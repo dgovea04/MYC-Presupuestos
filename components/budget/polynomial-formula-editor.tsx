@@ -1,0 +1,686 @@
+"use client";
+
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { RefreshCw, Save } from "lucide-react";
+
+import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
+import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-math";
+import { PolynomialKCalculator } from "@/components/budget/polynomial-k-calculator";
+import { PolynomialMonomialsTable } from "@/components/budget/polynomial-monomials-table";
+import { PolynomialValidationSummary } from "@/components/budget/polynomial-validation-summary";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
+import { formatDate } from "@/lib/utils";
+import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
+import type {
+  AdjustmentCalculationRecord,
+  PolynomialFormulaRecord,
+  PolynomialMonomialRecord,
+  UnifiedIndexRecord,
+} from "@/types/polynomial-formula";
+
+type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
+
+type KPreviewResult = {
+  kRaw: string;
+  kRounded: string;
+  terms: Array<{
+    name: string;
+    coefficient: string;
+    baseIndexValue: string;
+    adjustmentIndexValue: string;
+    ratio: string;
+    partial: string;
+  }>;
+};
+
+type FormulaStatus = PolynomialFormulaSectionData["summary"]["status"];
+
+const PLACEHOLDER_INDEX_NAME = "Pendiente de asignar";
+
+function cloneFormula(formula: PolynomialFormulaRecord | null): PolynomialFormulaRecord | null {
+  if (!formula) {
+    return null;
+  }
+
+  return {
+    ...formula,
+    monomials: formula.monomials.map((monomial) => ({ ...monomial })),
+  };
+}
+
+function getStatusBadgeClass(status: FormulaStatus) {
+  if (status === "VALID") return "bg-emerald-100 text-emerald-700";
+  if (status === "DRAFT") return "bg-amber-100 text-amber-700";
+  if (status === "ARCHIVED") return "bg-slate-200 text-slate-700";
+  return "bg-slate-100 text-slate-700";
+}
+
+function createFormulaSummary(formula: PolynomialFormulaRecord | null) {
+  return {
+    hasFormula: formula !== null,
+    monomialCount: formula?.monomials.length ?? 0,
+    totalBaseAmount: formula?.totalBaseAmount ?? "0.0000",
+    status: formula?.status ?? "NOT_CREATED",
+  } satisfies PolynomialFormulaSectionData["summary"];
+}
+
+function getFormulaSavePayload(formula: PolynomialFormulaRecord) {
+  return {
+    formulaId: formula.id,
+    name: formula.name,
+    baseMonth: formula.baseMonth,
+    baseYear: formula.baseYear,
+    monomials: formula.monomials.map((monomial) => ({
+      id: monomial.id,
+      code: monomial.code,
+      name: monomial.name,
+      costGroupKey: monomial.costGroupKey,
+      amount: monomial.amount,
+      coefficient: monomial.coefficient,
+      baseIndexCode: monomial.baseIndexCode,
+      baseIndexName: monomial.baseIndexName,
+      baseIndexValue: monomial.baseIndexValue,
+      adjustmentIndexCode: monomial.adjustmentIndexCode ?? null,
+      adjustmentIndexName: monomial.adjustmentIndexName ?? null,
+      adjustmentIndexValue: monomial.adjustmentIndexValue ?? null,
+      sortOrder: monomial.sortOrder,
+    })),
+  };
+}
+
+function buildMonomialValidationInput(monomials: PolynomialMonomialRecord[]) {
+  return monomials.map((monomial) => ({
+    coefficient: monomial.coefficient,
+    baseIndexValue: monomial.baseIndexValue,
+    adjustmentIndexValue: "1",
+    name: monomial.name,
+  }));
+}
+
+function hasPendingBaseIndices(monomials: PolynomialMonomialRecord[]) {
+  return monomials.some((monomial) => monomial.baseIndexName === PLACEHOLDER_INDEX_NAME);
+}
+
+function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
+  if (!lastSavedAt) return null;
+
+  const seconds = Math.max(0, Math.floor((currentTime - lastSavedAt) / 1000));
+  if (seconds < 60) {
+    return `Ultimo guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `Ultimo guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  return `Ultimo guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
+}
+
+function SaveBadge({ state, lastSavedLabel }: { state: SaveState; lastSavedLabel: string | null }) {
+  const styles: Record<SaveState, string> = {
+    idle: "bg-slate-100 text-slate-600",
+    dirty: "bg-amber-100 text-amber-700",
+    saving: "bg-sky-100 text-sky-700",
+    saved: "bg-emerald-100 text-emerald-700",
+    error: "bg-rose-100 text-rose-700",
+  };
+
+  const labels: Record<SaveState, string> = {
+    idle: "Sin cambios",
+    dirty: "Cambios pendientes",
+    saving: "Guardando...",
+    saved: "Guardado",
+    error: "Error al guardar",
+  };
+
+  return (
+    <span className={`${styles[state]} inline-flex flex-col rounded-full px-3 py-2 text-xs font-medium`}>
+      <span>{labels[state]}</span>
+      {lastSavedLabel ? <span className="mt-0.5 text-[11px] font-normal opacity-80">{lastSavedLabel}</span> : null}
+    </span>
+  );
+}
+
+export function PolynomialFormulaEditor({
+  section,
+  adjustments,
+}: {
+  section: PolynomialFormulaSectionData;
+  adjustments: AdjustmentCalculationRecord[];
+}) {
+  const [formula, setFormula] = useState(() => cloneFormula(section.formula));
+  const [summary, setSummary] = useState(() => createFormulaSummary(section.formula));
+  const [history, setHistory] = useState(adjustments);
+  const [baseIndexOptions, setBaseIndexOptions] = useState<UnifiedIndexRecord[]>([]);
+  const [baseIndicesLoading, setBaseIndicesLoading] = useState(() => Boolean(section.formula));
+  const [generateMonth, setGenerateMonth] = useState(section.formula?.baseMonth ?? new Date().getMonth() + 1);
+  const [generateYear, setGenerateYear] = useState(section.formula?.baseYear ?? new Date().getFullYear());
+  const [previewMonth, setPreviewMonth] = useState(new Date().getMonth() + 1);
+  const [previewYear, setPreviewYear] = useState(new Date().getFullYear());
+  const [originalAmount, setOriginalAmount] = useState("100000.00");
+  const [kPreview, setKPreview] = useState<KPreviewResult | null>(null);
+  const [kPreviewError, setKPreviewError] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isApplyingAdjustment, setIsApplyingAdjustment] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [saveClock, setSaveClock] = useState(() => Date.now());
+  const lastSavedPayload = useRef<string | null>(
+    section.formula ? JSON.stringify(getFormulaSavePayload(section.formula)) : null,
+  );
+
+  const validation = useMemo(
+    () => validatePolynomialFormula(buildMonomialValidationInput(formula?.monomials ?? [])),
+    [formula],
+  );
+  const canCalculatePreview =
+    formula !== null &&
+    formula.monomials.length > 0 &&
+    !hasPendingBaseIndices(formula.monomials) &&
+    validation.isCoefficientSumValid;
+  const previewAdjustedAmounts = useMemo(() => {
+    if (!kPreview) return null;
+    try {
+      return calculateAdjustmentAmounts({
+        originalAmount,
+        kRounded: kPreview.kRounded,
+      });
+    } catch {
+      return null;
+    }
+  }, [kPreview, originalAmount]);
+
+  const calculateKPreview = useEffectEvent(
+    async (formulaToPreview: PolynomialFormulaRecord, month: number, year: number) => {
+      setPreviewLoading(true);
+      setKPreviewError("");
+
+      try {
+        const response = await fetch(`/api/unified-indices?month=${month}&year=${year}`);
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error ?? "No se pudieron cargar los indices de reajuste");
+        }
+
+        const indices = (await response.json()) as UnifiedIndexRecord[];
+        const uniqueByCode = new Map<string, UnifiedIndexRecord>();
+        const duplicateCodes = new Set<string>();
+
+        for (const index of indices) {
+          if (uniqueByCode.has(index.code)) {
+            duplicateCodes.add(index.code);
+            continue;
+          }
+
+          uniqueByCode.set(index.code, index);
+        }
+
+        const duplicatedSelectedCodes = formulaToPreview.monomials
+          .map((monomial) => monomial.baseIndexCode)
+          .filter((code) => duplicateCodes.has(code));
+
+        if (duplicatedSelectedCodes.length > 0) {
+          throw new Error(
+            `Los codigos ${[...new Set(duplicatedSelectedCodes)].join(", ")} tienen multiples ambitos geograficos en ${month}/${year}.`,
+          );
+        }
+
+        const payload = {
+          monomials: formulaToPreview.monomials.map((monomial) => {
+            const matchingIndex = uniqueByCode.get(monomial.baseIndexCode);
+
+            if (!matchingIndex) {
+              throw new Error(`Falta el indice de reajuste para el codigo ${monomial.baseIndexCode}`);
+            }
+
+            return {
+              coefficient: monomial.coefficient,
+              baseIndexValue: monomial.baseIndexValue,
+              adjustmentIndexValue: matchingIndex.value,
+              name: monomial.name,
+            };
+          }),
+        };
+        const calculationResponse = await fetch(`/api/polynomial-formulas/${formulaToPreview.id}/calculate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!calculationResponse.ok) {
+          const data = await calculationResponse.json();
+          throw new Error(data.error ?? "No se pudo calcular K");
+        }
+
+        const result = (await calculationResponse.json()) as KPreviewResult;
+        setKPreview(result);
+      } catch (requestError) {
+        setKPreview(null);
+        setKPreviewError(requestError instanceof Error ? requestError.message : "No se pudo calcular K");
+      } finally {
+        setPreviewLoading(false);
+      }
+    },
+  );
+
+  useEffect(() => {
+    if (!formula) {
+      return;
+    }
+
+    let isActive = true;
+
+    void fetch(`/api/unified-indices?month=${formula.baseMonth}&year=${formula.baseYear}`)
+      .then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error ?? "No se pudieron cargar los indices base");
+        }
+
+        return (await response.json()) as UnifiedIndexRecord[];
+      })
+      .then((data) => {
+        if (!isActive) return;
+        setBaseIndexOptions(data);
+      })
+      .catch((requestError) => {
+        if (!isActive) return;
+        setError(requestError instanceof Error ? requestError.message : "No se pudieron cargar los indices base");
+      })
+      .finally(() => {
+        if (isActive) {
+          setBaseIndicesLoading(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [formula?.baseMonth, formula?.baseYear, formula]);
+
+  useEffect(() => {
+    if (!formula) return;
+
+    const nextPayload = JSON.stringify(getFormulaSavePayload(formula));
+
+    if (lastSavedPayload.current === null) {
+      setSaveState("dirty");
+      return;
+    }
+
+    setSaveState(nextPayload === lastSavedPayload.current ? "idle" : "dirty");
+  }, [formula]);
+
+  useEffect(() => {
+    if (!lastSavedAt) return;
+
+    const interval = window.setInterval(() => setSaveClock(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [lastSavedAt]);
+
+  useEffect(() => {
+    if (!feedback) return;
+
+    const timeout = window.setTimeout(() => setFeedback(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [feedback]);
+
+  useEffect(() => {
+    if (!canCalculatePreview || !formula) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void calculateKPreview(formula, previewMonth, previewYear);
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [canCalculatePreview, formula, previewMonth, previewYear]);
+
+  async function generateFormula() {
+    if (!section.budgetId) return;
+
+    setIsGenerating(true);
+    setError("");
+    setFeedback("");
+
+    try {
+      const response = await fetch(`/api/budgets/${section.budgetId}/polynomial-formula`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseMonth: generateMonth,
+          baseYear: generateYear,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "No se pudo generar la formula polinomica");
+      }
+
+      const nextFormula = (await response.json()) as PolynomialFormulaRecord;
+      setBaseIndicesLoading(true);
+      setFormula(cloneFormula(nextFormula));
+      setSummary(createFormulaSummary(nextFormula));
+      setKPreview(null);
+      setKPreviewError("");
+      lastSavedPayload.current = JSON.stringify(getFormulaSavePayload(nextFormula));
+      setSaveState("saved");
+      setLastSavedAt(Date.now());
+      setSaveClock(Date.now());
+      setFeedback("Formula generada desde el presupuesto.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo generar la formula");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function saveFormula() {
+    if (!formula) return false;
+
+    setSaveState("saving");
+    setError("");
+    setFeedback("");
+
+    try {
+      const response = await fetch(`/api/budgets/${section.budgetId}/polynomial-formula`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...getFormulaSavePayload(formula),
+          status:
+            validation.isValid && !hasPendingBaseIndices(formula.monomials) ? "VALID" : "DRAFT",
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "No se pudo guardar la formula");
+      }
+
+      const savedFormula = (await response.json()) as PolynomialFormulaRecord;
+      setFormula(cloneFormula(savedFormula));
+      setSummary(createFormulaSummary(savedFormula));
+      setKPreview(null);
+      setKPreviewError("");
+      lastSavedPayload.current = JSON.stringify(getFormulaSavePayload(savedFormula));
+      setSaveState("saved");
+      setLastSavedAt(Date.now());
+      setSaveClock(Date.now());
+      setFeedback("Formula guardada.");
+      return true;
+    } catch (requestError) {
+      setSaveState("error");
+      setError(requestError instanceof Error ? requestError.message : "No se pudo guardar la formula");
+      return false;
+    }
+  }
+
+  async function applyAdjustment() {
+    if (!formula || !kPreview) return;
+
+    setIsApplyingAdjustment(true);
+    setError("");
+    setFeedback("");
+
+    try {
+      const needsSave =
+        lastSavedPayload.current !== JSON.stringify(getFormulaSavePayload(formula));
+
+      if (needsSave) {
+        const saved = await saveFormula();
+        if (!saved) {
+          return;
+        }
+      }
+
+      const response = await fetch(`/api/polynomial-formulas/${formula.id}/adjustments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month: previewMonth,
+          year: previewYear,
+          originalAmount,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "No se pudo registrar el reajuste");
+      }
+
+      const adjustment = (await response.json()) as AdjustmentCalculationRecord;
+      setHistory((current) => [adjustment, ...current.filter((item) => item.id !== adjustment.id)]);
+      setFeedback("Reajuste registrado en el historial.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo aplicar el reajuste");
+    } finally {
+      setIsApplyingAdjustment(false);
+    }
+  }
+
+  function updateFormula(changes: Partial<PolynomialFormulaRecord>) {
+    setFormula((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        ...changes,
+      };
+
+      if (
+        (changes.baseMonth !== undefined && changes.baseMonth !== current.baseMonth) ||
+        (changes.baseYear !== undefined && changes.baseYear !== current.baseYear)
+      ) {
+        setBaseIndicesLoading(true);
+      }
+
+      setSummary(createFormulaSummary(next));
+      setKPreview(null);
+      setKPreviewError("");
+      return next;
+    });
+  }
+
+  function updateMonomial(nextMonomial: PolynomialMonomialRecord) {
+    setFormula((current) => {
+      if (!current) return current;
+
+      const next = {
+        ...current,
+        monomials: current.monomials.map((monomial) =>
+          monomial.id === nextMonomial.id ? nextMonomial : monomial,
+        ),
+      };
+
+      setSummary(createFormulaSummary(next));
+      setKPreview(null);
+      setKPreviewError("");
+      return next;
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      {!formula ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{section.title}</CardTitle>
+            <CardDescription>
+              Genera la formula polinomica desde el presupuesto general y luego asigna los indices INEI correspondientes a cada monomio.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes base</p>
+                <Input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={generateMonth}
+                  onChange={(event) => setGenerateMonth(Number(event.target.value))}
+                  className="mt-3"
+                />
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Anio base</p>
+                <Input
+                  type="number"
+                  min={1979}
+                  value={generateYear}
+                  onChange={(event) => setGenerateYear(Number(event.target.value))}
+                  className="mt-3"
+                />
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Accion</p>
+                <Button
+                  type="button"
+                  onClick={() => void generateFormula()}
+                  disabled={isGenerating}
+                  className="mt-3 w-full"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  {isGenerating ? "Generando..." : "Generar formula"}
+                </Button>
+              </div>
+            </div>
+
+            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {section.coefficients.map((coefficient) => (
+                <div key={coefficient.symbol} className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                  <p className="font-medium text-slate-900">
+                    {coefficient.symbol} - {coefficient.label}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">{coefficient.detail}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader className="gap-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <CardTitle>{formula.name}</CardTitle>
+                  <CardDescription>
+                    Mes base {formula.baseMonth}/{formula.baseYear}. Asigna indices INEI, valida coeficientes y calcula K en tiempo real.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`${getStatusBadgeClass(summary.status)} rounded-full px-3 py-2 text-xs font-medium`}>
+                    Estado: {summary.status}
+                  </span>
+                  <span className="rounded-full bg-sky-100 px-3 py-2 text-xs font-medium text-sky-700">
+                    Monomios: {summary.monomialCount}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
+                    Base: {summary.totalBaseAmount}
+                  </span>
+                  <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_160px_160px_auto]">
+                <div>
+                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Nombre</label>
+                  <Input
+                    value={formula.name}
+                    onChange={(event) => updateFormula({ name: event.target.value })}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes base</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={formula.baseMonth}
+                    onChange={(event) => updateFormula({ baseMonth: Number(event.target.value) })}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Anio base</label>
+                  <Input
+                    type="number"
+                    min={1979}
+                    value={formula.baseYear}
+                    onChange={(event) => updateFormula({ baseYear: Number(event.target.value) })}
+                    className="mt-2"
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button type="button" onClick={() => void saveFormula()} disabled={saveState === "saving"}>
+                    <Save className="mr-2 h-4 w-4" />
+                    Guardar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void generateFormula()}
+                    disabled={isGenerating}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Regenerar
+                  </Button>
+                </div>
+              </div>
+
+              {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+              {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+
+              <PolynomialFormulaMath monomials={formula.monomials} />
+            </CardContent>
+          </Card>
+
+          <PolynomialValidationSummary monomials={formula.monomials} />
+          <PolynomialMonomialsTable
+            monomials={formula.monomials}
+            baseIndexOptions={baseIndexOptions}
+            baseIndicesLoading={baseIndicesLoading}
+            onChangeMonomial={updateMonomial}
+          />
+          <PolynomialKCalculator
+            previewMonth={previewMonth}
+            previewYear={previewYear}
+            originalAmount={originalAmount}
+            onPreviewMonthChange={setPreviewMonth}
+            onPreviewYearChange={setPreviewYear}
+            onOriginalAmountChange={setOriginalAmount}
+            result={kPreview}
+            resultError={kPreviewError}
+            isLoading={previewLoading}
+            adjustedAmounts={previewAdjustedAmounts}
+            canApply={Boolean(kPreview && previewAdjustedAmounts && !kPreviewError)}
+            onApplyAdjustment={() => void applyAdjustment()}
+            isApplyingAdjustment={isApplyingAdjustment}
+          />
+          <PolynomialAdjustmentHistory adjustments={history} />
+        </>
+      )}
+
+      {history.length > 0 ? (
+        <p className="text-xs text-slate-500">
+          Ultimo reajuste registrado: {formatDate(history[0]?.createdAt ?? null)}
+        </p>
+      ) : null}
+    </div>
+  );
+}

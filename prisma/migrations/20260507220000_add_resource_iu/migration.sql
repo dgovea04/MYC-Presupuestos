@@ -1,0 +1,2 @@
+ALTER TABLE "Resource"
+ADD COLUMN "iu" TEXT;

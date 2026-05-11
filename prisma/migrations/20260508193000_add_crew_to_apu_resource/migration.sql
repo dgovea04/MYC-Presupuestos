@@ -1,0 +1,2 @@
+ALTER TABLE "ApuResource"
+ADD COLUMN "crew" DECIMAL(18,4);

@@ -1,0 +1,168 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { ActionButton } from "@/components/ui/action-button";
+import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  getAppDataChangeEventName,
+  getAppDataChangeStorageKey,
+  type AppDataChangePayload,
+  type BudgetLiveUpdateSummary,
+} from "@/lib/client/live-updates";
+import { formatDate } from "@/lib/utils";
+
+type BudgetSectionSummary = BudgetLiveUpdateSummary;
+
+const defaultSubBudgetNames = [
+  "Estructuras",
+  "Arquitectura",
+  "Instalaciones Sanitarias",
+  "Instalaciones Electricas",
+] as const;
+
+export function ProjectBudgetSections({
+  projectId,
+  generalBudget,
+  subBudgets,
+}: {
+  projectId: string;
+  generalBudget: BudgetSectionSummary | null;
+  subBudgets: BudgetSectionSummary[];
+}) {
+  const [optimisticBudgets, setOptimisticBudgets] = useState<Record<string, BudgetSectionSummary>>({});
+
+  useEffect(() => {
+    function applyPayload(payload: AppDataChangePayload | null) {
+      if (!payload?.budgets?.length) return;
+
+      const matchingBudgets = payload.budgets.filter((budget) => budget.projectId === projectId);
+      if (!matchingBudgets.length) return;
+
+      setOptimisticBudgets((current) => {
+        const next = { ...current };
+        for (const budget of matchingBudgets) {
+          next[budget.id] = budget;
+        }
+        return next;
+      });
+    }
+
+    function handleCustomEvent(event: Event) {
+      applyPayload((event as CustomEvent<AppDataChangePayload>).detail);
+    }
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== getAppDataChangeStorageKey() || !event.newValue) return;
+
+      try {
+        applyPayload(JSON.parse(event.newValue) as AppDataChangePayload);
+      } catch {}
+    }
+
+    window.addEventListener(getAppDataChangeEventName(), handleCustomEvent as EventListener);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener(getAppDataChangeEventName(), handleCustomEvent as EventListener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [projectId]);
+
+  const general = generalBudget ? optimisticBudgets[generalBudget.id] ?? generalBudget : null;
+  const subs = useMemo(
+    () => subBudgets.map((budget) => optimisticBudgets[budget.id] ?? budget),
+    [subBudgets, optimisticBudgets],
+  );
+
+  const orderedSubBudgets = useMemo(
+    () =>
+      defaultSubBudgetNames
+        .map((name) => subs.find((budget) => budget.name === name))
+        .filter((budget): budget is BudgetSectionSummary => Boolean(budget)),
+    [subs],
+  );
+
+  const consolidatedTotal = orderedSubBudgets.reduce((sum, budget) => sum + budget.totalAmount, 0);
+  const budgetCurrency = general?.currency ?? orderedSubBudgets[0]?.currency ?? "PEN";
+  const generalBudgetUpdatedAt =
+    orderedSubBudgets
+      .map((budget) => new Date(budget.updatedAt))
+      .sort((left, right) => right.getTime() - left.getTime())[0]
+      ?.toISOString() ?? general?.updatedAt;
+
+  return (
+    <>
+      <section id="presupuesto-general">
+        <Card>
+          <CardHeader>
+            <CardTitle>Presupuesto General</CardTitle>
+            <CardDescription>
+              Presupuesto padre del proyecto, pensado para consolidar el total general y abrir sus componentes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {general ? (
+              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-2">
+                  <p className="text-lg font-semibold text-slate-900">Presupuesto General</p>
+                  <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                    <span className="flex items-center gap-2">
+                      Total consolidado:
+                      <AnimatedCurrencyValue value={consolidatedTotal} currency={budgetCurrency} className="px-0 py-0 font-semibold text-slate-900" />
+                    </span>
+                    <span>Sub Presupuestos: {orderedSubBudgets.length}</span>
+                    <span>Ultima actualizacion: {formatDate(generalBudgetUpdatedAt)}</span>
+                  </div>
+                </div>
+                <Link href={`/budgets/${general.id}`}>
+                  <ActionButton action="open" label="Abrir editor" />
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Este proyecto todavia no tiene un presupuesto general configurado.</p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section id="subpresupuestos">
+        <Card>
+          <CardHeader>
+            <CardTitle>Sub Presupuestos</CardTitle>
+            <CardDescription>
+              Cada proyecto arranca con cuatro sub presupuestos base, listos para editar por especialidad.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-2">
+            {orderedSubBudgets.length ? (
+              orderedSubBudgets.map((budget) => (
+                <div key={budget.id} className="rounded-2xl border border-slate-200 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{budget.name}</p>
+                      <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                        Total actual:
+                        <AnimatedCurrencyValue value={budget.totalAmount} currency={budget.currency} className="px-0 py-0 font-medium text-slate-700" />
+                      </p>
+                    </div>
+                    <Badge className="bg-slate-200 text-slate-700">Sub Presupuesto</Badge>
+                  </div>
+                  <div className="mt-4">
+                    <Link href={`/budgets/${budget.id}`}>
+                      <ActionButton action="open" label="Abrir presupuesto" variant="outline" />
+                    </Link>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">Todavia no hay sub presupuestos configurados para este proyecto.</p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+    </>
+  );
+}

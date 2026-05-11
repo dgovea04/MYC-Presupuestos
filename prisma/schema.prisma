@@ -1,0 +1,532 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+enum BudgetLevelType {
+  TITLE
+  SUBTITLE
+  ITEM_GROUP
+  SUBITEM
+}
+
+enum BudgetKind {
+  GENERAL
+  SUB_BUDGET
+}
+
+enum ResourceCategory {
+  MATERIAL
+  LABOR
+  EQUIPMENT
+  TOOLS
+}
+
+enum GeneralExpenseType {
+  PERCENTAGE
+  FIXED
+}
+
+enum GeneralExpenseGroupKind {
+  FIXED
+  VARIABLE
+}
+
+enum GeneralExpenseItemCategory {
+  STANDARD
+  PERSONAL
+  TESTING
+  DIRECT_COST_BASED
+}
+
+enum ReportType {
+  BUDGET_PDF
+  BUDGET_EXCEL
+  APU_EXCEL
+}
+
+enum PolynomialFormulaStatus {
+  DRAFT
+  VALID
+  ARCHIVED
+}
+
+enum PolynomialCostGroup {
+  LABOR
+  MATERIALS
+  EQUIPMENT
+  OTHERS
+  GENERAL_EXPENSES_PROFIT
+  STEEL
+  CEMENT
+  MASONRY
+  INSTALLATIONS
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  companies    Company[]
+  settings     UserSettings?
+}
+
+model UserSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  currencyDecimals Int      @default(2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Company {
+  id         String     @id @default(cuid())
+  userId     String
+  name       String
+  ruc        String?
+  logoUrl    String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects   Project[]
+  resources  Resource[]
+
+  @@index([userId])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  companyId   String
+  name        String
+  clientName  String?
+  location    String?
+  projectType String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      ProjectStatus @default(PLANNING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  budgets     Budget[]
+  polynomialFormulas PolynomialFormula[]
+
+  @@index([companyId])
+}
+
+model Budget {
+  id                    String          @id @default(cuid())
+  projectId             String
+  parentBudgetId        String?
+  kind                  BudgetKind      @default(GENERAL)
+  name                  String
+  currency              String          @default("PEN")
+  igvRate               Decimal         @default(0.18) @db.Decimal(10, 4)
+  generalExpensesRate   Decimal         @default(0.10) @db.Decimal(10, 4)
+  utilityRate           Decimal         @default(0.08) @db.Decimal(10, 4)
+  totalDirectCost       Decimal         @default(0) @db.Decimal(18, 4)
+  totalGeneralExpenses  Decimal         @default(0) @db.Decimal(18, 4)
+  totalUtility          Decimal         @default(0) @db.Decimal(18, 4)
+  totalTax              Decimal         @default(0) @db.Decimal(18, 4)
+  totalAmount           Decimal         @default(0) @db.Decimal(18, 4)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  project               Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentBudget          Budget?         @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id], onDelete: SetNull)
+  childBudgets          Budget[]        @relation("BudgetHierarchy")
+  levels                BudgetLevel[]
+  items                 BudgetItem[]
+  generalExpenses       GeneralExpense[]
+  generalExpenseGroups  GeneralExpenseGroup[]
+  footerRows            BudgetFooterRow[]
+  polynomialFormulas    PolynomialFormula[]
+  valuations            Valuation[]
+  reports               Report[]
+
+  @@index([projectId])
+  @@index([parentBudgetId])
+  @@unique([id, projectId])
+}
+
+model BudgetLevel {
+  id        String        @id @default(cuid())
+  budgetId  String
+  parentId  String?
+  type      BudgetLevelType
+  code      String
+  name      String
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  budget    Budget        @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  parent    BudgetLevel?  @relation("BudgetLevelTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  BudgetLevel[] @relation("BudgetLevelTree")
+  items     BudgetItem[]
+
+  @@index([budgetId])
+  @@index([parentId])
+}
+
+model BudgetItem {
+  id          String       @id @default(cuid())
+  budgetId    String
+  levelId     String?
+  code        String
+  description String
+  unit        String
+  quantity    Decimal      @default(0) @db.Decimal(18, 4)
+  unitPrice   Decimal      @default(0) @db.Decimal(18, 4)
+  partial     Decimal      @default(0) @db.Decimal(18, 4)
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  budget      Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  level       BudgetLevel? @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  apu         Apu?
+  polynomialMonomialComponents PolynomialMonomialComponent[]
+
+  @@index([budgetId])
+  @@index([levelId])
+}
+
+model Resource {
+  id           String           @id @default(cuid())
+  companyId    String?
+  code         String
+  description  String
+  category     ResourceCategory
+  iu           String?
+  subcategory  String?
+  unit         String
+  unitPrice    Decimal          @default(0) @db.Decimal(18, 4)
+  currency     String           @default("PEN")
+  source       String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  apuResources ApuResource[]
+  partidaRows  PartidaApuRow[]
+
+  @@index([companyId])
+}
+
+model CatalogPartida {
+  id              String          @id @default(cuid())
+  description     String
+  unit            String
+  unitPrice       Decimal         @default(0) @db.Decimal(18, 4)
+  currency        String          @default("PEN")
+  source          String?
+  performance     Decimal         @default(1) @db.Decimal(18, 4)
+  performanceUnit String?
+  performanceRate String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  apuRows         PartidaApuRow[]
+
+  @@index([description])
+}
+
+model PartidaApuRow {
+  id               String         @id @default(cuid())
+  catalogPartidaId String
+  resourceId       String?
+  description      String
+  unit             String
+  crew             Decimal?       @db.Decimal(18, 4)
+  quantity         Decimal        @default(0) @db.Decimal(18, 4)
+  unitPrice        Decimal        @default(0) @db.Decimal(18, 4)
+  subtotal         Decimal        @default(0) @db.Decimal(18, 4)
+  resourceType     String?
+  groupLabel       String?
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  catalogPartida   CatalogPartida @relation(fields: [catalogPartidaId], references: [id], onDelete: Cascade)
+  resource         Resource?      @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([catalogPartidaId])
+  @@index([resourceId])
+}
+
+model Apu {
+  id            String        @id @default(cuid())
+  budgetItemId  String        @unique
+  name          String
+  unit          String
+  performance   Decimal       @default(1) @db.Decimal(18, 4)
+  totalUnitCost Decimal       @default(0) @db.Decimal(18, 4)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  budgetItem    BudgetItem    @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  resources     ApuResource[]
+}
+
+model ApuResource {
+  id           String    @id @default(cuid())
+  apuId        String
+  resourceId   String
+  resourceType String
+  crew         Decimal?  @db.Decimal(18, 4)
+  quantity     Decimal   @default(0) @db.Decimal(18, 4)
+  unitPrice    Decimal   @default(0) @db.Decimal(18, 4)
+  subtotal     Decimal   @default(0) @db.Decimal(18, 4)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  apu          Apu       @relation(fields: [apuId], references: [id], onDelete: Cascade)
+  resource     Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  polynomialMonomialComponents PolynomialMonomialComponent[]
+
+  @@index([apuId])
+  @@index([resourceId])
+}
+
+model GeneralExpense {
+  id         String             @id @default(cuid())
+  budgetId   String
+  name       String
+  type       GeneralExpenseType
+  amount     Decimal?           @db.Decimal(18, 4)
+  percentage Decimal?           @db.Decimal(10, 4)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  budget     Budget             @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId])
+}
+
+model GeneralExpenseGroup {
+  id         String                  @id @default(cuid())
+  budgetId   String
+  name       String
+  kind       GeneralExpenseGroupKind
+  sortOrder  Int                     @default(0)
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+  budget     Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  titles     GeneralExpenseTitle[]
+
+  @@index([budgetId])
+}
+
+model GeneralExpenseTitle {
+  id         String               @id @default(cuid())
+  groupId    String
+  code       String
+  name       String
+  category   GeneralExpenseItemCategory @default(STANDARD)
+  sortOrder  Int                  @default(0)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  group      GeneralExpenseGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  items      GeneralExpenseItem[]
+
+  @@index([groupId])
+}
+
+model GeneralExpenseItem {
+  id                      String                     @id @default(cuid())
+  titleId                 String
+  code                    String
+  description             String
+  category                GeneralExpenseItemCategory
+  unit                    String
+  quantityDescription     String?
+  quantity                Decimal                    @default(0) @db.Decimal(18, 4)
+  participationPercentage Decimal                    @default(0) @db.Decimal(10, 4)
+  unitPrice               Decimal                    @default(0) @db.Decimal(18, 4)
+  sortOrder               Int                        @default(0)
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  title                   GeneralExpenseTitle        @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([titleId])
+}
+
+model BudgetFooterRow {
+  id          String   @id @default(cuid())
+  budgetId    String
+  variable    String
+  description String
+  formula     String?
+  manualValue Decimal  @default(0) @db.Decimal(18, 4)
+  iu          String?
+  highlight   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId])
+}
+
+model Report {
+  id        String     @id @default(cuid())
+  budgetId  String
+  type      ReportType
+  fileUrl   String
+  createdAt DateTime   @default(now())
+  budget    Budget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId])
+}
+
+model PolynomialFormula {
+  id              String                  @id @default(cuid())
+  projectId        String
+  budgetId        String
+  name            String
+  baseMonth       Int
+  baseYear        Int
+  totalBaseAmount Decimal                 @default(0) @db.Decimal(18, 2)
+  status          PolynomialFormulaStatus @default(DRAFT)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  project         Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget          Budget                  @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  monomials       PolynomialMonomial[]
+  valuations      Valuation[]
+  adjustments     AdjustmentCalculation[]
+
+  @@index([projectId])
+  @@index([budgetId])
+  @@index([baseYear, baseMonth])
+  @@unique([id, budgetId])
+}
+
+model PolynomialMonomial {
+  id                   String                       @id @default(cuid())
+  formulaId            String
+  code                 String
+  name                 String
+  costGroupKey         PolynomialCostGroup
+  amount               Decimal                      @default(0) @db.Decimal(18, 2)
+  coefficient          Decimal                      @default(0) @db.Decimal(12, 3)
+  baseIndexCode        String
+  baseIndexName        String
+  baseIndexValue       Decimal                      @default(0) @db.Decimal(18, 3)
+  adjustmentIndexCode  String?
+  adjustmentIndexName  String?
+  adjustmentIndexValue Decimal?                     @db.Decimal(18, 3)
+  sortOrder            Int                          @default(0)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  formula              PolynomialFormula            @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  components           PolynomialMonomialComponent[]
+  adjustmentTerms      AdjustmentCalculationTerm[]
+
+  @@index([formulaId])
+  @@index([costGroupKey])
+  @@unique([formulaId, sortOrder])
+}
+
+model PolynomialMonomialComponent {
+  id           String             @id @default(cuid())
+  monomialId   String
+  budgetItemId String?
+  apuResourceId String?
+  resourceType String?
+  amount       Decimal            @default(0) @db.Decimal(18, 2)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  monomial     PolynomialMonomial @relation(fields: [monomialId], references: [id], onDelete: Cascade)
+  budgetItem   BudgetItem?        @relation(fields: [budgetItemId], references: [id], onDelete: SetNull)
+  apuResource  ApuResource?       @relation(fields: [apuResourceId], references: [id], onDelete: SetNull)
+
+  @@index([monomialId])
+  @@index([budgetItemId])
+  @@index([apuResourceId])
+}
+
+model UnifiedIndex {
+  id             String   @id @default(cuid())
+  code           String
+  name           String
+  category       String?
+  geographicArea String   @default("UNSPECIFIED")
+  month          Int
+  year           Int
+  value          Decimal  @default(0) @db.Decimal(18, 3)
+  source         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([code, geographicArea, month, year])
+  @@index([year, month])
+}
+
+model Valuation {
+  id         String               @id @default(cuid())
+  budgetId   String
+  formulaId  String?
+  month      Int
+  year       Int
+  amount     Decimal              @default(0) @db.Decimal(18, 2)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  budget     Budget               @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  formula    PolynomialFormula?   @relation(fields: [formulaId, budgetId], references: [id, budgetId], onDelete: Cascade)
+  adjustments AdjustmentCalculation[]
+
+  @@unique([budgetId, year, month])
+  @@index([formulaId])
+  @@unique([id, formulaId, year, month])
+}
+
+model AdjustmentCalculation {
+  id               String                       @id @default(cuid())
+  formulaId        String
+  valuationId      String
+  month            Int
+  year             Int
+  originalAmount   Decimal                      @default(0) @db.Decimal(18, 2)
+  adjustedAmount   Decimal                      @default(0) @db.Decimal(18, 2)
+  adjustmentAmount Decimal                      @default(0) @db.Decimal(18, 2)
+  kRaw             Decimal                      @default(0) @db.Decimal(18, 6)
+  kRounded         Decimal                      @default(0) @db.Decimal(12, 3)
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  formula          PolynomialFormula            @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  valuation        Valuation                    @relation(fields: [valuationId, formulaId, year, month], references: [id, formulaId, year, month], onDelete: Cascade)
+  terms            AdjustmentCalculationTerm[]
+
+  @@unique([formulaId, year, month])
+  @@unique([valuationId])
+}
+
+model AdjustmentCalculationTerm {
+  id                   String                 @id @default(cuid())
+  adjustmentId         String
+  monomialId           String
+  name                 String
+  coefficient          Decimal                @default(0) @db.Decimal(12, 3)
+  baseIndexValue       Decimal                @default(0) @db.Decimal(18, 3)
+  adjustmentIndexValue Decimal                @default(0) @db.Decimal(18, 3)
+  ratio                Decimal                @default(0) @db.Decimal(18, 6)
+  partial              Decimal                @default(0) @db.Decimal(18, 6)
+  sortOrder            Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  adjustment           AdjustmentCalculation  @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  monomial             PolynomialMonomial     @relation(fields: [monomialId], references: [id], onDelete: Cascade)
+
+  @@index([adjustmentId])
+  @@index([monomialId])
+  @@unique([adjustmentId, sortOrder])
+}
