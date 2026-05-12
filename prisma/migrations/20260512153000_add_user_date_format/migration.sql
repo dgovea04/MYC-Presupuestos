@@ -1,0 +1,2 @@
+ALTER TABLE "UserSettings"
+ADD COLUMN "dateFormat" TEXT NOT NULL DEFAULT 'DD_MMM_YYYY';

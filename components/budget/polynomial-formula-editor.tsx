@@ -8,6 +8,7 @@ import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-ma
 import { PolynomialKCalculator } from "@/components/budget/polynomial-k-calculator";
 import { PolynomialMonomialsTable } from "@/components/budget/polynomial-monomials-table";
 import { PolynomialValidationSummary } from "@/components/budget/polynomial-validation-summary";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -153,6 +154,7 @@ export function PolynomialFormulaEditor({
   section: PolynomialFormulaSectionData;
   adjustments: AdjustmentCalculationRecord[];
 }) {
+  const { dateFormat } = useFormattingSettings();
   const [formula, setFormula] = useState(() => cloneFormula(section.formula));
   const [summary, setSummary] = useState(() => createFormulaSummary(section.formula));
   const [history, setHistory] = useState(adjustments);
@@ -678,7 +680,7 @@ export function PolynomialFormulaEditor({
 
       {history.length > 0 ? (
         <p className="text-xs text-slate-500">
-          Ultimo reajuste registrado: {formatDate(history[0]?.createdAt ?? null)}
+          Ultimo reajuste registrado: {formatDate(history[0]?.createdAt ?? null, dateFormat)}
         </p>
       ) : null}
     </div>

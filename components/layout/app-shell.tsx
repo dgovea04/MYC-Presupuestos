@@ -8,6 +8,7 @@ import { LiveDataRefresh } from "@/components/layout/live-data-refresh";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import { Button } from "@/components/ui/button";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { DEFAULT_DATE_FORMAT, DEFAULT_INITIAL_SUB_BUDGET_NAMES, type UserSettingsRecord } from "@/types/settings";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -18,9 +19,24 @@ const links = [
   { href: "/settings", label: "Configuracion", icon: SlidersHorizontal },
 ];
 
-export async function AppShell({ children }: { children: ReactNode }) {
+export async function AppShell({
+  children,
+  settings: initialSettings,
+}: {
+  children: ReactNode;
+  settings?: UserSettingsRecord;
+}) {
   const session = await getAuthSession();
-  const settings = session?.user?.id ? await getUserSettings(session.user.id) : { currencyDecimals: 2 };
+  const fallbackSettings: UserSettingsRecord = {
+    defaultCurrency: "PEN",
+    currencyDecimals: 2,
+    dateFormat: DEFAULT_DATE_FORMAT,
+    defaultIgvRate: 0.18,
+    defaultGeneralExpensesRate: 0.1,
+    defaultUtilityRate: 0.08,
+    defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+  };
+  const settings = initialSettings ?? (session?.user?.id ? await getUserSettings(session.user.id) : fallbackSettings);
 
   return (
     <FormattingSettingsProvider settings={settings}>

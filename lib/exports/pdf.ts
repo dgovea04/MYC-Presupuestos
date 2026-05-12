@@ -3,12 +3,29 @@ import { buildDisplayRows, levelTypeLabel } from "@/lib/budget/structure";
 import type { BudgetRecord } from "@/types/budget";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 
+const MAX_CURRENCY_DECIMALS = 4;
+
+function normalizeDecimalPlaces(decimalPlaces: number) {
+  if (!Number.isFinite(decimalPlaces)) {
+    return 2;
+  }
+
+  const normalized = Math.trunc(decimalPlaces);
+  if (normalized < 0 || normalized > MAX_CURRENCY_DECIMALS) {
+    return 2;
+  }
+
+  return normalized;
+}
+
 export async function createBudgetPdf(
   budget: BudgetRecord,
   project?: { name?: string | null; clientName?: string | null; location?: string | null },
+  currencyDecimals = 2,
 ) {
   const normalized = calculateBudgetRecord(budget);
   const rows = buildDisplayRows(normalized);
+  const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
   const doc = new PDFDocument({ size: "A4", margin: 36 });
   const chunks: Buffer[] = [];
 
@@ -44,19 +61,19 @@ export async function createBudgetPdf(
     doc.text(row.item.code, 36, doc.y, { width: 55 });
     doc.text(row.item.description, 96 + row.depth * 12, doc.y, { width: 250 });
     doc.text(row.item.unit, 355, doc.y, { width: 35, align: "center" });
-    doc.text(row.item.quantity.toFixed(2), 395, doc.y, { width: 55, align: "right" });
-    doc.text(row.item.unitPrice.toFixed(2), 455, doc.y, { width: 60, align: "right" });
-    doc.text(row.item.partial.toFixed(2), 520, doc.y, { width: 55, align: "right" });
+    doc.text(row.item.quantity.toFixed(normalizedDecimals), 395, doc.y, { width: 55, align: "right" });
+    doc.text(row.item.unitPrice.toFixed(normalizedDecimals), 455, doc.y, { width: 60, align: "right" });
+    doc.text(row.item.partial.toFixed(normalizedDecimals), 520, doc.y, { width: 55, align: "right" });
     doc.moveDown(0.55);
   }
 
   doc.moveDown();
   const summaryX = 360;
-  drawSummaryLine(doc, summaryX, "Costo directo", normalized.totals.totalDirectCost);
-  drawSummaryLine(doc, summaryX, "Gastos generales", normalized.totals.totalGeneralExpenses);
-  drawSummaryLine(doc, summaryX, "Utilidad", normalized.totals.totalUtility);
-  drawSummaryLine(doc, summaryX, "IGV", normalized.totals.totalTax);
-  drawSummaryLine(doc, summaryX, "TOTAL", normalized.totals.totalAmount, true);
+  drawSummaryLine(doc, summaryX, "Costo directo", normalized.totals.totalDirectCost, false, normalizedDecimals);
+  drawSummaryLine(doc, summaryX, "Gastos generales", normalized.totals.totalGeneralExpenses, false, normalizedDecimals);
+  drawSummaryLine(doc, summaryX, "Utilidad", normalized.totals.totalUtility, false, normalizedDecimals);
+  drawSummaryLine(doc, summaryX, "IGV", normalized.totals.totalTax, false, normalizedDecimals);
+  drawSummaryLine(doc, summaryX, "TOTAL", normalized.totals.totalAmount, true, normalizedDecimals);
 
   doc.end();
 
@@ -77,7 +94,14 @@ function drawTableHeader(doc: PDFKit.PDFDocument) {
   doc.moveDown(1.5);
 }
 
-function drawSummaryLine(doc: PDFKit.PDFDocument, x: number, label: string, value: number, strong = false) {
+function drawSummaryLine(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  label: string,
+  value: number,
+  strong = false,
+  currencyDecimals = 2,
+) {
   const y = doc.y;
   if (strong) {
     doc.rect(x, y - 2, 190, 18).fill("#0f172a");
@@ -87,7 +111,7 @@ function drawSummaryLine(doc: PDFKit.PDFDocument, x: number, label: string, valu
   }
 
   doc.text(label, x + 8, y, { width: 90 });
-  doc.text(value.toFixed(2), x + 95, y, { width: 85, align: "right" });
+  doc.text(value.toFixed(currencyDecimals), x + 95, y, { width: 85, align: "right" });
   doc.moveDown(0.6);
   doc.fillColor("#334155").font("Helvetica");
 }

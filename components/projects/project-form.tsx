@@ -56,8 +56,13 @@ export function ProjectForm({ companies, project }: ProjectFormProps) {
 
     const savedProject = await response.json();
     broadcastAppDataChange(["/dashboard", "/projects", "/budgets"]);
-    router.push(project ? `/projects/${project.id}` : `/projects/${savedProject.id}`);
-    router.refresh();
+    if (project) {
+      router.push(`/projects/${project.id}`);
+      router.refresh();
+      return;
+    }
+
+    window.location.assign(`/projects/${savedProject.id}`);
   }
 
   return (
@@ -89,7 +94,9 @@ export function ProjectForm({ companies, project }: ProjectFormProps) {
       </div>
       {error ? <p className="md:col-span-2 text-sm text-rose-600">{error}</p> : null}
       <div className="md:col-span-2 flex justify-end">
-        <Button disabled={loading}>{loading ? "Guardando..." : project ? "Actualizar proyecto" : "Crear proyecto"}</Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Guardando..." : project ? "Actualizar proyecto" : "Crear proyecto"}
+        </Button>
       </div>
     </form>
   );

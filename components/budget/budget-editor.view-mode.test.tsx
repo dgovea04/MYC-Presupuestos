@@ -288,8 +288,8 @@ describe("BudgetEditor view mode integration", () => {
     expect(getOrderedItemDescriptions()).toEqual(orderedDescriptionsBeforeOpen);
   });
 
-  it("lets the select portal consume Escape before the dialog closes", async () => {
-    const { getApuAddResourceTrigger, getByText, getInputByValue, queryByText, queryPortaledOptionByText } = await renderEditor({
+  it("shows and hides the add-resource search suggestions with keyboard interaction", async () => {
+    const { getApuAddResourceSearch, getInputByValue, queryByTextExact } = await renderEditor({
       budget: createBudgetWithItem(),
       resourcesCatalog: [createResource()],
     });
@@ -303,27 +303,20 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getApuAddResourceTrigger().click();
+      getApuAddResourceSearch().focus();
     });
 
-    expect(queryPortaledOptionByText("MAT-01 - Arena fina")).toBeTruthy();
+    expect(queryByTextExact("MAT-01 - Arena fina")).toBeTruthy();
 
     await act(async () => {
       dispatchKey(document.activeElement, "Escape");
     });
 
-    expect(queryPortaledOptionByText("MAT-01 - Arena fina")).toBeNull();
-    expect(getByText("Editor APU")).toBeTruthy();
-
-    await act(async () => {
-      dispatchKey(document.activeElement, "Escape");
-    });
-
-    expect(queryByText("Editor APU")).toBeNull();
+    expect(queryByTextExact("MAT-01 - Arena fina")).toBeNull();
   });
 
-  it("keeps excel view mode available to portaled APU select content inside the dialog", async () => {
-    const { getApuAddResourceTrigger, getButtonByText, getInputByValue, getPortaledSelectContent } = await renderEditor({
+  it("shows the add-resource search immediately in excel mode", async () => {
+    const { getApuAddResourceSearch, getButtonByText, getInputByValue, getByText } = await renderEditor({
       budget: createBudgetWithItem(),
       resourcesCatalog: [createResource()],
     });
@@ -341,14 +334,14 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getApuAddResourceTrigger().click();
+      getApuAddResourceSearch().focus();
     });
 
-    expect(getPortaledSelectContent().dataset.viewMode).toBe("excel");
+    expect(getByText("MAT-01 - Arena fina")).toBeTruthy();
   });
 
-  it("resets the add-resource picker after insertion so the same resource can be selected again", async () => {
-    const { getApuAddResourceTrigger, getInputByValue, getPortaledOptionByText, getResourceRowCount } = await renderEditor({
+  it("resets the add-resource search after insertion so the same resource can be selected again", async () => {
+    const { getApuAddResourceSearch, getInputByValue, getByText, getResourceRowCount } = await renderEditor({
       budget: createBudgetWithItem(),
       resourcesCatalog: [createResource()],
     });
@@ -361,29 +354,183 @@ describe("BudgetEditor view mode integration", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ctrlKey: true, key: "Enter" }));
     });
 
-    const picker = getApuAddResourceTrigger();
+    const search = getApuAddResourceSearch();
     expect(getResourceRowCount()).toBe(0);
 
     await act(async () => {
-      picker.click();
+      search.focus();
     });
 
     await act(async () => {
-      getPortaledOptionByText("MAT-01 - Arena fina").click();
+      getByText("MAT-01 - Arena fina").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
 
     expect(getResourceRowCount()).toBe(1);
-    expect(picker.textContent).toContain("Agregar insumo desde el catalogo");
+    expect(search.value).toBe("");
 
     await act(async () => {
-      picker.click();
+      search.blur();
+      search.focus();
     });
 
     await act(async () => {
-      getPortaledOptionByText("MAT-01 - Arena fina").click();
+      getByText("MAT-01 - Arena fina").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
 
     expect(getResourceRowCount()).toBe(2);
+  });
+
+  it("lets a manual APU row assign its resource through the inline filtered search", async () => {
+    const { getButtonByText, getInputByValue, getByText, getByTestIdPrefix } = await renderEditor({
+      budget: createBudgetWithItem(),
+      resourcesCatalog: [createResource()],
+    });
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ctrlKey: true, key: "Enter" }));
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar fila manual").click();
+    });
+
+    await act(async () => {
+      getByTestIdPrefix("apu-resource-picker-").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+
+    const resourceSearchInput = getByTestIdPrefix("apu-resource-search-") as HTMLInputElement;
+
+    await act(async () => {
+      setInputValue(resourceSearchInput, "Arena");
+    });
+
+    await act(async () => {
+      getByText("MAT-01 - Arena fina").click();
+    });
+
+    expect(getByText("MAT-01 - Arena fina")).toBeTruthy();
+  });
+
+  it("shows matching suggestions when reopening a resource field that already has a value", async () => {
+    const { getButtonByText, getByText, getByTestIdPrefix, getInputByValue } = await renderEditor({
+      budget: createBudgetWithItemAndResource(),
+      resourcesCatalog: [createResource()],
+    });
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ctrlKey: true, key: "Enter" }));
+    });
+
+    await act(async () => {
+      getByTestIdPrefix("apu-resource-picker-").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+
+    expect(getByText("MAT-01 - Arena fina")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Cerrar").click();
+    });
+  });
+
+  it("blocks saving when an APU contains a manual row without an assigned resource", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ optimisticBudgets: [] }),
+    } as Response);
+
+    const { getButtonByText, getInputByValue, getResourceRowCount, getByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ctrlKey: true, key: "Enter" }));
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar fila manual").click();
+    });
+
+    expect(getResourceRowCount()).toBe(1);
+
+    await act(async () => {
+      getButtonByText("Cerrar").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Guardar").click();
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(getByText("Asigna un insumo o elimina la fila manual vacia antes de guardar el APU.")).toBeTruthy();
+  });
+
+  it("surfaces the fetch failure message instead of leaving the header stuck in Guardando", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network down"));
+
+    const { getButtonByText, getInputByValue, getByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    const descriptionInput = getInputByValue("Partida demo");
+
+    await act(async () => {
+      descriptionInput.focus();
+      setInputValue(descriptionInput, "Partida demo actualizada");
+      descriptionInput.blur();
+    });
+
+    await act(async () => {
+      getButtonByText("Guardar").click();
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getButtonByText("Guardar")).toBeTruthy();
+    expect(getByText("Network down")).toBeTruthy();
+  });
+
+  it("accepts decimal metrado typed with comma before saving", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ optimisticBudgets: [] }),
+    } as Response);
+
+    const { getButtonByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    const quantityInput = getInputByValue("5");
+
+    await act(async () => {
+      quantityInput.focus();
+      setInputValue(quantityInput, "1,25");
+      quantityInput.blur();
+    });
+
+    await act(async () => {
+      getButtonByText("Guardar").click();
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, requestInit] = fetchSpy.mock.calls[0] ?? [];
+    const body = typeof requestInit?.body === "string" ? JSON.parse(requestInit.body) : null;
+    const updatedItem = body?.items?.update?.find((item: { id: string }) => item.id === "item-1");
+
+    expect(updatedItem?.changes?.quantity).toBe(1.25);
   });
 
   it("uses tighter excel mode density in budget cells and summary panel", async () => {
@@ -486,29 +633,29 @@ async function renderEditor(options?: { budget?: BudgetRecord; resourcesCatalog?
 
       return element;
     },
-    getPortaledOptionByText: (text: string) => {
-      const element = [...document.body.querySelectorAll("[role='option']")].find((candidate) => candidate.textContent?.trim() === text);
+    getByTestId: (testId: string) => {
+      const element = document.body.querySelector(`[data-testid='${testId}']`);
 
       if (!(element instanceof HTMLElement)) {
-        throw new Error(`Missing portaled option: ${text}`);
+        throw new Error(`Missing test id: ${testId}`);
       }
 
       return element;
     },
-    queryPortaledOptionByText: (text: string) => {
-      const element = [...document.body.querySelectorAll("[role='option']")].find((candidate) => candidate.textContent?.trim() === text);
-      return element instanceof HTMLElement ? element : null;
-    },
-    getPortaledSelectContent: () => {
-      const element = document.body.querySelector(".ui-select-content");
+    getByTestIdPrefix: (testIdPrefix: string) => {
+      const element = document.body.querySelector(`[data-testid^='${testIdPrefix}']`);
 
-      if (!(element instanceof HTMLDivElement)) {
-        throw new Error("Missing portaled select content");
+      if (!(element instanceof HTMLElement)) {
+        throw new Error(`Missing test id prefix: ${testIdPrefix}`);
       }
 
       return element;
     },
     queryByText: (text: string) => {
+      const element = [...document.body.querySelectorAll("*")].find((candidate) => candidate.textContent?.trim() === text);
+      return element instanceof HTMLElement ? element : null;
+    },
+    queryByTextExact: (text: string) => {
       const element = [...document.body.querySelectorAll("*")].find((candidate) => candidate.textContent?.trim() === text);
       return element instanceof HTMLElement ? element : null;
     },
@@ -550,11 +697,11 @@ async function renderEditor(options?: { budget?: BudgetRecord; resourcesCatalog?
 
       return element;
     },
-    getApuAddResourceTrigger: () => {
-      const element = document.body.querySelector("[data-testid='apu-add-resource-select']");
+    getApuAddResourceSearch: () => {
+      const element = document.body.querySelector("[data-testid='apu-add-resource-search']");
 
-      if (!(element instanceof HTMLButtonElement)) {
-        throw new Error("Missing APU add-resource trigger");
+      if (!(element instanceof HTMLInputElement)) {
+        throw new Error("Missing APU add-resource search");
       }
 
       return element;
@@ -674,6 +821,54 @@ function createBudgetWithItem(): BudgetRecord {
           performance: 1,
           totalUnitCost: 20,
           resources: [],
+        },
+      },
+    ],
+  };
+}
+
+function createBudgetWithItemAndResource(): BudgetRecord {
+  const resource = createResource();
+
+  return {
+    ...createBudget(),
+    totalDirectCost: 77.5,
+    totalGeneralExpenses: 7.75,
+    totalUtility: 6.2,
+    totalTax: 16.46,
+    totalAmount: 107.91,
+    items: [
+      {
+        id: "item-1",
+        budgetId: "budget-1",
+        levelId: null,
+        code: "IT-1",
+        description: "Partida demo",
+        unit: "m2",
+        quantity: 5,
+        unitPrice: 15.5,
+        partial: 77.5,
+        sortOrder: 1,
+        apu: {
+          id: "apu-1",
+          budgetItemId: "item-1",
+          name: "Partida demo",
+          unit: "m2",
+          performance: 1,
+          totalUnitCost: 15.5,
+          resources: [
+            {
+              id: "apu-resource-1",
+              apuId: "apu-1",
+              resourceId: resource.id,
+              resourceType: resource.category,
+              crew: null,
+              quantity: 1,
+              unitPrice: resource.unitPrice,
+              subtotal: resource.unitPrice,
+              resource,
+            },
+          ],
         },
       },
     ],

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import ExcelJS from "exceljs";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
@@ -15,11 +15,14 @@ import type { BudgetLevelRecord, BudgetLevelType, BudgetRecord, BudgetItemRecord
 import type { ResourceRecord } from "@/types/resource";
 import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
+import { BufferedInput } from "@/components/ui/buffered-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type DragState = { kind: "level" | "item"; id: string } | null;
@@ -68,6 +71,11 @@ type InsertTarget = {
   kind: "level" | "item";
   id: string;
 };
+type ApuSheetControllerHandle = {
+  close: () => void;
+  isOpen: () => boolean;
+  open: (item: BudgetItemRecord, restoreFocusElement?: HTMLElement | null) => void;
+};
 
 const editableColumnOrder: EditableColumn[] = ["code", "description", "unit", "quantity"];
 
@@ -83,9 +91,9 @@ export function BudgetEditor({
   projectName?: string;
 }) {
   const router = useRouter();
+  const { currencyDecimals } = useFormattingSettings();
   const { isExcelMode } = useBudgetViewMode();
   const [state, setState] = useState(() => calculateBudgetRecord(budget));
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [pasteFeedback, setPasteFeedback] = useState("");
@@ -99,6 +107,7 @@ export function BudgetEditor({
   const [activeColumn, setActiveColumn] = useState<ActiveColumn>(null);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const [catalogSelectorRowId, setCatalogSelectorRowId] = useState<string | null>(null);
+  const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogHighlightedIndex, setCatalogHighlightedIndex] = useState(0);
   const [catalogMenu, setCatalogMenu] = useState<CatalogMenuState | null>(null);
   const [catalogInsertTarget, setCatalogInsertTarget] = useState<InsertTarget | null>(null);
@@ -114,9 +123,7 @@ export function BudgetEditor({
   const catalogSuggestions = useMemo(() => {
     if (!catalogSelectorRowId) return [];
 
-    const currentItem = summary.items.find((item) => item.id === catalogSelectorRowId);
-    const query = currentItem?.description.trim().toLowerCase() ?? "";
-    const normalizedQuery = query === "nueva partida" ? "" : query;
+    const normalizedQuery = catalogQuery.trim().toLowerCase() === "nueva partida" ? "" : catalogQuery.trim().toLowerCase();
 
     return partidasCatalog
       .filter((partida) => {
@@ -125,7 +132,7 @@ export function BudgetEditor({
         return text.includes(normalizedQuery);
       })
       .slice(0, 8);
-  }, [catalogSelectorRowId, partidasCatalog, summary.items]);
+  }, [catalogQuery, catalogSelectorRowId, partidasCatalog]);
   const isCatalogMenuOpen = Boolean(catalogSelectorRowId && catalogSuggestions.length > 0 && catalogMenu);
   const catalogInsertSuggestions = useMemo(() => {
     const query = catalogInsertQuery.trim().toLowerCase();
@@ -149,10 +156,6 @@ export function BudgetEditor({
   );
   const effectiveDensityMode: DensityMode = isExcelMode ? "compact" : densityMode;
   const isDensityLockedToCompact = isExcelMode;
-  const selectedItem = useMemo(() => {
-    const item = summary.items.find((candidate) => candidate.id === selectedItemId) ?? null;
-    return item ? ensureBudgetItemApu(item) : null;
-  }, [selectedItemId, summary.items]);
   const serializedSummary = useMemo(() => JSON.stringify(summary), [summary]);
   const lastSavedPayload = useRef(serializedSummary);
   const lastSavedSnapshot = useRef(summary);
@@ -160,13 +163,20 @@ export function BudgetEditor({
   const saveBudgetRef = useRef<((isAutosave?: boolean) => Promise<void>) | null>(null);
   const cellRefs = useRef(new Map<string, HTMLInputElement>());
   const editorRootRef = useRef<HTMLDivElement>(null);
-  const apuSheetRestoreFocusRef = useRef<HTMLElement | null>(null);
-  const handleCloseApuSheet = useCallback(() => {
-    setSelectedItemId(null);
+  const apuSheetControllerRef = useRef<ApuSheetControllerHandle | null>(null);
+  const apuSheetOpenRef = useRef(false);
+  const openApuSheet = useCallback((item: BudgetItemRecord) => {
+    apuSheetOpenRef.current = true;
+    apuSheetControllerRef.current?.open(
+      ensureBudgetItemApu(item),
+      document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    );
   }, []);
-  const openApuSheet = useCallback((itemId: string) => {
-    apuSheetRestoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setSelectedItemId(itemId);
+  const handleApuItemUpdate = useCallback((updatedItem: BudgetItemRecord) => {
+    setState((current) => ({
+      ...current,
+      items: current.items.map((item) => (item.id === updatedItem.id ? updatedItem : item)),
+    }));
   }, []);
 
   useEffect(() => {
@@ -235,7 +245,7 @@ export function BudgetEditor({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (selectedItemId) return;
+      if (apuSheetOpenRef.current) return;
 
       const editorRoot = editorRootRef.current;
       if (!isFocusedWithinEditor(editorRoot)) return;
@@ -257,7 +267,7 @@ export function BudgetEditor({
         if (!activeItem) return;
 
         event.preventDefault();
-        openApuSheet(activeItem.id);
+        openApuSheet(activeItem);
         return;
       }
 
@@ -285,7 +295,7 @@ export function BudgetEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeRowId, openApuSheet, selectedItemId, summary]);
+  }, [activeRowId, openApuSheet, summary]);
 
   function addLevel(type: BudgetLevelType, parentId?: string | null) {
     const sortOrder = state.levels.reduce((max, level) => Math.max(max, level.sortOrder), 0) + 1;
@@ -616,13 +626,15 @@ export function BudgetEditor({
     }
   }
 
-  function openCatalogSelector(rowId: string) {
+  function openCatalogSelector(rowId: string, query = "") {
     setCatalogSelectorRowId(rowId);
+    setCatalogQuery(query);
     setCatalogHighlightedIndex(0);
   }
 
   function closeCatalogSelector() {
     setCatalogSelectorRowId(null);
+    setCatalogQuery("");
     setCatalogMenu(null);
     setCatalogHighlightedIndex(0);
   }
@@ -850,6 +862,13 @@ export function BudgetEditor({
   async function saveBudget(isAutosave = false) {
     if (saving) return;
 
+    const incompleteApuResourceRow = findIncompleteApuResourceRow(summary);
+    if (incompleteApuResourceRow) {
+      setError("Asigna un insumo o elimina la fila manual vacia antes de guardar el APU.");
+      setSaveState("error");
+      return;
+    }
+
     const patch = buildBudgetStatePatch(lastSavedSnapshot.current, summary);
     if (!patch) {
       setSaveState("saved");
@@ -862,32 +881,41 @@ export function BudgetEditor({
 
     const payload = JSON.stringify(patch);
 
-    const response = await fetch(`/api/budgets/${budget.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: payload,
-    });
+    try {
+      const response = await fetch(`/api/budgets/${budget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
 
-    setSaving(false);
+      if (!response.ok) {
+        const data = await response.json().catch(async () => {
+          const text = await response.text().catch(() => "");
+          return text ? { error: text } : null;
+        });
+        const message = data?.error ?? "No se pudo guardar el presupuesto";
+        setError(`${response.status} ${response.statusText}: ${message}`.trim());
+        setSaveState("error");
+        return;
+      }
 
-    if (!response.ok) {
       const data = await response.json();
-      setError(data.error ?? "No se pudo guardar el presupuesto");
+
+      lastSavedPayload.current = serializedSummary;
+      lastSavedSnapshot.current = summary;
+      setLastSavedAt(Date.now());
+      setSaveClock(Date.now());
+      setSaveState("saved");
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], data.optimisticBudgets);
+
+      if (!isAutosave) {
+        router.refresh();
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "No se pudo guardar el presupuesto");
       setSaveState("error");
-      return;
-    }
-
-    const data = await response.json();
-
-    lastSavedPayload.current = serializedSummary;
-    lastSavedSnapshot.current = summary;
-    setLastSavedAt(Date.now());
-    setSaveClock(Date.now());
-    setSaveState("saved");
-    broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], data.optimisticBudgets);
-
-    if (!isAutosave) {
-      router.refresh();
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -1029,9 +1057,9 @@ export function BudgetEditor({
                       <TD className={getBodyCellClass("code", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
                         <div className="flex items-center gap-2">
                           <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
-                          <Input
+                          <BufferedInput
                             value={row.level.code}
-                            onChange={(event) => updateLevel(row.level.id, { code: event.target.value })}
+                            onCommit={(value) => updateLevel(row.level.id, { code: value })}
                             className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
                             ref={(element) => setCellRef(row.level.id, "code", element)}
                             onKeyDown={(event) => handleSpreadsheetNavigation(event, row.level.id, "code")}
@@ -1053,9 +1081,9 @@ export function BudgetEditor({
                           >
                             {levelTypeLabel[row.level.type]}
                           </span>
-                          <Input
+                          <BufferedInput
                             value={row.level.name}
-                            onChange={(event) => updateLevel(row.level.id, { name: event.target.value })}
+                            onCommit={(value) => updateLevel(row.level.id, { name: value })}
                             className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
                             ref={(element) => setCellRef(row.level.id, "description", element)}
                             onKeyDown={(event) => handleSpreadsheetNavigation(event, row.level.id, "description")}
@@ -1136,9 +1164,9 @@ export function BudgetEditor({
                       <TD className={getBodyCellClass("code", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
                         <div className="flex items-center gap-2">
                           <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
-                          <Input
+                          <BufferedInput
                             value={row.item.code}
-                            onChange={(event) => updateItem(row.item.id, { code: event.target.value })}
+                            onCommit={(value) => updateItem(row.item.id, { code: value })}
                             className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
                             ref={(element) => setCellRef(row.item.id, "code", element)}
                             onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "code")}
@@ -1153,11 +1181,11 @@ export function BudgetEditor({
                       <TD className={getBodyCellClass("description", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
                         <div style={{ paddingLeft: `${row.depth * 18}px` }}>
                           <div className="relative">
-                            <Input
+                            <BufferedInput
                               value={row.item.description}
-                              onChange={(event) => {
-                                updateItem(row.item.id, { description: event.target.value });
-                                openCatalogSelector(row.item.id);
+                              onCommit={(value) => updateItem(row.item.id, { description: value })}
+                              onValueChange={(value) => {
+                                openCatalogSelector(row.item.id, value);
                               }}
                               className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
                               ref={(element) => setCellRef(row.item.id, "description", element)}
@@ -1195,11 +1223,13 @@ export function BudgetEditor({
                               onFocus={() => {
                                 setActiveRowId(row.item.id);
                                 setActiveColumn("description");
-                                openCatalogSelector(row.item.id);
+                                openCatalogSelector(row.item.id, row.item.description);
                               }}
                               onBlur={() => {
                                 window.setTimeout(() => {
-                                  setCatalogSelectorRowId((current) => (current === row.item.id ? null : current));
+                                  if (catalogSelectorRowId === row.item.id) {
+                                    closeCatalogSelector();
+                                  }
                                 }, 120);
                               }}
                             />
@@ -1226,8 +1256,8 @@ export function BudgetEditor({
                                           {partida.unit} · {partida.apuRows.length} insumos · {partida.performanceRate ?? `${partida.performance} ${partida.unit}/DIA`}
                                         </p>
                                       </div>
-                                      <span className="whitespace-nowrap text-xs font-semibold text-slate-700">
-                                        {budget.currency} {partida.unitPrice.toFixed(2)}
+                                  <span className="whitespace-nowrap text-xs font-semibold text-slate-700">
+                                        {formatCurrency(partida.unitPrice, budget.currency, currencyDecimals)}
                                       </span>
                                     </button>
                                   ))}
@@ -1238,9 +1268,9 @@ export function BudgetEditor({
                         </div>
                       </TD>
                       <TD className={getBodyCellClass("unit", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
-                        <Input
+                        <BufferedInput
                           value={row.item.unit}
-                          onChange={(event) => updateItem(row.item.id, { unit: event.target.value })}
+                          onCommit={(value) => updateItem(row.item.id, { unit: value })}
                           className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-center")}
                           ref={(element) => setCellRef(row.item.id, "unit", element)}
                           onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "unit")}
@@ -1252,11 +1282,11 @@ export function BudgetEditor({
                         />
                       </TD>
                       <TD className={getBodyCellClass("quantity", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
-                        <Input
-                          type="number"
-                          step="0.01"
+                        <BufferedInput
+                          type="text"
+                          inputMode="decimal"
                           value={row.item.quantity}
-                          onChange={(event) => updateItem(row.item.id, { quantity: Number(event.target.value) })}
+                          onCommit={(value) => updateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) })}
                           className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums")}
                           ref={(element) => setCellRef(row.item.id, "quantity", element)}
                           onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "quantity")}
@@ -1305,7 +1335,7 @@ export function BudgetEditor({
                           <IconButton label="Bajar" onClick={() => moveItem(row.item.id, "down")}>
                             <ChevronDown className="h-4 w-4" />
                           </IconButton>
-                          <IconButton label="Editar APU" onClick={() => openApuSheet(row.item.id)}>
+                          <IconButton label="Editar APU" onClick={() => openApuSheet(row.item)}>
                             <Pencil className="h-4 w-4" />
                           </IconButton>
                           <IconButton
@@ -1456,19 +1486,14 @@ export function BudgetEditor({
         ) : null}
       </Card>
 
-      <ApuEditorSheet
-        item={selectedItem}
-        open={!!selectedItem}
-        onClose={handleCloseApuSheet}
+      <ApuSheetController
+        ref={apuSheetControllerRef}
         resourcesCatalog={resourcesCatalog}
-        restoreFocusElement={apuSheetRestoreFocusRef.current}
         densityMode={effectiveDensityMode}
-        onUpdate={(updatedItem) => {
-          setState((current) => ({
-            ...current,
-            items: current.items.map((item) => (item.id === updatedItem.id ? updatedItem : item)),
-          }));
+        onClose={() => {
+          apuSheetOpenRef.current = false;
         }}
+        onUpdate={handleApuItemUpdate}
       />
 
       {isCatalogMenuOpen && catalogMenu?.rowId === catalogSelectorRowId ? (
@@ -1506,7 +1531,7 @@ export function BudgetEditor({
                   </p>
                 </div>
                 <span className="whitespace-nowrap text-xs font-semibold text-slate-700">
-                  {budget.currency} {partida.unitPrice.toFixed(2)}
+                  {formatCurrency(partida.unitPrice, budget.currency, currencyDecimals)}
                 </span>
               </button>
             ))}
@@ -1582,6 +1607,56 @@ export function BudgetEditor({
     </div>
   );
 }
+
+const ApuSheetController = forwardRef<ApuSheetControllerHandle, {
+  densityMode: DensityMode;
+  onClose: () => void;
+  onUpdate: (item: BudgetItemRecord) => void;
+  resourcesCatalog: ResourceRecord[];
+}>(function ApuSheetController({ densityMode, onClose, onUpdate, resourcesCatalog }, ref) {
+  const [draftItem, setDraftItem] = useState<BudgetItemRecord | null>(null);
+  const [openedItemSnapshot, setOpenedItemSnapshot] = useState<string | null>(null);
+  const [restoreFocusElement, setRestoreFocusElement] = useState<HTMLElement | null>(null);
+
+  const closeSheet = useCallback(() => {
+    if (draftItem && openedItemSnapshot !== JSON.stringify(draftItem)) {
+      onUpdate(draftItem);
+    }
+
+    setDraftItem(null);
+    setOpenedItemSnapshot(null);
+    setRestoreFocusElement(null);
+    onClose();
+  }, [draftItem, onClose, onUpdate, openedItemSnapshot]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      close: () => {
+        closeSheet();
+      },
+      isOpen: () => draftItem !== null,
+      open: (nextItem, nextRestoreFocusElement) => {
+        setOpenedItemSnapshot(JSON.stringify(nextItem));
+        setRestoreFocusElement(nextRestoreFocusElement ?? null);
+        setDraftItem(nextItem);
+      },
+    }),
+    [closeSheet, draftItem],
+  );
+
+  return (
+    <ApuEditorSheet
+      item={draftItem}
+      open={draftItem !== null}
+      onClose={closeSheet}
+      onUpdate={setDraftItem}
+      resourcesCatalog={resourcesCatalog}
+      restoreFocusElement={restoreFocusElement}
+      densityMode={densityMode}
+    />
+  );
+});
 
 function IconButton({
   label,
@@ -1877,7 +1952,9 @@ function CatalogInsertSheet({
                       </div>
                     </TD>
                     <TD className="py-2 text-center text-sm text-slate-700">{partida.unit}</TD>
-                    <TD className="py-2 text-right text-sm font-medium tabular-nums text-slate-900">{partida.unitPrice.toFixed(2)}</TD>
+                    <TD className="py-2 text-right text-sm font-medium tabular-nums text-slate-900">
+                      {formatNumber(partida.unitPrice, currencyDecimals)}
+                    </TD>
                     <TD className="py-2 text-sm text-slate-600">{partida.performanceRate ?? `${partida.performance} ${partida.unit}/DIA`}</TD>
                     <TD className="py-2 text-right">
                       <Button size="sm" onClick={() => onSelect(partida)}>
@@ -2016,6 +2093,12 @@ function buildBudgetStatePatch(
     levels: levelPatch,
     items: itemPatch,
   };
+}
+
+function findIncompleteApuResourceRow(budget: BudgetRecord & { totals: BudgetTotals }) {
+  return budget.items.find((item) =>
+    item.apu?.resources.some((resource) => resource.resourceId.trim().length === 0),
+  );
 }
 
 function buildEntityPatch<T extends { id: string }>(previous: T[], current: T[]) {

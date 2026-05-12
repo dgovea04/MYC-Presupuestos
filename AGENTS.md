@@ -8,7 +8,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Use TypeScript strict mode
 - Never use any
 - Financial calculations must use decimal-safe math
-- All monetary values use 2 decimals
 - Polynomial coefficient calculations use 3 decimals
 - Keep calculation logic isolated from UI
 - All formulas must be testable
@@ -26,5 +25,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This project implements Peruvian construction budget regulations.
 Mathematical precision is critical.
 Never simplify financial formulas.
+
+"Para tareas simples y rutinarias, no utilices 'superpowers' ni procesos de razonamiento complejos. Prioriza soluciones directas y minimalistas sin delegar a sub-agentes."
 
 <!-- END:nextjs-agent-rules -->

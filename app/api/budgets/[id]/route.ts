@@ -17,6 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     revalidateBudgetPaths(budget.projectId, id);
     return NextResponse.json({ budget, optimisticBudgets });
   } catch (error) {
+    console.error("Budget PATCH failed", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo guardar el presupuesto" }, { status: 400 });
   }
 }

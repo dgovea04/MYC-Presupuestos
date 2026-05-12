@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/ui/action-button";
 import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import {
   getAppDataChangeEventName,
   getAppDataChangeStorageKey,
@@ -15,13 +16,6 @@ import {
 import { formatDate } from "@/lib/utils";
 
 type BudgetSectionSummary = BudgetLiveUpdateSummary;
-
-const defaultSubBudgetNames = [
-  "Estructuras",
-  "Arquitectura",
-  "Instalaciones Sanitarias",
-  "Instalaciones Electricas",
-] as const;
 
 export function ProjectBudgetSections({
   projectId,
@@ -33,6 +27,7 @@ export function ProjectBudgetSections({
   subBudgets: BudgetSectionSummary[];
 }) {
   const [optimisticBudgets, setOptimisticBudgets] = useState<Record<string, BudgetSectionSummary>>({});
+  const { defaultSubBudgetNames, dateFormat } = useFormattingSettings();
 
   useEffect(() => {
     function applyPayload(payload: AppDataChangePayload | null) {
@@ -77,13 +72,14 @@ export function ProjectBudgetSections({
     [subBudgets, optimisticBudgets],
   );
 
-  const orderedSubBudgets = useMemo(
-    () =>
-      defaultSubBudgetNames
-        .map((name) => subs.find((budget) => budget.name === name))
-        .filter((budget): budget is BudgetSectionSummary => Boolean(budget)),
-    [subs],
-  );
+  const orderedSubBudgets = useMemo(() => {
+    const orderedByDefaultNames = defaultSubBudgetNames
+      .map((name) => subs.find((budget) => budget.name === name))
+      .filter((budget): budget is BudgetSectionSummary => Boolean(budget));
+    const remaining = subs.filter((budget) => !defaultSubBudgetNames.includes(budget.name));
+
+    return [...orderedByDefaultNames, ...remaining];
+  }, [subs, defaultSubBudgetNames]);
 
   const consolidatedTotal = orderedSubBudgets.reduce((sum, budget) => sum + budget.totalAmount, 0);
   const budgetCurrency = general?.currency ?? orderedSubBudgets[0]?.currency ?? "PEN";
@@ -114,7 +110,7 @@ export function ProjectBudgetSections({
                       <AnimatedCurrencyValue value={consolidatedTotal} currency={budgetCurrency} className="px-0 py-0 font-semibold text-slate-900" />
                     </span>
                     <span>Sub Presupuestos: {orderedSubBudgets.length}</span>
-                    <span>Ultima actualizacion: {formatDate(generalBudgetUpdatedAt)}</span>
+                    <span>Ultima actualizacion: {formatDate(generalBudgetUpdatedAt, dateFormat)}</span>
                   </div>
                 </div>
                 <Link href={`/budgets/${general.id}`}>
@@ -133,7 +129,7 @@ export function ProjectBudgetSections({
           <CardHeader>
             <CardTitle>Sub Presupuestos</CardTitle>
             <CardDescription>
-              Cada proyecto arranca con cuatro sub presupuestos base, listos para editar por especialidad.
+              Cada proyecto arranca con los sub presupuestos base configurados, listos para editar por especialidad.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 lg:grid-cols-2">

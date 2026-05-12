@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetById } from "@/lib/data/budgets";
 import { createBudgetPdf } from "@/lib/exports/pdf";
+import { getUserSettings } from "@/lib/data/settings";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json({ error: "Presupuesto no encontrado" }, { status: 404 });
   }
 
-  const file = await createBudgetPdf(budget, budget.project);
+  const settings = await getUserSettings(session.user.id);
+  const file = await createBudgetPdf(budget, budget.project, settings.currencyDecimals);
 
   return new NextResponse(file, {
     headers: {

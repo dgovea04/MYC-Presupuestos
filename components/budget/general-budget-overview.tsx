@@ -42,6 +42,7 @@ const specialtyOrder = [
   "Instalaciones Sanitarias",
   "Instalaciones Electricas",
 ] as const;
+const QUANTITY_DECIMALS = 2;
 
 export function GeneralBudgetOverview({
   projectId,
@@ -54,7 +55,7 @@ export function GeneralBudgetOverview({
   subBudgets: SubBudgetOverview[];
   subBudgetDetails: BudgetRecord[];
 }) {
-  const { currencyDecimals } = useFormattingSettings();
+  const { currencyDecimals, dateFormat } = useFormattingSettings();
   const [optimisticTotals, setOptimisticTotals] = useState<Record<string, { totalAmount: number; updatedAt: string }>>({});
 
   useEffect(() => {
@@ -175,7 +176,7 @@ export function GeneralBudgetOverview({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold text-slate-900">{budget.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">Actualizado {formatDate(budget.updatedAt)}</p>
+                    <p className="mt-1 text-sm text-slate-500">Actualizado {formatDate(budget.updatedAt, dateFormat)}</p>
                   </div>
                   <Badge className="bg-sky-100 text-sky-700">{formatNumber(participation, 1)}%</Badge>
                 </div>
@@ -212,7 +213,7 @@ export function GeneralBudgetOverview({
               <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
               <span>Partidas: {consolidatedTotals.itemsCount}</span>
               <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
-              <span>Ultima actualizacion: {latestUpdatedAt ? formatDate(latestUpdatedAt) : "Sin fecha"}</span>
+              <span>Ultima actualizacion: {latestUpdatedAt ? formatDate(latestUpdatedAt, dateFormat) : "Sin fecha"}</span>
             </div>
           </div>
         </CardHeader>
@@ -369,7 +370,7 @@ export function GeneralBudgetOverview({
                               </div>
                             </TD>
                             <TD className="text-center">{row.item.unit}</TD>
-                            <TD className="text-right tabular-nums">{formatNumber(row.item.quantity, 2)}</TD>
+                            <TD className="text-right tabular-nums">{formatNumber(row.item.quantity, QUANTITY_DECIMALS)}</TD>
                             <TD className="text-right tabular-nums">{formatCurrencyCell(row.item.unitPrice, activeBudget.currency, currencyDecimals)}</TD>
                             <TD className="text-right">
                               <AnimatedCurrencyValue value={row.item.partial} currency={activeBudget.currency} className="justify-end px-0 py-0 text-sm text-slate-900" />

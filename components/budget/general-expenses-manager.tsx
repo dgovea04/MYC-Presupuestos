@@ -18,6 +18,7 @@ import type {
 } from "@/types/budget-sections";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
+const RATE_PERCENTAGE_DECIMALS = 2;
 
 export function GeneralExpensesManager({
   budgetId,
@@ -741,5 +742,5 @@ function getDirectCostPercentage(amount: number, totalDirectCost: number) {
 }
 
 function formatPercentageValue(value: number) {
-  return `${formatNumber(value * 100, 2)}%`;
+  return `${formatNumber(value * 100, RATE_PERCENTAGE_DECIMALS)}%`;
 }

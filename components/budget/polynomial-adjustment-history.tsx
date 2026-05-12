@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
 import type { AdjustmentCalculationRecord } from "@/types/polynomial-formula";
@@ -8,6 +9,8 @@ export function PolynomialAdjustmentHistory({
 }: {
   adjustments: AdjustmentCalculationRecord[];
 }) {
+  const { dateFormat } = useFormattingSettings();
+
   return (
     <Card>
       <CardHeader>
@@ -36,7 +39,7 @@ export function PolynomialAdjustmentHistory({
               <TBody>
                 {adjustments.map((adjustment) => (
                   <TR key={adjustment.id}>
-                    <TD>{formatDate(new Date(adjustment.year, adjustment.month - 1, 1))}</TD>
+                    <TD>{formatDate(new Date(adjustment.year, adjustment.month - 1, 1), dateFormat)}</TD>
                     <TD className="text-right tabular-nums">{adjustment.originalAmount}</TD>
                     <TD className="text-right tabular-nums">{adjustment.kRounded}</TD>
                     <TD className="text-right tabular-nums">{adjustment.adjustedAmount}</TD>

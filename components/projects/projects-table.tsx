@@ -7,6 +7,7 @@ import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import type { ProjectRecord } from "@/types/project";
 import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/ui/action-button";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
@@ -17,6 +18,7 @@ type ProjectRow = ProjectRecord & {
 
 export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   const router = useRouter();
+  const { dateFormat } = useFormattingSettings();
   const [filter, setFilter] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -74,7 +76,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                   <Badge>{project.status}</Badge>
                 </TD>
                 <TD>{project.budgetsCount}</TD>
-                <TD>{formatDate(project.updatedAt)}</TD>
+                <TD>{formatDate(project.updatedAt, dateFormat)}</TD>
                 <TD>
                   <div className="flex justify-end gap-2">
                     <Link href={`/projects/${project.id}`}>

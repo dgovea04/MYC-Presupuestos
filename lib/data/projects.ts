@@ -1,25 +1,94 @@
 import { prisma } from "@/lib/db/prisma";
+import { getUserSettings } from "@/lib/data/settings";
 import { projectSchema, type ProjectInput } from "@/lib/validations/project";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
 
-const defaultProjectBudgetNames = [
-  "Estructuras",
-  "Arquitectura",
-  "Instalaciones Sanitarias",
-  "Instalaciones Electricas",
-] as const;
-
-const defaultBudgetRates = {
-  currency: "PEN",
-  igvRate: 0.18,
-  generalExpensesRate: 0.1,
-  utilityRate: 0.08,
+const defaultBudgetTotals = {
   totalDirectCost: 0,
   totalGeneralExpenses: 0,
   totalUtility: 0,
   totalTax: 0,
   totalAmount: 0,
 } as const;
+
+type BudgetDefaultsContext = {
+  currency: string;
+  igvRate: Prisma.Decimal | number;
+  generalExpensesRate: Prisma.Decimal | number;
+  utilityRate: Prisma.Decimal | number;
+};
+
+type BudgetDefaultsSource = BudgetDefaultsContext & {
+  kind: "GENERAL" | "SUB_BUDGET";
+  name: string;
+};
+
+function createDefaultBudgetContext(settings: Awaited<ReturnType<typeof getUserSettings>>): BudgetDefaultsContext {
+  return {
+    currency: settings.defaultCurrency,
+    igvRate: settings.defaultIgvRate,
+    generalExpensesRate: settings.defaultGeneralExpensesRate,
+    utilityRate: settings.defaultUtilityRate,
+  };
+}
+
+function createBudgetData(context: BudgetDefaultsContext) {
+  return {
+    currency: context.currency,
+    igvRate: context.igvRate,
+    generalExpensesRate: context.generalExpensesRate,
+    utilityRate: context.utilityRate,
+    ...defaultBudgetTotals,
+  };
+}
+
+function resolveBudgetDefaultsContext(
+  budgets: BudgetDefaultsSource[],
+  fallbackContext: BudgetDefaultsContext,
+): BudgetDefaultsContext {
+  const compatibleBudget =
+    budgets.find((budget) => budget.kind === "GENERAL" && budget.name === "Presupuesto General") ??
+    budgets.find((budget) => budget.kind === "GENERAL") ??
+    budgets[0];
+
+  if (!compatibleBudget) {
+    return fallbackContext;
+  }
+
+  return {
+    currency: compatibleBudget.currency,
+    igvRate: compatibleBudget.igvRate,
+    generalExpensesRate: compatibleBudget.generalExpensesRate,
+    utilityRate: compatibleBudget.utilityRate,
+  };
+}
+
+function createZeroDecimalBudgetTotals() {
+  return {
+    totalDirectCost: new Prisma.Decimal(0),
+    totalGeneralExpenses: new Prisma.Decimal(0),
+    totalUtility: new Prisma.Decimal(0),
+    totalTax: new Prisma.Decimal(0),
+    totalAmount: new Prisma.Decimal(0),
+  };
+}
+
+function getDefaultSubBudgetNames(settings: Awaited<ReturnType<typeof getUserSettings>>) {
+  if (settings.defaultSubBudgetNames.length > 0) {
+    return [...settings.defaultSubBudgetNames];
+  }
+
+  return [...DEFAULT_INITIAL_SUB_BUDGET_NAMES];
+}
+
+function getFallbackSubBudgetNames(defaultSubBudgetNames: readonly string[]) {
+  if (defaultSubBudgetNames.length > 0) {
+    return [...defaultSubBudgetNames];
+  }
+
+  return [...DEFAULT_INITIAL_SUB_BUDGET_NAMES];
+}
 
 export async function getUserCompanies(userId: string) {
   return prisma.company.findMany({
@@ -29,6 +98,8 @@ export async function getUserCompanies(userId: string) {
 }
 
 export async function getProjectsByUser(userId: string) {
+  const settings = await getUserSettings(userId);
+
   return prisma.$transaction(async (tx) => {
     const projects = await tx.project.findMany({
       where: {
@@ -46,7 +117,12 @@ export async function getProjectsByUser(userId: string) {
 
     const hydratedProjects = [];
     for (const project of projects) {
-      const budgets = await ensureProjectBudgetStructure(tx, project.id);
+      const budgets = await ensureProjectBudgetStructure(
+        tx,
+        project.id,
+        createDefaultBudgetContext(settings),
+        settings.defaultSubBudgetNames,
+      );
       hydratedProjects.push({
         ...project,
         budgets,
@@ -58,6 +134,8 @@ export async function getProjectsByUser(userId: string) {
 }
 
 export async function getProjectById(id: string, userId: string) {
+  const settings = await getUserSettings(userId);
+
   return prisma.$transaction(async (tx) => {
     const project = await tx.project.findFirst({
       where: {
@@ -75,7 +153,12 @@ export async function getProjectById(id: string, userId: string) {
       return null;
     }
 
-    const budgets = await ensureProjectBudgetStructure(tx, project.id);
+    const budgets = await ensureProjectBudgetStructure(
+      tx,
+      project.id,
+      createDefaultBudgetContext(settings),
+      settings.defaultSubBudgetNames,
+    );
 
     return {
       ...project,
@@ -99,6 +182,10 @@ export async function createProject(userId: string, input: ProjectInput) {
     throw new Error("No puedes crear proyectos en una empresa que no te pertenece");
   }
 
+  const settings = await getUserSettings(userId);
+  const defaultBudgetData = createBudgetData(createDefaultBudgetContext(settings));
+  const defaultBudgetNames = getDefaultSubBudgetNames(settings);
+
   return prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
       data: {
@@ -113,17 +200,17 @@ export async function createProject(userId: string, input: ProjectInput) {
         projectId: project.id,
         kind: "GENERAL",
         name: "Presupuesto General",
-        ...defaultBudgetRates,
+        ...defaultBudgetData,
       },
     });
 
     await tx.budget.createMany({
-      data: defaultProjectBudgetNames.map((name) => ({
+      data: defaultBudgetNames.map((name) => ({
         projectId: project.id,
         parentBudgetId: generalBudget.id,
         kind: "SUB_BUDGET",
         name,
-        ...defaultBudgetRates,
+        ...defaultBudgetData,
       })),
     });
 
@@ -182,11 +269,20 @@ export async function deleteProject(id: string, userId: string) {
   });
 }
 
-async function ensureProjectBudgetStructure(tx: Prisma.TransactionClient, projectId: string) {
+async function ensureProjectBudgetStructure(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  fallbackBudgetContext: BudgetDefaultsContext,
+  defaultSubBudgetNames: string[],
+) {
   const budgets = await tx.budget.findMany({
     where: { projectId },
     orderBy: [{ kind: "asc" }, { createdAt: "asc" }],
   });
+
+  const recoveryBudgetDefaults = createBudgetData(
+    resolveBudgetDefaultsContext(budgets, fallbackBudgetContext),
+  );
 
   let generalBudget =
     budgets.find((budget) => budget.kind === "GENERAL" && budget.name === "Presupuesto General") ??
@@ -199,7 +295,7 @@ async function ensureProjectBudgetStructure(tx: Prisma.TransactionClient, projec
         projectId,
         kind: "GENERAL",
         name: "Presupuesto General",
-        ...defaultBudgetRates,
+        ...recoveryBudgetDefaults,
       },
     });
   } else if (generalBudget.name !== "Presupuesto General") {
@@ -210,8 +306,16 @@ async function ensureProjectBudgetStructure(tx: Prisma.TransactionClient, projec
   }
 
   const budgetsByName = new Map(budgets.map((budget) => [budget.name, budget]));
+  const childBudgetDefaults = createBudgetData({
+    currency: generalBudget.currency,
+    igvRate: generalBudget.igvRate,
+    generalExpensesRate: generalBudget.generalExpensesRate,
+    utilityRate: generalBudget.utilityRate,
+  });
 
-  for (const name of defaultProjectBudgetNames) {
+  const defaultBudgetNames = getFallbackSubBudgetNames(defaultSubBudgetNames);
+
+  for (const name of defaultBudgetNames) {
     const existing = budgetsByName.get(name);
 
     if (existing) {
@@ -234,7 +338,7 @@ async function ensureProjectBudgetStructure(tx: Prisma.TransactionClient, projec
         parentBudgetId: generalBudget.id,
         kind: "SUB_BUDGET",
         name,
-        ...defaultBudgetRates,
+        ...childBudgetDefaults,
       },
     });
 
@@ -269,19 +373,13 @@ async function refreshGeneralBudgetTotals(tx: Prisma.TransactionClient, generalB
 
   const consolidated = generalBudget.childBudgets.reduce(
     (totals, childBudget) => ({
-      totalDirectCost: totals.totalDirectCost + Number(childBudget.totalDirectCost),
-      totalGeneralExpenses: totals.totalGeneralExpenses + Number(childBudget.totalGeneralExpenses),
-      totalUtility: totals.totalUtility + Number(childBudget.totalUtility),
-      totalTax: totals.totalTax + Number(childBudget.totalTax),
-      totalAmount: totals.totalAmount + Number(childBudget.totalAmount),
+      totalDirectCost: totals.totalDirectCost.plus(childBudget.totalDirectCost),
+      totalGeneralExpenses: totals.totalGeneralExpenses.plus(childBudget.totalGeneralExpenses),
+      totalUtility: totals.totalUtility.plus(childBudget.totalUtility),
+      totalTax: totals.totalTax.plus(childBudget.totalTax),
+      totalAmount: totals.totalAmount.plus(childBudget.totalAmount),
     }),
-    {
-      totalDirectCost: 0,
-      totalGeneralExpenses: 0,
-      totalUtility: 0,
-      totalTax: 0,
-      totalAmount: 0,
-    },
+    createZeroDecimalBudgetTotals(),
   );
 
   await tx.budget.update({

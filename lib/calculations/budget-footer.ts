@@ -1,3 +1,5 @@
+import { formatNumber } from "@/lib/utils";
+
 export type BudgetFooterRow = {
   code: "CD" | "PGG" | "UTI" | "ST" | "IGV" | "TOTAL";
   description: string;
@@ -61,7 +63,7 @@ export function calculateBudgetFooterSummary(input: {
 }
 
 function formatRateLabel(rate: number) {
-  return `${(rate * 100).toFixed(2)}%`;
+  return `${formatNumber(rate * 100, 2)}%`;
 }
 
 function formatFormulaRate(rate: number) {

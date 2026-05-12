@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { BudgetForm } from "@/components/budget/budget-form";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectsByUser } from "@/lib/data/projects";
+import { getUserSettings } from "@/lib/data/settings";
 
 export default async function NewBudgetPage({
   searchParams,
@@ -11,7 +12,7 @@ export default async function NewBudgetPage({
 }) {
   const session = await getAuthSession();
   const { projectId } = await searchParams;
-  const projects = await getProjectsByUser(session!.user.id);
+  const [projects, settings] = await Promise.all([getProjectsByUser(session!.user.id), getUserSettings(session!.user.id)]);
 
   return (
     <AppShell>
@@ -24,6 +25,10 @@ export default async function NewBudgetPage({
           <BudgetForm
             projects={projects.map((project) => ({ id: project.id, name: project.name }))}
             defaultProjectId={projectId}
+            defaultCurrency={settings.defaultCurrency}
+            defaultIgvRate={settings.defaultIgvRate}
+            defaultGeneralExpensesRate={settings.defaultGeneralExpensesRate}
+            defaultUtilityRate={settings.defaultUtilityRate}
           />
         </CardContent>
       </Card>

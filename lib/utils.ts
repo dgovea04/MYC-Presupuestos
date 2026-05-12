@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { DEFAULT_DATE_FORMAT, type DateFormatOption } from "@/types/settings";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -24,9 +25,25 @@ export function formatCurrency(value: number, currency = "PEN", decimalPlaces = 
   return `${sign}${symbol} ${formatNumber(Math.abs(value), decimalPlaces)}`;
 }
 
-export function formatDate(value?: string | Date | null) {
+export function formatDate(value?: string | Date | null, dateFormat: DateFormatOption = DEFAULT_DATE_FORMAT) {
   if (!value) return "Sin fecha";
   const date = typeof value === "string" ? new Date(value) : value;
+
+  if (dateFormat === "DD_MM_YYYY") {
+    return new Intl.DateTimeFormat("es-PE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date);
+  }
+
+  if (dateFormat === "DD_MM") {
+    return new Intl.DateTimeFormat("es-PE", {
+      day: "2-digit",
+      month: "2-digit",
+    }).format(date);
+  }
+
   return new Intl.DateTimeFormat("es-PE", {
     day: "2-digit",
     month: "short",

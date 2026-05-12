@@ -140,7 +140,7 @@ describe("BudgetDetailPage", () => {
       },
     ]);
     mocks.getCatalogPartidas.mockResolvedValue([]);
-    mocks.getUserSettings.mockResolvedValue({ currencyDecimals: 2 });
+    mocks.getUserSettings.mockResolvedValue({ defaultCurrency: "PEN", currencyDecimals: 2 });
     mocks.getProjectById.mockResolvedValue({
       id: "project-1",
       name: "Proyecto Demo",

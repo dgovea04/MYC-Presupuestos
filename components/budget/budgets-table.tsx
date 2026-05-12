@@ -26,7 +26,7 @@ type BudgetRow = {
 
 export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
   const router = useRouter();
-  const { currencyDecimals } = useFormattingSettings();
+  const { currencyDecimals, dateFormat } = useFormattingSettings();
   const [optimisticBudgets, setOptimisticBudgets] = useState<Record<string, Partial<BudgetRow>>>({});
   const [filter, setFilter] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
                 <TD className="font-medium text-slate-900">{budget.name}</TD>
                 <TD>{budget.projectName}</TD>
                 <TD>{formatCurrency(budget.totalAmount, budget.currency, currencyDecimals)}</TD>
-                <TD>{formatDate(budget.updatedAt)}</TD>
+                <TD>{formatDate(budget.updatedAt, dateFormat)}</TD>
                 <TD>
                   <div className="flex justify-end gap-2">
                     <Link href={`/budgets/${budget.id}`}>

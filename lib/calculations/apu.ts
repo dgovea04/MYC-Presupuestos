@@ -74,8 +74,17 @@ export function calculateApuRows<T extends ApuCalculationRow>(rows: T[], perform
   });
 }
 
+export function calculateApuSummary<T extends ApuCalculationRow>(rows: T[], performance: number) {
+  const calculatedRows = calculateApuRows(rows, performance);
+
+  return {
+    rows: calculatedRows,
+    totalUnitCost: roundMoney(calculatedRows.reduce((sum, row) => sum + row.subtotal, 0)),
+  };
+}
+
 export function calculateApuTotalUnitCost<T extends ApuCalculationRow>(rows: T[], performance: number) {
-  return roundMoney(calculateApuRows(rows, performance).reduce((sum, row) => sum + row.subtotal, 0));
+  return calculateApuSummary(rows, performance).totalUnitCost;
 }
 
 export function isCrewDrivenApuRow(row: Pick<ApuCalculationRow, "crew" | "resourceType" | "unit" | "resource">) {

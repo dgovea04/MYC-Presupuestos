@@ -7,14 +7,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import type { UserSettingsRecord } from "@/types/settings";
+import { formatNumber } from "@/lib/utils";
+
+type BudgetFormProps = {
+  projects: Array<{ id: string; name: string }>;
+  defaultProjectId?: string;
+  defaultCurrency?: UserSettingsRecord["defaultCurrency"];
+  defaultIgvRate?: UserSettingsRecord["defaultIgvRate"];
+  defaultGeneralExpensesRate?: UserSettingsRecord["defaultGeneralExpensesRate"];
+  defaultUtilityRate?: UserSettingsRecord["defaultUtilityRate"];
+};
+
+const RATE_INPUT_STEP = "0.001";
+
+function formatRateDefault(rate: number) {
+  return formatRate(rate);
+}
+
+function formatRate(rate: number) {
+  return formatNumber(rate, 6).replace(/\.?0+$/, "");
+}
 
 export function BudgetForm({
   projects,
   defaultProjectId,
-}: {
-  projects: Array<{ id: string; name: string }>;
-  defaultProjectId?: string;
-}) {
+  defaultCurrency = "PEN",
+  defaultIgvRate = 0.18,
+  defaultGeneralExpensesRate = 0.1,
+  defaultUtilityRate = 0.08,
+}: BudgetFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -60,22 +82,28 @@ export function BudgetForm({
       </div>
       <div className="space-y-2">
         <Label htmlFor="currency">Moneda</Label>
-        <Select id="currency" name="currency" defaultValue="PEN">
+        <Select id="currency" name="currency" defaultValue={defaultCurrency}>
           <option value="PEN">PEN</option>
           <option value="USD">USD</option>
         </Select>
       </div>
       <div className="space-y-2">
         <Label htmlFor="igvRate">IGV</Label>
-        <Input id="igvRate" name="igvRate" type="number" step="0.01" defaultValue="0.18" />
+        <Input id="igvRate" name="igvRate" type="number" step={RATE_INPUT_STEP} defaultValue={formatRateDefault(defaultIgvRate)} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="generalExpensesRate">Gastos generales</Label>
-        <Input id="generalExpensesRate" name="generalExpensesRate" type="number" step="0.01" defaultValue="0.10" />
+        <Input
+          id="generalExpensesRate"
+          name="generalExpensesRate"
+          type="number"
+          step={RATE_INPUT_STEP}
+          defaultValue={formatRateDefault(defaultGeneralExpensesRate)}
+        />
       </div>
       <div className="space-y-2">
         <Label htmlFor="utilityRate">Utilidad</Label>
-        <Input id="utilityRate" name="utilityRate" type="number" step="0.01" defaultValue="0.08" />
+        <Input id="utilityRate" name="utilityRate" type="number" step={RATE_INPUT_STEP} defaultValue={formatRateDefault(defaultUtilityRate)} />
       </div>
       {error ? <p className="md:col-span-2 text-sm text-rose-600">{error}</p> : null}
       <div className="md:col-span-2 flex justify-end">

@@ -2,23 +2,11 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
-import { getUserSettings, updateUserSettings } from "@/lib/data/settings";
-import { userSettingsSchema } from "@/lib/validations/settings";
+import { upsertPrimaryCompany } from "@/lib/data/company";
+import { companySchema } from "@/lib/validations/company";
 
-const updateSettingsRequestSchema = userSettingsSchema.strict();
-const VALIDATION_ERROR_MESSAGE = "Revisa los datos de configuracion e intenta nuevamente.";
-const SAVE_ERROR_MESSAGE = "No se pudo guardar la configuracion";
-
-export async function GET() {
-  const session = await getAuthSession();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  }
-
-  const settings = await getUserSettings(session.user.id);
-  return NextResponse.json(settings);
-}
+const VALIDATION_ERROR_MESSAGE = "Revisa los datos de la empresa e intenta nuevamente.";
+const SAVE_ERROR_MESSAGE = "No se pudo guardar la empresa.";
 
 export async function PATCH(request: Request) {
   const session = await getAuthSession();
@@ -29,8 +17,8 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const payload = updateSettingsRequestSchema.parse(body);
-    const settings = await updateUserSettings(session.user.id, payload);
+    const payload = companySchema.parse(body);
+    const company = await upsertPrimaryCompany(session.user.id, payload);
 
     revalidatePath("/dashboard");
     revalidatePath("/projects");
@@ -38,7 +26,7 @@ export async function PATCH(request: Request) {
     revalidatePath("/resources");
     revalidatePath("/settings");
 
-    return NextResponse.json(settings);
+    return NextResponse.json(company);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: VALIDATION_ERROR_MESSAGE }, { status: 400 });

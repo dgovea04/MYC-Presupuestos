@@ -48,7 +48,7 @@ export default async function DashboardPage() {
             {stats.budgets.map((budget) => (
               <Link key={budget.id} href={`/budgets/${budget.id}`} className="block rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-sky-300 hover:bg-sky-50/50">
                 <p className="font-medium text-slate-900">{budget.name}</p>
-                <p className="mt-1 text-sm text-slate-500">Actualizado {formatDate(budget.updatedAt)}</p>
+                <p className="mt-1 text-sm text-slate-500">Actualizado {formatDate(budget.updatedAt, settings.dateFormat)}</p>
               </Link>
             ))}
           </CardContent>

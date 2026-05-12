@@ -9,11 +9,50 @@ type ProjectMeta = {
   location?: string | null;
 };
 
-export async function createBudgetWorkbook(budget: BudgetRecord, project?: ProjectMeta) {
+const MAX_CURRENCY_DECIMALS = 4;
+
+function normalizeDecimalPlaces(decimalPlaces: number) {
+  if (!Number.isFinite(decimalPlaces)) {
+    return 2;
+  }
+
+  const normalized = Math.trunc(decimalPlaces);
+  if (normalized < 0 || normalized > MAX_CURRENCY_DECIMALS) {
+    return 2;
+  }
+
+  return normalized;
+}
+
+function getCurrencySymbol(currency: string) {
+  if (currency === "USD") return "$";
+  if (currency === "PEN") return "S/";
+  if (currency === "EUR") return "EUR";
+  return currency;
+}
+
+function buildDecimalFormat(decimalPlaces: number) {
+  if (decimalPlaces === 0) {
+    return "#,##0";
+  }
+
+  return `#,##0.${"0".repeat(decimalPlaces)}`;
+}
+
+function createCurrencyNumberFormat(currency: string, decimalPlaces: number) {
+  return `${getCurrencySymbol(currency)} ${buildDecimalFormat(decimalPlaces)}`;
+}
+
+export async function createBudgetWorkbook(
+  budget: BudgetRecord,
+  project?: ProjectMeta,
+  currencyDecimals = 2,
+) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Presupuesto");
   const normalized = calculateBudgetRecord(budget);
   const rows = buildDisplayRows(normalized);
+  const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
 
   workbook.creator = "MYC Presupuestos";
   sheet.views = [{ state: "frozen", ySplit: 6 }];
@@ -88,8 +127,8 @@ export async function createBudgetWorkbook(budget: BudgetRecord, project?: Proje
   writeSummaryRow(sheet, currentRow++, "IGV", normalized.totals.totalTax);
   writeSummaryRow(sheet, currentRow++, "Total", normalized.totals.totalAmount, true);
 
-  formatCurrencyColumns(sheet, [5, 6]);
-  formatCurrencyColumns(sheet, [2], false);
+  formatCurrencyColumns(sheet, [5, 6], normalized.currency, normalizedDecimals);
+  formatCurrencyColumns(sheet, [2], normalized.currency, normalizedDecimals, false);
   sheet.eachRow((row) => {
     row.eachCell((cell) => {
       cell.border = {
@@ -104,10 +143,11 @@ export async function createBudgetWorkbook(budget: BudgetRecord, project?: Proje
   return workbook.xlsx.writeBuffer();
 }
 
-export async function createApuWorkbook(budget: BudgetRecord, project?: ProjectMeta) {
+export async function createApuWorkbook(budget: BudgetRecord, project?: ProjectMeta, currencyDecimals = 2) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("APU");
   const normalized = calculateBudgetRecord(budget);
+  const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
 
   workbook.creator = "MYC Presupuestos";
   sheet.columns = [
@@ -170,7 +210,7 @@ export async function createApuWorkbook(budget: BudgetRecord, project?: ProjectM
     currentRow += 2;
   }
 
-  formatCurrencyColumns(sheet, [7, 8]);
+  formatCurrencyColumns(sheet, [7, 8], normalized.currency, normalizedDecimals);
 
   return workbook.xlsx.writeBuffer();
 }
@@ -189,11 +229,18 @@ function writeSummaryRow(sheet: ExcelJS.Worksheet, rowNumber: number, label: str
   }
 }
 
-function formatCurrencyColumns(sheet: ExcelJS.Worksheet, columns: number[], onlyNumeric = true) {
+function formatCurrencyColumns(
+  sheet: ExcelJS.Worksheet,
+  columns: number[],
+  currency: string,
+  decimalPlaces = 2,
+  onlyNumeric = true,
+) {
   for (const columnNumber of columns) {
+    const format = createCurrencyNumberFormat(currency, decimalPlaces);
     sheet.getColumn(columnNumber).eachCell((cell) => {
       if (!onlyNumeric || typeof cell.value === "number") {
-        cell.numFmt = '"S/" #,##0.00';
+        cell.numFmt = format;
       }
     });
   }

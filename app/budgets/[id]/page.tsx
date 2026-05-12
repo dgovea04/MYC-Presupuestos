@@ -18,27 +18,34 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 export default async function BudgetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getAuthSession();
-  const [budget, resources, partidasCatalog, settings] = await Promise.all([
-    getBudgetById(id, session!.user.id),
-    getResourcesByUser(session!.user.id),
-    getCatalogPartidas(),
-    getUserSettings(session!.user.id),
-  ]);
-
-  if (!budget) {
+  if (!session) {
+    console.error("BudgetDetailPage missing session", { budgetId: id });
     notFound();
   }
 
-  const project = await getProjectById(budget.projectId, session!.user.id);
+  const [budget, resources, partidasCatalog, settings] = await Promise.all([
+    getBudgetById(id, session.user.id),
+    getResourcesByUser(session.user.id),
+    getCatalogPartidas(),
+    getUserSettings(session.user.id),
+  ]);
+
+  if (!budget) {
+    console.error("BudgetDetailPage budget not found", { budgetId: id, userId: session.user.id });
+    notFound();
+  }
+
+  const project = await getProjectById(budget.projectId, session.user.id);
 
   if (!project) {
+    console.error("BudgetDetailPage project not found", { budgetId: budget.id, projectId: budget.projectId, userId: session.user.id });
     notFound();
   }
 
   if (budget.kind === "GENERAL") {
     const [subBudgetSummaries, subBudgetDetails] = await Promise.all([
-      getProjectSubBudgetSummaries(project.id, session!.user.id),
-      getProjectSubBudgetDetails(project.id, session!.user.id),
+      getProjectSubBudgetSummaries(project.id, session.user.id),
+      getProjectSubBudgetDetails(project.id, session.user.id),
     ]);
 
     const subBudgets = [
@@ -77,7 +84,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               <Metric label="Total Presupuesto" value={formatCurrency(budget.totalAmount, budget.currency, settings.currencyDecimals)} />
               <Metric label="Sub Presupuestos" value={String(subBudgets.length)} />
               <Metric label="Cliente" value={project.clientName || "Pendiente"} />
-              <Metric label="Actualizado" value={formatDate(project.updatedAt)} />
+              <Metric label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
             </CardContent>
           </Card>
 

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectById } from "@/lib/data/projects";
+import { getUserSettings } from "@/lib/data/settings";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
 import { getProjectOtherSections } from "@/lib/projects/other-sections";
@@ -32,7 +33,7 @@ const projectSections = [
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getAuthSession();
-  const project = await getProjectById(id, session!.user.id);
+  const [project, settings] = await Promise.all([getProjectById(id, session!.user.id), getUserSettings(session!.user.id)]);
 
   if (!project) {
     notFound();
@@ -46,7 +47,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const otherSections = getProjectOtherSections(generalBudget?.id ?? null);
 
   return (
-    <AppShell>
+    <AppShell settings={settings}>
       <div className="space-y-5">
         <Card>
           <CardHeader className="gap-4">
@@ -80,7 +81,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <Metric label="Cliente" value={project.clientName || "Pendiente"} />
             <Metric label="Ubicacion" value={project.location || "Pendiente"} />
             <Metric label="Tipo de obra" value={project.projectType || "Pendiente"} />
-            <Metric label="Actualizado" value={formatDate(project.updatedAt)} />
+            <Metric label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
           </CardContent>
         </Card>
 

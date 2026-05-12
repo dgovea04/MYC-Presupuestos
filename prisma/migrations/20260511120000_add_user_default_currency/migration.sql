@@ -1,0 +1,2 @@
+ALTER TABLE "UserSettings"
+ADD COLUMN "defaultCurrency" TEXT NOT NULL DEFAULT 'PEN';
