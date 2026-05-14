@@ -42,7 +42,7 @@ export type PricingPlan = {
 export const featureItems: FeatureItem[] = [
   {
     title: "Presupuestos",
-    description: "Estructura presupuestos generales por partidas, subtitulos y metrados con claridad operativa.",
+    description: "Estructura presupuestos generales por partidas, subtítulos y metrados con claridad operativa.",
     icon: FileSpreadsheet,
   },
   {
@@ -51,23 +51,23 @@ export const featureItems: FeatureItem[] = [
     icon: Calculator,
   },
   {
-    title: "Catalogo de Insumos",
+    title: "Catálogo de Insumos",
     description: "Consolida precios, unidades y recursos reutilizables para evitar duplicidad y desorden.",
     icon: PackageSearch,
   },
   {
-    title: "Formula Polinomica",
-    description: "Prepara reajustes y seguimiento de indices unificados segun normativa peruana.",
+    title: "Fórmula Polinómica",
+    description: "Prepara reajustes y seguimiento de índices unificados según normativa peruana.",
     icon: LineChart,
   },
   {
-    title: "Programacion",
-    description: "Relaciona partidas y cronogramas para mantener costo, avance y secuencia tecnica alineados.",
+    title: "Programación",
+    description: "Relaciona partidas y cronogramas para mantener costo, avance y secuencia técnica alineados.",
     icon: FolderKanban,
   },
   {
     title: "Reportes",
-    description: "Exporta entregables claros para oficina tecnica, clientes y control de obra en Excel o PDF.",
+    description: "Exporta entregables claros para oficina técnica, clientes y control de obra en Excel o PDF.",
     icon: BarChart3,
   },
 ];
@@ -75,44 +75,44 @@ export const featureItems: FeatureItem[] = [
 export const benefitItems: BenefitItem[] = [
   {
     title: "Pensado para flujos reales de obra",
-    description: "Desde presupuesto base hasta reajuste, la interfaz mantiene el lenguaje y la jerarquia que usa una oficina tecnica.",
+    description: "Desde presupuesto base hasta reajuste, la interfaz mantiene el lenguaje y la jerarquía que usa una oficina técnica.",
     icon: HardHat,
   },
   {
     title: "Menos tiempo corrigiendo hojas",
-    description: "La informacion queda conectada entre APU, insumos, resumen y reportes para reducir retrabajo manual.",
+    description: "La información queda conectada entre APU, insumos, resumen y reportes para reducir retrabajo manual.",
     icon: CheckCircle2,
   },
   {
-    title: "Mas claridad para decidir costos",
-    description: "Totales, incidencias y comparativos aparecen en pantallas legibles para tomar decisiones mas rapido.",
+    title: "Más claridad para decidir costos",
+    description: "Totales, incidencias y comparativos aparecen en pantallas legibles para tomar decisiones más rápido.",
     icon: ClipboardList,
   },
   {
     title: "Base moderna para crecer",
-    description: "Reutiliza datos, estandariza criterios y deja atras archivos dispersos y software tradicional pesado.",
+    description: "Reutiliza datos, estandariza criterios y deja atrás archivos dispersos y software tradicional pesado.",
     icon: Blocks,
   },
 ];
 
 export const testimonials: TestimonialItem[] = [
   {
-    quote: "Pasamos de revisar varias hojas por presupuesto a trabajar en una vista unica mucho mas clara para metrados, APU y resumen.",
+    quote: "Pasamos de revisar varias hojas por presupuesto a trabajar en una vista única mucho más clara para metrados, APU y resumen.",
     name: "Ing. Carlos Paredes",
-    role: "Jefe de Oficina Tecnica",
+    role: "Jefe de Oficina Técnica",
     company: "Constructora AndeSur",
   },
   {
-    quote: "La tabla se siente familiar para el equipo, pero con mucho mas orden. Exportamos mas rapido y con menos ajustes de ultimo minuto.",
+    quote: "La tabla se siente familiar para el equipo, pero con mucho más orden. Exportamos más rápido y con menos ajustes de último minuto.",
     name: "Arq. Daniela Salazar",
     role: "Coordinadora de Presupuestos",
     company: "Grupo Obra Urbana",
   },
   {
-    quote: "Lo valioso no es solo el presupuesto: es tener catalogo, formula polinomica y reportes conectados en el mismo flujo.",
+    quote: "Lo valioso no es solo el presupuesto: es tener catálogo, fórmula polinómica y reportes conectados en el mismo flujo.",
     name: "Luis Huaman",
     role: "Gerente de Costos",
-    company: "Proyectos Civiles del Pacifico",
+    company: "Proyectos Civiles del Pacífico",
   },
 ];
 
@@ -120,41 +120,41 @@ export const pricingPlans: PricingPlan[] = [
   {
     name: "Starter",
     price: "S/ 89",
-    description: "Para profesionales y equipos pequenos que necesitan ordenar presupuestos y APUs.",
+    description: "Para profesionales y equipos pequeños que necesitan ordenar presupuestos y APUs.",
     features: [
       "Hasta 3 proyectos activos",
       "Presupuestos y APUs base",
-      "Catalogo de insumos",
-      "Exportacion a Excel y PDF",
+      "Catálogo de insumos",
+      "Exportación a Excel y PDF",
     ],
   },
   {
     name: "Pro",
     price: "S/ 189",
-    description: "Para oficinas tecnicas que trabajan varios presupuestos y requieren mas control operativo.",
+    description: "Para oficinas técnicas que trabajan varios presupuestos y requieren más control operativo.",
     highlight: true,
     features: [
       "Proyectos y presupuestos ilimitados",
-      "Formula polinomica y reajustes",
-      "Programacion y seguimiento",
+      "Fórmula polinómica y reajustes",
+      "Programación y seguimiento",
       "Reportes avanzados por obra",
     ],
   },
   {
     name: "Empresa",
     price: "A medida",
-    description: "Para constructoras que necesitan estandarizacion, visibilidad multiusuario y acompanamiento.",
+    description: "Para constructoras que necesitan estandarización, visibilidad multiusuario y acompañamiento.",
     features: [
-      "Multiusuario por area o sede",
-      "Configuracion empresarial",
+      "Multiusuario por área o sede",
+      "Configuración empresarial",
       "Soporte prioritario",
-      "Onboarding y acompanamiento tecnico",
+      "Onboarding y acompañamiento técnico",
     ],
   },
 ];
 
 export const footerLinks = {
-  producto: ["Presupuestos", "APU", "Formula polinomica", "Reportes"],
+  producto: ["Presupuestos", "APU", "Fórmula polinómica", "Reportes"],
   empresa: ["Nosotros", "Clientes", "Seguridad", "Contacto"],
-  recursos: ["Demo", "Guia de inicio", "Casos de uso", "Soporte"],
+  recursos: ["Demo", "Guía de inicio", "Casos de uso", "Soporte"],
 };

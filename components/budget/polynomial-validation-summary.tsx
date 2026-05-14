@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
 import type { PolynomialMonomialRecord } from "@/types/polynomial-formula";
 
@@ -24,13 +25,12 @@ export function PolynomialValidationSummary({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Validacion</CardTitle>
-        <CardDescription>
-          Revisa la consistencia estructural antes de pasar a calculos de reajuste.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 p-6">
+        <OperationalPanel
+          title="Validación"
+          description="Revisa la consistencia estructural antes de pasar a cálculos de reajuste."
+        />
+
         <div className="flex flex-wrap gap-2">
           <Badge className={validation.isCoefficientSumValid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
             Suma coeficientes: {validation.coefficientSum}
@@ -39,7 +39,7 @@ export function PolynomialValidationSummary({
             Monomios: {monomials.length}/8
           </Badge>
           <Badge className={pendingBaseAssignments.length === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
-            Indices base pendientes: {pendingBaseAssignments.length}
+            Índices base pendientes: {pendingBaseAssignments.length}
           </Badge>
         </div>
 
@@ -57,7 +57,7 @@ export function PolynomialValidationSummary({
 
         {pendingBaseAssignments.length > 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-            Asigna indices INEI base a cada monomio antes de calcular K o registrar reajustes.
+            Asigna índices INEI base a cada monomio antes de calcular K o registrar reajustes.
           </div>
         ) : null}
       </CardContent>

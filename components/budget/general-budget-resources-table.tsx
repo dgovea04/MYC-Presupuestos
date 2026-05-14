@@ -2,8 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
+import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatCurrency, formatNumber } from "@/lib/utils";
@@ -52,41 +55,42 @@ export function GeneralBudgetResourcesTable({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Lista de insumos derivada</CardTitle>
-        <CardDescription>
-          Consolidado automatico a partir de los APUs de los sub presupuestos del proyecto. Esta vista es operativa y de solo lectura.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_220px_240px]">
-          <Input
-            placeholder="Buscar por codigo, descripcion o unidad"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <Select value={category} onChange={(event) => setCategory(event.target.value)}>
-            <option value="ALL">Todas las categorias</option>
-            <option value="MATERIAL">Materiales</option>
-            <option value="LABOR">Mano de obra</option>
-            <option value="EQUIPMENT">Equipos</option>
-            <option value="TOOLS">Herramientas</option>
-          </Select>
-          <Select value={budgetName} onChange={(event) => setBudgetName(event.target.value)}>
-            <option value="ALL">Todas las especialidades</option>
-            {budgetOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </Select>
-        </div>
+      <CardContent className="space-y-4 p-6">
+        <OperationalPanel
+          title="Lista de insumos derivada"
+          description="Consolidado automático a partir de los APUs de los sub presupuestos del proyecto. Esta vista es operativa y de solo lectura."
+          metrics={<span>{summary.resources.length} insumos en origen</span>}
+          controls={
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_220px_240px]">
+              <Input
+                placeholder="Buscar por código, descripción o unidad"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              <Select value={category} onChange={(event) => setCategory(event.target.value)}>
+                <option value="ALL">Todas las categorías</option>
+                <option value="MATERIAL">Materiales</option>
+                <option value="LABOR">Mano de obra</option>
+                <option value="EQUIPMENT">Equipos</option>
+                <option value="TOOLS">Herramientas</option>
+              </Select>
+              <Select value={budgetName} onChange={(event) => setBudgetName(event.target.value)}>
+                <option value="ALL">Todas las especialidades</option>
+                {budgetOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          }
+        />
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <MetricCard label="Insumos" value={String(filteredResources.length)} />
-          <MetricCard label="Especialidades" value={String(summary.budgetCount)} />
-          <MetricCard label="Cantidad total" value={formatNumber(totals.totalQuantity, 4)} />
-          <MetricCard label="Costo total" value={formatCurrency(totals.totalCost, currency, currencyDecimals)} />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <InfoCard label="Insumos" value={String(filteredResources.length)} tone="slate" />
+          <InfoCard label="Especialidades" value={String(summary.budgetCount)} tone="sky" />
+          <InfoCard label="Cantidad total" value={formatNumber(totals.totalQuantity, 4)} tone="amber" />
+          <InfoCard label="Costo total" value={formatCurrency(totals.totalCost, currency, currencyDecimals)} tone="sky" />
         </div>
 
         {summary.unresolvedCount > 0 ? (
@@ -99,9 +103,9 @@ export function GeneralBudgetResourcesTable({
           <Table>
             <THead>
               <TR className="bg-slate-50 hover:bg-slate-50">
-                <TH>Codigo</TH>
-                <TH>Descripcion</TH>
-                <TH>Categoria</TH>
+                <TH>Código</TH>
+                <TH>Descripción</TH>
+                <TH>Categoría</TH>
                 <TH className="text-center">Unidad</TH>
                 <TH className="text-right">P. unitario</TH>
                 <TH className="text-right">Cantidad total</TH>
@@ -126,8 +130,8 @@ export function GeneralBudgetResourcesTable({
               ))}
               {filteredResources.length === 0 ? (
                 <TR>
-                  <TD colSpan={9} className="py-6 text-center text-sm text-slate-500">
-                    No hay insumos que coincidan con los filtros actuales.
+                  <TD colSpan={9} className="p-4">
+                    <EmptyStatePanel message="No hay insumos que coincidan con los filtros actuales." className="py-5 text-center" />
                   </TD>
                 </TR>
               ) : null}
@@ -136,15 +140,6 @@ export function GeneralBudgetResourcesTable({
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
-    </div>
   );
 }
 

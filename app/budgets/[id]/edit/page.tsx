@@ -1,0 +1,47 @@
+import { FileSpreadsheet } from "lucide-react";
+import { notFound } from "next/navigation";
+import { AppShell } from "@/components/layout/app-shell";
+import { BudgetForm } from "@/components/budget/budget-form";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PageHeaderCard } from "@/components/ui/page-header-card";
+import { getAuthSession } from "@/lib/auth/session";
+import { getBudgetById } from "@/lib/data/budgets";
+import { getProjectsByUser } from "@/lib/data/projects";
+
+export default async function EditBudgetPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await getAuthSession();
+  const [budget, projects] = await Promise.all([getBudgetById(id, session!.user.id), getProjectsByUser(session!.user.id)]);
+
+  if (!budget) {
+    notFound();
+  }
+
+  return (
+    <AppShell>
+      <Card className="border-slate-200">
+        <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <PageHeaderCard
+            icon={<FileSpreadsheet className="h-5 w-5" />}
+            title="Editar presupuesto"
+            description="Ajusta nombre, proyecto base, moneda y parametros principales del presupuesto."
+          />
+        </CardHeader>
+        <CardContent className="pt-6">
+          <BudgetForm
+            projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+            budget={{
+              id: budget.id,
+              name: budget.name,
+              projectId: budget.projectId,
+              currency: budget.currency,
+              defaultIgvRate: budget.defaultIgvRate,
+              defaultGeneralExpensesRate: budget.defaultGeneralExpensesRate,
+              defaultUtilityRate: budget.defaultUtilityRate,
+            }}
+          />
+        </CardContent>
+      </Card>
+    </AppShell>
+  );
+}

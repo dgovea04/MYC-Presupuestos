@@ -3,7 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import ExcelJS from "exceljs";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Type } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
@@ -19,6 +19,7 @@ import { BufferedInput } from "@/components/ui/buffered-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -50,6 +51,7 @@ type PendingPaste = {
   parsedPaste: ParsedPasteResult;
   targetRow: BudgetDisplayRow;
   startColumn: EditableColumn;
+  source: "inline-paste" | "excel-import";
 };
 type PastePreviewRow = {
   kind: "level" | "item";
@@ -66,6 +68,22 @@ type CatalogMenuState = {
   top: number;
   left: number;
   width: number;
+};
+type LevelActionMenuState = {
+  rowId: string;
+  kind: "add" | "more";
+  top: number;
+  left: number;
+};
+type ItemActionMenuState = {
+  rowId: string;
+  top: number;
+  left: number;
+};
+type HeaderActionMenuState = {
+  kind: "add" | "more";
+  top: number;
+  left: number;
 };
 type InsertTarget = {
   kind: "level" | "item";
@@ -118,6 +136,9 @@ export function BudgetEditor({
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogHighlightedIndex, setCatalogHighlightedIndex] = useState(0);
   const [catalogMenu, setCatalogMenu] = useState<CatalogMenuState | null>(null);
+  const [levelActionMenu, setLevelActionMenu] = useState<LevelActionMenuState | null>(null);
+  const [itemActionMenu, setItemActionMenu] = useState<ItemActionMenuState | null>(null);
+  const [headerActionMenu, setHeaderActionMenu] = useState<HeaderActionMenuState | null>(null);
   const [catalogInsertTarget, setCatalogInsertTarget] = useState<InsertTarget | null>(null);
   const [catalogInsertQuery, setCatalogInsertQuery] = useState("");
   const [catalogSelectedIds, setCatalogSelectedIds] = useState<string[]>([]);
@@ -253,6 +274,51 @@ export function BudgetEditor({
   }, [catalogSelectorRowId, rows]);
 
   useEffect(() => {
+    if (!levelActionMenu) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest("[data-level-action-menu]")) return;
+      if (target.closest("[data-level-action-trigger]")) return;
+      setLevelActionMenu(null);
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [levelActionMenu]);
+
+  useEffect(() => {
+    if (!itemActionMenu) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest("[data-item-action-menu]")) return;
+      if (target.closest("[data-item-action-trigger]")) return;
+      setItemActionMenu(null);
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [itemActionMenu]);
+
+  useEffect(() => {
+    if (!headerActionMenu) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest("[data-header-action-menu]")) return;
+      if (target.closest("[data-header-action-trigger]")) return;
+      setHeaderActionMenu(null);
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [headerActionMenu]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (apuSheetOpenRef.current) return;
 
@@ -351,9 +417,9 @@ export function BudgetEditor({
   }
 
   function openCatalogInsert(target: InsertTarget | null) {
-    const nextTarget = target ?? getDefaultInsertTarget(rows, activeRowId);
+    const nextTarget = target ?? getDefaultInsertTarget(rows, activeRowIdRef.current);
     if (!nextTarget) {
-      setError("Necesitas al menos un nivel o una partida activa para insertar desde el catalogo.");
+      setError("Necesitas al menos un nivel o una partida activa para insertar desde el catálogo.");
       return;
     }
 
@@ -369,7 +435,7 @@ export function BudgetEditor({
   }
 
   function openExcelImport(target: InsertTarget | null) {
-    const nextTarget = target ?? getDefaultInsertTarget(rows, activeRowId);
+    const nextTarget = target ?? getDefaultInsertTarget(rows, activeRowIdRef.current);
     if (!nextTarget) {
       setError("Necesitas al menos un nivel o una partida activa para importar desde Excel.");
       return;
@@ -480,7 +546,7 @@ export function BudgetEditor({
 
     if (unresolvedRows.length > 0) {
       setPasteFeedback(
-        `Se agrego la partida, pero ${unresolvedRows.length} ${unresolvedRows.length === 1 ? "insumo no existe" : "insumos no existen"} en el catalogo de insumos y se omitieron del APU.`,
+        `Se agregó la partida, pero ${unresolvedRows.length} ${unresolvedRows.length === 1 ? "insumo no existe" : "insumos no existen"} en el catálogo de insumos y se omitieron del APU.`,
       );
     }
 
@@ -495,14 +561,11 @@ export function BudgetEditor({
     if (partidas.length === 0) return;
 
     setState((current) => {
-      const levelId =
-        target.kind === "level"
-          ? target.id
-          : current.items.find((item) => item.id === target.id)?.levelId ?? null;
+      const insertion = resolveItemInsertionFromTarget(target, current.items);
 
       const nextItems = partidas.map((partida, index) => {
         const nextItem = createBudgetItemDraft(current, {
-          levelId,
+          levelId: insertion.levelId,
           overrides: {
             description: partida.description,
             unit: partida.unit,
@@ -543,15 +606,15 @@ export function BudgetEditor({
 
       return {
         ...current,
-        items: normalizeItemSortOrders([...current.items, ...nextItems]),
+        items: insertItemsAtPosition(current.items, nextItems, insertion),
       };
     });
 
     closeCatalogInsert();
     setPasteFeedback(
       partidas.length === 1
-        ? `Partida agregada desde catalogo: ${partidas[0]?.description ?? "Partida"}.`
-        : `${partidas.length} partidas agregadas desde el catalogo.`,
+        ? `Partida agregada desde catálogo: ${partidas[0]?.description ?? "Partida"}.`
+        : `${partidas.length} partidas agregadas desde el catálogo.`,
     );
   }
 
@@ -560,7 +623,7 @@ export function BudgetEditor({
 
     const targetRow = resolveTargetRow(rows, excelImportTarget);
     if (!targetRow) {
-      setError("No se encontro el destino para la importacion.");
+      setError("No se encontró el destino para la importación.");
       return;
     }
 
@@ -575,6 +638,7 @@ export function BudgetEditor({
       parsedPaste,
       targetRow,
       startColumn: "code",
+      source: "excel-import",
     });
     closeExcelImport();
   }
@@ -651,6 +715,88 @@ export function BudgetEditor({
     setCatalogHighlightedIndex(0);
   }
 
+  function toggleLevelActionMenu(rowId: string, kind: "add" | "more", trigger: HTMLElement) {
+    const rect = trigger.getBoundingClientRect();
+
+    setLevelActionMenu((current) =>
+      current?.rowId === rowId && current.kind === kind
+        ? null
+        : {
+            rowId,
+            kind,
+            top: rect.bottom + 6,
+            left: rect.right - 192,
+          },
+    );
+  }
+
+  function toggleItemActionMenu(rowId: string, trigger: HTMLElement) {
+    const rect = trigger.getBoundingClientRect();
+
+    setItemActionMenu((current) =>
+      current?.rowId === rowId
+        ? null
+        : {
+            rowId,
+            top: rect.bottom + 6,
+            left: rect.right - 192,
+          },
+    );
+  }
+
+  function toggleHeaderActionMenu(kind: "add" | "more", trigger: HTMLElement) {
+    const rect = trigger.getBoundingClientRect();
+
+    setHeaderActionMenu((current) =>
+      current?.kind === kind
+        ? null
+        : {
+            kind,
+            top: rect.bottom + 6,
+            left: rect.right - 208,
+          },
+    );
+  }
+
+  function duplicateItem(itemId: string) {
+    setState((current) => {
+      const sourceItem = current.items.find((item) => item.id === itemId);
+      if (!sourceItem) return current;
+
+      return {
+        ...current,
+        items: normalizeItemSortOrders([
+          ...current.items,
+          {
+            ...sourceItem,
+            id: crypto.randomUUID(),
+            code: `${sourceItem.code}-C`,
+            description: `${sourceItem.description} (copia)`,
+            sortOrder: current.items.length + 1,
+            apu: sourceItem.apu
+              ? {
+                  ...sourceItem.apu,
+                  id: crypto.randomUUID(),
+                  budgetItemId: "",
+                  resources: sourceItem.apu.resources.map((resource) => ({
+                    ...resource,
+                    id: crypto.randomUUID(),
+                  })),
+                }
+              : sourceItem.apu,
+          },
+        ]),
+      };
+    });
+  }
+
+  function removeItem(itemId: string) {
+    setState((current) => ({
+      ...current,
+      items: normalizeItemSortOrders(current.items.filter((currentItem) => currentItem.id !== itemId)),
+    }));
+  }
+
   function removeLevel(levelId: string) {
     setState((current) => {
       const descendantIds = collectDescendantLevelIds(current.levels, levelId);
@@ -667,14 +813,14 @@ export function BudgetEditor({
   function moveLevel(levelId: string, direction: "up" | "down") {
     setState((current) => ({
       ...current,
-      levels: moveEntity(current.levels, levelId, direction),
+      levels: moveScopedEntity(current.levels, levelId, direction, (level) => level.parentId ?? null, resequenceLevels),
     }));
   }
 
   function moveItem(itemId: string, direction: "up" | "down") {
     setState((current) => ({
       ...current,
-      items: moveEntity(current.items, itemId, direction),
+      items: moveScopedEntity(current.items, itemId, direction, (item) => item.levelId ?? null, resequenceItems),
     }));
   }
 
@@ -684,14 +830,26 @@ export function BudgetEditor({
     if (dragState.kind === "level" && targetRow.kind === "level") {
       setState((current) => ({
         ...current,
-        levels: moveEntityToTarget(current.levels, dragState.id, targetRow.level.id),
+        levels: moveScopedEntityToTarget(
+          current.levels,
+          dragState.id,
+          targetRow.level.id,
+          (level) => level.parentId ?? null,
+          resequenceLevels,
+        ),
       }));
     }
 
     if (dragState.kind === "item" && targetRow.kind === "item") {
       setState((current) => ({
         ...current,
-        items: moveEntityToTarget(current.items, dragState.id, targetRow.item.id),
+        items: moveScopedEntityToTarget(
+          current.items,
+          dragState.id,
+          targetRow.item.id,
+          (item) => item.levelId ?? null,
+          resequenceItems,
+        ),
       }));
     }
 
@@ -711,13 +869,14 @@ export function BudgetEditor({
       parsedPaste,
       targetRow,
       startColumn,
+      source: "inline-paste",
     });
   }
 
   function applyPendingPaste() {
     if (!pendingPaste) return;
 
-    const { parsedPaste, targetRow } = pendingPaste;
+    const { parsedPaste, source, targetRow } = pendingPaste;
     setPasteFeedback(getPasteFeedbackMessage(parsedPaste.importedItems, parsedPaste.importedLevels));
     setState((current) => {
       if (parsedPaste.mode === "structured") {
@@ -735,6 +894,24 @@ export function BudgetEditor({
       const pastedRows = parsedPaste.rows;
 
       if (targetRow.kind === "item") {
+        if (source === "excel-import") {
+          const insertion = resolveItemInsertionFromTarget({ kind: "item", id: targetRow.item.id }, current.items);
+          const extraItems = pastedRows.map((row, index) =>
+            resolveCatalogPartidaForDraftItem(
+              createBudgetItemDraft(current, {
+                levelId: insertion.levelId,
+                overrides: row,
+                sortOrder: current.items.length + index + 1,
+              }),
+            ),
+          );
+
+          return {
+            ...current,
+            items: insertItemsAtPosition(current.items, extraItems, insertion),
+          };
+        }
+
         const sortedItems = [...current.items].sort((left, right) => left.sortOrder - right.sortOrder);
         const targetIndex = sortedItems.findIndex((item) => item.id === targetRow.item.id);
 
@@ -758,15 +935,15 @@ export function BudgetEditor({
 
         return {
           ...current,
-          items: normalizeItemSortOrders(sortedItems),
+          items: resequenceItems(sortedItems),
         };
       }
 
-      const levelId = targetRow.level.id;
+      const insertion = resolveItemInsertionFromTarget({ kind: "level", id: targetRow.level.id }, current.items);
       const extraItems = pastedRows.map((row, index) =>
         resolveCatalogPartidaForDraftItem(
           createBudgetItemDraft(current, {
-            levelId,
+            levelId: insertion.levelId,
             overrides: row,
             sortOrder: current.items.length + index + 1,
           }),
@@ -775,7 +952,7 @@ export function BudgetEditor({
 
       return {
         ...current,
-        items: normalizeItemSortOrders([...current.items, ...extraItems]),
+        items: insertItemsAtPosition(current.items, extraItems, insertion),
       };
     });
 
@@ -951,73 +1128,126 @@ export function BudgetEditor({
         setCatalogSelectorRowId(null);
       }}
     >
-      <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            {projectName ? <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">{projectName}</p> : null}
-            <CardTitle>{budget.name}</CardTitle>
-            <p className="text-sm text-slate-500">Editor jerarquico con guardado automatico y reordenamiento operativo.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ViewModeToggle />
-            <span className="text-xs font-medium text-slate-500" data-view-mode-label>
-              {isExcelMode ? "Modo Excel activo" : "Vista moderna activa"}
-            </span>
-            <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />
-            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setDensityMode("compact")}
-                aria-pressed={effectiveDensityMode === "compact"}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                  effectiveDensityMode === "compact" ? "bg-slate-900 text-white" : "text-slate-500",
-                )}
-              >
-                Compacto
-              </button>
-              <button
-                type="button"
-                onClick={() => setDensityMode("comfortable")}
-                aria-pressed={!isDensityLockedToCompact && effectiveDensityMode === "comfortable"}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                  !isDensityLockedToCompact && effectiveDensityMode === "comfortable" ? "bg-slate-900 text-white" : "text-slate-500",
-                )}
-              >
-                Comodo
-              </button>
+      <Card className={cn("overflow-hidden border-slate-200/90 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.28)]", isExcelMode && "rounded-md shadow-[0_10px_24px_-20px_rgba(15,23,42,0.18)]")}>
+        <CardHeader className="flex flex-col gap-3 border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)]">
+          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              {projectName ? <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">{projectName}</p> : null}
+              <CardTitle className="tracking-tight text-slate-950">{budget.name}</CardTitle>
+              <p className="text-xs leading-5 text-slate-500">Edición jerárquica con autosave y guardado manual.</p>
             </div>
-            <Button variant="outline" onClick={() => addLevel("TITLE")}>
-              Agregar titulo
-            </Button>
-            <Button variant="outline" onClick={() => addLevel("SUBTITLE")}>
-              Agregar subtitulo
-            </Button>
-            <Button variant="outline" onClick={() => openCatalogInsert(null)}>
-              Desde catalogo
-            </Button>
-            <Button variant="outline" onClick={() => openExcelImport(null)}>
-              Importar Excel
-            </Button>
-            <Button onClick={() => addItem()}>Agregar partida</Button>
-            <Button variant="secondary" onClick={() => void saveBudget()} disabled={saving}>
-              {saving ? "Guardando..." : "Guardar"}
-            </Button>
+            <div className="flex flex-col gap-1.5 xl:min-w-0 xl:items-end">
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <div className="group inline-flex self-end rounded-2xl border border-slate-200/90 bg-white/90 px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-slate-300 hover:bg-white focus-within:border-slate-300 focus-within:bg-white">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">Vista</p>
+                      <ViewModeToggle />
+                    </div>
+                    <div className="hidden w-0 overflow-hidden transition-all duration-200 ease-out group-hover:w-5 group-focus-within:w-5 sm:flex sm:items-center sm:justify-center">
+                      <div className="h-6 w-px bg-slate-200 opacity-0 transition duration-200 ease-out group-hover:opacity-100 group-focus-within:opacity-100" />
+                    </div>
+                    <div className="flex max-h-0 max-w-0 translate-x-2 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:max-h-16 group-hover:max-w-[220px] group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:max-h-16 group-focus-within:max-w-[220px] group-focus-within:translate-x-0 group-focus-within:opacity-100 sm:flex-row sm:items-center sm:gap-2">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">Densidad</p>
+                      <div className="inline-flex rounded-xl border border-slate-200/90 bg-white p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
+                        <button
+                          type="button"
+                          onClick={() => setDensityMode("compact")}
+                          aria-pressed={effectiveDensityMode === "compact"}
+                          className={cn(
+                            "rounded-lg px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                            effectiveDensityMode === "compact" ? "bg-slate-900 text-white" : "text-slate-500",
+                          )}
+                        >
+                          Compacto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDensityMode("comfortable")}
+                          aria-pressed={!isDensityLockedToCompact && effectiveDensityMode === "comfortable"}
+                          className={cn(
+                            "rounded-lg px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                            !isDensityLockedToCompact && effectiveDensityMode === "comfortable" ? "bg-slate-900 text-white" : "text-slate-500",
+                          )}
+                        >
+                          Cómodo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <div className="rounded-2xl border border-slate-200/90 bg-white/95 px-2 py-1 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
+                  <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} compact />
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => void saveBudget()}
+                  disabled={saving}
+                  className="h-8 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]"
+                >
+                  {saving ? "Guardando..." : "Guardar"}
+                </Button>
+                <div className="flex items-center gap-1 rounded-full border border-slate-200/90 bg-white/90 px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
+                  <button
+                    type="button"
+                    data-header-action-trigger
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    onClick={(event) => toggleHeaderActionMenu("add", event.currentTarget)}
+                    title="Agregar partida, título, subtítulo o subpartida"
+                    aria-label="Agregar partida, título, subtítulo o subpartida"
+                    aria-haspopup="menu"
+                    aria-expanded={headerActionMenu?.kind === "add"}
+                    aria-controls="budget-header-add-menu"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Agregar
+                  </button>
+                  <IconButton
+                    label="Abrir acciones globales del sub presupuesto"
+                    onClick={(event) => toggleHeaderActionMenu("more", event.currentTarget)}
+                    className="h-8 w-8 rounded-full"
+                    dataActionTrigger
+                    dataHeaderActionTrigger
+                    ariaExpanded={headerActionMenu?.kind === "more"}
+                    ariaControls="budget-header-more-menu"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </IconButton>
+                </div>
+                <div className="hidden" aria-hidden="true">
+                  <Button variant="outline" onClick={() => addLevel("TITLE")}>
+                    Agregar título
+                  </Button>
+                  <Button variant="outline" onClick={() => addLevel("SUBTITLE")}>
+                    Agregar subtítulo
+                  </Button>
+                  <Button variant="outline" onClick={() => openCatalogInsert(null)}>
+                    Desde catálogo
+                  </Button>
+                  <Button variant="outline" onClick={() => openExcelImport(null)}>
+                    Importar Excel
+                  </Button>
+                  <Button onClick={() => addItem()}>Agregar partida</Button>
+                </div>
+              </div>
+            </div>
           </div>
         </CardHeader>
         <CardContent className={cn("space-y-4", isExcelMode && "space-y-3")}>
-          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-          {pasteFeedback ? <p className="text-sm text-emerald-700">{pasteFeedback}</p> : null}
+          {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+          {pasteFeedback ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{pasteFeedback}</p> : null}
 
           <div
             data-testid="budget-table-surface"
             data-density-mode={effectiveDensityMode}
             className={cn(
-              "max-h-[72vh] overflow-auto border",
+              "max-h-[72vh] overflow-auto border shadow-[0_18px_36px_-30px_rgba(15,23,42,0.22)]",
               isExcelMode
                 ? "rounded-md border-slate-300 bg-white shadow-inner shadow-slate-200/50"
-                : "rounded-2xl border-slate-200",
+                : "rounded-2xl border-slate-200/90 bg-white",
             )}
           >
             <Table
@@ -1028,22 +1258,27 @@ export function BudgetEditor({
             >
               <colgroup>
                 <col className="w-[130px]" />
-                <col className="w-[340px]" />
+                <col className="w-[420px]" />
                 <col className="w-[90px]" />
+                <col className="w-[92px]" />
+                <col className="w-[96px]" />
+                <col className="w-[96px]" />
                 <col className="w-[110px]" />
-                <col className="w-[96px]" />
-                <col className="w-[96px]" />
-                <col className="w-[170px]" />
               </colgroup>
               <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
                 <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90" : "bg-slate-50")}>
-                  <TH className={getHeaderCellClass("code", activeColumn, isExcelMode)}>Codigo</TH>
-                  <TH className={getHeaderCellClass("description", activeColumn, isExcelMode)}>Descripcion</TH>
+                  <TH className={getHeaderCellClass("code", activeColumn, isExcelMode)}>Código</TH>
+                  <TH className={getHeaderCellClass("description", activeColumn, isExcelMode)}>Descripción</TH>
                   <TH className={getHeaderCellClass("unit", activeColumn, isExcelMode, "text-center")}>Unidad</TH>
                   <TH className={getHeaderCellClass("quantity", activeColumn, isExcelMode, "text-right")}>Metrado</TH>
                   <TH className={getHeaderCellClass("unitPrice", activeColumn, isExcelMode, "text-right")}>P. Unitario</TH>
                   <TH className={getHeaderCellClass("partial", activeColumn, isExcelMode, "text-right")}>Parcial</TH>
-                  <TH className={getHeaderCellClass("actions", activeColumn, isExcelMode, "right-0 text-right")}>Acciones</TH>
+                  <TH className={getHeaderCellClass("actions", activeColumn, isExcelMode, "right-0 text-right")}>
+                    <span className="inline-flex w-full items-center justify-end">
+                      <MoreHorizontal className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                      <span className="sr-only">Acciones</span>
+                    </span>
+                  </TH>
                 </TR>
               </THead>
               <TBody>
@@ -1064,7 +1299,7 @@ export function BudgetEditor({
                         setActiveRowId(row.level.id);
                       }}
                       className={cn(
-                        "hover:bg-transparent",
+                        "group hover:bg-transparent",
                         getLevelRowTone(row.level.type, isExcelMode),
                         dragState?.kind === "level" && dragState.id === row.level.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
                         activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
@@ -1090,18 +1325,10 @@ export function BudgetEditor({
                       </TD>
                       <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
                         <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
-                          <span
-                            className={cn(
-                              "bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
-                              isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
-                            )}
-                          >
-                            {levelTypeLabel[row.level.type]}
-                          </span>
                           <BufferedInput
                             value={row.level.name}
                             onCommit={(value) => updateLevel(row.level.id, { name: value })}
-                            className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
+                            className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "flex-1")}
                             ref={(element) => setCellRef(row.level.id, "description", element)}
                             onKeyDown={(event) => handleSpreadsheetNavigation(event, row.level.id, "description")}
                             onPaste={(event) => handlePasteRows(event, row, "description")}
@@ -1111,6 +1338,14 @@ export function BudgetEditor({
                               setActiveColumn("description");
                             }}
                           />
+                          <span
+                            className={cn(
+                              "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
+                              isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
+                            )}
+                          >
+                            {levelTypeLabel[row.level.type]}
+                          </span>
                         </div>
                       </TD>
                       <TD className={getBodyCellClass("unit", activeColumn, "", effectiveDensityMode, isExcelMode)} colSpan={4} />
@@ -1120,43 +1355,28 @@ export function BudgetEditor({
                           getStickyActionTone(row.level.type, isExcelMode),
                         )}
                       >
-                        <div className="flex justify-end gap-1">
-                          <Select
-                            value={row.level.type}
-                            onChange={(event) => updateLevel(row.level.id, { type: event.target.value as BudgetLevelType })}
-                            className="h-8 min-w-[124px] rounded-lg px-2 text-xs"
+                        <div className="ml-auto flex translate-x-1 justify-end gap-1 rounded-full border border-transparent bg-white/0 px-1 py-0.5 opacity-80 transition duration-200 group-hover:translate-x-0 group-hover:border-slate-200/80 group-hover:bg-white/80 group-hover:opacity-100 group-hover:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-hover:backdrop-blur-sm group-focus-within:translate-x-0 group-focus-within:border-slate-200/80 group-focus-within:bg-white/80 group-focus-within:opacity-100 group-focus-within:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-focus-within:backdrop-blur-sm">
+                          <button
+                            type="button"
+                            data-level-action-trigger
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                            onClick={(event) => toggleLevelActionMenu(row.level.id, "add", event.currentTarget)}
+                            title="Agregar contenido debajo de este nivel"
+                            aria-label="Agregar contenido debajo de este nivel"
+                            aria-haspopup="menu"
+                            aria-expanded={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "add"}
+                            aria-controls={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "add" ? `budget-level-add-menu-${row.level.id}` : undefined}
                           >
-                            <option value="TITLE">Titulo</option>
-                            <option value="SUBTITLE">Subtitulo</option>
-                            <option value="ITEM_GROUP">Subpartida</option>
-                          </Select>
-                          <IconButton label="Subir" onClick={() => moveLevel(row.level.id, "up")}>
-                            <ChevronUp className="h-4 w-4" />
-                          </IconButton>
-                          <IconButton label="Bajar" onClick={() => moveLevel(row.level.id, "down")}>
-                            <ChevronDown className="h-4 w-4" />
-                          </IconButton>
-                          {row.level.type === "TITLE" ? (
-                            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => addLevel("SUBTITLE", row.level.id)}>
-                              Subtitulo
-                            </Button>
-                          ) : null}
-                          {row.level.type === "SUBTITLE" || row.level.type === "ITEM_GROUP" ? (
-                            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => addLevel("ITEM_GROUP", row.level.id)}>
-                              Subpartida
-                            </Button>
-                          ) : null}
-                          <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => openCatalogInsert({ kind: "level", id: row.level.id })}>
-                            Catalogo
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => openExcelImport({ kind: "level", id: row.level.id })}>
-                            Excel
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => addItem(row.level.id)}>
-                            Partida
-                          </Button>
-                          <IconButton label="Eliminar" onClick={() => removeLevel(row.level.id)}>
-                            <Trash2 className="h-4 w-4" />
+                            <Plus className="h-4 w-4" />
+                          </button>
+                          <IconButton
+                            label="Abrir acciones del nivel"
+                            onClick={(event) => toggleLevelActionMenu(row.level.id, "more", event.currentTarget)}
+                            dataActionTrigger
+                            ariaExpanded={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "more"}
+                            ariaControls={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "more" ? `budget-level-more-menu-${row.level.id}` : undefined}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
                           </IconButton>
                         </div>
                       </TD>
@@ -1177,6 +1397,7 @@ export function BudgetEditor({
                         setActiveRowId(row.item.id);
                       }}
                       className={cn(
+                        "group",
                         isExcelMode && "bg-white",
                         dragState?.kind === "item" && dragState.id === row.item.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
                         activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
@@ -1354,57 +1575,26 @@ export function BudgetEditor({
                           isExcelMode,
                         )}
                       >
-                        <div className="flex justify-end gap-1">
-                          <IconButton label="Subir" onClick={() => moveItem(row.item.id, "up")}>
-                            <ChevronUp className="h-4 w-4" />
-                          </IconButton>
-                          <IconButton label="Bajar" onClick={() => moveItem(row.item.id, "down")}>
-                            <ChevronDown className="h-4 w-4" />
-                          </IconButton>
-                          <IconButton label="Editar APU" onClick={() => openApuSheet(row.item)}>
-                            <Pencil className="h-4 w-4" />
-                          </IconButton>
-                          <IconButton
-                            label="Duplicar"
-                            onClick={() =>
-                              setState((current) => ({
-                                ...current,
-                                items: normalizeItemSortOrders([
-                                  ...current.items,
-                                  {
-                                    ...row.item,
-                                    id: crypto.randomUUID(),
-                                    code: `${row.item.code}-C`,
-                                    description: `${row.item.description} (copia)`,
-                                    sortOrder: current.items.length + 1,
-                                    apu: row.item.apu
-                                      ? {
-                                          ...row.item.apu,
-                                          id: crypto.randomUUID(),
-                                          budgetItemId: "",
-                                          resources: row.item.apu.resources.map((resource) => ({
-                                            ...resource,
-                                            id: crypto.randomUUID(),
-                                          })),
-                                        }
-                                      : row.item.apu,
-                                  },
-                                ]),
-                              }))
-                            }
+                        <div className="ml-auto flex translate-x-1 justify-end gap-1 rounded-full border border-transparent bg-white/0 px-1 py-0.5 opacity-80 transition duration-200 group-hover:translate-x-0 group-hover:border-slate-200/80 group-hover:bg-white/80 group-hover:opacity-100 group-hover:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-hover:backdrop-blur-sm group-focus-within:translate-x-0 group-focus-within:border-slate-200/80 group-focus-within:bg-white/80 group-focus-within:opacity-100 group-focus-within:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-focus-within:backdrop-blur-sm">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openApuSheet(row.item)}
+                            className="h-7 gap-1.5 rounded-full border border-slate-200 bg-white/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-slate-600 shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-slate-300 hover:bg-white"
+                            title="Abrir editor APU de esta partida"
+                            aria-label="Abrir editor APU de esta partida"
                           >
-                            <Copy className="h-4 w-4" />
-                          </IconButton>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            APU
+                          </Button>
                           <IconButton
-                            label="Eliminar"
-                            onClick={() =>
-                              setState((current) => ({
-                                ...current,
-                                items: normalizeItemSortOrders(current.items.filter((currentItem) => currentItem.id !== row.item.id)),
-                              }))
-                            }
+                            label="Abrir acciones de la partida"
+                            onClick={(event) => toggleItemActionMenu(row.item.id, event.currentTarget)}
+                            dataActionTrigger
+                            ariaExpanded={itemActionMenu?.rowId === row.item.id}
+                            ariaControls={itemActionMenu?.rowId === row.item.id ? `budget-item-menu-${row.item.id}` : undefined}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <MoreHorizontal className="h-4 w-4" />
                           </IconButton>
                         </div>
                       </TD>
@@ -1417,11 +1607,11 @@ export function BudgetEditor({
 
           <div
             className={cn(
-              "flex flex-wrap items-center justify-between border border-sky-100 bg-sky-50",
+              "flex flex-wrap items-center justify-between border border-sky-100 bg-[linear-gradient(180deg,rgba(240,249,255,0.98)_0%,rgba(224,242,254,0.9)_100%)] shadow-[0_14px_30px_-26px_rgba(2,132,199,0.28)]",
               isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3",
             )}
           >
-            <p className={cn("font-medium text-sky-900", isExcelMode && "text-sm")}>Total visible y actualizado automaticamente</p>
+            <p className={cn("font-medium text-sky-900", isExcelMode && "text-sm")}>Total visible y actualizado automáticamente</p>
             <AnimatedCurrencyValue
               value={summary.totals.totalAmount}
               currency={budget.currency}
@@ -1434,11 +1624,14 @@ export function BudgetEditor({
       <Card
         data-testid="budget-summary-panel"
         data-density-mode={effectiveDensityMode}
-        className={cn("h-fit overflow-hidden xl:sticky xl:top-4", isExcelMode && "rounded-md border-slate-300 shadow-none")}
+        className={cn(
+          "h-fit overflow-hidden border-slate-200/90 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
+          isExcelMode && "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
+        )}
       >
         <CardHeader
           className={cn(
-            "flex flex-row items-center",
+            "flex flex-row items-center border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)]",
             summaryCollapsed ? "justify-center px-2 py-3" : "justify-between",
             isExcelMode && !summaryCollapsed && "px-3 py-2",
           )}
@@ -1480,7 +1673,7 @@ export function BudgetEditor({
             <SummaryRow label="Gastos generales" value={summary.totals.totalGeneralExpenses} currency={budget.currency} compact={isExcelMode} />
             <SummaryRow label="Utilidad" value={summary.totals.totalUtility} currency={budget.currency} compact={isExcelMode} />
             <SummaryRow label="IGV" value={summary.totals.totalTax} currency={budget.currency} compact={isExcelMode} />
-            <div className={cn("bg-slate-900 text-white", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
+            <div className={cn("bg-slate-900 text-white shadow-[0_18px_36px_-26px_rgba(15,23,42,0.45)]", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
               <p className={cn("text-slate-300", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
               <AnimatedCurrencyValue
                 value={summary.totals.totalAmount}
@@ -1505,7 +1698,7 @@ export function BudgetEditor({
                 </Button>
               </a>
             </div>
-            <div className={cn("border border-slate-200 bg-slate-50 text-xs text-slate-500", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
+            <div className={cn("border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] text-xs text-slate-500", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
               Atajos: <span className="font-medium text-slate-700">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-slate-700">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-slate-700">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-slate-700">Pegar</span> importa filas desde Excel.
             </div>
           </CardContent>
@@ -1562,6 +1755,231 @@ export function BudgetEditor({
               </button>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {levelActionMenu ? (
+        <div
+          id={`budget-level-${levelActionMenu.kind}-menu-${levelActionMenu.rowId}`}
+          data-level-action-menu
+          role="menu"
+          aria-label={levelActionMenu.kind === "add" ? "Agregar contenido al nivel" : "Acciones del nivel"}
+          className="fixed z-[92] w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+          style={{
+            top: levelActionMenu.top,
+            left: levelActionMenu.left,
+          }}
+        >
+          {levelActionMenu.kind === "add" ? (
+            <LevelActionMenuButton
+              label="Agregar partida"
+              onClick={() => {
+                addItem(levelActionMenu.rowId);
+                setLevelActionMenu(null);
+              }}
+            />
+          ) : null}
+          {levelActionMenu.kind === "add" && rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId)?.level.type === "TITLE" ? (
+            <LevelActionMenuButton
+              label="Agregar subtítulo"
+              onClick={() => {
+                addLevel("SUBTITLE", levelActionMenu.rowId);
+                setLevelActionMenu(null);
+              }}
+            />
+          ) : null}
+          {levelActionMenu.kind === "add" &&
+          (() => {
+            const levelRow = rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId);
+            return levelRow?.kind === "level" && (levelRow.level.type === "SUBTITLE" || levelRow.level.type === "ITEM_GROUP");
+          })() ? (
+            <LevelActionMenuButton
+              label="Agregar subpartida"
+              onClick={() => {
+                addLevel("ITEM_GROUP", levelActionMenu.rowId);
+                setLevelActionMenu(null);
+              }}
+            />
+          ) : null}
+
+          {levelActionMenu.kind === "more" ? (
+            <>
+              <LevelActionMenuButton
+                label="Mover arriba"
+                onClick={() => {
+                  moveLevel(levelActionMenu.rowId, "up");
+                  setLevelActionMenu(null);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Mover abajo"
+                onClick={() => {
+                  moveLevel(levelActionMenu.rowId, "down");
+                  setLevelActionMenu(null);
+                }}
+              />
+              <div className="my-1 border-t border-slate-100" />
+              <LevelActionMenuButton
+                label="Cambiar a título"
+                onClick={() => {
+                  updateLevel(levelActionMenu.rowId, { type: "TITLE" });
+                  setLevelActionMenu(null);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Cambiar a subtítulo"
+                onClick={() => {
+                  updateLevel(levelActionMenu.rowId, { type: "SUBTITLE" });
+                  setLevelActionMenu(null);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Cambiar a subpartida"
+                onClick={() => {
+                  updateLevel(levelActionMenu.rowId, { type: "ITEM_GROUP" });
+                  setLevelActionMenu(null);
+                }}
+              />
+              <div className="my-1 border-t border-slate-100" />
+              <LevelActionMenuButton
+                label="Insertar desde catálogo"
+                onClick={() => {
+                  openCatalogInsert({ kind: "level", id: levelActionMenu.rowId });
+                  setLevelActionMenu(null);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Importar desde Excel"
+                onClick={() => {
+                  openExcelImport({ kind: "level", id: levelActionMenu.rowId });
+                  setLevelActionMenu(null);
+                }}
+              />
+              <div className="my-1 border-t border-slate-100" />
+              <LevelActionMenuButton
+                label="Eliminar nivel"
+                onClick={() => {
+                  removeLevel(levelActionMenu.rowId);
+                  setLevelActionMenu(null);
+                }}
+              />
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {itemActionMenu ? (
+        <div
+          id={`budget-item-menu-${itemActionMenu.rowId}`}
+          data-item-action-menu
+          role="menu"
+          aria-label="Acciones de la partida"
+          className="fixed z-[92] w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+          style={{
+            top: itemActionMenu.top,
+            left: itemActionMenu.left,
+          }}
+        >
+          <LevelActionMenuButton
+            label="Mover arriba"
+            onClick={() => {
+              moveItem(itemActionMenu.rowId, "up");
+              setItemActionMenu(null);
+            }}
+          />
+          <LevelActionMenuButton
+            label="Mover abajo"
+            onClick={() => {
+              moveItem(itemActionMenu.rowId, "down");
+              setItemActionMenu(null);
+            }}
+          />
+          <div className="my-1 border-t border-slate-100" />
+          <LevelActionMenuButton
+            label="Duplicar partida"
+            onClick={() => {
+              duplicateItem(itemActionMenu.rowId);
+              setItemActionMenu(null);
+            }}
+          />
+          <LevelActionMenuButton
+            label="Eliminar partida"
+            onClick={() => {
+              removeItem(itemActionMenu.rowId);
+              setItemActionMenu(null);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {headerActionMenu ? (
+        <div
+          id={headerActionMenu.kind === "add" ? "budget-header-add-menu" : "budget-header-more-menu"}
+          data-header-action-menu
+          role="menu"
+          aria-label={headerActionMenu.kind === "add" ? "Agregar contenido al sub presupuesto" : "Acciones globales del sub presupuesto"}
+          className="fixed z-[92] w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+          style={{
+            top: headerActionMenu.top,
+            left: headerActionMenu.left,
+          }}
+        >
+          {headerActionMenu.kind === "add" ? (
+            <>
+              <LevelActionMenuButton
+                label="Agregar partida"
+                icon={<Plus className="h-4 w-4" />}
+                className="bg-slate-50 font-semibold text-slate-900 hover:bg-slate-100"
+                onClick={() => {
+                  addItem();
+                  setHeaderActionMenu(null);
+                }}
+              />
+              <div className="my-1 border-t border-slate-100" />
+              <LevelActionMenuButton
+                label="Agregar título"
+                icon={<Type className="h-4 w-4" />}
+                onClick={() => {
+                  addLevel("TITLE");
+                  setHeaderActionMenu(null);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Agregar subtítulo"
+                icon={<Rows3 className="h-4 w-4" />}
+                onClick={() => {
+                  addLevel("SUBTITLE");
+                  setHeaderActionMenu(null);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Agregar subpartida"
+                icon={<GripVertical className="h-4 w-4" />}
+                onClick={() => {
+                  addLevel("ITEM_GROUP");
+                  setHeaderActionMenu(null);
+                }}
+              />
+            </>
+          ) : null}
+          {headerActionMenu.kind === "more" ? (
+            <>
+              <LevelActionMenuButton
+                label="Insertar desde catálogo"
+                onClick={() => {
+                  openCatalogInsert(null);
+                  setHeaderActionMenu(null);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Importar desde Excel"
+                onClick={() => {
+                  openExcelImport(null);
+                  setHeaderActionMenu(null);
+                }}
+              />
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -1687,41 +2105,74 @@ const ApuSheetController = forwardRef<ApuSheetControllerHandle, {
 function IconButton({
   label,
   onClick,
+  className,
+  dataActionTrigger = false,
+  dataHeaderActionTrigger = false,
+  ariaExpanded,
+  ariaControls,
   children,
 }: {
   label: string;
-  onClick: () => void;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  className?: string;
+  dataActionTrigger?: boolean;
+  dataHeaderActionTrigger?: boolean;
+  ariaExpanded?: boolean;
+  ariaControls?: string;
   children: React.ReactNode;
 }) {
   return (
-    <Button size="sm" variant="ghost" onClick={onClick} title={label} aria-label={label} className="h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100">
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-haspopup="menu"
+      aria-expanded={ariaExpanded}
+      aria-controls={ariaControls}
+      data-level-action-trigger={dataActionTrigger ? "true" : undefined}
+      data-header-action-trigger={dataHeaderActionTrigger ? "true" : undefined}
+      className={cn("h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2", className)}
+    >
       {children}
     </Button>
   );
 }
 
-function SaveBadge({ state, lastSavedLabel }: { state: SaveState; lastSavedLabel: string | null }) {
-  const styles: Record<SaveState, string> = {
-    idle: "bg-slate-100 text-slate-600",
-    dirty: "bg-amber-100 text-amber-700",
-    saving: "bg-sky-100 text-sky-700",
-    saved: "bg-emerald-100 text-emerald-700",
-    error: "bg-rose-100 text-rose-700",
-  };
-
-  const labels: Record<SaveState, string> = {
-    idle: "Sin cambios",
-    dirty: "Cambios pendientes",
-    saving: "Guardando...",
-    saved: "Guardado automatico",
-    error: "Error al guardar",
-  };
-
+function SaveBadge({ state, lastSavedLabel, compact = false }: { state: SaveState; lastSavedLabel: string | null; compact?: boolean }) {
   return (
-    <span className={cn("inline-flex flex-col rounded-full px-3 py-2 text-xs font-medium", styles[state])}>
-      <span>{labels[state]}</span>
-      {lastSavedLabel ? <span className="mt-0.5 text-[11px] font-normal opacity-80">{lastSavedLabel}</span> : null}
-    </span>
+    <SaveStateBadge
+      state={state}
+      lastSavedLabel={lastSavedLabel}
+      compact={compact}
+      bordered
+      className={compact ? "min-w-[116px]" : "min-w-[132px]"}
+    />
+  );
+}
+
+function LevelActionMenuButton({
+  label,
+  onClick,
+  icon,
+  className,
+}: {
+  label: string;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      role="menuitem"
+      className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1", className)}
+    >
+      {icon ? <span className="shrink-0 text-slate-400">{icon}</span> : null}
+      {label}
+    </button>
   );
 }
 
@@ -1780,7 +2231,7 @@ function PastePreviewSheet({
       <div className="mx-auto mt-10 w-[min(960px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-sm text-slate-500">Previsualizacion de pegado</p>
+            <p className="text-sm text-slate-500">Previsualización de pegado</p>
             <h3 className="text-2xl font-semibold text-slate-900">Revisa antes de importar</h3>
             <p className="mt-1 text-sm text-slate-500">
               Destino: {targetLabel} desde columna <span className="font-medium text-slate-700">{pendingPaste.startColumn}</span>
@@ -1792,7 +2243,7 @@ function PastePreviewSheet({
         </div>
 
         <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 md:grid-cols-3">
-          <PreviewStat label="Modo" value={pendingPaste.parsedPaste.mode === "structured" ? "Jerarquico" : "Plano"} />
+          <PreviewStat label="Modo" value={pendingPaste.parsedPaste.mode === "structured" ? "Jerárquico" : "Plano"} />
           <PreviewStat label="Niveles" value={String(pendingPaste.parsedPaste.importedLevels)} />
           <PreviewStat label="Partidas" value={String(pendingPaste.parsedPaste.importedItems)} />
         </div>
@@ -1810,10 +2261,10 @@ function PastePreviewSheet({
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">
                   <TH>Tipo</TH>
-                  <TH>Descripcion</TH>
+                  <TH>Descripción</TH>
                   <TH className="text-center">Unidad</TH>
                   <TH className="text-right">Metrado</TH>
-                  <TH>Codigo</TH>
+                  <TH>Código</TH>
                 </TR>
               </THead>
               <TBody>
@@ -1826,8 +2277,8 @@ function PastePreviewSheet({
                           onChange={(event) => onLevelTypeChange(row.entryIndex ?? 0, event.target.value as BudgetLevelType)}
                           className="h-8 min-w-[124px] rounded-lg px-2 text-xs"
                         >
-                          <option value="TITLE">Titulo</option>
-                          <option value="SUBTITLE">Subtitulo</option>
+                          <option value="TITLE">Título</option>
+                          <option value="SUBTITLE">Subtítulo</option>
                           <option value="ITEM_GROUP">Subpartida</option>
                         </Select>
                       ) : (
@@ -1851,12 +2302,12 @@ function PastePreviewSheet({
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <p className="text-sm text-slate-500">Solo se aplicara al confirmar.</p>
+          <p className="text-sm text-slate-500">Solo se aplicará al confirmar.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
-              Seguir revisando despues
+              Seguir revisando después
             </Button>
-            <Button onClick={onConfirm}>Confirmar importacion</Button>
+            <Button onClick={onConfirm}>Confirmar importación</Button>
           </div>
         </div>
       </div>
@@ -1912,7 +2363,7 @@ function CatalogInsertSheet({
       <div className="mx-auto mt-10 w-[min(1080px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-sm text-slate-500">Insertar desde catalogo</p>
+            <p className="text-sm text-slate-500">Insertar desde catálogo</p>
             <h3 className="text-2xl font-semibold text-slate-900">Selecciona una partida base</h3>
             <p className="mt-1 text-sm text-slate-500">Destino: {target.kind === "level" ? "nivel" : "partida"}.</p>
           </div>
@@ -1959,7 +2410,7 @@ function CatalogInsertSheet({
                   <TH className="text-center">Unidad</TH>
                   <TH className="text-right">P. Unitario</TH>
                   <TH>Rendimiento</TH>
-                  <TH className="text-right">Accion</TH>
+                  <TH className="text-right">Acción</TH>
                 </TR>
               </THead>
               <TBody>
@@ -1983,7 +2434,7 @@ function CatalogInsertSheet({
                     <TD className="py-2 text-right text-sm font-medium tabular-nums text-slate-900">
                       {formatNumber(partida.unitPrice, currencyDecimals)}
                     </TD>
-                    <TD className="py-2 text-sm text-slate-600">{partida.performanceRate ?? `${partida.performance} ${partida.unit}/DIA`}</TD>
+                    <TD className="py-2 text-sm text-slate-600">{partida.performanceRate ?? `${partida.performance} ${partida.unit}/DÍA`}</TD>
                     <TD className="py-2 text-right">
                       <Button size="sm" onClick={() => onSelect(partida)}>
                         Insertar
@@ -2031,10 +2482,10 @@ function ExcelImportSheet({
       <div className="mx-auto mt-10 w-[min(980px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-sm text-slate-500">Importacion desde Excel</p>
+            <p className="text-sm text-slate-500">Importación desde Excel</p>
             <h3 className="text-2xl font-semibold text-slate-900">Pega subpartidas y partidas</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Destino: {target.kind === "level" ? "nivel" : "partida"}. Puedes pegar columnas tipo codigo, descripcion, unidad y metrado.
+              Destino: {target.kind === "level" ? "nivel" : "partida"}. Puedes pegar columnas tipo código, descripción, unidad y metrado.
             </p>
           </div>
           <Button variant="outline" onClick={onClose}>
@@ -2072,22 +2523,22 @@ function ExcelImportSheet({
           <textarea
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            placeholder={"Pega aqui el bloque desde Excel...\n01\tOBRAS PRELIMINARES\n01.01\tLIMPIEZA DE TERRENO\tM2\t120.00"}
+            placeholder={"Pega aquí el bloque desde Excel...\n01\tOBRAS PRELIMINARES\n01.01\tLIMPIEZA DE TERRENO\tM2\t120.00"}
             className="min-h-[320px] w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200"
           />
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            El sistema detecta jerarquia cuando pegas codigos como <span className="font-medium text-slate-800">01</span>, <span className="font-medium text-slate-800">01.01</span>, <span className="font-medium text-slate-800">01.01.01</span> o cuando la descripcion viene indentada.
+            El sistema detecta jerarquía cuando pegas códigos como <span className="font-medium text-slate-800">01</span>, <span className="font-medium text-slate-800">01.01</span>, <span className="font-medium text-slate-800">01.01.01</span> o cuando la descripción viene indentada.
           </div>
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <p className="text-sm text-slate-500">Se abrira una previsualizacion antes de importar.</p>
+          <p className="text-sm text-slate-500">Se abrirá una previsualización antes de importar.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
               Cancelar
             </Button>
             <Button onClick={onConfirm} disabled={!value.trim()}>
-              Revisar importacion
+              Revisar importación
             </Button>
           </div>
         </div>
@@ -2197,21 +2648,21 @@ function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
 
   const seconds = Math.max(0, Math.floor((currentTime - lastSavedAt) / 1000));
   if (seconds < 60) {
-    return `Ultimo guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+    return `Último guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
   }
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
-    return `Ultimo guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    return `Último guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
   }
 
   const hours = Math.floor(minutes / 60);
-  return `Ultimo guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
+  return `Último guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
 }
 
 function getDefaultLevelName(type: BudgetLevelType) {
-  if (type === "TITLE") return "Nuevo titulo";
-  if (type === "SUBTITLE") return "Nuevo subtitulo";
+  if (type === "TITLE") return "Nuevo título";
+  if (type === "SUBTITLE") return "Nuevo subtítulo";
   if (type === "ITEM_GROUP") return "Nueva subpartida";
   return "Nuevo subitem";
 }
@@ -2839,6 +3290,21 @@ function resolveItemInsertion(rows: BudgetDisplayRow[], activeRowId: string | nu
   };
 }
 
+function resolveItemInsertionFromTarget(target: InsertTarget, items: BudgetItemRecord[]): ItemInsertion {
+  if (target.kind === "level") {
+    return {
+      levelId: target.id,
+      afterItemId: null,
+    };
+  }
+
+  const targetItem = items.find((item) => item.id === target.id) ?? null;
+  return {
+    levelId: targetItem?.levelId ?? null,
+    afterItemId: target.id,
+  };
+}
+
 function resolveLevelInsertion(
   type: BudgetLevelType,
   rows: BudgetDisplayRow[],
@@ -2948,12 +3414,16 @@ function findAncestorLevelIdByType(levels: BudgetLevelRecord[], levelId: string 
 }
 
 function insertItemAtPosition(items: BudgetItemRecord[], nextItem: BudgetItemRecord, insertion: ItemInsertion) {
+  return insertItemsAtPosition(items, [nextItem], insertion);
+}
+
+function insertItemsAtPosition(items: BudgetItemRecord[], nextItems: BudgetItemRecord[], insertion: ItemInsertion) {
   const sorted = [...items].sort((left, right) => left.sortOrder - right.sortOrder);
 
   if (insertion.afterItemId) {
     const anchorIndex = sorted.findIndex((item) => item.id === insertion.afterItemId);
     if (anchorIndex >= 0) {
-      sorted.splice(anchorIndex + 1, 0, nextItem);
+      sorted.splice(anchorIndex + 1, 0, ...nextItems);
       return resequenceItems(sorted);
     }
   }
@@ -2961,12 +3431,12 @@ function insertItemAtPosition(items: BudgetItemRecord[], nextItem: BudgetItemRec
   if (insertion.levelId) {
     const firstSiblingIndex = sorted.findIndex((item) => item.levelId === insertion.levelId);
     if (firstSiblingIndex >= 0) {
-      sorted.splice(firstSiblingIndex, 0, nextItem);
+      sorted.splice(firstSiblingIndex, 0, ...nextItems);
       return resequenceItems(sorted);
     }
   }
 
-  return resequenceItems([...sorted, nextItem]);
+  return resequenceItems([...sorted, ...nextItems]);
 }
 
 function insertLevelAtPosition(levels: BudgetLevelRecord[], nextLevel: BudgetLevelRecord, insertion: LevelInsertion) {
@@ -3129,38 +3599,67 @@ function shouldMoveHorizontally(input: HTMLInputElement, key: "ArrowLeft" | "Arr
   return selectionEnd === input.value.length;
 }
 
-function moveEntity<T extends { id: string; sortOrder: number }>(items: T[], id: string, direction: "up" | "down"): T[] {
+function moveScopedEntity<T extends { id: string; sortOrder: number }, TScope>(
+  items: T[],
+  id: string,
+  direction: "up" | "down",
+  getScope: (item: T) => TScope,
+  resequence: (items: T[]) => T[],
+): T[] {
   const sorted = [...items].sort((left, right) => left.sortOrder - right.sortOrder);
   const index = sorted.findIndex((item) => item.id === id);
 
   if (index === -1) return items;
 
-  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  const currentItem = sorted[index];
+  if (!currentItem) return items;
 
-  if (targetIndex < 0 || targetIndex >= sorted.length) return items;
+  const scope = getScope(currentItem);
+  const siblingIndexes = sorted.reduce<number[]>((indexes, item, currentIndex) => {
+    if (getScope(item) === scope) {
+      indexes.push(currentIndex);
+    }
+    return indexes;
+  }, []);
+  const siblingPosition = siblingIndexes.indexOf(index);
+
+  if (siblingPosition === -1) return items;
+
+  const targetSiblingPosition = direction === "up" ? siblingPosition - 1 : siblingPosition + 1;
+  if (targetSiblingPosition < 0 || targetSiblingPosition >= siblingIndexes.length) return items;
+
+  const targetIndex = siblingIndexes[targetSiblingPosition];
+  if (targetIndex === undefined) return items;
 
   [sorted[index], sorted[targetIndex]] = [sorted[targetIndex], sorted[index]];
 
-  return sorted.map((item, currentIndex) => ({
-    ...item,
-    sortOrder: currentIndex + 1,
-  }));
+  return resequence(sorted);
 }
 
-function moveEntityToTarget<T extends { id: string; sortOrder: number }>(items: T[], sourceId: string, targetId: string): T[] {
+function moveScopedEntityToTarget<T extends { id: string; sortOrder: number }, TScope>(
+  items: T[],
+  sourceId: string,
+  targetId: string,
+  getScope: (item: T) => TScope,
+  resequence: (items: T[]) => T[],
+): T[] {
   const sorted = [...items].sort((left, right) => left.sortOrder - right.sortOrder);
   const sourceIndex = sorted.findIndex((item) => item.id === sourceId);
   const targetIndex = sorted.findIndex((item) => item.id === targetId);
 
   if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) return items;
 
+  const sourceItem = sorted[sourceIndex];
+  const targetItem = sorted[targetIndex];
+  if (!sourceItem || !targetItem) return items;
+  if (getScope(sourceItem) !== getScope(targetItem)) return items;
+
   const [source] = sorted.splice(sourceIndex, 1);
+  if (!source) return items;
+
   sorted.splice(targetIndex, 0, source);
 
-  return sorted.map((item, index) => ({
-    ...item,
-    sortOrder: index + 1,
-  }));
+  return resequence(sorted);
 }
 
 function normalizeSortOrders(levels: BudgetLevelRecord[]) {

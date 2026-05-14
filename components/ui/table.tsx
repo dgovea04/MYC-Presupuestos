@@ -16,7 +16,10 @@ export function TBody({ className, ...props }: React.HTMLAttributes<HTMLTableSec
 export function TR({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
-      className={cn("ui-table-row border-b border-slate-100 transition-colors hover:bg-slate-50", className)}
+      className={cn(
+        "ui-table-row border-b border-slate-100 transition-[background-color,box-shadow] duration-150 hover:bg-slate-50/90 focus-within:bg-sky-50/60",
+        className,
+      )}
       {...props}
     />
   );
@@ -32,5 +35,5 @@ export function TH({ className, ...props }: React.ThHTMLAttributes<HTMLTableCell
 }
 
 export function TD({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("ui-table-cell p-3 align-middle text-slate-700", className)} {...props} />;
+  return <td className={cn("ui-table-cell p-3 align-middle text-slate-700 transition-colors", className)} {...props} />;
 }

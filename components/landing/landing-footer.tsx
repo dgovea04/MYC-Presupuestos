@@ -5,14 +5,14 @@ import { LandingLogo } from "@/components/landing/landing-logo";
 const footerLinkMap: Record<string, string> = {
   Presupuestos: "#features",
   APU: "#features",
-  "Formula polinomica": "#features",
+  "Fórmula polinómica": "#features",
   Reportes: "#preview",
   Nosotros: "#comparison",
   Clientes: "#comparison",
   Seguridad: "#pricing",
   Contacto: "#contacto",
   Demo: "#preview",
-  "Guia de inicio": "/register",
+  "Guía de inicio": "/register",
   "Casos de uso": "#comparison",
   Soporte: "#contacto",
 };
@@ -41,7 +41,7 @@ export function LandingFooter() {
         <div>
           <LandingLogo />
           <p className="mt-5 max-w-sm text-sm leading-7 text-slate-500">
-            Plataforma moderna de costos y presupuestos de obra para ingenieros, contratistas y oficinas tecnicas.
+            Plataforma moderna de costos y presupuestos de obra para ingenieros, contratistas y oficinas técnicas.
           </p>
           <p className="mt-6 text-sm text-slate-400">&copy; 2026 MYC Presupuestos. Todos los derechos reservados.</p>
         </div>

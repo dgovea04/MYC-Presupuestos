@@ -61,7 +61,8 @@ describe("BudgetEditor view mode integration", () => {
     const { host, getButtonByText, getByText, getEditorRoot } = await renderEditor();
 
     expect(host.dataset.viewMode).toBe("modern");
-    expect(getByText("Vista moderna activa")).toBeTruthy();
+    expect(getByText("Vista")).toBeTruthy();
+    expect(getByText("Densidad")).toBeTruthy();
     expect(getEditorRoot().className).toContain("budget-modern-flow");
     expect(countViewModeAnchors(host)).toBe(1);
 
@@ -70,7 +71,8 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     expect(host.dataset.viewMode).toBe("excel");
-    expect(getByText("Modo Excel activo")).toBeTruthy();
+    expect(getByText("Vista")).toBeTruthy();
+    expect(getByText("Densidad")).toBeTruthy();
     expect(getEditorRoot().className).toContain("budget-excel-flow");
     expect(countViewModeAnchors(host)).toBe(1);
   });
@@ -602,6 +604,63 @@ describe("BudgetEditor view mode integration", () => {
     ]);
   });
 
+  it("inserts catalog items from the header target right after the active item", async () => {
+    const { getButtonByText, getInputByValue, getOrderedInputValues } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+
+    await act(async () => {
+      getButtonByText("Desde catalogo").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Insertar").click();
+    });
+
+    expect(getOrderedInputValues(["Partida demo", "Excavacion manual", "Partida secundaria"])).toEqual([
+      "Partida demo",
+      "Excavacion manual",
+      "Partida secundaria",
+    ]);
+  });
+
+  it("inserts excel import rows from the header target right after the active item", async () => {
+    const { getButtonByText, getInputByValue, getOrderedInputValues, getTextarea } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+
+    await act(async () => {
+      getButtonByText("Importar Excel").click();
+    });
+
+    await act(async () => {
+      setTextareaValue(getTextarea(), "IT-77\tPartida importada\tm2\t12");
+    });
+
+    await act(async () => {
+      getButtonByText("Revisar importacion").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Confirmar importacion").click();
+    });
+
+    expect(getOrderedInputValues(["Partida demo", "Partida importada", "Partida secundaria"])).toEqual([
+      "Partida demo",
+      "Partida importada",
+      "Partida secundaria",
+    ]);
+  });
+
   it("accepts decimal metrado typed with comma before saving", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
@@ -688,6 +747,27 @@ describe("BudgetEditor view mode integration", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(getOrderedItemDescriptions()).toEqual(["Partida secundaria", "Partida demo"]);
   });
+
+  it("moves items with Alt+Arrow within the same visible section even when global item sort is interleaved", async () => {
+    const { getInputByValue, getOrderedInputValues } = await renderEditor({
+      budget: createBudgetWithInterleavedSectionItems(),
+    });
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, altKey: true, key: "ArrowDown" }));
+    });
+
+    expect(getOrderedInputValues(["Partida demo", "Partida secundaria", "Partida otra seccion"])).toEqual([
+      "Partida secundaria",
+      "Partida demo",
+      "Partida otra seccion",
+    ]);
+  });
+
 });
 
 async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?: CatalogPartidaRecord[]; resourcesCatalog?: ResourceRecord[] }) {
@@ -819,6 +899,15 @@ async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?:
 
       if (!(element instanceof HTMLInputElement)) {
         throw new Error(`Missing input with value: ${value}`);
+      }
+
+      return element;
+    },
+    getTextarea: () => {
+      const element = document.body.querySelector("textarea");
+
+      if (!(element instanceof HTMLTextAreaElement)) {
+        throw new Error("Missing textarea");
       }
 
       return element;
@@ -1171,6 +1260,73 @@ function createBudgetWithTwoItems(): BudgetRecord {
   };
 }
 
+function createBudgetWithInterleavedSectionItems(): BudgetRecord {
+  return {
+    ...createBudget(),
+    levels: [
+      {
+        id: "level-title-1",
+        budgetId: "budget-1",
+        parentId: null,
+        type: "TITLE",
+        code: "01",
+        name: "Obras preliminares",
+        sortOrder: 1,
+      },
+      {
+        id: "level-subtitle-1",
+        budgetId: "budget-1",
+        parentId: "level-title-1",
+        type: "SUBTITLE",
+        code: "01.01",
+        name: "Movimiento de tierras",
+        sortOrder: 2,
+      },
+      {
+        id: "level-title-2",
+        budgetId: "budget-1",
+        parentId: null,
+        type: "TITLE",
+        code: "02",
+        name: "Instalaciones",
+        sortOrder: 3,
+      },
+      {
+        id: "level-subtitle-2",
+        budgetId: "budget-1",
+        parentId: "level-title-2",
+        type: "SUBTITLE",
+        code: "02.01",
+        name: "Electricas",
+        sortOrder: 4,
+      },
+    ],
+    items: [
+      {
+        ...createBudgetWithItem().items[0]!,
+        id: "item-1",
+        levelId: "level-subtitle-1",
+        description: "Partida demo",
+        sortOrder: 1,
+      },
+      {
+        ...createBudgetWithItem().items[0]!,
+        id: "item-2",
+        levelId: "level-subtitle-2",
+        description: "Partida otra seccion",
+        sortOrder: 2,
+      },
+      {
+        ...createBudgetWithItem().items[0]!,
+        id: "item-3",
+        levelId: "level-subtitle-1",
+        description: "Partida secundaria",
+        sortOrder: 3,
+      },
+    ],
+  };
+}
+
 function countViewModeAnchors(host: HTMLDivElement) {
   return [host, ...host.querySelectorAll<HTMLElement>("[data-view-mode]")].filter((element) => element.hasAttribute("data-view-mode")).length;
 }
@@ -1192,6 +1348,13 @@ function setInputValue(input: HTMLInputElement, value: string) {
   descriptor?.set?.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value");
+  descriptor?.set?.call(textarea, value);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  textarea.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function dispatchKey(target: Element | null, key: string, options?: Pick<KeyboardEventInit, "shiftKey">) {

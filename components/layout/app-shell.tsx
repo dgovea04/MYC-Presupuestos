@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { FileSpreadsheet, FolderKanban, LayoutDashboard, Rows3, SlidersHorizontal, Wrench } from "lucide-react";
+import { FileSpreadsheet, FolderKanban, LayoutDashboard, Plus, Rows3, SlidersHorizontal, Wrench } from "lucide-react";
 import { getAuthSession } from "@/lib/auth/session";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppBackButton } from "@/components/layout/app-back-button";
@@ -85,7 +85,10 @@ export async function AppShell({
               </div>
 
               <Link href="/projects/new">
-                <Button>Nuevo proyecto</Button>
+                <Button className="gap-2 shadow-sm shadow-sky-950/10">
+                  <Plus className="h-4 w-4" />
+                  Nuevo proyecto
+                </Button>
               </Link>
             </header>
 

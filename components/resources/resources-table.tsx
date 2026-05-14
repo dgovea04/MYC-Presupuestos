@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import ExcelJS from "exceljs";
+import { Plus } from "lucide-react";
 import type { ResourceCategory, ResourcePatchFields, ResourcePatchResult, ResourceRecord, ResourceStatePatch } from "@/types/resource";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
@@ -417,45 +420,67 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="grid gap-3 md:grid-cols-[1fr_220px] md:flex-1">
-          <Input placeholder="Buscar por codigo, insumo o IU" value={filter} onChange={(event) => setFilter(event.target.value)} />
-          <Select value={category} onChange={(event) => setCategory(event.target.value)}>
-            <option value="ALL">Todas las categorias</option>
-            <option value="MATERIAL">Materiales</option>
-            <option value="LABOR">Mano de obra</option>
-            <option value="EQUIPMENT">Equipos</option>
-          </Select>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <SaveBadge state={derivedSaveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />
-          <Button variant="outline" onClick={addBlankRow}>
-            Nueva fila
-          </Button>
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-            Importar Excel
-          </Button>
-          <Button variant="secondary" onClick={() => void saveAllDirtyRows()} disabled={dirtyCount === 0 || pendingIds.length > 0}>
-            {dirtyCount > 0 ? `Guardar cambios (${dirtyCount})` : "Sin cambios"}
-          </Button>
-        </div>
-      </div>
+      <OperationalPanel
+        title="Tabla operativa"
+        description="Busca, filtra y actualiza insumos del catálogo general sin salir de la tabla."
+        metrics={
+          <>
+            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
+              {filtered.length} {filtered.length === 1 ? "insumo" : "insumos"}
+            </span>
+            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
+              {rows.length} total
+            </span>
+          </>
+        }
+        controls={
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+              <Input placeholder="Buscar por código, insumo o IU" value={filter} onChange={(event) => setFilter(event.target.value)} />
+              <Select value={category} onChange={(event) => setCategory(event.target.value)}>
+                <option value="ALL">Todas las categorías</option>
+                <option value="MATERIAL">Materiales</option>
+                <option value="LABOR">Mano de obra</option>
+                <option value="EQUIPMENT">Equipos</option>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <p className="text-sm text-slate-500">
+                {filter.trim() ? `Mostrando ${filtered.length} coincidencias para "${filter}"` : "Vista general del catálogo de insumos"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <SaveStateBadge state={derivedSaveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} savedLabel="Guardado" className="min-w-[152px]" />
+                <Button variant="default" onClick={addBlankRow} className="gap-2 shadow-sm shadow-sky-950/10">
+                  <Plus className="h-4 w-4" />
+                  Crear insumo
+                </Button>
+                <Button variant="outline" className="bg-white" onClick={() => fileInputRef.current?.click()}>
+                  Importar Excel
+                </Button>
+                <Button variant="secondary" onClick={() => void saveAllDirtyRows()} disabled={dirtyCount === 0 || pendingIds.length > 0}>
+                  {dirtyCount > 0 ? `Guardar cambios (${dirtyCount})` : "Sin cambios"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        }
+      />
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => void handleImportFile(event)} />
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      {feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {feedback ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</p> : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="max-h-[68vh] overflow-auto">
           <Table>
             <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
               <TR className="bg-slate-50 hover:bg-slate-50">
-                <TH>CODIGO</TH>
+                <TH>CÓDIGO</TH>
                 <TH>INSUMO</TH>
                 <TH>UNIDAD</TH>
                 <TH>PRECIO</TH>
-                <TH>CATEGORIA</TH>
+                <TH>CATEGORÍA</TH>
                 <TH>IU</TH>
                 <TH>FUENTE</TH>
                 <TH className="text-right">ACCIONES</TH>
@@ -586,31 +611,6 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
   );
 }
 
-function SaveBadge({ state, lastSavedLabel }: { state: SaveState; lastSavedLabel: string | null }) {
-  const styles: Record<SaveState, string> = {
-    idle: "bg-slate-100 text-slate-600",
-    dirty: "bg-amber-100 text-amber-700",
-    saving: "bg-sky-100 text-sky-700",
-    saved: "bg-emerald-100 text-emerald-700",
-    error: "bg-rose-100 text-rose-700",
-  };
-
-  const labels: Record<SaveState, string> = {
-    idle: "Sin cambios",
-    dirty: "Cambios pendientes",
-    saving: "Guardando...",
-    saved: "Guardado",
-    error: "Error al guardar",
-  };
-
-  return (
-    <span className={`inline-flex min-w-[152px] flex-col rounded-full px-3 py-2 text-xs font-medium ${styles[state]}`}>
-      <span>{labels[state]}</span>
-      {lastSavedLabel ? <span className="mt-0.5 text-[11px] font-normal opacity-80">{lastSavedLabel}</span> : null}
-    </span>
-  );
-}
-
 function PastePreviewSheet({
   pendingPaste,
   onClose,
@@ -629,10 +629,10 @@ function PastePreviewSheet({
       <div className="mx-auto mt-10 w-[min(1100px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-sm text-slate-500">Previsualizacion de pegado</p>
+            <p className="text-sm text-slate-500">Previsualización de pegado</p>
             <h3 className="text-2xl font-semibold text-slate-900">Revisa antes de aplicar</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Se prepararan {pendingPaste.rows.length} {pendingPaste.rows.length === 1 ? "insumo" : "insumos"} desde la columna{" "}
+              Se prepararán {pendingPaste.rows.length} {pendingPaste.rows.length === 1 ? "insumo" : "insumos"} desde la columna{" "}
               <span className="font-medium text-slate-700">{pendingPaste.startColumn}</span>.
             </p>
           </div>
@@ -646,11 +646,11 @@ function PastePreviewSheet({
             <Table>
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">
-                  <TH>CODIGO</TH>
+                  <TH>CÓDIGO</TH>
                   <TH>INSUMO</TH>
                   <TH>UNIDAD</TH>
                   <TH className="text-right">PRECIO</TH>
-                  <TH>CATEGORIA</TH>
+                  <TH>CATEGORÍA</TH>
                   <TH>IU</TH>
                   <TH>FUENTE</TH>
                 </TR>
@@ -673,7 +673,7 @@ function PastePreviewSheet({
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <p className="text-sm text-slate-500">El pegado solo se aplicara al confirmar.</p>
+          <p className="text-sm text-slate-500">El pegado solo se aplicará al confirmar.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
               Cerrar
@@ -1098,16 +1098,16 @@ function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
 
   const seconds = Math.max(0, Math.floor((currentTime - lastSavedAt) / 1000));
   if (seconds < 60) {
-    return `Ultimo guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+    return `Último guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
   }
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
-    return `Ultimo guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    return `Último guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
   }
 
   const hours = Math.floor(minutes / 60);
-  return `Ultimo guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
+  return `Último guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
 }
 
 function parseSpreadsheetNumber(value: string) {

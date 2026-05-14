@@ -7,8 +7,8 @@ export function BenefitsSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           badge="Beneficios"
-          title="Hecho para equipos que necesitan rigor tecnico sin cargar la operacion."
-          description="La experiencia prioriza lectura, orden y continuidad entre modulos para que el equipo avance mas rapido con menos retrabajo."
+          title="Hecho para equipos que necesitan rigor técnico sin cargar la operación."
+          description="La experiencia prioriza lectura, orden y continuidad entre módulos para que el equipo avance más rápido con menos retrabajo."
           tone="dark"
         />
         <div className="mt-14 grid gap-6 md:grid-cols-2">

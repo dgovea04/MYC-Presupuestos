@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
+import { FolderKanban } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectById, getUserCompanies } from "@/lib/data/projects";
 import { ProjectForm } from "@/components/projects/project-form";
@@ -16,12 +18,15 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
 
   return (
     <AppShell>
-      <Card>
-        <CardHeader>
-          <CardTitle>Editar proyecto</CardTitle>
-          <CardDescription>Ajusta datos generales de la obra y su estado actual.</CardDescription>
+      <Card className="border-slate-200">
+        <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <PageHeaderCard
+            icon={<FolderKanban className="h-5 w-5" />}
+            title="Editar proyecto"
+            description="Ajusta datos generales de la obra y su estado actual."
+          />
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <ProjectForm companies={companies} project={project} />
         </CardContent>
       </Card>

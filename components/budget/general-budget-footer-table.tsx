@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { BudgetFooterStructure, BudgetFooterRowInput } from "@/types/budget-sections";
@@ -32,6 +34,8 @@ export function GeneralBudgetFooterTable({
   const lastSavedPayload = useRef(JSON.stringify(getSavePayload(initialStructure.rows)));
 
   const serializedDraft = useMemo(() => JSON.stringify(getSavePayload(structure.rows)), [structure.rows]);
+  const calculatedRowsCount = useMemo(() => structure.rows.filter((row) => row.isCalculated).length, [structure.rows]);
+  const highlightedRowsCount = useMemo(() => structure.rows.filter((row) => row.highlight).length, [structure.rows]);
 
   useEffect(() => {
     if (!isHydrated.current) {
@@ -198,27 +202,37 @@ export function GeneralBudgetFooterTable({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <CardTitle>Pie de presupuesto</CardTitle>
-          <CardDescription>Constructor libre del resumen final, con formulas entre variables y guardado automatico.</CardDescription>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />
-          <ToolbarIconButton label="Agregar fila" onClick={addRow} disabled={saving}>
-            <Plus className="h-4 w-4" />
-          </ToolbarIconButton>
-          <ToolbarIconButton label={saving ? "Guardando" : "Guardar ahora"} onClick={() => void saveStructure()} disabled={saving}>
-            <Save className="h-4 w-4" />
-          </ToolbarIconButton>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-        {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+    <div className="space-y-4">
+      <OperationalPanel
+        title="Pie de presupuesto"
+        description="Constructor libre del resumen final, con fórmulas entre variables y guardado automático."
+        metrics={<SaveStateBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />}
+        controls={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-500">Usa variables como `CD + PGG + UTI` para armar totales y líneas finales del presupuesto.</p>
+            <div className="flex items-center gap-2">
+              {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+              {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+              <ToolbarIconButton label="Agregar fila" onClick={addRow} disabled={saving}>
+                <Plus className="h-4 w-4" />
+              </ToolbarIconButton>
+              <ToolbarIconButton label={saving ? "Guardando" : "Guardar ahora"} onClick={() => void saveStructure()} disabled={saving}>
+                <Save className="h-4 w-4" />
+              </ToolbarIconButton>
+            </div>
+          </div>
+        }
+      />
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <InfoCard label="Filas" value={String(structure.rows.length)} tone="slate" />
+        <InfoCard label="Fórmulas activas" value={String(calculatedRowsCount)} tone="sky" />
+        <InfoCard label="Filas resaltadas" value={String(highlightedRowsCount)} tone="amber" />
+        <InfoCard label="Importe en letras" value={structure.amountInWords ? "Disponible" : "Pendiente"} tone="slate" />
+      </div>
+
+      <div className="space-y-4">
+        <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
           <Table className="table-fixed min-w-[1160px] w-full">
             <colgroup>
               <col className="w-[150px]" />
@@ -232,8 +246,8 @@ export function GeneralBudgetFooterTable({
             <THead>
               <TR className="bg-slate-50 hover:bg-slate-50">
                 <TH>Variable</TH>
-                <TH>Descripcion</TH>
-                <TH>Formula</TH>
+                <TH>Descripción</TH>
+                <TH>Fórmula</TH>
                 <TH className="text-right">Valor</TH>
                 <TH className="text-center">IU</TH>
                 <TH className="text-center">Resaltar</TH>
@@ -321,12 +335,12 @@ export function GeneralBudgetFooterTable({
           </Table>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] px-4 py-3 shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Importe en letras</p>
           <p className="mt-2 text-sm font-semibold text-slate-900">{structure.amountInWords}</p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -357,31 +371,6 @@ function ToolbarIconButton({
   );
 }
 
-function SaveBadge({ state, lastSavedLabel }: { state: SaveState; lastSavedLabel: string | null }) {
-  const styles: Record<SaveState, string> = {
-    idle: "bg-slate-100 text-slate-600",
-    dirty: "bg-amber-100 text-amber-700",
-    saving: "bg-sky-100 text-sky-700",
-    saved: "bg-emerald-100 text-emerald-700",
-    error: "bg-rose-100 text-rose-700",
-  };
-
-  const labels: Record<SaveState, string> = {
-    idle: "Sin cambios",
-    dirty: "Cambios pendientes",
-    saving: "Guardando...",
-    saved: "Guardado automatico",
-    error: "Error al guardar",
-  };
-
-  return (
-    <span className={cn("inline-flex flex-col rounded-full px-3 py-2 text-xs font-medium", styles[state])}>
-      <span>{labels[state]}</span>
-      {lastSavedLabel ? <span className="mt-0.5 text-[11px] font-normal opacity-80">{lastSavedLabel}</span> : null}
-    </span>
-  );
-}
-
 function getInputDensityClass() {
   return "h-8 rounded-lg px-2 text-xs";
 }
@@ -404,9 +393,9 @@ function getSavePayload(rows: BudgetFooterStructure["rows"]) {
 function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
   if (!lastSavedAt) return null;
   const seconds = Math.max(0, Math.floor((currentTime - lastSavedAt) / 1000));
-  if (seconds < 60) return `Ultimo guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+  if (seconds < 60) return `Último guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `Ultimo guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+  if (minutes < 60) return `Último guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
   const hours = Math.floor(minutes / 60);
-  return `Ultimo guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
+  return `Último guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
 }

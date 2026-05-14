@@ -20,7 +20,7 @@ const sidebarItems = [
   { label: "Dashboard", icon: LayoutGrid },
   { label: "Presupuestos", icon: FolderKanban, active: true },
   { label: "APU", icon: Calculator },
-  { label: "Formula", icon: Sigma },
+  { label: "Fórmula", icon: Sigma },
   { label: "Reportes", icon: BarChart3 },
 ];
 
@@ -34,10 +34,10 @@ export function HeroSection() {
             Plataforma moderna de costos y presupuestos de obra
           </Badge>
           <h1 className="font-display mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-[3.6rem]">
-            Presupuestos de obra mas claros, conectados y listos para decidir.
+            Presupuestos de obra más claros, conectados y listos para decidir.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-            MYC Presupuestos unifica presupuestos, APU, catalogo de insumos, formula polinomica, programacion y reportes en una experiencia SaaS hecha para ingenieria civil y oficinas tecnicas.
+            MYC Presupuestos unifica presupuestos, APU, catálogo de insumos, fórmula polinómica, programación y reportes en una experiencia SaaS hecha para ingeniería civil y oficinas técnicas.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <LandingLinkButton href="/register" className="gap-2">
@@ -77,7 +77,7 @@ export function HeroSection() {
                 ))}
               </div>
               <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs text-slate-400">Indice de avance</p>
+                <p className="text-xs text-slate-400">Índice de avance</p>
                 <div className="mt-3 h-2 rounded-full bg-white/10">
                   <div className="h-2 w-[68%] rounded-full bg-[linear-gradient(90deg,#38bdf8_0%,#2563eb_100%)]" />
                 </div>
@@ -108,7 +108,7 @@ export function HeroSection() {
                     <table className="min-w-full text-sm">
                       <thead className="bg-slate-50 text-slate-500">
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium">Codigo</th>
+                          <th className="px-3 py-2 text-left font-medium">Código</th>
                           <th className="px-3 py-2 text-left font-medium">Partida</th>
                           <th className="px-3 py-2 text-left font-medium">Und.</th>
                           <th className="px-3 py-2 text-right font-medium">Metrado</th>
@@ -135,7 +135,7 @@ export function HeroSection() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">Incidencia por especialidad</p>
-                        <p className="text-xs text-slate-500">Placeholder de grafico con CSS</p>
+                        <p className="text-xs text-slate-500">Placeholder de gráfico con CSS</p>
                       </div>
                       <span className="text-xs text-slate-400">Q2</span>
                     </div>
@@ -155,7 +155,7 @@ export function HeroSection() {
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white shadow-sm shadow-slate-200/70">
-                    <p className="text-sm font-semibold">Formula polinomica lista para reajuste</p>
+                    <p className="text-sm font-semibold">Fórmula polinómica lista para reajuste</p>
                     <div className="mt-4 flex items-end gap-2">
                       {[22, 38, 31, 46, 58, 42, 64].map((height) => (
                         <div key={height} className="flex h-16 flex-1 items-end rounded-full bg-white/10 p-1">

@@ -27,7 +27,9 @@ export function ActionButton({ action, label, iconOnly = false, className, child
       title={label}
       aria-label={label}
       className={cn(
-        "gap-2",
+        "gap-2 shadow-none",
+        props.variant === "ghost" ? "hover:bg-slate-100/90 focus-visible:bg-sky-50 focus-visible:text-sky-800" : undefined,
+        props.variant === "outline" ? "border-slate-300/90 bg-white/95 hover:border-slate-400 hover:bg-slate-50" : undefined,
         iconOnly ? "h-8 w-8 rounded-lg px-0" : undefined,
         className,
       )}

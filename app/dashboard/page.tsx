@@ -14,7 +14,11 @@ import {
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { CompactStatCard } from "@/components/ui/compact-stat-card";
+import { FilterPillLink } from "@/components/ui/filter-pill-link";
+import { ToneBadge } from "@/components/ui/context-badges";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { getAuthSession } from "@/lib/auth/session";
 import { getDashboardStats } from "@/lib/data/dashboard";
 import { getUserSettings } from "@/lib/data/settings";
@@ -56,7 +60,7 @@ export default async function DashboardPage({
         <StatCard
           title="Pendientes por atender"
           value={String(stats.pendingCount)}
-          description="Proyectos que requieren una accion concreta."
+          description="Proyectos que requieren una acción concreta."
           icon={<AlertTriangle className="h-5 w-5" />}
           footer={`Alta ${pendingCounts.high} - Media ${pendingCounts.medium} - Baja ${pendingCounts.low}`}
           tone={stats.pendingCount > 0 ? "attention" : "default"}
@@ -80,13 +84,11 @@ export default async function DashboardPage({
 
       <section className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <Card className="border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)]">
-          <CardHeader>
-            <CardTitle>Continua donde te quedaste</CardTitle>
-            <CardDescription>
-              Retoma rapido el proyecto con actividad mas reciente y salta directo a su detalle.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
+          <CardContent className="flex flex-col gap-5 p-6">
+            <OperationalPanel
+              title="Continua donde te quedaste"
+              description="Retoma rápido el proyecto con actividad más reciente y salta directo a su detalle."
+            />
             {stats.recentProject ? (
               <div className="space-y-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -97,7 +99,7 @@ export default async function DashboardPage({
                     </div>
                     <p className="text-sm text-slate-600">{stats.recentProject.companyName}</p>
                     <p className="text-sm text-slate-500">
-                      Ultima actualizacion {formatDate(stats.recentProject.updatedAt, settings.dateFormat)}
+                      Última actualización {formatDate(stats.recentProject.updatedAt, settings.dateFormat)}
                     </p>
                   </div>
                   {stats.recentProject.generalBudget ? (
@@ -115,17 +117,9 @@ export default async function DashboardPage({
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <ContinueInfoCard
-                    label="Empresa"
-                    value={stats.recentProject.companyName}
-                    tone="slate"
-                  />
-                  <ContinueInfoCard
-                    label="Estado"
-                    value={stats.recentProject.status}
-                    tone="sky"
-                  />
-                  <ContinueInfoCard
+                  <CompactStatCard label="Empresa" value={stats.recentProject.companyName} tone="slate" />
+                  <CompactStatCard label="Estado" value={stats.recentProject.status} tone="sky" />
+                  <CompactStatCard
                     label="Presupuesto"
                     value={stats.recentProject.generalBudget ? "Disponible" : "Pendiente"}
                     tone={stats.recentProject.generalBudget ? "emerald" : "amber"}
@@ -143,7 +137,7 @@ export default async function DashboardPage({
               </div>
             ) : (
               <EmptyState
-                title="Aun no tienes proyectos activos"
+                title="Aún no tienes proyectos activos"
                 description="Crea tu primer proyecto para comenzar a trabajar con presupuestos, reajustes y seguimiento."
                 href="/projects/new"
                 action="Crear proyecto"
@@ -153,11 +147,8 @@ export default async function DashboardPage({
         </Card>
 
         <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
-          <CardHeader>
-            <CardTitle>Acciones rapidas</CardTitle>
-            <CardDescription>Atajos para entrar al flujo principal sin rodeos.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-6">
+            <OperationalPanel title="Acciones rápidas" description="Atajos para entrar al flujo principal sin rodeos." />
             <ActionLink
               href="/projects/new"
               title="Nuevo proyecto"
@@ -169,7 +160,7 @@ export default async function DashboardPage({
               <ActionLink
                 href="/budgets/new"
                 title="Nuevo presupuesto"
-                description="Genera un presupuesto y conectalo a un proyecto."
+                description="Genera un presupuesto y conéctalo a un proyecto."
                 icon={<FileSpreadsheet className="h-5 w-5" />}
               />
               <ActionLink
@@ -180,7 +171,7 @@ export default async function DashboardPage({
               />
               <ActionLink
                 href="/settings"
-                title="Configuracion"
+                title="Configuración"
                 description="Ajusta moneda, fechas y especialidades iniciales."
                 icon={<Settings2 className="h-5 w-5" />}
               />
@@ -191,30 +182,28 @@ export default async function DashboardPage({
 
       <section className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <Card className="min-h-full">
-          <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#fffdf8_0%,#fffaf0_100%)]">
-            <CardTitle>Pendientes por atender</CardTitle>
-            <CardDescription>
-              Bandeja operativa para detectar proyectos sin presupuesto, formula o reajustes registrados.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-6">
+            <OperationalPanel
+              title="Pendientes por atender"
+              description="Bandeja operativa para detectar proyectos sin presupuesto, fórmula o reajustes registrados."
+            />
             {stats.pendingItems.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <MiniStat label="Sin presupuesto" value={String(pendingTypeSummary.missingGeneralBudget)} tone="rose" />
-                <MiniStat label="Sin formula" value={String(pendingTypeSummary.missingFormula)} tone="amber" />
-                <MiniStat label="Sin reajustes" value={String(pendingTypeSummary.missingAdjustments)} tone="sky" />
-                <MiniStat label="Sin actividad" value={String(pendingTypeSummary.noRecentActivity)} tone="slate" />
+                <CompactStatCard label="Sin presupuesto" value={String(pendingTypeSummary.missingGeneralBudget)} tone="rose" />
+                <CompactStatCard label="Sin fórmula" value={String(pendingTypeSummary.missingFormula)} tone="amber" />
+                <CompactStatCard label="Sin reajustes" value={String(pendingTypeSummary.missingAdjustments)} tone="sky" />
+                <CompactStatCard label="Sin actividad" value={String(pendingTypeSummary.noRecentActivity)} tone="slate" />
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <PriorityFilterLink href="/dashboard" label="Todos" count={pendingCounts.all} active={selectedPriority === "all"} />
-              <PriorityFilterLink href="/dashboard?priority=high" label="Alta" count={pendingCounts.high} active={selectedPriority === "high"} />
-              <PriorityFilterLink href="/dashboard?priority=medium" label="Media" count={pendingCounts.medium} active={selectedPriority === "medium"} />
-              <PriorityFilterLink href="/dashboard?priority=low" label="Baja" count={pendingCounts.low} active={selectedPriority === "low"} />
+              <FilterPillLink href="/dashboard" label="Todos" count={pendingCounts.all} active={selectedPriority === "all"} />
+              <FilterPillLink href="/dashboard?priority=high" label="Alta" count={pendingCounts.high} active={selectedPriority === "high"} tone="rose" />
+              <FilterPillLink href="/dashboard?priority=medium" label="Media" count={pendingCounts.medium} active={selectedPriority === "medium"} tone="amber" />
+              <FilterPillLink href="/dashboard?priority=low" label="Baja" count={pendingCounts.low} active={selectedPriority === "low"} tone="slate" />
             </div>
             {filteredPendingItems.length === 0 ? (
               <EmptyState
-                title={stats.pendingItems.length === 0 ? "Todo al dia" : "Sin pendientes en este filtro"}
+                title={stats.pendingItems.length === 0 ? "Todo al día" : "Sin pendientes en este filtro"}
                 description={
                   stats.pendingItems.length === 0
                     ? "No encontramos pendientes operativos en proyectos, presupuestos ni reajustes."
@@ -232,7 +221,7 @@ export default async function DashboardPage({
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={getPriorityBadgeClass(group.priority)}>{getPriorityLabel(group.priority)}</Badge>
+                          <ToneBadge label={getPriorityLabel(group.priority)} tone={getPriorityTone(group.priority)} />
                           <span className="text-sm font-medium text-slate-900">
                             {group.items.length} {group.items.length === 1 ? "pendiente" : "pendientes"}
                           </span>
@@ -266,7 +255,7 @@ export default async function DashboardPage({
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-medium text-slate-900">{item.projectName}</p>
                               <Badge>{item.status}</Badge>
-                              <Badge className={getPendingTypeBadgeClass(item.type)}>{getPendingTypeLabel(item.type)}</Badge>
+                              <ToneBadge label={getPendingTypeLabel(item.type)} tone={getPendingTypeTone(item.type)} />
                             </div>
                             <p className="text-sm text-slate-600">{item.companyName}</p>
                             <p className="text-sm text-slate-500">{item.observation}</p>
@@ -286,22 +275,22 @@ export default async function DashboardPage({
         </Card>
 
         <Card className="min-h-full border-slate-200 bg-[linear-gradient(180deg,#f8fcff_0%,#f3f9ff_100%)]">
-          <CardHeader className="bg-transparent">
-            <CardTitle>Actividad reciente</CardTitle>
-            <CardDescription>Rastro operativo reciente para retomar contexto sin abrir varias vistas.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 p-6">
+            <OperationalPanel
+              title="Actividad reciente"
+              description="Rastro operativo reciente para retomar contexto sin abrir varias vistas."
+            />
             {stats.recentActivity.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-3">
-                <MiniStat label="Esta semana" value={String(recentActivitySummary.thisWeekCount)} tone="sky" />
-                <MiniStat label="Mas reciente" value={recentActivitySummary.latestLabel} tone="slate" />
-                <MiniStat label="Tipo dominante" value={recentActivitySummary.topTypeLabel} tone="violet" />
+                <CompactStatCard label="Esta semana" value={String(recentActivitySummary.thisWeekCount)} tone="sky" />
+                <CompactStatCard label="Más reciente" value={recentActivitySummary.latestLabel} tone="slate" />
+                <CompactStatCard label="Tipo dominante" value={recentActivitySummary.topTypeLabel} tone="violet" />
               </div>
             ) : null}
             {stats.recentActivity.length === 0 ? (
               <EmptyState
                 title="Sin actividad reciente"
-                description="Cuando edites proyectos, presupuestos o reajustes, veras aqui el rastro mas reciente."
+                description="Cuando edites proyectos, presupuestos o reajustes, verás aquí el rastro más reciente."
               />
             ) : (
               <div className="space-y-3">
@@ -337,15 +326,15 @@ export default async function DashboardPage({
 
       <section className="grid gap-6 lg:grid-cols-2">
         <Card className="min-h-full">
-          <CardHeader>
-            <CardTitle>Proyectos recientes</CardTitle>
-            <CardDescription>Accesos directos para volver a las obras con mas movimiento.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-6">
+            <OperationalPanel
+              title="Proyectos recientes"
+              description="Accesos directos para volver a las obras con más movimiento."
+            />
             {stats.projects.length === 0 ? (
               <EmptyState
-                title="Aun no hay proyectos recientes"
-                description="Empieza creando un proyecto y aqui apareceran sus accesos recientes."
+                title="Aún no hay proyectos recientes"
+                description="Empieza creando un proyecto y aquí aparecerán sus accesos recientes."
               />
             ) : (
               stats.projects.map((project) => (
@@ -360,7 +349,7 @@ export default async function DashboardPage({
                       <Badge>{project.status}</Badge>
                     </div>
                     <p className="text-sm text-slate-600">{project.companyName}</p>
-                    <p className="text-sm text-slate-500">{project.location || "Ubicacion pendiente"}</p>
+                    <p className="text-sm text-slate-500">{project.location || "Ubicación pendiente"}</p>
                   </div>
                   <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:text-right">
                     <p className="font-medium text-slate-700">Ver proyecto</p>
@@ -373,15 +362,15 @@ export default async function DashboardPage({
         </Card>
 
         <Card className="min-h-full">
-          <CardHeader>
-            <CardTitle>Presupuestos recientes</CardTitle>
-            <CardDescription>Ultimos movimientos del presupuesto general por proyecto.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-6">
+            <OperationalPanel
+              title="Presupuestos recientes"
+              description="Últimos movimientos del presupuesto general por proyecto."
+            />
             {stats.budgets.length === 0 ? (
               <EmptyState
-                title="Aun no hay presupuestos recientes"
-                description="Cuando registres presupuestos generales, apareceran aqui para retomarlos rapido."
+                title="Aún no hay presupuestos recientes"
+                description="Cuando registres presupuestos generales, aparecerán aquí para retomarlos rápido."
               />
             ) : (
               stats.budgets.map((budget) => (
@@ -453,7 +442,7 @@ function StatCard({
   const palette = tones[tone];
 
   return (
-    <Card className={cn("overflow-hidden shadow-sm", palette.card)}>
+    <Card className={cn("overflow-hidden border-slate-200/90 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)] transition-colors", palette.card)}>
       <CardContent className="space-y-4 py-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -461,7 +450,12 @@ function StatCard({
             <p className={cn("text-3xl font-semibold tracking-tight", palette.value)}>{value}</p>
             <p className="text-sm text-slate-600">{description}</p>
           </div>
-          <span className={cn("inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm", palette.iconWrap)}>
+          <span
+            className={cn(
+              "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-[0_14px_28px_-18px_rgba(15,23,42,0.24)]",
+              palette.iconWrap,
+            )}
+          >
             {icon}
           </span>
         </div>
@@ -506,7 +500,10 @@ function ActionLink({
   return (
     <Link
       href={href}
-      className={cn("group flex items-start gap-3 rounded-2xl border px-4 py-3 transition", palette.link)}
+      className={cn(
+        "group flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.22)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_18px_38px_-26px_rgba(15,23,42,0.26)]",
+        palette.link,
+      )}
     >
       <span
         className={cn("inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-sm", palette.iconWrap)}
@@ -524,30 +521,6 @@ function ActionLink({
   );
 }
 
-function ContinueInfoCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "slate" | "sky" | "emerald" | "amber";
-}) {
-  const tones = {
-    slate: "border-slate-200 bg-white/80 text-slate-700",
-    sky: "border-sky-100 bg-white/80 text-sky-700",
-    emerald: "border-emerald-100 bg-white/80 text-emerald-700",
-    amber: "border-amber-100 bg-white/80 text-amber-700",
-  } as const;
-
-  return (
-    <div className={cn("rounded-2xl border px-4 py-3 shadow-sm", tones[tone])}>
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold">{value}</p>
-    </div>
-  );
-}
-
 function EmptyState({
   title,
   description,
@@ -560,7 +533,7 @@ function EmptyState({
   action?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)] px-4 py-6 text-sm text-slate-600">
       <p className="font-medium text-slate-900">{title}</p>
       <p className="mt-2">{description}</p>
       {href && action ? (
@@ -568,31 +541,6 @@ function EmptyState({
           <PrimaryLink href={href}>{action}</PrimaryLink>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "sky" | "slate" | "violet" | "rose" | "amber";
-}) {
-  const tones = {
-    sky: "border-sky-100 bg-white/80 text-sky-700",
-    slate: "border-slate-200 bg-white/80 text-slate-700",
-    violet: "border-violet-100 bg-white/80 text-violet-700",
-    rose: "border-rose-100 bg-white/80 text-rose-700",
-    amber: "border-amber-100 bg-white/80 text-amber-700",
-  } as const;
-
-  return (
-    <div className={`rounded-2xl border px-3 py-3 shadow-sm ${tones[tone]}`}>
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold">{value}</p>
     </div>
   );
 }
@@ -619,16 +567,16 @@ function SecondaryLink({ href, children }: { href: string; children: ReactNode }
   );
 }
 
-function getPriorityBadgeClass(priority: "high" | "medium" | "low") {
-  if (priority === "high") return "bg-rose-100 text-rose-700";
-  if (priority === "medium") return "bg-amber-100 text-amber-700";
-  return "bg-slate-100 text-slate-700";
-}
-
 function getPriorityLabel(priority: "high" | "medium" | "low") {
   if (priority === "high") return "Alta";
   if (priority === "medium") return "Media";
   return "Baja";
+}
+
+function getPriorityTone(priority: "high" | "medium" | "low") {
+  if (priority === "high") return "rose" as const;
+  if (priority === "medium") return "amber" as const;
+  return "slate" as const;
 }
 
 function resolvePendingPriorityFilter(value: string | undefined) {
@@ -637,42 +585,6 @@ function resolvePendingPriorityFilter(value: string | undefined) {
   }
 
   return "all";
-}
-
-function PriorityFilterLink({
-  href,
-  label,
-  count,
-  active,
-}: {
-  href: string;
-  label: string;
-  count: number;
-  active: boolean;
-}) {
-  const palette = getPriorityFilterPalette(label);
-
-  return (
-    <Link
-      href={href}
-      className={
-        active
-          ? `inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium !text-white ${palette.active}`
-          : `inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1.5 text-sm font-medium transition ${palette.inactive}`
-      }
-    >
-      {label}
-      <span
-        className={
-          active
-            ? `rounded-full px-2 py-0.5 text-[11px] font-semibold !text-white ${palette.activeCount}`
-            : `rounded-full px-2 py-0.5 text-[11px] font-semibold ${palette.inactiveCount}`
-        }
-      >
-        {count}
-      </span>
-    </Link>
-  );
 }
 
 function EventTypeBadge({
@@ -689,7 +601,7 @@ function EventTypeBadge({
 }) {
   const config = getEventTypeBadgeConfig(type);
 
-  return <Badge className={config.className}>{config.label}</Badge>;
+  return <ToneBadge label={config.label} tone={config.tone} />;
 }
 
 function EventTypeIcon({
@@ -733,7 +645,7 @@ function getActivityActionLabel(
   }
 
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
-    return "Revisar formula";
+    return "Revisar fórmula";
   }
 
   return "Ver reajuste";
@@ -752,27 +664,27 @@ function getEventTypeBadgeConfig(
   if (type === "PROJECT_UPDATED" || type === "PROJECT_CREATED") {
     return {
       label: "Proyecto",
-      className: "bg-slate-100 text-slate-700",
+      tone: "slate" as const,
     };
   }
 
   if (type === "GENERAL_BUDGET_UPDATED" || type === "GENERAL_BUDGET_CREATED") {
     return {
       label: "Presupuesto",
-      className: "bg-sky-100 text-sky-700",
+      tone: "sky" as const,
     };
   }
 
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
     return {
-      label: "Formula",
-      className: "bg-violet-100 text-violet-700",
+      label: "Fórmula",
+      tone: "violet" as const,
     };
   }
 
   return {
     label: "Reajuste",
-    className: "bg-emerald-100 text-emerald-700",
+    tone: "emerald" as const,
   };
 }
 
@@ -813,47 +725,11 @@ function getEventTypeIconConfig(
   };
 }
 
-function getPriorityFilterPalette(label: string) {
-  if (label === "Alta") {
-    return {
-      active: "bg-rose-600 hover:bg-rose-700",
-      inactive: "border-rose-200 text-rose-700 hover:border-rose-300 hover:bg-rose-50",
-      activeCount: "bg-white/15",
-      inactiveCount: "bg-rose-100 text-rose-700",
-    };
-  }
-
-  if (label === "Media") {
-    return {
-      active: "bg-amber-500 hover:bg-amber-600",
-      inactive: "border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-50",
-      activeCount: "bg-white/15",
-      inactiveCount: "bg-amber-100 text-amber-700",
-    };
-  }
-
-  if (label === "Baja") {
-    return {
-      active: "bg-slate-600 hover:bg-slate-700",
-      inactive: "border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-50",
-      activeCount: "bg-white/15",
-      inactiveCount: "bg-slate-100 text-slate-600",
-    };
-  }
-
-  return {
-    active: "bg-slate-900 hover:bg-slate-800",
-    inactive: "border-slate-300 text-slate-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700",
-    activeCount: "bg-white/15",
-    inactiveCount: "bg-slate-100 text-slate-500",
-  };
-}
-
 function getPendingTypeLabel(
   type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
 ) {
   if (type === "MISSING_GENERAL_BUDGET") return "Presupuesto";
-  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Formula";
+  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Fórmula";
   if (type === "MISSING_ADJUSTMENTS") return "Reajuste";
   return "Seguimiento";
 }
@@ -862,18 +738,18 @@ function getPendingActionLabel(
   type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
 ) {
   if (type === "MISSING_GENERAL_BUDGET") return "Crear presupuesto";
-  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Generar formula";
+  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Generar fórmula";
   if (type === "MISSING_ADJUSTMENTS") return "Registrar reajuste";
   return "Revisar proyecto";
 }
 
-function getPendingTypeBadgeClass(
+function getPendingTypeTone(
   type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
 ) {
-  if (type === "MISSING_GENERAL_BUDGET") return "bg-rose-100 text-rose-700";
-  if (type === "MISSING_POLYNOMIAL_FORMULA") return "bg-amber-100 text-amber-700";
-  if (type === "MISSING_ADJUSTMENTS") return "bg-sky-100 text-sky-700";
-  return "bg-slate-100 text-slate-700";
+  if (type === "MISSING_GENERAL_BUDGET") return "rose" as const;
+  if (type === "MISSING_POLYNOMIAL_FORMULA") return "amber" as const;
+  if (type === "MISSING_ADJUSTMENTS") return "sky" as const;
+  return "slate" as const;
 }
 
 function getPendingSummaryBadgeClass(
@@ -928,10 +804,10 @@ function formatRelativeActivityDay(value: Date) {
   }
 
   if (diffDays < 7) {
-    return `Hace ${diffDays} dias`;
+    return `Hace ${diffDays} días`;
   }
 
-  return "Mas de 1 semana";
+  return "Más de 1 semana";
 }
 
 function summarizePendingTypes(

@@ -4,9 +4,9 @@ import { SectionHeading } from "@/components/landing/section-heading";
 type ComparisonValue = "yes" | "partial" | "no";
 
 const comparisonRows: Array<{ category: string; excel: ComparisonValue; software: ComparisonValue; myc: ComparisonValue }> = [
-  { category: "Estructura de presupuestos jerarquica", excel: "partial", software: "partial", myc: "yes" },
+  { category: "Estructura de presupuestos jerárquica", excel: "partial", software: "partial", myc: "yes" },
   { category: "APU conectado con partidas", excel: "partial", software: "no", myc: "yes" },
-  { category: "Formula polinomica integrada", excel: "no", software: "partial", myc: "yes" },
+  { category: "Fórmula polinómica integrada", excel: "no", software: "partial", myc: "yes" },
   { category: "Reportes listos para obra", excel: "partial", software: "partial", myc: "yes" },
   { category: "Flujo moderno multiusuario", excel: "no", software: "no", myc: "yes" },
 ];
@@ -54,15 +54,15 @@ export function ComparisonSection() {
   return (
     <section id="comparison" className="landing-section landing-shell scroll-mt-28">
       <SectionHeading
-        badge="Comparacion"
-        title="Mas orden que Excel, menos friccion que el software tradicional."
-        description="MYC Presupuestos conserva la familiaridad del trabajo tecnico, pero agrega una experiencia moderna, conectada y preparada para crecer con el equipo."
+        badge="Comparación"
+        title="Más orden que Excel, menos fricción que el software tradicional."
+        description="MYC Presupuestos conserva la familiaridad del trabajo técnico, pero agrega una experiencia moderna, conectada y preparada para crecer con el equipo."
         align="center"
       />
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-500">
-        <span className="landing-chip rounded-full px-3 py-1.5">Comparacion de uso real</span>
+        <span className="landing-chip rounded-full px-3 py-1.5">Comparación de uso real</span>
         <span className="landing-chip rounded-full px-3 py-1.5">Menos retrabajo manual</span>
-        <span className="landing-chip rounded-full px-3 py-1.5">Mas continuidad entre modulos</span>
+        <span className="landing-chip rounded-full px-3 py-1.5">Más continuidad entre módulos</span>
       </div>
       <div className="landing-surface-elevated mt-14 overflow-hidden rounded-[1.9rem]">
         <div className="border-b border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-6 py-6">

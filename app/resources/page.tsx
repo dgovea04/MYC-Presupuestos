@@ -1,11 +1,13 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Wrench } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ResourcesTable } from "@/components/resources/resources-table";
 import { ResourceForm } from "@/components/resources/resource-form";
 import { getUserCompanies } from "@/lib/data/projects";
+import { PageHeaderCard } from "@/components/ui/page-header-card";
 
 export default async function ResourcesPage() {
   const session = await getAuthSession();
@@ -13,12 +15,15 @@ export default async function ResourcesPage() {
 
   return (
     <AppShell>
-      <Card>
-        <CardHeader>
-          <CardTitle>Catalogo de insumos</CardTitle>
-          <CardDescription>Catalogo general precargado para buscar, reutilizar y ampliar insumos de obra.</CardDescription>
+      <Card className="border-slate-200">
+        <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <PageHeaderCard
+            icon={<Wrench className="h-5 w-5" />}
+            title="Catalogo de insumos"
+            description="Catalogo general precargado para buscar, reutilizar y ampliar insumos de obra."
+          />
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6 pt-6">
           <div className="mb-6">
             <ResourceForm companyId={companies[0]?.id} />
           </div>

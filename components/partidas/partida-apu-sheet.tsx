@@ -35,7 +35,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
   const isReadonly = currentPartida.source === "Catalogo de partidas precargado" && !currentPartida.isNew;
   const calculatedRows = calculateApuRows(currentPartida.apuRows, currentPartida.performance);
   const calculatedUnitPrice = calculateApuTotalUnitCost(currentPartida.apuRows, currentPartida.performance);
-  const performanceLabel = `${currentPartida.unit}/Dia`;
+  const performanceLabel = `${currentPartida.unit}/Día`;
 
   function applyCalculatedPartida(nextRows: PartidaApuRowRecord[], performance = currentPartida.performance, overrides?: Partial<EditableCatalogPartida>) {
     const normalizedRows = normalizeRows(calculateApuRows(nextRows, performance));
@@ -177,7 +177,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
         <div className="mb-5 grid gap-3 md:grid-cols-[1fr_180px]">
           <Select defaultValue="" onChange={(event) => addResource(event.target.value)} disabled={isReadonly}>
             <option value="" disabled>
-              Agregar insumo desde el catalogo
+              Agregar insumo desde el catálogo
             </option>
             {resourcesCatalog.map((resource) => (
               <option key={resource.id} value={resource.id}>
@@ -321,7 +321,7 @@ function normalizeRows(rows: PartidaApuRowRecord[]) {
 
 function buildPerformanceRate(performance: number, unit: string) {
   const normalizedUnit = unit.trim();
-  return normalizedUnit ? `${performance.toFixed(4)} ${normalizedUnit}/DIA` : `${performance.toFixed(4)}`;
+  return normalizedUnit ? `${performance.toFixed(4)} ${normalizedUnit}/DÍA` : `${performance.toFixed(4)}`;
 }
 
 function moveEntityToTarget<T extends { id: string }>(items: T[], sourceId: string, targetId: string) {

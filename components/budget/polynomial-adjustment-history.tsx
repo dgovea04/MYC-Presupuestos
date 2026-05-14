@@ -1,5 +1,7 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
 import type { AdjustmentCalculationRecord } from "@/types/polynomial-formula";
@@ -13,17 +15,15 @@ export function PolynomialAdjustmentHistory({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Historial de reajustes</CardTitle>
-        <CardDescription>
-          Registro mensual de valorizaciones recalculadas con su coeficiente K.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4 p-6">
+        <OperationalPanel
+          title="Historial de reajustes"
+          description="Registro mensual de valorizaciones recalculadas con su coeficiente K."
+          metrics={<span>{adjustments.length} registros</span>}
+        />
+
         {adjustments.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-            Todavia no existen reajustes registrados para esta formula.
-          </div>
+          <EmptyStatePanel message="Todavía no existen reajustes registrados para esta fórmula." />
         ) : (
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <Table>

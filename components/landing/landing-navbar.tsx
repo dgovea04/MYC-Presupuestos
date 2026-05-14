@@ -55,7 +55,7 @@ export function LandingNavbar() {
         </nav>
         <div className="flex items-center gap-4 lg:gap-5">
           <LandingLinkButton href="/login" variant="secondary" className="hidden sm:inline-flex">
-            Iniciar sesion
+            Iniciar sesión
           </LandingLinkButton>
           <LandingLinkButton href="/register">Solicitar acceso</LandingLinkButton>
         </div>

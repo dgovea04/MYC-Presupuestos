@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { FolderKanban } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { ActionButton } from "@/components/ui/action-button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContextBadge, ProjectStatusBadge } from "@/components/ui/context-badges";
+import { InfoCard } from "@/components/ui/info-cards";
+import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
@@ -26,7 +29,7 @@ const projectSections = [
   {
     id: "otras-secciones",
     title: "Otras secciones",
-    description: "APU, lista de insumos, gastos generales, pie de presupuesto y formula polinomica del proyecto.",
+    description: "APU, lista de insumos, gastos generales, pie de presupuesto y fórmula polinómica del proyecto.",
   },
 ] as const;
 
@@ -49,59 +52,51 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   return (
     <AppShell settings={settings}>
       <div className="space-y-5">
-        <Card>
-          <CardHeader className="gap-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge>{project.status}</Badge>
-                  <Badge className="bg-sky-100 text-sky-700">{project.company.name}</Badge>
-                </div>
-                <div>
-                  <CardTitle className="text-2xl">{project.name}</CardTitle>
-                  <CardDescription>
-                    Cada proyecto ahora funciona como contenedor de su presupuesto general, subpresupuestos y demas
-                    secciones tecnicas.
-                  </CardDescription>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link href={`/projects/${project.id}/edit`}>
-                  <ActionButton action="edit" label="Editar proyecto" variant="outline" />
-                </Link>
-                {generalBudget ? (
-                  <Link href={`/budgets/${generalBudget.id}`}>
-                    <ActionButton action="open" label="Abrir presupuesto general" />
+        <Card className="border-slate-200">
+          <CardHeader className="gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+            <PageHeaderCard
+              icon={<FolderKanban className="h-5 w-5" />}
+              title={project.name}
+              description="Cada proyecto ahora funciona como contenedor de su presupuesto general, subpresupuestos y demás secciones técnicas."
+              badges={
+                <>
+                  <ProjectStatusBadge status={project.status} />
+                  <ContextBadge label={project.company.name} />
+                </>
+              }
+              actions={
+                <>
+                  <Link href={`/projects/${project.id}/edit`}>
+                    <ActionButton action="edit" label="Editar proyecto" variant="outline" />
                   </Link>
-                ) : null}
-              </div>
+                  {generalBudget ? (
+                    <Link href={`/budgets/${generalBudget.id}`}>
+                      <ActionButton action="open" label="Abrir presupuesto general" />
+                    </Link>
+                  ) : null}
+                </>
+              }
+            />
+          </CardHeader>
+          <CardContent className="space-y-5 pt-6">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <InfoCard label="Cliente" value={project.clientName || "Pendiente"} />
+              <InfoCard label="Ubicación" value={project.location || "Pendiente"} />
+              <InfoCard label="Tipo de obra" value={project.projectType || "Pendiente"} />
+              <InfoCard label="Presupuestos" value={String(project.budgets.length)} />
+              <InfoCard label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
             </div>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Cliente" value={project.clientName || "Pendiente"} />
-            <Metric label="Ubicacion" value={project.location || "Pendiente"} />
-            <Metric label="Tipo de obra" value={project.projectType || "Pendiente"} />
-            <Metric label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Presupuesto del proyecto</CardTitle>
-            <CardDescription>
-              Este flujo reemplaza la navegacion suelta de presupuestos por una lectura centrada en la obra.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {projectSections.map((section) => (
-              <a
-                key={section.id}
-                href={`#${section.id}`}
-                className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
-              >
-                {section.title}
-              </a>
-            ))}
+            <div className="flex flex-wrap gap-2">
+              {projectSections.map((section) => (
+                <a
+                  key={section.id}
+                  href={`#${section.id}`}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+                >
+                  {section.title}
+                </a>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -134,7 +129,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         />
 
         <section id="otras-secciones">
-          <Card>
+          <Card className="border-slate-200">
             <CardHeader>
               <CardTitle>Otras secciones del proyecto</CardTitle>
               <CardDescription>
@@ -150,7 +145,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 md:col-span-2 xl:col-span-4">
                   <p className="font-medium text-slate-900">Presupuesto general pendiente</p>
                   <p className="mt-2 text-sm text-slate-600">
-                    Esta seccion se habilitara cuando el proyecto tenga un presupuesto general disponible.
+                    Esta sección se habilitará cuando el proyecto tenga un presupuesto general disponible.
                   </p>
                 </div>
               )}
@@ -159,15 +154,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </section>
       </div>
     </AppShell>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
-    </div>
   );
 }
 

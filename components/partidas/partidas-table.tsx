@@ -1,9 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { PartidaApuSheet } from "@/components/partidas/partida-apu-sheet";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -95,7 +98,7 @@ export function PartidasTable({
         unit: "",
         unitPrice: 0,
         currency: "PEN",
-        source: "Catalogo de partidas precargado",
+        source: "Catálogo de partidas precargado",
         performance: 1,
         performanceUnit: "",
         performanceRate: "1.0000",
@@ -156,7 +159,7 @@ export function PartidasTable({
       const result = (await response.json()) as CatalogPartidaPatchResult;
       reconcilePatchResult(result);
       setLastSavedAt(result.savedAt);
-      setFeedback("Catalogo de partidas guardado.");
+      setFeedback("Catálogo de partidas guardado.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "No se pudieron guardar las partidas");
     } finally {
@@ -199,7 +202,7 @@ export function PartidasTable({
       const result = (await response.json()) as CatalogPartidaPatchResult;
       reconcilePatchResult(result);
       setLastSavedAt(result.savedAt);
-      setFeedback("Partida eliminada del catalogo.");
+      setFeedback("Partida eliminada del catálogo.");
       if (selectedId === id) {
         setSelectedId(null);
       }
@@ -238,31 +241,49 @@ export function PartidasTable({
 
   return (
     <>
-      <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
-          <Input
-            placeholder="Buscar partida, unidad o rendimiento"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            className="md:max-w-xl"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <SaveBadge dirtyCount={dirtyRows.length} lastSavedAt={lastSavedAt} isSaving={pendingIds.length > 0} />
-          <Button variant="outline" onClick={addBlankRow}>
-            Nueva partida
-          </Button>
-          <Button onClick={saveAllDirtyRows} disabled={!dirtyRows.length || pendingIds.length > 0}>
-            {pendingIds.length > 0 ? "Guardando..." : dirtyRows.length > 0 ? `Guardar cambios (${dirtyRows.length})` : "Sin cambios"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-        <span>{rows.length} partidas en catalogo</span>
-        <span>{dirtyRows.length} pendientes</span>
-        {lastSavedAt ? <span>Ultimo guardado: {new Date(lastSavedAt).toLocaleTimeString("es-PE")}</span> : null}
-      </div>
+      <OperationalPanel
+        title="Tabla operativa"
+        description="Busca partidas, revisa rendimiento y abre su APU sin salir del catálogo."
+        metrics={
+          <>
+            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
+              {filteredRows.length} {filteredRows.length === 1 ? "partida" : "partidas"}
+            </span>
+            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
+              {rows.length} total
+            </span>
+            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
+              {dirtyRows.length} pendientes
+            </span>
+          </>
+        }
+        controls={
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <Input
+                placeholder="Buscar partida, unidad o rendimiento"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                className="md:max-w-xl"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <SaveBadge dirtyCount={dirtyRows.length} lastSavedAt={lastSavedAt} isSaving={pendingIds.length > 0} />
+                <Button variant="default" onClick={addBlankRow} className="gap-2 shadow-sm shadow-sky-950/10">
+                  <Plus className="h-4 w-4" />
+                  Nueva partida
+                </Button>
+                <Button onClick={saveAllDirtyRows} disabled={!dirtyRows.length || pendingIds.length > 0}>
+                  {pendingIds.length > 0 ? "Guardando..." : dirtyRows.length > 0 ? `Guardar cambios (${dirtyRows.length})` : "Sin cambios"}
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm text-slate-500">
+              {filter.trim() ? `Mostrando ${filteredRows.length} coincidencias para "${filter}"` : "Vista general del catálogo de partidas"}
+              {lastSavedAt ? ` · Último guardado: ${new Date(lastSavedAt).toLocaleTimeString("es-PE")}` : ""}
+            </p>
+          </div>
+        }
+      />
 
       {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
       {feedback ? <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</div> : null}
@@ -431,7 +452,7 @@ function buildPerformanceRate(performance: number, unit: string) {
 }
 
 function isPreloadedPartida(row: EditableCatalogPartida) {
-  return row.source === "Catalogo de partidas precargado";
+  return row.source === "Catálogo de partidas precargado";
 }
 
 function SaveBadge({
@@ -443,21 +464,13 @@ function SaveBadge({
   lastSavedAt: string | null;
   isSaving: boolean;
 }) {
-  const label = isSaving ? "Guardando..." : dirtyCount > 0 ? "Cambios pendientes" : "Sin cambios";
-  const tone = isSaving
-    ? "bg-sky-100 text-sky-700"
-    : dirtyCount > 0
-      ? "bg-amber-100 text-amber-700"
-      : "bg-slate-100 text-slate-600";
+  const state = isSaving ? "saving" : dirtyCount > 0 ? "dirty" : "idle";
 
   return (
-    <span className={`inline-flex min-w-[152px] flex-col rounded-full px-3 py-2 text-xs font-medium ${tone}`}>
-      <span>{label}</span>
-      {lastSavedAt ? (
-        <span className="mt-0.5 text-[11px] font-normal opacity-80">
-          Ultimo guardado: {new Date(lastSavedAt).toLocaleTimeString("es-PE")}
-        </span>
-      ) : null}
-    </span>
+    <SaveStateBadge
+      state={state}
+      lastSavedLabel={lastSavedAt ? `Último guardado: ${new Date(lastSavedAt).toLocaleTimeString("es-PE")}` : null}
+      className="min-w-[152px]"
+    />
   );
 }

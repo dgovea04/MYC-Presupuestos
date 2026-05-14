@@ -1,8 +1,11 @@
 import { Calculator } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
+import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type KPreviewResult = {
@@ -53,13 +56,13 @@ export function PolynomialKCalculator({
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Calculo de K y valorizacion</CardTitle>
-        <CardDescription>
-          Ajusta el periodo de valorizacion y revisa la tabla de relacion de indices antes de aplicar el reajuste.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
+        <OperationalPanel
+          title="Cálculo de K y valorización"
+          description="Ajusta el período de valorización y revisa la tabla de relación de índices antes de aplicar el reajuste."
+          metrics={result ? <span>{result.terms.length} monomios en cálculo</span> : undefined}
+        />
+
         <div className="grid gap-4 lg:grid-cols-[140px_160px_minmax(220px,1fr)_auto]">
           <div>
             <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes reajuste</label>
@@ -73,7 +76,7 @@ export function PolynomialKCalculator({
             />
           </div>
           <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Anio reajuste</label>
+            <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Año reajuste</label>
             <Input
               type="number"
               min={1979}
@@ -83,7 +86,7 @@ export function PolynomialKCalculator({
             />
           </div>
           <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Valorizacion original</label>
+            <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Valorización original</label>
             <Input
               type="number"
               step="0.01"
@@ -105,20 +108,23 @@ export function PolynomialKCalculator({
 
         {result ? (
           <>
-            <div className="grid gap-3 md:grid-cols-5">
-              <MetricCard label="K raw" value={result.kRaw} />
-              <MetricCard label="K redondeado" value={result.kRounded} />
-              <MetricCard
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <InfoCard label="K raw" value={result.kRaw} tone="slate" />
+              <InfoCard label="K redondeado" value={result.kRounded} tone="sky" />
+              <InfoCard
                 label="Monto original"
                 value={adjustedAmounts?.originalAmount ?? originalAmount}
+                tone="slate"
               />
-              <MetricCard
+              <InfoCard
                 label="Monto reajustado"
                 value={adjustedAmounts?.adjustedAmount ?? "-"}
+                tone="sky"
               />
-              <MetricCard
+              <InfoCard
                 label="Reajuste"
                 value={adjustedAmounts?.adjustmentAmount ?? "-"}
+                tone="amber"
               />
             </div>
 
@@ -150,20 +156,9 @@ export function PolynomialKCalculator({
             </div>
           </>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-            Cuando la formula tenga indices base completos, el sistema calculara K automaticamente para el periodo indicado.
-          </div>
+          <EmptyStatePanel message="Cuando la fórmula tenga índices base completos, el sistema calculará K automáticamente para el período indicado." />
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
-    </div>
   );
 }

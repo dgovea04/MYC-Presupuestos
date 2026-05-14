@@ -1,11 +1,14 @@
 import Link from "next/link";
+import { FileSpreadsheet } from "lucide-react";
 import { notFound } from "next/navigation";
 import { BudgetFlow } from "@/components/budget/budget-flow";
 import { AppShell } from "@/components/layout/app-shell";
 import { GeneralBudgetOverview } from "@/components/budget/general-budget-overview";
 import { ActionButton } from "@/components/ui/action-button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContextBadge } from "@/components/ui/context-badges";
+import { InfoCard } from "@/components/ui/info-cards";
+import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetById, getProjectSubBudgetDetails, getProjectSubBudgetSummaries } from "@/lib/data/budgets";
 import { getCatalogPartidas } from "@/lib/data/partidas";
@@ -52,7 +55,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       "Estructuras",
       "Arquitectura",
       "Instalaciones Sanitarias",
-      "Instalaciones Electricas",
+      "Instalaciones Eléctricas",
     ]
       .map((name) => project.budgets.find((item) => item.kind === "SUB_BUDGET" && item.name === name))
       .filter((item) => item != null);
@@ -60,44 +63,60 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     return (
       <AppShell>
         <div className="space-y-5">
-          <Card>
-            <CardHeader className="gap-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge>Presupuesto General</Badge>
-                    <Badge className="bg-sky-100 text-sky-700">{project.name}</Badge>
-                  </div>
-                  <div>
-                    <CardTitle>{budget.name}</CardTitle>
-                    <CardDescription>
-                      Este presupuesto es un consolidado del proyecto. Sus partidas viven dentro de los Sub Presupuestos.
-                    </CardDescription>
-                  </div>
-                </div>
-                <Link href={`/projects/${project.id}`}>
-                  <ActionButton action="open" label="Volver al proyecto" variant="outline" />
-                </Link>
-              </div>
+          <Card className="border-slate-200">
+            <CardHeader className="gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+              <PageHeaderCard
+                icon={<FileSpreadsheet className="h-5 w-5" />}
+                title={budget.name}
+                description="Este presupuesto es un consolidado del proyecto. Sus partidas viven dentro de los Sub Presupuestos."
+                badges={
+                  <>
+                    <ContextBadge label="Presupuesto General" tone="slate" />
+                    <ContextBadge label={project.name} />
+                  </>
+                }
+                actions={
+                  <Link href={`/projects/${project.id}`}>
+                    <ActionButton action="open" label="Volver al proyecto" variant="outline" />
+                  </Link>
+                }
+              />
             </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <Metric label="Total Presupuesto" value={formatCurrency(budget.totalAmount, budget.currency, settings.currencyDecimals)} />
-              <Metric label="Sub Presupuestos" value={String(subBudgets.length)} />
-              <Metric label="Cliente" value={project.clientName || "Pendiente"} />
-              <Metric label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
+            <CardContent className="space-y-5 pt-6">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <InfoCard label="Total Presupuesto" value={formatCurrency(budget.totalAmount, budget.currency, settings.currencyDecimals)} />
+                <InfoCard label="Sub Presupuestos" value={String(subBudgets.length)} />
+                <InfoCard label="Cliente" value={project.clientName || "Pendiente"} />
+                <InfoCard label="Moneda" value={budget.currency} />
+                <InfoCard label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href="#subpresupuestos"
+                  className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+                >
+                  Sub Presupuestos
+                </a>
+                <a
+                  href="#otras-secciones"
+                  className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+                >
+                  Otras secciones
+                </a>
+              </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="subpresupuestos" className="border-slate-200">
             <CardHeader>
               <CardTitle>Sub Presupuestos</CardTitle>
               <CardDescription>
-                Abre cada especialidad para editar partidas, APUs y costos. El total de este presupuesto se consolida automaticamente.
+                Abre cada especialidad para editar partidas, APUs y costos. El total de este presupuesto se consolida automáticamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 lg:grid-cols-2">
               {subBudgets.map((subBudget) => (
-                <div key={subBudget.id} className="rounded-2xl border border-slate-200 p-5">
+                <div key={subBudget.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/70">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold text-slate-900">{subBudget.name}</p>
@@ -105,7 +124,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                         Total actual: {formatCurrency(decimalToNumber(subBudget.totalAmount), subBudget.currency, settings.currencyDecimals)}
                       </p>
                     </div>
-                    <Badge className="bg-slate-200 text-slate-700">Sub Presupuesto</Badge>
+                    <ContextBadge label="Sub Presupuesto" tone="slate" />
                   </div>
                   <div className="mt-4">
                     <Link href={`/budgets/${subBudget.id}`}>
@@ -139,11 +158,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           />
 
           <section id="otras-secciones">
-            <Card>
+            <Card className="border-slate-200">
               <CardHeader>
                 <CardTitle>Otras secciones del presupuesto</CardTitle>
                 <CardDescription>
-                  Recuperamos la vista de trabajo para las secciones tecnicas complementarias del presupuesto dentro de
+                  Recuperamos la vista de trabajo para las secciones técnicas complementarias del presupuesto dentro de
                   esta pantalla inicial.
                 </CardDescription>
               </CardHeader>
@@ -164,8 +183,8 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                   href={`/budgets/${budget.id}/footer`}
                 />
                 <SectionCard
-                  title="Formula polinomica"
-                  detail="Bloque listo para recuperar la formula polinomica dentro del flujo principal."
+                  title="Fórmula polinómica"
+                  detail="Bloque listo para recuperar la fórmula polinómica dentro del flujo principal."
                   href={`/budgets/${budget.id}/polynomial-formula`}
                 />
               </CardContent>
@@ -197,15 +216,6 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         }))}
       />
     </AppShell>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
-    </div>
   );
 }
 

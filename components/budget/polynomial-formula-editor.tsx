@@ -10,8 +10,11 @@ import { PolynomialMonomialsTable } from "@/components/budget/polynomial-monomia
 import { PolynomialValidationSummary } from "@/components/budget/polynomial-validation-summary";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
 import { formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
@@ -110,41 +113,16 @@ function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
 
   const seconds = Math.max(0, Math.floor((currentTime - lastSavedAt) / 1000));
   if (seconds < 60) {
-    return `Ultimo guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+    return `Último guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
   }
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
-    return `Ultimo guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    return `Último guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
   }
 
   const hours = Math.floor(minutes / 60);
-  return `Ultimo guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
-}
-
-function SaveBadge({ state, lastSavedLabel }: { state: SaveState; lastSavedLabel: string | null }) {
-  const styles: Record<SaveState, string> = {
-    idle: "bg-slate-100 text-slate-600",
-    dirty: "bg-amber-100 text-amber-700",
-    saving: "bg-sky-100 text-sky-700",
-    saved: "bg-emerald-100 text-emerald-700",
-    error: "bg-rose-100 text-rose-700",
-  };
-
-  const labels: Record<SaveState, string> = {
-    idle: "Sin cambios",
-    dirty: "Cambios pendientes",
-    saving: "Guardando...",
-    saved: "Guardado",
-    error: "Error al guardar",
-  };
-
-  return (
-    <span className={`${styles[state]} inline-flex flex-col rounded-full px-3 py-2 text-xs font-medium`}>
-      <span>{labels[state]}</span>
-      {lastSavedLabel ? <span className="mt-0.5 text-[11px] font-normal opacity-80">{lastSavedLabel}</span> : null}
-    </span>
-  );
+  return `Último guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
 }
 
 export function PolynomialFormulaEditor({
@@ -209,7 +187,7 @@ export function PolynomialFormulaEditor({
         const response = await fetch(`/api/unified-indices?month=${month}&year=${year}`);
         if (!response.ok) {
           const data = await response.json();
-          throw new Error(data.error ?? "No se pudieron cargar los indices de reajuste");
+          throw new Error(data.error ?? "No se pudieron cargar los índices de reajuste");
         }
 
         const indices = (await response.json()) as UnifiedIndexRecord[];
@@ -231,7 +209,7 @@ export function PolynomialFormulaEditor({
 
         if (duplicatedSelectedCodes.length > 0) {
           throw new Error(
-            `Los codigos ${[...new Set(duplicatedSelectedCodes)].join(", ")} tienen multiples ambitos geograficos en ${month}/${year}.`,
+            `Los códigos ${[...new Set(duplicatedSelectedCodes)].join(", ")} tienen múltiples ámbitos geográficos en ${month}/${year}.`,
           );
         }
 
@@ -240,7 +218,7 @@ export function PolynomialFormulaEditor({
             const matchingIndex = uniqueByCode.get(monomial.baseIndexCode);
 
             if (!matchingIndex) {
-              throw new Error(`Falta el indice de reajuste para el codigo ${monomial.baseIndexCode}`);
+              throw new Error(`Falta el índice de reajuste para el código ${monomial.baseIndexCode}`);
             }
 
             return {
@@ -284,7 +262,7 @@ export function PolynomialFormulaEditor({
       .then(async (response) => {
         if (!response.ok) {
           const data = await response.json();
-          throw new Error(data.error ?? "No se pudieron cargar los indices base");
+          throw new Error(data.error ?? "No se pudieron cargar los índices base");
         }
 
         return (await response.json()) as UnifiedIndexRecord[];
@@ -295,7 +273,7 @@ export function PolynomialFormulaEditor({
       })
       .catch((requestError) => {
         if (!isActive) return;
-        setError(requestError instanceof Error ? requestError.message : "No se pudieron cargar los indices base");
+        setError(requestError instanceof Error ? requestError.message : "No se pudieron cargar los índices base");
       })
       .finally(() => {
         if (isActive) {
@@ -366,7 +344,7 @@ export function PolynomialFormulaEditor({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error ?? "No se pudo generar la formula polinomica");
+        throw new Error(data.error ?? "No se pudo generar la fórmula polinómica");
       }
 
       const nextFormula = (await response.json()) as PolynomialFormulaRecord;
@@ -379,9 +357,9 @@ export function PolynomialFormulaEditor({
       setSaveState("saved");
       setLastSavedAt(Date.now());
       setSaveClock(Date.now());
-      setFeedback("Formula generada desde el presupuesto.");
+      setFeedback("Fórmula generada desde el presupuesto.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "No se pudo generar la formula");
+      setError(requestError instanceof Error ? requestError.message : "No se pudo generar la fórmula");
     } finally {
       setIsGenerating(false);
     }
@@ -407,7 +385,7 @@ export function PolynomialFormulaEditor({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error ?? "No se pudo guardar la formula");
+        throw new Error(data.error ?? "No se pudo guardar la fórmula");
       }
 
       const savedFormula = (await response.json()) as PolynomialFormulaRecord;
@@ -419,11 +397,11 @@ export function PolynomialFormulaEditor({
       setSaveState("saved");
       setLastSavedAt(Date.now());
       setSaveClock(Date.now());
-      setFeedback("Formula guardada.");
+      setFeedback("Fórmula guardada.");
       return true;
     } catch (requestError) {
       setSaveState("error");
-      setError(requestError instanceof Error ? requestError.message : "No se pudo guardar la formula");
+      setError(requestError instanceof Error ? requestError.message : "No se pudo guardar la fórmula");
       return false;
     }
   }
@@ -514,16 +492,23 @@ export function PolynomialFormulaEditor({
   return (
     <div className="space-y-5">
       {!formula ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{section.title}</CardTitle>
-            <CardDescription>
-              Genera la formula polinomica desde el presupuesto general y luego asigna los indices INEI correspondientes a cada monomio.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
+          <Card className="border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
+            <CardContent className="space-y-5 p-6">
+            <OperationalPanel
+              title={section.title}
+              description="Genera la fórmula polinómica desde el presupuesto general y luego asigna los índices INEI correspondientes a cada monomio."
+              controls={
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-slate-500">
+                    La generación inicial toma los coeficientes del presupuesto general y prepara el editor para la asignación de índices.
+                  </p>
+                  {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+                </div>
+              }
+            />
+
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes base</p>
                 <Input
                   type="number"
@@ -534,8 +519,8 @@ export function PolynomialFormulaEditor({
                   className="mt-3"
                 />
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Anio base</p>
+                <div className="rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Año base</p>
                 <Input
                   type="number"
                   min={1979}
@@ -544,7 +529,7 @@ export function PolynomialFormulaEditor({
                   className="mt-3"
                 />
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] p-4">
+                <div className="rounded-2xl border border-sky-200/80 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] p-4 shadow-[0_14px_30px_-26px_rgba(2,132,199,0.22)]">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Accion</p>
                 <Button
                   type="button"
@@ -553,16 +538,14 @@ export function PolynomialFormulaEditor({
                   className="mt-3 w-full"
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  {isGenerating ? "Generando..." : "Generar formula"}
+                  {isGenerating ? "Generando..." : "Generar fórmula"}
                 </Button>
               </div>
             </div>
 
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {section.coefficients.map((coefficient) => (
-                <div key={coefficient.symbol} className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                <div key={coefficient.symbol} className="rounded-2xl border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)] p-4">
                   <p className="font-medium text-slate-900">
                     {coefficient.symbol} - {coefficient.label}
                   </p>
@@ -574,30 +557,42 @@ export function PolynomialFormulaEditor({
         </Card>
       ) : (
         <>
-          <Card>
-            <CardHeader className="gap-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <CardTitle>{formula.name}</CardTitle>
-                  <CardDescription>
-                    Mes base {formula.baseMonth}/{formula.baseYear}. Asigna indices INEI, valida coeficientes y calcula K en tiempo real.
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`${getStatusBadgeClass(summary.status)} rounded-full px-3 py-2 text-xs font-medium`}>
-                    Estado: {summary.status}
-                  </span>
-                  <span className="rounded-full bg-sky-100 px-3 py-2 text-xs font-medium text-sky-700">
-                    Monomios: {summary.monomialCount}
-                  </span>
-                  <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
-                    Base: {summary.totalBaseAmount}
-                  </span>
-                  <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />
-                </div>
+          <Card className="border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
+            <CardContent className="space-y-4 p-6">
+              <OperationalPanel
+                title={formula.name}
+                description={`Mes base ${formula.baseMonth}/${formula.baseYear}. Asigna índices INEI, valida coeficientes y calcula K en tiempo real.`}
+                metrics={
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`${getStatusBadgeClass(summary.status)} rounded-full px-3 py-2 text-xs font-medium`}>
+                      Estado: {summary.status}
+                    </span>
+                    <SaveStateBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} savedLabel="Guardado" />
+                  </div>
+                }
+                controls={
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-slate-500">
+                      Guarda la fórmula antes de registrar reajustes para mantener consistente el historial del presupuesto general.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+                      {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+                    </div>
+                  </div>
+                }
+              />
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <InfoCard label="Monomios" value={String(summary.monomialCount)} tone="sky" />
+                <InfoCard label="Base acumulada" value={summary.totalBaseAmount} tone="slate" />
+                <InfoCard
+                  label="Índices pendientes"
+                  value={String(formula.monomials.filter((monomial) => monomial.baseIndexName === PLACEHOLDER_INDEX_NAME).length)}
+                  tone="amber"
+                />
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+
               <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_160px_160px_auto]">
                 <div>
                   <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Nombre</label>
@@ -619,7 +614,7 @@ export function PolynomialFormulaEditor({
                   />
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Anio base</label>
+                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Año base</label>
                   <Input
                     type="number"
                     min={1979}
@@ -644,9 +639,6 @@ export function PolynomialFormulaEditor({
                   </Button>
                 </div>
               </div>
-
-              {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-              {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
 
               <PolynomialFormulaMath monomials={formula.monomials} />
             </CardContent>
@@ -680,7 +672,7 @@ export function PolynomialFormulaEditor({
 
       {history.length > 0 ? (
         <p className="text-xs text-slate-500">
-          Ultimo reajuste registrado: {formatDate(history[0]?.createdAt ?? null, dateFormat)}
+          Último reajuste registrado: {formatDate(history[0]?.createdAt ?? null, dateFormat)}
         </p>
       ) : null}
     </div>

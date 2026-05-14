@@ -168,7 +168,7 @@ export function ApuEditorSheet({
   const currentItemRecord = currentItem;
   const currentApuRecord = currentApu;
   const { rows: calculatedResources, totalUnitCost: calculatedUnitCost } = apuSummary;
-  const performanceLabel = `${currentItemRecord.unit}/Dia`;
+  const performanceLabel = `${currentItemRecord.unit}/Día`;
 
   function addResource(resourceId: string) {
     const selected = resourcesCatalog.find((resource) => resource.id === resourceId);
@@ -365,7 +365,7 @@ export function ApuEditorSheet({
             }}
             className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
             data-testid="apu-add-resource-search"
-            placeholder="Agregar insumo desde el catalogo"
+            placeholder="Agregar insumo desde el catálogo"
           />
           <Button
             variant="outline"
@@ -501,7 +501,7 @@ export function ApuEditorSheet({
                           data-testid={`apu-resource-search-${resource.id}`}
                           value={editingResourceQuery}
                           className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
-                          placeholder="Buscar insumo por codigo o descripcion"
+                          placeholder="Buscar insumo por código o descripción"
                           ref={(element) => {
                             if (element) {
                               resourceSearchRefs.current.set(resource.id, element);

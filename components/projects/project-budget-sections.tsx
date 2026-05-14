@@ -5,7 +5,9 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/ui/action-button";
 import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import {
   getAppDataChangeEventName,
@@ -92,16 +94,15 @@ export function ProjectBudgetSections({
   return (
     <>
       <section id="presupuesto-general">
-        <Card>
-          <CardHeader>
-            <CardTitle>Presupuesto General</CardTitle>
-            <CardDescription>
-              Presupuesto padre del proyecto, pensado para consolidar el total general y abrir sus componentes.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <Card className="border-slate-200">
+          <CardContent className="space-y-4 p-6">
+            <OperationalPanel
+              title="Presupuesto general"
+              description="Presupuesto padre del proyecto, pensado para consolidar el total general y abrir sus componentes."
+            />
+
             {general ? (
-              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-2">
                   <p className="text-lg font-semibold text-slate-900">Presupuesto General</p>
                   <div className="flex flex-wrap gap-4 text-sm text-slate-600">
@@ -110,7 +111,7 @@ export function ProjectBudgetSections({
                       <AnimatedCurrencyValue value={consolidatedTotal} currency={budgetCurrency} className="px-0 py-0 font-semibold text-slate-900" />
                     </span>
                     <span>Sub Presupuestos: {orderedSubBudgets.length}</span>
-                    <span>Ultima actualizacion: {formatDate(generalBudgetUpdatedAt, dateFormat)}</span>
+                    <span>Última actualización: {formatDate(generalBudgetUpdatedAt, dateFormat)}</span>
                   </div>
                 </div>
                 <Link href={`/budgets/${general.id}`}>
@@ -118,24 +119,25 @@ export function ProjectBudgetSections({
                 </Link>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Este proyecto todavia no tiene un presupuesto general configurado.</p>
+              <EmptyStatePanel message="Este proyecto todavía no tiene un presupuesto general configurado." />
             )}
           </CardContent>
         </Card>
       </section>
 
       <section id="subpresupuestos">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sub Presupuestos</CardTitle>
-            <CardDescription>
-              Cada proyecto arranca con los sub presupuestos base configurados, listos para editar por especialidad.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 lg:grid-cols-2">
+        <Card className="border-slate-200">
+          <CardContent className="space-y-4 p-6">
+            <OperationalPanel
+              title="Sub presupuestos"
+              description="Cada proyecto arranca con los sub presupuestos base configurados, listos para editar por especialidad."
+              metrics={<span>{orderedSubBudgets.length} especialidades</span>}
+            />
+
+            <div className="grid gap-4 lg:grid-cols-2">
             {orderedSubBudgets.length ? (
               orderedSubBudgets.map((budget) => (
-                <div key={budget.id} className="rounded-2xl border border-slate-200 p-5">
+                <div key={budget.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/70">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold text-slate-900">{budget.name}</p>
@@ -154,8 +156,12 @@ export function ProjectBudgetSections({
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-500">Todavia no hay sub presupuestos configurados para este proyecto.</p>
+              <EmptyStatePanel
+                message="Todavía no hay sub presupuestos configurados para este proyecto."
+                className="lg:col-span-2"
+              />
             )}
+            </div>
           </CardContent>
         </Card>
       </section>

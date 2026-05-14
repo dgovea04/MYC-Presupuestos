@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,27 +55,41 @@ export function CompanyProfileForm({
   }
 
   return (
-    <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
-      <div className="space-y-2">
-        <Label htmlFor="companyName">Nombre</Label>
-        <Input id="companyName" disabled={pending} required value={name} onChange={(event) => setName(event.target.value)} />
+    <form className="space-y-5" onSubmit={handleSubmit}>
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+        <div className="mb-4 space-y-1">
+          <p className="text-sm font-medium text-slate-900">Datos principales</p>
+          <p className="text-sm text-slate-500">Información comercial base para proyectos, presupuestos y catálogos.</p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="companyName">Nombre</Label>
+            <Input id="companyName" disabled={pending} required value={name} onChange={(event) => setName(event.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyRuc">RUC</Label>
+            <Input
+              id="companyRuc"
+              disabled={pending}
+              inputMode="numeric"
+              maxLength={11}
+              placeholder="Opcional"
+              value={ruc}
+              onChange={(event) => setRuc(event.target.value)}
+            />
+          </div>
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="companyRuc">RUC</Label>
-        <Input
-          id="companyRuc"
-          disabled={pending}
-          inputMode="numeric"
-          maxLength={11}
-          placeholder="Opcional"
-          value={ruc}
-          onChange={(event) => setRuc(event.target.value)}
-        />
-      </div>
-      {error ? <p className="text-sm text-rose-600 md:col-span-2">{error}</p> : null}
-      {success ? <p className="text-sm text-emerald-700 md:col-span-2">{success}</p> : null}
-      <div className="md:col-span-2 flex justify-end">
-        <Button disabled={pending}>{pending ? "Guardando..." : "Guardar empresa"}</Button>
+
+      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {success ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
+
+      <div className="flex items-center justify-end rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <Button className="gap-2 shadow-sm shadow-sky-950/10" disabled={pending}>
+          <Save className="h-4 w-4" />
+          {pending ? "Guardando..." : "Guardar empresa"}
+        </Button>
       </div>
     </form>
   );

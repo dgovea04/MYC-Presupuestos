@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -281,13 +283,13 @@ export function GeneralExpensesManager({
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Nuevo titulo", category: "STANDARD" } satisfies GeneralExpenseTitleInput),
+        body: JSON.stringify({ name: "Nuevo título", category: "STANDARD" } satisfies GeneralExpenseTitleInput),
       },
       groupId,
     );
 
     if (result) {
-      setFeedback("Titulo agregado.");
+      setFeedback("Título agregado.");
     }
   }
 
@@ -304,7 +306,7 @@ export function GeneralExpensesManager({
     );
 
     if (result) {
-      setFeedback("Titulo eliminado.");
+      setFeedback("Título eliminado.");
     }
   }
 
@@ -355,52 +357,50 @@ export function GeneralExpensesManager({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <CardTitle>Detalle de gastos generales</CardTitle>
-          <CardDescription>
-            Cada presupuesto general usa una copia editable de la plantilla base. Los parciales se recalculan usando el costo
-            directo real del presupuesto actual.
-          </CardDescription>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />
-          <ToolbarIconButton
-            label={saving ? "Guardando" : "Guardar ahora"}
-            onClick={() => void saveStructure()}
-            disabled={saving || pendingKeys.length > 0}
-          >
-            <Save className="h-4 w-4" />
-          </ToolbarIconButton>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          El total oficial del presupuesto sigue saliendo de la tasa general actual: {formatNumber(generalExpensesRate, 4)}.
-          Esta seccion trabaja con el desagregado operativo de la plantilla base.
-        </div>
+    <div className="space-y-5">
+      <OperationalPanel
+        title="Detalle de gastos generales"
+        description="Cada presupuesto general usa una copia editable de la plantilla base. Los parciales se recalculan usando el costo directo real del presupuesto actual."
+        metrics={<SaveStateBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />}
+        controls={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-500">
+              Reglas: `Parcial = Cantidad x PU` o `Cantidad x % Part x Costo Directo`, segun categoria.
+            </p>
+            <div className="flex items-center gap-2">
+              {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+              {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+              <ToolbarIconButton
+                label={saving ? "Guardando" : "Guardar ahora"}
+                onClick={() => void saveStructure()}
+                disabled={saving || pendingKeys.length > 0}
+              >
+                <Save className="h-4 w-4" />
+              </ToolbarIconButton>
+            </div>
+          </div>
+        }
+      />
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <MetricCard label="Costo directo" value={formatCurrency(totalDirectCost, currency, currencyDecimals)} />
-          <MetricCard label="Gasto general calculado" value={formatCurrency(preview.total, currency, currencyDecimals)} />
-          <MetricCard label="Grupos" value={String(preview.groups.length)} />
-          <MetricCard
-            label="Titulos"
-            value={String(preview.groups.reduce((sum, group) => sum + group.titles.length, 0))}
-          />
-        </div>
+      <div className="rounded-2xl border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.98)_0%,rgba(254,243,199,0.92)_100%)] px-4 py-3 text-sm text-amber-800 shadow-[0_14px_30px_-26px_rgba(217,119,6,0.22)]">
+        El total oficial del presupuesto sigue saliendo de la tasa general actual: {formatNumber(generalExpensesRate, 4)}.
+        Esta sección trabaja con el desagregado operativo de la plantilla base.
+      </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-slate-500">
-            Reglas: `Parcial = Cantidad x PU` o `Cantidad x % Part x Costo Directo`, segun categoria.
-          </p>
-          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-          {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
-        </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <InfoCard label="Costo directo" value={formatCurrency(totalDirectCost, currency, currencyDecimals)} tone="slate" />
+        <InfoCard label="Gasto general calculado" value={formatCurrency(preview.total, currency, currencyDecimals)} tone="sky" />
+        <InfoCard label="Grupos" value={String(preview.groups.length)} tone="amber" />
+        <InfoCard
+          label="Títulos"
+          value={String(preview.groups.reduce((sum, group) => sum + group.titles.length, 0))}
+          tone="slate"
+        />
+      </div>
 
+      <div className="space-y-5">
         {preview.groups.map((group) => (
-          <section key={group.id} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+          <section key={group.id} className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
@@ -413,7 +413,7 @@ export function GeneralExpensesManager({
                   Subtotal: {formatCurrency(group.subtotal, currency, currencyDecimals)}
                 </span>
                 <ToolbarIconButton
-                  label="Agregar titulo"
+                  label="Agregar título"
                   onClick={() => void addTitle(group.id)}
                   disabled={saving || pendingKeys.includes(group.id)}
                 >
@@ -423,19 +423,19 @@ export function GeneralExpensesManager({
             </div>
 
             {group.titles.map((title) => (
-              <div key={title.id} className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <div key={title.id} className="space-y-3 rounded-2xl border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="grid flex-1 gap-3 md:grid-cols-[minmax(110px,140px)_minmax(240px,1fr)_minmax(220px,260px)]">
                     <Input
                       value={title.code}
                       onChange={(event) => updateTitle(title.id, { code: event.target.value })}
-                      aria-label={`Codigo del titulo ${title.name}`}
+                      aria-label={`Código del título ${title.name}`}
                       className={getInputDensityClass()}
                     />
                     <Input
                       value={title.name}
                       onChange={(event) => updateTitle(title.id, { name: event.target.value })}
-                      aria-label={`Nombre del titulo ${title.code}`}
+                      aria-label={`Nombre del título ${title.code}`}
                       className={getInputDensityClass()}
                     />
                     <Select
@@ -447,15 +447,15 @@ export function GeneralExpensesManager({
                       }
                       className={getInputDensityClass()}
                     >
-                      <option value="STANDARD">Estandar</option>
+                      <option value="STANDARD">Estándar</option>
                       <option value="PERSONAL">Personal</option>
                       <option value="TESTING">Ensayos</option>
-                      <option value="DIRECT_COST_BASED">En funcion del Costo Directo</option>
+                      <option value="DIRECT_COST_BASED">En función del costo directo</option>
                     </Select>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <p className="text-sm text-slate-500">
-                      Subtotal del titulo: {formatCurrency(title.subtotal, currency, currencyDecimals)}
+                      Subtotal del título: {formatCurrency(title.subtotal, currency, currencyDecimals)}
                     </p>
                     <ToolbarIconButton
                       label="Agregar item"
@@ -465,7 +465,7 @@ export function GeneralExpensesManager({
                       <Plus className="h-4 w-4" />
                     </ToolbarIconButton>
                     <ToolbarIconButton
-                      label="Eliminar titulo"
+                      label="Eliminar título"
                       onClick={() => void deleteTitle(title.id)}
                       disabled={saving || pendingKeys.includes(title.id)}
                     >
@@ -474,12 +474,12 @@ export function GeneralExpensesManager({
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]">
                   <Table className="min-w-[980px]">
                     <THead>
                       <TR className="bg-slate-50 hover:bg-slate-50">
                         <TH>Codigo</TH>
-                        <TH>Descripcion</TH>
+                        <TH>Descripción</TH>
                         <TH>Unidad</TH>
                         <TH>Cant. desc.</TH>
                         <TH className="text-right">Cantidad</TH>
@@ -579,22 +579,22 @@ export function GeneralExpensesManager({
           </section>
         ))}
 
-        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Resumen final</p>
-              <h3 className="mt-1 text-lg font-semibold text-slate-900">DESCOMPOSICION DE LOS GASTOS GENERALES</h3>
+              <h3 className="mt-1 text-lg font-semibold text-slate-900">DESCOMPOSICIÓN DE LOS GASTOS GENERALES</h3>
             </div>
             <p className="text-sm text-slate-500">
               Porcentajes calculados sobre el costo directo actual: {formatCurrency(totalDirectCost, currency, currencyDecimals)}
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]">
             <Table>
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">
-                  <TH>Descripcion</TH>
+                  <TH>Descripción</TH>
                   <TH className="text-right">Porcentaje</TH>
                   <TH className="text-right">Monto</TH>
                 </TR>
@@ -619,42 +619,8 @@ export function GeneralExpensesManager({
             </Table>
           </div>
         </section>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
+      </div>
     </div>
-  );
-}
-
-function SaveBadge({ state, lastSavedLabel }: { state: SaveState; lastSavedLabel: string | null }) {
-  const styles: Record<SaveState, string> = {
-    idle: "bg-slate-100 text-slate-600",
-    dirty: "bg-amber-100 text-amber-700",
-    saving: "bg-sky-100 text-sky-700",
-    saved: "bg-emerald-100 text-emerald-700",
-    error: "bg-rose-100 text-rose-700",
-  };
-
-  const labels: Record<SaveState, string> = {
-    idle: "Sin cambios",
-    dirty: "Cambios pendientes",
-    saving: "Guardando...",
-    saved: "Guardado automatico",
-    error: "Error al guardar",
-  };
-
-  return (
-    <span className={cn("inline-flex flex-col rounded-full px-3 py-2 text-xs font-medium", styles[state])}>
-      <span>{labels[state]}</span>
-      {lastSavedLabel ? <span className="mt-0.5 text-[11px] font-normal opacity-80">{lastSavedLabel}</span> : null}
-    </span>
   );
 }
 
@@ -721,16 +687,16 @@ function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
 
   const seconds = Math.max(0, Math.floor((currentTime - lastSavedAt) / 1000));
   if (seconds < 60) {
-    return `Ultimo guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+    return `Último guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
   }
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
-    return `Ultimo guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    return `Último guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
   }
 
   const hours = Math.floor(minutes / 60);
-  return `Ultimo guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
+  return `Último guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
 }
 
 function getDirectCostPercentage(amount: number, totalDirectCost: number) {

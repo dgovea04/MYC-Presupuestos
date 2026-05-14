@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -39,13 +40,13 @@ export function PolynomialMonomialsTable({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Monomios</CardTitle>
-        <CardDescription>
-          Edita codigos, nombres e indices base. Los coeficientes deben sumar 1.000 y cada monomio debe quedar asociado a un indice INEI.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
+        <OperationalPanel
+          title="Monomios"
+          description="Edita codigos, nombres e indices base. Los coeficientes deben sumar 1.000 y cada monomio debe quedar asociado a un indice INEI."
+          metrics={<span>{monomials.length} monomios</span>}
+        />
+
         {baseIndicesLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             Cargando indices INEI del mes base...

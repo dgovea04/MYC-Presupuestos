@@ -27,14 +27,14 @@ export function PricingSection() {
       <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 xl:px-12">
         <SectionHeading
           badge="Precios"
-          title="Planes claros para profesionales, oficinas tecnicas y constructoras."
-          description="Cada plan se enfoca en el nivel de operacion que necesita el equipo, desde presupuestos individuales hasta estandarizacion empresarial."
+          title="Planes claros para profesionales, oficinas técnicas y constructoras."
+          description="Cada plan se enfoca en el nivel de operación que necesita el equipo, desde presupuestos individuales hasta estandarización empresarial."
           align="center"
         />
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-500">
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Implementacion simple</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Implementación simple</span>
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Sin curva tipo ERP</span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Escala por tipo de operacion</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Escala por tipo de operación</span>
         </div>
         <div className="mt-14 grid gap-6 xl:grid-cols-[0.96fr_1.08fr_0.96fr]">
           {pricingPlans.map((plan, index) => (
