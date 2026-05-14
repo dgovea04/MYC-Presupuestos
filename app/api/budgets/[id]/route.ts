@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
+import { recordActivityEvent } from "@/lib/data/activity-events";
 import { deleteBudget, getBudgetById, getBudgetLiveUpdateSummaries, saveBudgetPatch } from "@/lib/data/budgets";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +14,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const body = await request.json();
     const { id } = await params;
     const budget = await saveBudgetPatch(id, session.user.id, body);
+    await recordActivityEvent({
+      userId: session.user.id,
+      type: "BUDGET_UPDATED",
+      title: "Presupuesto actualizado",
+      detail: budget.name,
+      href: `/budgets/${id}`,
+    });
     const optimisticBudgets = await getBudgetLiveUpdateSummaries(id, session.user.id);
     revalidateBudgetPaths(budget.projectId, id);
     return NextResponse.json({ budget, optimisticBudgets });

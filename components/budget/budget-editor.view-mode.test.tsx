@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { BudgetEditor } from "@/components/budget/budget-editor";
 import { BudgetViewModeProvider } from "@/components/budget/view-mode-provider";
 import type { BudgetRecord } from "@/types/budget";
+import type { CatalogPartidaRecord } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
 
 vi.mock("next/navigation", () => ({
@@ -503,6 +504,104 @@ describe("BudgetEditor view mode integration", () => {
     expect(getByText("Network down")).toBeTruthy();
   });
 
+  it("keeps the selected catalog partida when adding a new item from the inline selector", async () => {
+    const { getButtonByText, getByText, getInputByValue, getOutsideFocusTarget, queryByText } = await renderEditor({
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar partida").click();
+    });
+
+    expect(getInputByValue("Nueva partida")).toBeTruthy();
+    expect(getByText("Excavacion manual")).toBeTruthy();
+
+    await act(async () => {
+      getByText("Excavacion manual").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+
+    await act(async () => {
+      getOutsideFocusTarget().focus();
+    });
+
+    expect(getInputByValue("Excavacion manual")).toBeTruthy();
+    expect(queryByText("Nueva partida")).toBeNull();
+  });
+
+  it("uses the nearest visible title or subtitle context when adding an item from the header action", async () => {
+    const { getButtonByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithTitleAndSubtitle(),
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar partida").click();
+    });
+
+    const input = getInputByValue("Nueva partida");
+    const paddingWrapper = input.parentElement?.parentElement;
+
+    expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 36px");
+  });
+
+  it("anchors a header subtitle under the nearest title context", async () => {
+    const { getButtonByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithTitleOnly(),
+    });
+
+    await act(async () => {
+      getInputByValue("Obras preliminares").focus();
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar subtitulo").click();
+    });
+
+    const input = getInputByValue("Nuevo subtitulo");
+    const paddingWrapper = input.parentElement;
+
+    expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 18px");
+  });
+
+  it("inserts a header item immediately after the active item in the same section", async () => {
+    const { getButtonByText, getInputByValue, getOrderedInputValues } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar partida").click();
+    });
+
+    expect(getOrderedInputValues(["Partida demo", "Nueva partida", "Partida secundaria"])).toEqual([
+      "Partida demo",
+      "Nueva partida",
+      "Partida secundaria",
+    ]);
+  });
+
+  it("inserts a header title after the active title section instead of sending it to the end", async () => {
+    const { getButtonByText, getInputByValue, getOrderedInputValues } = await renderEditor({
+      budget: createBudgetWithTwoTitles(),
+    });
+
+    await act(async () => {
+      getInputByValue("Movimiento de tierras").focus();
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar titulo").click();
+    });
+
+    expect(getOrderedInputValues(["Obras preliminares", "Nuevo titulo", "Instalaciones"])).toEqual([
+      "Obras preliminares",
+      "Nuevo titulo",
+      "Instalaciones",
+    ]);
+  });
+
   it("accepts decimal metrado typed with comma before saving", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
@@ -591,7 +690,7 @@ describe("BudgetEditor view mode integration", () => {
   });
 });
 
-async function renderEditor(options?: { budget?: BudgetRecord; resourcesCatalog?: ResourceRecord[] }) {
+async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?: CatalogPartidaRecord[]; resourcesCatalog?: ResourceRecord[] }) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -604,7 +703,7 @@ async function renderEditor(options?: { budget?: BudgetRecord; resourcesCatalog?
       <BudgetViewModeProvider>
         <BudgetEditor
           budget={options?.budget ?? createBudget()}
-          partidasCatalog={[]}
+          partidasCatalog={options?.partidasCatalog ?? []}
           projectName="Proyecto Demo"
           resourcesCatalog={options?.resourcesCatalog ?? []}
         />
@@ -757,6 +856,10 @@ async function renderEditor(options?: { budget?: BudgetRecord; resourcesCatalog?
       [...nextContainer.querySelectorAll("input")]
         .map((candidate) => candidate.value)
         .filter((value) => value === "Partida demo" || value === "Partida secundaria"),
+    getOrderedInputValues: (values: string[]) =>
+      [...nextContainer.querySelectorAll("input")]
+        .map((candidate) => candidate.value)
+        .filter((value) => values.includes(value)),
     getOutsideFocusTarget: () => {
       let element = document.querySelector("[data-testid='outside-focus-target']");
       if (!(element instanceof HTMLButtonElement)) {
@@ -898,6 +1001,143 @@ function createBudgetWithItemWithoutApu(): BudgetRecord {
         apu: null,
       },
     ],
+  };
+}
+
+function createCatalogPartida(): CatalogPartidaRecord {
+  return {
+    id: "catalog-1",
+    description: "Excavacion manual",
+    unit: "m3",
+    unitPrice: 125.5,
+    currency: "PEN",
+    performance: 4,
+    performanceUnit: "m3",
+    performanceRate: "4.000 m3/DIA",
+    apuRows: [],
+  };
+}
+
+function createBudgetWithTitleAndSubtitle(): BudgetRecord {
+  return {
+    ...createBudget(),
+    levels: [
+      {
+        id: "level-title-1",
+        budgetId: "budget-1",
+        parentId: null,
+        type: "TITLE",
+        code: "01",
+        name: "Obras preliminares",
+        sortOrder: 1,
+      },
+      {
+        id: "level-subtitle-1",
+        budgetId: "budget-1",
+        parentId: "level-title-1",
+        type: "SUBTITLE",
+        code: "01.01",
+        name: "Movimiento de tierras",
+        sortOrder: 2,
+      },
+    ],
+    items: [],
+  };
+}
+
+function createBudgetWithTitleOnly(): BudgetRecord {
+  return {
+    ...createBudget(),
+    levels: [
+      {
+        id: "level-title-1",
+        budgetId: "budget-1",
+        parentId: null,
+        type: "TITLE",
+        code: "01",
+        name: "Obras preliminares",
+        sortOrder: 1,
+      },
+    ],
+    items: [],
+  };
+}
+
+function createBudgetWithTwoSectionItems(): BudgetRecord {
+  return {
+    ...createBudget(),
+    levels: [
+      {
+        id: "level-title-1",
+        budgetId: "budget-1",
+        parentId: null,
+        type: "TITLE",
+        code: "01",
+        name: "Obras preliminares",
+        sortOrder: 1,
+      },
+      {
+        id: "level-subtitle-1",
+        budgetId: "budget-1",
+        parentId: "level-title-1",
+        type: "SUBTITLE",
+        code: "01.01",
+        name: "Movimiento de tierras",
+        sortOrder: 2,
+      },
+    ],
+    items: [
+      {
+        ...createBudgetWithItem().items[0]!,
+        id: "item-1",
+        levelId: "level-subtitle-1",
+        description: "Partida demo",
+        sortOrder: 1,
+      },
+      {
+        ...createBudgetWithItem().items[0]!,
+        id: "item-2",
+        levelId: "level-subtitle-1",
+        description: "Partida secundaria",
+        sortOrder: 2,
+      },
+    ],
+  };
+}
+
+function createBudgetWithTwoTitles(): BudgetRecord {
+  return {
+    ...createBudget(),
+    levels: [
+      {
+        id: "level-title-1",
+        budgetId: "budget-1",
+        parentId: null,
+        type: "TITLE",
+        code: "01",
+        name: "Obras preliminares",
+        sortOrder: 1,
+      },
+      {
+        id: "level-subtitle-1",
+        budgetId: "budget-1",
+        parentId: "level-title-1",
+        type: "SUBTITLE",
+        code: "01.01",
+        name: "Movimiento de tierras",
+        sortOrder: 2,
+      },
+      {
+        id: "level-title-2",
+        budgetId: "budget-1",
+        parentId: null,
+        type: "TITLE",
+        code: "02",
+        name: "Instalaciones",
+        sortOrder: 3,
+      },
+    ],
+    items: [],
   };
 }
 

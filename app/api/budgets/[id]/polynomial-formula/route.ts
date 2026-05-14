@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { recordActivityEvent } from "@/lib/data/activity-events";
 import {
   generatePolynomialFormulaFromBudget,
   getBudgetPolynomialFormulaSectionData,
@@ -53,6 +54,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = await request.json();
     const payload = polynomialFormulaGenerateSchema.parse(body);
     const formula = await generatePolynomialFormulaFromBudget(id, session.user.id, payload);
+    await recordActivityEvent({
+      userId: session.user.id,
+      type: "POLYNOMIAL_FORMULA_GENERATED",
+      title: "Formula polinomica generada",
+      detail: formula.name,
+      href: `/budgets/${id}/polynomial-formula`,
+    });
     return NextResponse.json(formula, { status: 201 });
   } catch (error) {
     return NextResponse.json(
@@ -74,10 +82,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   try {
-    await params;
+    const { id } = await params;
     const body = await request.json();
     const payload = polynomialFormulaPatchSchema.parse(body);
     const formula = await savePolynomialFormula(payload.formulaId, session.user.id, payload);
+    await recordActivityEvent({
+      userId: session.user.id,
+      type: "POLYNOMIAL_FORMULA_UPDATED",
+      title: "Formula polinomica actualizada",
+      detail: formula.name,
+      href: `/budgets/${id}/polynomial-formula`,
+    });
     return NextResponse.json(formula);
   } catch (error) {
     return NextResponse.json(

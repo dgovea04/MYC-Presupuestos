@@ -15,7 +15,10 @@ function hasPolynomialFormulaDelegate(client: PrismaClient | undefined) {
     return false;
   }
 
-  return typeof (client as PrismaClient & { polynomialFormula?: unknown }).polynomialFormula !== "undefined";
+  return (
+    typeof (client as PrismaClient & { polynomialFormula?: unknown }).polynomialFormula !== "undefined" &&
+    typeof (client as PrismaClient & { activityEvent?: unknown }).activityEvent !== "undefined"
+  );
 }
 
 const existingClient =

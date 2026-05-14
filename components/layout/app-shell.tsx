@@ -84,8 +84,8 @@ export async function AppShell({
                 </div>
               </div>
 
-              <Link href="/budgets/new">
-                <Button>Nuevo presupuesto</Button>
+              <Link href="/projects/new">
+                <Button>Nuevo proyecto</Button>
               </Link>
             </header>
 

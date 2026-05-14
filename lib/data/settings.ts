@@ -258,11 +258,11 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultUtilityRate"
   `;
 
+  const storedSettings = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
+
   return parseStoredUserSettingsRow({
-    ...settings,
-    dateFormat: supportsDateFormat && typeof (settings as Record<string, unknown>).dateFormat !== "undefined"
-      ? (settings as Record<string, unknown>).dateFormat
-      : data.dateFormat,
+    ...storedSettings,
+    dateFormat: supportsDateFormat && typeof storedSettings.dateFormat !== "undefined" ? storedSettings.dateFormat : data.dateFormat,
     defaultSubBudgetNames: data.defaultSubBudgetNames,
   });
 }

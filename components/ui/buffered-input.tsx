@@ -4,21 +4,22 @@ import { Input } from "@/components/ui/input";
 type BufferedInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "defaultValue" | "onChange" | "value"> & {
   onCommit: (value: string) => void;
   onValueChange?: (value: string) => void;
+  syncWhileFocused?: boolean;
   value: number | string | null | undefined;
 };
 
 export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(function BufferedInput(
-  { onBlur, onCommit, onFocus, onValueChange, value, ...props },
+  { onBlur, onCommit, onFocus, onValueChange, syncWhileFocused = false, value, ...props },
   ref,
 ) {
   const [draft, setDraft] = React.useState(() => stringifyValue(value));
   const isFocusedRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!isFocusedRef.current) {
+    if (!isFocusedRef.current || syncWhileFocused) {
       setDraft(stringifyValue(value));
     }
-  }, [value]);
+  }, [syncWhileFocused, value]);
 
   function commit(nextValue: string) {
     if (nextValue !== stringifyValue(value)) {

@@ -71,6 +71,14 @@ type InsertTarget = {
   kind: "level" | "item";
   id: string;
 };
+type ItemInsertion = {
+  levelId: string | null;
+  afterItemId: string | null;
+};
+type LevelInsertion = {
+  parentId: string | null;
+  afterLevelId: string | null;
+};
 type ApuSheetControllerHandle = {
   close: () => void;
   isOpen: () => boolean;
@@ -163,6 +171,7 @@ export function BudgetEditor({
   const saveBudgetRef = useRef<((isAutosave?: boolean) => Promise<void>) | null>(null);
   const cellRefs = useRef(new Map<string, HTMLInputElement>());
   const editorRootRef = useRef<HTMLDivElement>(null);
+  const activeRowIdRef = useRef<string | null>(null);
   const apuSheetControllerRef = useRef<ApuSheetControllerHandle | null>(null);
   const apuSheetOpenRef = useRef(false);
   const openApuSheet = useCallback((item: BudgetItemRecord) => {
@@ -298,36 +307,39 @@ export function BudgetEditor({
   }, [activeRowId, openApuSheet, summary]);
 
   function addLevel(type: BudgetLevelType, parentId?: string | null) {
-    const sortOrder = state.levels.reduce((max, level) => Math.max(max, level.sortOrder), 0) + 1;
+    const insertion = resolveLevelInsertion(type, rows, state.levels, activeRowIdRef.current, parentId);
 
-    setState((current) => ({
-      ...current,
-      levels: [
-        ...current.levels,
-        {
-          id: crypto.randomUUID(),
-          budgetId: current.id,
-          parentId: parentId ?? null,
-          type,
-          code: createLevelCode(current.levels, parentId ?? null, sortOrder),
-          name: getDefaultLevelName(type),
-          sortOrder,
-        },
-      ],
-    }));
+    setState((current) => {
+      const nextLevel = {
+        id: crypto.randomUUID(),
+        budgetId: current.id,
+        parentId: insertion.parentId,
+        type,
+        code: createLevelCode(current.levels, insertion.parentId, current.levels.length + 1),
+        name: getDefaultLevelName(type),
+        sortOrder: current.levels.length + 1,
+      } satisfies BudgetLevelRecord;
+
+      return {
+        ...current,
+        levels: insertLevelAtPosition(current.levels, nextLevel, insertion),
+      };
+    });
   }
 
   function addItem(levelId?: string | null) {
-    const parentLevelId = levelId ?? state.levels.at(-1)?.id ?? null;
+    const insertion = resolveItemInsertion(rows, activeRowIdRef.current, levelId);
+    const parentLevelId = insertion.levelId;
     const nextItem = createBudgetItemDraft(state, {
       levelId: parentLevelId,
     });
 
     setState((current) => ({
       ...current,
-      items: [...current.items, nextItem],
+      items: insertItemAtPosition(current.items, nextItem, insertion),
     }));
 
+    activeRowIdRef.current = nextItem.id;
     setActiveRowId(nextItem.id);
     setActiveColumn("description");
     openCatalogSelector(nextItem.id);
@@ -933,6 +945,7 @@ export function BudgetEditor({
         const nextTarget = event.relatedTarget;
         if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
 
+        activeRowIdRef.current = null;
         setActiveRowId(null);
         setActiveColumn(null);
         setCatalogSelectorRowId(null);
@@ -1046,7 +1059,10 @@ export function BudgetEditor({
                       }}
                       onDrop={() => handleDropRow(row)}
                       onDragEnd={() => setDragState(null)}
-                      onFocusCapture={() => setActiveRowId(row.level.id)}
+                      onFocusCapture={() => {
+                        activeRowIdRef.current = row.level.id;
+                        setActiveRowId(row.level.id);
+                      }}
                       className={cn(
                         "hover:bg-transparent",
                         getLevelRowTone(row.level.type, isExcelMode),
@@ -1054,7 +1070,7 @@ export function BudgetEditor({
                         activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
                       )}
                     >
-                      <TD className={getBodyCellClass("code", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
+                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
                         <div className="flex items-center gap-2">
                           <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
                           <BufferedInput
@@ -1065,13 +1081,14 @@ export function BudgetEditor({
                             onKeyDown={(event) => handleSpreadsheetNavigation(event, row.level.id, "code")}
                             onPaste={(event) => handlePasteRows(event, row, "code")}
                             onFocus={() => {
+                              activeRowIdRef.current = row.level.id;
                               setActiveRowId(row.level.id);
                               setActiveColumn("code");
                             }}
                           />
                         </div>
                       </TD>
-                      <TD className={getBodyCellClass("description", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
+                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
                         <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
                           <span
                             className={cn(
@@ -1089,6 +1106,7 @@ export function BudgetEditor({
                             onKeyDown={(event) => handleSpreadsheetNavigation(event, row.level.id, "description")}
                             onPaste={(event) => handlePasteRows(event, row, "description")}
                             onFocus={() => {
+                              activeRowIdRef.current = row.level.id;
                               setActiveRowId(row.level.id);
                               setActiveColumn("description");
                             }}
@@ -1098,7 +1116,7 @@ export function BudgetEditor({
                       <TD className={getBodyCellClass("unit", activeColumn, "", effectiveDensityMode, isExcelMode)} colSpan={4} />
                       <TD
                         className={cn(
-                          getBodyCellClass("actions", activeColumn, "sticky right-0 align-top", effectiveDensityMode, isExcelMode),
+                          getBodyCellClass("actions", activeColumn, "sticky right-0 align-[initial]", effectiveDensityMode, isExcelMode),
                           getStickyActionTone(row.level.type, isExcelMode),
                         )}
                       >
@@ -1154,14 +1172,17 @@ export function BudgetEditor({
                       }}
                       onDrop={() => handleDropRow(row)}
                       onDragEnd={() => setDragState(null)}
-                      onFocusCapture={() => setActiveRowId(row.item.id)}
+                      onFocusCapture={() => {
+                        activeRowIdRef.current = row.item.id;
+                        setActiveRowId(row.item.id);
+                      }}
                       className={cn(
                         isExcelMode && "bg-white",
                         dragState?.kind === "item" && dragState.id === row.item.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
                         activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
                       )}
                     >
-                      <TD className={getBodyCellClass("code", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
+                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
                         <div className="flex items-center gap-2">
                           <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
                           <BufferedInput
@@ -1172,13 +1193,14 @@ export function BudgetEditor({
                             onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "code")}
                             onPaste={(event) => handlePasteRows(event, row, "code")}
                             onFocus={() => {
+                              activeRowIdRef.current = row.item.id;
                               setActiveRowId(row.item.id);
                               setActiveColumn("code");
                             }}
                           />
                         </div>
                       </TD>
-                      <TD className={getBodyCellClass("description", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
+                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
                         <div style={{ paddingLeft: `${row.depth * 18}px` }}>
                           <div className="relative">
                             <BufferedInput
@@ -1187,6 +1209,7 @@ export function BudgetEditor({
                               onValueChange={(value) => {
                                 openCatalogSelector(row.item.id, value);
                               }}
+                              syncWhileFocused
                               className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
                               ref={(element) => setCellRef(row.item.id, "description", element)}
                               onKeyDown={(event) => {
@@ -1221,6 +1244,7 @@ export function BudgetEditor({
                               }}
                               onPaste={(event) => handlePasteRows(event, row, "description")}
                               onFocus={() => {
+                                activeRowIdRef.current = row.item.id;
                                 setActiveRowId(row.item.id);
                                 setActiveColumn("description");
                                 openCatalogSelector(row.item.id, row.item.description);
@@ -1267,7 +1291,7 @@ export function BudgetEditor({
                           </div>
                         </div>
                       </TD>
-                      <TD className={getBodyCellClass("unit", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
+                      <TD className={getBodyCellClass("unit", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
                         <BufferedInput
                           value={row.item.unit}
                           onCommit={(value) => updateItem(row.item.id, { unit: value })}
@@ -1276,12 +1300,13 @@ export function BudgetEditor({
                           onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "unit")}
                           onPaste={(event) => handlePasteRows(event, row, "unit")}
                           onFocus={() => {
+                            activeRowIdRef.current = row.item.id;
                             setActiveRowId(row.item.id);
                             setActiveColumn("unit");
                           }}
                         />
                       </TD>
-                      <TD className={getBodyCellClass("quantity", activeColumn, "align-top", effectiveDensityMode, isExcelMode)}>
+                      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
                         <BufferedInput
                           type="text"
                           inputMode="decimal"
@@ -1292,6 +1317,7 @@ export function BudgetEditor({
                           onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "quantity")}
                           onPaste={(event) => handlePasteRows(event, row, "quantity")}
                           onFocus={() => {
+                            activeRowIdRef.current = row.item.id;
                             setActiveRowId(row.item.id);
                             setActiveColumn("quantity");
                           }}
@@ -1301,7 +1327,7 @@ export function BudgetEditor({
                         className={getBodyCellClass(
                           "unitPrice",
                           activeColumn,
-                          "align-top whitespace-nowrap text-right text-xs font-medium tabular-nums text-slate-800",
+                          "align-[initial] whitespace-nowrap text-right text-xs font-medium tabular-nums text-slate-800",
                           effectiveDensityMode,
                           isExcelMode,
                         )}
@@ -1312,7 +1338,7 @@ export function BudgetEditor({
                         className={getBodyCellClass(
                           "partial",
                           activeColumn,
-                          "align-top whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-900",
+                          "align-[initial] whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-900",
                           effectiveDensityMode,
                           isExcelMode,
                         )}
@@ -1323,7 +1349,7 @@ export function BudgetEditor({
                         className={getBodyCellClass(
                           "actions",
                           activeColumn,
-                          cn("sticky right-0 align-top", isExcelMode ? "bg-white/95" : "bg-white"),
+                          cn("sticky right-0 align-[initial]", isExcelMode ? "bg-white/95" : "bg-white"),
                           effectiveDensityMode,
                           isExcelMode,
                         )}
@@ -1877,6 +1903,8 @@ function CatalogInsertSheet({
   onSelect: (partida: CatalogPartidaRecord) => void;
   onInsertSelected: () => void;
 }) {
+  const { currencyDecimals } = useFormattingSettings();
+
   if (!open || !target) return null;
 
   return (
@@ -2751,6 +2779,218 @@ function getLeadingSpaces(value: string) {
   return match?.[0].length ?? 0;
 }
 
+function resolveDefaultItemLevelId(rows: BudgetDisplayRow[], activeRowId: string | null) {
+  if (activeRowId) {
+    const activeRowIndex = rows.findIndex((row) => getRowId(row) === activeRowId);
+    if (activeRowIndex >= 0) {
+      return resolveContextLevelIdFromRowIndex(rows, activeRowIndex);
+    }
+  }
+
+  return resolveContextLevelIdFromRowIndex(rows, rows.length - 1);
+}
+
+function resolveDefaultLevelParentId(
+  type: BudgetLevelType,
+  rows: BudgetDisplayRow[],
+  levels: BudgetLevelRecord[],
+  activeRowId: string | null,
+) {
+  if (type === "TITLE") return null;
+  if (type !== "SUBTITLE") return null;
+
+  const contextLevelId = resolveDefaultItemLevelId(rows, activeRowId);
+  if (!contextLevelId) return null;
+
+  const contextLevel = levels.find((level) => level.id === contextLevelId) ?? null;
+  if (!contextLevel) return null;
+
+  if (contextLevel.type === "TITLE") return contextLevel.id;
+
+  return findAncestorLevelIdByType(levels, contextLevel.parentId ?? null, "TITLE");
+}
+
+function resolveItemInsertion(rows: BudgetDisplayRow[], activeRowId: string | null, explicitLevelId?: string | null): ItemInsertion {
+  if (explicitLevelId !== undefined) {
+    return {
+      levelId: explicitLevelId ?? null,
+      afterItemId: null,
+    };
+  }
+
+  const contextRow = resolveActiveOrLastRow(rows, activeRowId);
+  if (!contextRow) {
+    return {
+      levelId: null,
+      afterItemId: null,
+    };
+  }
+
+  if (contextRow.kind === "item") {
+    return {
+      levelId: contextRow.item.levelId ?? null,
+      afterItemId: contextRow.item.id,
+    };
+  }
+
+  return {
+    levelId: contextRow.level.id,
+    afterItemId: null,
+  };
+}
+
+function resolveLevelInsertion(
+  type: BudgetLevelType,
+  rows: BudgetDisplayRow[],
+  levels: BudgetLevelRecord[],
+  activeRowId: string | null,
+  explicitParentId?: string | null,
+): LevelInsertion {
+  if (explicitParentId !== undefined) {
+    return {
+      parentId: explicitParentId ?? null,
+      afterLevelId: null,
+    };
+  }
+
+  if (type === "TITLE") {
+    return {
+      parentId: null,
+      afterLevelId: resolveContextLevelAnchorId(rows, levels, activeRowId, "TITLE"),
+    };
+  }
+
+  if (type === "SUBTITLE") {
+    const contextRow = resolveActiveOrLastRow(rows, activeRowId);
+    const parentId = resolveDefaultLevelParentId(type, rows, levels, activeRowId);
+
+    if (!parentId) {
+      return {
+        parentId: null,
+        afterLevelId: null,
+      };
+    }
+
+    if (contextRow?.kind === "level" && contextRow.level.type === "TITLE") {
+      return {
+        parentId,
+        afterLevelId: null,
+      };
+    }
+
+    const subtitleAnchorId = resolveContextLevelAnchorId(rows, levels, activeRowId, "SUBTITLE");
+    return {
+      parentId,
+      afterLevelId: subtitleAnchorId,
+    };
+  }
+
+  return {
+    parentId: explicitParentId ?? null,
+    afterLevelId: null,
+  };
+}
+
+function resolveContextLevelAnchorId(
+  rows: BudgetDisplayRow[],
+  levels: BudgetLevelRecord[],
+  activeRowId: string | null,
+  type: BudgetLevelType,
+) {
+  const contextRow = resolveActiveOrLastRow(rows, activeRowId);
+  if (!contextRow) return null;
+
+  if (contextRow.kind === "level") {
+    if (contextRow.level.type === type) return contextRow.level.id;
+    return findAncestorLevelIdByType(levels, contextRow.level.parentId ?? null, type);
+  }
+
+  return findAncestorLevelIdByType(levels, contextRow.item.levelId ?? null, type);
+}
+
+function resolveActiveOrLastRow(rows: BudgetDisplayRow[], activeRowId: string | null) {
+  if (activeRowId) {
+    const activeRow = rows.find((row) => getRowId(row) === activeRowId);
+    if (activeRow) return activeRow;
+  }
+
+  return rows.at(-1) ?? null;
+}
+
+function resolveContextLevelIdFromRowIndex(rows: BudgetDisplayRow[], rowIndex: number) {
+  for (let index = rowIndex; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (!row) continue;
+
+    if (row.kind === "item" && row.item.levelId) {
+      return row.item.levelId;
+    }
+
+    if (row.kind === "level") {
+      return row.level.id;
+    }
+  }
+
+  return null;
+}
+
+function findAncestorLevelIdByType(levels: BudgetLevelRecord[], levelId: string | null, type: BudgetLevelType): string | null {
+  let currentId = levelId;
+
+  while (currentId) {
+    const current = levels.find((level) => level.id === currentId) ?? null;
+    if (!current) return null;
+    if (current.type === type) return current.id;
+    currentId = current.parentId ?? null;
+  }
+
+  return null;
+}
+
+function insertItemAtPosition(items: BudgetItemRecord[], nextItem: BudgetItemRecord, insertion: ItemInsertion) {
+  const sorted = [...items].sort((left, right) => left.sortOrder - right.sortOrder);
+
+  if (insertion.afterItemId) {
+    const anchorIndex = sorted.findIndex((item) => item.id === insertion.afterItemId);
+    if (anchorIndex >= 0) {
+      sorted.splice(anchorIndex + 1, 0, nextItem);
+      return resequenceItems(sorted);
+    }
+  }
+
+  if (insertion.levelId) {
+    const firstSiblingIndex = sorted.findIndex((item) => item.levelId === insertion.levelId);
+    if (firstSiblingIndex >= 0) {
+      sorted.splice(firstSiblingIndex, 0, nextItem);
+      return resequenceItems(sorted);
+    }
+  }
+
+  return resequenceItems([...sorted, nextItem]);
+}
+
+function insertLevelAtPosition(levels: BudgetLevelRecord[], nextLevel: BudgetLevelRecord, insertion: LevelInsertion) {
+  const sorted = [...levels].sort((left, right) => left.sortOrder - right.sortOrder);
+
+  if (insertion.afterLevelId) {
+    const anchorIndex = sorted.findIndex((level) => level.id === insertion.afterLevelId);
+    if (anchorIndex >= 0) {
+      sorted.splice(anchorIndex + 1, 0, nextLevel);
+      return resequenceLevels(sorted);
+    }
+  }
+
+  if (insertion.parentId) {
+    const firstSiblingIndex = sorted.findIndex((level) => level.parentId === insertion.parentId);
+    if (firstSiblingIndex >= 0) {
+      sorted.splice(firstSiblingIndex, 0, nextLevel);
+      return resequenceLevels(sorted);
+    }
+  }
+
+  return resequenceLevels([...sorted, nextLevel]);
+}
+
 function getDefaultInsertTarget(rows: BudgetDisplayRow[], activeRowId: string | null): InsertTarget | null {
   if (activeRowId) {
     const activeRow = rows.find((row) => getRowId(row) === activeRowId);
@@ -2939,6 +3179,20 @@ function normalizeItemSortOrders(items: BudgetItemRecord[]) {
       ...item,
       sortOrder: index + 1,
     }));
+}
+
+function resequenceLevels(levels: BudgetLevelRecord[]) {
+  return levels.map((level, index) => ({
+    ...level,
+    sortOrder: index + 1,
+  }));
+}
+
+function resequenceItems(items: BudgetItemRecord[]) {
+  return items.map((item, index) => ({
+    ...item,
+    sortOrder: index + 1,
+  }));
 }
 
 function getHeaderCellClass(column: ActiveColumn, activeColumn: ActiveColumn, isExcelMode: boolean, extraClassName?: string) {

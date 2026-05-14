@@ -165,8 +165,10 @@ export function ApuEditorSheet({
   }, [currentApu]);
 
   if (!open || !currentItem || !currentApu) return null;
+  const currentItemRecord = currentItem;
+  const currentApuRecord = currentApu;
   const { rows: calculatedResources, totalUnitCost: calculatedUnitCost } = apuSummary;
-  const performanceLabel = `${currentItem.unit}/Dia`;
+  const performanceLabel = `${currentItemRecord.unit}/Dia`;
 
   function addResource(resourceId: string) {
     const selected = resourcesCatalog.find((resource) => resource.id === resourceId);
@@ -177,14 +179,14 @@ export function ApuEditorSheet({
     setAddResourceMenuOpen(false);
     setAddResourceMenuPosition(null);
     onUpdate({
-      ...currentItem,
+      ...currentItemRecord,
       apu: {
-        ...currentApu,
+        ...currentApuRecord,
         resources: [
-          ...currentApu.resources,
+          ...currentApuRecord.resources,
           {
             id: crypto.randomUUID(),
-            apuId: currentApu.id,
+            apuId: currentApuRecord.id,
             resourceId: selected.id,
             resourceType: selected.category,
             crew: null,
@@ -202,10 +204,10 @@ export function ApuEditorSheet({
     if (!draggedResourceId || draggedResourceId === targetId) return;
 
     onUpdate({
-      ...currentItem,
+      ...currentItemRecord,
       apu: {
-        ...currentApu,
-        resources: moveEntityToTarget(currentApu.resources, draggedResourceId, targetId),
+        ...currentApuRecord,
+        resources: moveEntityToTarget(currentApuRecord.resources, draggedResourceId, targetId),
       },
     });
 
@@ -217,18 +219,18 @@ export function ApuEditorSheet({
     setAddResourceHighlightedIndex(0);
   }
 
-  function openResourceSearch(resource: (typeof currentApu.resources)[number]) {
+  function openResourceSearch(resource: (typeof currentApuRecord.resources)[number]) {
     setEditingResourceRowId(resource.id);
     setEditingResourceQuery(resource.resource ? `${resource.resource.code} - ${resource.resource.description}` : "");
     setResourceHighlightedIndex(0);
   }
 
   function applyResourceSelection(
-    resource: (typeof currentApu.resources)[number],
+    resource: (typeof currentApuRecord.resources)[number],
     index: number,
     selected: ResourceRecord,
   ) {
-    const resources = [...currentApu.resources];
+    const resources = [...currentApuRecord.resources];
     resources[index] = {
       ...resource,
       resourceId: selected.id,
@@ -241,9 +243,9 @@ export function ApuEditorSheet({
     setResourceMenu(null);
     setResourceHighlightedIndex(0);
     onUpdate({
-      ...currentItem,
+      ...currentItemRecord,
       apu: {
-        ...currentApu,
+        ...currentApuRecord,
         resources,
       },
     });
@@ -273,10 +275,10 @@ export function ApuEditorSheet({
               <div>
                 <p className={cn("text-slate-500", isExcelMode ? "text-xs uppercase tracking-wide" : "text-sm")}>Editor APU</p>
                 <Dialog.Title asChild>
-                  <h3 className={cn("font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>{currentItem.description}</h3>
+                  <h3 className={cn("font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>{currentItemRecord.description}</h3>
                 </Dialog.Title>
                 <Dialog.Description asChild>
-                  <p className={cn("mt-1 text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItem.unit}</p>
+                  <p className={cn("mt-1 text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItemRecord.unit}</p>
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -292,14 +294,14 @@ export function ApuEditorSheet({
                 <BufferedInput
                   type="number"
                   step="0.01"
-                  value={currentApu.performance}
+                  value={currentApuRecord.performance}
                   data-testid="apu-performance-input"
                   className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
                   onCommit={(value) =>
                     onUpdate({
-                      ...currentItem,
+                      ...currentItemRecord,
                       apu: {
-                        ...currentApu,
+                        ...currentApuRecord,
                         performance: Number(value),
                       },
                     })
@@ -370,14 +372,14 @@ export function ApuEditorSheet({
             className={cn(effectiveDensityMode === "compact" ? "h-8 text-xs" : "h-9 text-sm")}
             onClick={() =>
               onUpdate({
-                ...currentItem,
+                ...currentItemRecord,
                 apu: {
-                  ...currentApu,
+                  ...currentApuRecord,
                   resources: [
-                    ...currentApu.resources,
+                    ...currentApuRecord.resources,
                     {
                       id: crypto.randomUUID(),
-                      apuId: currentApu.id,
+                      apuId: currentApuRecord.id,
                       resourceId: "",
                       resourceType: "MATERIAL",
                       crew: null,
@@ -458,7 +460,7 @@ export function ApuEditorSheet({
               </TR>
             </THead>
             <TBody>
-              {currentApu.resources.map((resource, index) => {
+              {currentApuRecord.resources.map((resource, index) => {
                 const calculatedResource = calculatedResources[index] ?? resource;
                 const isCrewDriven = isCrewDrivenApuRow(calculatedResource);
                 const isPercentageBased = isPercentageBasedApuRow(calculatedResource);
@@ -579,15 +581,15 @@ export function ApuEditorSheet({
                         value={resource.crew ?? ""}
                         className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums")}
                         onCommit={(value) => {
-                          const resources = [...currentApu.resources];
+                          const resources = [...currentApuRecord.resources];
                           resources[index] = {
                             ...resource,
                             crew: value === "" ? null : Number(value),
                           };
                           onUpdate({
-                            ...currentItem,
+                            ...currentItemRecord,
                             apu: {
-                              ...currentApu,
+                              ...currentApuRecord,
                               resources,
                             },
                           });
@@ -612,15 +614,15 @@ export function ApuEditorSheet({
                       readOnly={isCrewDriven}
                       className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums", isCrewDriven ? readonlyInputClass : undefined)}
                       onCommit={(value) => {
-                        const resources = [...currentApu.resources];
+                        const resources = [...currentApuRecord.resources];
                         resources[index] = {
                           ...resource,
                           quantity: Number(value),
                         };
                         onUpdate({
-                          ...currentItem,
+                          ...currentItemRecord,
                           apu: {
-                            ...currentApu,
+                            ...currentApuRecord,
                             resources,
                           },
                         });
@@ -635,15 +637,15 @@ export function ApuEditorSheet({
                       readOnly={isPercentageBased}
                       className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums", isPercentageBased ? readonlyInputClass : undefined)}
                       onCommit={(value) => {
-                        const resources = [...currentApu.resources];
+                        const resources = [...currentApuRecord.resources];
                         resources[index] = {
                           ...resource,
                           unitPrice: Number(value),
                         };
                         onUpdate({
-                          ...currentItem,
+                          ...currentItemRecord,
                           apu: {
-                            ...currentApu,
+                            ...currentApuRecord,
                             resources,
                           },
                         });
@@ -665,10 +667,10 @@ export function ApuEditorSheet({
                       className={cn(effectiveDensityMode === "compact" ? "h-8 px-2 text-xs" : "h-9 px-2 text-sm")}
                       onClick={() =>
                         onUpdate({
-                          ...currentItem,
+                          ...currentItemRecord,
                           apu: {
-                            ...currentApu,
-                            resources: currentApu.resources.filter((_, currentIndex) => currentIndex !== index),
+                            ...currentApuRecord,
+                            resources: currentApuRecord.resources.filter((_, currentIndex) => currentIndex !== index),
                           },
                         })
                       }
@@ -702,8 +704,8 @@ export function ApuEditorSheet({
                   )}
                   onMouseDown={(event) => {
                     event.preventDefault();
-                    const resource = currentApu.resources.find((candidateResource) => candidateResource.id === editingResourceRowId);
-                    const resourceIndex = currentApu.resources.findIndex((candidateResource) => candidateResource.id === editingResourceRowId);
+                    const resource = currentApuRecord.resources.find((candidateResource) => candidateResource.id === editingResourceRowId);
+                    const resourceIndex = currentApuRecord.resources.findIndex((candidateResource) => candidateResource.id === editingResourceRowId);
                     if (!resource || resourceIndex === -1) return;
                     applyResourceSelection(resource, resourceIndex, candidate);
                   }}

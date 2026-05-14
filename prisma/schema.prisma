@@ -74,6 +74,16 @@ enum PolynomialCostGroup {
   INSTALLATIONS
 }
 
+enum ActivityEventType {
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  BUDGET_CREATED
+  BUDGET_UPDATED
+  POLYNOMIAL_FORMULA_GENERATED
+  POLYNOMIAL_FORMULA_UPDATED
+  ADJUSTMENT_REGISTERED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -83,6 +93,21 @@ model User {
   updatedAt    DateTime  @updatedAt
   companies    Company[]
   settings     UserSettings?
+  activityEvents ActivityEvent[]
+}
+
+model ActivityEvent {
+  id        String            @id @default(cuid())
+  userId    String
+  type      ActivityEventType
+  title     String
+  detail    String
+  href      String
+  createdAt DateTime          @default(now())
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([type, createdAt(sort: Desc)])
 }
 
 model UserSettings {

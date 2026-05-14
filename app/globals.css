@@ -10,7 +10,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
-  --font-sans: "Segoe UI", "Aptos", "Inter", sans-serif;
+  --font-sans: var(--font-inter), "Inter", "Segoe UI", "Aptos", sans-serif;
+  --font-display: var(--font-plus-jakarta-sans), "Plus Jakarta Sans", var(--font-sans);
   --font-mono: "Cascadia Code", "Consolas", monospace;
 }
 
@@ -20,12 +21,58 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+.font-display {
+  font-family: var(--font-display), Arial, Helvetica, sans-serif;
+}
+
+.landing-shell {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.landing-section {
+  padding-block: 5rem;
+}
+
+.landing-section-tight {
+  padding-block: 4.5rem;
+}
+
+.landing-section-contrast {
+  padding-block: 5rem;
+}
+
+.landing-surface-elevated {
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+  box-shadow: 0 24px 70px -44px rgba(15, 23, 42, 0.32);
+}
+
+.landing-surface-subtle {
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 32px -24px rgba(15, 23, 42, 0.18);
+}
+
+.landing-surface-contrast {
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 30%),
+    linear-gradient(135deg, #020617 0%, #0f172a 100%);
+  box-shadow: 0 26px 70px -52px rgba(2, 6, 23, 0.72);
+}
+
+.landing-chip {
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.9);
+  color: #475569;
+}
+
 * {
   box-sizing: border-box;
 }
 
 :where(a) {
-  color: inherit;
   text-decoration: none;
 }
 
@@ -114,4 +161,27 @@ body {
 
 [data-view-mode="excel"] .ui-card-description {
   font-size: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .landing-shell {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .landing-section,
+  .landing-section-contrast {
+    padding-block: 7rem;
+  }
+
+  .landing-section-tight {
+    padding-block: 6rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .landing-shell {
+    padding-inline: 3rem;
+  }
 }

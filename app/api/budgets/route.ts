@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
+import { recordActivityEvent } from "@/lib/data/activity-events";
 import { createBudget } from "@/lib/data/budgets";
 
 export async function POST(request: Request) {
@@ -12,6 +13,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const budget = await createBudget(body);
+    await recordActivityEvent({
+      userId: session.user.id,
+      type: "BUDGET_CREATED",
+      title: "Presupuesto creado",
+      detail: budget.name,
+      href: `/budgets/${budget.id}`,
+    });
     revalidatePath("/dashboard");
     revalidatePath("/budgets");
     revalidatePath("/projects");

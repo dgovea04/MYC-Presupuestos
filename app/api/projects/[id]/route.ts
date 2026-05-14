@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
+import { recordActivityEvent } from "@/lib/data/activity-events";
 import { getProjectById } from "@/lib/data/projects";
 import { deleteProject, updateProject } from "@/lib/data/projects";
 
@@ -14,6 +15,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const body = await request.json();
     const { id } = await params;
     const project = await updateProject(id, session.user.id, body);
+    await recordActivityEvent({
+      userId: session.user.id,
+      type: "PROJECT_UPDATED",
+      title: "Proyecto actualizado",
+      detail: project.name,
+      href: `/projects/${project.id}`,
+    });
     revalidateProjectPaths(id);
     return NextResponse.json(project);
   } catch (error) {

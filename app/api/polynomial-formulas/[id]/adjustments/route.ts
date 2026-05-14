@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { recordActivityEvent } from "@/lib/data/activity-events";
+import { prisma } from "@/lib/db/prisma";
 import {
   calculatePolynomialFormulaAdjustment,
   listPolynomialFormulaAdjustments,
@@ -41,6 +43,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = await request.json();
     const payload = polynomialAdjustmentCreateSchema.parse(body);
     const adjustment = await calculatePolynomialFormulaAdjustment(id, session.user.id, payload);
+    const formula = await prisma.polynomialFormula.findFirst({
+      where: {
+        id,
+        budget: {
+          project: {
+            company: {
+              userId: session.user.id,
+            },
+          },
+        },
+      },
+      select: {
+        name: true,
+        budgetId: true,
+      },
+    });
+
+    if (formula) {
+      await recordActivityEvent({
+        userId: session.user.id,
+        type: "ADJUSTMENT_REGISTERED",
+        title: "Reajuste registrado",
+        detail: `${formula.name} · ${adjustment.month}/${adjustment.year}`,
+        href: `/budgets/${formula.budgetId}/polynomial-formula`,
+      });
+    }
+
     return NextResponse.json(adjustment, { status: 201 });
   } catch (error) {
     return NextResponse.json(
