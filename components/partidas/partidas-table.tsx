@@ -322,7 +322,7 @@ export function PartidasTable({
                       value={row.description}
                       readOnly={isReadonly}
                       onChange={(event) => patchRow(row.id, { description: event.target.value })}
-                      className={isReadonly ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+                      className={isReadonly ? "border-transparent bg-transparent px-0 shadow-none focus:border-transparent" : undefined}
                     />
                   </TD>
                   <TD className="align-top">
@@ -330,7 +330,7 @@ export function PartidasTable({
                       value={row.unit}
                       readOnly={isReadonly}
                       onChange={(event) => patchRow(row.id, { unit: event.target.value })}
-                      className={isReadonly ? "border-transparent bg-transparent px-0 shadow-none text-center" : "text-center"}
+                      className={isReadonly ? "border-transparent bg-transparent px-0 shadow-none text-center focus:border-transparent" : "text-center"}
                     />
                   </TD>
                   <TD className="align-top text-right font-medium tabular-nums text-slate-900">
