@@ -74,16 +74,19 @@ type LevelActionMenuState = {
   kind: "add" | "more";
   top: number;
   left: number;
+  trigger: HTMLElement | null;
 };
 type ItemActionMenuState = {
   rowId: string;
   top: number;
   left: number;
+  trigger: HTMLElement | null;
 };
 type HeaderActionMenuState = {
   kind: "add" | "more";
   top: number;
   left: number;
+  trigger: HTMLElement | null;
 };
 type InsertTarget = {
   kind: "level" | "item";
@@ -195,6 +198,36 @@ export function BudgetEditor({
   const activeRowIdRef = useRef<string | null>(null);
   const apuSheetControllerRef = useRef<ApuSheetControllerHandle | null>(null);
   const apuSheetOpenRef = useRef(false);
+  const levelActionMenuRef = useRef<HTMLDivElement | null>(null);
+  const itemActionMenuRef = useRef<HTMLDivElement | null>(null);
+  const headerActionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  function closeLevelActionMenu(restoreFocus = false) {
+    setLevelActionMenu((current) => {
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => current?.trigger?.focus());
+      }
+      return null;
+    });
+  }
+
+  function closeItemActionMenu(restoreFocus = false) {
+    setItemActionMenu((current) => {
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => current?.trigger?.focus());
+      }
+      return null;
+    });
+  }
+
+  function closeHeaderActionMenu(restoreFocus = false) {
+    setHeaderActionMenu((current) => {
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => current?.trigger?.focus());
+      }
+      return null;
+    });
+  }
   const openApuSheet = useCallback((item: BudgetItemRecord) => {
     apuSheetOpenRef.current = true;
     apuSheetControllerRef.current?.open(
@@ -281,11 +314,31 @@ export function BudgetEditor({
       if (!(target instanceof HTMLElement)) return;
       if (target.closest("[data-level-action-menu]")) return;
       if (target.closest("[data-level-action-trigger]")) return;
-      setLevelActionMenu(null);
+      closeLevelActionMenu(true);
     }
 
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [levelActionMenu]);
+
+  useEffect(() => {
+    if (!levelActionMenu) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      levelActionMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    });
+
+    function handleEscape(event: KeyboardEvent) {
+      if (handleMenuArrowNavigation(event, levelActionMenuRef.current)) return;
+      if (event.key !== "Escape") return;
+      closeLevelActionMenu(true);
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", handleEscape);
+    };
   }, [levelActionMenu]);
 
   useEffect(() => {
@@ -296,11 +349,31 @@ export function BudgetEditor({
       if (!(target instanceof HTMLElement)) return;
       if (target.closest("[data-item-action-menu]")) return;
       if (target.closest("[data-item-action-trigger]")) return;
-      setItemActionMenu(null);
+      closeItemActionMenu(true);
     }
 
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [itemActionMenu]);
+
+  useEffect(() => {
+    if (!itemActionMenu) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      itemActionMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    });
+
+    function handleEscape(event: KeyboardEvent) {
+      if (handleMenuArrowNavigation(event, itemActionMenuRef.current)) return;
+      if (event.key !== "Escape") return;
+      closeItemActionMenu(true);
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", handleEscape);
+    };
   }, [itemActionMenu]);
 
   useEffect(() => {
@@ -311,11 +384,31 @@ export function BudgetEditor({
       if (!(target instanceof HTMLElement)) return;
       if (target.closest("[data-header-action-menu]")) return;
       if (target.closest("[data-header-action-trigger]")) return;
-      setHeaderActionMenu(null);
+      closeHeaderActionMenu(true);
     }
 
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [headerActionMenu]);
+
+  useEffect(() => {
+    if (!headerActionMenu) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      headerActionMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    });
+
+    function handleEscape(event: KeyboardEvent) {
+      if (handleMenuArrowNavigation(event, headerActionMenuRef.current)) return;
+      if (event.key !== "Escape") return;
+      closeHeaderActionMenu(true);
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", handleEscape);
+    };
   }, [headerActionMenu]);
 
   useEffect(() => {
@@ -726,6 +819,7 @@ export function BudgetEditor({
             kind,
             top: rect.bottom + 6,
             left: rect.right - 192,
+            trigger,
           },
     );
   }
@@ -740,6 +834,7 @@ export function BudgetEditor({
             rowId,
             top: rect.bottom + 6,
             left: rect.right - 192,
+            trigger,
           },
     );
   }
@@ -754,6 +849,7 @@ export function BudgetEditor({
             kind,
             top: rect.bottom + 6,
             left: rect.right - 208,
+            trigger,
           },
     );
   }
@@ -1760,6 +1856,7 @@ export function BudgetEditor({
 
       {levelActionMenu ? (
         <div
+          ref={levelActionMenuRef}
           id={`budget-level-${levelActionMenu.kind}-menu-${levelActionMenu.rowId}`}
           data-level-action-menu
           role="menu"
@@ -1775,7 +1872,7 @@ export function BudgetEditor({
               label="Agregar partida"
               onClick={() => {
                 addItem(levelActionMenu.rowId);
-                setLevelActionMenu(null);
+                closeLevelActionMenu(true);
               }}
             />
           ) : null}
@@ -1784,7 +1881,7 @@ export function BudgetEditor({
               label="Agregar subtítulo"
               onClick={() => {
                 addLevel("SUBTITLE", levelActionMenu.rowId);
-                setLevelActionMenu(null);
+                closeLevelActionMenu(true);
               }}
             />
           ) : null}
@@ -1797,7 +1894,7 @@ export function BudgetEditor({
               label="Agregar subpartida"
               onClick={() => {
                 addLevel("ITEM_GROUP", levelActionMenu.rowId);
-                setLevelActionMenu(null);
+                closeLevelActionMenu(true);
               }}
             />
           ) : null}
@@ -1808,14 +1905,14 @@ export function BudgetEditor({
                 label="Mover arriba"
                 onClick={() => {
                   moveLevel(levelActionMenu.rowId, "up");
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
               <LevelActionMenuButton
                 label="Mover abajo"
                 onClick={() => {
                   moveLevel(levelActionMenu.rowId, "down");
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
               <div className="my-1 border-t border-slate-100" />
@@ -1823,21 +1920,21 @@ export function BudgetEditor({
                 label="Cambiar a título"
                 onClick={() => {
                   updateLevel(levelActionMenu.rowId, { type: "TITLE" });
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
               <LevelActionMenuButton
                 label="Cambiar a subtítulo"
                 onClick={() => {
                   updateLevel(levelActionMenu.rowId, { type: "SUBTITLE" });
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
               <LevelActionMenuButton
                 label="Cambiar a subpartida"
                 onClick={() => {
                   updateLevel(levelActionMenu.rowId, { type: "ITEM_GROUP" });
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
               <div className="my-1 border-t border-slate-100" />
@@ -1845,14 +1942,14 @@ export function BudgetEditor({
                 label="Insertar desde catálogo"
                 onClick={() => {
                   openCatalogInsert({ kind: "level", id: levelActionMenu.rowId });
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
               <LevelActionMenuButton
                 label="Importar desde Excel"
                 onClick={() => {
                   openExcelImport({ kind: "level", id: levelActionMenu.rowId });
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
               <div className="my-1 border-t border-slate-100" />
@@ -1860,7 +1957,7 @@ export function BudgetEditor({
                 label="Eliminar nivel"
                 onClick={() => {
                   removeLevel(levelActionMenu.rowId);
-                  setLevelActionMenu(null);
+                  closeLevelActionMenu(true);
                 }}
               />
             </>
@@ -1870,6 +1967,7 @@ export function BudgetEditor({
 
       {itemActionMenu ? (
         <div
+          ref={itemActionMenuRef}
           id={`budget-item-menu-${itemActionMenu.rowId}`}
           data-item-action-menu
           role="menu"
@@ -1884,14 +1982,14 @@ export function BudgetEditor({
             label="Mover arriba"
             onClick={() => {
               moveItem(itemActionMenu.rowId, "up");
-              setItemActionMenu(null);
+              closeItemActionMenu(true);
             }}
           />
           <LevelActionMenuButton
             label="Mover abajo"
             onClick={() => {
               moveItem(itemActionMenu.rowId, "down");
-              setItemActionMenu(null);
+              closeItemActionMenu(true);
             }}
           />
           <div className="my-1 border-t border-slate-100" />
@@ -1899,14 +1997,14 @@ export function BudgetEditor({
             label="Duplicar partida"
             onClick={() => {
               duplicateItem(itemActionMenu.rowId);
-              setItemActionMenu(null);
+              closeItemActionMenu(true);
             }}
           />
           <LevelActionMenuButton
             label="Eliminar partida"
             onClick={() => {
               removeItem(itemActionMenu.rowId);
-              setItemActionMenu(null);
+              closeItemActionMenu(true);
             }}
           />
         </div>
@@ -1914,6 +2012,7 @@ export function BudgetEditor({
 
       {headerActionMenu ? (
         <div
+          ref={headerActionMenuRef}
           id={headerActionMenu.kind === "add" ? "budget-header-add-menu" : "budget-header-more-menu"}
           data-header-action-menu
           role="menu"
@@ -1932,7 +2031,7 @@ export function BudgetEditor({
                 className="bg-slate-50 font-semibold text-slate-900 hover:bg-slate-100"
                 onClick={() => {
                   addItem();
-                  setHeaderActionMenu(null);
+                  closeHeaderActionMenu(true);
                 }}
               />
               <div className="my-1 border-t border-slate-100" />
@@ -1941,7 +2040,7 @@ export function BudgetEditor({
                 icon={<Type className="h-4 w-4" />}
                 onClick={() => {
                   addLevel("TITLE");
-                  setHeaderActionMenu(null);
+                  closeHeaderActionMenu(true);
                 }}
               />
               <LevelActionMenuButton
@@ -1949,7 +2048,7 @@ export function BudgetEditor({
                 icon={<Rows3 className="h-4 w-4" />}
                 onClick={() => {
                   addLevel("SUBTITLE");
-                  setHeaderActionMenu(null);
+                  closeHeaderActionMenu(true);
                 }}
               />
               <LevelActionMenuButton
@@ -1957,7 +2056,7 @@ export function BudgetEditor({
                 icon={<GripVertical className="h-4 w-4" />}
                 onClick={() => {
                   addLevel("ITEM_GROUP");
-                  setHeaderActionMenu(null);
+                  closeHeaderActionMenu(true);
                 }}
               />
             </>
@@ -1968,14 +2067,14 @@ export function BudgetEditor({
                 label="Insertar desde catálogo"
                 onClick={() => {
                   openCatalogInsert(null);
-                  setHeaderActionMenu(null);
+                  closeHeaderActionMenu(true);
                 }}
               />
               <LevelActionMenuButton
                 label="Importar desde Excel"
                 onClick={() => {
                   openExcelImport(null);
-                  setHeaderActionMenu(null);
+                  closeHeaderActionMenu(true);
                 }}
               />
             </>
@@ -2174,6 +2273,50 @@ function LevelActionMenuButton({
       {label}
     </button>
   );
+}
+
+function focusMenuItem(container: HTMLDivElement | null, index: number) {
+  if (!container) return;
+  const items = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+  items[index]?.focus();
+}
+
+function handleMenuArrowNavigation(event: KeyboardEvent, container: HTMLDivElement | null) {
+  if (!container) return false;
+
+  const items = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+  if (items.length === 0) return false;
+
+  const currentIndex = Math.max(
+    0,
+    items.findIndex((item) => item === document.activeElement),
+  );
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    focusMenuItem(container, Math.min(currentIndex + 1, items.length - 1));
+    return true;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    focusMenuItem(container, Math.max(currentIndex - 1, 0));
+    return true;
+  }
+
+  if (event.key === "Home") {
+    event.preventDefault();
+    focusMenuItem(container, 0);
+    return true;
+  }
+
+  if (event.key === "End") {
+    event.preventDefault();
+    focusMenuItem(container, items.length - 1);
+    return true;
+  }
+
+  return false;
 }
 
 function SummaryRow({ label, value, currency, compact = false }: { label: string; value: number; currency: string; compact?: boolean }) {
