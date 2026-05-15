@@ -87,7 +87,7 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     expect(getTableSurface().className).toContain("rounded-md");
-    expect(getHeaderByText("Codigo").className).toContain("budget-sticky-header");
+    expect(getHeaderByText("Código").className).toContain("budget-sticky-header");
 
     await act(async () => {
       getInputByValue("Partida demo").focus();
@@ -123,7 +123,7 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getButtonByText("Comodo").click();
+      getButtonByText("Cómodo").click();
     });
 
     await act(async () => {
@@ -555,10 +555,10 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getButtonByText("Agregar subtitulo").click();
+      getButtonByText("Agregar subtítulo").click();
     });
 
-    const input = getInputByValue("Nuevo subtitulo");
+    const input = getInputByValue("Nuevo subtítulo");
     const paddingWrapper = input.parentElement;
 
     expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 18px");
@@ -594,12 +594,12 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getButtonByText("Agregar titulo").click();
+      getButtonByText("Agregar título").click();
     });
 
-    expect(getOrderedInputValues(["Obras preliminares", "Nuevo titulo", "Instalaciones"])).toEqual([
+    expect(getOrderedInputValues(["Obras preliminares", "Nuevo título", "Instalaciones"])).toEqual([
       "Obras preliminares",
-      "Nuevo titulo",
+      "Nuevo título",
       "Instalaciones",
     ]);
   });
@@ -615,7 +615,7 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getButtonByText("Desde catalogo").click();
+      getButtonByText("Desde catálogo").click();
     });
 
     await act(async () => {
@@ -647,11 +647,11 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getButtonByText("Revisar importacion").click();
+      getButtonByText("Revisar importación").click();
     });
 
     await act(async () => {
-      getButtonByText("Confirmar importacion").click();
+      getButtonByText("Confirmar importación").click();
     });
 
     expect(getOrderedInputValues(["Partida demo", "Partida importada", "Partida secundaria"])).toEqual([
@@ -697,7 +697,7 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     await act(async () => {
-      getButtonByText("Comodo").click();
+      getButtonByText("Cómodo").click();
     });
 
     await act(async () => {
@@ -707,9 +707,9 @@ describe("BudgetEditor view mode integration", () => {
     expect(getEditorRoot().dataset.densityMode).toBe("compact");
     expect(getTableSurface().dataset.densityMode).toBe("compact");
     expect(getSummaryPanel().dataset.densityMode).toBe("compact");
-    expect(getHeaderByText("Codigo").className).toContain("budget-sticky-header");
+    expect(getHeaderByText("Código").className).toContain("budget-sticky-header");
     expect(getButtonByText("Compacto").getAttribute("aria-pressed")).toBe("true");
-    expect(getButtonByText("Comodo").getAttribute("aria-pressed")).toBe("false");
+    expect(getButtonByText("Cómodo").getAttribute("aria-pressed")).toBe("false");
   });
 
   it("keeps Task 4 shortcuts scoped to the editor when focus leaves the editor context", async () => {

@@ -42,7 +42,8 @@ describe("BudgetFlow", () => {
     const { host, getButtonByText, getByText, getEditorRoot } = await renderBudgetFlow();
 
     expect(host.dataset.viewMode).toBe("modern");
-    expect(getByText("Vista moderna activa")).toBeTruthy();
+    expect(getByText("Vista")).toBeTruthy();
+    expect(getByText("Densidad")).toBeTruthy();
     expect(getEditorRoot().className).toContain("budget-modern-flow");
 
     await act(async () => {
@@ -50,7 +51,8 @@ describe("BudgetFlow", () => {
     });
 
     expect(host.dataset.viewMode).toBe("excel");
-    expect(getByText("Modo Excel activo")).toBeTruthy();
+    expect(getByText("Vista")).toBeTruthy();
+    expect(getByText("Densidad")).toBeTruthy();
     expect(getEditorRoot().className).toContain("budget-excel-flow");
   });
 });

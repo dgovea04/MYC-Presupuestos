@@ -6,8 +6,8 @@ import { getUserSettings, updateUserSettings } from "@/lib/data/settings";
 import { userSettingsSchema } from "@/lib/validations/settings";
 
 const updateSettingsRequestSchema = userSettingsSchema.strict();
-const VALIDATION_ERROR_MESSAGE = "Revisa los datos de configuracion e intenta nuevamente.";
-const SAVE_ERROR_MESSAGE = "No se pudo guardar la configuracion";
+const VALIDATION_ERROR_MESSAGE = "Revisa los datos de configuración e intenta nuevamente.";
+const SAVE_ERROR_MESSAGE = "No se pudo guardar la configuración";
 
 export async function GET() {
   const session = await getAuthSession();

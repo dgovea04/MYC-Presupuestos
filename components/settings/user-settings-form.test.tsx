@@ -186,7 +186,7 @@ describe("UserSettingsForm", () => {
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(getText(/IGV: Ingresa un porcentaje valido entre 0 y 100\./)).toBeTruthy();
+    expect(getText(/IGV: Ingresa un porcentaje válido entre 0 y 100\./)).toBeTruthy();
   });
 
   it("keeps pending state safe and shows a fallback error on failed non-JSON responses", async () => {
@@ -236,7 +236,7 @@ describe("UserSettingsForm", () => {
       });
     });
 
-    expect(getText(/No se pudo guardar la configuracion/)).toBeTruthy();
+    expect(getText(/No se pudo guardar la configuración/)).toBeTruthy();
     expect(getSelect("defaultCurrency").disabled).toBe(false);
     expect(getSelect("currencyDecimals").disabled).toBe(false);
     expect(getSelect("dateFormat").disabled).toBe(false);
@@ -244,7 +244,7 @@ describe("UserSettingsForm", () => {
     expect(getInput("defaultGeneralExpensesRate").disabled).toBe(false);
     expect(getInput("defaultUtilityRate").disabled).toBe(false);
     expect(getInput("defaultSubBudgetName-0").disabled).toBe(false);
-    expect(getButton(/Guardar configuracion/)).toBeTruthy();
+    expect(getButton(/Guardar configuración/)).toBeTruthy();
   });
 
   it("allows adding and removing initial sub budgets from the table before submit", async () => {
