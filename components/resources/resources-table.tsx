@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import ExcelJS from "exceljs";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import type { ResourceCategory, ResourcePatchFields, ResourcePatchResult, ResourceRecord, ResourceStatePatch } from "@/types/resource";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
+import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { Input } from "@/components/ui/input";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
+import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { VirtualizedTableFrame, VirtualizedTableSpacerRow } from "@/components/ui/virtualized-table-frame";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
+import { cn } from "@/lib/utils";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type EditableColumn = "code" | "description" | "unit" | "unitPrice" | "category" | "iu" | "source";
@@ -35,12 +41,25 @@ const resourceCodePrefixes: Record<ResourceCategory, string> = {
   EQUIPMENT: "EQ",
   TOOLS: "HER",
 };
+const RESOURCE_ROW_HEIGHT = 74;
+const RESOURCE_ROW_OVERSCAN = 8;
+const RESOURCE_TABLE_COLUMN_COUNT = 8;
 
-export function ResourcesTable({ resources, companyId }: { resources: ResourceRecord[]; companyId?: string }) {
+export function ResourcesTable({
+  resources,
+  companyId,
+  onRequestCreate,
+}: {
+  resources: ResourceRecord[];
+  companyId?: string;
+  onRequestCreate?: () => void;
+}) {
+  const { isExcelMode } = useAppViewMode();
+  const { excelRowHeight } = useFormattingSettings();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<EditableResource[]>(() => resources.map((resource) => toEditableResource(resource)));
   const [filter, setFilter] = useState("");
-  const [category, setCategory] = useState("ALL");
+  const [category, setCategory] = useState<"ALL" | ResourceCategory>("ALL");
   const [error, setError] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [saveClock, setSaveClock] = useState(() => Date.now());
@@ -48,17 +67,26 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
   const [pendingPaste, setPendingPaste] = useState<PendingPaste | null>(null);
   const [feedback, setFeedback] = useState("");
   const baseRowsRef = useRef(new Map(resources.map((resource) => [resource.id, resource])));
+  const deferredFilter = useDeferredValue(filter);
 
   const filtered = useMemo(
     () =>
-      rows.filter((resource) => {
-        const matchesCategory = category === "ALL" || resource.category === category;
-        const text = `${resource.code} ${resource.description} ${resource.iu ?? ""}`.toLowerCase();
-        return matchesCategory && text.includes(filter.toLowerCase());
-      }),
-    [category, filter, rows],
-  );
+      rows
+        .filter((resource) => {
+          const matchesCategory = category === "ALL" || resource.category === category;
+          const text = `${resource.code} ${resource.description} ${resource.iu ?? ""}`.toLowerCase();
+          return matchesCategory && text.includes(deferredFilter.toLowerCase());
+        })
+        .sort((left, right) => {
+          const descriptionComparison = left.description.localeCompare(right.description);
+          if (descriptionComparison !== 0) {
+            return descriptionComparison;
+          }
 
+          return left.code.localeCompare(right.code);
+        }),
+    [category, deferredFilter, rows],
+  );
   const dirtyCount = useMemo(() => rows.filter((row) => row.isDirty || row.isNew).length, [rows]);
   const derivedSaveState = useMemo<SaveState>(() => {
     if (pendingIds.length > 0) return "saving";
@@ -67,13 +95,19 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
     if (lastSavedAt) return "saved";
     return "idle";
   }, [dirtyCount, error, lastSavedAt, pendingIds.length]);
-
   useEffect(() => {
     if (!lastSavedAt) return;
 
     const interval = setInterval(() => setSaveClock(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [lastSavedAt]);
+  const { scrollContainerRef, scrollProps, virtualRange } = useVirtualTableWindow({
+    items: filtered,
+    rowHeight: isExcelMode ? excelRowHeight : RESOURCE_ROW_HEIGHT,
+    overscan: RESOURCE_ROW_OVERSCAN,
+    fallbackVisibleRows: 10,
+    resetKey: `${category}:${deferredFilter}`,
+  });
 
   function updateDraft(id: string, patch: Partial<EditableResource>) {
     setRows((current) =>
@@ -105,21 +139,6 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
             }
           : row,
       ),
-    );
-  }
-
-  function addBlankRow() {
-    setRows((current) =>
-      applyGeneratedCodes([
-        ...current,
-        createEditableDraft(companyId, {
-          description: "",
-          unit: "",
-          unitPrice: 0,
-          category: "MATERIAL",
-          iu: "",
-        }),
-      ]),
     );
   }
 
@@ -162,36 +181,6 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
       setError(saveError instanceof Error ? saveError.message : "No se pudo guardar el insumo");
     } finally {
       setPendingIds((current) => current.filter((id) => id !== resource.id));
-    }
-  }
-
-  async function saveAllDirtyRows() {
-    const rowsToSave = rows.filter((row) => row.isDirty || row.isNew);
-    const patch = buildResourcesBatchPatch(rowsToSave, baseRowsRef.current, companyId);
-    if (!patch) return;
-
-    setError("");
-    setPendingIds(rowsToSave.map((row) => row.id));
-
-    try {
-      const response = await fetch("/api/resources", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "No se pudieron guardar los cambios");
-      }
-
-      const result = (await response.json()) as ResourcePatchResult;
-      reconcilePatchResult(result);
-      updateLastSavedAt(result.savedAt);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "No se pudieron guardar los cambios");
-    } finally {
-      setPendingIds((current) => current.filter((id) => !rowsToSave.some((row) => row.id === id)));
     }
   }
 
@@ -316,14 +305,6 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
     });
   }
 
-  function updateLastSavedAt(savedAt: string) {
-    const nextSavedAt = Date.parse(savedAt);
-    if (Number.isNaN(nextSavedAt)) return;
-
-    setLastSavedAt(nextSavedAt);
-    setSaveClock(nextSavedAt);
-  }
-
   function cancelRow(id: string) {
     setRows((current) =>
       current.flatMap((row) => {
@@ -334,6 +315,14 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
         return base ? [toEditableResource(base)] : [row];
       }),
     );
+  }
+
+  function updateLastSavedAt(savedAt: string) {
+    const nextSavedAt = Date.parse(savedAt);
+    if (Number.isNaN(nextSavedAt)) return;
+
+    setLastSavedAt(nextSavedAt);
+    setSaveClock(nextSavedAt);
   }
 
   function handlePaste(event: React.ClipboardEvent<HTMLElement>, targetId: string, startColumn: EditableColumn) {
@@ -422,43 +411,54 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
     <div className="space-y-4">
       <OperationalPanel
         title="Tabla operativa"
-        description="Busca, filtra y actualiza insumos del catálogo general sin salir de la tabla."
+        description="Busca, filtra y actualiza insumos del catalogo general sin salir de la tabla."
         metrics={
-          <>
-            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
-              {filtered.length} {filtered.length === 1 ? "insumo" : "insumos"}
-            </span>
-            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
-              {rows.length} total
-            </span>
-          </>
+          <div className="flex flex-wrap items-center gap-2">
+            <OperationalMetricBadge tone="accent">
+              {filtered.length} {filtered.length === 1 ? "insumo visible" : "insumos visibles"}
+            </OperationalMetricBadge>
+            <OperationalMetricBadge>
+              {rows.length} en catalogo
+            </OperationalMetricBadge>
+          </div>
         }
         controls={
-          <div className="flex flex-col gap-3">
-            <div className="grid gap-3 md:grid-cols-[1fr_220px]">
-              <Input placeholder="Buscar por código, insumo o IU" value={filter} onChange={(event) => setFilter(event.target.value)} />
-              <Select value={category} onChange={(event) => setCategory(event.target.value)}>
-                <option value="ALL">Todas las categorías</option>
+            <div className="flex flex-col gap-3">
+              <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+                <Input placeholder="Buscar por codigo, insumo o IU" value={filter} onChange={(event) => setFilter(event.target.value)} />
+                <Select value={category} onChange={(event) => setCategory(event.target.value as "ALL" | ResourceCategory)}>
+                <option value="ALL">Todas las categorias</option>
                 <option value="MATERIAL">Materiales</option>
                 <option value="LABOR">Mano de obra</option>
                 <option value="EQUIPMENT">Equipos</option>
               </Select>
             </div>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <p className="text-sm text-slate-500">
-                {filter.trim() ? `Mostrando ${filtered.length} coincidencias para "${filter}"` : "Vista general del catálogo de insumos"}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <SaveStateBadge state={derivedSaveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} savedLabel="Guardado" className="min-w-[152px]" />
-                <Button variant="default" onClick={addBlankRow} className="gap-2 shadow-sm shadow-sky-950/10">
+            <div className={cn("flex flex-col gap-3 border bg-white/90 p-3 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200")}>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-slate-700">
+                  {filter.trim() ? `Mostrando ${filtered.length} coincidencias para "${filter}"` : "Vista general del catalogo de insumos"}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span>{category === "ALL" ? "Todas las categorias" : getCategoryLabel(category)}</span>
+                  <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                  <span>{dirtyCount > 0 ? `${dirtyCount} cambios por guardar` : "Sin cambios pendientes"}</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <SaveStateBadge
+                  state={derivedSaveState}
+                  lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)}
+                  savedLabel="Guardado"
+                  compact
+                  bordered
+                  className="min-w-[152px]"
+                />
+                <Button variant="secondary" size="sm" onClick={onRequestCreate} className="gap-2">
                   <Plus className="h-4 w-4" />
                   Crear insumo
                 </Button>
-                <Button variant="outline" className="bg-white" onClick={() => fileInputRef.current?.click()}>
+                <Button variant="outline" size="sm" className="bg-white" onClick={() => fileInputRef.current?.click()}>
                   Importar Excel
-                </Button>
-                <Button variant="secondary" onClick={() => void saveAllDirtyRows()} disabled={dirtyCount === 0 || pendingIds.length > 0}>
-                  {dirtyCount > 0 ? `Guardar cambios (${dirtyCount})` : "Sin cambios"}
                 </Button>
               </div>
             </div>
@@ -468,146 +468,169 @@ export function ResourcesTable({ resources, companyId }: { resources: ResourceRe
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => void handleImportFile(event)} />
 
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      {feedback ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</p> : null}
+      {error ? <p className={cn("border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700", isExcelMode ? "rounded-md" : "rounded-2xl")}>{error}</p> : null}
+      {feedback ? <p className={cn("border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700", isExcelMode ? "rounded-md" : "rounded-2xl")}>{feedback}</p> : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="max-h-[68vh] overflow-auto">
-          <Table>
+      <VirtualizedTableFrame scrollContainerRef={scrollContainerRef} onScroll={scrollProps.onScroll}>
+          <Table className="table-fixed">
+            <ResourceTableColGroup />
             <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
               <TR className="bg-slate-50 hover:bg-slate-50">
-                <TH>CÓDIGO</TH>
+                <TH>CODIGO</TH>
                 <TH>INSUMO</TH>
                 <TH>UNIDAD</TH>
                 <TH>PRECIO</TH>
-                <TH>CATEGORÍA</TH>
+                <TH>CATEGORIA</TH>
                 <TH>IU</TH>
                 <TH>FUENTE</TH>
                 <TH className="text-right">ACCIONES</TH>
               </TR>
             </THead>
             <TBody>
-            {filtered.map((resource) => {
-              const isOwned = !!resource.companyId || resource.isNew;
-              const isPending = pendingIds.includes(resource.id);
-
-              return (
-                <TR key={resource.id} className={resource.isNew ? "bg-emerald-50/60" : resource.isDirty ? "bg-amber-50/50" : ""}>
-                  <TD>
-                    <Input
-                      value={resource.code || "Auto"}
-                      readOnly
-                      onPaste={(event) => handlePaste(event, resource.id, "code")}
-                      className="border-transparent bg-slate-50 px-2 font-medium tabular-nums text-slate-700 shadow-none"
-                    />
-                  </TD>
-                  <TD>
-                    <Input
-                      value={resource.description}
-                      disabled={!resource.isEditing}
-                      onPaste={(event) => handlePaste(event, resource.id, "description")}
-                      onChange={(event) => updateDraft(resource.id, { description: event.target.value })}
-                      className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
-                    />
-                  </TD>
-                  <TD>
-                    <Input
-                      value={resource.unit}
-                      disabled={!resource.isEditing}
-                      onPaste={(event) => handlePaste(event, resource.id, "unit")}
-                      onChange={(event) => updateDraft(resource.id, { unit: event.target.value })}
-                      className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
-                    />
-                  </TD>
-                  <TD>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={resource.unitPrice}
-                      disabled={!resource.isEditing}
-                      onPaste={(event) => handlePaste(event, resource.id, "unitPrice")}
-                      onChange={(event) => updateDraft(resource.id, { unitPrice: Number(event.target.value) })}
-                      className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
-                    />
-                  </TD>
-                  <TD>
-                    <Select
-                      value={resource.category}
-                      disabled={!resource.isEditing}
-                      onPaste={(event) => handlePaste(event, resource.id, "category")}
-                      onChange={(event) => updateDraft(resource.id, { category: event.target.value as ResourceCategory })}
-                      className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
-                    >
-                      <option value="MATERIAL">Materiales</option>
-                      <option value="LABOR">Mano de obra</option>
-                      <option value="EQUIPMENT">Equipos</option>
-                    </Select>
-                  </TD>
-                  <TD>
-                    <Input
-                      value={resource.iu ?? ""}
-                      disabled={!resource.isEditing}
-                      onPaste={(event) => handlePaste(event, resource.id, "iu")}
-                      onChange={(event) => updateDraft(resource.id, { iu: event.target.value })}
-                      className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
-                    />
-                  </TD>
-                  <TD>
-                    <Input
-                      value={resource.source ?? ""}
-                      disabled={!resource.isEditing}
-                      onPaste={(event) => handlePaste(event, resource.id, "source")}
-                      onChange={(event) => updateDraft(resource.id, { source: event.target.value })}
-                      className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
-                    />
-                  </TD>
-                  <TD>
-                    <div className="flex justify-end gap-2">
-                      {resource.isEditing ? (
-                        <>
-                          <ActionButton action="save" label="Guardar" size="sm" variant="secondary" disabled={isPending} onClick={() => void saveRow(resource)} />
-                          <ActionButton action="cancel" label="Cancelar" size="sm" variant="ghost" disabled={isPending} onClick={() => cancelRow(resource.id)} />
-                        </>
-                      ) : (
-                        <>
-                          <ActionButton
-                            action="edit"
-                            label="Editar"
-                            size="sm"
-                            variant="ghost"
-                            disabled={!isOwned || isPending}
-                            onClick={() => startEditing(resource.id)}
-                          />
-                          <ActionButton
-                            action="duplicate"
-                            label="Duplicar"
-                            size="sm"
-                            variant="ghost"
-                            disabled={isPending}
-                            onClick={() => void duplicateRow(resource)}
-                          />
-                          <ActionButton
-                            action="delete"
-                            label="Eliminar"
-                            size="sm"
-                            variant="ghost"
-                            disabled={!isOwned || isPending}
-                            onClick={() => void removeRow(resource.id)}
-                          />
-                        </>
-                      )}
-                    </div>
-                  </TD>
-                </TR>
-              );
-            })}
+              <VirtualizedTableSpacerRow colSpan={RESOURCE_TABLE_COLUMN_COUNT} height={virtualRange.topSpacerHeight} />
+              {virtualRange.visibleRows.map((resource) => (
+                <ResourceTableRow
+                  key={resource.id}
+                  resource={resource}
+                  isExcelMode={isExcelMode}
+                  excelRowHeight={excelRowHeight}
+                  isPending={pendingIds.includes(resource.id)}
+                  onPaste={handlePaste}
+                  onUpdateDraft={updateDraft}
+                  onStartEditing={startEditing}
+                  onSaveRow={saveRow}
+                  onCancelRow={cancelRow}
+                  onDuplicateRow={duplicateRow}
+                  onRemoveRow={removeRow}
+                />
+              ))}
+              <VirtualizedTableSpacerRow colSpan={RESOURCE_TABLE_COLUMN_COUNT} height={virtualRange.bottomSpacerHeight} />
             </TBody>
           </Table>
-        </div>
-      </div>
+      </VirtualizedTableFrame>
 
       <PastePreviewSheet pendingPaste={pendingPaste} onClose={closePastePreview} onConfirm={applyPendingPaste} />
     </div>
+  );
+}
+
+function ResourceTableRow({
+  resource,
+  isExcelMode,
+  excelRowHeight,
+  isPending,
+  onPaste,
+  onUpdateDraft,
+  onStartEditing,
+  onSaveRow,
+  onCancelRow,
+  onDuplicateRow,
+  onRemoveRow,
+}: {
+  resource: EditableResource;
+  isExcelMode: boolean;
+  excelRowHeight: number;
+  isPending: boolean;
+  onPaste: (event: React.ClipboardEvent<HTMLElement>, targetId: string, startColumn: EditableColumn) => void;
+  onUpdateDraft: (id: string, patch: Partial<EditableResource>) => void;
+  onStartEditing: (id: string) => void;
+  onSaveRow: (resource: EditableResource) => Promise<void>;
+  onCancelRow: (id: string) => void;
+  onDuplicateRow: (resource: EditableResource) => Promise<void>;
+  onRemoveRow: (id: string) => Promise<void>;
+}) {
+  const isOwned = !!resource.companyId || resource.isNew;
+
+  return (
+    <TR
+      className={resource.isNew ? "bg-emerald-50/60" : resource.isDirty ? "bg-amber-50/50" : ""}
+      style={{ height: isExcelMode ? excelRowHeight : RESOURCE_ROW_HEIGHT }}
+    >
+      <TD>
+        <Input
+          value={resource.code || "Auto"}
+          readOnly
+          onPaste={(event) => onPaste(event, resource.id, "code")}
+          className="border-transparent bg-slate-50 px-2 font-medium tabular-nums text-slate-700 shadow-none"
+        />
+      </TD>
+      <TD>
+        <Input
+          value={resource.description}
+          disabled={!resource.isEditing}
+          onPaste={(event) => onPaste(event, resource.id, "description")}
+          onChange={(event) => onUpdateDraft(resource.id, { description: event.target.value })}
+          className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+        />
+      </TD>
+      <TD>
+        <Input
+          value={resource.unit}
+          disabled={!resource.isEditing}
+          onPaste={(event) => onPaste(event, resource.id, "unit")}
+          onChange={(event) => onUpdateDraft(resource.id, { unit: event.target.value })}
+          className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+        />
+      </TD>
+      <TD>
+        <Input
+          type="number"
+          step="0.01"
+          value={resource.unitPrice}
+          disabled={!resource.isEditing}
+          onPaste={(event) => onPaste(event, resource.id, "unitPrice")}
+          onChange={(event) => onUpdateDraft(resource.id, { unitPrice: Number(event.target.value) })}
+          className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+        />
+      </TD>
+      <TD>
+        <Select
+          value={resource.category}
+          disabled={!resource.isEditing}
+          onPaste={(event) => onPaste(event, resource.id, "category")}
+          onChange={(event) => onUpdateDraft(resource.id, { category: event.target.value as ResourceCategory })}
+          className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+        >
+          <option value="MATERIAL">Materiales</option>
+          <option value="LABOR">Mano de obra</option>
+          <option value="EQUIPMENT">Equipos</option>
+        </Select>
+      </TD>
+      <TD>
+        <Input
+          value={resource.iu ?? ""}
+          disabled={!resource.isEditing}
+          onPaste={(event) => onPaste(event, resource.id, "iu")}
+          onChange={(event) => onUpdateDraft(resource.id, { iu: normalizeResourceIuCode(event.target.value) ?? "" })}
+          className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+        />
+      </TD>
+      <TD>
+        <Input
+          value={resource.source ?? ""}
+          disabled={!resource.isEditing}
+          onPaste={(event) => onPaste(event, resource.id, "source")}
+          onChange={(event) => onUpdateDraft(resource.id, { source: event.target.value })}
+          className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+        />
+      </TD>
+      <TD>
+        <div className="flex justify-end gap-2">
+          {resource.isEditing ? (
+            <>
+              <ActionButton action="save" label="Guardar" size="sm" variant="secondary" disabled={isPending} onClick={() => void onSaveRow(resource)} />
+              <ActionButton action="cancel" label="Cancelar" size="sm" variant="ghost" disabled={isPending} onClick={() => onCancelRow(resource.id)} />
+            </>
+          ) : (
+            <>
+              <ActionButton action="edit" label="Editar" size="sm" variant="ghost" disabled={!isOwned || isPending} onClick={() => onStartEditing(resource.id)} />
+              <ActionButton action="duplicate" label="Duplicar" size="sm" variant="ghost" disabled={isPending} onClick={() => void onDuplicateRow(resource)} />
+              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" disabled={!isOwned || isPending} onClick={() => void onRemoveRow(resource.id)} />
+            </>
+          )}
+        </div>
+      </TD>
+    </TR>
   );
 }
 
@@ -620,19 +643,20 @@ function PastePreviewSheet({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { isExcelMode } = useAppViewMode();
   if (!pendingPaste) return null;
 
   const previewRows = pendingPaste.previewRows.slice(0, 20);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm">
-      <div className="mx-auto mt-10 w-[min(1100px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    <div className={cn("fixed inset-0 z-50 bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
+      <div className={cn("mx-auto mt-10 w-[min(1100px,calc(100%-2rem))] overflow-hidden border bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl border-slate-200 shadow-2xl")}>
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-sm text-slate-500">Previsualización de pegado</p>
+            <p className="text-sm text-slate-500">Previsualizacion de pegado</p>
             <h3 className="text-2xl font-semibold text-slate-900">Revisa antes de aplicar</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Se prepararán {pendingPaste.rows.length} {pendingPaste.rows.length === 1 ? "insumo" : "insumos"} desde la columna{" "}
+              Se prepararan {pendingPaste.rows.length} {pendingPaste.rows.length === 1 ? "insumo" : "insumos"} desde la columna{" "}
               <span className="font-medium text-slate-700">{pendingPaste.startColumn}</span>.
             </p>
           </div>
@@ -642,15 +666,16 @@ function PastePreviewSheet({
         </div>
 
         <div className="max-h-[56vh] overflow-auto px-6 py-5">
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
-            <Table>
+          <div className={getTableFrameClassName(isExcelMode)}>
+            <Table className="table-fixed">
+              <ResourceTableColGroup includeActions={false} />
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">
-                  <TH>CÓDIGO</TH>
+                  <TH>CODIGO</TH>
                   <TH>INSUMO</TH>
                   <TH>UNIDAD</TH>
                   <TH className="text-right">PRECIO</TH>
-                  <TH>CATEGORÍA</TH>
+                  <TH>CATEGORIA</TH>
                   <TH>IU</TH>
                   <TH>FUENTE</TH>
                 </TR>
@@ -673,7 +698,7 @@ function PastePreviewSheet({
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <p className="text-sm text-slate-500">El pegado solo se aplicará al confirmar.</p>
+          <p className="text-sm text-slate-500">El pegado solo se aplicara al confirmar.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
               Cerrar
@@ -686,9 +711,25 @@ function PastePreviewSheet({
   );
 }
 
+function ResourceTableColGroup({ includeActions = true }: { includeActions?: boolean }) {
+  return (
+    <colgroup>
+      <col style={{ width: "110px" }} />
+      <col style={{ width: "320px" }} />
+      <col style={{ width: "96px" }} />
+      <col style={{ width: "120px" }} />
+      <col style={{ width: "170px" }} />
+      <col style={{ width: "96px" }} />
+      <col style={{ width: "220px" }} />
+      {includeActions ? <col style={{ width: "220px" }} /> : null}
+    </colgroup>
+  );
+}
+
 function toEditableResource(resource: ResourceRecord): EditableResource {
   return {
     ...resource,
+    iu: normalizeResourceIuCode(resource.iu) ?? "",
     isEditing: false,
     isNew: false,
     isDirty: false,
@@ -703,7 +744,7 @@ function createEditableDraft(companyId: string | undefined, row: ResourcePasteRo
     code: "",
     description: row.description ?? "",
     category: row.category ?? "MATERIAL",
-    iu: row.iu ?? "",
+    iu: normalizeResourceIuCode(row.iu) ?? "",
     subcategory: "",
     unit: row.unit ?? "",
     unitPrice: row.unitPrice ?? 0,
@@ -713,30 +754,6 @@ function createEditableDraft(companyId: string | undefined, row: ResourcePasteRo
     isNew: true,
     isDirty: true,
     needsCodeGeneration: true,
-  };
-}
-
-function buildResourcesBatchPatch(
-  rowsToSave: EditableResource[],
-  baseRows: Map<string, ResourceRecord>,
-  fallbackCompanyId?: string,
-): ResourceStatePatch | null {
-  const create: ResourceStatePatch["create"] = [];
-  const update: ResourceStatePatch["update"] = [];
-
-  for (const row of rowsToSave) {
-    const patch = buildResourcePatch(row.isNew ? null : (baseRows.get(row.id) ?? null), row, fallbackCompanyId);
-    if (!patch) continue;
-    create.push(...patch.create);
-    update.push(...patch.update);
-  }
-
-  if (!create.length && !update.length) return null;
-
-  return {
-    create,
-    update,
-    delete: [],
   };
 }
 
@@ -781,7 +798,7 @@ function getResourcePatchFields(resource: ResourceRecord, fallbackCompanyId?: st
     code: resource.code,
     description: resource.description,
     category: resource.category,
-    iu: resource.iu ?? "",
+    iu: normalizeResourceIuCode(resource.iu) ?? "",
     subcategory: resource.subcategory ?? "",
     unit: resource.unit,
     unitPrice: resource.unitPrice,
@@ -810,7 +827,7 @@ function applyPastedValuesToResource(resource: EditableResource, row: ResourcePa
     ...resource,
     description: row.description ?? resource.description,
     category: nextCategory,
-    iu: row.iu ?? resource.iu,
+    iu: normalizeResourceIuCode(row.iu) ?? resource.iu,
     subcategory: resource.subcategory,
     unit: row.unit ?? resource.unit,
     unitPrice: row.unitPrice ?? resource.unitPrice,
@@ -913,7 +930,7 @@ function parsePastedResourceRows(rawText: string, startColumn: EditableColumn): 
           return;
         }
 
-        draft[column] = cell.trim();
+        draft[column] = column === "iu" ? (normalizeResourceIuCode(cell) ?? "") : cell.trim();
       });
 
       return draft;
@@ -922,6 +939,7 @@ function parsePastedResourceRows(rawText: string, startColumn: EditableColumn): 
 }
 
 async function parseResourceRowsFromWorkbook(file: File) {
+  const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const buffer = await file.arrayBuffer();
   await workbook.xlsx.load(buffer);
@@ -1022,7 +1040,7 @@ function parseWorkbookDataRow(
       unit,
       unitPrice,
       category: categoryRaw ? normalizeResourceCategory(categoryRaw) : "MATERIAL",
-      iu: getWorkbookCell(row, headerMap.iu),
+      iu: normalizeResourceIuCode(getWorkbookCell(row, headerMap.iu)) ?? "",
       source: getWorkbookCell(row, headerMap.source),
     };
   }
@@ -1037,7 +1055,7 @@ function parseWorkbookDataRow(
   const category = isCategoryLike(fifthValue) ? normalizeResourceCategory(fifthValue) : "MATERIAL";
   const unit = thirdValue;
   const unitPrice = parseSpreadsheetNumber(fourthValue);
-  const iu = sixthValue;
+  const iu = normalizeResourceIuCode(sixthValue) ?? "";
 
   if (!code && !description) return null;
 
@@ -1098,16 +1116,16 @@ function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
 
   const seconds = Math.max(0, Math.floor((currentTime - lastSavedAt) / 1000));
   if (seconds < 60) {
-    return `Último guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+    return `Ultimo guardado hace ${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
   }
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
-    return `Último guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    return `Ultimo guardado hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
   }
 
   const hours = Math.floor(minutes / 60);
-  return `Último guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
+  return `Ultimo guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
 }
 
 function parseSpreadsheetNumber(value: string) {
@@ -1130,3 +1148,4 @@ function parseSpreadsheetNumber(value: string) {
 
   return Number(trimmed.replaceAll(",", "")) || 0;
 }
+

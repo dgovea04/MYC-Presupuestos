@@ -68,4 +68,135 @@ describe("calculateApuSummary", () => {
     expect(summary.rows).toEqual(calculateApuRows(rows, 10));
     expect(summary.totalUnitCost).toBe(calculateApuTotalUnitCost(rows, 10));
   });
+
+  it("builds fixed category subtotals, folds tools into equipment, and recognizes subpartidas", () => {
+    const rows = [
+      {
+        id: "labor-1",
+        apuId: "apu-1",
+        resourceId: "resource-1",
+        resourceType: "LABOR",
+        crew: null,
+        quantity: 1.5,
+        unitPrice: 20,
+        subtotal: 0,
+        resource: {
+          id: "resource-1",
+          code: "MO-01",
+          description: "Oficial",
+          category: "LABOR" as const,
+          unit: "jor",
+          unitPrice: 20,
+          currency: "PEN",
+        },
+      },
+      {
+        id: "material-1",
+        apuId: "apu-1",
+        resourceId: "resource-2",
+        resourceType: "MATERIAL",
+        crew: null,
+        quantity: 2,
+        unitPrice: 15.5,
+        subtotal: 0,
+        resource: {
+          id: "resource-2",
+          code: "MAT-01",
+          description: "Cemento",
+          category: "MATERIAL" as const,
+          unit: "bolsa",
+          unitPrice: 15.5,
+          currency: "PEN",
+        },
+      },
+      {
+        id: "equipment-1",
+        apuId: "apu-1",
+        resourceId: "resource-3",
+        resourceType: "EQUIPMENT",
+        crew: null,
+        quantity: 0.5,
+        unitPrice: 80,
+        subtotal: 0,
+        resource: {
+          id: "resource-3",
+          code: "EQ-01",
+          description: "Mezcladora",
+          category: "EQUIPMENT" as const,
+          unit: "hm",
+          unitPrice: 80,
+          currency: "PEN",
+        },
+      },
+      {
+        id: "tools-1",
+        apuId: "apu-1",
+        resourceId: "resource-4",
+        resourceType: "TOOLS",
+        crew: null,
+        quantity: 0.1,
+        unitPrice: 50,
+        subtotal: 0,
+        resource: {
+          id: "resource-4",
+          code: "HM-01",
+          description: "Herramientas",
+          category: "TOOLS" as const,
+          unit: "glb",
+          unitPrice: 50,
+          currency: "PEN",
+        },
+      },
+      {
+        id: "subcontract-1",
+        apuId: "apu-1",
+        resourceId: "resource-5",
+        resourceType: "SUBCONTRACT",
+        crew: null,
+        quantity: 1,
+        unitPrice: 200,
+        subtotal: 0,
+        resource: {
+          id: "resource-5",
+          code: "SC-01",
+          description: "Instalacion tercerizada",
+          category: "EQUIPMENT" as const,
+          unit: "glb",
+          unitPrice: 200,
+          currency: "PEN",
+        },
+      },
+      {
+        id: "subpartida-1",
+        apuId: "apu-1",
+        resourceId: "resource-6",
+        resourceType: "SUBPARTIDA",
+        crew: null,
+        quantity: 1,
+        unitPrice: 125,
+        subtotal: 0,
+        resource: {
+          id: "resource-6",
+          code: "SP-01",
+          description: "Sub partida prefabricada",
+          category: "MATERIAL" as const,
+          unit: "glb",
+          unitPrice: 125,
+          currency: "PEN",
+        },
+      },
+    ];
+
+    const summary = calculateApuSummary(rows, 8);
+
+    expect(summary.categoryTotals).toEqual([
+      { category: "LABOR", subtotal: 30 },
+      { category: "MATERIAL", subtotal: 31 },
+      { category: "EQUIPMENT", subtotal: 45 },
+      { category: "SUBCONTRACT", subtotal: 200 },
+      { category: "SUBPARTIDA", subtotal: 125 },
+    ]);
+    expect(summary.totalUnitCost).toBe(431);
+    expect(summary.rows).toEqual(calculateApuRows(rows, 8));
+  });
 });

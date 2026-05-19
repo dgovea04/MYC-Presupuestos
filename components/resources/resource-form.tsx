@@ -1,16 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormActionBar, FormSectionPanel } from "@/components/ui/operational-surfaces";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import type { ResourceRecord } from "@/types/resource";
 
-export function ResourceForm({ companyId }: { companyId?: string }) {
-  const router = useRouter();
+export function ResourceForm({
+  companyId,
+  onCreated,
+  onCancel,
+}: {
+  companyId?: string;
+  onCreated?: (resource: ResourceRecord) => void;
+  onCancel?: () => void;
+}) {
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -32,11 +41,14 @@ export function ResourceForm({ companyId }: { companyId?: string }) {
       return;
     }
 
-    router.refresh();
+    const createdResource = (await response.json()) as ResourceRecord;
+    formRef.current?.reset();
+    broadcastAppDataChange(["/resources", "/budgets", "/partidas"]);
+    onCreated?.(createdResource);
   }
 
   return (
-    <form action={handleSubmit} className="space-y-5">
+    <form ref={formRef} action={handleSubmit} className="space-y-5">
       <FormSectionPanel
         title="Nuevo insumo"
         description="Registra rápidamente un insumo base para reutilizarlo en APUs, catálogos y presupuestos."
@@ -81,10 +93,17 @@ export function ResourceForm({ companyId }: { companyId?: string }) {
       {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
 
       <FormActionBar>
-        <Button className="gap-2 shadow-sm shadow-sky-950/10" disabled={loading}>
-          <Plus className="h-4 w-4" />
-          {loading ? "Guardando..." : "Crear insumo"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onCancel ? (
+            <Button variant="outline" type="button" onClick={onCancel} disabled={loading}>
+              Cancelar
+            </Button>
+          ) : null}
+          <Button type="submit" className="gap-2 shadow-sm shadow-sky-950/10" disabled={loading}>
+            <Plus className="h-4 w-4" />
+            {loading ? "Guardando..." : "Crear insumo"}
+          </Button>
+        </div>
       </FormActionBar>
     </form>
   );

@@ -4,8 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { decimalToNumber } from "@/lib/db/serializers";
-import { ResourcesTable } from "@/components/resources/resources-table";
-import { ResourceForm } from "@/components/resources/resource-form";
+import { ResourcesPageContent } from "@/components/resources/resources-page-content";
 import { getUserCompanies } from "@/lib/data/projects";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 
@@ -24,10 +23,7 @@ export default async function ResourcesPage() {
           />
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
-          <div className="mb-6">
-            <ResourceForm companyId={companies[0]?.id} />
-          </div>
-          <ResourcesTable
+          <ResourcesPageContent
             companyId={companies[0]?.id}
             resources={resources.map((resource) => ({
               id: resource.id,

@@ -1,0 +1,81 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { ResourceCreateSheet } from "@/components/resources/resource-create-sheet";
+import { ResourcesTable } from "@/components/resources/resources-table";
+import type { ResourceCategory, ResourceRecord } from "@/types/resource";
+
+export function ResourcesPageContent({
+  companyId,
+  resources,
+}: {
+  companyId?: string;
+  resources: ResourceRecord[];
+}) {
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
+  const [createdResources, setCreatedResources] = useState<ResourceRecord[]>([]);
+
+  const localResources = useMemo(() => {
+    const resourcesById = new Map(resources.map((resource) => [resource.id, resource]));
+
+    for (const resource of createdResources) {
+      resourcesById.set(resource.id, resource);
+    }
+
+    return sortResourcesForCatalog([...resourcesById.values()]);
+  }, [createdResources, resources]);
+
+  const resourcesTableKey = useMemo(
+    () =>
+      localResources
+        .map((resource) => `${resource.id}:${resource.description}:${resource.category}:${resource.unit}:${resource.unitPrice}`)
+        .join("|"),
+    [localResources],
+  );
+
+  function handleResourceCreated(resource: ResourceRecord) {
+    setCreatedResources((current) => {
+      const nextResources = current.filter((entry) => entry.id !== resource.id);
+      return [...nextResources, resource];
+    });
+    setIsCreateFormOpen(false);
+  }
+
+  return (
+    <div className="space-y-6">
+      <ResourceCreateSheet
+        open={isCreateFormOpen}
+        companyId={companyId}
+        onClose={() => setIsCreateFormOpen(false)}
+        onCreated={handleResourceCreated}
+      />
+
+      <ResourcesTable
+        key={resourcesTableKey}
+        companyId={companyId}
+        resources={localResources}
+        onRequestCreate={() => setIsCreateFormOpen(true)}
+      />
+    </div>
+  );
+}
+
+function sortResourcesForCatalog(resources: ResourceRecord[]) {
+  return [...resources].sort((left, right) => compareResourceForCatalog(left, right));
+}
+
+function compareResourceForCatalog(
+  left: Pick<ResourceRecord, "category" | "description">,
+  right: Pick<ResourceRecord, "category" | "description">,
+) {
+  const categoryComparison = compareResourceCategory(left.category, right.category);
+  if (categoryComparison !== 0) {
+    return categoryComparison;
+  }
+
+  return left.description.localeCompare(right.description);
+}
+
+function compareResourceCategory(left: ResourceCategory, right: ResourceCategory) {
+  return left.localeCompare(right);
+}

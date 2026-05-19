@@ -1,10 +1,17 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { serializeCatalogPartida } from "@/lib/db/serializers";
 import { calculateApuRows, calculateApuTotalUnitCost } from "@/lib/calculations/apu";
 import { catalogPartidaStatePatchSchema, catalogPartidaSchema, type CatalogPartidaApuRowInput, type CatalogPartidaInput } from "@/lib/validations/partida";
 import type { CatalogPartidaPatchResult, CatalogPartidaRecord, CatalogPartidaStatePatch } from "@/types/partida";
 
+export const CATALOG_PARTIDAS_CACHE_TAG = "catalog-partidas";
+
 export async function getCatalogPartidas() {
+  return getCachedCatalogPartidas();
+}
+
+async function getCatalogPartidasFromDatabase() {
   const partidas = await prisma.catalogPartida.findMany({
     include: {
       apuRows: {
@@ -16,6 +23,10 @@ export async function getCatalogPartidas() {
 
   return partidas.map((partida) => serializeCatalogPartida(partida));
 }
+
+const getCachedCatalogPartidas = unstable_cache(getCatalogPartidasFromDatabase, ["catalog-partidas"], {
+  tags: [CATALOG_PARTIDAS_CACHE_TAG],
+});
 
 export async function saveCatalogPartidasPatch(patchInput: CatalogPartidaStatePatch): Promise<CatalogPartidaPatchResult> {
   const patch = catalogPartidaStatePatchSchema.parse(patchInput);

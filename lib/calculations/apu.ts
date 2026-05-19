@@ -13,6 +13,21 @@ type ApuCalculationRow = {
   };
 };
 
+export type ApuPresentationCategory = "LABOR" | "MATERIAL" | "EQUIPMENT" | "SUBCONTRACT" | "SUBPARTIDA";
+
+export type ApuCategoryTotal = {
+  category: ApuPresentationCategory;
+  subtotal: number;
+};
+
+export const APU_PRESENTATION_CATEGORY_ORDER: ApuPresentationCategory[] = [
+  "LABOR",
+  "MATERIAL",
+  "EQUIPMENT",
+  "SUBCONTRACT",
+  "SUBPARTIDA",
+];
+
 type ResourceBucket = "LABOR" | "MATERIAL" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT" | "OTHER";
 
 const HOURS_PER_DAY = 8;
@@ -79,6 +94,7 @@ export function calculateApuSummary<T extends ApuCalculationRow>(rows: T[], perf
 
   return {
     rows: calculatedRows,
+    categoryTotals: buildCategoryTotals(calculatedRows),
     totalUnitCost: roundMoney(calculatedRows.reduce((sum, row) => sum + row.subtotal, 0)),
   };
 }
@@ -100,6 +116,34 @@ export function isLaborApuRow(row: Pick<ApuCalculationRow, "resourceType" | "res
   return resolveRowBucket(row) === "LABOR";
 }
 
+export function getApuPresentationCategory(row: Pick<ApuCalculationRow, "resourceType" | "resource">): ApuPresentationCategory {
+  const normalizedType = normalizeResourceType(row.resourceType ?? row.resource?.category ?? "");
+
+  if (normalizedType === "LABOR" || normalizedType === "MO" || normalizedType === "MANO DE OBRA") return "LABOR";
+  if (normalizedType === "MATERIAL" || normalizedType === "MAT" || normalizedType === "MATERIALES") return "MATERIAL";
+  if (
+    normalizedType === "EQUIPMENT" ||
+    normalizedType === "EQ" ||
+    normalizedType === "EQUIPO" ||
+    normalizedType === "TOOLS" ||
+    normalizedType === "TOOL" ||
+    normalizedType === "HERRAMIENTAS"
+  ) {
+    return "EQUIPMENT";
+  }
+  if (normalizedType === "SUBCONTRACT" || normalizedType === "SUBCONTRATOS" || normalizedType === "SUBCONTRATO") return "SUBCONTRACT";
+  if (
+    normalizedType === "SUBPARTIDA" ||
+    normalizedType === "SUB PARTIDA" ||
+    normalizedType === "SUBPARTIDAS" ||
+    normalizedType === "SUB PARTIDAS"
+  ) {
+    return "SUBPARTIDA";
+  }
+
+  return "MATERIAL";
+}
+
 function calculateRowQuantity(row: ApuCalculationRow, performance: number, normalizedUnit: string) {
   if (!CREW_DRIVEN_UNITS.has(normalizedUnit) || row.crew == null) {
     return round(toNumber(row.quantity));
@@ -110,6 +154,22 @@ function calculateRowQuantity(row: ApuCalculationRow, performance: number, norma
   }
 
   return round((toNumber(row.crew) * HOURS_PER_DAY) / performance);
+}
+
+function buildCategoryTotals(rows: ApuCalculationRow[]): ApuCategoryTotal[] {
+  const totals = new Map<ApuPresentationCategory, number>(
+    APU_PRESENTATION_CATEGORY_ORDER.map((category) => [category, 0]),
+  );
+
+  for (const row of rows) {
+    const category = getApuPresentationCategory(row);
+    totals.set(category, roundMoney((totals.get(category) ?? 0) + row.subtotal));
+  }
+
+  return APU_PRESENTATION_CATEGORY_ORDER.map((category) => ({
+    category,
+    subtotal: totals.get(category) ?? 0,
+  }));
 }
 
 function getPercentageBaseSubtotal(

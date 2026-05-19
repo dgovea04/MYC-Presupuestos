@@ -1,7 +1,8 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { GripVertical } from "lucide-react";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { BufferedInput } from "@/components/ui/buffered-input";
@@ -9,7 +10,17 @@ import { useFormattingSettings } from "@/components/providers/formatting-setting
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { calculateApuSummary, isCrewDrivenApuRow, isLaborApuRow, isPercentageBasedApuRow } from "@/lib/calculations/apu";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { getApuCategoryPresentation } from "@/lib/apu/presentation";
+import { getExcelViewCssVariables } from "@/lib/budget/excel-view-css";
+import {
+  APU_PRESENTATION_CATEGORY_ORDER,
+  calculateApuSummary,
+  getApuPresentationCategory,
+  isCrewDrivenApuRow,
+  isLaborApuRow,
+  isPercentageBasedApuRow,
+} from "@/lib/calculations/apu";
 import type { BudgetItemRecord } from "@/types/budget";
 import type { ResourceRecord } from "@/types/resource";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -40,8 +51,9 @@ export function ApuEditorSheet({
   densityMode,
 }: ApuEditorSheetProps) {
   const { isExcelMode } = useBudgetViewMode();
-  const { currencyDecimals } = useFormattingSettings();
+  const { currencyDecimals, excelRowHeight, excelShowFieldBorders } = useFormattingSettings();
   const addResourceSearchRef = useRef<HTMLInputElement | null>(null);
+  const addResourceBlurTimeoutRef = useRef<number | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
@@ -56,26 +68,43 @@ export function ApuEditorSheet({
   const [resourceHighlightedIndex, setResourceHighlightedIndex] = useState(0);
   const [resourceMenu, setResourceMenu] = useState<ResourceMenuState | null>(null);
   const effectiveDensityMode = isExcelMode ? "compact" : densityMode;
+  const deferredAddResourceQuery = useDeferredValue(addResourceQuery);
+  const deferredEditingResourceQuery = useDeferredValue(editingResourceQuery);
+  const indexedResourcesCatalog = useMemo(
+    () =>
+      resourcesCatalog.map((resource) => ({
+        resource,
+        searchText: buildResourceSearchText(resource),
+      })),
+    [resourcesCatalog],
+  );
+  const resourcesById = useMemo(() => new Map(resourcesCatalog.map((resource) => [resource.id, resource])), [resourcesCatalog]);
   const addResourceSuggestions = useMemo(() => {
-    const query = normalizeResourceSearchText(addResourceQuery);
-    return resourcesCatalog
-      .filter((resource) => {
+    const query = normalizeResourceSearchText(deferredAddResourceQuery);
+    return indexedResourcesCatalog
+      .filter(({ searchText }) => {
         if (!query) return true;
-        return buildResourceSearchText(resource).includes(query);
+        return searchText.includes(query);
       })
+      .map(({ resource }) => resource)
       .slice(0, 8);
-  }, [addResourceQuery, resourcesCatalog]);
+  }, [deferredAddResourceQuery, indexedResourcesCatalog]);
   const resourceSuggestions = useMemo(() => {
     if (!editingResourceRowId) return [];
 
-    const query = normalizeResourceSearchText(editingResourceQuery);
-    return resourcesCatalog
-      .filter((resource) => {
+    const query = normalizeResourceSearchText(deferredEditingResourceQuery);
+    return indexedResourcesCatalog
+      .filter(({ searchText }) => {
         if (!query) return true;
-        return buildResourceSearchText(resource).includes(query);
+        return searchText.includes(query);
       })
+      .map(({ resource }) => resource)
       .slice(0, 8);
-  }, [editingResourceQuery, editingResourceRowId, resourcesCatalog]);
+  }, [deferredEditingResourceQuery, editingResourceRowId, indexedResourcesCatalog]);
+  const excelCssVariables = useMemo<CSSProperties>(
+    () => getExcelViewCssVariables(excelShowFieldBorders, excelRowHeight),
+    [excelRowHeight, excelShowFieldBorders],
+  );
 
   useEffect(() => {
     if (open && item?.apu) {
@@ -98,6 +127,9 @@ export function ApuEditorSheet({
 
   useEffect(() => {
     return () => {
+      if (addResourceBlurTimeoutRef.current !== null) {
+        window.clearTimeout(addResourceBlurTimeoutRef.current);
+      }
       if (previousActiveElementRef.current?.isConnected) {
         previousActiveElementRef.current.focus();
       }
@@ -158,7 +190,11 @@ export function ApuEditorSheet({
   const currentApu = item?.apu ?? null;
   const apuSummary = useMemo(() => {
     if (!currentApu) {
-      return { rows: [], totalUnitCost: 0 };
+      return {
+        rows: [],
+        categoryTotals: APU_PRESENTATION_CATEGORY_ORDER.map((category) => ({ category, subtotal: 0 })),
+        totalUnitCost: 0,
+      };
     }
 
     return calculateApuSummary(currentApu.resources, currentApu.performance);
@@ -167,12 +203,17 @@ export function ApuEditorSheet({
   if (!open || !currentItem || !currentApu) return null;
   const currentItemRecord = currentItem;
   const currentApuRecord = currentApu;
-  const { rows: calculatedResources, totalUnitCost: calculatedUnitCost } = apuSummary;
+  const { rows: calculatedResources, totalUnitCost: calculatedUnitCost, categoryTotals } = apuSummary;
   const performanceLabel = `${currentItemRecord.unit}/Día`;
 
   function addResource(resourceId: string) {
-    const selected = resourcesCatalog.find((resource) => resource.id === resourceId);
+    const selected = resourcesById.get(resourceId);
     if (!selected) return;
+
+    if (addResourceBlurTimeoutRef.current !== null) {
+      window.clearTimeout(addResourceBlurTimeoutRef.current);
+      addResourceBlurTimeoutRef.current = null;
+    }
 
     setAddResourceQuery("");
     setAddResourceHighlightedIndex(0);
@@ -215,6 +256,10 @@ export function ApuEditorSheet({
   }
 
   function openAddResourceSearch() {
+    if (addResourceBlurTimeoutRef.current !== null) {
+      window.clearTimeout(addResourceBlurTimeoutRef.current);
+      addResourceBlurTimeoutRef.current = null;
+    }
     setAddResourceMenuOpen(true);
     setAddResourceHighlightedIndex(0);
   }
@@ -265,11 +310,13 @@ export function ApuEditorSheet({
           <div
             className={cn(
               "fixed inset-y-0 right-0 z-50 ml-auto h-full w-full overflow-y-auto bg-white shadow-2xl outline-none",
-              isExcelMode ? "max-w-[92rem] p-3 shadow-none" : "max-w-6xl p-5",
+              isExcelMode ? "max-w-6xl p-5 shadow-none" : "max-w-6xl p-5",
             )}
+            data-excel-field-border-scope="apu-editor"
             data-view-mode={isExcelMode ? "excel" : "modern"}
             data-density-mode={effectiveDensityMode}
             data-testid="apu-editor-sheet-panel"
+            style={excelCssVariables}
           >
             <div className={cn("flex items-start justify-between", isExcelMode ? "mb-3" : "mb-5")}>
               <div>
@@ -288,31 +335,51 @@ export function ApuEditorSheet({
               </Dialog.Close>
             </div>
 
-            <div className={cn("grid md:grid-cols-2", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-4")}>
-              <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({performanceLabel})</p>
-                <BufferedInput
-                  type="number"
-                  step="0.01"
-                  value={currentApuRecord.performance}
-                  data-testid="apu-performance-input"
-                  className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
-                  onCommit={(value) =>
-                    onUpdate({
-                      ...currentItemRecord,
-                      apu: {
-                        ...currentApuRecord,
-                        performance: Number(value),
-                      },
-                    })
-                  }
-                />
+            <div className={cn("grid", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-4")}>
+              <div className={cn("grid md:grid-cols-2", isExcelMode ? "gap-2" : "gap-4")}>
+                <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
+                  <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({performanceLabel})</p>
+                  <BufferedInput
+                    type="number"
+                    step="0.01"
+                    value={currentApuRecord.performance}
+                    data-testid="apu-performance-input"
+                    className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
+                    onCommit={(value) =>
+                      onUpdate({
+                        ...currentItemRecord,
+                        apu: {
+                          ...currentApuRecord,
+                          performance: Number(value),
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
+                  <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
+                  <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
+                    {formatCurrency(calculatedUnitCost, "PEN", currencyDecimals)}
+                  </p>
+                </div>
               </div>
-              <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
-                <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
-                  {formatCurrency(calculatedUnitCost, "PEN", currencyDecimals)}
-                </p>
+              <div className={cn("grid sm:grid-cols-2 xl:grid-cols-5", isExcelMode ? "gap-2" : "gap-3")}>
+                {categoryTotals.map((categoryTotal) => {
+                  const presentation = getApuCategoryPresentation(categoryTotal.category);
+
+                  return (
+                    <div
+                      key={categoryTotal.category}
+                      data-testid={`apu-summary-card-${categoryTotal.category}`}
+                      className={cn("border", isExcelMode ? "rounded-md p-2" : "rounded-2xl p-4", presentation.summaryClassName)}
+                    >
+                      <p className={cn("font-medium", isExcelMode ? "text-[11px] uppercase tracking-wide" : "text-sm")}>{presentation.label}</p>
+                      <p className={cn("mt-1 font-semibold tabular-nums", isExcelMode ? "text-base" : "text-lg")}>
+                        {formatCurrency(categoryTotal.subtotal, "PEN", currencyDecimals)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -322,6 +389,10 @@ export function ApuEditorSheet({
             value={addResourceQuery}
             onFocus={openAddResourceSearch}
             onChange={(event) => {
+              if (addResourceBlurTimeoutRef.current !== null) {
+                window.clearTimeout(addResourceBlurTimeoutRef.current);
+                addResourceBlurTimeoutRef.current = null;
+              }
               setAddResourceQuery(event.target.value);
               setAddResourceMenuOpen(true);
               setAddResourceHighlightedIndex(0);
@@ -357,13 +428,15 @@ export function ApuEditorSheet({
               }
             }}
             onBlur={() => {
-              window.setTimeout(() => {
+              addResourceBlurTimeoutRef.current = window.setTimeout(() => {
                 setAddResourceMenuOpen(false);
                 setAddResourceMenuPosition(null);
                 setAddResourceHighlightedIndex(0);
+                addResourceBlurTimeoutRef.current = null;
               }, 120);
             }}
             className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
+            data-excel-field-border-opt-out="true"
             data-testid="apu-add-resource-search"
             placeholder="Agregar insumo desde el catálogo"
           />
@@ -429,13 +502,7 @@ export function ApuEditorSheet({
           </div>
         ) : null}
 
-        <div
-          className={cn(
-            "overflow-hidden border border-slate-200",
-            isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl",
-          )}
-          data-density-mode={effectiveDensityMode}
-        >
+        <div className={getTableFrameClassName(isExcelMode)} data-density-mode={effectiveDensityMode}>
           <Table className="table-auto">
             <colgroup>
               <col className="w-[36px]" />
@@ -462,6 +529,8 @@ export function ApuEditorSheet({
             <TBody>
               {currentApuRecord.resources.map((resource, index) => {
                 const calculatedResource = calculatedResources[index] ?? resource;
+                const presentationCategory = getApuPresentationCategory(calculatedResource);
+                const categoryPresentation = getApuCategoryPresentation(presentationCategory);
                 const isCrewDriven = isCrewDrivenApuRow(calculatedResource);
                 const isPercentageBased = isPercentageBasedApuRow(calculatedResource);
                 const isLabor = isLaborApuRow(calculatedResource);
@@ -481,10 +550,17 @@ export function ApuEditorSheet({
                   }}
                   onDragEnd={() => setDraggedResourceId(null)}
                   onDrop={() => moveResourceToTarget(resource.id)}
-                  className={cn(draggedResourceId === resource.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "")}
+                  className={cn(
+                    categoryPresentation.rowClassName,
+                    draggedResourceId === resource.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
+                  )}
                 >
                   <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "pr-0")}>
-                    <span className="inline-flex cursor-grab text-slate-400">
+                    <span
+                      data-testid={`apu-row-grip-${resource.id}`}
+                      data-apu-category={presentationCategory}
+                      className={cn("inline-flex cursor-grab", categoryPresentation.gripClassName)}
+                    >
                       <GripVertical className="h-4 w-4" />
                     </span>
                   </TD>
@@ -556,6 +632,7 @@ export function ApuEditorSheet({
                       <button
                         type="button"
                         draggable={false}
+                        data-excel-field-trigger="true"
                         data-testid={`apu-resource-picker-${resource.id}`}
                         className={cn(
                           "flex w-full items-center rounded-sm border border-slate-300 bg-white px-2 text-left text-xs text-slate-900 shadow-none transition hover:border-sky-400 hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/20",

@@ -16,7 +16,7 @@ export default async function GeneralBudgetResourcesPage({ params }: { params: P
       projectName={project.name}
       activeSection="resources"
       title="Lista de insumos"
-      description="Consolidado derivado desde los APUs de los sub presupuestos del proyecto."
+      description="Consolidado derivado desde los APUs de los Sub Presupuestos del proyecto."
     >
       <GeneralBudgetResourcesTable summary={summary} currency={budget.currency} />
     </GeneralBudgetSectionShell>

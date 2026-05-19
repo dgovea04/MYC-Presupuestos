@@ -1,5 +1,7 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { serializeResource } from "@/lib/db/serializers";
+import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { resourceSchema, resourceStatePatchSchema, type ResourceInput } from "@/lib/validations/resource";
 import type {
   ResourceCategory,
@@ -16,24 +18,100 @@ const resourceCodePrefixes: Record<ResourceCategory, string> = {
   EQUIPMENT: "EQ",
   TOOLS: "HER",
 };
+export const GLOBAL_RESOURCES_CACHE_TAG = "global-resources";
 
 export async function getResourcesByUser(userId: string) {
+  const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(userId)]);
+
+  return [...globalResources, ...userResources].sort(compareResourcesForCatalog);
+}
+
+async function getGlobalResources() {
   return prisma.resource.findMany({
     where: {
-      OR: [
-        { companyId: null },
-        {
-          company: {
-            userId,
-          },
-        },
-      ],
-    },
-    include: {
-      company: true,
+      companyId: null,
     },
     orderBy: [{ category: "asc" }, { description: "asc" }],
   });
+}
+
+const getCachedGlobalResources = unstable_cache(getGlobalResources, ["global-resources"], {
+  tags: [GLOBAL_RESOURCES_CACHE_TAG],
+});
+
+async function getUserOwnedResources(userId: string) {
+  return prisma.resource.findMany({
+    where: {
+      company: {
+        userId,
+      },
+    },
+    orderBy: [{ category: "asc" }, { description: "asc" }],
+  });
+}
+
+function compareResourcesForCatalog(left: { category: ResourceCategory; description: string }, right: { category: ResourceCategory; description: string }) {
+  const categoryComparison = left.category.localeCompare(right.category);
+  if (categoryComparison !== 0) {
+    return categoryComparison;
+  }
+
+  return left.description.localeCompare(right.description);
+}
+
+export async function resourceMutationTouchesGlobalCatalog(resourceIds: string[]) {
+  if (resourceIds.length === 0) {
+    return false;
+  }
+
+  const globalResourcesCount = await prisma.resource.count({
+    where: {
+      id: {
+        in: resourceIds,
+      },
+      companyId: null,
+    },
+  });
+
+  return globalResourcesCount > 0;
+}
+
+export async function resourcePatchTouchesGlobalCatalog(userId: string, patchInput: ResourceStatePatch) {
+  const patch = resourceStatePatchSchema.parse(patchInput);
+
+  if (patch.create.some((entry) => normalizeOptionalString(entry.data.companyId) == null)) {
+    return true;
+  }
+
+  for (const entry of patch.update) {
+    const existing = await prisma.resource.findFirst({
+      where: {
+        id: entry.id,
+        OR: [
+          { companyId: null },
+          {
+            company: {
+              userId,
+            },
+          },
+        ],
+      },
+      select: {
+        companyId: true,
+      },
+    });
+
+    if (!existing) {
+      continue;
+    }
+
+    const nextCompanyId = "companyId" in entry.changes ? normalizeOptionalString(entry.changes.companyId) : existing.companyId;
+    if (existing.companyId == null || nextCompanyId == null) {
+      return true;
+    }
+  }
+
+  return resourceMutationTouchesGlobalCatalog(patch.delete);
 }
 
 export async function createResource(input: ResourceInput) {
@@ -249,7 +327,7 @@ function normalizeResourceFields(input: ResourceInput | ResourcePatchFields) {
     code: normalizeOptionalString(input.code),
     description: input.description.trim(),
     category: input.category,
-    iu: normalizeOptionalString(input.iu),
+    iu: normalizeResourceIuCode(input.iu),
     subcategory: normalizeOptionalString(input.subcategory),
     unit: input.unit.trim(),
     unitPrice: input.unitPrice,
@@ -264,7 +342,7 @@ function normalizeResourcePatchChanges(changes: Partial<ResourcePatchFields>) {
   if ("companyId" in changes) normalized.companyId = normalizeOptionalString(changes.companyId);
   if ("description" in changes && changes.description !== undefined) normalized.description = changes.description.trim();
   if ("category" in changes && changes.category !== undefined) normalized.category = changes.category;
-  if ("iu" in changes) normalized.iu = normalizeOptionalString(changes.iu);
+  if ("iu" in changes) normalized.iu = normalizeResourceIuCode(changes.iu);
   if ("subcategory" in changes) normalized.subcategory = normalizeOptionalString(changes.subcategory);
   if ("unit" in changes && changes.unit !== undefined) normalized.unit = changes.unit.trim();
   if ("unitPrice" in changes && changes.unitPrice !== undefined) normalized.unitPrice = changes.unitPrice;
