@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Save } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { Save, Upload, Trash2, Image as ImageIcon } from "lucide-react";
+import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,16 +12,21 @@ const DEFAULT_SAVE_ERROR = "No se pudo guardar la empresa.";
 
 export function CompanyProfileForm({
   initialCompany,
+  onSaved,
 }: {
   initialCompany?: {
     name?: string | null;
     ruc?: string | null;
+    logoUrl?: string | null;
   };
+  onSaved?: (company: { name?: string | null; ruc?: string | null; logoUrl?: string | null }) => void;
 }) {
-  const router = useRouter();
   const [name, setName] = useState(initialCompany?.name ?? "");
   const [ruc, setRuc] = useState(initialCompany?.ruc ?? "");
+  const [logoUrl, setLogoUrl] = useState(initialCompany?.logoUrl ?? null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
+  const [logoPending, setLogoPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -45,12 +51,82 @@ export function CompanyProfileForm({
         return;
       }
 
+      const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
+      onSaved?.(company);
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets", "/resources", "/settings"], undefined, {
+        locallyHandledPaths: ["/settings"],
+      });
       setSuccess("Empresa guardada correctamente.");
-      router.refresh();
     } catch {
       setError(DEFAULT_SAVE_ERROR);
     } finally {
       setPending(false);
+    }
+  }
+
+  async function handleLogoUpload() {
+    if (!logoFile) return;
+
+    setLogoPending(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const formData = new FormData();
+      formData.set("logo", logoFile);
+
+      const response = await fetch("/api/company/logo", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        setError(await getErrorMessage(response));
+        return;
+      }
+
+      const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
+      setLogoUrl(company.logoUrl ?? null);
+      setLogoFile(null);
+      onSaved?.(company);
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets", "/resources", "/settings"], undefined, {
+        locallyHandledPaths: ["/settings"],
+      });
+      setSuccess("Logo guardado correctamente.");
+    } catch {
+      setError(DEFAULT_SAVE_ERROR);
+    } finally {
+      setLogoPending(false);
+    }
+  }
+
+  async function handleLogoDelete() {
+    setLogoPending(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/company/logo", {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        setError(await getErrorMessage(response));
+        return;
+      }
+
+      const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
+      setLogoUrl(null);
+      setLogoFile(null);
+      onSaved?.(company);
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets", "/resources", "/settings"], undefined, {
+        locallyHandledPaths: ["/settings"],
+      });
+      setSuccess("Logo eliminado correctamente.");
+    } catch {
+      setError(DEFAULT_SAVE_ERROR);
+    } finally {
+      setLogoPending(false);
     }
   }
 
@@ -78,6 +154,51 @@ export function CompanyProfileForm({
               value={ruc}
               onChange={(event) => setRuc(event.target.value)}
             />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+        <div className="mb-4 space-y-1">
+          <p className="text-sm font-medium text-slate-900">Logo de empresa</p>
+          <p className="text-sm text-slate-500">Usa PNG o JPG para que el logo pueda salir correctamente en PDF y Excel.</p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
+          <div className="flex h-36 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white">
+            {logoUrl ? (
+              <Image src={logoUrl} alt="Logo de empresa" width={140} height={112} className="max-h-28 max-w-[140px] object-contain" />
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-slate-400">
+                <ImageIcon className="h-8 w-8" />
+                <span className="text-xs font-medium uppercase tracking-[0.16em]">Sin logo</span>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="companyLogo">Seleccionar logo</Label>
+              <Input
+                id="companyLogo"
+                type="file"
+                accept="image/png,image/jpeg"
+                disabled={logoPending}
+                onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" className="gap-2" disabled={!logoFile || logoPending} onClick={() => void handleLogoUpload()}>
+                <Upload className="h-4 w-4" />
+                {logoPending ? "Subiendo..." : logoUrl ? "Reemplazar logo" : "Subir logo"}
+              </Button>
+              {logoUrl ? (
+                <Button type="button" variant="ghost" className="gap-2 text-rose-600 hover:text-rose-700" disabled={logoPending} onClick={() => void handleLogoDelete()}>
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar logo
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

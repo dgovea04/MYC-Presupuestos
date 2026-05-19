@@ -1,13 +1,23 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { userSettingsSchema, type UserSettingsInput } from "@/lib/validations/settings";
-import { DEFAULT_DATE_FORMAT, DEFAULT_INITIAL_SUB_BUDGET_NAMES, type UserSettingsRecord } from "@/types/settings";
+import {
+  DEFAULT_DATE_FORMAT,
+  DEFAULT_EXCEL_ROW_HEIGHT,
+  DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+  DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+  DEFAULT_VIEW_MODE,
+  type UserSettingsRecord,
+} from "@/types/settings";
 import { z } from "zod";
 
 export const defaultUserSettings: UserSettingsRecord = {
   defaultCurrency: "PEN",
   currencyDecimals: 2,
   dateFormat: DEFAULT_DATE_FORMAT,
+  defaultViewMode: DEFAULT_VIEW_MODE,
+  excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+  excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
   defaultIgvRate: 0.18,
   defaultGeneralExpensesRate: 0.1,
   defaultUtilityRate: 0.08,
@@ -18,6 +28,9 @@ const userSettingsStoredRowSchema = z.object({
   defaultCurrency: userSettingsSchema.shape.defaultCurrency,
   currencyDecimals: userSettingsSchema.shape.currencyDecimals,
   dateFormat: userSettingsSchema.shape.dateFormat,
+  defaultViewMode: userSettingsSchema.shape.defaultViewMode,
+  excelShowFieldBorders: userSettingsSchema.shape.excelShowFieldBorders,
+  excelRowHeight: userSettingsSchema.shape.excelRowHeight,
   defaultIgvRate: userSettingsSchema.shape.defaultIgvRate,
   defaultGeneralExpensesRate: userSettingsSchema.shape.defaultGeneralExpensesRate,
   defaultUtilityRate: userSettingsSchema.shape.defaultUtilityRate,
@@ -40,6 +53,9 @@ function normalizeUserSettingsRateFields(row: Record<string, unknown>): Record<s
   return {
     ...row,
     dateFormat: row.dateFormat,
+    defaultViewMode: row.defaultViewMode,
+    excelShowFieldBorders: row.excelShowFieldBorders,
+    excelRowHeight: row.excelRowHeight,
     defaultIgvRate: normalizeRateValue(row.defaultIgvRate),
     defaultGeneralExpensesRate: normalizeRateValue(row.defaultGeneralExpensesRate),
     defaultUtilityRate: normalizeRateValue(row.defaultUtilityRate),
@@ -56,6 +72,9 @@ function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
   const defaultCurrency = userSettingsSchema.shape.defaultCurrency.safeParse(rowRecord.defaultCurrency);
   const currencyDecimals = userSettingsSchema.shape.currencyDecimals.safeParse(rowRecord.currencyDecimals);
   const dateFormat = userSettingsSchema.shape.dateFormat.safeParse(rowRecord.dateFormat);
+  const defaultViewMode = userSettingsSchema.shape.defaultViewMode.safeParse(rowRecord.defaultViewMode);
+  const excelShowFieldBorders = userSettingsSchema.shape.excelShowFieldBorders.safeParse(rowRecord.excelShowFieldBorders);
+  const excelRowHeight = userSettingsSchema.shape.excelRowHeight.safeParse(rowRecord.excelRowHeight);
   const defaultIgvRate = userSettingsSchema.shape.defaultIgvRate.safeParse(rowRecord.defaultIgvRate);
   const defaultGeneralExpensesRate = userSettingsSchema.shape.defaultGeneralExpensesRate.safeParse(
     rowRecord.defaultGeneralExpensesRate,
@@ -67,6 +86,9 @@ function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
     defaultCurrency: defaultCurrency.success ? defaultCurrency.data : defaultUserSettings.defaultCurrency,
     currencyDecimals: currencyDecimals.success ? currencyDecimals.data : defaultUserSettings.currencyDecimals,
     dateFormat: dateFormat.success ? dateFormat.data : defaultUserSettings.dateFormat,
+    defaultViewMode: defaultViewMode.success ? defaultViewMode.data : defaultUserSettings.defaultViewMode,
+    excelShowFieldBorders: excelShowFieldBorders.success ? excelShowFieldBorders.data : defaultUserSettings.excelShowFieldBorders,
+    excelRowHeight: excelRowHeight.success ? excelRowHeight.data : defaultUserSettings.excelRowHeight,
     defaultIgvRate: defaultIgvRate.success ? defaultIgvRate.data : defaultUserSettings.defaultIgvRate,
     defaultGeneralExpensesRate: defaultGeneralExpensesRate.success
       ? defaultGeneralExpensesRate.data
@@ -113,14 +135,17 @@ async function hasUserSettingsColumn(columnName: string) {
 }
 
 export async function getUserSettings(userId: string): Promise<UserSettingsRecord> {
-  const [supportsDefaultSubBudgetNames, supportsDateFormat] = await Promise.all([
+  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
+    hasUserSettingsColumn("defaultViewMode"),
+    hasUserSettingsColumn("excelShowFieldBorders"),
+    hasUserSettingsColumn("excelRowHeight"),
   ]);
 
-  if (supportsDefaultSubBudgetNames && supportsDateFormat) {
+  if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
     const [settings] = await prisma.$queryRaw<Array<unknown>>`
-      SELECT "defaultCurrency", "currencyDecimals", "dateFormat", "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
+      SELECT "defaultCurrency", "currencyDecimals", "dateFormat", "defaultViewMode", "excelShowFieldBorders", "excelRowHeight", "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
       , "defaultSubBudgetNames"
       FROM "UserSettings"
       WHERE "userId" = ${userId}
@@ -133,6 +158,9 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
   const [settings] = await prisma.$queryRaw<Array<unknown>>`
     SELECT "defaultCurrency", "currencyDecimals"
     ${supportsDateFormat ? Prisma.sql`, "dateFormat"` : Prisma.empty}
+    ${supportsDefaultViewMode ? Prisma.sql`, "defaultViewMode"` : Prisma.empty}
+    ${supportsExcelShowFieldBorders ? Prisma.sql`, "excelShowFieldBorders"` : Prisma.empty}
+    ${supportsExcelRowHeight ? Prisma.sql`, "excelRowHeight"` : Prisma.empty}
     , "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
     ${supportsDefaultSubBudgetNames ? Prisma.sql`, "defaultSubBudgetNames"` : Prisma.empty}
     FROM "UserSettings"
@@ -151,6 +179,15 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
     dateFormat: supportsDateFormat && typeof (settings as Record<string, unknown>).dateFormat !== "undefined"
       ? (settings as Record<string, unknown>).dateFormat
       : DEFAULT_DATE_FORMAT,
+    defaultViewMode: supportsDefaultViewMode && typeof (settings as Record<string, unknown>).defaultViewMode !== "undefined"
+      ? (settings as Record<string, unknown>).defaultViewMode
+      : DEFAULT_VIEW_MODE,
+    excelShowFieldBorders: supportsExcelShowFieldBorders && typeof (settings as Record<string, unknown>).excelShowFieldBorders !== "undefined"
+      ? (settings as Record<string, unknown>).excelShowFieldBorders
+      : DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+    excelRowHeight: supportsExcelRowHeight && typeof (settings as Record<string, unknown>).excelRowHeight !== "undefined"
+      ? (settings as Record<string, unknown>).excelRowHeight
+      : DEFAULT_EXCEL_ROW_HEIGHT,
     defaultSubBudgetNames: supportsDefaultSubBudgetNames && typeof (settings as Record<string, unknown>).defaultSubBudgetNames !== "undefined"
       ? (settings as Record<string, unknown>).defaultSubBudgetNames
       : DEFAULT_INITIAL_SUB_BUDGET_NAMES,
@@ -159,12 +196,15 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
 
 export async function updateUserSettings(userId: string, input: UserSettingsInput): Promise<UserSettingsRecord> {
   const data = userSettingsSchema.parse(input);
-  const [supportsDefaultSubBudgetNames, supportsDateFormat] = await Promise.all([
+  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
+    hasUserSettingsColumn("defaultViewMode"),
+    hasUserSettingsColumn("excelShowFieldBorders"),
+    hasUserSettingsColumn("excelRowHeight"),
   ]);
 
-  if (supportsDefaultSubBudgetNames && supportsDateFormat) {
+  if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
     const [settings] = await prisma.$queryRaw<Array<unknown>>`
       INSERT INTO "UserSettings" (
         "id",
@@ -172,6 +212,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultCurrency",
         "currencyDecimals",
         "dateFormat",
+        "defaultViewMode",
+        "excelShowFieldBorders",
+        "excelRowHeight",
         "defaultIgvRate",
         "defaultGeneralExpensesRate",
         "defaultUtilityRate",
@@ -185,6 +228,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         ${data.defaultCurrency},
         ${data.currencyDecimals},
         ${data.dateFormat},
+        ${data.defaultViewMode},
+        ${data.excelShowFieldBorders},
+        ${data.excelRowHeight},
         ${data.defaultIgvRate},
         ${data.defaultGeneralExpensesRate},
         ${data.defaultUtilityRate},
@@ -197,6 +243,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultCurrency" = EXCLUDED."defaultCurrency",
         "currencyDecimals" = EXCLUDED."currencyDecimals",
         "dateFormat" = EXCLUDED."dateFormat",
+        "defaultViewMode" = EXCLUDED."defaultViewMode",
+        "excelShowFieldBorders" = EXCLUDED."excelShowFieldBorders",
+        "excelRowHeight" = EXCLUDED."excelRowHeight",
         "defaultIgvRate" = EXCLUDED."defaultIgvRate",
         "defaultGeneralExpensesRate" = EXCLUDED."defaultGeneralExpensesRate",
         "defaultUtilityRate" = EXCLUDED."defaultUtilityRate",
@@ -206,6 +255,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultCurrency",
         "currencyDecimals",
         "dateFormat",
+        "defaultViewMode",
+        "excelShowFieldBorders",
+        "excelRowHeight",
         "defaultIgvRate",
         "defaultGeneralExpensesRate",
         "defaultUtilityRate",
@@ -222,6 +274,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultCurrency",
       "currencyDecimals",
       ${supportsDateFormat ? Prisma.sql`"dateFormat",` : Prisma.empty}
+      ${supportsDefaultViewMode ? Prisma.sql`"defaultViewMode",` : Prisma.empty}
+      ${supportsExcelShowFieldBorders ? Prisma.sql`"excelShowFieldBorders",` : Prisma.empty}
+      ${supportsExcelRowHeight ? Prisma.sql`"excelRowHeight",` : Prisma.empty}
       "defaultIgvRate",
       "defaultGeneralExpensesRate",
       "defaultUtilityRate",
@@ -234,6 +289,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       ${data.defaultCurrency},
       ${data.currencyDecimals},
       ${supportsDateFormat ? Prisma.sql`${data.dateFormat},` : Prisma.empty}
+      ${supportsDefaultViewMode ? Prisma.sql`${data.defaultViewMode},` : Prisma.empty}
+      ${supportsExcelShowFieldBorders ? Prisma.sql`${data.excelShowFieldBorders},` : Prisma.empty}
+      ${supportsExcelRowHeight ? Prisma.sql`${data.excelRowHeight},` : Prisma.empty}
       ${data.defaultIgvRate},
       ${data.defaultGeneralExpensesRate},
       ${data.defaultUtilityRate},
@@ -245,6 +303,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultCurrency" = EXCLUDED."defaultCurrency",
       "currencyDecimals" = EXCLUDED."currencyDecimals",
       ${supportsDateFormat ? Prisma.sql`"dateFormat" = EXCLUDED."dateFormat",` : Prisma.empty}
+      ${supportsDefaultViewMode ? Prisma.sql`"defaultViewMode" = EXCLUDED."defaultViewMode",` : Prisma.empty}
+      ${supportsExcelShowFieldBorders ? Prisma.sql`"excelShowFieldBorders" = EXCLUDED."excelShowFieldBorders",` : Prisma.empty}
+      ${supportsExcelRowHeight ? Prisma.sql`"excelRowHeight" = EXCLUDED."excelRowHeight",` : Prisma.empty}
       "defaultIgvRate" = EXCLUDED."defaultIgvRate",
       "defaultGeneralExpensesRate" = EXCLUDED."defaultGeneralExpensesRate",
       "defaultUtilityRate" = EXCLUDED."defaultUtilityRate",
@@ -253,6 +314,9 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultCurrency",
       "currencyDecimals",
       ${supportsDateFormat ? Prisma.sql`"dateFormat",` : Prisma.empty}
+      ${supportsDefaultViewMode ? Prisma.sql`"defaultViewMode",` : Prisma.empty}
+      ${supportsExcelShowFieldBorders ? Prisma.sql`"excelShowFieldBorders",` : Prisma.empty}
+      ${supportsExcelRowHeight ? Prisma.sql`"excelRowHeight",` : Prisma.empty}
       "defaultIgvRate",
       "defaultGeneralExpensesRate",
       "defaultUtilityRate"
@@ -263,6 +327,15 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
   return parseStoredUserSettingsRow({
     ...storedSettings,
     dateFormat: supportsDateFormat && typeof storedSettings.dateFormat !== "undefined" ? storedSettings.dateFormat : data.dateFormat,
+    defaultViewMode: supportsDefaultViewMode && typeof storedSettings.defaultViewMode !== "undefined"
+      ? storedSettings.defaultViewMode
+      : data.defaultViewMode,
+    excelShowFieldBorders: supportsExcelShowFieldBorders && typeof storedSettings.excelShowFieldBorders !== "undefined"
+      ? storedSettings.excelShowFieldBorders
+      : data.excelShowFieldBorders,
+    excelRowHeight: supportsExcelRowHeight && typeof storedSettings.excelRowHeight !== "undefined"
+      ? storedSettings.excelRowHeight
+      : data.excelRowHeight,
     defaultSubBudgetNames: data.defaultSubBudgetNames,
   });
 }

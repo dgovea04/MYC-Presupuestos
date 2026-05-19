@@ -55,7 +55,7 @@ export function RegisterForm() {
         <Input id="ruc" name="ruc" placeholder="20123456789" />
       </div>
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      <Button className="w-full" disabled={loading}>
+      <Button className="w-full" type="submit" disabled={loading}>
         {loading ? "Creando cuenta..." : "Crear cuenta"}
       </Button>
     </form>

@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { DATE_FORMAT_OPTIONS, DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
+import {
+  DATE_FORMAT_OPTIONS,
+  DEFAULT_EXCEL_ROW_HEIGHT,
+  DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+  DEFAULT_VIEW_MODE,
+  EXCEL_ROW_HEIGHT_OPTIONS,
+  VIEW_MODE_OPTIONS,
+} from "@/types/settings";
 
 const numericInputSchema = z.union([
   z.number(),
@@ -23,13 +30,18 @@ const projectSubBudgetNamesSchema = z
     return [...new Set(normalized)];
   })
   .refine((names) => names.length > 0, {
-    message: "Se requiere al menos una especialidad inicial",
+    message: "Se requiere al menos un Sub Presupuesto inicial",
   });
 
 export const userSettingsSchema = z.object({
   defaultCurrency: z.enum(["PEN", "USD"]),
   currencyDecimals: numericInputSchema.pipe(z.number().int().min(0).max(4)),
   dateFormat: z.enum(DATE_FORMAT_OPTIONS).default("DD_MMM_YYYY"),
+  defaultViewMode: z.enum(VIEW_MODE_OPTIONS).default(DEFAULT_VIEW_MODE),
+  excelShowFieldBorders: z.boolean().default(true),
+  excelRowHeight: numericInputSchema.pipe(z.number().int().refine((value) => EXCEL_ROW_HEIGHT_OPTIONS.includes(value as 40 | 45 | 52 | 60), {
+    message: "Expected a valid excel row height",
+  })).default(DEFAULT_EXCEL_ROW_HEIGHT),
   defaultIgvRate: decimalRateSchema,
   defaultGeneralExpensesRate: decimalRateSchema,
   defaultUtilityRate: decimalRateSchema,

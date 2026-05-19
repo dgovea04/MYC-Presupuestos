@@ -28,3 +28,36 @@ export async function upsertPrimaryCompany(userId: string, input: CompanyInput) 
     },
   });
 }
+
+export async function getPrimaryCompany(userId: string) {
+  return prisma.company.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function updatePrimaryCompanyLogo(userId: string, logoUrl: string) {
+  const company = await getPrimaryCompany(userId);
+
+  if (!company) {
+    throw new Error("Empresa no encontrada.");
+  }
+
+  return prisma.company.update({
+    where: { id: company.id },
+    data: { logoUrl },
+  });
+}
+
+export async function clearPrimaryCompanyLogo(userId: string) {
+  const company = await getPrimaryCompany(userId);
+
+  if (!company) {
+    throw new Error("Empresa no encontrada.");
+  }
+
+  return prisma.company.update({
+    where: { id: company.id },
+    data: { logoUrl: null },
+  });
+}

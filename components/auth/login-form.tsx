@@ -44,7 +44,7 @@ export function LoginForm() {
         <Input id="password" name="password" type="password" placeholder="••••••••" required />
       </div>
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      <Button className="w-full" disabled={loading}>
+      <Button className="w-full" type="submit" disabled={loading}>
         {loading ? "Ingresando..." : "Iniciar sesión"}
       </Button>
     </form>

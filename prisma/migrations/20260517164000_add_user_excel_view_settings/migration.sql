@@ -1,0 +1,4 @@
+ALTER TABLE "UserSettings"
+ADD COLUMN "defaultViewMode" TEXT NOT NULL DEFAULT 'modern',
+ADD COLUMN "excelShowFieldBorders" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "excelRowHeight" INTEGER NOT NULL DEFAULT 52;

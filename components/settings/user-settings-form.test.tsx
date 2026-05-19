@@ -45,10 +45,15 @@ vi.mock("@/lib/settings/budget-rate-percentages", () => ({
   parseBudgetRatePercentageInput: vi.fn((value: string) => Number(value) / 100),
 }));
 
+vi.mock("@/lib/client/live-updates", () => ({
+  broadcastAppDataChange: vi.fn(),
+}));
+
 import { UserSettingsForm } from "@/components/settings/user-settings-form";
+import { APP_VIEW_MODE_SETTINGS_UPDATED_EVENT } from "@/lib/budget/view-mode";
 import { formatBudgetRatePercentageInput, parseBudgetRatePercentageInput } from "@/lib/settings/budget-rate-percentages";
 import { formatCurrency } from "@/lib/utils";
-import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
+import { DEFAULT_EXCEL_ROW_HEIGHT, DEFAULT_INITIAL_SUB_BUDGET_NAMES, DEFAULT_VIEW_MODE } from "@/types/settings";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -57,6 +62,19 @@ declare global {
 let activeContainer: HTMLDivElement | null = null;
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const baseSettings = {
+  defaultCurrency: "PEN" as const,
+  currencyDecimals: 2,
+  dateFormat: "DD_MMM_YYYY" as const,
+  defaultViewMode: DEFAULT_VIEW_MODE,
+  excelShowFieldBorders: true,
+  excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+  defaultIgvRate: 0.18,
+  defaultGeneralExpensesRate: 0.1,
+  defaultUtilityRate: 0.08,
+  defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+};
 
 describe("UserSettingsForm", () => {
   afterEach(async () => {
@@ -87,15 +105,7 @@ describe("UserSettingsForm", () => {
 
     const { form, getInput, getSelect, getText } = await renderForm(
       <UserSettingsForm
-        initialSettings={{
-          defaultCurrency: "PEN",
-          currencyDecimals: 2,
-          dateFormat: "DD_MMM_YYYY",
-          defaultIgvRate: 0.18,
-          defaultGeneralExpensesRate: 0.1,
-          defaultUtilityRate: 0.08,
-          defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
-        }}
+        initialSettings={baseSettings}
       />,
     );
 
@@ -115,6 +125,11 @@ describe("UserSettingsForm", () => {
       getSelect("currencyDecimals").dispatchEvent(new Event("change", { bubbles: true }));
       getSelect("dateFormat").value = "DD_MM_YYYY";
       getSelect("dateFormat").dispatchEvent(new Event("change", { bubbles: true }));
+      getSelect("defaultViewMode").value = "excel";
+      getSelect("defaultViewMode").dispatchEvent(new Event("change", { bubbles: true }));
+      getSelect("excelRowHeight").value = "60";
+      getSelect("excelRowHeight").dispatchEvent(new Event("change", { bubbles: true }));
+      getInput("excelShowFieldBorders").click();
       updateInputValue(getInput("defaultIgvRate"), "19");
       updateInputValue(getInput("defaultGeneralExpensesRate"), "12.5");
       updateInputValue(getInput("defaultUtilityRate"), "9");
@@ -135,6 +150,9 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "USD",
         currencyDecimals: 3,
         dateFormat: "DD_MM_YYYY",
+        defaultViewMode: "excel",
+        excelShowFieldBorders: false,
+        excelRowHeight: 60,
         defaultIgvRate: 0.19,
         defaultGeneralExpensesRate: 0.125,
         defaultUtilityRate: 0.09,
@@ -165,15 +183,7 @@ describe("UserSettingsForm", () => {
 
     const { form, getInput, getText } = await renderForm(
       <UserSettingsForm
-        initialSettings={{
-          defaultCurrency: "PEN",
-          currencyDecimals: 2,
-          dateFormat: "DD_MMM_YYYY",
-          defaultIgvRate: 0.18,
-          defaultGeneralExpensesRate: 0.1,
-          defaultUtilityRate: 0.08,
-          defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
-        }}
+        initialSettings={baseSettings}
       />,
     );
 
@@ -186,7 +196,7 @@ describe("UserSettingsForm", () => {
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(getText(/IGV: Ingresa un porcentaje válido entre 0 y 100\./)).toBeTruthy();
+    expect(getText(/IGV: Ingresa un porcentaje valido entre 0 y 100\./)).toBeTruthy();
   });
 
   it("keeps pending state safe and shows a fallback error on failed non-JSON responses", async () => {
@@ -202,15 +212,7 @@ describe("UserSettingsForm", () => {
 
     const { form, getButton, getInput, getSelect, getText } = await renderForm(
       <UserSettingsForm
-        initialSettings={{
-          defaultCurrency: "USD",
-          currencyDecimals: 2,
-          dateFormat: "DD_MMM_YYYY",
-          defaultIgvRate: 0.18,
-          defaultGeneralExpensesRate: 0.1,
-          defaultUtilityRate: 0.08,
-          defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
-        }}
+        initialSettings={{ ...baseSettings, defaultCurrency: "USD" }}
       />,
     );
 
@@ -222,7 +224,10 @@ describe("UserSettingsForm", () => {
     expect(getSelect("defaultCurrency").disabled).toBe(true);
     expect(getSelect("currencyDecimals").disabled).toBe(true);
     expect(getSelect("dateFormat").disabled).toBe(true);
+    expect(getSelect("defaultViewMode").disabled).toBe(true);
+    expect(getSelect("excelRowHeight").disabled).toBe(true);
     expect(getInput("defaultIgvRate").disabled).toBe(true);
+    expect(getInput("excelShowFieldBorders").disabled).toBe(true);
     expect(getInput("defaultGeneralExpensesRate").disabled).toBe(true);
     expect(getInput("defaultUtilityRate").disabled).toBe(true);
     expect(getInput("defaultSubBudgetName-0").disabled).toBe(true);
@@ -236,15 +241,18 @@ describe("UserSettingsForm", () => {
       });
     });
 
-    expect(getText(/No se pudo guardar la configuración/)).toBeTruthy();
+    expect(getText(/No se pudo guardar la configuracion/)).toBeTruthy();
     expect(getSelect("defaultCurrency").disabled).toBe(false);
     expect(getSelect("currencyDecimals").disabled).toBe(false);
     expect(getSelect("dateFormat").disabled).toBe(false);
+    expect(getSelect("defaultViewMode").disabled).toBe(false);
+    expect(getSelect("excelRowHeight").disabled).toBe(false);
     expect(getInput("defaultIgvRate").disabled).toBe(false);
+    expect(getInput("excelShowFieldBorders").disabled).toBe(false);
     expect(getInput("defaultGeneralExpensesRate").disabled).toBe(false);
     expect(getInput("defaultUtilityRate").disabled).toBe(false);
     expect(getInput("defaultSubBudgetName-0").disabled).toBe(false);
-    expect(getButton(/Guardar configuración/)).toBeTruthy();
+    expect(getButton(/Guardar configuracion/)).toBeTruthy();
   });
 
   it("allows adding and removing initial sub budgets from the table before submit", async () => {
@@ -257,20 +265,12 @@ describe("UserSettingsForm", () => {
 
     const { form, getButton, getInput, getDeleteButtons } = await renderForm(
       <UserSettingsForm
-        initialSettings={{
-          defaultCurrency: "PEN",
-          currencyDecimals: 2,
-          dateFormat: "DD_MMM_YYYY",
-          defaultIgvRate: 0.18,
-          defaultGeneralExpensesRate: 0.1,
-          defaultUtilityRate: 0.08,
-          defaultSubBudgetNames: ["Estructuras", "Arquitectura"],
-        }}
+        initialSettings={{ ...baseSettings, defaultSubBudgetNames: ["Estructuras", "Arquitectura"] }}
       />,
     );
 
     await act(async () => {
-      getButton(/Agregar especialidad/).click();
+      getButton(/Agregar Sub Presupuesto/).click();
     });
 
     await act(async () => {
@@ -289,6 +289,9 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: "DD_MMM_YYYY",
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: true,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
         defaultIgvRate: 0.18,
         defaultGeneralExpensesRate: 0.1,
         defaultUtilityRate: 0.08,
@@ -307,15 +310,7 @@ describe("UserSettingsForm", () => {
 
     const { form, getButton, getInput } = await renderForm(
       <UserSettingsForm
-        initialSettings={{
-          defaultCurrency: "PEN",
-          currencyDecimals: 2,
-          dateFormat: "DD_MMM_YYYY",
-          defaultIgvRate: 0.18,
-          defaultGeneralExpensesRate: 0.1,
-          defaultUtilityRate: 0.08,
-          defaultSubBudgetNames: ["Obras preliminares"],
-        }}
+        initialSettings={{ ...baseSettings, defaultSubBudgetNames: ["Obras preliminares"] }}
       />,
     );
 
@@ -338,6 +333,9 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: "DD_MMM_YYYY",
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: true,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
         defaultIgvRate: 0.18,
         defaultGeneralExpensesRate: 0.1,
         defaultUtilityRate: 0.08,
@@ -349,15 +347,7 @@ describe("UserSettingsForm", () => {
   it("disables restore when the table already matches the recommended base list", async () => {
     const { getButton, getInput, getText, queryText } = await renderForm(
       <UserSettingsForm
-        initialSettings={{
-          defaultCurrency: "PEN",
-          currencyDecimals: 2,
-          dateFormat: "DD_MMM_YYYY",
-          defaultIgvRate: 0.18,
-          defaultGeneralExpensesRate: 0.1,
-          defaultUtilityRate: 0.08,
-          defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
-        }}
+        initialSettings={baseSettings}
       />,
     );
 
@@ -382,15 +372,7 @@ describe("UserSettingsForm", () => {
 
     const { form, getRows } = await renderForm(
       <UserSettingsForm
-        initialSettings={{
-          defaultCurrency: "PEN",
-          currencyDecimals: 2,
-          dateFormat: "DD_MMM_YYYY",
-          defaultIgvRate: 0.18,
-          defaultGeneralExpensesRate: 0.1,
-          defaultUtilityRate: 0.08,
-          defaultSubBudgetNames: ["Estructuras", "Arquitectura", "Instalaciones"],
-        }}
+        initialSettings={{ ...baseSettings, defaultSubBudgetNames: ["Estructuras", "Arquitectura", "Instalaciones"] }}
       />,
     );
 
@@ -418,12 +400,48 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: "DD_MMM_YYYY",
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: true,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
         defaultIgvRate: 0.18,
         defaultGeneralExpensesRate: 0.1,
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: ["Arquitectura", "Instalaciones", "Estructuras"],
       }),
     });
+  });
+
+  it("keeps the local view-mode override after a successful save", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ...baseSettings,
+        defaultViewMode: "excel",
+        excelShowFieldBorders: false,
+        excelRowHeight: 45,
+      }),
+    }));
+    const eventSpy = vi.fn();
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem("app_view_mode", "modern");
+    window.addEventListener(APP_VIEW_MODE_SETTINGS_UPDATED_EVENT, eventSpy);
+
+    const { form, getInput, getSelect } = await renderForm(<UserSettingsForm initialSettings={baseSettings} />);
+
+    await act(async () => {
+      getSelect("defaultViewMode").value = "excel";
+      getSelect("defaultViewMode").dispatchEvent(new Event("change", { bubbles: true }));
+      getSelect("excelRowHeight").value = "45";
+      getSelect("excelRowHeight").dispatchEvent(new Event("change", { bubbles: true }));
+      getInput("excelShowFieldBorders").click();
+      form.requestSubmit();
+    });
+
+    expect(window.localStorage.getItem("app_view_mode")).toBe("modern");
+    expect(eventSpy).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener(APP_VIEW_MODE_SETTINGS_UPDATED_EVENT, eventSpy);
   });
 });
 

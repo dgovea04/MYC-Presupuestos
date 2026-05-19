@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import { userSettingsSchema } from "@/lib/validations/settings";
-import { DEFAULT_DATE_FORMAT, DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
+import {
+  DEFAULT_DATE_FORMAT,
+  DEFAULT_EXCEL_ROW_HEIGHT,
+  DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+  DEFAULT_VIEW_MODE,
+} from "@/types/settings";
 
 const validSettings = {
   defaultCurrency: "PEN" as const,
   currencyDecimals: 2,
   dateFormat: DEFAULT_DATE_FORMAT,
+  defaultViewMode: DEFAULT_VIEW_MODE,
+  excelShowFieldBorders: true,
+  excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
   defaultIgvRate: 0.18,
   defaultGeneralExpensesRate: 0.12,
   defaultUtilityRate: 0.08,
@@ -106,6 +114,36 @@ describe("userSettingsSchema", () => {
       userSettingsSchema.parse({
         ...validSettings,
         dateFormat: "MM_DD_YYYY",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts supported view mode and excel row height values", () => {
+    expect(
+      userSettingsSchema.parse({
+        ...validSettings,
+        defaultViewMode: "excel",
+        excelShowFieldBorders: false,
+        excelRowHeight: "60",
+      }),
+    ).toEqual({
+      ...validSettings,
+      defaultViewMode: "excel",
+      excelShowFieldBorders: false,
+      excelRowHeight: 60,
+    });
+
+    expect(() =>
+      userSettingsSchema.parse({
+        ...validSettings,
+        defaultViewMode: "classic",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      userSettingsSchema.parse({
+        ...validSettings,
+        excelRowHeight: 47,
       }),
     ).toThrow();
   });

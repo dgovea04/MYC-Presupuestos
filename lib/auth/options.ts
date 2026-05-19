@@ -1,8 +1,84 @@
+import { Prisma } from "@prisma/client";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { loginSchema } from "@/lib/validations/auth";
 import { verifyPassword } from "@/lib/auth/password";
+import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
+import { loginSchema } from "@/lib/validations/auth";
+
+const authUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  passwordHash: z.string().optional(),
+  avatarUrl: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  jobTitle: z.string().nullable().optional(),
+  bio: z.string().nullable().optional(),
+});
+
+type AuthUserRecord = z.infer<typeof authUserSchema>;
+
+function normalizeAuthUser(row: unknown): AuthUserRecord | null {
+  const parsedUser = authUserSchema.safeParse(row);
+
+  if (!parsedUser.success) {
+    return null;
+  }
+
+  return {
+    ...parsedUser.data,
+    avatarUrl: parsedUser.data.avatarUrl ?? null,
+    phone: parsedUser.data.phone ?? null,
+    jobTitle: parsedUser.data.jobTitle ?? null,
+    bio: parsedUser.data.bio ?? null,
+  };
+}
+
+async function getAuthUserByEmail(email: string) {
+  const profileColumns = await getUserProfileColumnSupport();
+  const rows = await prisma.$queryRaw<Array<unknown>>`
+    SELECT "id", "name", "email", "passwordHash"
+    ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
+    ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
+    ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
+    ${profileColumns.bio ? Prisma.sql`, "bio"` : Prisma.empty}
+    FROM "User"
+    WHERE "email" = ${email}
+    LIMIT 1
+  `;
+
+  return normalizeAuthUser(rows[0]);
+}
+
+async function getAuthUserById(userId: string) {
+  const profileColumns = await getUserProfileColumnSupport();
+  const rows = await prisma.$queryRaw<Array<unknown>>`
+    SELECT "id", "name", "email"
+    ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
+    ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
+    ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
+    ${profileColumns.bio ? Prisma.sql`, "bio"` : Prisma.empty}
+    FROM "User"
+    WHERE "id" = ${userId}
+    LIMIT 1
+  `;
+
+  return normalizeAuthUser(rows[0]);
+}
+
+function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "avatarUrl" | "phone" | "jobTitle" | "bio">) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    phone: user.phone,
+    jobTitle: user.jobTitle,
+    bio: user.bio,
+  };
+}
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -25,11 +101,9 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email },
-        });
+        const user = await getAuthUserByEmail(parsed.data.email);
 
-        if (!user) {
+        if (!user?.passwordHash) {
           return null;
         }
 
@@ -39,11 +113,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-        };
+        return toSessionProfile(user);
       },
     }),
   ],
@@ -51,13 +121,27 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.name = user.name;
+        token.email = user.email;
+        token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | null | undefined) ?? null : null;
+        token.phone = "phone" in user ? (user.phone as string | null | undefined) ?? null : null;
+        token.jobTitle = "jobTitle" in user ? (user.jobTitle as string | null | undefined) ?? null : null;
+        token.bio = "bio" in user ? (user.bio as string | null | undefined) ?? null : null;
       }
 
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.id) {
+        const currentUser = await getAuthUserById(token.id as string);
+
         session.user.id = token.id as string;
+        session.user.name = currentUser?.name ?? (token.name as string | null | undefined) ?? session.user.name ?? null;
+        session.user.email = currentUser?.email ?? (token.email as string | null | undefined) ?? session.user.email ?? null;
+        session.user.avatarUrl = currentUser?.avatarUrl ?? (token.avatarUrl as string | null | undefined) ?? null;
+        session.user.phone = currentUser?.phone ?? (token.phone as string | null | undefined) ?? null;
+        session.user.jobTitle = currentUser?.jobTitle ?? (token.jobTitle as string | null | undefined) ?? null;
+        session.user.bio = currentUser?.bio ?? (token.bio as string | null | undefined) ?? null;
       }
 
       return session;
