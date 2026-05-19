@@ -15,6 +15,7 @@ import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getProjectById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { getUserSettings } from "@/lib/data/settings";
+import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -26,12 +27,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  const [budget, resources, partidasCatalog, settings] = await Promise.all([
-    getBudgetById(id, session.user.id),
-    getResourcesByUser(session.user.id),
-    getCatalogPartidas(),
-    getUserSettings(session.user.id),
-  ]);
+  const [budget, settings] = await Promise.all([getBudgetById(id, session.user.id), getUserSettings(session.user.id)]);
 
   if (!budget) {
     console.error("BudgetDetailPage budget not found", { budgetId: id, userId: session.user.id });
@@ -51,14 +47,9 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       getProjectSubBudgetDetails(project.id, session.user.id),
     ]);
 
-    const subBudgets = [
-      "Estructuras",
-      "Arquitectura",
-      "Instalaciones Sanitarias",
-      "Instalaciones Eléctricas",
-    ]
-      .map((name) => project.budgets.find((item) => item.kind === "SUB_BUDGET" && item.name === name))
-      .filter((item) => item != null);
+    const subBudgets = orderSubBudgetsBySpecialty(
+      project.budgets.filter((item) => item.kind === "SUB_BUDGET"),
+    );
 
     return (
       <AppShell>
@@ -111,7 +102,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
             <CardHeader>
               <CardTitle>Sub Presupuestos</CardTitle>
               <CardDescription>
-                Abre cada especialidad para editar partidas, APUs y costos. El total de este presupuesto se consolida automáticamente.
+                Abre cada Sub Presupuesto para editar partidas, APUs y costos. El total de este presupuesto se consolida automáticamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 lg:grid-cols-2">
@@ -128,7 +119,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                   </div>
                   <div className="mt-4">
                     <Link href={`/budgets/${subBudget.id}`}>
-                      <ActionButton action="open" label="Abrir presupuesto" />
+                      <ActionButton action="open" label="Abrir Sub Presupuesto" />
                     </Link>
                   </div>
                 </div>
@@ -168,6 +159,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <SectionCard
+                  title="Programacion de obra"
+                  detail="Cronograma consolidado, calendario valorizado, insumos por periodo y curva S basica."
+                  href={`/budgets/${budget.id}/work-schedule`}
+                />
+                <SectionCard
                   title="Lista de insumos"
                   detail="Base para volver a trabajar el listado de insumos asociado al presupuesto."
                   href={`/budgets/${budget.id}/resources`}
@@ -194,6 +190,8 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       </AppShell>
     );
   }
+
+  const [resources, partidasCatalog] = await Promise.all([getResourcesByUser(session.user.id), getCatalogPartidas()]);
 
   return (
     <AppShell>

@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { getAuthSession } from "@/lib/auth/session";
-import { getBudgetById } from "@/lib/data/budgets";
-import { getProjectById } from "@/lib/data/projects";
+import { decimalToNumber } from "@/lib/db/serializers";
+import { getBudgetHeaderById } from "@/lib/data/budgets";
+import { getProjectHeaderById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
 
 export async function getGeneralBudgetSectionContext(id: string) {
@@ -11,7 +12,7 @@ export async function getGeneralBudgetSectionContext(id: string) {
   }
 
   const [budget, settings] = await Promise.all([
-    getBudgetById(id, session.user.id),
+    getBudgetHeaderById(id, session.user.id),
     getUserSettings(session.user.id),
   ]);
 
@@ -19,14 +20,24 @@ export async function getGeneralBudgetSectionContext(id: string) {
     notFound();
   }
 
-  const project = await getProjectById(budget.projectId, session.user.id);
+  const project = await getProjectHeaderById(budget.projectId, session.user.id);
   if (!project) {
     notFound();
   }
 
   return {
     session,
-    budget,
+    budget: {
+      ...budget,
+      igvRate: decimalToNumber(budget.igvRate),
+      generalExpensesRate: decimalToNumber(budget.generalExpensesRate),
+      utilityRate: decimalToNumber(budget.utilityRate),
+      totalDirectCost: decimalToNumber(budget.totalDirectCost),
+      totalGeneralExpenses: decimalToNumber(budget.totalGeneralExpenses),
+      totalUtility: decimalToNumber(budget.totalUtility),
+      totalTax: decimalToNumber(budget.totalTax),
+      totalAmount: decimalToNumber(budget.totalAmount),
+    },
     project,
     settings,
   };

@@ -8,9 +8,10 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 
 const sections = [
   { id: "resources", label: "Lista de insumos", href: "resources" },
+  { id: "work-schedule", label: "Programacion de obra", href: "work-schedule" },
   { id: "general-expenses", label: "Gastos generales", href: "general-expenses" },
   { id: "footer", label: "Pie de presupuesto", href: "footer" },
-  { id: "polynomial-formula", label: "Fórmula polinómica", href: "polynomial-formula" },
+  { id: "polynomial-formula", label: "Formula polinomica", href: "polynomial-formula" },
 ] as const;
 
 export function GeneralBudgetSectionShell({

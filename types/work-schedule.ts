@@ -1,0 +1,133 @@
+export type WorkScheduleMonthlyDistributionRecord = {
+  year: number;
+  month: number;
+  percentage: number;
+};
+
+export type WorkScheduleResourceRecord = {
+  resourceId: string;
+  code: string;
+  description: string;
+  unit: string;
+  unitPrice: number;
+  totalQuantity: number;
+  totalCost: number;
+};
+
+export type WorkScheduleLineRecord = {
+  scheduleItemId?: string;
+  budgetItemId: string;
+  levelId?: string | null;
+  sortOrder?: number;
+  itemCode: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  partial: number;
+  subBudgetId: string;
+  subBudgetName: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  durationDays?: number | null;
+  predecessor?: string | null;
+  crew?: number | null;
+  performance?: number | null;
+  performanceLabel?: string | null;
+  monthlyDistributions: WorkScheduleMonthlyDistributionRecord[];
+  resources?: WorkScheduleResourceRecord[];
+};
+
+export type WorkScheduleLevelSummaryRecord = {
+  kind: "level";
+  rowId: string;
+  levelId: string;
+  levelType: "TITLE" | "SUBTITLE";
+  itemCode: string;
+  description: string;
+  subBudgetId: string;
+  subBudgetName: string;
+  durationDays: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  partial: number;
+  childLineIds: string[];
+};
+
+export type WorkScheduleDisplayRowRecord =
+  | {
+      kind: "line";
+      rowId: string;
+      line: WorkScheduleLineRecord;
+    }
+  | WorkScheduleLevelSummaryRecord;
+
+export type WorkSchedulePeriodRecord = {
+  year: number;
+  month: number;
+  key: string;
+};
+
+export type WorkScheduleValuationCalendarRow = {
+  scheduleItemId?: string;
+  budgetItemId: string;
+  itemCode: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  partial: number;
+  subBudgetName: string;
+  rowTotal: number;
+  periodAmounts: Record<string, number>;
+};
+
+export type WorkScheduleResourceCalendarRow = {
+  resourceId: string;
+  code: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  partial: number;
+  periodQuantities: Record<string, number>;
+  periodAmounts: Record<string, number>;
+};
+
+export type WorkScheduleCurvePointRecord = {
+  year: number;
+  month: number;
+  key: string;
+  monthlyAmount: number;
+  accumulatedAmount: number;
+  accumulatedPercentage: number;
+};
+
+export type WorkScheduleGroupRecord = {
+  subBudgetId: string;
+  subBudgetName: string;
+  totalAmount: number;
+  lines: WorkScheduleLineRecord[];
+  rows: WorkScheduleDisplayRowRecord[];
+};
+
+export type WorkScheduleViewRecord = {
+  budgetId: string;
+  budgetName: string;
+  projectName: string;
+  currency: string;
+  groups: WorkScheduleGroupRecord[];
+  valuationCalendar: {
+    periods: WorkSchedulePeriodRecord[];
+    rows: WorkScheduleValuationCalendarRow[];
+  };
+  resourceCalendar: {
+    periods: WorkSchedulePeriodRecord[];
+    rows: WorkScheduleResourceCalendarRow[];
+  };
+  curveSeries: WorkScheduleCurvePointRecord[];
+  timeline: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+};
