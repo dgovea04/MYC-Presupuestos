@@ -3,15 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:repair-companies": "tsx prisma/repair-company-duplicates.ts",
-    "test": "vitest run"
+    "dev": "node ./node_modules/next/dist/bin/next dev",
+    "build": "node ./node_modules/next/dist/bin/next build",
+    "start": "node ./node_modules/next/dist/bin/next start",
+    "lint": "node ./node_modules/eslint/bin/eslint.js .",
+    "prisma:generate": "node ./node_modules/prisma/build/index.js generate",
+    "prisma:migrate": "node ./node_modules/prisma/build/index.js migrate dev",
+    "prisma:seed": "node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts",
+    "prisma:normalize-resource-iu": "node ./node_modules/tsx/dist/cli.mjs prisma/normalize-resource-iu-codes.ts",
+    "prisma:repair-companies": "node ./node_modules/tsx/dist/cli.mjs prisma/repair-company-duplicates.ts",
+    "test": "node ./node_modules/vitest/vitest.mjs run"
   },
   "dependencies": {
     "@google/design.md": "^0.1.1",

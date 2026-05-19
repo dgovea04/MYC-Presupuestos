@@ -88,6 +88,10 @@ model User {
   id           String    @id @default(cuid())
   name         String
   email        String    @unique
+  avatarUrl    String?
+  phone        String?
+  jobTitle     String?
+  bio          String?
   passwordHash String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -116,6 +120,9 @@ model UserSettings {
   currencyDecimals           Int      @default(2)
   defaultCurrency            String   @default("PEN")
   dateFormat                 String   @default("DD_MMM_YYYY")
+  defaultViewMode            String   @default("modern")
+  excelShowFieldBorders      Boolean  @default(true)
+  excelRowHeight             Int      @default(52)
   defaultIgvRate             Decimal  @default(0.18) @db.Decimal(10, 4)
   defaultGeneralExpensesRate Decimal  @default(0.10) @db.Decimal(10, 4)
   defaultUtilityRate         Decimal  @default(0.08) @db.Decimal(10, 4)
@@ -187,6 +194,7 @@ model Budget {
   generalExpenseGroups  GeneralExpenseGroup[]
   footerRows            BudgetFooterRow[]
   polynomialFormulas    PolynomialFormula[]
+  workSchedule         WorkSchedule?
   valuations            Valuation[]
   reports               Report[]
 
@@ -230,10 +238,57 @@ model BudgetItem {
   budget      Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   level       BudgetLevel? @relation(fields: [levelId], references: [id], onDelete: SetNull)
   apu         Apu?
+  workScheduleItems WorkScheduleItem[]
   polynomialMonomialComponents PolynomialMonomialComponent[]
 
   @@index([budgetId])
   @@index([levelId])
+}
+
+model WorkSchedule {
+  id        String             @id @default(cuid())
+  budgetId  String             @unique
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  budget    Budget             @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  items     WorkScheduleItem[]
+
+  @@index([budgetId])
+}
+
+model WorkScheduleItem {
+  id            String                     @id @default(cuid())
+  scheduleId    String
+  budgetItemId  String
+  startDate     DateTime
+  endDate       DateTime
+  durationDays  Int
+  predecessor   String?
+  crew          Decimal?                   @db.Decimal(18, 4)
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  schedule      WorkSchedule               @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  budgetItem    BudgetItem                 @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  distributions WorkScheduleDistribution[]
+
+  @@unique([scheduleId, budgetItemId])
+  @@index([scheduleId])
+  @@index([budgetItemId])
+}
+
+model WorkScheduleDistribution {
+  id             String           @id @default(cuid())
+  scheduleItemId String
+  year           Int
+  month          Int
+  percentage     Decimal          @db.Decimal(10, 4)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  scheduleItem   WorkScheduleItem @relation(fields: [scheduleItemId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleItemId, year, month])
+  @@index([scheduleItemId])
+  @@index([year, month])
 }
 
 model Resource {
