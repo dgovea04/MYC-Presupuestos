@@ -6,12 +6,28 @@ const mocks = vi.hoisted(() => ({
   companyFindFirst: vi.fn(),
   transaction: vi.fn(),
   projectFindFirst: vi.fn(),
+  projectFindMany: vi.fn(),
   projectCreate: vi.fn(),
   budgetCreate: vi.fn(),
   budgetCreateMany: vi.fn(),
   budgetFindMany: vi.fn(),
   budgetFindUnique: vi.fn(),
   budgetUpdate: vi.fn(),
+  budgetLevelCreate: vi.fn(),
+  budgetItemCreate: vi.fn(),
+  apuCreate: vi.fn(),
+  apuResourceCreate: vi.fn(),
+  generalExpenseCreate: vi.fn(),
+  generalExpenseGroupCreate: vi.fn(),
+  generalExpenseTitleCreate: vi.fn(),
+  generalExpenseItemCreate: vi.fn(),
+  footerRowCreate: vi.fn(),
+  polynomialFormulaCreate: vi.fn(),
+  polynomialMonomialCreate: vi.fn(),
+  polynomialComponentCreate: vi.fn(),
+  workScheduleCreate: vi.fn(),
+  valuationCreate: vi.fn(),
+  adjustmentCreate: vi.fn(),
   getUserSettings: vi.fn(),
 }));
 
@@ -34,7 +50,288 @@ vi.mock("@/lib/data/settings", async () => {
 });
 
 import { defaultUserSettings } from "@/lib/data/settings";
-import { createProject, getProjectById } from "@/lib/data/projects";
+import * as projectData from "@/lib/data/projects";
+
+const { createProject, duplicateProject, getProjectById } = projectData;
+
+function createDuplicationSourceProject() {
+  const sourceProjectId = "project-source";
+  const generalBudgetId = "budget-general-source";
+  const subBudgetId = "budget-sub-source";
+  const levelId = "level-source";
+  const itemId = "item-source";
+  const apuId = "apu-source";
+  const apuResourceId = "apu-resource-source";
+  const groupId = "group-source";
+  const titleId = "title-source";
+  const expenseItemId = "expense-item-source";
+  const footerRowId = "footer-row-source";
+  const formulaId = "formula-source";
+  const monomialId = "monomial-source";
+
+  return {
+    id: sourceProjectId,
+    companyId: "company-1",
+    name: "Hospital Norte",
+    clientName: "Cliente 1",
+    location: "Piura",
+    projectType: "Edificacion",
+    startDate: new Date("2026-01-10T00:00:00.000Z"),
+    endDate: new Date("2026-06-20T00:00:00.000Z"),
+    status: "IN_PROGRESS",
+    budgets: [
+      {
+        id: generalBudgetId,
+        projectId: sourceProjectId,
+        parentBudgetId: null,
+        kind: "GENERAL",
+        name: "Presupuesto General",
+        currency: "PEN",
+        igvRate: new Prisma.Decimal("0.18"),
+        generalExpensesRate: new Prisma.Decimal("0.10"),
+        utilityRate: new Prisma.Decimal("0.08"),
+        totalDirectCost: new Prisma.Decimal("1000"),
+        totalGeneralExpenses: new Prisma.Decimal("100"),
+        totalUtility: new Prisma.Decimal("80"),
+        totalTax: new Prisma.Decimal("212.4"),
+        totalAmount: new Prisma.Decimal("1392.4"),
+        levels: [],
+        items: [],
+        generalExpenses: [],
+        generalExpenseGroups: [],
+        footerRows: [],
+        workSchedule: { id: "schedule-source" },
+        valuations: [{ id: "valuation-source" }],
+      },
+      {
+        id: subBudgetId,
+        projectId: sourceProjectId,
+        parentBudgetId: generalBudgetId,
+        kind: "SUB_BUDGET",
+        name: "Estructuras",
+        currency: "PEN",
+        igvRate: new Prisma.Decimal("0.18"),
+        generalExpensesRate: new Prisma.Decimal("0.10"),
+        utilityRate: new Prisma.Decimal("0.08"),
+        totalDirectCost: new Prisma.Decimal("1000"),
+        totalGeneralExpenses: new Prisma.Decimal("100"),
+        totalUtility: new Prisma.Decimal("80"),
+        totalTax: new Prisma.Decimal("212.4"),
+        totalAmount: new Prisma.Decimal("1392.4"),
+        levels: [
+          {
+            id: levelId,
+            budgetId: subBudgetId,
+            parentId: null,
+            type: "TITLE",
+            code: "01",
+            name: "Obras provisionales",
+            sortOrder: 0,
+          },
+        ],
+        items: [
+          {
+            id: itemId,
+            budgetId: subBudgetId,
+            levelId,
+            code: "01.01",
+            description: "Trazo y replanteo",
+            unit: "m2",
+            quantity: new Prisma.Decimal("10"),
+            unitPrice: new Prisma.Decimal("25"),
+            partial: new Prisma.Decimal("250"),
+            sortOrder: 0,
+            apu: {
+              id: apuId,
+              budgetItemId: itemId,
+              name: "Trazo y replanteo",
+              unit: "m2",
+              performance: new Prisma.Decimal("1"),
+              totalUnitCost: new Prisma.Decimal("25"),
+              resources: [
+                {
+                  id: apuResourceId,
+                  apuId,
+                  resourceId: "resource-1",
+                  resourceType: "LABOR",
+                  crew: new Prisma.Decimal("1"),
+                  quantity: new Prisma.Decimal("2"),
+                  unitPrice: new Prisma.Decimal("12.5"),
+                  subtotal: new Prisma.Decimal("25"),
+                },
+              ],
+            },
+          },
+        ],
+        generalExpenses: [
+          {
+            id: "general-expense-source",
+            budgetId: subBudgetId,
+            name: "Movilidad",
+            type: "FIXED",
+            amount: new Prisma.Decimal("1500"),
+            percentage: null,
+          },
+        ],
+        generalExpenseGroups: [
+          {
+            id: groupId,
+            budgetId: subBudgetId,
+            name: "Gastos fijos",
+            kind: "FIXED",
+            sortOrder: 0,
+            titles: [
+              {
+                id: titleId,
+                groupId,
+                code: "1",
+                name: "Personal tecnico",
+                category: "STANDARD",
+                sortOrder: 0,
+                items: [
+                  {
+                    id: expenseItemId,
+                    titleId,
+                    code: "1.1",
+                    description: "Residente",
+                    category: "STANDARD",
+                    unit: "mes",
+                    quantityDescription: "1 x 6",
+                    quantity: new Prisma.Decimal("6"),
+                    participationPercentage: new Prisma.Decimal("0"),
+                    unitPrice: new Prisma.Decimal("3000"),
+                    sortOrder: 0,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        footerRows: [
+          {
+            id: footerRowId,
+            budgetId: subBudgetId,
+            variable: "K",
+            description: "Coeficiente",
+            formula: "CD + GG + U",
+            manualValue: new Prisma.Decimal("0"),
+            iu: "39",
+            highlight: true,
+            sortOrder: 0,
+          },
+        ],
+        workSchedule: { id: "schedule-sub-source" },
+        valuations: [{ id: "valuation-sub-source" }],
+      },
+    ],
+    polynomialFormulas: [
+      {
+        id: formulaId,
+        projectId: sourceProjectId,
+        budgetId: subBudgetId,
+        name: "Formula base",
+        baseMonth: 1,
+        baseYear: 2026,
+        totalBaseAmount: new Prisma.Decimal("250"),
+        status: "VALID",
+        monomials: [
+          {
+            id: monomialId,
+            formulaId,
+            code: "M1",
+            name: "Mano de obra",
+            costGroupKey: "LABOR",
+            amount: new Prisma.Decimal("250"),
+            coefficient: new Prisma.Decimal("1.000"),
+            baseIndexCode: "47",
+            baseIndexName: "Mano de obra",
+            baseIndexValue: new Prisma.Decimal("500.000"),
+            adjustmentIndexCode: null,
+            adjustmentIndexName: null,
+            adjustmentIndexValue: null,
+            sortOrder: 0,
+            components: [
+              {
+                id: "component-source",
+                monomialId,
+                budgetItemId: itemId,
+                apuResourceId,
+                resourceType: "LABOR",
+                amount: new Prisma.Decimal("250"),
+              },
+            ],
+          },
+        ],
+        valuations: [{ id: "formula-valuation-source" }],
+        adjustments: [{ id: "adjustment-source" }],
+      },
+    ],
+  };
+}
+
+function wireDuplicationTransactionMocks() {
+  mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+    callback({
+      project: {
+        create: mocks.projectCreate,
+        findFirst: mocks.projectFindFirst,
+        findMany: mocks.projectFindMany,
+      },
+      budget: {
+        create: mocks.budgetCreate,
+        createMany: mocks.budgetCreateMany,
+        findMany: mocks.budgetFindMany,
+        findUnique: mocks.budgetFindUnique,
+        update: mocks.budgetUpdate,
+      },
+      budgetLevel: {
+        create: mocks.budgetLevelCreate,
+      },
+      budgetItem: {
+        create: mocks.budgetItemCreate,
+      },
+      apu: {
+        create: mocks.apuCreate,
+      },
+      apuResource: {
+        create: mocks.apuResourceCreate,
+      },
+      generalExpense: {
+        create: mocks.generalExpenseCreate,
+      },
+      generalExpenseGroup: {
+        create: mocks.generalExpenseGroupCreate,
+      },
+      generalExpenseTitle: {
+        create: mocks.generalExpenseTitleCreate,
+      },
+      generalExpenseItem: {
+        create: mocks.generalExpenseItemCreate,
+      },
+      budgetFooterRow: {
+        create: mocks.footerRowCreate,
+      },
+      polynomialFormula: {
+        create: mocks.polynomialFormulaCreate,
+      },
+      polynomialMonomial: {
+        create: mocks.polynomialMonomialCreate,
+      },
+      polynomialMonomialComponent: {
+        create: mocks.polynomialComponentCreate,
+      },
+      workSchedule: {
+        create: mocks.workScheduleCreate,
+      },
+      valuation: {
+        create: mocks.valuationCreate,
+      },
+      polynomialAdjustment: {
+        create: mocks.adjustmentCreate,
+      },
+    }),
+  );
+}
 
 describe("project data", () => {
   beforeEach(() => {
@@ -652,5 +949,302 @@ describe("project data", () => {
     expect(updateCall?.data.totalUtility.toString()).toBe("0.7");
     expect(updateCall?.data.totalTax.toString()).toBe("0.9");
     expect(updateCall?.data.totalAmount.toString()).toBe("1.1");
+  });
+
+  describe("project duplication", () => {
+    beforeEach(() => {
+      mocks.projectFindMany.mockReset();
+      mocks.budgetLevelCreate.mockReset();
+      mocks.budgetItemCreate.mockReset();
+      mocks.apuCreate.mockReset();
+      mocks.apuResourceCreate.mockReset();
+      mocks.generalExpenseCreate.mockReset();
+      mocks.generalExpenseGroupCreate.mockReset();
+      mocks.generalExpenseTitleCreate.mockReset();
+      mocks.generalExpenseItemCreate.mockReset();
+      mocks.footerRowCreate.mockReset();
+      mocks.polynomialFormulaCreate.mockReset();
+      mocks.polynomialMonomialCreate.mockReset();
+      mocks.polynomialComponentCreate.mockReset();
+      mocks.workScheduleCreate.mockReset();
+      mocks.valuationCreate.mockReset();
+      mocks.adjustmentCreate.mockReset();
+
+      wireDuplicationTransactionMocks();
+    });
+
+    it("duplicates a project's technical structure and skips operational history", async () => {
+      const sourceProject = createDuplicationSourceProject();
+
+      mocks.projectFindFirst.mockResolvedValue(sourceProject);
+      mocks.projectFindMany.mockResolvedValue([{ name: "Hospital Norte (copia)" }]);
+      mocks.projectCreate.mockResolvedValue({
+        id: "project-copy-2",
+        name: "Hospital Norte (copia 2)",
+      });
+      mocks.budgetCreate
+        .mockResolvedValueOnce({
+          id: "budget-general-copy",
+          projectId: "project-copy-2",
+          parentBudgetId: null,
+        })
+        .mockResolvedValueOnce({
+          id: "budget-sub-copy",
+          projectId: "project-copy-2",
+          parentBudgetId: "budget-general-copy",
+        });
+      mocks.budgetLevelCreate.mockResolvedValue({ id: "level-copy" });
+      mocks.budgetItemCreate.mockResolvedValue({ id: "item-copy" });
+      mocks.apuCreate.mockResolvedValue({ id: "apu-copy" });
+      mocks.apuResourceCreate.mockResolvedValue({ id: "apu-resource-copy" });
+      mocks.generalExpenseCreate.mockResolvedValue({ id: "general-expense-copy" });
+      mocks.generalExpenseGroupCreate.mockResolvedValue({ id: "group-copy" });
+      mocks.generalExpenseTitleCreate.mockResolvedValue({ id: "title-copy" });
+      mocks.generalExpenseItemCreate.mockResolvedValue({ id: "expense-item-copy" });
+      mocks.footerRowCreate.mockResolvedValue({ id: "footer-row-copy" });
+      mocks.polynomialFormulaCreate.mockResolvedValue({ id: "formula-copy" });
+      mocks.polynomialMonomialCreate.mockResolvedValue({ id: "monomial-copy" });
+      mocks.polynomialComponentCreate.mockResolvedValue({ id: "component-copy" });
+
+      const duplicated = await duplicateProject("project-source", "user-1");
+
+      expect(duplicated.name).toBe("Hospital Norte (copia 2)");
+      expect(mocks.projectCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          companyId: "company-1",
+          name: "Hospital Norte (copia 2)",
+          clientName: "Cliente 1",
+          location: "Piura",
+          projectType: "Edificacion",
+          status: "IN_PROGRESS",
+        }),
+      });
+      expect(mocks.budgetCreate).toHaveBeenCalledTimes(2);
+      expect(mocks.budgetCreate).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            projectId: "project-copy-2",
+            parentBudgetId: null,
+            kind: "GENERAL",
+            name: "Presupuesto General",
+          }),
+        }),
+      );
+      expect(mocks.budgetCreate).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            projectId: "project-copy-2",
+            parentBudgetId: "budget-general-copy",
+            kind: "SUB_BUDGET",
+            name: "Estructuras",
+          }),
+        }),
+      );
+      expect(mocks.budgetLevelCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.budgetLevelCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          budgetId: "budget-sub-copy",
+          parentId: null,
+          code: "01",
+        }),
+      });
+      expect(mocks.budgetItemCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.budgetItemCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          budgetId: "budget-sub-copy",
+          levelId: "level-copy",
+          code: "01.01",
+        }),
+      });
+      expect(mocks.apuCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.apuCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          budgetItemId: "item-copy",
+          name: "Trazo y replanteo",
+        }),
+      });
+      expect(mocks.apuResourceCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.apuResourceCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          apuId: "apu-copy",
+          resourceId: "resource-1",
+        }),
+      });
+      expect(mocks.generalExpenseCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.generalExpenseCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          budgetId: "budget-sub-copy",
+          name: "Movilidad",
+          type: "FIXED",
+          amount: new Prisma.Decimal("1500"),
+          percentage: null,
+        }),
+      });
+      expect(mocks.generalExpenseGroupCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.generalExpenseGroupCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          budgetId: "budget-sub-copy",
+          name: "Gastos fijos",
+        }),
+      });
+      expect(mocks.generalExpenseTitleCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.generalExpenseTitleCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          groupId: "group-copy",
+          code: "1",
+        }),
+      });
+      expect(mocks.generalExpenseItemCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.generalExpenseItemCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          titleId: "title-copy",
+          code: "1.1",
+        }),
+      });
+      expect(mocks.footerRowCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.footerRowCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          budgetId: "budget-sub-copy",
+          variable: "K",
+          iu: "39",
+        }),
+      });
+      expect(mocks.polynomialFormulaCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.polynomialFormulaCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          projectId: "project-copy-2",
+          budgetId: "budget-sub-copy",
+          name: "Formula base",
+        }),
+      });
+      expect(mocks.polynomialMonomialCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.polynomialMonomialCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          formulaId: "formula-copy",
+          code: "M1",
+        }),
+      });
+      expect(mocks.polynomialComponentCreate).toHaveBeenCalledTimes(1);
+      expect(mocks.polynomialComponentCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          monomialId: "monomial-copy",
+          budgetItemId: "item-copy",
+          apuResourceId: "apu-resource-copy",
+        }),
+      });
+      expect(mocks.workScheduleCreate).not.toHaveBeenCalled();
+      expect(mocks.valuationCreate).not.toHaveBeenCalled();
+      expect(mocks.adjustmentCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects duplication when the source project does not belong to the user", async () => {
+      mocks.projectFindFirst.mockResolvedValue(null);
+
+      await expect(duplicateProject("project-unknown", "user-2")).rejects.toThrow(
+        "No tienes permisos para duplicar este proyecto",
+      );
+      expect(mocks.projectCreate).not.toHaveBeenCalled();
+      expect(mocks.budgetCreate).not.toHaveBeenCalled();
+      expect(mocks.budgetLevelCreate).not.toHaveBeenCalled();
+      expect(mocks.budgetItemCreate).not.toHaveBeenCalled();
+      expect(mocks.apuCreate).not.toHaveBeenCalled();
+      expect(mocks.apuResourceCreate).not.toHaveBeenCalled();
+      expect(mocks.generalExpenseCreate).not.toHaveBeenCalled();
+      expect(mocks.generalExpenseGroupCreate).not.toHaveBeenCalled();
+      expect(mocks.generalExpenseTitleCreate).not.toHaveBeenCalled();
+      expect(mocks.generalExpenseItemCreate).not.toHaveBeenCalled();
+      expect(mocks.footerRowCreate).not.toHaveBeenCalled();
+      expect(mocks.polynomialFormulaCreate).not.toHaveBeenCalled();
+      expect(mocks.polynomialMonomialCreate).not.toHaveBeenCalled();
+      expect(mocks.polynomialComponentCreate).not.toHaveBeenCalled();
+      expect(mocks.workScheduleCreate).not.toHaveBeenCalled();
+      expect(mocks.valuationCreate).not.toHaveBeenCalled();
+      expect(mocks.adjustmentCreate).not.toHaveBeenCalled();
+    });
+
+    it("uses the base copy suffix when no duplicate names exist", async () => {
+      mocks.projectFindFirst.mockResolvedValue({
+        id: "project-source",
+        companyId: "company-1",
+        name: "Colegio Sur",
+        clientName: "",
+        location: "",
+        projectType: "",
+        startDate: null,
+        endDate: null,
+        status: "PLANNING",
+        budgets: [],
+        polynomialFormulas: [],
+      });
+      mocks.projectFindMany.mockResolvedValue([]);
+      mocks.projectCreate.mockResolvedValue({
+        id: "project-copy",
+        name: "Colegio Sur (copia)",
+      });
+
+      await duplicateProject("project-source", "user-1");
+
+      expect(mocks.projectFindMany).toHaveBeenCalledWith({
+        where: {
+          companyId: "company-1",
+          name: {
+            startsWith: "Colegio Sur (copia",
+          },
+        },
+        select: { name: true },
+      });
+      expect(mocks.projectCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          companyId: "company-1",
+          name: "Colegio Sur (copia)",
+          status: "PLANNING",
+        }),
+      });
+    });
+
+    it("chooses the next numeric suffix when base and numbered copies already exist", async () => {
+      mocks.projectFindFirst.mockResolvedValue({
+        id: "project-source",
+        companyId: "company-1",
+        name: "Colegio Sur",
+        clientName: "",
+        location: "",
+        projectType: "",
+        startDate: null,
+        endDate: null,
+        status: "PLANNING",
+        budgets: [],
+        polynomialFormulas: [],
+      });
+      mocks.projectFindMany.mockResolvedValue([
+        { name: "Colegio Sur (copia)" },
+        { name: "Colegio Sur (copia 2)" },
+      ]);
+      mocks.projectCreate.mockResolvedValue({
+        id: "project-copy-3",
+        name: "Colegio Sur (copia 3)",
+      });
+
+      await duplicateProject("project-source", "user-1");
+
+      expect(mocks.projectFindMany).toHaveBeenCalledWith({
+        where: {
+          companyId: "company-1",
+          name: {
+            startsWith: "Colegio Sur (copia",
+          },
+        },
+        select: { name: true },
+      });
+      expect(mocks.projectCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          companyId: "company-1",
+          name: "Colegio Sur (copia 3)",
+          status: "PLANNING",
+        }),
+      });
+    });
   });
 });

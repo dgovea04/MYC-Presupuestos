@@ -2,92 +2,124 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import type { ProjectRecord } from "@/types/project";
-import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/ui/action-button";
+import { ProjectStatusBadge } from "@/components/ui/context-badges";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Input } from "@/components/ui/input";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { OperationalFilterSummary, OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { StaticTableFrame } from "@/components/ui/virtualized-table-frame";
 import { formatDate } from "@/lib/utils";
 
 type ProjectRow = ProjectRecord & {
   budgetsCount: number;
 };
 
+async function readErrorMessage(response: Response, fallbackMessage: string) {
+  try {
+    const data = (await response.json()) as { error?: string };
+    return data.error ?? fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
+}
+
 export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
-  const router = useRouter();
   const { dateFormat } = useFormattingSettings();
+  const [rows, setRows] = useState(projects);
   const [filter, setFilter] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const filtered = useMemo(
     () =>
-      projects.filter((project) =>
+      rows.filter((project) =>
         `${project.name} ${project.clientName ?? ""} ${project.location ?? ""}`.toLowerCase().includes(filter.toLowerCase()),
       ),
-    [filter, projects],
+    [filter, rows],
   );
 
   async function removeProject(id: string) {
     setPendingId(id);
     setError("");
 
-    const response = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    try {
+      const response = await fetch(`/api/projects/${id}`, { method: "DELETE" });
 
-    setPendingId(null);
+      if (!response.ok) {
+        setError(await readErrorMessage(response, "No se pudo eliminar el proyecto"));
+        return;
+      }
 
-    if (!response.ok) {
-      const data = await response.json();
-      setError(data.error ?? "No se pudo eliminar el proyecto");
-      return;
+      setRows((current) => current.filter((project) => project.id !== id));
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], undefined, { locallyHandledPaths: ["/projects"] });
+    } catch {
+      setError("No se pudo eliminar el proyecto");
+    } finally {
+      setPendingId(null);
     }
+  }
 
-    broadcastAppDataChange(["/dashboard", "/projects", "/budgets"]);
-    router.refresh();
+  async function duplicateProject(id: string) {
+    const sourceProject = rows.find((project) => project.id === id);
+    if (!sourceProject) return;
+
+    setPendingId(id);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
+
+      if (!response.ok) {
+        setError(await readErrorMessage(response, "No se pudo duplicar el proyecto"));
+        return;
+      }
+
+      const duplicatedProject = (await response.json()) as ProjectRecord;
+
+      setRows((current) => [{ ...duplicatedProject, budgetsCount: sourceProject.budgetsCount }, ...current]);
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], undefined, { locallyHandledPaths: ["/projects"] });
+    } catch {
+      setError("No se pudo duplicar el proyecto");
+    } finally {
+      setPendingId(null);
+    }
   }
 
   return (
     <div className="space-y-4">
       <OperationalPanel
         title="Tabla operativa"
-        description="Busca por obra, cliente o ubicación y entra rápido a editar o revisar presupuestos."
+        description="Busca por obra, cliente o ubicacion y entra rapido a editar o revisar presupuestos."
         metrics={
-          <>
-            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
+          <div className="flex flex-wrap items-center gap-2">
+            <OperationalMetricBadge tone="accent">
               {filtered.length} {filtered.length === 1 ? "proyecto" : "proyectos"}
-            </span>
-            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
-              {projects.length} total
-            </span>
-          </>
+            </OperationalMetricBadge>
+            <OperationalMetricBadge>{rows.length} total</OperationalMetricBadge>
+          </div>
         }
         controls={
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <Input
-              placeholder="Buscar por obra, cliente o ubicación"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              className="lg:max-w-xl"
-            />
-            <p className="text-sm text-slate-500">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <Input placeholder="Buscar por obra, cliente o ubicacion" value={filter} onChange={(event) => setFilter(event.target.value)} />
+            <OperationalFilterSummary className="flex items-center" data-testid="projects-filter-summary">
               {filter.trim() ? `Mostrando ${filtered.length} coincidencias para "${filter}"` : "Vista general del portafolio de obras"}
-            </p>
+            </OperationalFilterSummary>
           </div>
         }
       />
 
       {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <StaticTableFrame>
         <Table>
           <THead className="[&_tr]:border-b-slate-200">
             <TR className="bg-slate-50 hover:bg-slate-50">
               <TH>Proyecto</TH>
               <TH>Cliente</TH>
-              <TH>Ubicación</TH>
+              <TH>Ubicacion</TH>
               <TH>Estado</TH>
               <TH>Presupuestos</TH>
               <TH>Actualizado</TH>
@@ -102,7 +134,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                   <TD>{project.clientName || "Pendiente"}</TD>
                   <TD>{project.location || "Pendiente"}</TD>
                   <TD>
-                    <Badge>{project.status}</Badge>
+                    <ProjectStatusBadge status={project.status} />
                   </TD>
                   <TD>{project.budgetsCount}</TD>
                   <TD>{formatDate(project.updatedAt, dateFormat)}</TD>
@@ -114,6 +146,16 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                       <Link href={`/projects/${project.id}/edit`}>
                         <ActionButton action="edit" label="Editar" size="sm" variant="ghost" />
                       </Link>
+                      <ActionButton
+                        action="duplicate"
+                        label="Duplicar"
+                        size="sm"
+                        variant="ghost"
+                        disabled={pendingId === project.id}
+                        data-project-action="duplicate"
+                        data-project-id={project.id}
+                        onClick={() => duplicateProject(project.id)}
+                      />
                       <ActionButton
                         action="delete"
                         label="Eliminar"
@@ -131,14 +173,14 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                 <TD colSpan={7} className="px-6 py-10 text-center">
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-slate-900">No encontramos proyectos con ese filtro</p>
-                    <p className="text-sm text-slate-500">Prueba otro término de búsqueda o crea una obra nueva para comenzar.</p>
+                    <p className="text-sm text-slate-500">Prueba otro termino de busqueda o crea una obra nueva para comenzar.</p>
                   </div>
                 </TD>
               </TR>
             )}
           </TBody>
         </Table>
-      </div>
+      </StaticTableFrame>
     </div>
   );
 }
