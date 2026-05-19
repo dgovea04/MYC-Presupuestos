@@ -8,7 +8,7 @@ import { ContextBadge, ProjectStatusBadge } from "@/components/ui/context-badges
 import { InfoCard } from "@/components/ui/info-cards";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
-import { getProjectById } from "@/lib/data/projects";
+import { getProjectOverviewById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
@@ -36,7 +36,7 @@ const projectSections = [
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getAuthSession();
-  const [project, settings] = await Promise.all([getProjectById(id, session!.user.id), getUserSettings(session!.user.id)]);
+  const [project, settings] = await Promise.all([getProjectOverviewById(id, session!.user.id), getUserSettings(session!.user.id)]);
 
   if (!project) {
     notFound();
@@ -46,6 +46,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     project.budgets.find((budget) => budget.kind === "GENERAL") ??
     project.budgets.find((budget) => budget.parentBudgetId == null) ??
     null;
+  const generalBudgetsCount = generalBudget ? 1 : 0;
   const subBudgets = project.budgets.filter((budget) => budget.kind === "SUB_BUDGET");
   const otherSections = getProjectOtherSections(generalBudget?.id ?? null);
 
@@ -83,7 +84,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <InfoCard label="Cliente" value={project.clientName || "Pendiente"} />
               <InfoCard label="Ubicación" value={project.location || "Pendiente"} />
               <InfoCard label="Tipo de obra" value={project.projectType || "Pendiente"} />
-              <InfoCard label="Presupuestos" value={String(project.budgets.length)} />
+              <InfoCard label="Presupuestos" value={String(generalBudgetsCount)} />
               <InfoCard label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
             </div>
             <div className="flex flex-wrap gap-2">

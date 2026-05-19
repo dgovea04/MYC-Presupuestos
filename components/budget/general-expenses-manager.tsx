@@ -9,6 +9,8 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { calculateGeneralExpenseStructure } from "@/lib/calculations/general-expense-structure";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
@@ -36,6 +38,7 @@ export function GeneralExpensesManager({
   initialStructure: GeneralExpenseStructure;
 }) {
   const { currencyDecimals } = useFormattingSettings();
+  const { isExcelMode } = useAppViewMode();
   const [structure, setStructure] = useState(initialStructure);
   const [pendingKeys, setPendingKeys] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -382,7 +385,7 @@ export function GeneralExpensesManager({
         }
       />
 
-      <div className="rounded-2xl border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.98)_0%,rgba(254,243,199,0.92)_100%)] px-4 py-3 text-sm text-amber-800 shadow-[0_14px_30px_-26px_rgba(217,119,6,0.22)]">
+      <div className={cn("border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.98)_0%,rgba(254,243,199,0.92)_100%)] px-4 py-3 text-sm text-amber-800", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_14px_30px_-26px_rgba(217,119,6,0.22)]")}>
         El total oficial del presupuesto sigue saliendo de la tasa general actual: {formatNumber(generalExpensesRate, 4)}.
         Esta sección trabaja con el desagregado operativo de la plantilla base.
       </div>
@@ -400,7 +403,7 @@ export function GeneralExpensesManager({
 
       <div className="space-y-5">
         {preview.groups.map((group) => (
-          <section key={group.id} className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
+          <section key={group.id} className={cn("space-y-4 border bg-white p-4", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
@@ -423,7 +426,7 @@ export function GeneralExpensesManager({
             </div>
 
             {group.titles.map((title) => (
-              <div key={title.id} className="space-y-3 rounded-2xl border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4">
+              <div key={title.id} className={cn("space-y-3 border bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200/80")}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="grid flex-1 gap-3 md:grid-cols-[minmax(110px,140px)_minmax(240px,1fr)_minmax(220px,260px)]">
                     <Input
@@ -474,7 +477,7 @@ export function GeneralExpensesManager({
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]">
+                <div className={getTableFrameClassName(isExcelMode, !isExcelMode ? "shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]" : undefined)}>
                   <Table className="min-w-[980px]">
                     <THead>
                       <TR className="bg-slate-50 hover:bg-slate-50">
@@ -579,7 +582,7 @@ export function GeneralExpensesManager({
           </section>
         ))}
 
-        <section className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
+        <section className={cn("space-y-4 border bg-white p-4", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Resumen final</p>
@@ -590,7 +593,7 @@ export function GeneralExpensesManager({
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]">
+          <div className={getTableFrameClassName(isExcelMode, !isExcelMode ? "shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]" : undefined)}>
             <Table>
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">
@@ -646,13 +649,15 @@ function ToolbarIconButton({
       aria-label={label}
       className="h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100"
     >
-      {children}
+      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0">
+        {children}
+      </span>
     </Button>
   );
 }
 
 function getInputDensityClass() {
-  return "h-8 rounded-lg px-2 text-xs";
+  return "h-8 rounded-sm px-2 text-xs";
 }
 
 function getStructureSavePayload(structure: GeneralExpenseStructure) {

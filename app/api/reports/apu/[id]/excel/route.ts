@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
+import { getUserAccount } from "@/lib/data/account";
 import { getBudgetById } from "@/lib/data/budgets";
+import { getUserCompanies } from "@/lib/data/projects";
 import { createApuWorkbook } from "@/lib/exports/excel";
 import { getUserSettings } from "@/lib/data/settings";
 
@@ -18,7 +20,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 
   const settings = await getUserSettings(session.user.id);
-  const file = await createApuWorkbook(budget, budget.project, settings.currencyDecimals);
+  const [account, companies] = await Promise.all([getUserAccount(session.user.id), getUserCompanies(session.user.id)]);
+  const file = await createApuWorkbook(budget, budget.project, settings.currencyDecimals, {
+    companyName: companies[0]?.name ?? null,
+    companyLogoUrl: companies[0]?.logoUrl ?? null,
+    name: account.name,
+    avatarUrl: account.avatarUrl,
+    jobTitle: account.jobTitle,
+    phone: account.phone,
+  });
 
   return new NextResponse(file, {
     headers: {

@@ -86,7 +86,9 @@ describe("BudgetEditor view mode integration", () => {
       getButtonByText("Tipo Excel").click();
     });
 
-    expect(getTableSurface().className).toContain("rounded-md");
+    expect(getTableSurface().className).toContain("rounded-none");
+    expect(getTableSurface().className).toContain("border-transparent");
+    expect(getTableSurface().className).toContain("shadow-none");
     expect(getHeaderByText("Código").className).toContain("budget-sticky-header");
 
     await act(async () => {
@@ -139,6 +141,9 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     expect(getApuSheetPanel().dataset.densityMode).toBe("compact");
+    expect(getApuSheetPanel().dataset.excelFieldBorderScope).toBe("apu-editor");
+    expect(getApuSheetPanel().style.getPropertyValue("--excel-field-border-color")).toBe("#cbd5e1");
+    expect(getApuSheetPanel().style.getPropertyValue("--excel-row-height")).toBe("52px");
   });
 
   it("moves focus into the APU sheet, keeps excel density, and closes it with Escape", async () => {

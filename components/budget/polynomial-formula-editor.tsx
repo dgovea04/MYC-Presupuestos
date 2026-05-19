@@ -15,8 +15,9 @@ import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
 import type {
   AdjustmentCalculationRecord,
@@ -133,6 +134,7 @@ export function PolynomialFormulaEditor({
   adjustments: AdjustmentCalculationRecord[];
 }) {
   const { dateFormat } = useFormattingSettings();
+  const { isExcelMode } = useAppViewMode();
   const [formula, setFormula] = useState(() => cloneFormula(section.formula));
   const [summary, setSummary] = useState(() => createFormulaSummary(section.formula));
   const [history, setHistory] = useState(adjustments);
@@ -492,7 +494,7 @@ export function PolynomialFormulaEditor({
   return (
     <div className="space-y-5">
       {!formula ? (
-          <Card className="border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
+          <Card className={cn(isExcelMode ? "rounded-md border-slate-300 shadow-none" : "border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
             <CardContent className="space-y-5 p-6">
             <OperationalPanel
               title={section.title}
@@ -508,7 +510,7 @@ export function PolynomialFormulaEditor({
             />
 
             <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4">
+                <div className={cn("border bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200/90")}>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes base</p>
                 <Input
                   type="number"
@@ -519,7 +521,7 @@ export function PolynomialFormulaEditor({
                   className="mt-3"
                 />
               </div>
-                <div className="rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4">
+                <div className={cn("border bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200/90")}>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Año base</p>
                 <Input
                   type="number"
@@ -529,7 +531,7 @@ export function PolynomialFormulaEditor({
                   className="mt-3"
                 />
               </div>
-                <div className="rounded-2xl border border-sky-200/80 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] p-4 shadow-[0_14px_30px_-26px_rgba(2,132,199,0.22)]">
+                <div className={cn("border border-sky-200/80 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] p-4", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_14px_30px_-26px_rgba(2,132,199,0.22)]")}>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Accion</p>
                 <Button
                   type="button"
@@ -545,7 +547,7 @@ export function PolynomialFormulaEditor({
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {section.coefficients.map((coefficient) => (
-                <div key={coefficient.symbol} className="rounded-2xl border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)] p-4">
+                <div key={coefficient.symbol} className={cn("border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md" : "rounded-2xl")}>
                   <p className="font-medium text-slate-900">
                     {coefficient.symbol} - {coefficient.label}
                   </p>
@@ -557,14 +559,14 @@ export function PolynomialFormulaEditor({
         </Card>
       ) : (
         <>
-          <Card className="border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
+          <Card className={cn(isExcelMode ? "rounded-md border-slate-300 shadow-none" : "border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
             <CardContent className="space-y-4 p-6">
               <OperationalPanel
                 title={formula.name}
                 description={`Mes base ${formula.baseMonth}/${formula.baseYear}. Asigna índices INEI, valida coeficientes y calcula K en tiempo real.`}
                 metrics={
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`${getStatusBadgeClass(summary.status)} rounded-full px-3 py-2 text-xs font-medium`}>
+                    <span className={cn(getStatusBadgeClass(summary.status), isExcelMode ? "rounded-sm" : "rounded-full", "px-3 py-2 text-xs font-medium")}>
                       Estado: {summary.status}
                     </span>
                     <SaveStateBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} savedLabel="Guardado" />

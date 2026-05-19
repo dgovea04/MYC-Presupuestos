@@ -1,13 +1,10 @@
 import ExcelJS from "exceljs";
 import { buildDisplayRows, levelTypeLabel } from "@/lib/budget/structure";
 import type { BudgetRecord } from "@/types/budget";
+import type { ReportResponsibleMeta } from "@/types/report-meta";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
-
-type ProjectMeta = {
-  name?: string | null;
-  clientName?: string | null;
-  location?: string | null;
-};
+import { buildDocumentSignatureSummary, type DocumentSignatureProjectMeta } from "@/lib/exports/document-signature";
+import { loadReportIdentityAssets } from "@/lib/exports/report-assets";
 
 const MAX_CURRENCY_DECIMALS = 4;
 
@@ -45,14 +42,16 @@ function createCurrencyNumberFormat(currency: string, decimalPlaces: number) {
 
 export async function createBudgetWorkbook(
   budget: BudgetRecord,
-  project?: ProjectMeta,
+  project?: DocumentSignatureProjectMeta,
   currencyDecimals = 2,
+  responsible?: ReportResponsibleMeta,
 ) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Presupuesto");
   const normalized = calculateBudgetRecord(budget);
   const rows = buildDisplayRows(normalized);
   const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
+  const identityAssets = await loadReportIdentityAssets(responsible);
 
   workbook.creator = "MYC Presupuestos";
   sheet.views = [{ state: "frozen", ySplit: 6 }];
@@ -83,14 +82,23 @@ export async function createBudgetWorkbook(
   sheet.getCell("B4").value = project?.location ?? "-";
   sheet.getCell("D4").value = "Moneda";
   sheet.getCell("E4").value = normalized.currency;
+  const responsibleRows = buildResponsibleMetaRows(responsible);
 
-  const headerRow = sheet.getRow(6);
+  for (const [index, row] of responsibleRows.entries()) {
+    const rowNumber = 5 + index;
+    sheet.getCell(`A${rowNumber}`).value = row[0];
+    sheet.getCell(`B${rowNumber}`).value = row[1];
+    sheet.getCell(`D${rowNumber}`).value = row[2];
+    sheet.getCell(`E${rowNumber}`).value = row[3];
+  }
+
+  const headerRow = sheet.getRow(7);
   headerRow.values = ["Codigo", "Descripcion", "Unidad", "Metrado", "Precio unitario", "Parcial"];
   headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
   headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
   headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-  let currentRow = 7;
+  let currentRow = 8;
 
   for (const row of rows) {
     if (row.kind === "level") {
@@ -126,6 +134,7 @@ export async function createBudgetWorkbook(
   writeSummaryRow(sheet, currentRow++, "Utilidad", normalized.totals.totalUtility);
   writeSummaryRow(sheet, currentRow++, "IGV", normalized.totals.totalTax);
   writeSummaryRow(sheet, currentRow++, "Total", normalized.totals.totalAmount, true);
+  currentRow = writeBudgetDocumentSignatureBlock(sheet, workbook, currentRow + 1, normalized.name, project, responsible, identityAssets);
 
   formatCurrencyColumns(sheet, [5, 6], normalized.currency, normalizedDecimals);
   formatCurrencyColumns(sheet, [2], normalized.currency, normalizedDecimals, false);
@@ -143,11 +152,17 @@ export async function createBudgetWorkbook(
   return workbook.xlsx.writeBuffer();
 }
 
-export async function createApuWorkbook(budget: BudgetRecord, project?: ProjectMeta, currencyDecimals = 2) {
+export async function createApuWorkbook(
+  budget: BudgetRecord,
+  project?: DocumentSignatureProjectMeta,
+  currencyDecimals = 2,
+  responsible?: ReportResponsibleMeta,
+) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("APU");
   const normalized = calculateBudgetRecord(budget);
   const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
+  const identityAssets = await loadReportIdentityAssets(responsible);
 
   workbook.creator = "MYC Presupuestos";
   sheet.columns = [
@@ -169,8 +184,17 @@ export async function createApuWorkbook(budget: BudgetRecord, project?: ProjectM
   sheet.getCell("B2").value = project?.name ?? "-";
   sheet.getCell("E2").value = "Presupuesto";
   sheet.getCell("F2").value = normalized.name;
+  const responsibleRows = buildResponsibleMetaRows(responsible);
 
-  let currentRow = 4;
+  for (const [index, row] of responsibleRows.entries()) {
+    const rowNumber = 3 + index;
+    sheet.getCell(`A${rowNumber}`).value = row[0];
+    sheet.getCell(`B${rowNumber}`).value = row[1];
+    sheet.getCell(`E${rowNumber}`).value = row[2];
+    sheet.getCell(`F${rowNumber}`).value = row[3];
+  }
+
+  let currentRow = 6;
 
   for (const item of normalized.items) {
     const apu = item.apu;
@@ -210,9 +234,162 @@ export async function createApuWorkbook(budget: BudgetRecord, project?: ProjectM
     currentRow += 2;
   }
 
+  writeApuDocumentSignatureBlock(sheet, workbook, currentRow + 1, normalized.name, project, responsible, identityAssets);
+
   formatCurrencyColumns(sheet, [7, 8], normalized.currency, normalizedDecimals);
 
   return workbook.xlsx.writeBuffer();
+}
+
+export function buildResponsibleMetaRows(responsible?: ReportResponsibleMeta) {
+  return [
+    ["Responsable", responsible?.name ?? "-", "Cargo", responsible?.jobTitle ?? "-"],
+    ["Empresa", responsible?.companyName ?? "-", "Telefono", responsible?.phone ?? "-"],
+  ] as const;
+}
+
+function writeBudgetDocumentSignatureBlock(
+  sheet: ExcelJS.Worksheet,
+  workbook: ExcelJS.Workbook,
+  startRow: number,
+  budgetName: string,
+  project?: DocumentSignatureProjectMeta,
+  responsible?: ReportResponsibleMeta,
+  identityAssets?: Awaited<ReturnType<typeof loadReportIdentityAssets>>,
+) {
+  const summary = buildDocumentSignatureSummary(budgetName, project, responsible);
+
+  sheet.mergeCells(`A${startRow}:F${startRow}`);
+  const titleCell = sheet.getCell(`A${startRow}`);
+  titleCell.value = "FIRMA DOCUMENTAL";
+  titleCell.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+  titleCell.alignment = { horizontal: "center" };
+
+  sheet.mergeCells(`A${startRow + 1}:F${startRow + 1}`);
+  const subtitleCell = sheet.getCell(`A${startRow + 1}`);
+  subtitleCell.value = "Cierre visual del presupuesto con responsable tecnico y espacios de firma.";
+  subtitleCell.font = { italic: true, color: { argb: "FF475569" } };
+  subtitleCell.alignment = { wrapText: true };
+  subtitleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FBFF" } };
+  if (identityAssets?.companyLogo) {
+    insertWorksheetImage(workbook, sheet, identityAssets.companyLogo, {
+      br: { col: 5.75, row: startRow + 0.95 },
+      tl: { col: 5.05, row: startRow - 0.05 },
+    });
+  }
+
+  sheet.mergeCells(`A${startRow + 2}:C${startRow + 2}`);
+  sheet.mergeCells(`D${startRow + 2}:F${startRow + 2}`);
+  writeSectionHeaderCell(sheet.getCell(`A${startRow + 2}`), "RESUMEN DOCUMENTAL");
+  writeSectionHeaderCell(sheet.getCell(`D${startRow + 2}`), "RESPONSABLE TECNICO");
+
+  for (const [index, [leftLabel, leftValue]] of summary.document.entries()) {
+    const rowNumber = startRow + 3 + index;
+    const [rightLabel, rightValue] = summary.responsible[index];
+    writeSummaryLabelValueRow(sheet, rowNumber, "A", "B", leftLabel, leftValue);
+    writeSummaryLabelValueRow(sheet, rowNumber, "D", "E", rightLabel, rightValue);
+  }
+
+  const signatureTitleRow = startRow + 8;
+  sheet.mergeCells(`A${signatureTitleRow}:C${signatureTitleRow}`);
+  sheet.mergeCells(`D${signatureTitleRow}:F${signatureTitleRow}`);
+  writeSectionHeaderCell(sheet.getCell(`A${signatureTitleRow}`), "FIRMA DEL RESPONSABLE");
+  writeSectionHeaderCell(sheet.getCell(`D${signatureTitleRow}`), "VO. BO. / APROBACION");
+
+  const signatureLineRow = signatureTitleRow + 1;
+  sheet.mergeCells(`A${signatureLineRow}:C${signatureLineRow}`);
+  sheet.mergeCells(`D${signatureLineRow}:F${signatureLineRow}`);
+  sheet.getRow(signatureLineRow).height = 28;
+  writeSignatureLineCell(
+    sheet.getCell(`A${signatureLineRow}`),
+    summary.responsibleSigner,
+    summary.responsibleRole,
+  );
+  writeSignatureLineCell(
+    sheet.getCell(`D${signatureLineRow}`),
+    summary.approverLabel,
+    "Espacio reservado para aprobacion del documento",
+  );
+  if (identityAssets?.avatar) {
+    insertWorksheetImage(workbook, sheet, identityAssets.avatar, {
+      br: { col: 1.05, row: signatureLineRow + 0.8 },
+      tl: { col: 0.15, row: signatureLineRow + 0.02 },
+    });
+  }
+
+  return signatureLineRow + 1;
+}
+
+function writeApuDocumentSignatureBlock(
+  sheet: ExcelJS.Worksheet,
+  workbook: ExcelJS.Workbook,
+  startRow: number,
+  budgetName: string,
+  project?: DocumentSignatureProjectMeta,
+  responsible?: ReportResponsibleMeta,
+  identityAssets?: Awaited<ReturnType<typeof loadReportIdentityAssets>>,
+) {
+  const summary = buildDocumentSignatureSummary(budgetName, project, responsible);
+
+  sheet.mergeCells(`A${startRow}:H${startRow}`);
+  const titleCell = sheet.getCell(`A${startRow}`);
+  titleCell.value = "FIRMA DOCUMENTAL";
+  titleCell.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+  titleCell.alignment = { horizontal: "center" };
+
+  sheet.mergeCells(`A${startRow + 1}:H${startRow + 1}`);
+  const subtitleCell = sheet.getCell(`A${startRow + 1}`);
+  subtitleCell.value = "Cierre visual del APU con responsable tecnico y espacios de firma.";
+  subtitleCell.font = { italic: true, color: { argb: "FF475569" } };
+  subtitleCell.alignment = { wrapText: true };
+  subtitleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FBFF" } };
+  if (identityAssets?.companyLogo) {
+    insertWorksheetImage(workbook, sheet, identityAssets.companyLogo, {
+      br: { col: 7.7, row: startRow + 0.95 },
+      tl: { col: 6.9, row: startRow - 0.05 },
+    });
+  }
+
+  sheet.mergeCells(`A${startRow + 2}:D${startRow + 2}`);
+  sheet.mergeCells(`E${startRow + 2}:H${startRow + 2}`);
+  writeSectionHeaderCell(sheet.getCell(`A${startRow + 2}`), "RESUMEN DOCUMENTAL");
+  writeSectionHeaderCell(sheet.getCell(`E${startRow + 2}`), "RESPONSABLE TECNICO");
+
+  for (const [index, [leftLabel, leftValue]] of summary.document.entries()) {
+    const rowNumber = startRow + 3 + index;
+    const [rightLabel, rightValue] = summary.responsible[index];
+    writeSummaryLabelValueRow(sheet, rowNumber, "A", "B", leftLabel, leftValue);
+    writeSummaryLabelValueRow(sheet, rowNumber, "E", "F", rightLabel, rightValue);
+  }
+
+  const signatureTitleRow = startRow + 8;
+  sheet.mergeCells(`A${signatureTitleRow}:D${signatureTitleRow}`);
+  sheet.mergeCells(`E${signatureTitleRow}:H${signatureTitleRow}`);
+  writeSectionHeaderCell(sheet.getCell(`A${signatureTitleRow}`), "FIRMA DEL RESPONSABLE");
+  writeSectionHeaderCell(sheet.getCell(`E${signatureTitleRow}`), "VO. BO. / APROBACION");
+
+  const signatureLineRow = signatureTitleRow + 1;
+  sheet.mergeCells(`A${signatureLineRow}:D${signatureLineRow}`);
+  sheet.mergeCells(`E${signatureLineRow}:H${signatureLineRow}`);
+  sheet.getRow(signatureLineRow).height = 28;
+  writeSignatureLineCell(
+    sheet.getCell(`A${signatureLineRow}`),
+    summary.responsibleSigner,
+    summary.responsibleRole,
+  );
+  writeSignatureLineCell(
+    sheet.getCell(`E${signatureLineRow}`),
+    summary.approverLabel,
+    "Espacio reservado para aprobacion del documento",
+  );
+  if (identityAssets?.avatar) {
+    insertWorksheetImage(workbook, sheet, identityAssets.avatar, {
+      br: { col: 1.05, row: signatureLineRow + 0.8 },
+      tl: { col: 0.15, row: signatureLineRow + 0.02 },
+    });
+  }
 }
 
 function writeSummaryRow(sheet: ExcelJS.Worksheet, rowNumber: number, label: string, value: number, highlight = false) {
@@ -227,6 +404,57 @@ function writeSummaryRow(sheet: ExcelJS.Worksheet, rowNumber: number, label: str
     row.getCell(4).font = { bold: true, color: { argb: "FFFFFFFF" } };
     row.getCell(5).font = { bold: true, color: { argb: "FFFFFFFF" } };
   }
+}
+
+function writeSectionHeaderCell(cell: ExcelJS.Cell, value: string) {
+  cell.value = value;
+  cell.font = { bold: true, color: { argb: "FF0F172A" } };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0F2FE" } };
+  cell.alignment = { horizontal: "center" };
+}
+
+function writeSummaryLabelValueRow(
+  sheet: ExcelJS.Worksheet,
+  rowNumber: number,
+  labelColumn: "A" | "D" | "E",
+  valueColumn: "B" | "E" | "F",
+  label: string,
+  value: string,
+) {
+  sheet.getCell(`${labelColumn}${rowNumber}`).value = label;
+  sheet.getCell(`${valueColumn}${rowNumber}`).value = value;
+  sheet.getCell(`${labelColumn}${rowNumber}`).font = { bold: true, color: { argb: "FF64748B" } };
+  sheet.getCell(`${valueColumn}${rowNumber}`).font = { color: { argb: "FF0F172A" } };
+  sheet.getCell(`${labelColumn}${rowNumber}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+  sheet.getCell(`${valueColumn}${rowNumber}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } };
+}
+
+function writeSignatureLineCell(cell: ExcelJS.Cell, primary: string, secondary: string) {
+  cell.value = `${primary}\n${secondary}`;
+  cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  cell.font = { bold: true, color: { argb: "FF0F172A" } };
+  cell.border = {
+    top: { style: "thin", color: { argb: "FF94A3B8" } },
+    left: { style: "dotted", color: { argb: "FFCBD5E1" } },
+    bottom: { style: "dotted", color: { argb: "FFCBD5E1" } },
+    right: { style: "dotted", color: { argb: "FFCBD5E1" } },
+  };
+}
+
+function insertWorksheetImage(
+  workbook: ExcelJS.Workbook,
+  sheet: ExcelJS.Worksheet,
+  asset: Awaited<ReturnType<typeof loadReportIdentityAssets>>["avatar"] extends infer T
+    ? Exclude<T, null>
+    : never,
+  range: { tl: { col: number; row: number }; br: { col: number; row: number } },
+) {
+  const imageId = workbook.addImage({
+    buffer: asset.buffer,
+    extension: asset.extension === "jpg" ? "jpeg" : asset.extension,
+  });
+
+  sheet.addImage(imageId, range);
 }
 
 function formatCurrencyColumns(

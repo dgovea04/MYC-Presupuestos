@@ -158,6 +158,34 @@ export async function getBudgetById(id: string, userId: string) {
   };
 }
 
+export async function getBudgetHeaderById(id: string, userId: string) {
+  return prisma.budget.findFirst({
+    where: {
+      id,
+      project: {
+        company: {
+          userId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      projectId: true,
+      kind: true,
+      name: true,
+      currency: true,
+      igvRate: true,
+      generalExpensesRate: true,
+      utilityRate: true,
+      totalDirectCost: true,
+      totalGeneralExpenses: true,
+      totalUtility: true,
+      totalTax: true,
+      totalAmount: true,
+    },
+  });
+}
+
 export async function getGeneralBudgetResourceSummary(budgetId: string, userId: string): Promise<GeneralBudgetResourceSummaryResult> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
 
@@ -974,9 +1002,10 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
         .filter((resourceId) => !desiredResourceIds.has(resourceId));
 
       for (const resource of item.apu.resources) {
+        const persistedResourceId = await resolvePersistableApuResourceId(tx, userId, resource);
         const resourceData = {
           apuId: persistedApuId,
-          resourceId: resource.resourceId,
+          resourceId: persistedResourceId,
           resourceType: resource.resourceType,
           crew: resource.crew ?? null,
           quantity: resource.quantity,
@@ -1156,6 +1185,76 @@ async function refreshGeneralBudgetTotals(
     where: { id: generalBudgetId },
     data: consolidated,
   });
+}
+
+async function resolvePersistableApuResourceId(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  resource: BudgetRecord["items"][number]["apu"] extends infer TApu
+    ? TApu extends { resources: infer TResources }
+      ? TResources extends Array<infer TResource>
+        ? TResource
+        : never
+      : never
+    : never,
+) {
+  const candidateIds = [resource.resourceId, resource.resource?.id].filter(
+    (value, index, values): value is string =>
+      typeof value === "string" && value.trim().length > 0 && values.indexOf(value) === index,
+  );
+
+  for (const candidateId of candidateIds) {
+    const existingResource = await tx.resource.findFirst({
+      where: {
+        id: candidateId,
+        OR: [
+          { companyId: null },
+          {
+            company: {
+              userId,
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (existingResource) {
+      return existingResource.id;
+    }
+  }
+
+  if (resource.resource) {
+    const fallbackResource = await tx.resource.findFirst({
+      where: {
+        description: resource.resource.description,
+        unit: resource.resource.unit,
+        category: resource.resource.category,
+        OR: [
+          { companyId: null },
+          {
+            company: {
+              userId,
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (fallbackResource) {
+      return fallbackResource.id;
+    }
+  }
+
+  const resourceLabel =
+    resource.resource?.description?.trim() ||
+    resource.resourceId.trim() ||
+    "seleccionado";
+
+  throw new Error(
+    `El insumo "${resourceLabel}" ya no existe o no est\u00e1 disponible. Vuelve a seleccionarlo antes de guardar el APU.`,
+  );
 }
 
 async function getAccessibleGeneralBudget(budgetId: string, userId: string) {

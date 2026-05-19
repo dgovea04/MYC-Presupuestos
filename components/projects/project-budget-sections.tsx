@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/ui/action-button";
 import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import {
   getAppDataChangeEventName,
@@ -111,7 +112,7 @@ export function ProjectBudgetSections({
                       <AnimatedCurrencyValue value={consolidatedTotal} currency={budgetCurrency} className="px-0 py-0 font-semibold text-slate-900" />
                     </span>
                     <span>Sub Presupuestos: {orderedSubBudgets.length}</span>
-                    <span>Última actualización: {formatDate(generalBudgetUpdatedAt, dateFormat)}</span>
+                    <span>Ultima actualizacion: {formatDate(generalBudgetUpdatedAt, dateFormat)}</span>
                   </div>
                 </div>
                 <Link href={`/budgets/${general.id}`}>
@@ -119,7 +120,7 @@ export function ProjectBudgetSections({
                 </Link>
               </div>
             ) : (
-              <EmptyStatePanel message="Este proyecto todavía no tiene un presupuesto general configurado." />
+              <EmptyStatePanel message="Este proyecto todavia no tiene un presupuesto general configurado." />
             )}
           </CardContent>
         </Card>
@@ -129,38 +130,35 @@ export function ProjectBudgetSections({
         <Card className="border-slate-200">
           <CardContent className="space-y-4 p-6">
             <OperationalPanel
-              title="Sub presupuestos"
-              description="Cada proyecto arranca con los sub presupuestos base configurados, listos para editar por especialidad."
-              metrics={<span>{orderedSubBudgets.length} especialidades</span>}
+              title="Sub Presupuestos"
+              description="Cada proyecto arranca con los Sub Presupuestos base configurados, listos para editar cada Sub Presupuesto."
+              metrics={<OperationalMetricBadge tone="accent">{orderedSubBudgets.length} Sub Presupuestos</OperationalMetricBadge>}
             />
 
             <div className="grid gap-4 lg:grid-cols-2">
-            {orderedSubBudgets.length ? (
-              orderedSubBudgets.map((budget) => (
-                <div key={budget.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/70">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">{budget.name}</p>
-                      <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                        Total actual:
-                        <AnimatedCurrencyValue value={budget.totalAmount} currency={budget.currency} className="px-0 py-0 font-medium text-slate-700" />
-                      </p>
+              {orderedSubBudgets.length ? (
+                orderedSubBudgets.map((budget) => (
+                  <div key={budget.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/70">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">{budget.name}</p>
+                        <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                          Total actual:
+                          <AnimatedCurrencyValue value={budget.totalAmount} currency={budget.currency} className="px-0 py-0 font-medium text-slate-700" />
+                        </p>
+                      </div>
+                      <Badge className="bg-slate-200 text-slate-700">Sub Presupuesto</Badge>
                     </div>
-                    <Badge className="bg-slate-200 text-slate-700">Sub Presupuesto</Badge>
+                    <div className="mt-4">
+                      <Link href={`/budgets/${budget.id}`}>
+                        <ActionButton action="open" label="Abrir Sub Presupuesto" variant="outline" />
+                      </Link>
+                    </div>
                   </div>
-                  <div className="mt-4">
-                    <Link href={`/budgets/${budget.id}`}>
-                      <ActionButton action="open" label="Abrir presupuesto" variant="outline" />
-                    </Link>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <EmptyStatePanel
-                message="Todavía no hay sub presupuestos configurados para este proyecto."
-                className="lg:col-span-2"
-              />
-            )}
+                ))
+              ) : (
+                <EmptyStatePanel message="Todavia no hay Sub Presupuestos configurados para este proyecto." className="lg:col-span-2" />
+              )}
             </div>
           </CardContent>
         </Card>

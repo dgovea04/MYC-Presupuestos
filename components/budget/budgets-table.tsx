@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import {
   broadcastAppDataChange,
   getAppDataChangeEventName,
@@ -12,8 +12,9 @@ import {
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { ActionButton } from "@/components/ui/action-button";
 import { Input } from "@/components/ui/input";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { OperationalFilterSummary, OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { StaticTableFrame } from "@/components/ui/virtualized-table-frame";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 type BudgetRow = {
@@ -26,8 +27,8 @@ type BudgetRow = {
 };
 
 export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
-  const router = useRouter();
   const { currencyDecimals, dateFormat } = useFormattingSettings();
+  const [baseRows, setBaseRows] = useState(budgets);
   const [optimisticBudgets, setOptimisticBudgets] = useState<Record<string, Partial<BudgetRow>>>({});
   const [filter, setFilter] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -78,11 +79,11 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
 
   const rows = useMemo(
     () =>
-      budgets.map((budget) => ({
+      baseRows.map((budget) => ({
         ...budget,
         ...optimisticBudgets[budget.id],
       })),
-    [budgets, optimisticBudgets],
+    [baseRows, optimisticBudgets],
   );
 
   const filtered = useMemo(
@@ -104,42 +105,35 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
       return;
     }
 
-    broadcastAppDataChange(["/dashboard", "/projects", "/budgets"]);
-    router.refresh();
+    setBaseRows((current) => current.filter((budget) => budget.id !== id));
+    broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], undefined, { locallyHandledPaths: ["/budgets"] });
   }
 
   return (
     <div className="space-y-4">
       <OperationalPanel
         title="Tabla operativa"
-        description="Busca por presupuesto o proyecto y entra rápido a revisar o depurar la cartera activa."
+        description="Busca por presupuesto o proyecto y entra rapido a revisar o depurar la cartera activa."
         metrics={
-          <>
-            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
+          <div className="flex flex-wrap items-center gap-2">
+            <OperationalMetricBadge tone="accent">
               {filtered.length} {filtered.length === 1 ? "presupuesto" : "presupuestos"}
-            </span>
-            <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600">
-              {rows.length} total
-            </span>
-          </>
+            </OperationalMetricBadge>
+            <OperationalMetricBadge>{rows.length} total</OperationalMetricBadge>
+          </div>
         }
         controls={
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <Input
-              placeholder="Buscar por presupuesto o proyecto"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              className="lg:max-w-xl"
-            />
-            <p className="text-sm text-slate-500">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <Input placeholder="Buscar por presupuesto o proyecto" value={filter} onChange={(event) => setFilter(event.target.value)} />
+            <OperationalFilterSummary className="flex items-center">
               {filter.trim() ? `Mostrando ${filtered.length} coincidencias para "${filter}"` : "Vista general de presupuestos disponibles"}
-            </p>
+            </OperationalFilterSummary>
           </div>
         }
       />
 
       {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <StaticTableFrame>
         <Table>
           <THead className="[&_tr]:border-b-slate-200">
             <TR className="bg-slate-50 hover:bg-slate-50">
@@ -180,14 +174,14 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
                 <TD colSpan={5} className="px-6 py-10 text-center">
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-slate-900">No encontramos presupuestos con ese filtro</p>
-                    <p className="text-sm text-slate-500">Prueba otro término de búsqueda o crea un presupuesto nuevo para comenzar.</p>
+                    <p className="text-sm text-slate-500">Prueba otro termino de busqueda o crea un presupuesto nuevo para comenzar.</p>
                   </div>
                 </TD>
               </TR>
             )}
           </TBody>
         </Table>
-      </div>
+      </StaticTableFrame>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { cn } from "@/lib/utils";
 import type { PolynomialMonomialRecord } from "@/types/polynomial-formula";
 
 export function PolynomialFormulaMath({
@@ -5,13 +7,15 @@ export function PolynomialFormulaMath({
 }: {
   monomials: PolynomialMonomialRecord[];
 }) {
+  const { isExcelMode } = useAppViewMode();
+
   if (!monomials.length) {
-    return <p className="text-sm text-slate-500">La expresión matemática aparecerá cuando exista una fórmula generada.</p>;
+    return <p className="text-sm text-slate-500">La expresion matematica aparecera cuando exista una formula generada.</p>;
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Expresión</p>
+    <div className={cn("border border-slate-200 bg-slate-50 px-4 py-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Expresion</p>
       <p className="mt-3 break-words font-mono text-sm text-slate-900">
         K ={" "}
         {monomials

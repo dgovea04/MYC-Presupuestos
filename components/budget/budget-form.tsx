@@ -85,7 +85,6 @@ export function BudgetForm({
 
     if (budget) {
       router.push(`/budgets/${budget.id}`);
-      router.refresh();
       return;
     }
 

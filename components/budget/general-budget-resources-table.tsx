@@ -1,14 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
+
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { StaticTableFrame } from "@/components/ui/virtualized-table-frame";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import type { GeneralBudgetResourceSummaryResult } from "@/types/budget-sections";
 
@@ -19,6 +23,7 @@ export function GeneralBudgetResourcesTable({
   summary: GeneralBudgetResourceSummaryResult;
   currency: string;
 }) {
+  const { isExcelMode } = useAppViewMode();
   const { currencyDecimals } = useFormattingSettings();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("ALL");
@@ -58,24 +63,24 @@ export function GeneralBudgetResourcesTable({
       <CardContent className="space-y-4 p-6">
         <OperationalPanel
           title="Lista de insumos derivada"
-          description="Consolidado automático a partir de los APUs de los sub presupuestos del proyecto. Esta vista es operativa y de solo lectura."
-          metrics={<span>{summary.resources.length} insumos en origen</span>}
+          description="Consolidado automatico a partir de los APUs de los Sub Presupuestos del proyecto. Esta vista es operativa y de solo lectura."
+          metrics={<OperationalMetricBadge tone="accent">{summary.resources.length} insumos en origen</OperationalMetricBadge>}
           controls={
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_220px_240px]">
               <Input
-                placeholder="Buscar por código, descripción o unidad"
+                placeholder="Buscar por codigo, descripcion o unidad"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
               <Select value={category} onChange={(event) => setCategory(event.target.value)}>
-                <option value="ALL">Todas las categorías</option>
+                <option value="ALL">Todas las categorias</option>
                 <option value="MATERIAL">Materiales</option>
                 <option value="LABOR">Mano de obra</option>
                 <option value="EQUIPMENT">Equipos</option>
                 <option value="TOOLS">Herramientas</option>
               </Select>
               <Select value={budgetName} onChange={(event) => setBudgetName(event.target.value)}>
-                <option value="ALL">Todas las especialidades</option>
+                <option value="ALL">Todos los Sub Presupuestos</option>
                 {budgetOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -86,32 +91,32 @@ export function GeneralBudgetResourcesTable({
           }
         />
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className={isExcelMode ? "grid gap-2 md:grid-cols-2 xl:grid-cols-4" : "grid gap-3 md:grid-cols-2 xl:grid-cols-4"}>
           <InfoCard label="Insumos" value={String(filteredResources.length)} tone="slate" />
-          <InfoCard label="Especialidades" value={String(summary.budgetCount)} tone="sky" />
+          <InfoCard label="Sub Presupuestos" value={String(summary.budgetCount)} tone="sky" />
           <InfoCard label="Cantidad total" value={formatNumber(totals.totalQuantity, 4)} tone="amber" />
           <InfoCard label="Costo total" value={formatCurrency(totals.totalCost, currency, currencyDecimals)} tone="sky" />
         </div>
 
         {summary.unresolvedCount > 0 ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className={cn("border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800", isExcelMode ? "rounded-md" : "rounded-2xl")}>
             {summary.unresolvedCount} insumos no resolubles quedaron fuera del consolidado derivado.
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <StaticTableFrame>
           <Table>
             <THead>
               <TR className="bg-slate-50 hover:bg-slate-50">
-                <TH>Código</TH>
-                <TH>Descripción</TH>
-                <TH>Categoría</TH>
+                <TH>Codigo</TH>
+                <TH>Descripcion</TH>
+                <TH>Categoria</TH>
                 <TH className="text-center">Unidad</TH>
                 <TH className="text-right">P. unitario</TH>
                 <TH className="text-right">Cantidad total</TH>
                 <TH className="text-right">Costo total</TH>
                 <TH className="text-right">Usos</TH>
-                <TH>Especialidades</TH>
+                <TH>Sub Presupuestos</TH>
               </TR>
             </THead>
             <TBody>
@@ -137,7 +142,7 @@ export function GeneralBudgetResourcesTable({
               ) : null}
             </TBody>
           </Table>
-        </div>
+        </StaticTableFrame>
       </CardContent>
     </Card>
   );

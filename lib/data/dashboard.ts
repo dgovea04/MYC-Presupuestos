@@ -39,48 +39,84 @@ export type DashboardActivityItem = {
 };
 
 export async function getDashboardStats(userId: string) {
-  const companies = await prisma.company.findMany({
-    where: { userId },
-    include: {
-      projects: {
-        include: {
-          budgets: {
-            include: {
-              polynomialFormulas: {
-                include: {
-                  adjustments: {
-                    orderBy: { createdAt: "desc" },
-                    take: 1,
-                  },
-                },
-                orderBy: { updatedAt: "desc" },
-              },
-            },
-          },
-          polynomialFormulas: {
-            include: {
-              adjustments: {
-                orderBy: { createdAt: "desc" },
-                take: 1,
-              },
-            },
-            orderBy: { updatedAt: "desc" },
+  const [companiesCount, projects, activityEvents] = await Promise.all([
+    prisma.company.count({
+      where: { userId },
+    }),
+    prisma.project.findMany({
+      where: {
+        company: {
+          userId,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        status: true,
+        updatedAt: true,
+        company: {
+          select: {
+            name: true,
           },
         },
-        orderBy: { updatedAt: "desc" },
+        budgets: {
+          select: {
+            id: true,
+            kind: true,
+            totalAmount: true,
+            currency: true,
+            updatedAt: true,
+            polynomialFormulas: {
+              select: {
+                id: true,
+                adjustments: {
+                  select: {
+                    id: true,
+                  },
+                  orderBy: { createdAt: "desc" },
+                  take: 1,
+                },
+              },
+              orderBy: { updatedAt: "desc" },
+            },
+          },
+        },
+        polynomialFormulas: {
+          select: {
+            id: true,
+            budgetId: true,
+            updatedAt: true,
+            adjustments: {
+              select: {
+                id: true,
+                month: true,
+                year: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+        },
       },
-    },
-  });
+      orderBy: { updatedAt: "desc" },
+    }),
+    typeof (prisma as typeof prisma & { activityEvent?: unknown }).activityEvent === "undefined"
+      ? Promise.resolve([])
+      : prisma.activityEvent.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+          take: 25,
+        }),
+  ]);
 
-  const projects = companies
-    .flatMap((company) =>
-      company.projects.map((project) => ({
-        ...project,
-        companyName: company.name,
-      })),
-    )
-    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
-  const generalBudgets = projects
+  const projectsWithCompany = projects.map((project) => ({
+    ...project,
+    companyName: project.company.name,
+  }));
+  const generalBudgets = projectsWithCompany
     .flatMap((project) =>
       project.budgets
         .filter((budget) => budget.kind === "GENERAL")
@@ -92,7 +128,7 @@ export async function getDashboardStats(userId: string) {
         })),
     )
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
-  const formulas = projects
+  const formulas = projectsWithCompany
     .flatMap((project) =>
       project.polynomialFormulas.map((formula) => ({
         ...formula,
@@ -114,47 +150,38 @@ export async function getDashboardStats(userId: string) {
       })),
     )
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
-  const activityEvents =
-    typeof (prisma as typeof prisma & { activityEvent?: unknown }).activityEvent === "undefined"
-      ? []
-      : await prisma.activityEvent.findMany({
-          where: { userId },
-          orderBy: { createdAt: "desc" },
-          take: 12,
-        });
+  const generalBudgetByProjectId = new Map(generalBudgets.map((budget) => [budget.projectId, budget]));
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
   return {
-    companiesCount: companies.length > 0 ? 1 : 0,
-    projectsCount: projects.length,
+    companiesCount,
+    projectsCount: projectsWithCompany.length,
     budgetsCount: generalBudgets.length,
     portfolioValue: generalBudgets.reduce((sum, budget) => sum + decimalToNumber(budget.totalAmount), 0),
     monthlyAdjustmentsCount: adjustments.filter(
       (adjustment) => adjustment.month === currentMonth && adjustment.year === currentYear,
     ).length,
-    pendingCount: getPendingItems(projects).length,
-    recentProject: projects[0]
+    pendingCount: getPendingItems(projectsWithCompany).length,
+    recentProject: projectsWithCompany[0]
       ? {
-          id: projects[0].id,
-          name: projects[0].name,
-          companyName: projects[0].companyName,
-          status: projects[0].status,
-          updatedAt: projects[0].updatedAt,
-          generalBudget: generalBudgets.find((budget) => budget.projectId === projects[0].id)
+          id: projectsWithCompany[0].id,
+          name: projectsWithCompany[0].name,
+          companyName: projectsWithCompany[0].companyName,
+          status: projectsWithCompany[0].status,
+          updatedAt: projectsWithCompany[0].updatedAt,
+          generalBudget: generalBudgetByProjectId.get(projectsWithCompany[0].id)
             ? {
-                id: generalBudgets.find((budget) => budget.projectId === projects[0].id)!.id,
-                totalAmount: decimalToNumber(
-                  generalBudgets.find((budget) => budget.projectId === projects[0].id)!.totalAmount,
-                ),
-                currency: generalBudgets.find((budget) => budget.projectId === projects[0].id)!.currency,
+                id: generalBudgetByProjectId.get(projectsWithCompany[0].id)!.id,
+                totalAmount: decimalToNumber(generalBudgetByProjectId.get(projectsWithCompany[0].id)!.totalAmount),
+                currency: generalBudgetByProjectId.get(projectsWithCompany[0].id)!.currency,
               }
             : null,
         }
       : null,
-    projects: projects.slice(0, 5).map((project) => ({
+    projects: projectsWithCompany.slice(0, 5).map((project) => ({
       id: project.id,
       name: project.name,
       companyName: project.companyName,
@@ -171,11 +198,11 @@ export async function getDashboardStats(userId: string) {
       totalAmount: decimalToNumber(budget.totalAmount),
       currency: budget.currency,
     })),
-    pendingItems: getPendingItems(projects).slice(0, 8),
+    pendingItems: getPendingItems(projectsWithCompany),
     recentActivity: (activityEvents.length > 0
       ? activityEvents.map(mapActivityEvent)
-      : getRecentActivity(projects, generalBudgets, formulas, adjustments)
-    ).slice(0, 8),
+      : getRecentActivity(projectsWithCompany, generalBudgets, formulas, adjustments)
+    ).slice(0, 25),
   };
 }
 

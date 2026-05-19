@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { getProjectById } from "@/lib/data/projects";
+import { getProjectHeaderById } from "@/lib/data/projects";
 import { deleteProject, updateProject } from "@/lib/data/projects";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -37,7 +37,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
   try {
     const { id } = await params;
-    const project = await getProjectById(id, session.user.id);
+    const project = await getProjectHeaderById(id, session.user.id);
     if (!project) {
       return NextResponse.json({ error: "No tienes permisos para eliminar este proyecto" }, { status: 400 });
     }

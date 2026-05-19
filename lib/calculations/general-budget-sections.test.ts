@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { aggregateGeneralBudgetResources } from "@/lib/calculations/general-budget-sections";
 
 describe("aggregateGeneralBudgetResources", () => {
-  it("consolida insumos repetidos entre especialidades y excluye insumos no resolubles", () => {
+  it("consolida insumos repetidos entre Sub Presupuestos y excluye insumos no resolubles", () => {
     const result = aggregateGeneralBudgetResources([
       {
         name: "Estructuras",

@@ -5,6 +5,8 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import type { PolynomialMonomialRecord, UnifiedIndexRecord } from "@/types/polynomial-formula";
 
 type BaseIndexOption = {
@@ -36,6 +38,7 @@ export function PolynomialMonomialsTable({
   baseIndicesLoading: boolean;
   onChangeMonomial: (monomial: PolynomialMonomialRecord) => void;
 }) {
+  const { isExcelMode } = useAppViewMode();
   const options = toBaseIndexOptions(baseIndexOptions);
 
   return (
@@ -48,12 +51,12 @@ export function PolynomialMonomialsTable({
         />
 
         {baseIndicesLoading ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
             Cargando indices INEI del mes base...
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className={getTableFrameClassName(isExcelMode)}>
           <Table className="min-w-[1120px]">
             <THead>
               <TR className="bg-slate-50 hover:bg-slate-50">

@@ -3,6 +3,8 @@ import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { formatDate } from "@/lib/utils";
 import type { AdjustmentCalculationRecord } from "@/types/polynomial-formula";
 
@@ -12,6 +14,7 @@ export function PolynomialAdjustmentHistory({
   adjustments: AdjustmentCalculationRecord[];
 }) {
   const { dateFormat } = useFormattingSettings();
+  const { isExcelMode } = useAppViewMode();
 
   return (
     <Card>
@@ -23,9 +26,9 @@ export function PolynomialAdjustmentHistory({
         />
 
         {adjustments.length === 0 ? (
-          <EmptyStatePanel message="Todavía no existen reajustes registrados para esta fórmula." />
+          <EmptyStatePanel message="Todavia no existen reajustes registrados para esta formula." />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <div className={getTableFrameClassName(isExcelMode)}>
             <Table>
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">

@@ -1,3 +1,5 @@
+"use client";
+
 import { Calculator } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -7,6 +9,8 @@ import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 
 type KPreviewResult = {
   kRaw: string;
@@ -54,6 +58,8 @@ export function PolynomialKCalculator({
   onApplyAdjustment: () => void;
   isApplyingAdjustment: boolean;
 }) {
+  const { isExcelMode } = useAppViewMode();
+
   return (
     <Card>
       <CardContent className="space-y-4 p-6">
@@ -128,7 +134,7 @@ export function PolynomialKCalculator({
               />
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <div className={getTableFrameClassName(isExcelMode)}>
               <Table>
                 <THead>
                   <TR className="bg-slate-50 hover:bg-slate-50">

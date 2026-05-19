@@ -1,19 +1,19 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import ExcelJS from "exceljs";
+import dynamic from "next/dynamic";
+import { forwardRef, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Type } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
+import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { cn } from "@/lib/utils";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { ViewModeToggle } from "@/components/budget/view-mode-toggle";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type { BudgetLevelRecord, BudgetLevelType, BudgetRecord, BudgetItemRecord, BudgetStatePatch, BudgetTotals } from "@/types/budget";
 import type { ResourceRecord } from "@/types/resource";
-import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,10 @@ import { Input } from "@/components/ui/input";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import type { CellValue } from "exceljs";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type DragState = { kind: "level" | "item"; id: string } | null;
@@ -107,6 +109,11 @@ type ApuSheetControllerHandle = {
 };
 
 const editableColumnOrder: EditableColumn[] = ["code", "description", "unit", "quantity"];
+const ApuEditorSheet = dynamic(() =>
+  import("@/components/apu/apu-editor-sheet").then((module) => module.ApuEditorSheet),
+);
+const BUDGET_ROW_OVERSCAN = 10;
+const BUDGET_TABLE_COLUMN_COUNT = 7;
 
 export function BudgetEditor({
   budget,
@@ -120,7 +127,7 @@ export function BudgetEditor({
   projectName?: string;
 }) {
   const router = useRouter();
-  const { currencyDecimals } = useFormattingSettings();
+  const { currencyDecimals, excelRowHeight } = useFormattingSettings();
   const { isExcelMode } = useBudgetViewMode();
   const [state, setState] = useState(() => calculateBudgetRecord(budget));
   const [saving, setSaving] = useState(false);
@@ -149,33 +156,55 @@ export function BudgetEditor({
   const [excelImportText, setExcelImportText] = useState("");
   const [excelImportFileName, setExcelImportFileName] = useState("");
   const [excelImportLoading, setExcelImportLoading] = useState(false);
+  const deferredCatalogQuery = useDeferredValue(catalogQuery);
+  const deferredCatalogInsertQuery = useDeferredValue(catalogInsertQuery);
+  const indexedPartidasCatalog = useMemo(
+    () =>
+      partidasCatalog.map((partida) => ({
+        partida,
+        searchText: `${partida.description} ${partida.unit} ${partida.performanceRate ?? ""}`.toLowerCase(),
+      })),
+    [partidasCatalog],
+  );
+  const partidasById = useMemo(() => new Map(partidasCatalog.map((partida) => [partida.id, partida])), [partidasCatalog]);
+  const resourcesById = useMemo(() => new Map(resourcesCatalog.map((resource) => [resource.id, resource])), [resourcesCatalog]);
+  const resourcesByDescriptionUnit = useMemo(
+    () =>
+      new Map(
+        resourcesCatalog.map((resource) => [
+          `${normalizeLookupText(resource.description)}|${normalizeLookupText(resource.unit)}`,
+          resource,
+        ]),
+      ),
+    [resourcesCatalog],
+  );
 
   const summary = useMemo(() => calculateBudgetRecord(state), [state]);
   const rows = useMemo(() => buildDisplayRows(summary), [summary]);
   const catalogSuggestions = useMemo(() => {
     if (!catalogSelectorRowId) return [];
 
-    const normalizedQuery = catalogQuery.trim().toLowerCase() === "nueva partida" ? "" : catalogQuery.trim().toLowerCase();
+    const normalizedQuery = deferredCatalogQuery.trim().toLowerCase() === "nueva partida" ? "" : deferredCatalogQuery.trim().toLowerCase();
 
-    return partidasCatalog
-      .filter((partida) => {
+    return indexedPartidasCatalog
+      .filter(({ searchText }) => {
         if (!normalizedQuery) return true;
-        const text = `${partida.description} ${partida.unit} ${partida.performanceRate ?? ""}`.toLowerCase();
-        return text.includes(normalizedQuery);
+        return searchText.includes(normalizedQuery);
       })
+      .map(({ partida }) => partida)
       .slice(0, 8);
-  }, [catalogQuery, catalogSelectorRowId, partidasCatalog]);
+  }, [catalogSelectorRowId, deferredCatalogQuery, indexedPartidasCatalog]);
   const isCatalogMenuOpen = Boolean(catalogSelectorRowId && catalogSuggestions.length > 0 && catalogMenu);
   const catalogInsertSuggestions = useMemo(() => {
-    const query = catalogInsertQuery.trim().toLowerCase();
-    return partidasCatalog
-      .filter((partida) => {
+    const query = deferredCatalogInsertQuery.trim().toLowerCase();
+    return indexedPartidasCatalog
+      .filter(({ searchText }) => {
         if (!query) return true;
-        const text = `${partida.description} ${partida.unit} ${partida.performanceRate ?? ""}`.toLowerCase();
-        return text.includes(query);
+        return searchText.includes(query);
       })
+      .map(({ partida }) => partida)
       .slice(0, 40);
-  }, [catalogInsertQuery, partidasCatalog]);
+  }, [deferredCatalogInsertQuery, indexedPartidasCatalog]);
   const editableCells = useMemo<EditableCell[]>(
     () =>
       rows.flatMap((row) =>
@@ -196,11 +225,31 @@ export function BudgetEditor({
   const cellRefs = useRef(new Map<string, HTMLInputElement>());
   const editorRootRef = useRef<HTMLDivElement>(null);
   const activeRowIdRef = useRef<string | null>(null);
+  const pendingUiTimeoutsRef = useRef<number[]>([]);
   const apuSheetControllerRef = useRef<ApuSheetControllerHandle | null>(null);
   const apuSheetOpenRef = useRef(false);
   const levelActionMenuRef = useRef<HTMLDivElement | null>(null);
   const itemActionMenuRef = useRef<HTMLDivElement | null>(null);
   const headerActionMenuRef = useRef<HTMLDivElement | null>(null);
+  const estimatedBudgetRowHeight = isExcelMode ? excelRowHeight : 58;
+
+  useEffect(() => {
+    return () => {
+      for (const timeoutId of pendingUiTimeoutsRef.current) {
+        window.clearTimeout(timeoutId);
+      }
+      pendingUiTimeoutsRef.current = [];
+    };
+  }, []);
+
+  function scheduleUiTimeout(callback: () => void, delay: number) {
+    const timeoutId = window.setTimeout(() => {
+      pendingUiTimeoutsRef.current = pendingUiTimeoutsRef.current.filter((candidate) => candidate !== timeoutId);
+      callback();
+    }, delay);
+
+    pendingUiTimeoutsRef.current.push(timeoutId);
+  }
 
   function closeLevelActionMenu(restoreFocus = false) {
     setLevelActionMenu((current) => {
@@ -280,6 +329,15 @@ export function BudgetEditor({
     const interval = setInterval(() => setSaveClock(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [lastSavedAt]);
+
+  const { scrollContainerRef: tableScrollRef, scrollProps: tableScrollProps, virtualRange: virtualBudgetRange } =
+    useVirtualTableWindow({
+      items: rows,
+      rowHeight: estimatedBudgetRowHeight,
+      overscan: BUDGET_ROW_OVERSCAN,
+      fallbackVisibleRows: 12,
+      resetKey: estimatedBudgetRowHeight,
+    });
 
   useEffect(() => {
     if (!catalogSelectorRowId) return;
@@ -416,10 +474,22 @@ export function BudgetEditor({
       if (apuSheetOpenRef.current) return;
 
       const editorRoot = editorRootRef.current;
-      if (!isFocusedWithinEditor(editorRoot)) return;
-
       const isMac = navigator.platform.toUpperCase().includes("MAC");
       const commandOrCtrl = isMac ? event.metaKey : event.ctrlKey;
+
+      if (commandOrCtrl && event.key === "Enter") {
+        const targetRowId = activeRowIdRef.current ?? getFocusedBudgetRowId(editorRoot);
+        if (!targetRowId) return;
+
+        const activeItem = summary.items.find((item) => item.id === targetRowId);
+        if (!activeItem) return;
+
+        event.preventDefault();
+        openApuSheet(activeItem);
+        return;
+      }
+
+      if (!isFocusedWithinEditor(editorRoot)) return;
 
       if (commandOrCtrl && event.key.toLowerCase() === "s") {
         event.preventDefault();
@@ -427,17 +497,8 @@ export function BudgetEditor({
         return;
       }
 
-      const focusedRowId = getFocusedBudgetRowId(editorRoot);
-      if (!focusedRowId || focusedRowId !== activeRowId) return;
-
-      if (commandOrCtrl && event.key === "Enter") {
-        const activeItem = summary.items.find((item) => item.id === focusedRowId);
-        if (!activeItem) return;
-
-        event.preventDefault();
-        openApuSheet(activeItem);
-        return;
-      }
+      const focusedRowId = getFocusedBudgetRowId(editorRoot) ?? activeRowIdRef.current;
+      if (!focusedRowId) return;
 
       if (event.altKey) {
         if (event.key === "ArrowUp") {
@@ -503,7 +564,7 @@ export function BudgetEditor({
     setActiveColumn("description");
     openCatalogSelector(nextItem.id);
 
-    window.setTimeout(() => {
+    scheduleUiTimeout(() => {
       focusCell({ rowId: nextItem.id, column: "description" });
       openCatalogSelector(nextItem.id);
     }, 0);
@@ -565,9 +626,9 @@ export function BudgetEditor({
     const normalizedUnit = normalizeLookupText(input.unit);
     if (!normalizedDescription) return null;
 
-    const exactDescriptionMatches = partidasCatalog.filter(
-      (partida) => normalizeLookupText(partida.description) === normalizedDescription,
-    );
+    const exactDescriptionMatches = indexedPartidasCatalog
+      .filter(({ partida }) => normalizeLookupText(partida.description) === normalizedDescription)
+      .map(({ partida }) => partida);
 
     if (normalizedUnit) {
       const exactDescriptionAndUnitMatch = exactDescriptionMatches.find(
@@ -597,7 +658,7 @@ export function BudgetEditor({
         performance: partida.performance,
         totalUnitCost: partida.unitPrice,
         resources: partida.apuRows.flatMap((row) => {
-          const resolvedResource = resolveCatalogResource(row, resourcesCatalog);
+          const resolvedResource = resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit);
           if (!resolvedResource) return [];
 
           return [
@@ -626,7 +687,7 @@ export function BudgetEditor({
   }
 
   function applyCatalogPartidaToItem(itemId: string, partida: CatalogPartidaRecord) {
-    const unresolvedRows = partida.apuRows.filter((row) => !resolveCatalogResource(row, resourcesCatalog));
+    const unresolvedRows = partida.apuRows.filter((row) => !resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit));
 
     setState((current) => ({
       ...current,
@@ -675,7 +736,7 @@ export function BudgetEditor({
           performance: partida.performance,
           totalUnitCost: partida.unitPrice,
           resources: partida.apuRows.flatMap((row) => {
-            const resolvedResource = resolveCatalogResource(row, resourcesCatalog);
+            const resolvedResource = resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit);
             if (!resolvedResource) return [];
 
             return [
@@ -741,6 +802,7 @@ export function BudgetEditor({
     setError("");
 
     try {
+      const { default: ExcelJS } = await import("exceljs");
       const lowerName = file.name.toLowerCase();
       if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv")) {
         const text = await file.text();
@@ -776,7 +838,7 @@ export function BudgetEditor({
           ?.map((row) => {
             const values = Array.isArray(row.values) ? row.values.slice(1) : [];
             return values
-              .map((value: ExcelJS.CellValue | undefined) => formatWorkbookCellValue(value))
+              .map((value: CellValue | undefined) => formatWorkbookCellValue(value))
               .join("\t");
           })
           .filter((line) => line.split("\t").some((cell) => cell.trim().length > 0)) ?? [];
@@ -1191,7 +1253,9 @@ export function BudgetEditor({
       setLastSavedAt(Date.now());
       setSaveClock(Date.now());
       setSaveState("saved");
-      broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], data.optimisticBudgets);
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], data.optimisticBudgets, {
+        locallyHandledPaths: ["/budgets"],
+      });
 
       if (!isAutosave) {
         router.refresh();
@@ -1275,7 +1339,7 @@ export function BudgetEditor({
               </div>
 
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                <div className="rounded-2xl border border-slate-200/90 bg-white/95 px-2 py-1 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
+                <div className="flex items-center">
                   <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} compact />
                 </div>
                 <Button
@@ -1337,14 +1401,14 @@ export function BudgetEditor({
           {pasteFeedback ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{pasteFeedback}</p> : null}
 
           <div
+            ref={tableScrollRef}
             data-testid="budget-table-surface"
             data-density-mode={effectiveDensityMode}
-            className={cn(
-              "max-h-[72vh] overflow-auto border shadow-[0_18px_36px_-30px_rgba(15,23,42,0.22)]",
-              isExcelMode
-                ? "rounded-md border-slate-300 bg-white shadow-inner shadow-slate-200/50"
-                : "rounded-2xl border-slate-200/90 bg-white",
+            className={getTableFrameClassName(
+              isExcelMode,
+              cn("max-h-[72vh] overflow-auto", !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.22)]" : undefined),
             )}
+            {...tableScrollProps}
           >
             <Table
               className={cn(
@@ -1378,7 +1442,12 @@ export function BudgetEditor({
                 </TR>
               </THead>
               <TBody>
-                {rows.map((row) =>
+                {virtualBudgetRange.topSpacerHeight > 0 ? (
+                  <TR aria-hidden="true" className="hover:bg-transparent focus-within:bg-transparent">
+                    <TD colSpan={BUDGET_TABLE_COLUMN_COUNT} className="p-0" style={{ height: virtualBudgetRange.topSpacerHeight }} />
+                  </TR>
+                ) : null}
+                {virtualBudgetRange.visibleRows.map((row) =>
                   row.kind === "level" ? (
                     <TR
                       key={row.level.id}
@@ -1451,11 +1520,11 @@ export function BudgetEditor({
                           getStickyActionTone(row.level.type, isExcelMode),
                         )}
                       >
-                        <div className="ml-auto flex translate-x-1 justify-end gap-1 rounded-full border border-transparent bg-white/0 px-1 py-0.5 opacity-80 transition duration-200 group-hover:translate-x-0 group-hover:border-slate-200/80 group-hover:bg-white/80 group-hover:opacity-100 group-hover:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-hover:backdrop-blur-sm group-focus-within:translate-x-0 group-focus-within:border-slate-200/80 group-focus-within:bg-white/80 group-focus-within:opacity-100 group-focus-within:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-focus-within:backdrop-blur-sm">
+                        <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
                           <button
                             type="button"
                             data-level-action-trigger
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
                             onClick={(event) => toggleLevelActionMenu(row.level.id, "add", event.currentTarget)}
                             title="Agregar contenido debajo de este nivel"
                             aria-label="Agregar contenido debajo de este nivel"
@@ -1567,7 +1636,7 @@ export function BudgetEditor({
                                 openCatalogSelector(row.item.id, row.item.description);
                               }}
                               onBlur={() => {
-                                window.setTimeout(() => {
+                                scheduleUiTimeout(() => {
                                   if (catalogSelectorRowId === row.item.id) {
                                     closeCatalogSelector();
                                   }
@@ -1671,7 +1740,7 @@ export function BudgetEditor({
                           isExcelMode,
                         )}
                       >
-                        <div className="ml-auto flex translate-x-1 justify-end gap-1 rounded-full border border-transparent bg-white/0 px-1 py-0.5 opacity-80 transition duration-200 group-hover:translate-x-0 group-hover:border-slate-200/80 group-hover:bg-white/80 group-hover:opacity-100 group-hover:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-hover:backdrop-blur-sm group-focus-within:translate-x-0 group-focus-within:border-slate-200/80 group-focus-within:bg-white/80 group-focus-within:opacity-100 group-focus-within:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)] group-focus-within:backdrop-blur-sm">
+                        <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1680,7 +1749,7 @@ export function BudgetEditor({
                             title="Abrir editor APU de esta partida"
                             aria-label="Abrir editor APU de esta partida"
                           >
-                            <ExternalLink className="h-3.5 w-3.5" />
+                            <ExternalLink className="h-4 w-4" />
                             APU
                           </Button>
                           <IconButton
@@ -1697,6 +1766,11 @@ export function BudgetEditor({
                     </TR>
                   ),
                 )}
+                {virtualBudgetRange.bottomSpacerHeight > 0 ? (
+                  <TR aria-hidden="true" className="hover:bg-transparent focus-within:bg-transparent">
+                    <TD colSpan={BUDGET_TABLE_COLUMN_COUNT} className="p-0" style={{ height: virtualBudgetRange.bottomSpacerHeight }} />
+                  </TR>
+                ) : null}
               </TBody>
             </Table>
           </div>
@@ -2103,7 +2177,9 @@ export function BudgetEditor({
           if (!catalogInsertTarget) return;
           insertCatalogPartidas(
             catalogInsertTarget,
-            partidasCatalog.filter((partida) => catalogSelectedIds.includes(partida.id)),
+            catalogSelectedIds
+              .map((partidaId) => partidasById.get(partidaId))
+              .filter((partida): partida is CatalogPartidaRecord => partida !== undefined),
           );
         }}
       />
@@ -2234,7 +2310,9 @@ function IconButton({
       data-header-action-trigger={dataHeaderActionTrigger ? "true" : undefined}
       className={cn("h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2", className)}
     >
-      {children}
+      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0">
+        {children}
+      </span>
     </Button>
   );
 }
@@ -2364,14 +2442,16 @@ function PastePreviewSheet({
   onConfirm: () => void;
   onLevelTypeChange: (entryIndex: number, levelType: BudgetLevelType) => void;
 }) {
+  const { isExcelMode } = useBudgetViewMode();
+
   if (!pendingPaste) return null;
 
   const previewRows = getPastePreviewRows(pendingPaste.parsedPaste);
   const targetLabel = pendingPaste.targetRow.kind === "level" ? "nivel" : "partida";
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm">
-      <div className="mx-auto mt-10 w-[min(960px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    <div className={cn("fixed inset-0 z-50 bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
+      <div className={cn("mx-auto mt-10 w-[min(960px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <p className="text-sm text-slate-500">Previsualización de pegado</p>
@@ -2392,7 +2472,7 @@ function PastePreviewSheet({
         </div>
 
         <div className="max-h-[52vh] overflow-auto px-6 py-5">
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <div className={getTableFrameClassName(isExcelMode)}>
             <Table className="table-fixed w-full">
               <colgroup>
                 <col className="w-[110px]" />
@@ -2459,8 +2539,10 @@ function PastePreviewSheet({
 }
 
 function PreviewStat({ label, value }: { label: string; value: string }) {
+  const { isExcelMode } = useBudgetViewMode();
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+    <div className={cn("border border-slate-200 bg-white px-4 py-3", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
     </div>
@@ -2497,13 +2579,14 @@ function CatalogInsertSheet({
   onSelect: (partida: CatalogPartidaRecord) => void;
   onInsertSelected: () => void;
 }) {
+  const { isExcelMode } = useBudgetViewMode();
   const { currencyDecimals } = useFormattingSettings();
 
   if (!open || !target) return null;
 
   return (
-    <div className="fixed inset-0 z-[95] bg-slate-950/30 backdrop-blur-sm">
-      <div className="mx-auto mt-10 w-[min(1080px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    <div className={cn("fixed inset-0 z-[95] bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
+      <div className={cn("mx-auto mt-10 w-[min(1080px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <p className="text-sm text-slate-500">Insertar desde catálogo</p>
@@ -2536,7 +2619,7 @@ function CatalogInsertSheet({
         </div>
 
         <div className="max-h-[62vh] overflow-auto px-6 py-5">
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <div className={getTableFrameClassName(isExcelMode)}>
             <Table className="table-fixed w-full">
               <colgroup>
                 <col className="w-[58px]" />
@@ -2616,13 +2699,14 @@ function ExcelImportSheet({
   onConfirm: () => void;
   onFileSelect: (file: File) => Promise<void>;
 }) {
+  const { isExcelMode } = useBudgetViewMode();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!open || !target) return null;
 
   return (
-    <div className="fixed inset-0 z-[95] bg-slate-950/30 backdrop-blur-sm">
-      <div className="mx-auto mt-10 w-[min(980px,calc(100%-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    <div className={cn("fixed inset-0 z-[95] bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
+      <div className={cn("mx-auto mt-10 w-[min(980px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <p className="text-sm text-slate-500">Importación desde Excel</p>
@@ -2637,7 +2721,7 @@ function ExcelImportSheet({
         </div>
 
         <div className="space-y-4 px-6 py-5">
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
+          <div className={cn("border border-dashed border-slate-300 bg-slate-50 px-4 py-4", isExcelMode ? "rounded-md" : "rounded-2xl")}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-900">Cargar archivo Excel</p>
@@ -2667,9 +2751,12 @@ function ExcelImportSheet({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             placeholder={"Pega aquí el bloque desde Excel...\n01\tOBRAS PRELIMINARES\n01.01\tLIMPIEZA DE TERRENO\tM2\t120.00"}
-            className="min-h-[320px] w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200"
+            className={cn(
+              "min-h-[320px] w-full border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200",
+              isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl shadow-sm",
+            )}
           />
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
             El sistema detecta jerarquía cuando pegas códigos como <span className="font-medium text-slate-800">01</span>, <span className="font-medium text-slate-800">01.01</span>, <span className="font-medium text-slate-800">01.01.01</span> o cuando la descripción viene indentada.
           </div>
         </div>
@@ -3265,7 +3352,7 @@ function isQuantityHeaderToken(token: string) {
   return token === "metrado" || token === "cantidad" || token === "cant." || token === "cant" || token === "metr";
 }
 
-function formatWorkbookCellValue(value: ExcelJS.CellValue | undefined) {
+function formatWorkbookCellValue(value: CellValue | undefined) {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") {
     if ("text" in value && typeof value.text === "string") return value.text;
@@ -3664,23 +3751,15 @@ function getCellKey(rowId: string, column: EditableColumn) {
 
 function resolveCatalogResource(
   row: CatalogPartidaRecord["apuRows"][number],
-  resourcesCatalog: ResourceRecord[],
+  resourcesById: Map<string, ResourceRecord>,
+  resourcesByDescriptionUnit: Map<string, ResourceRecord>,
 ) {
   if (row.resourceId) {
-    const byId = resourcesCatalog.find((resource) => resource.id === row.resourceId);
+    const byId = resourcesById.get(row.resourceId);
     if (byId) return byId;
   }
 
-  const normalizedDescription = normalizeLookupText(row.description);
-  const normalizedUnit = normalizeLookupText(row.unit);
-
-  return (
-    resourcesCatalog.find(
-      (resource) =>
-        normalizeLookupText(resource.description) === normalizedDescription &&
-        normalizeLookupText(resource.unit) === normalizedUnit,
-    ) ?? null
-  );
+  return resourcesByDescriptionUnit.get(`${normalizeLookupText(row.description)}|${normalizeLookupText(row.unit)}`) ?? null;
 }
 
 function normalizeLookupText(value: string) {

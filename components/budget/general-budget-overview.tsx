@@ -13,13 +13,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import {
   getAppDataChangeEventName,
   getAppDataChangeStorageKey,
   type AppDataChangePayload,
 } from "@/lib/client/live-updates";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
+import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import type { BudgetRecord } from "@/types/budget";
 
 type SubBudgetOverview = {
@@ -38,12 +41,6 @@ type SubBudgetOverview = {
   itemsCount: number;
 };
 
-const specialtyOrder = [
-  "Estructuras",
-  "Arquitectura",
-  "Instalaciones Sanitarias",
-  "Instalaciones Electricas",
-] as const;
 const QUANTITY_DECIMALS = 2;
 
 export function GeneralBudgetOverview({
@@ -58,6 +55,7 @@ export function GeneralBudgetOverview({
   subBudgetDetails: BudgetRecord[];
 }) {
   const { currencyDecimals, dateFormat } = useFormattingSettings();
+  const { isExcelMode } = useAppViewMode();
   const [optimisticTotals, setOptimisticTotals] = useState<Record<string, { totalAmount: number; updatedAt: string }>>({});
 
   useEffect(() => {
@@ -106,14 +104,11 @@ export function GeneralBudgetOverview({
 
   const orderedSubBudgets = useMemo(
     () =>
-      specialtyOrder
-        .map((name) => subBudgets.find((budget) => budget.name === name))
-        .filter((budget): budget is SubBudgetOverview => Boolean(budget))
-        .map((budget) => ({
-          ...budget,
-          totalAmount: optimisticTotals[budget.id]?.totalAmount ?? budget.totalAmount,
-          updatedAt: optimisticTotals[budget.id]?.updatedAt ?? budget.updatedAt,
-        })),
+      orderSubBudgetsBySpecialty(subBudgets).map((budget) => ({
+        ...budget,
+        totalAmount: optimisticTotals[budget.id]?.totalAmount ?? budget.totalAmount,
+        updatedAt: optimisticTotals[budget.id]?.updatedAt ?? budget.updatedAt,
+      })),
     [optimisticTotals, subBudgets],
   );
   const [activeBudgetId, setActiveBudgetId] = useState<string | null>(orderedSubBudgets[0]?.id ?? null);
@@ -167,9 +162,9 @@ export function GeneralBudgetOverview({
       <Card className="border-slate-200">
         <CardContent className="space-y-4 p-6">
           <OperationalPanel
-            title="Resumen por especialidad"
-            description="Lectura ejecutiva del consolidado. Cada tarjeta responde a cambios del editor y refleja el peso de cada especialidad dentro del total general."
-            metrics={<span>{orderedSubBudgets.length} especialidades</span>}
+            title="Resumen por Sub Presupuesto"
+            description="Lectura ejecutiva del consolidado. Cada tarjeta responde a cambios del editor y refleja el peso de cada Sub Presupuesto dentro del total general."
+            metrics={<span>{orderedSubBudgets.length} Sub Presupuestos</span>}
           />
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -197,7 +192,10 @@ export function GeneralBudgetOverview({
               return (
                 <div
                   key={budget.id}
-                  className="rounded-3xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-sm transition hover:border-sky-300"
+                  className={cn(
+                    "border bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 transition hover:border-sky-300",
+                    isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-3xl border-slate-200 shadow-sm",
+                  )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -222,7 +220,7 @@ export function GeneralBudgetOverview({
 
                   <div className="mt-4 flex justify-end">
                     <Link href={`/budgets/${budget.id}`}>
-                      <ActionButton action="open" label="Abrir especialidad" variant="outline" />
+                      <ActionButton action="open" label="Abrir Sub Presupuesto" variant="outline" />
                     </Link>
                   </div>
                 </div>
@@ -239,7 +237,7 @@ export function GeneralBudgetOverview({
             description="Consolida cantidades, estructura y montos de cada sub presupuesto sin entrar todavía al detalle de partidas."
             metrics={
               <>
-                <span>Especialidades: {orderedSubBudgets.length}</span>
+                <span>Sub Presupuestos: {orderedSubBudgets.length}</span>
                 <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
                 <span>Partidas: {consolidatedTotals.itemsCount}</span>
                 <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
@@ -250,11 +248,11 @@ export function GeneralBudgetOverview({
             }
           />
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <div className={getTableFrameClassName(isExcelMode)}>
             <Table>
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">
-                  <TH>Especialidad</TH>
+                  <TH>Sub Presupuesto</TH>
                   <TH className="text-right">Niveles</TH>
                   <TH className="text-right">Partidas</TH>
                   <TH className="text-right">Costo directo</TH>
@@ -346,12 +344,12 @@ export function GeneralBudgetOverview({
         <CardContent className="space-y-4 p-6">
           <OperationalPanel
             title="Sub presupuesto conectado al consolidado"
-            description="Navega entre especialidades desde una vista tipo tabs. Según la especialidad activa, abajo se muestra su lectura detallada dentro del consolidado."
+            description="Navega entre Sub Presupuestos desde una vista tipo tabs. Según el Sub Presupuesto activo, abajo se muestra su lectura detallada dentro del consolidado."
           />
 
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase tracking-[0.2em] text-slate-500">Especialidades</span>
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-500">Sub Presupuestos</span>
               {orderedSubBudgets.map((budget) => (
                 <button
                   key={budget.id}
@@ -359,8 +357,8 @@ export function GeneralBudgetOverview({
                   onClick={() => setActiveBudgetId(budget.id)}
                   className={
                     budget.id === activeBudgetId
-                      ? "inline-flex rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm text-white transition"
-                      : "inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50"
+                      ? cn("inline-flex border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm text-white transition", isExcelMode ? "rounded-sm" : "rounded-full")
+                      : cn("inline-flex border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50", isExcelMode ? "rounded-sm border-slate-300" : "rounded-full")
                   }
                 >
                   {budget.name}
@@ -370,11 +368,11 @@ export function GeneralBudgetOverview({
 
             {activeBudget ? (
               <>
-                <div className="flex flex-col gap-3 rounded-2xl border border-sky-100 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className={cn("flex flex-col gap-3 border border-sky-100 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl")}>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-slate-900">{activeBudget.name}</p>
-                      <Badge className="bg-sky-100 text-sky-700">Especialidad activa</Badge>
+                      <Badge className="bg-sky-100 text-sky-700">Sub Presupuesto activo</Badge>
                     </div>
                     <p className="mt-1 flex items-center gap-2 text-sm text-slate-600">
                       <Sparkles className="h-4 w-4 text-sky-600" />
@@ -388,12 +386,12 @@ export function GeneralBudgetOverview({
                       className="px-0 py-0 text-xl font-semibold text-slate-900"
                     />
                     <Link href={`/budgets/${activeBudget.id}`}>
-                      <ActionButton action="open" label="Abrir especialidad" variant="outline" />
+                      <ActionButton action="open" label="Abrir Sub Presupuesto" variant="outline" />
                     </Link>
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <div className={getTableFrameClassName(isExcelMode)}>
                   <Table>
                     <THead>
                       <TR className="bg-slate-50 hover:bg-slate-50">
@@ -428,7 +426,7 @@ export function GeneralBudgetOverview({
                                 <Link href={`/budgets/${activeBudget.id}`}>
                                   <ActionButton
                                     action="open"
-                                    label="Abrir especialidad"
+                                    label="Abrir Sub Presupuesto"
                                     size="sm"
                                     variant="ghost"
                                   />
@@ -463,7 +461,7 @@ export function GeneralBudgetOverview({
                                 <Link href={`/budgets/${activeBudget.id}`}>
                                   <ActionButton
                                     action="open"
-                                    label="Abrir especialidad"
+                                    label="Abrir Sub Presupuesto"
                                     size="sm"
                                     variant="ghost"
                                   />

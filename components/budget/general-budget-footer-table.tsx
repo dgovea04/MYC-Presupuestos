@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { cn } from "@/lib/utils";
 import type { BudgetFooterStructure, BudgetFooterRowInput } from "@/types/budget-sections";
 
@@ -21,6 +23,7 @@ export function GeneralBudgetFooterTable({
   budgetId: string;
   initialStructure: BudgetFooterStructure;
 }) {
+  const { isExcelMode } = useAppViewMode();
   const [structure, setStructure] = useState(initialStructure);
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -232,7 +235,7 @@ export function GeneralBudgetFooterTable({
       </div>
 
       <div className="space-y-4">
-        <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]">
+        <div className={getTableFrameClassName(isExcelMode, !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]" : undefined)}>
           <Table className="table-fixed min-w-[1160px] w-full">
             <colgroup>
               <col className="w-[150px]" />
@@ -335,7 +338,7 @@ export function GeneralBudgetFooterTable({
           </Table>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] px-4 py-3 shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]">
+        <div className={cn("border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] px-4 py-3", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]")}>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Importe en letras</p>
           <p className="mt-2 text-sm font-semibold text-slate-900">{structure.amountInWords}</p>
         </div>
@@ -366,7 +369,9 @@ function ToolbarIconButton({
       aria-label={label}
       className="h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100"
     >
-      {children}
+      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0">
+        {children}
+      </span>
     </Button>
   );
 }

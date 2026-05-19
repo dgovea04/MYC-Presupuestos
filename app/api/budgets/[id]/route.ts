@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { deleteBudget, getBudgetById, getBudgetLiveUpdateSummaries, saveBudgetPatch } from "@/lib/data/budgets";
+import { deleteBudget, getBudgetHeaderById, getBudgetLiveUpdateSummaries, saveBudgetPatch } from "@/lib/data/budgets";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -38,7 +38,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
   try {
     const { id } = await params;
-    const budget = await getBudgetById(id, session.user.id);
+    const budget = await getBudgetHeaderById(id, session.user.id);
     if (!budget) {
       return NextResponse.json({ error: "No tienes permisos para eliminar este presupuesto" }, { status: 400 });
     }

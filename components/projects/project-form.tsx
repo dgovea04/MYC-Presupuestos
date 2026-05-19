@@ -60,7 +60,6 @@ export function ProjectForm({ companies, project }: ProjectFormProps) {
     broadcastAppDataChange(["/dashboard", "/projects", "/budgets"]);
     if (project) {
       router.push(`/projects/${project.id}`);
-      router.refresh();
       return;
     }
 
