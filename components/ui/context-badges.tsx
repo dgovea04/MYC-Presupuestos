@@ -1,4 +1,8 @@
+"use client";
+
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn } from "@/lib/utils";
+import { getProjectStatusLabel, getProjectStatusTone } from "@/lib/project-status";
 
 export function ToneBadge({
   label,
@@ -11,10 +15,12 @@ export function ToneBadge({
   bordered?: boolean;
   className?: string;
 }) {
+  const { isExcelMode } = useAppViewMode();
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium shadow-[0_8px_18px_-16px_rgba(15,23,42,0.4)] transition-colors",
+        "inline-flex items-center px-2.5 py-1 text-xs font-medium transition-colors",
+        isExcelMode ? "rounded-sm shadow-none" : "rounded-full shadow-[0_8px_18px_-16px_rgba(15,23,42,0.4)]",
         getToneBadgeClassName(tone, bordered),
         className,
       )}
@@ -40,17 +46,10 @@ export function ContextBadge({
 }
 
 function getProjectStatusConfig(status: string) {
-  switch (status) {
-    case "IN_PROGRESS":
-      return { label: "En ejecucion", tone: "emerald" as const };
-    case "COMPLETED":
-      return { label: "Completado", tone: "slate" as const };
-    case "ON_HOLD":
-      return { label: "En pausa", tone: "amber" as const };
-    case "PLANNING":
-    default:
-      return { label: "Planificacion", tone: "sky" as const };
-  }
+  return {
+    label: getProjectStatusLabel(status),
+    tone: getProjectStatusTone(status),
+  };
 }
 
 function getToneBadgeClassName(

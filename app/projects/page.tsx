@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
-import { getProjectsByUser } from "@/lib/data/projects";
+import { getProjectsListByUser } from "@/lib/data/projects";
 
 export default async function ProjectsPage() {
   const session = await getAuthSession();
-  const projects = await getProjectsByUser(session!.user.id);
+  const projects = await getProjectsListByUser(session!.user.id);
 
   return (
     <AppShell>
@@ -45,7 +45,7 @@ export default async function ProjectsPage() {
               status: project.status,
               createdAt: project.createdAt.toISOString(),
               updatedAt: project.updatedAt.toISOString(),
-              budgetsCount: project.budgets.filter((budget) => budget.kind === "GENERAL").length,
+              budgetsCount: project._count.budgets,
             }))}
           />
         </CardContent>

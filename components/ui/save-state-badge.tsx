@@ -1,3 +1,6 @@
+"use client";
+
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn } from "@/lib/utils";
 
 export type SaveStateBadgeStatus = "idle" | "dirty" | "saving" | "saved" | "error";
@@ -17,6 +20,7 @@ export function SaveStateBadge({
   bordered?: boolean;
   className?: string;
 }) {
+  const { isExcelMode } = useAppViewMode();
   const styles: Record<SaveStateBadgeStatus, string> = {
     idle: bordered ? "border-slate-200 bg-slate-100/80 text-slate-600" : "bg-slate-100 text-slate-600",
     dirty: bordered ? "border-amber-200 bg-amber-100/80 text-amber-700" : "bg-amber-100 text-amber-700",
@@ -36,8 +40,9 @@ export function SaveStateBadge({
   return (
     <span
       className={cn(
-        "inline-flex flex-col text-xs font-medium shadow-[0_8px_20px_-18px_rgba(15,23,42,0.45)] transition-colors",
-        bordered ? "rounded-2xl border" : "rounded-full",
+        "inline-flex flex-col text-xs font-medium transition-colors",
+        isExcelMode ? "shadow-none" : "shadow-[0_8px_20px_-18px_rgba(15,23,42,0.45)]",
+        bordered ? (isExcelMode ? "rounded-md border" : "rounded-2xl border") : isExcelMode ? "rounded-sm" : "rounded-full",
         compact ? "px-2.5 py-1.5" : "px-3 py-2",
         styles[state],
         className,

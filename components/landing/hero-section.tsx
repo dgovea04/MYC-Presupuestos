@@ -134,7 +134,7 @@ export function HeroSection() {
                   <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-100/80">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">Incidencia por especialidad</p>
+                        <p className="text-sm font-semibold text-slate-900">Incidencia por Sub Presupuesto</p>
                         <p className="text-xs text-slate-500">Placeholder de gráfico con CSS</p>
                       </div>
                       <span className="text-xs text-slate-400">Q2</span>

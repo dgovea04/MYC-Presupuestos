@@ -29,7 +29,7 @@ export default async function NewProjectPage() {
             <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
               <p className="font-medium text-amber-900">Primero necesitas una empresa o perfil profesional.</p>
               <p className="text-sm text-amber-800">
-                Los proyectos se crean dentro de una empresa. Configura esa base en la sección de configuración y luego vuelve aquí para generar tus sub presupuestos iniciales.
+                Los proyectos se crean dentro de una empresa. Configura esa base en la sección de configuración y luego vuelve aquí para generar tus Sub Presupuestos iniciales.
               </p>
               <Link href="/settings">
                 <Button variant="outline">Ir a configuración</Button>

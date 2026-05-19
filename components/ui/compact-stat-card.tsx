@@ -1,3 +1,6 @@
+"use client";
+
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn } from "@/lib/utils";
 
 export function CompactStatCard({
@@ -9,6 +12,7 @@ export function CompactStatCard({
   value: string;
   tone?: "sky" | "slate" | "violet" | "rose" | "amber" | "emerald";
 }) {
+  const { isExcelMode } = useAppViewMode();
   const tones = {
     sky: "border-sky-100 bg-white/80 text-sky-700",
     slate: "border-slate-200 bg-white/80 text-slate-700",
@@ -19,7 +23,7 @@ export function CompactStatCard({
   } as const;
 
   return (
-    <div className={cn("rounded-2xl border px-4 py-3 shadow-sm", tones[tone])}>
+    <div className={cn("border px-4 py-3", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl shadow-sm", tones[tone])}>
       <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
       <p className="mt-2 text-sm font-semibold">{value}</p>
     </div>

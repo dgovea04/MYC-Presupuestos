@@ -16,23 +16,27 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CompactStatCard } from "@/components/ui/compact-stat-card";
+import { ProjectStatusBadge } from "@/components/ui/context-badges";
 import { FilterPillLink } from "@/components/ui/filter-pill-link";
 import { ToneBadge } from "@/components/ui/context-badges";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import { OperationalPanel, OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { getAuthSession } from "@/lib/auth/session";
 import { getDashboardStats } from "@/lib/data/dashboard";
+import { getProjectStatusLabel } from "@/lib/project-status";
 import { getUserSettings } from "@/lib/data/settings";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ priority?: string }>;
+  searchParams?: Promise<{ priority?: string; pendingPage?: string; activityPage?: string }>;
 }) {
   const session = await getAuthSession();
   const resolvedSearchParams = (await searchParams) ?? {};
   const [stats, settings] = await Promise.all([getDashboardStats(session!.user.id), getUserSettings(session!.user.id)]);
   const selectedPriority = resolvePendingPriorityFilter(resolvedSearchParams.priority);
+  const requestedPendingPage = resolvePageNumber(resolvedSearchParams.pendingPage);
+  const requestedActivityPage = resolvePageNumber(resolvedSearchParams.activityPage);
   const pendingCounts = {
     all: stats.pendingItems.length,
     high: stats.pendingItems.filter((item) => item.priority === "high").length,
@@ -45,7 +49,9 @@ export default async function DashboardPage({
       : stats.pendingItems.filter((item) => item.priority === selectedPriority);
   const recentActivitySummary = summarizeRecentActivity(stats.recentActivity);
   const pendingTypeSummary = summarizePendingTypes(stats.pendingItems);
-  const groupedPendingItems = groupPendingItemsByPriority(filteredPendingItems);
+  const paginatedPendingItems = paginateItems(filteredPendingItems, requestedPendingPage, DASHBOARD_SECTION_PAGE_SIZE);
+  const paginatedRecentActivity = paginateItems(stats.recentActivity, requestedActivityPage, DASHBOARD_SECTION_PAGE_SIZE);
+  const groupedPendingItems = groupPendingItemsByPriority(paginatedPendingItems.items);
 
   return (
     <AppShell settings={settings}>
@@ -60,7 +66,7 @@ export default async function DashboardPage({
         <StatCard
           title="Pendientes por atender"
           value={String(stats.pendingCount)}
-          description="Proyectos que requieren una acción concreta."
+          description="Proyectos que requieren una accion concreta."
           icon={<AlertTriangle className="h-5 w-5" />}
           footer={`Alta ${pendingCounts.high} - Media ${pendingCounts.medium} - Baja ${pendingCounts.low}`}
           tone={stats.pendingCount > 0 ? "attention" : "default"}
@@ -82,24 +88,24 @@ export default async function DashboardPage({
         />
       </section>
 
-      <section className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <Card className="border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)]">
-          <CardContent className="flex flex-col gap-5 p-6">
-            <OperationalPanel
+      <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+        <Card className="h-full border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)]">
+          <CardContent className="flex h-full flex-col gap-5 p-6">
+            <OperationalSectionHeader
               title="Continua donde te quedaste"
-              description="Retoma rápido el proyecto con actividad más reciente y salta directo a su detalle."
+              description="Retoma rapido el proyecto con actividad mas reciente y salta directo a su detalle."
             />
             {stats.recentProject ? (
-              <div className="space-y-5">
+              <div className="flex flex-1 flex-col justify-between gap-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-2xl font-semibold text-slate-900">{stats.recentProject.name}</p>
-                      <Badge>{stats.recentProject.status}</Badge>
+                      <ProjectStatusBadge status={stats.recentProject.status} />
                     </div>
                     <p className="text-sm text-slate-600">{stats.recentProject.companyName}</p>
                     <p className="text-sm text-slate-500">
-                      Última actualización {formatDate(stats.recentProject.updatedAt, settings.dateFormat)}
+                      Ultima actualizacion {formatDate(stats.recentProject.updatedAt, settings.dateFormat)}
                     </p>
                   </div>
                   {stats.recentProject.generalBudget ? (
@@ -118,7 +124,7 @@ export default async function DashboardPage({
 
                 <div className="grid gap-3 md:grid-cols-3">
                   <CompactStatCard label="Empresa" value={stats.recentProject.companyName} tone="slate" />
-                  <CompactStatCard label="Estado" value={stats.recentProject.status} tone="sky" />
+                  <CompactStatCard label="Estado" value={getProjectStatusLabel(stats.recentProject.status)} tone="sky" />
                   <CompactStatCard
                     label="Presupuesto"
                     value={stats.recentProject.generalBudget ? "Disponible" : "Pendiente"}
@@ -137,7 +143,7 @@ export default async function DashboardPage({
               </div>
             ) : (
               <EmptyState
-                title="Aún no tienes proyectos activos"
+                title="Aun no tienes proyectos activos"
                 description="Crea tu primer proyecto para comenzar a trabajar con presupuestos, reajustes y seguimiento."
                 href="/projects/new"
                 action="Crear proyecto"
@@ -146,21 +152,21 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
-          <CardContent className="space-y-4 p-6">
-            <OperationalPanel title="Acciones rápidas" description="Atajos para entrar al flujo principal sin rodeos." />
+        <Card className="h-full border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <CardContent className="flex h-full flex-col gap-4 p-6">
+            <OperationalSectionHeader title="Acciones rapidas" description="Atajos para entrar al flujo principal sin rodeos." />
             <ActionLink
               href="/projects/new"
               title="Nuevo proyecto"
-              description="Crea una obra y arranca con sus especialidades base."
+              description="Crea una obra y arranca con sus Sub Presupuestos base."
               icon={<FolderKanban className="h-5 w-5" />}
               tone="primary"
             />
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="grid flex-1 content-start gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <ActionLink
                 href="/budgets/new"
                 title="Nuevo presupuesto"
-                description="Genera un presupuesto y conéctalo a un proyecto."
+                description="Genera un presupuesto y conectalo a un proyecto."
                 icon={<FileSpreadsheet className="h-5 w-5" />}
               />
               <ActionLink
@@ -171,8 +177,8 @@ export default async function DashboardPage({
               />
               <ActionLink
                 href="/settings"
-                title="Configuración"
-                description="Ajusta moneda, fechas y especialidades iniciales."
+                title="Configuracion"
+                description="Ajusta moneda, fechas y Sub Presupuestos iniciales."
                 icon={<Settings2 className="h-5 w-5" />}
               />
             </div>
@@ -185,25 +191,64 @@ export default async function DashboardPage({
           <CardContent className="space-y-4 p-6">
             <OperationalPanel
               title="Pendientes por atender"
-              description="Bandeja operativa para detectar proyectos sin presupuesto, fórmula o reajustes registrados."
+              description="Bandeja operativa para detectar proyectos sin presupuesto, formula o reajustes registrados."
             />
             {stats.pendingItems.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <CompactStatCard label="Sin presupuesto" value={String(pendingTypeSummary.missingGeneralBudget)} tone="rose" />
-                <CompactStatCard label="Sin fórmula" value={String(pendingTypeSummary.missingFormula)} tone="amber" />
+                <CompactStatCard label="Sin formula" value={String(pendingTypeSummary.missingFormula)} tone="amber" />
                 <CompactStatCard label="Sin reajustes" value={String(pendingTypeSummary.missingAdjustments)} tone="sky" />
                 <CompactStatCard label="Sin actividad" value={String(pendingTypeSummary.noRecentActivity)} tone="slate" />
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <FilterPillLink href="/dashboard" label="Todos" count={pendingCounts.all} active={selectedPriority === "all"} />
-              <FilterPillLink href="/dashboard?priority=high" label="Alta" count={pendingCounts.high} active={selectedPriority === "high"} tone="rose" />
-              <FilterPillLink href="/dashboard?priority=medium" label="Media" count={pendingCounts.medium} active={selectedPriority === "medium"} tone="amber" />
-              <FilterPillLink href="/dashboard?priority=low" label="Baja" count={pendingCounts.low} active={selectedPriority === "low"} tone="slate" />
+              <FilterPillLink
+                href={buildDashboardHref({
+                  priority: undefined,
+                  pendingPage: 1,
+                  activityPage: paginatedRecentActivity.page,
+                })}
+                label="Todos"
+                count={pendingCounts.all}
+                active={selectedPriority === "all"}
+              />
+              <FilterPillLink
+                href={buildDashboardHref({
+                  priority: "high",
+                  pendingPage: 1,
+                  activityPage: paginatedRecentActivity.page,
+                })}
+                label="Alta"
+                count={pendingCounts.high}
+                active={selectedPriority === "high"}
+                tone="rose"
+              />
+              <FilterPillLink
+                href={buildDashboardHref({
+                  priority: "medium",
+                  pendingPage: 1,
+                  activityPage: paginatedRecentActivity.page,
+                })}
+                label="Media"
+                count={pendingCounts.medium}
+                active={selectedPriority === "medium"}
+                tone="amber"
+              />
+              <FilterPillLink
+                href={buildDashboardHref({
+                  priority: "low",
+                  pendingPage: 1,
+                  activityPage: paginatedRecentActivity.page,
+                })}
+                label="Baja"
+                count={pendingCounts.low}
+                active={selectedPriority === "low"}
+                tone="slate"
+              />
             </div>
             {filteredPendingItems.length === 0 ? (
               <EmptyState
-                title={stats.pendingItems.length === 0 ? "Todo al día" : "Sin pendientes en este filtro"}
+                title={stats.pendingItems.length === 0 ? "Todo al dia" : "Sin pendientes en este filtro"}
                 description={
                   stats.pendingItems.length === 0
                     ? "No encontramos pendientes operativos en proyectos, presupuestos ni reajustes."
@@ -246,29 +291,41 @@ export default async function DashboardPage({
                     </summary>
                     <div className="space-y-3 border-t border-slate-100 px-4 py-4">
                       {group.items.map((item) => (
-                        <Link
+                        <DashboardRecordLink
                           key={`${item.projectId}-${item.type}`}
                           href={item.href}
-                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition hover:border-amber-300 hover:bg-amber-50/30 lg:flex-row lg:items-center lg:justify-between"
+                          tone="amber"
+                          metaTitle={getPendingActionLabel(item.type)}
+                          metaDetail={`Actualizado ${formatDate(item.updatedAt, settings.dateFormat)}`}
                         >
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-medium text-slate-900">{item.projectName}</p>
-                              <Badge>{item.status}</Badge>
+                              <ProjectStatusBadge status={item.status} />
                               <ToneBadge label={getPendingTypeLabel(item.type)} tone={getPendingTypeTone(item.type)} />
                             </div>
                             <p className="text-sm text-slate-600">{item.companyName}</p>
                             <p className="text-sm text-slate-500">{item.observation}</p>
                           </div>
-                          <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:text-right">
-                            <p className="font-medium text-slate-700">{getPendingActionLabel(item.type)}</p>
-                            <p>Actualizado {formatDate(item.updatedAt, settings.dateFormat)}</p>
-                          </div>
-                        </Link>
+                        </DashboardRecordLink>
                       ))}
                     </div>
                   </details>
                 ))}
+                <SectionPagination
+                  currentPage={paginatedPendingItems.page}
+                  totalPages={paginatedPendingItems.totalPages}
+                  previousHref={buildDashboardHref({
+                    priority: selectedPriority === "all" ? undefined : selectedPriority,
+                    pendingPage: paginatedPendingItems.page - 1,
+                    activityPage: paginatedRecentActivity.page,
+                  })}
+                  nextHref={buildDashboardHref({
+                    priority: selectedPriority === "all" ? undefined : selectedPriority,
+                    pendingPage: paginatedPendingItems.page + 1,
+                    activityPage: paginatedRecentActivity.page,
+                  })}
+                />
               </div>
             )}
           </CardContent>
@@ -276,29 +333,31 @@ export default async function DashboardPage({
 
         <Card className="min-h-full border-slate-200 bg-[linear-gradient(180deg,#f8fcff_0%,#f3f9ff_100%)]">
           <CardContent className="space-y-3 p-6">
-            <OperationalPanel
+            <OperationalSectionHeader
               title="Actividad reciente"
               description="Rastro operativo reciente para retomar contexto sin abrir varias vistas."
             />
             {stats.recentActivity.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-3">
                 <CompactStatCard label="Esta semana" value={String(recentActivitySummary.thisWeekCount)} tone="sky" />
-                <CompactStatCard label="Más reciente" value={recentActivitySummary.latestLabel} tone="slate" />
+                <CompactStatCard label="Mas reciente" value={recentActivitySummary.latestLabel} tone="slate" />
                 <CompactStatCard label="Tipo dominante" value={recentActivitySummary.topTypeLabel} tone="violet" />
               </div>
             ) : null}
             {stats.recentActivity.length === 0 ? (
               <EmptyState
                 title="Sin actividad reciente"
-                description="Cuando edites proyectos, presupuestos o reajustes, verás aquí el rastro más reciente."
+                description="Cuando edites proyectos, presupuestos o reajustes, veras aqui el rastro mas reciente."
               />
             ) : (
               <div className="space-y-3">
-                {stats.recentActivity.map((item) => (
-                  <Link
+                {paginatedRecentActivity.items.map((item) => (
+                  <DashboardRecordLink
                     key={item.id}
                     href={item.href}
-                    className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition hover:border-sky-300 hover:bg-sky-50/40 lg:flex-row lg:items-center lg:justify-between"
+                    tone="sky"
+                    metaTitle={getActivityActionLabel(item.type)}
+                    metaDetail={`Actualizado ${formatDate(item.createdAt, settings.dateFormat)}`}
                   >
                     <div className="flex items-start gap-3">
                       <EventTypeIcon type={item.type} />
@@ -312,12 +371,22 @@ export default async function DashboardPage({
                         </div>
                       </div>
                     </div>
-                    <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:text-right">
-                      <p className="font-medium text-slate-700">{getActivityActionLabel(item.type)}</p>
-                      <p>Actualizado {formatDate(item.createdAt, settings.dateFormat)}</p>
-                    </div>
-                  </Link>
+                  </DashboardRecordLink>
                 ))}
+                <SectionPagination
+                  currentPage={paginatedRecentActivity.page}
+                  totalPages={paginatedRecentActivity.totalPages}
+                  previousHref={buildDashboardHref({
+                    priority: selectedPriority === "all" ? undefined : selectedPriority,
+                    pendingPage: paginatedPendingItems.page,
+                    activityPage: paginatedRecentActivity.page - 1,
+                  })}
+                  nextHref={buildDashboardHref({
+                    priority: selectedPriority === "all" ? undefined : selectedPriority,
+                    pendingPage: paginatedPendingItems.page,
+                    activityPage: paginatedRecentActivity.page + 1,
+                  })}
+                />
               </div>
             )}
           </CardContent>
@@ -327,35 +396,33 @@ export default async function DashboardPage({
       <section className="grid gap-6 lg:grid-cols-2">
         <Card className="min-h-full">
           <CardContent className="space-y-4 p-6">
-            <OperationalPanel
+            <OperationalSectionHeader
               title="Proyectos recientes"
-              description="Accesos directos para volver a las obras con más movimiento."
+              description="Accesos directos para volver a las obras con mas movimiento."
             />
             {stats.projects.length === 0 ? (
               <EmptyState
-                title="Aún no hay proyectos recientes"
-                description="Empieza creando un proyecto y aquí aparecerán sus accesos recientes."
+                title="Aun no hay proyectos recientes"
+                description="Empieza creando un proyecto y aqui apareceran sus accesos recientes."
               />
             ) : (
               stats.projects.map((project) => (
-                <Link
+                <DashboardRecordLink
                   key={project.id}
                   href={`/projects/${project.id}`}
-                  className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition hover:border-sky-300 hover:bg-sky-50/40 lg:flex-row lg:items-center lg:justify-between"
+                  tone="sky"
+                  metaTitle="Ver proyecto"
+                  metaDetail={`Actualizado ${formatDate(project.updatedAt, settings.dateFormat)}`}
                 >
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-slate-900">{project.name}</p>
-                      <Badge>{project.status}</Badge>
+                      <ProjectStatusBadge status={project.status} />
                     </div>
                     <p className="text-sm text-slate-600">{project.companyName}</p>
-                    <p className="text-sm text-slate-500">{project.location || "Ubicación pendiente"}</p>
+                    <p className="text-sm text-slate-500">{project.location || "Ubicacion pendiente"}</p>
                   </div>
-                  <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:text-right">
-                    <p className="font-medium text-slate-700">Ver proyecto</p>
-                    <p>Actualizado {formatDate(project.updatedAt, settings.dateFormat)}</p>
-                  </div>
-                </Link>
+                </DashboardRecordLink>
               ))
             )}
           </CardContent>
@@ -363,21 +430,23 @@ export default async function DashboardPage({
 
         <Card className="min-h-full">
           <CardContent className="space-y-4 p-6">
-            <OperationalPanel
+            <OperationalSectionHeader
               title="Presupuestos recientes"
-              description="Últimos movimientos del presupuesto general por proyecto."
+              description="Ultimos movimientos del presupuesto general por proyecto."
             />
             {stats.budgets.length === 0 ? (
               <EmptyState
-                title="Aún no hay presupuestos recientes"
-                description="Cuando registres presupuestos generales, aparecerán aquí para retomarlos rápido."
+                title="Aun no hay presupuestos recientes"
+                description="Cuando registres presupuestos generales, apareceran aqui para retomarlos rapido."
               />
             ) : (
               stats.budgets.map((budget) => (
-                <Link
+                <DashboardRecordLink
                   key={budget.id}
                   href={`/budgets/${budget.id}`}
-                  className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition hover:border-sky-300 hover:bg-sky-50/40 lg:flex-row lg:items-center lg:justify-between"
+                  tone="sky"
+                  metaTitle="Ver presupuesto"
+                  metaDetail={`Actualizado ${formatDate(budget.updatedAt, settings.dateFormat)}`}
                 >
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -389,11 +458,7 @@ export default async function DashboardPage({
                       {formatCurrency(budget.totalAmount, budget.currency, settings.currencyDecimals)}
                     </p>
                   </div>
-                  <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:text-right">
-                    <p className="font-medium text-slate-700">Ver presupuesto</p>
-                    <p>Actualizado {formatDate(budget.updatedAt, settings.dateFormat)}</p>
-                  </div>
-                </Link>
+                </DashboardRecordLink>
               ))
             )}
           </CardContent>
@@ -402,6 +467,8 @@ export default async function DashboardPage({
     </AppShell>
   );
 }
+
+const DASHBOARD_SECTION_PAGE_SIZE = 5;
 
 function StatCard({
   title,
@@ -521,6 +588,47 @@ function ActionLink({
   );
 }
 
+function DashboardRecordLink({
+  href,
+  children,
+  metaTitle,
+  metaDetail,
+  tone = "sky",
+}: {
+  href: string;
+  children: ReactNode;
+  metaTitle: string;
+  metaDetail: string;
+  tone?: "sky" | "amber";
+}) {
+  const tones = {
+    sky: "hover:border-sky-300 hover:bg-sky-50/40",
+    amber: "hover:border-amber-300 hover:bg-amber-50/30",
+  } as const;
+
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition lg:flex-row lg:items-center lg:justify-between",
+        tones[tone],
+      )}
+    >
+      {children}
+      <DashboardRecordMeta title={metaTitle} detail={metaDetail} />
+    </Link>
+  );
+}
+
+function DashboardRecordMeta({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:text-right">
+      <p className="font-medium text-slate-700">{title}</p>
+      <p>{detail}</p>
+    </div>
+  );
+}
+
 function EmptyState({
   title,
   description,
@@ -587,6 +695,113 @@ function resolvePendingPriorityFilter(value: string | undefined) {
   return "all";
 }
 
+function resolvePageNumber(value: string | undefined) {
+  const parsedValue = Number(value);
+
+  if (!Number.isInteger(parsedValue) || parsedValue < 1) {
+    return 1;
+  }
+
+  return parsedValue;
+}
+
+function paginateItems<T>(items: T[], requestedPage: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const startIndex = (page - 1) * pageSize;
+
+  return {
+    items: items.slice(startIndex, startIndex + pageSize),
+    page,
+    totalPages,
+  };
+}
+
+function buildDashboardHref({
+  priority,
+  pendingPage,
+  activityPage,
+}: {
+  priority?: "high" | "medium" | "low";
+  pendingPage?: number;
+  activityPage?: number;
+}) {
+  const searchParams = new URLSearchParams();
+
+  if (priority) {
+    searchParams.set("priority", priority);
+  }
+
+  if (pendingPage && pendingPage > 1) {
+    searchParams.set("pendingPage", String(pendingPage));
+  }
+
+  if (activityPage && activityPage > 1) {
+    searchParams.set("activityPage", String(activityPage));
+  }
+
+  const query = searchParams.toString();
+
+  return query.length > 0 ? `/dashboard?${query}` : "/dashboard";
+}
+
+function SectionPagination({
+  currentPage,
+  totalPages,
+  previousHref,
+  nextHref,
+}: {
+  currentPage: number;
+  totalPages: number;
+  previousHref: string;
+  nextHref: string;
+}) {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-2">
+      <span className="mr-auto text-xs text-slate-500">
+        Pagina {currentPage} de {totalPages}
+      </span>
+      <MinimalPaginationLink href={previousHref} disabled={currentPage <= 1}>
+        Anterior
+      </MinimalPaginationLink>
+      <MinimalPaginationLink href={nextHref} disabled={currentPage >= totalPages}>
+        Siguiente
+      </MinimalPaginationLink>
+    </div>
+  );
+}
+
+function MinimalPaginationLink({
+  href,
+  disabled,
+  children,
+}: {
+  href: string;
+  disabled: boolean;
+  children: ReactNode;
+}) {
+  if (disabled) {
+    return (
+      <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-400">
+        {children}
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-sky-300 hover:text-sky-700"
+    >
+      {children}
+    </Link>
+  );
+}
+
 function EventTypeBadge({
   type,
 }: {
@@ -645,7 +860,7 @@ function getActivityActionLabel(
   }
 
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
-    return "Revisar fórmula";
+    return "Revisar formula";
   }
 
   return "Ver reajuste";
@@ -677,7 +892,7 @@ function getEventTypeBadgeConfig(
 
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
     return {
-      label: "Fórmula",
+      label: "Formula",
       tone: "violet" as const,
     };
   }
@@ -729,7 +944,7 @@ function getPendingTypeLabel(
   type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
 ) {
   if (type === "MISSING_GENERAL_BUDGET") return "Presupuesto";
-  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Fórmula";
+  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Formula";
   if (type === "MISSING_ADJUSTMENTS") return "Reajuste";
   return "Seguimiento";
 }
@@ -738,7 +953,7 @@ function getPendingActionLabel(
   type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
 ) {
   if (type === "MISSING_GENERAL_BUDGET") return "Crear presupuesto";
-  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Generar fórmula";
+  if (type === "MISSING_POLYNOMIAL_FORMULA") return "Generar formula";
   if (type === "MISSING_ADJUSTMENTS") return "Registrar reajuste";
   return "Revisar proyecto";
 }
@@ -804,10 +1019,10 @@ function formatRelativeActivityDay(value: Date) {
   }
 
   if (diffDays < 7) {
-    return `Hace ${diffDays} días`;
+    return `Hace ${diffDays} dias`;
   }
 
-  return "Más de 1 semana";
+  return "Mas de 1 semana";
 }
 
 function summarizePendingTypes(
@@ -865,3 +1080,4 @@ function groupPendingItemsByPriority(
     }))
     .filter((group) => group.items.length > 0);
 }
+

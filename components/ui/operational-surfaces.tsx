@@ -1,18 +1,34 @@
-import type { ReactNode } from "react";
+"use client";
+
+import type { HTMLAttributes, ReactNode } from "react";
+
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import {
+  getFormActionBarClassName,
+  getFormSectionPanelClassName,
+  getOperationalFilterSummaryClassName,
+  getOperationalMetricBadgeClassName,
+  getOperationalPanelClassName,
+} from "@/components/view-mode/view-mode-styles";
+import { cn } from "@/lib/utils";
 
 export function OperationalPanel({
   title,
   description,
   metrics,
   controls,
+  className,
 }: {
   title: string;
   description: string;
   metrics?: ReactNode;
   controls?: ReactNode;
+  className?: string;
 }) {
+  const { isExcelMode } = useAppViewMode();
+
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(248,250,252,0.95)_100%)] p-4 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.32)] transition-colors">
+    <div className={getOperationalPanelClassName(isExcelMode, className)}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-slate-900">{title}</p>
@@ -25,19 +41,73 @@ export function OperationalPanel({
   );
 }
 
+export function OperationalSectionHeader({
+  title,
+  description,
+  className,
+}: {
+  title: string;
+  description: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("space-y-1", className)}>
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <p className="max-w-3xl text-sm leading-6 text-slate-500">{description}</p>
+    </div>
+  );
+}
+
+export function OperationalMetricBadge({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "accent";
+}) {
+  const { isExcelMode } = useAppViewMode();
+
+  return (
+    <span className={getOperationalMetricBadgeClassName(isExcelMode, tone)}>
+      {children}
+    </span>
+  );
+}
+
+export function OperationalFilterSummary({
+  children,
+  className,
+  ...props
+}: {
+  children: ReactNode;
+  className?: string;
+} & HTMLAttributes<HTMLDivElement>) {
+  const { isExcelMode } = useAppViewMode();
+
+  return (
+    <div {...props} className={getOperationalFilterSummaryClassName(isExcelMode, className)}>
+      {children}
+    </div>
+  );
+}
+
 export function FormSectionPanel({
   title,
   description,
   children,
   icon,
+  className,
 }: {
   title: string;
   description: string;
   children: ReactNode;
   icon?: ReactNode;
+  className?: string;
 }) {
+  const { isExcelMode } = useAppViewMode();
+
   return (
-    <section className="space-y-4 rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(248,250,252,0.92)_100%)] p-4 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.28)] transition-colors">
+    <section className={getFormSectionPanelClassName(isExcelMode, className)}>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           {icon ? <span className="text-slate-500">{icon}</span> : null}
@@ -50,9 +120,11 @@ export function FormSectionPanel({
   );
 }
 
-export function FormActionBar({ children }: { children: ReactNode }) {
+export function FormActionBar({ children, className }: { children: ReactNode; className?: string }) {
+  const { isExcelMode } = useAppViewMode();
+
   return (
-    <div className="flex items-center justify-end rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 shadow-[0_10px_25px_-22px_rgba(15,23,42,0.35)]">
+    <div className={getFormActionBarClassName(isExcelMode, className)}>
       {children}
     </div>
   );

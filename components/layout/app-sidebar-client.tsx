@@ -1,16 +1,24 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { FileSpreadsheet, FolderKanban, LayoutDashboard, Rows3, SlidersHorizontal, Wrench } from "lucide-react";
+import { BookOpen, FileSpreadsheet, FolderKanban, LayoutDashboard, Rows3, SlidersHorizontal, Wrench } from "lucide-react";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SidebarNav, type SidebarNavLink } from "@/components/layout/sidebar-nav";
 import { SidebarUserCard } from "@/components/layout/sidebar-user-card";
+import {
+  isSidebarMode,
+  SIDEBAR_EXPANDED_WIDTH,
+  SIDEBAR_MINI_WIDTH,
+  SIDEBAR_MODE_COOKIE_NAME,
+  SIDEBAR_MODE_STORAGE_KEY,
+  type SidebarMode,
+} from "@/lib/layout/sidebar-mode";
 import { cn } from "@/lib/utils";
 
-type SidebarMode = "expanded" | "mini";
-
 type AppSidebarClientProps = {
+  initialMode?: SidebarMode | null;
+  userAvatarUrl?: string | null;
   userName?: string | null;
   userEmail?: string | null;
 };
@@ -21,13 +29,33 @@ const NAV_LINKS: SidebarNavLink[] = [
   { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
   { href: "/resources", label: "Catalogo de Insumos", icon: Wrench },
   { href: "/partidas", label: "Catalogo de Partidas", icon: Rows3 },
+  { href: "/unified-indices", label: "Indices Unificados (IU)", icon: BookOpen },
+  { href: "/unified-index-dictionary", label: "Diccionario de IU", icon: BookOpen },
   { href: "/settings", label: "Configuracion", icon: SlidersHorizontal },
 ];
 
 const FULL_WIDTH_QUERY = "(min-width: 1536px)";
 const SIDEBAR_MODE_EVENT = "myc:sidebar-mode-change";
-const SIDEBAR_MODE_STORAGE_KEY = "myc:sidebar-mode";
 const SIDEBAR_NAV_ID = "app-sidebar-navigation";
+
+function persistSidebarModeCookie(mode: SidebarMode) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${SIDEBAR_MODE_COOKIE_NAME}=${mode}; path=/; max-age=31536000; samesite=lax`;
+}
+
+function syncSidebarWidthCssVariable(mode: SidebarMode) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.documentElement.style.setProperty(
+    "--app-sidebar-initial-width",
+    `${mode === "mini" ? SIDEBAR_MINI_WIDTH : SIDEBAR_EXPANDED_WIDTH}px`,
+  );
+}
 
 function getViewportMode(): SidebarMode {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -35,10 +63,6 @@ function getViewportMode(): SidebarMode {
   }
 
   return window.matchMedia(FULL_WIDTH_QUERY).matches ? "mini" : "expanded";
-}
-
-function isSidebarMode(value: string | null): value is SidebarMode {
-  return value === "expanded" || value === "mini";
 }
 
 function getStoredSidebarMode(): SidebarMode | null {
@@ -51,12 +75,8 @@ function getStoredSidebarMode(): SidebarMode | null {
   return isSidebarMode(storedMode) ? storedMode : null;
 }
 
-function getSidebarModeSnapshot(): SidebarMode {
-  return getStoredSidebarMode() ?? getViewportMode();
-}
-
-function getSidebarModeServerSnapshot(): SidebarMode {
-  return "expanded";
+function getSidebarModeServerSnapshot(initialMode?: SidebarMode | null): SidebarMode {
+  return initialMode ?? "expanded";
 }
 
 function subscribeToSidebarMode(onStoreChange: () => void) {
@@ -111,31 +131,56 @@ function getInitials(userName?: string | null, userEmail?: string | null) {
   return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
 }
 
-export function AppSidebarClient({ userEmail, userName }: AppSidebarClientProps) {
+export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userName }: AppSidebarClientProps) {
   const pathname = usePathname() ?? "";
-  const mode = useSyncExternalStore(subscribeToSidebarMode, getSidebarModeSnapshot, getSidebarModeServerSnapshot);
+  const mode = useSyncExternalStore(
+    subscribeToSidebarMode,
+    () => getStoredSidebarMode() ?? initialMode ?? getViewportMode(),
+    () => getSidebarModeServerSnapshot(initialMode),
+  );
   const isMini = mode === "mini";
   const initials = getInitials(userName, userEmail);
   const displayName = userName?.trim() || "Equipo tecnico";
   const displayEmail = userEmail?.trim() || "Sin correo";
 
+  useEffect(() => {
+    if (!initialMode) {
+      return;
+    }
+
+    if (getStoredSidebarMode() !== initialMode) {
+      window.localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, initialMode);
+    }
+  }, [initialMode]);
+
+  useEffect(() => {
+    persistSidebarModeCookie(mode);
+    syncSidebarWidthCssVariable(mode);
+  }, [mode]);
+
   const toggleSidebarMode = () => {
     const nextMode: SidebarMode = isMini ? "expanded" : "mini";
     window.localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, nextMode);
+    persistSidebarModeCookie(nextMode);
     window.dispatchEvent(new Event(SIDEBAR_MODE_EVENT));
   };
 
   return (
     <aside
       className={cn(
-        "flex min-h-full flex-col rounded-3xl border border-white/70 bg-slate-900 p-4 text-white shadow-xl shadow-slate-900/10 transition-[width,padding] duration-200",
-        isMini ? "w-24 items-center" : "w-full max-w-[280px]",
+        "flex min-h-full flex-col overflow-visible rounded-3xl border border-white/70 bg-slate-900 p-4 text-white shadow-xl shadow-slate-900/10 transition-[width,padding] duration-200",
+        isMini ? "items-center" : "",
       )}
       data-sidebar-mode={mode}
+      style={{
+        width: "var(--app-sidebar-initial-width, 280px)",
+        minWidth: "var(--app-sidebar-initial-width, 280px)",
+        maxWidth: "var(--app-sidebar-initial-width, 280px)",
+      }}
     >
       <SidebarBrand mode={mode} navigationId={SIDEBAR_NAV_ID} onToggle={toggleSidebarMode} />
       <SidebarNav links={NAV_LINKS} mode={mode} navigationId={SIDEBAR_NAV_ID} pathname={pathname} />
-      <SidebarUserCard mode={mode} user={{ email: displayEmail, initials, name: displayName }} />
+      <SidebarUserCard mode={mode} user={{ avatarUrl: userAvatarUrl ?? null, email: displayEmail, initials, name: displayName }} />
     </aside>
   );
 }

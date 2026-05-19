@@ -81,6 +81,10 @@ body {
   --excel-border-soft: #e2e8f0;
   --excel-header-background: #f8fafc;
   --excel-surface-background: #ffffff;
+  --excel-field-border-color: #cbd5e1;
+  --excel-row-height: 52px;
+  --excel-cell-padding-x: 0.5rem;
+  --excel-control-height: calc(var(--excel-row-height) - 8px);
 }
 
 [data-view-mode="excel"] .ui-table {
@@ -88,33 +92,56 @@ body {
 }
 
 [data-view-mode="excel"] .ui-table-head-cell {
-  height: 2rem;
+  height: var(--excel-row-height) !important;
+  min-height: var(--excel-row-height) !important;
   border: 1px solid var(--excel-border);
-  padding: 0.375rem 0.5rem;
+  padding: 0 var(--excel-cell-padding-x);
   background: var(--excel-header-background);
   color: #475569;
   font-size: 0.75rem;
   font-weight: 600;
+  transition: none;
 }
 
 [data-view-mode="excel"] .ui-table-cell {
+  height: var(--excel-row-height);
+  min-height: var(--excel-row-height);
   border: 1px solid var(--excel-border-soft);
-  padding: 0.375rem 0.5rem;
+  padding: 0 var(--excel-cell-padding-x);
   background: var(--excel-surface-background);
+  transition: background-color 150ms ease, box-shadow 150ms ease;
 }
 
 [data-view-mode="excel"] .ui-table-row {
+  height: var(--excel-row-height);
   border-bottom-color: var(--excel-border-soft);
+  transition: background-color 150ms ease, box-shadow 150ms ease;
 }
 
-[data-view-mode="excel"] .ui-input,
-[data-view-mode="excel"] .ui-select-trigger {
-  height: 2rem;
-  border-radius: 0.125rem;
-  border-color: var(--excel-border);
-  padding: 0.25rem 0.5rem;
-  box-shadow: none;
+[data-view-mode="excel"] .ui-table-head.sticky {
+  top: -1px;
+  z-index: 30;
+  background: var(--excel-header-background);
+}
+
+[data-view-mode="excel"] .budget-sticky-header {
+  top: -1px;
+}
+
+[data-view-mode="excel"] .ui-table-cell :is(.ui-input, .ui-select-trigger, [data-excel-field-trigger="true"]),
+[data-view-mode="excel"] .ui-table-head-cell :is(.ui-input, .ui-select-trigger, [data-excel-field-trigger="true"]),
+[data-view-mode="excel"] [data-excel-field-border-scope="apu-editor"] :is(.ui-input, .ui-select-trigger, [data-excel-field-trigger="true"]):not([data-excel-field-border-opt-out="true"]) {
+  height: var(--excel-control-height);
+  border-radius: 0 !important;
+  border-color: var(--excel-field-border-color) !important;
+  padding: 0.125rem 0.5rem;
+  box-shadow: none !important;
   font-size: 0.75rem;
+  transition: none;
+}
+
+[data-view-mode="excel"] [data-excel-field-border-opt-out="true"] {
+  border-color: #cbd5e1 !important;
 }
 
 .ui-select-content[data-view-mode="excel"] {
@@ -133,11 +160,18 @@ body {
 }
 
 [data-view-mode="excel"] .ui-button {
-  height: 2rem;
+  height: var(--excel-control-height);
   border-radius: 0.125rem;
   padding-inline: 0.75rem;
   box-shadow: none;
   font-size: 0.75rem;
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+[data-view-mode="excel"] :is(.ui-button, .ui-select-trigger, .ui-select-item, [data-excel-field-trigger="true"]) svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 [data-view-mode="excel"] .ui-card {

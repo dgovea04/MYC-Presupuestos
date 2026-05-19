@@ -18,13 +18,19 @@ export type AppDataChangePayload = {
   paths: string[];
   occurredAt: number;
   budgets?: BudgetLiveUpdateSummary[];
+  locallyHandledPaths?: string[];
 };
 
-export function broadcastAppDataChange(paths: string[], budgets?: BudgetLiveUpdateSummary[]) {
+export function broadcastAppDataChange(
+  paths: string[],
+  budgets?: BudgetLiveUpdateSummary[],
+  options?: { locallyHandledPaths?: string[] },
+) {
   const payload: AppDataChangePayload = {
     paths,
     occurredAt: Date.now(),
     budgets,
+    locallyHandledPaths: options?.locallyHandledPaths,
   };
 
   try {

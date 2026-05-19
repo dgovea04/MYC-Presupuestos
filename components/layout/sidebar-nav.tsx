@@ -30,7 +30,7 @@ export function SidebarNav({
   const isMini = mode === "mini";
 
   return (
-    <nav className={cn("mt-6 flex w-full flex-col gap-2", isMini && "items-center")} id={navigationId}>
+    <nav className={cn("mt-6 flex w-full flex-col gap-2", isMini && "mt-[50px] items-center")} id={navigationId}>
       {links.map((link) => {
         const Icon = link.icon;
         const active = isActivePath(pathname, link.href);
@@ -42,12 +42,12 @@ export function SidebarNav({
             className={cn(
               "flex items-center rounded-2xl px-3 py-3 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900",
               active ? "bg-white/14 text-white" : "text-slate-200 hover:bg-white/10",
-              isMini ? "w-12 justify-center px-0" : "gap-3",
+              isMini ? "w-14 justify-center px-0" : "gap-3.5",
             )}
             href={link.href}
             title={isMini ? link.label : undefined}
           >
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon className="h-5 w-5 shrink-0" />
             {isMini ? <span className="sr-only">{link.label}</span> : <span>{link.label}</span>}
           </Link>
         );

@@ -115,19 +115,33 @@ describe("AppSidebarClient", () => {
     mockPathname = "/budgets";
 
     await act(async () => {
-      root.render(<AppSidebarClient userEmail="maria@example.com" userName="Maria Lopez" />);
+      root.render(<AppSidebarClient userAvatarUrl="/uploads/avatars/maria.png" userEmail="maria@example.com" userName="Maria Lopez" />);
     });
 
     const sidebar = container.querySelector("[data-sidebar-mode]");
     const activeLink = container.querySelector('a[aria-current="page"]');
     const toggle = container.querySelector('button[aria-label="Contraer sidebar"]');
     const signOut = [...container.querySelectorAll("button")].find((element) => element.textContent?.includes("Cerrar sesion"));
+    const navigationHrefs = [...container.querySelectorAll("a")].map((element) => element.getAttribute("href"));
 
     expect(sidebar?.getAttribute("data-sidebar-mode")).toBe("expanded");
     expect(container.textContent).toContain("Costos y presupuestos de obra");
     expect(activeLink?.getAttribute("href")).toBe("/budgets");
+    expect(navigationHrefs).toEqual([
+      "/dashboard",
+      "/projects",
+      "/budgets",
+      "/resources",
+      "/partidas",
+      "/unified-indices",
+      "/unified-index-dictionary",
+      "/settings",
+      "/account",
+    ]);
     expect(container.textContent).toContain("Maria Lopez");
     expect(container.textContent).toContain("maria@example.com");
+    expect(container.textContent).toContain("Mi perfil");
+    expect(container.querySelector('[data-next-image="/uploads/avatars/maria.png"]')).not.toBeNull();
     expect(toggle?.getAttribute("aria-controls")).toBe("app-sidebar-navigation");
     expect(toggle?.getAttribute("aria-expanded")).toBe("true");
     expect(toggle).not.toBeNull();
@@ -213,6 +227,7 @@ describe("AppSidebarClient", () => {
     });
 
     expect(window.localStorage.getItem("myc:sidebar-mode")).toBe("expanded");
+    expect(document.cookie).toContain("myc_sidebar_mode=expanded");
     expect(container.querySelector("[data-sidebar-mode]")?.getAttribute("data-sidebar-mode")).toBe("expanded");
   });
 
@@ -229,6 +244,31 @@ describe("AppSidebarClient", () => {
 
     expect(sidebar?.getAttribute("data-sidebar-mode")).toBe("expanded");
     expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("uses the persisted initial mode snapshot during hydration", async () => {
+    mockMatchMedia(false);
+    const hydrationContainer = document.createElement("div");
+    const serverMarkup = renderToString(<AppSidebarClient initialMode="mini" userEmail="maria@example.com" userName="Maria Lopez" />);
+    let hydratedRoot: ReturnType<typeof hydrateRoot> | null = null;
+
+    document.body.appendChild(hydrationContainer);
+    hydrationContainer.innerHTML = serverMarkup;
+
+    await act(async () => {
+      hydratedRoot = hydrateRoot(
+        hydrationContainer,
+        <AppSidebarClient initialMode="mini" userEmail="maria@example.com" userName="Maria Lopez" />,
+      );
+    });
+
+    expect(hydrationContainer.querySelector("[data-sidebar-mode]")?.getAttribute("data-sidebar-mode")).toBe("mini");
+
+    await act(async () => {
+      hydratedRoot?.unmount();
+    });
+
+    hydrationContainer.remove();
   });
 
   it("resynchronizes the sidebar mode when the viewport changes and there is no stored preference", async () => {
@@ -281,6 +321,7 @@ describe("AppSidebarClient", () => {
     expect(container.textContent).toContain("Ada Lovelace");
     expect(container.textContent).toContain("ada@example.com");
     expect(container.textContent).toContain("Cuenta activa");
+    expect(container.querySelector('a[href="/account"]')).not.toBeNull();
     expect(initials).not.toBeUndefined();
     expect(signOut?.querySelector(".ml-2")?.textContent).toBe("Cerrar sesion");
   });
