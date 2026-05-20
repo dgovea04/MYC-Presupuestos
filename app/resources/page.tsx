@@ -13,7 +13,7 @@ export default async function ResourcesPage() {
   const [resources, companies] = await Promise.all([getResourcesByUser(session!.user.id), getUserCompanies(session!.user.id)]);
 
   return (
-    <AppShell>
+    <AppShell currentUser={session!.user}>
       <Card className="border-slate-200">
         <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
           <PageHeaderCard

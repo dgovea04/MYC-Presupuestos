@@ -28,7 +28,7 @@ const budgetFooterDraft: BudgetFooterDraft = {
 
 export default async function GeneralBudgetFooterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { budget, project, session } = await getGeneralBudgetSectionContext(id);
+  const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const [structure, account, companies] = await Promise.all([
     getBudgetFooterStructure(id, session.user.id),
     getUserAccount(session.user.id),
@@ -44,6 +44,8 @@ export default async function GeneralBudgetFooterPage({ params }: { params: Prom
       activeSection="footer"
       title="Pie de presupuesto"
       description="Constructor libre del pie de presupuesto general, conectado a variables y formulas editables."
+      currentUser={currentUser}
+      settings={settings}
     >
       <GeneralBudgetFooterTable
         budgetId={budget.id}

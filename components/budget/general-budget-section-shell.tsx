@@ -5,6 +5,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import type { UserSettingsRecord } from "@/types/settings";
 
 const sections = [
   { id: "resources", label: "Lista de insumos", href: "resources" },
@@ -22,6 +23,8 @@ export function GeneralBudgetSectionShell({
   activeSection,
   title,
   description,
+  currentUser,
+  settings,
   children,
 }: {
   budgetId: string;
@@ -31,10 +34,16 @@ export function GeneralBudgetSectionShell({
   activeSection: (typeof sections)[number]["id"];
   title: string;
   description: string;
+  currentUser?: {
+    avatarUrl?: string | null;
+    email?: string | null;
+    name?: string | null;
+  };
+  settings?: UserSettingsRecord;
   children: React.ReactNode;
 }) {
   return (
-    <AppShell>
+    <AppShell currentUser={currentUser} settings={settings}>
       <div className="space-y-5">
         <Card>
           <CardContent className="space-y-4 p-6">

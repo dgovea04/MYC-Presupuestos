@@ -5,7 +5,7 @@ import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 
 export default async function WorkSchedulePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { budget, project, session } = await getGeneralBudgetSectionContext(id);
+  const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const section = await getWorkScheduleSection(id, session.user.id);
 
   return (
@@ -17,6 +17,8 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
       activeSection="work-schedule"
       title="Programacion de obra"
       description="Cronograma consolidado del proyecto con calendario valorizado, insumos por periodo y curva S basica."
+      currentUser={currentUser}
+      settings={settings}
     >
       <WorkSchedulePageContent initialData={section} />
     </GeneralBudgetSectionShell>

@@ -68,7 +68,8 @@ export function UnifiedIndexDictionaryPageContent({ rows }: { rows: UnifiedIndex
       />
 
       <VirtualizedTableFrame scrollContainerRef={scrollContainerRef} onScroll={scrollProps.onScroll}>
-        <Table>
+        <Table className="table-fixed">
+          <UnifiedIndexDictionaryColGroup />
           <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
             <TR className="bg-slate-50 hover:bg-slate-50">
               <TH>ELEMENTO</TH>
@@ -95,4 +96,14 @@ export function UnifiedIndexDictionaryPageContent({ rows }: { rows: UnifiedIndex
 
 function formatCount(value: number, singular: string, plural: string) {
   return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function UnifiedIndexDictionaryColGroup() {
+  return (
+    <colgroup>
+      <col style={{ width: "38%" }} />
+      <col style={{ width: "42%" }} />
+      <col style={{ width: "140px" }} />
+    </colgroup>
+  );
 }

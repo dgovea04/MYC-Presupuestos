@@ -53,6 +53,7 @@ export function SettingsPageContent({
   account: AccountRecord;
   initialSettings: UserSettingsRecord;
 }) {
+  const [companyState, setCompanyState] = useState(company);
   const [settings, setSettings] = useState(initialSettings);
   const currencyPreview = useMemo(
     () => formatCurrency(7723.48, settings.defaultCurrency, settings.currencyDecimals),
@@ -65,7 +66,7 @@ export function SettingsPageContent({
     <div className="space-y-6">
       <section className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <div className="space-y-6">
-          <CompanyProfileCard company={company} />
+          <CompanyProfileCard company={companyState} onSaved={setCompanyState} />
 
           <Card className="border-slate-200">
             <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#fffdf8_0%,#fffaf0_100%)]">
@@ -124,8 +125,8 @@ export function SettingsPageContent({
               <CardDescription>Lectura corta del estado actual de tus ajustes globales.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <InfoCard label="Empresa" value={company?.name ?? "Pendiente"} layout="inline" />
-              <InfoCard label="Logo" value={company?.logoUrl ? "Disponible" : "Pendiente"} layout="inline" />
+              <InfoCard label="Empresa" value={companyState?.name ?? "Pendiente"} layout="inline" />
+              <InfoCard label="Logo" value={companyState?.logoUrl ? "Disponible" : "Pendiente"} layout="inline" />
               <InfoCard label="Moneda" value={settings.defaultCurrency} layout="inline" />
               <InfoCard label="Fecha" value={DATE_FORMAT_LABELS[settings.dateFormat]} layout="inline" />
               <InfoCard label="Vista" value={settings.defaultViewMode === "excel" ? "Modo Excel" : "Moderna"} layout="inline" />
@@ -147,8 +148,8 @@ export function SettingsPageContent({
                     <p className="mt-2 text-sm text-slate-600">Responsable, empresa y firma visual que acompanaran los exportes.</p>
                   </div>
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
-                    {company?.logoUrl ? (
-                      <Image src={company.logoUrl} alt="Logo de empresa" width={42} height={42} className="max-h-10 w-auto object-contain" />
+                    {companyState?.logoUrl ? (
+                      <Image src={companyState.logoUrl} alt="Logo de empresa" width={42} height={42} className="max-h-10 w-auto object-contain" />
                     ) : (
                       <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Logo</span>
                     )}
@@ -156,7 +157,7 @@ export function SettingsPageContent({
                 </div>
 
                 <div className="mt-4 grid gap-3">
-                  <PreviewRow label="Empresa" value={company?.name ?? "Pendiente"} />
+                  <PreviewRow label="Empresa" value={companyState?.name ?? "Pendiente"} />
                   <PreviewRow label="Responsable" value={account.name} />
                   <PreviewRow label="Cargo" value={account.jobTitle || "Pendiente"} />
                   <PreviewRow label="Telefono" value={account.phone || "Pendiente"} />
@@ -166,7 +167,7 @@ export function SettingsPageContent({
                   <SignaturePreview
                     title="Firma del responsable"
                     primary={account.name}
-                    secondary={account.jobTitle || company?.name || "Cargo pendiente"}
+                    secondary={account.jobTitle || companyState?.name || "Cargo pendiente"}
                   />
                   <SignaturePreview
                     title="Vo. Bo. / aprobacion"

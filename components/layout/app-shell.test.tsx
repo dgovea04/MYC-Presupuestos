@@ -98,4 +98,38 @@ describe("AppShell", () => {
     expect(markup).toContain('data-name="Maria Actualizada"');
     expect(markup).toContain('data-email="maria@example.com"');
   });
+
+  it("skips fetching the session when currentUser and settings are provided", async () => {
+    vi.mocked(getAuthSession).mockReset();
+    vi.mocked(getUserSettings).mockReset();
+
+    const markup = renderToStaticMarkup(
+      await AppShell({
+        children: <div>Contenido</div>,
+        currentUser: {
+          avatarUrl: "/uploads/avatars/user-2.webp",
+          email: "ana@example.com",
+          name: "Ana",
+        },
+        settings: {
+          defaultCurrency: "PEN",
+          currencyDecimals: 2,
+          dateFormat: "DD_MMM_YYYY",
+          defaultViewMode: "modern",
+          excelShowFieldBorders: true,
+          excelRowHeight: 52,
+          defaultIgvRate: 0.18,
+          defaultGeneralExpensesRate: 0.1,
+          defaultUtilityRate: 0.08,
+          defaultSubBudgetNames: ["Arquitectura"],
+        },
+      }),
+    );
+
+    expect(markup).toContain('data-avatar="/uploads/avatars/user-2.webp"');
+    expect(markup).toContain('data-name="Ana"');
+    expect(markup).toContain('data-email="ana@example.com"');
+    expect(getAuthSession).not.toHaveBeenCalled();
+    expect(getUserSettings).not.toHaveBeenCalled();
+  });
 });

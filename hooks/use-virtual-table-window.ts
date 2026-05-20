@@ -30,6 +30,8 @@ export function useVirtualTableWindow<T>({
   resetKey,
 }: VirtualTableWindowInput<T>): VirtualTableWindowResult<T> {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollFrameRef = useRef<number | null>(null);
+  const latestScrollTopRef = useRef(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
 
@@ -50,6 +52,14 @@ export function useVirtualTableWindow<T>({
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (pendingScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingScrollFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const element = scrollContainerRef.current;
     if (!element) return;
 
@@ -59,6 +69,11 @@ export function useVirtualTableWindow<T>({
       element.scrollTop = 0;
     }
 
+    latestScrollTopRef.current = 0;
+    if (pendingScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingScrollFrameRef.current);
+      pendingScrollFrameRef.current = null;
+    }
     setScrollTop(0);
   }, [resetKey]);
 
@@ -88,7 +103,18 @@ export function useVirtualTableWindow<T>({
   return {
     scrollContainerRef,
     scrollProps: {
-      onScroll: (event) => setScrollTop(event.currentTarget.scrollTop),
+      onScroll: (event) => {
+        latestScrollTopRef.current = event.currentTarget.scrollTop;
+
+        if (pendingScrollFrameRef.current !== null) {
+          return;
+        }
+
+        pendingScrollFrameRef.current = window.requestAnimationFrame(() => {
+          pendingScrollFrameRef.current = null;
+          setScrollTop((current) => (current === latestScrollTopRef.current ? current : latestScrollTopRef.current));
+        });
+      },
     },
     virtualRange,
   };

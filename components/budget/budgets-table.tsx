@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import {
@@ -33,6 +33,7 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
   const [filter, setFilter] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const deferredFilter = useDeferredValue(filter);
 
   useEffect(() => {
     function applyPayload(payload: AppDataChangePayload | null) {
@@ -87,11 +88,11 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
   );
 
   const filtered = useMemo(
-    () => rows.filter((budget) => `${budget.name} ${budget.projectName}`.toLowerCase().includes(filter.toLowerCase())),
-    [rows, filter],
+    () => rows.filter((budget) => `${budget.name} ${budget.projectName}`.toLowerCase().includes(deferredFilter.toLowerCase())),
+    [deferredFilter, rows],
   );
 
-  async function removeBudget(id: string) {
+  const removeBudget = useCallback(async (id: string) => {
     setPendingId(id);
     setError("");
 
@@ -107,7 +108,7 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
 
     setBaseRows((current) => current.filter((budget) => budget.id !== id));
     broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], undefined, { locallyHandledPaths: ["/budgets"] });
-  }
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -147,27 +148,14 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
           <TBody>
             {filtered.length > 0 ? (
               filtered.map((budget) => (
-                <TR key={budget.id} className="hover:bg-slate-50/80">
-                  <TD className="font-medium text-slate-900">{budget.name}</TD>
-                  <TD>{budget.projectName}</TD>
-                  <TD>{formatCurrency(budget.totalAmount, budget.currency, currencyDecimals)}</TD>
-                  <TD>{formatDate(budget.updatedAt, dateFormat)}</TD>
-                  <TD>
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/budgets/${budget.id}`}>
-                        <ActionButton action="open" label="Abrir" size="sm" variant="outline" />
-                      </Link>
-                      <ActionButton
-                        action="delete"
-                        label="Eliminar"
-                        size="sm"
-                        variant="ghost"
-                        disabled={pendingId === budget.id}
-                        onClick={() => removeBudget(budget.id)}
-                      />
-                    </div>
-                  </TD>
-                </TR>
+                <BudgetTableRow
+                  key={budget.id}
+                  budget={budget}
+                  currencyDecimals={currencyDecimals}
+                  dateFormat={dateFormat}
+                  isPending={pendingId === budget.id}
+                  onRemoveBudget={removeBudget}
+                />
               ))
             ) : (
               <TR>
@@ -185,3 +173,41 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
     </div>
   );
 }
+
+const BudgetTableRow = memo(function BudgetTableRow({
+  budget,
+  currencyDecimals,
+  dateFormat,
+  isPending,
+  onRemoveBudget,
+}: {
+  budget: BudgetRow;
+  currencyDecimals: number;
+  dateFormat: string;
+  isPending: boolean;
+  onRemoveBudget: (id: string) => Promise<void>;
+}) {
+  return (
+    <TR className="hover:bg-slate-50/80">
+      <TD className="font-medium text-slate-900">{budget.name}</TD>
+      <TD>{budget.projectName}</TD>
+      <TD>{formatCurrency(budget.totalAmount, budget.currency, currencyDecimals)}</TD>
+      <TD>{formatDate(budget.updatedAt, dateFormat)}</TD>
+      <TD>
+        <div className="flex justify-end gap-2">
+          <Link href={`/budgets/${budget.id}`}>
+            <ActionButton action="open" label="Abrir" size="sm" variant="outline" />
+          </Link>
+          <ActionButton
+            action="delete"
+            label="Eliminar"
+            size="sm"
+            variant="ghost"
+            disabled={isPending}
+            onClick={() => void onRemoveBudget(budget.id)}
+          />
+        </div>
+      </TD>
+    </TR>
+  );
+});

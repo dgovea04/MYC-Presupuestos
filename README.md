@@ -135,8 +135,8 @@ También puedes crear tu propia cuenta desde `/register`.
 
 ## Scripts disponibles
 
-```powershell
 npm.cmd run dev
+```powershell
 npm.cmd run build
 npm.cmd run lint
 npm.cmd run test

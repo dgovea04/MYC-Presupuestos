@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
+import { useDisableBodyScrollLockCompensation } from "@/hooks/use-disable-body-scroll-lock-compensation";
 import { cn } from "@/lib/utils";
 import {
   extractSelectOptions,
@@ -29,10 +30,16 @@ export type SelectValueChangeEvent = {
 export type SelectProps = SelectTriggerProps & {
   autoComplete?: string;
   children: SelectOptionChildren;
+  contentClassName?: string;
+  contentPosition?: "popper" | "item-aligned";
+  contentSideOffset?: number;
   defaultValue?: string;
+  disableBodyScrollLockCompensation?: boolean;
   form?: string;
   name?: string;
   onChange?: (event: SelectValueChangeEvent) => void;
+  portalContainer?: HTMLElement | null;
+  portal?: boolean;
   required?: boolean;
   value?: string;
 };
@@ -65,12 +72,18 @@ export function Select({
   autoComplete,
   children,
   className,
+  contentClassName,
+  contentPosition = "popper",
+  contentSideOffset = 6,
   defaultValue,
+  disableBodyScrollLockCompensation = false,
   disabled,
   form,
   id,
   name,
   onChange,
+  portalContainer,
+  portal = true,
   required,
   title,
   tabIndex,
@@ -98,12 +111,11 @@ export function Select({
 
   const isControlled = value !== undefined;
   const [internalValue, setInternalValue] = React.useState(() => fallbackValue);
+  const [open, setOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<SelectViewMode>("modern");
-  const hasSelectableEmptyValue = React.useMemo(
-    () => rawRenderableOptions.some((option) => option.value === ""),
-    [rawRenderableOptions],
-  );
-  const usesNativeFallbackFormControl = hasSelectableEmptyValue;
+  const usesNativeFallbackFormControl = true;
+
+  useDisableBodyScrollLockCompensation(disableBodyScrollLockCompensation && open);
 
   const selectedValue = isControlled ? String(value ?? "") : internalValue;
   const selectedOption = renderableOptions.find((option) => option.value === selectedValue) ?? null;
@@ -205,38 +217,70 @@ export function Select({
     }
   }
 
+  const content = (
+    <SelectPrimitive.Content
+      data-view-mode={viewMode}
+      position={contentPosition}
+      sideOffset={contentSideOffset}
+      className={cn("ui-select-content z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl", contentClassName)}
+    >
+      <SelectPrimitive.Viewport className="p-1">
+        {renderableOptions.map((option) => (
+          <SelectPrimitive.Item
+            data-view-mode={viewMode}
+            key={`${option.value}-${option.label}`}
+            value={option.radixValue}
+            disabled={option.disabled}
+            className={cn(
+              "ui-select-item relative flex min-h-9 cursor-default select-none items-center rounded-lg py-2 pl-8 pr-3 text-sm text-slate-700 outline-none",
+              "data-[highlighted]:bg-slate-900 data-[highlighted]:text-white",
+              "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+            )}
+          >
+            <span className="absolute left-2 inline-flex h-4 w-4 items-center justify-center">
+              <SelectPrimitive.ItemIndicator>
+                <Check className="h-4 w-4" />
+              </SelectPrimitive.ItemIndicator>
+            </span>
+            <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
+          </SelectPrimitive.Item>
+        ))}
+      </SelectPrimitive.Viewport>
+    </SelectPrimitive.Content>
+  );
+
   return (
     <div ref={containerRef} className="ui-select relative">
-      {usesNativeFallbackFormControl ? (
-        <select
-          ref={fallbackSelectRef}
-          aria-hidden="true"
-          autoComplete={autoComplete}
-          defaultValue={selectedValue}
-          disabled={disabled}
-          form={form}
-          name={name}
-          required={required}
-          style={VISUALLY_HIDDEN_SELECT_STYLES}
-          tabIndex={-1}
-          onChange={() => undefined}
-        >
-          {rawRenderableOptions.map((option) => (
-            <option key={`${option.value}-${option.label}`} value={option.value} disabled={option.disabled}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      ) : null}
+      <select
+        ref={fallbackSelectRef}
+        aria-hidden="true"
+        autoComplete={autoComplete}
+        defaultValue={selectedValue}
+        disabled={disabled}
+        form={form}
+        name={name}
+        required={required}
+        style={VISUALLY_HIDDEN_SELECT_STYLES}
+        tabIndex={-1}
+        onChange={() => undefined}
+      >
+        {rawRenderableOptions.map((option) => (
+          <option key={`${option.value}-${option.label}`} value={option.value} disabled={option.disabled}>
+            {option.label}
+          </option>
+        ))}
+      </select>
 
       <SelectPrimitive.Root
+        open={open}
+        onOpenChange={setOpen}
         value={selectedRadixValue}
         onValueChange={handleValueChange}
         disabled={disabled}
-        name={usesNativeFallbackFormControl ? undefined : name}
-        required={usesNativeFallbackFormControl ? undefined : required}
-        form={usesNativeFallbackFormControl ? undefined : form}
-        autoComplete={usesNativeFallbackFormControl ? undefined : autoComplete}
+        name={undefined}
+        required={undefined}
+        form={undefined}
+        autoComplete={undefined}
       >
         <SelectPrimitive.Trigger
           {...triggerProps}
@@ -258,38 +302,7 @@ export function Select({
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
           </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
-
-        <SelectPrimitive.Portal>
-          <SelectPrimitive.Content
-            data-view-mode={viewMode}
-            position="popper"
-            sideOffset={6}
-            className="ui-select-content z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
-          >
-            <SelectPrimitive.Viewport className="p-1">
-              {renderableOptions.map((option) => (
-                <SelectPrimitive.Item
-                  data-view-mode={viewMode}
-                  key={`${option.value}-${option.label}`}
-                  value={option.radixValue}
-                  disabled={option.disabled}
-                  className={cn(
-                    "ui-select-item relative flex min-h-9 cursor-default select-none items-center rounded-lg py-2 pl-8 pr-3 text-sm text-slate-700 outline-none",
-                    "data-[highlighted]:bg-slate-900 data-[highlighted]:text-white",
-                    "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-                  )}
-                >
-                  <span className="absolute left-2 inline-flex h-4 w-4 items-center justify-center">
-                    <SelectPrimitive.ItemIndicator>
-                      <Check className="h-4 w-4" />
-                    </SelectPrimitive.ItemIndicator>
-                  </span>
-                  <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
-                </SelectPrimitive.Item>
-              ))}
-            </SelectPrimitive.Viewport>
-          </SelectPrimitive.Content>
-        </SelectPrimitive.Portal>
+        {portal ? <SelectPrimitive.Portal container={portalContainer ?? undefined}>{content}</SelectPrimitive.Portal> : content}
       </SelectPrimitive.Root>
     </div>
   );

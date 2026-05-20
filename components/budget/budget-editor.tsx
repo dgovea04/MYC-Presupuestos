@@ -1,10 +1,22 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import dynamic from "next/dynamic";
-import { forwardRef, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Type } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
+import {
+  attachPartidaSuggestionsToGuidedPaste,
+  createGuidedBudgetPaste,
+  type BudgetPasteApplyMode,
+  type BudgetPasteMode,
+  type BudgetPasteStructuredEntry,
+  type GuidedBudgetPaste,
+  type GuidedBudgetPasteWithSuggestions,
+} from "@/lib/budgets/paste-import";
+import { applyCatalogPartidaToDraftItem, resolveCatalogResource } from "@/lib/budgets/catalog-partida-application";
+import { calculateBudgetQualitySummary, type BudgetItemQualityState, type BudgetQualitySummary } from "@/lib/budgets/budget-quality";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
@@ -26,6 +38,7 @@ import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles"
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import type { CellValue } from "exceljs";
+import type { BudgetPasteSuggestedMatch } from "@/lib/budgets/sub-budget-partida-suggestions";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type DragState = { kind: "level" | "item"; id: string } | null;
@@ -34,26 +47,24 @@ type ActiveColumn = "code" | "description" | "unit" | "quantity" | "unitPrice" |
 type EditableColumn = "code" | "description" | "unit" | "quantity";
 type EditableCell = { rowId: string; column: EditableColumn };
 type PastedItemRow = Partial<Pick<BudgetItemRecord, EditableColumn>>;
-type ParsedClipboardRow = {
-  code?: string;
-  description?: string;
-  rawDescription?: string;
-  unit?: string;
-  quantity?: number;
-  rawQuantity?: string;
-};
-type ClipboardHeaderMap = Partial<Record<EditableColumn, number>>;
-type StructuredPasteEntry =
-  | { kind: "level"; code?: string; name: string; depth: number; levelType?: BudgetLevelType }
-  | { kind: "item"; values: PastedItemRow; parentDepth: number };
-type ParsedPasteResult =
-  | { mode: "flat"; rows: PastedItemRow[]; importedItems: number; importedLevels: number }
-  | { mode: "structured"; entries: StructuredPasteEntry[]; importedItems: number; importedLevels: number };
 type PendingPaste = {
-  parsedPaste: ParsedPasteResult;
+  rawText: string;
+  guidedPaste: GuidedBudgetPasteWithSuggestions;
+  rowResolutions: PendingPasteRowResolution[];
   targetRow: BudgetDisplayRow;
   startColumn: EditableColumn;
   source: "inline-paste" | "excel-import";
+};
+type PendingPasteRowResolution = {
+  sourceRowIndex: number;
+  selectedPartidaId: string | null;
+};
+type PendingPasteItemMatchPresentation = {
+  matchKind: "exact" | "suggested" | "unresolved";
+  exactMatch: CatalogPartidaRecord | null;
+  bestSuggestion: CatalogPartidaRecord | null;
+  suggestions: BudgetPasteSuggestedMatch[];
+  isSuggestionApplied: boolean;
 };
 type PastePreviewRow = {
   kind: "level" | "item";
@@ -64,6 +75,8 @@ type PastePreviewRow = {
   depth: number;
   levelType?: string;
   entryIndex?: number;
+  itemMatch?: PendingPasteItemMatchPresentation | null;
+  sourceRowIndex: number;
 };
 type CatalogMenuState = {
   rowId: string;
@@ -90,6 +103,10 @@ type HeaderActionMenuState = {
   left: number;
   trigger: HTMLElement | null;
 };
+type FixedMenuSize = {
+  width: number;
+  height: number;
+};
 type InsertTarget = {
   kind: "level" | "item";
   id: string;
@@ -102,18 +119,75 @@ type LevelInsertion = {
   parentId: string | null;
   afterLevelId: string | null;
 };
-type ApuSheetControllerHandle = {
-  close: () => void;
-  isOpen: () => boolean;
-  open: (item: BudgetItemRecord, restoreFocusElement?: HTMLElement | null) => void;
+type ApuSheetSession = {
+  item: BudgetItemRecord;
+  restoreFocusElement: HTMLElement | null;
 };
 
 const editableColumnOrder: EditableColumn[] = ["code", "description", "unit", "quantity"];
+const pasteModeLabel: Record<BudgetPasteMode, string> = {
+  flat: "Plano",
+  "structured-by-code": "Jerárquico por código",
+  "structured-by-indent": "Jerárquico por indentación",
+};
 const ApuEditorSheet = dynamic(() =>
   import("@/components/apu/apu-editor-sheet").then((module) => module.ApuEditorSheet),
 );
 const BUDGET_ROW_OVERSCAN = 10;
 const BUDGET_TABLE_COLUMN_COUNT = 7;
+const ACTION_MENU_OFFSET = 6;
+const ACTION_MENU_VIEWPORT_PADDING = 12;
+const LEVEL_ACTION_MENU_WIDTH = 192;
+const ITEM_ACTION_MENU_WIDTH = 192;
+const HEADER_ACTION_MENU_WIDTH = 208;
+const LEVEL_ADD_MENU_ESTIMATED_HEIGHT = 152;
+const LEVEL_MORE_MENU_ESTIMATED_HEIGHT = 336;
+const ITEM_ACTION_MENU_ESTIMATED_HEIGHT = 146;
+const HEADER_ADD_MENU_ESTIMATED_HEIGHT = 216;
+const HEADER_MORE_MENU_ESTIMATED_HEIGHT = 112;
+const EMPTY_CATALOG_SUGGESTIONS: CatalogPartidaRecord[] = [];
+
+function getFixedMenuPosition(triggerRect: DOMRect, menuSize: FixedMenuSize) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxLeft = Math.max(ACTION_MENU_VIEWPORT_PADDING, viewportWidth - menuSize.width - ACTION_MENU_VIEWPORT_PADDING);
+  const maxTop = Math.max(ACTION_MENU_VIEWPORT_PADDING, viewportHeight - menuSize.height - ACTION_MENU_VIEWPORT_PADDING);
+  const spaceBelow = viewportHeight - triggerRect.bottom - ACTION_MENU_OFFSET - ACTION_MENU_VIEWPORT_PADDING;
+  const spaceAbove = triggerRect.top - ACTION_MENU_OFFSET - ACTION_MENU_VIEWPORT_PADDING;
+  const shouldOpenUpwards = spaceBelow < menuSize.height && spaceAbove > spaceBelow;
+
+  return {
+    left: Math.min(Math.max(triggerRect.right - menuSize.width, ACTION_MENU_VIEWPORT_PADDING), maxLeft),
+    top: shouldOpenUpwards
+      ? Math.max(triggerRect.top - menuSize.height - ACTION_MENU_OFFSET, ACTION_MENU_VIEWPORT_PADDING)
+      : Math.min(triggerRect.bottom + ACTION_MENU_OFFSET, maxTop),
+  };
+}
+
+function subscribeWindowPositionUpdates(updatePosition: () => void) {
+  let frame = 0;
+
+  const scheduleUpdate = () => {
+    if (frame !== 0) return;
+
+    frame = window.requestAnimationFrame(() => {
+      frame = 0;
+      updatePosition();
+    });
+  };
+
+  scheduleUpdate();
+  window.addEventListener("resize", scheduleUpdate);
+  window.addEventListener("scroll", scheduleUpdate, true);
+
+  return () => {
+    if (frame !== 0) {
+      window.cancelAnimationFrame(frame);
+    }
+    window.removeEventListener("resize", scheduleUpdate);
+    window.removeEventListener("scroll", scheduleUpdate, true);
+  };
+}
 
 export function BudgetEditor({
   budget,
@@ -134,8 +208,8 @@ export function BudgetEditor({
   const [error, setError] = useState("");
   const [pasteFeedback, setPasteFeedback] = useState("");
   const [pendingPaste, setPendingPaste] = useState<PendingPaste | null>(null);
+  const [itemQualityStateById, setItemQualityStateById] = useState<Record<string, BudgetItemQualityState | undefined>>({});
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const [saveClock, setSaveClock] = useState(() => Date.now());
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [dragState, setDragState] = useState<DragState>(null);
   const [densityMode, setDensityMode] = useState<DensityMode>("compact");
@@ -156,6 +230,8 @@ export function BudgetEditor({
   const [excelImportText, setExcelImportText] = useState("");
   const [excelImportFileName, setExcelImportFileName] = useState("");
   const [excelImportLoading, setExcelImportLoading] = useState(false);
+  const [clearSubBudgetDialogOpen, setClearSubBudgetDialogOpen] = useState(false);
+  const [apuSheetSession, setApuSheetSession] = useState<ApuSheetSession | null>(null);
   const deferredCatalogQuery = useDeferredValue(catalogQuery);
   const deferredCatalogInsertQuery = useDeferredValue(catalogInsertQuery);
   const indexedPartidasCatalog = useMemo(
@@ -180,7 +256,38 @@ export function BudgetEditor({
   );
 
   const summary = useMemo(() => calculateBudgetRecord(state), [state]);
+  const qualitySummary = useMemo(
+    () => calculateBudgetQualitySummary(summary.items, itemQualityStateById),
+    [itemQualityStateById, summary.items],
+  );
   const rows = useMemo(() => buildDisplayRows(summary), [summary]);
+  const rowNavigationLookup = useMemo(() => {
+    const rowIdToIndex = new Map<string, number>();
+    const rowIdToColumns = new Map<string, EditableColumn[]>();
+    const orderedEditableCells: EditableCell[] = [];
+    const editableCellIndexByKey = new Map<string, number>();
+
+    rows.forEach((row, rowIndex) => {
+      const rowId = getRowId(row);
+      const columns = getEditableColumnsForRow(row);
+
+      rowIdToIndex.set(rowId, rowIndex);
+      rowIdToColumns.set(rowId, columns);
+
+      columns.forEach((column) => {
+        const nextCell = { rowId, column } satisfies EditableCell;
+        editableCellIndexByKey.set(getCellKey(rowId, column), orderedEditableCells.length);
+        orderedEditableCells.push(nextCell);
+      });
+    });
+
+    return {
+      rowIdToIndex,
+      rowIdToColumns,
+      orderedEditableCells,
+      editableCellIndexByKey,
+    };
+  }, [rows]);
   const catalogSuggestions = useMemo(() => {
     if (!catalogSelectorRowId) return [];
 
@@ -196,6 +303,8 @@ export function BudgetEditor({
   }, [catalogSelectorRowId, deferredCatalogQuery, indexedPartidasCatalog]);
   const isCatalogMenuOpen = Boolean(catalogSelectorRowId && catalogSuggestions.length > 0 && catalogMenu);
   const catalogInsertSuggestions = useMemo(() => {
+    if (!catalogInsertTarget) return [];
+
     const query = deferredCatalogInsertQuery.trim().toLowerCase();
     return indexedPartidasCatalog
       .filter(({ searchText }) => {
@@ -204,21 +313,11 @@ export function BudgetEditor({
       })
       .map(({ partida }) => partida)
       .slice(0, 40);
-  }, [deferredCatalogInsertQuery, indexedPartidasCatalog]);
-  const editableCells = useMemo<EditableCell[]>(
-    () =>
-      rows.flatMap((row) =>
-        getEditableColumnsForRow(row).map((column) => ({
-          rowId: getRowId(row),
-          column,
-        })),
-      ),
-    [rows],
-  );
+  }, [catalogInsertTarget, deferredCatalogInsertQuery, indexedPartidasCatalog]);
+  const editableCells = rowNavigationLookup.orderedEditableCells;
+  const levelIdSet = useMemo(() => new Set(summary.levels.map((level) => level.id)), [summary.levels]);
   const effectiveDensityMode: DensityMode = isExcelMode ? "compact" : densityMode;
   const isDensityLockedToCompact = isExcelMode;
-  const serializedSummary = useMemo(() => JSON.stringify(summary), [summary]);
-  const lastSavedPayload = useRef(serializedSummary);
   const lastSavedSnapshot = useRef(summary);
   const isHydrated = useRef(false);
   const saveBudgetRef = useRef<((isAutosave?: boolean) => Promise<void>) | null>(null);
@@ -226,8 +325,6 @@ export function BudgetEditor({
   const editorRootRef = useRef<HTMLDivElement>(null);
   const activeRowIdRef = useRef<string | null>(null);
   const pendingUiTimeoutsRef = useRef<number[]>([]);
-  const apuSheetControllerRef = useRef<ApuSheetControllerHandle | null>(null);
-  const apuSheetOpenRef = useRef(false);
   const levelActionMenuRef = useRef<HTMLDivElement | null>(null);
   const itemActionMenuRef = useRef<HTMLDivElement | null>(null);
   const headerActionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -242,14 +339,14 @@ export function BudgetEditor({
     };
   }, []);
 
-  function scheduleUiTimeout(callback: () => void, delay: number) {
+  const scheduleUiTimeout = useCallback((callback: () => void, delay: number) => {
     const timeoutId = window.setTimeout(() => {
       pendingUiTimeoutsRef.current = pendingUiTimeoutsRef.current.filter((candidate) => candidate !== timeoutId);
       callback();
     }, delay);
 
     pendingUiTimeoutsRef.current.push(timeoutId);
-  }
+  }, []);
 
   function closeLevelActionMenu(restoreFocus = false) {
     setLevelActionMenu((current) => {
@@ -278,11 +375,10 @@ export function BudgetEditor({
     });
   }
   const openApuSheet = useCallback((item: BudgetItemRecord) => {
-    apuSheetOpenRef.current = true;
-    apuSheetControllerRef.current?.open(
-      ensureBudgetItemApu(item),
-      document.activeElement instanceof HTMLElement ? document.activeElement : null,
-    );
+    setApuSheetSession({
+      item: ensureBudgetItemApu(item),
+      restoreFocusElement: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    });
   }, []);
   const handleApuItemUpdate = useCallback((updatedItem: BudgetItemRecord) => {
     setState((current) => ({
@@ -297,10 +393,10 @@ export function BudgetEditor({
       return;
     }
 
-    if (serializedSummary !== lastSavedPayload.current) {
+    if (summary !== lastSavedSnapshot.current) {
       setSaveState("dirty");
     }
-  }, [serializedSummary]);
+  }, [summary]);
 
   useEffect(() => {
     if (!isHydrated.current || saveState !== "dirty") return;
@@ -322,13 +418,6 @@ export function BudgetEditor({
     const timeout = setTimeout(() => setPasteFeedback(""), 4000);
     return () => clearTimeout(timeout);
   }, [pasteFeedback]);
-
-  useEffect(() => {
-    if (!lastSavedAt) return;
-
-    const interval = setInterval(() => setSaveClock(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [lastSavedAt]);
 
   const { scrollContainerRef: tableScrollRef, scrollProps: tableScrollProps, virtualRange: virtualBudgetRange } =
     useVirtualTableWindow({
@@ -355,13 +444,7 @@ export function BudgetEditor({
       });
     };
 
-    updatePosition();
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
+    return subscribeWindowPositionUpdates(updatePosition);
   }, [catalogSelectorRowId, rows]);
 
   useEffect(() => {
@@ -470,8 +553,81 @@ export function BudgetEditor({
   }, [headerActionMenu]);
 
   useEffect(() => {
+    if (!levelActionMenu) return;
+
+    const updatePosition = () => {
+      if (!levelActionMenu.trigger?.isConnected) {
+        closeLevelActionMenu();
+        return;
+      }
+
+      const menuElement = levelActionMenuRef.current;
+      const menuSize: FixedMenuSize = {
+        width: menuElement?.offsetWidth ?? LEVEL_ACTION_MENU_WIDTH,
+        height: menuElement?.offsetHeight ?? (levelActionMenu.kind === "add" ? LEVEL_ADD_MENU_ESTIMATED_HEIGHT : LEVEL_MORE_MENU_ESTIMATED_HEIGHT),
+      };
+      const nextPosition = getFixedMenuPosition(levelActionMenu.trigger.getBoundingClientRect(), menuSize);
+
+      setLevelActionMenu((current) =>
+        current && current.rowId === levelActionMenu.rowId && current.kind === levelActionMenu.kind
+          ? { ...current, ...nextPosition }
+          : current,
+      );
+    };
+
+    return subscribeWindowPositionUpdates(updatePosition);
+  }, [levelActionMenu]);
+
+  useEffect(() => {
+    if (!itemActionMenu) return;
+
+    const updatePosition = () => {
+      if (!itemActionMenu.trigger?.isConnected) {
+        closeItemActionMenu();
+        return;
+      }
+
+      const menuElement = itemActionMenuRef.current;
+      const nextPosition = getFixedMenuPosition(itemActionMenu.trigger.getBoundingClientRect(), {
+        width: menuElement?.offsetWidth ?? ITEM_ACTION_MENU_WIDTH,
+        height: menuElement?.offsetHeight ?? ITEM_ACTION_MENU_ESTIMATED_HEIGHT,
+      });
+
+      setItemActionMenu((current) => (current && current.rowId === itemActionMenu.rowId ? { ...current, ...nextPosition } : current));
+    };
+
+    return subscribeWindowPositionUpdates(updatePosition);
+  }, [itemActionMenu]);
+
+  useEffect(() => {
+    if (!headerActionMenu) return;
+
+    const updatePosition = () => {
+      if (!headerActionMenu.trigger?.isConnected) {
+        closeHeaderActionMenu();
+        return;
+      }
+
+      const menuElement = headerActionMenuRef.current;
+      const menuSize: FixedMenuSize = {
+        width: menuElement?.offsetWidth ?? HEADER_ACTION_MENU_WIDTH,
+        height: menuElement?.offsetHeight ?? (headerActionMenu.kind === "add" ? HEADER_ADD_MENU_ESTIMATED_HEIGHT : HEADER_MORE_MENU_ESTIMATED_HEIGHT),
+      };
+      const nextPosition = getFixedMenuPosition(headerActionMenu.trigger.getBoundingClientRect(), menuSize);
+
+      setHeaderActionMenu((current) =>
+        current && current.kind === headerActionMenu.kind
+          ? { ...current, ...nextPosition }
+          : current,
+      );
+    };
+
+    return subscribeWindowPositionUpdates(updatePosition);
+  }, [headerActionMenu]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (apuSheetOpenRef.current) return;
+      if (apuSheetSession) return;
 
       const editorRoot = editorRootRef.current;
       const isMac = navigator.platform.toUpperCase().includes("MAC");
@@ -503,7 +659,7 @@ export function BudgetEditor({
       if (event.altKey) {
         if (event.key === "ArrowUp") {
           event.preventDefault();
-          if (summary.levels.some((level) => level.id === focusedRowId)) {
+          if (levelIdSet.has(focusedRowId)) {
             moveLevel(focusedRowId, "up");
           } else {
             moveItem(focusedRowId, "up");
@@ -513,7 +669,7 @@ export function BudgetEditor({
 
         if (event.key === "ArrowDown") {
           event.preventDefault();
-          if (summary.levels.some((level) => level.id === focusedRowId)) {
+          if (levelIdSet.has(focusedRowId)) {
             moveLevel(focusedRowId, "down");
           } else {
             moveItem(focusedRowId, "down");
@@ -524,7 +680,7 @@ export function BudgetEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeRowId, openApuSheet, summary]);
+  }, [activeRowId, apuSheetSession, levelIdSet, openApuSheet, summary]);
 
   function addLevel(type: BudgetLevelType, parentId?: string | null) {
     const insertion = resolveLevelInsertion(type, rows, state.levels, activeRowIdRef.current, parentId);
@@ -607,84 +763,19 @@ export function BudgetEditor({
     setExcelImportLoading(false);
   }
 
-  function updateLevel(levelId: string, patch: Partial<BudgetLevelRecord>) {
+  const updateLevel = useCallback((levelId: string, patch: Partial<BudgetLevelRecord>) => {
     setState((current) => ({
       ...current,
       levels: current.levels.map((level) => (level.id === levelId ? { ...level, ...patch } : level)),
     }));
-  }
+  }, []);
 
-  function updateItem(itemId: string, patch: Partial<BudgetItemRecord>) {
+  const updateItem = useCallback((itemId: string, patch: Partial<BudgetItemRecord>) => {
     setState((current) => ({
       ...current,
       items: current.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
     }));
-  }
-
-  function findMatchingCatalogPartida(input: Pick<BudgetItemRecord, "description" | "unit">) {
-    const normalizedDescription = normalizeLookupText(input.description);
-    const normalizedUnit = normalizeLookupText(input.unit);
-    if (!normalizedDescription) return null;
-
-    const exactDescriptionMatches = indexedPartidasCatalog
-      .filter(({ partida }) => normalizeLookupText(partida.description) === normalizedDescription)
-      .map(({ partida }) => partida);
-
-    if (normalizedUnit) {
-      const exactDescriptionAndUnitMatch = exactDescriptionMatches.find(
-        (partida) => normalizeLookupText(partida.unit) === normalizedUnit,
-      );
-      if (exactDescriptionAndUnitMatch) return exactDescriptionAndUnitMatch;
-    }
-
-    if (exactDescriptionMatches.length === 1) {
-      return exactDescriptionMatches[0] ?? null;
-    }
-
-    return null;
-  }
-
-  function applyCatalogPartidaToDraftItem(item: BudgetItemRecord, partida: CatalogPartidaRecord) {
-    return {
-      ...item,
-      description: partida.description,
-      unit: partida.unit,
-      unitPrice: partida.unitPrice,
-      apu: {
-        id: item.apu?.id ?? crypto.randomUUID(),
-        budgetItemId: item.apu?.budgetItemId ?? "",
-        name: partida.description,
-        unit: partida.unit,
-        performance: partida.performance,
-        totalUnitCost: partida.unitPrice,
-        resources: partida.apuRows.flatMap((row) => {
-          const resolvedResource = resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit);
-          if (!resolvedResource) return [];
-
-          return [
-            {
-              id: crypto.randomUUID(),
-              apuId: item.apu?.id ?? "",
-              resourceId: resolvedResource.id,
-              resourceType: row.resourceType ?? resolvedResource.category,
-              crew: row.crew ?? null,
-              quantity: row.quantity,
-              unitPrice: row.unitPrice,
-              subtotal: row.subtotal,
-              resource: resolvedResource,
-            },
-          ];
-        }),
-      },
-    };
-  }
-
-  function resolveCatalogPartidaForDraftItem(item: BudgetItemRecord) {
-    const matchedPartida = findMatchingCatalogPartida(item);
-    if (!matchedPartida) return item;
-
-    return applyCatalogPartidaToDraftItem(item, matchedPartida);
-  }
+  }, []);
 
   function applyCatalogPartidaToItem(itemId: string, partida: CatalogPartidaRecord) {
     const unresolvedRows = partida.apuRows.filter((row) => !resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit));
@@ -693,9 +784,22 @@ export function BudgetEditor({
       ...current,
       items: current.items.map((item) =>
         item.id === itemId
-          ? applyCatalogPartidaToDraftItem(item, partida)
+          ? applyCatalogPartidaToDraftItem({
+              item,
+              partida,
+              resourcesById,
+              resourcesByDescriptionUnit,
+            })
           : item,
       ),
+    }));
+
+    setItemQualityStateById((current) => ({
+      ...current,
+      [itemId]: {
+        requiresCatalogReview: false,
+        resolvedFromSuggestion: false,
+      },
     }));
 
     if (unresolvedRows.length > 0) {
@@ -728,34 +832,12 @@ export function BudgetEditor({
           sortOrder: current.items.length + index + 1,
         });
 
-        nextItem.apu = {
-          id: nextItem.apu?.id ?? crypto.randomUUID(),
-          budgetItemId: "",
-          name: partida.description,
-          unit: partida.unit,
-          performance: partida.performance,
-          totalUnitCost: partida.unitPrice,
-          resources: partida.apuRows.flatMap((row) => {
-            const resolvedResource = resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit);
-            if (!resolvedResource) return [];
-
-            return [
-              {
-                id: crypto.randomUUID(),
-                apuId: nextItem.apu?.id ?? "",
-                resourceId: resolvedResource.id,
-                resourceType: row.resourceType ?? resolvedResource.category,
-                crew: row.crew ?? null,
-                quantity: row.quantity,
-                unitPrice: row.unitPrice,
-                subtotal: row.subtotal,
-                resource: resolvedResource,
-              },
-            ];
-          }),
-        };
-
-        return nextItem;
+        return applyCatalogPartidaToDraftItem({
+          item: nextItem,
+          partida,
+          resourcesById,
+          resourcesByDescriptionUnit,
+        });
       });
 
       return {
@@ -781,15 +863,27 @@ export function BudgetEditor({
       return;
     }
 
-    const parsedPaste = parsePastedBudgetRows(excelImportText, "code");
-    if (!parsedPaste) {
+    const rawText = excelImportText;
+    const guidedPaste = attachPartidaSuggestionsToGuidedPaste(
+      createGuidedBudgetPaste({
+        rawText,
+        startColumn: "code",
+        targetKind: targetRow.kind,
+        applyMode: resolveDefaultPasteApplyMode(targetRow),
+      }),
+      partidasCatalog,
+    );
+
+    if (guidedPaste.rows.length === 0 && guidedPaste.entries.length === 0) {
       setError("No se encontraron filas validas para importar desde el bloque pegado.");
       return;
     }
 
     setError("");
     setPendingPaste({
-      parsedPaste,
+      rawText,
+      guidedPaste,
+      rowResolutions: createPendingPasteRowResolutions(guidedPaste),
       targetRow,
       startColumn: "code",
       source: "excel-import",
@@ -857,21 +951,25 @@ export function BudgetEditor({
     }
   }
 
-  function openCatalogSelector(rowId: string, query = "") {
+  const openCatalogSelector = useCallback((rowId: string, query = "") => {
     setCatalogSelectorRowId(rowId);
     setCatalogQuery(query);
     setCatalogHighlightedIndex(0);
-  }
+  }, []);
 
-  function closeCatalogSelector() {
+  const closeCatalogSelector = useCallback(() => {
     setCatalogSelectorRowId(null);
     setCatalogQuery("");
     setCatalogMenu(null);
     setCatalogHighlightedIndex(0);
-  }
+  }, []);
 
-  function toggleLevelActionMenu(rowId: string, kind: "add" | "more", trigger: HTMLElement) {
+  const toggleLevelActionMenu = useCallback((rowId: string, kind: "add" | "more", trigger: HTMLElement) => {
     const rect = trigger.getBoundingClientRect();
+    const initialPosition = getFixedMenuPosition(rect, {
+      width: LEVEL_ACTION_MENU_WIDTH,
+      height: kind === "add" ? LEVEL_ADD_MENU_ESTIMATED_HEIGHT : LEVEL_MORE_MENU_ESTIMATED_HEIGHT,
+    });
 
     setLevelActionMenu((current) =>
       current?.rowId === rowId && current.kind === kind
@@ -879,38 +977,43 @@ export function BudgetEditor({
         : {
             rowId,
             kind,
-            top: rect.bottom + 6,
-            left: rect.right - 192,
+            ...initialPosition,
             trigger,
           },
     );
-  }
+  }, []);
 
-  function toggleItemActionMenu(rowId: string, trigger: HTMLElement) {
+  const toggleItemActionMenu = useCallback((rowId: string, trigger: HTMLElement) => {
     const rect = trigger.getBoundingClientRect();
+    const initialPosition = getFixedMenuPosition(rect, {
+      width: ITEM_ACTION_MENU_WIDTH,
+      height: ITEM_ACTION_MENU_ESTIMATED_HEIGHT,
+    });
 
     setItemActionMenu((current) =>
       current?.rowId === rowId
         ? null
         : {
             rowId,
-            top: rect.bottom + 6,
-            left: rect.right - 192,
+            ...initialPosition,
             trigger,
           },
     );
-  }
+  }, []);
 
   function toggleHeaderActionMenu(kind: "add" | "more", trigger: HTMLElement) {
     const rect = trigger.getBoundingClientRect();
+    const initialPosition = getFixedMenuPosition(rect, {
+      width: HEADER_ACTION_MENU_WIDTH,
+      height: kind === "add" ? HEADER_ADD_MENU_ESTIMATED_HEIGHT : HEADER_MORE_MENU_ESTIMATED_HEIGHT,
+    });
 
     setHeaderActionMenu((current) =>
       current?.kind === kind
         ? null
         : {
             kind,
-            top: rect.bottom + 6,
-            left: rect.right - 208,
+            ...initialPosition,
             trigger,
           },
     );
@@ -968,6 +1071,33 @@ export function BudgetEditor({
     });
   }
 
+  function openClearSubBudgetDialog() {
+    if (summary.levels.length === 0 && summary.items.length === 0) {
+      setError("El sub presupuesto ya está vacío.");
+      return;
+    }
+
+    setClearSubBudgetDialogOpen(true);
+  }
+
+  function clearSubBudget() {
+    setError("");
+    setCatalogSelectorRowId(null);
+    closeCatalogSelector();
+    closeCatalogInsert();
+    closeExcelImport();
+    activeRowIdRef.current = null;
+    setActiveRowId(null);
+    setActiveColumn(null);
+    setState((current) => ({
+      ...current,
+      levels: [],
+      items: [],
+    }));
+    setClearSubBudgetDialogOpen(false);
+    setPasteFeedback("Sub presupuesto limpio. Los cambios se guardarán con autosave o al pulsar Guardar.");
+  }
+
   function moveLevel(levelId: string, direction: "up" | "down") {
     setState((current) => ({
       ...current,
@@ -982,7 +1112,7 @@ export function BudgetEditor({
     }));
   }
 
-  function handleDropRow(targetRow: BudgetDisplayRow) {
+  const handleDropRow = useCallback((targetRow: BudgetDisplayRow) => {
     if (!dragState) return;
 
     if (dragState.kind === "level" && targetRow.kind === "level") {
@@ -1012,55 +1142,155 @@ export function BudgetEditor({
     }
 
     setDragState(null);
-  }
+  }, [dragState]);
 
-  function handlePasteRows(
+  const handlePasteRows = useCallback((
     event: React.ClipboardEvent<HTMLInputElement>,
     targetRow: BudgetDisplayRow,
     startColumn: EditableColumn,
-  ) {
-    const parsedPaste = parsePastedBudgetRows(event.clipboardData.getData("text"), startColumn);
-    if (!parsedPaste) return;
+  ) => {
+    const rawText = event.clipboardData.getData("text");
+    const guidedPaste = attachPartidaSuggestionsToGuidedPaste(
+      createGuidedBudgetPaste({
+        rawText,
+        startColumn,
+        targetKind: targetRow.kind,
+        applyMode: resolveDefaultPasteApplyMode(targetRow),
+      }),
+      partidasCatalog,
+    );
+    if (guidedPaste.rows.length === 0 && guidedPaste.entries.length === 0) return;
 
     event.preventDefault();
+    closeCatalogSelector();
     setPendingPaste({
-      parsedPaste,
+      rawText,
+      guidedPaste,
+      rowResolutions: createPendingPasteRowResolutions(guidedPaste),
       targetRow,
       startColumn,
       source: "inline-paste",
     });
-  }
+  }, [closeCatalogSelector, partidasCatalog]);
 
   function applyPendingPaste() {
     if (!pendingPaste) return;
 
-    const { parsedPaste, source, targetRow } = pendingPaste;
-    setPasteFeedback(getPasteFeedbackMessage(parsedPaste.importedItems, parsedPaste.importedLevels));
+    const { guidedPaste, targetRow } = pendingPaste;
+    setPasteFeedback(getPasteFeedbackMessage(guidedPaste.importedItems, guidedPaste.importedLevels));
+    const nextQualityStateById: Record<string, BudgetItemQualityState | undefined> = {};
+
     setState((current) => {
-      if (parsedPaste.mode === "structured") {
-        return importStructuredPaste(current, targetRow, parsedPaste.entries, (levelId, values, sortOrder) =>
-          resolveCatalogPartidaForDraftItem(
-            createBudgetItemDraft(current, {
-              levelId,
-              overrides: values,
-              sortOrder,
-            }),
-          ),
-        );
+      const applySuggestedOrMatchedPartida = (
+        item: BudgetItemRecord,
+        sourceRowIndex: number,
+        fallbackMatch: PendingPaste["guidedPaste"]["itemMatches"][number]["match"],
+      ) => {
+        const rowResolution = pendingPaste.rowResolutions.find((resolution) => resolution.sourceRowIndex === sourceRowIndex) ?? null;
+        const rowMatch = guidedPaste.itemMatches.find((match) => match.sourceRowIndex === sourceRowIndex)?.match ?? fallbackMatch;
+        const selectedPartida =
+          rowMatch.matchKind === "exact"
+            ? rowMatch.exactMatch
+            : rowResolution?.selectedPartidaId
+              ? partidasById.get(rowResolution.selectedPartidaId) ?? null
+              : null;
+
+        if (!selectedPartida) {
+          nextQualityStateById[item.id] = {
+            requiresCatalogReview: true,
+            resolvedFromSuggestion: false,
+          };
+          return item;
+        }
+
+        nextQualityStateById[item.id] = {
+          requiresCatalogReview: false,
+          resolvedFromSuggestion: rowMatch.matchKind === "suggested",
+        };
+
+        return applyCatalogPartidaToDraftItem({
+          item,
+          partida: selectedPartida,
+          resourcesById,
+          resourcesByDescriptionUnit,
+        });
+      };
+
+      if (guidedPaste.selectedMode !== "flat") {
+        return importStructuredPaste(current, targetRow, guidedPaste.entries, (levelId, values, sortOrder, entryIndex, sourceRowIndex) => {
+          const nextItem = createBudgetItemDraft(current, {
+            levelId,
+            overrides: values,
+            sortOrder,
+          });
+          const rowMatch = guidedPaste.itemMatches.find((match) => match.entryIndex === entryIndex || match.sourceRowIndex === sourceRowIndex)?.match;
+
+          return rowMatch ? applySuggestedOrMatchedPartida(nextItem, sourceRowIndex, rowMatch) : nextItem;
+        });
       }
 
-      const pastedRows = parsedPaste.rows;
+      const pastedRows = guidedPaste.rows;
 
       if (targetRow.kind === "item") {
-        if (source === "excel-import") {
+        if (guidedPaste.applyMode === "replace-current") {
+          const sortedItems = [...current.items].sort((left, right) => left.sortOrder - right.sortOrder);
+          const targetIndex = sortedItems.findIndex((item) => item.id === targetRow.item.id);
+
+          if (targetIndex === -1) return current;
+
+          const firstRowMatch = guidedPaste.itemMatches.find((match) => match.rowIndex === 0)?.match;
+          sortedItems[targetIndex] =
+            firstRowMatch
+              ? applySuggestedOrMatchedPartida(
+                  applyPastedValuesToItem(sortedItems[targetIndex], pastedRows[0] ?? {}),
+                  0,
+                  firstRowMatch,
+                )
+              : applyPastedValuesToItem(sortedItems[targetIndex], pastedRows[0] ?? {});
+
+          if (pastedRows.length > 1) {
+            const extraItems = pastedRows.slice(1).map((row, index) =>
+              applySuggestedOrMatchedPartida(
+                createBudgetItemDraft(current, {
+                  levelId: sortedItems[targetIndex]?.levelId ?? null,
+                  overrides: row,
+                  sortOrder: sortedItems[targetIndex]!.sortOrder + index + 1,
+                }),
+                index + 1,
+                guidedPaste.itemMatches.find((match) => match.rowIndex === index + 1)?.match ?? {
+                  matchKind: "unresolved",
+                  exactMatch: null,
+                  bestSuggestion: null,
+                  suggestions: [],
+                },
+              ),
+            );
+
+            sortedItems.splice(targetIndex + 1, 0, ...extraItems);
+          }
+
+          return {
+            ...current,
+            items: resequenceItems(sortedItems),
+          };
+        }
+
+        if (guidedPaste.applyMode === "insert-below") {
           const insertion = resolveItemInsertionFromTarget({ kind: "item", id: targetRow.item.id }, current.items);
           const extraItems = pastedRows.map((row, index) =>
-            resolveCatalogPartidaForDraftItem(
+            applySuggestedOrMatchedPartida(
               createBudgetItemDraft(current, {
                 levelId: insertion.levelId,
                 overrides: row,
                 sortOrder: current.items.length + index + 1,
               }),
+              index,
+              guidedPaste.itemMatches.find((match) => match.rowIndex === index)?.match ?? {
+                matchKind: "unresolved",
+                exactMatch: null,
+                bestSuggestion: null,
+                suggestions: [],
+              },
             ),
           );
 
@@ -1069,42 +1299,23 @@ export function BudgetEditor({
             items: insertItemsAtPosition(current.items, extraItems, insertion),
           };
         }
-
-        const sortedItems = [...current.items].sort((left, right) => left.sortOrder - right.sortOrder);
-        const targetIndex = sortedItems.findIndex((item) => item.id === targetRow.item.id);
-
-        if (targetIndex === -1) return current;
-
-        sortedItems[targetIndex] = resolveCatalogPartidaForDraftItem(applyPastedValuesToItem(sortedItems[targetIndex], pastedRows[0]));
-
-        if (pastedRows.length > 1) {
-          const extraItems = pastedRows.slice(1).map((row, index) =>
-            resolveCatalogPartidaForDraftItem(
-              createBudgetItemDraft(current, {
-                levelId: sortedItems[targetIndex].levelId ?? null,
-                overrides: row,
-                sortOrder: sortedItems[targetIndex].sortOrder + index + 1,
-              }),
-            ),
-          );
-
-          sortedItems.splice(targetIndex + 1, 0, ...extraItems);
-        }
-
-        return {
-          ...current,
-          items: resequenceItems(sortedItems),
-        };
       }
 
       const insertion = resolveItemInsertionFromTarget({ kind: "level", id: targetRow.level.id }, current.items);
       const extraItems = pastedRows.map((row, index) =>
-        resolveCatalogPartidaForDraftItem(
+        applySuggestedOrMatchedPartida(
           createBudgetItemDraft(current, {
             levelId: insertion.levelId,
             overrides: row,
             sortOrder: current.items.length + index + 1,
           }),
+          index,
+          guidedPaste.itemMatches.find((match) => match.rowIndex === index)?.match ?? {
+            matchKind: "unresolved",
+            exactMatch: null,
+            bestSuggestion: null,
+            suggestions: [],
+          },
         ),
       );
 
@@ -1114,6 +1325,11 @@ export function BudgetEditor({
       };
     });
 
+    setItemQualityStateById((current) => ({
+      ...current,
+      ...nextQualityStateById,
+    }));
+
     setPendingPaste(null);
   }
 
@@ -1121,7 +1337,7 @@ export function BudgetEditor({
     setPendingPaste(null);
   }
 
-  function setCellRef(rowId: string, column: EditableColumn, element: HTMLInputElement | null) {
+  const setCellRef = useCallback((rowId: string, column: EditableColumn, element: HTMLInputElement | null) => {
     const key = getCellKey(rowId, column);
 
     if (!element) {
@@ -1130,9 +1346,9 @@ export function BudgetEditor({
     }
 
     cellRefs.current.set(key, element);
-  }
+  }, []);
 
-  function focusCell(cell: EditableCell | null) {
+  const focusCell = useCallback((cell: EditableCell | null) => {
     if (!cell) return;
 
     const element = cellRefs.current.get(getCellKey(cell.rowId, cell.column));
@@ -1140,17 +1356,17 @@ export function BudgetEditor({
 
     element.focus();
     element.select();
-  }
+  }, []);
 
-  function getAdjacentCell(rowId: string, column: EditableColumn, direction: "up" | "down") {
-    const rowIndex = rows.findIndex((row) => getRowId(row) === rowId);
+  const getAdjacentCell = useCallback((rowId: string, column: EditableColumn, direction: "up" | "down") => {
+    const rowIndex = rowNavigationLookup.rowIdToIndex.get(rowId) ?? -1;
     if (rowIndex === -1) return null;
 
     const step = direction === "up" ? -1 : 1;
 
     for (let currentIndex = rowIndex + step; currentIndex >= 0 && currentIndex < rows.length; currentIndex += step) {
       const nextRow = rows[currentIndex];
-      const nextColumn = resolveTargetColumn(getEditableColumnsForRow(nextRow), column);
+      const nextColumn = resolveTargetColumn(rowNavigationLookup.rowIdToColumns.get(getRowId(nextRow)) ?? [], column);
 
       if (nextColumn) {
         return { rowId: getRowId(nextRow), column: nextColumn };
@@ -1158,13 +1374,13 @@ export function BudgetEditor({
     }
 
     return null;
-  }
+  }, [rowNavigationLookup.rowIdToColumns, rowNavigationLookup.rowIdToIndex, rows]);
 
-  function handleSpreadsheetNavigation(
+  const handleSpreadsheetNavigation = useCallback((
     event: React.KeyboardEvent<HTMLInputElement>,
     rowId: string,
     column: EditableColumn,
-  ) {
+  ) => {
     if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
 
     if (event.key === "ArrowUp") {
@@ -1181,7 +1397,7 @@ export function BudgetEditor({
 
     if (event.key === "Tab") {
       event.preventDefault();
-      const currentIndex = editableCells.findIndex((cell) => cell.rowId === rowId && cell.column === column);
+      const currentIndex = rowNavigationLookup.editableCellIndexByKey.get(getCellKey(rowId, column)) ?? -1;
       if (currentIndex === -1) return;
 
       const nextIndex = event.shiftKey ? currentIndex - 1 : currentIndex + 1;
@@ -1194,8 +1410,7 @@ export function BudgetEditor({
 
       event.preventDefault();
 
-      const row = rows.find((candidate) => getRowId(candidate) === rowId);
-      const columns = getEditableColumnsForRow(row ?? null);
+      const columns = rowNavigationLookup.rowIdToColumns.get(rowId) ?? [];
       const columnIndex = columns.indexOf(column);
       if (columnIndex === -1) return;
 
@@ -1204,7 +1419,46 @@ export function BudgetEditor({
 
       focusCell({ rowId, column: nextColumn });
     }
-  }
+  }, [editableCells, focusCell, getAdjacentCell, rowNavigationLookup.editableCellIndexByKey, rowNavigationLookup.rowIdToColumns]);
+
+  const handleRowFocus = useCallback((rowId: string) => {
+    activeRowIdRef.current = rowId;
+    setActiveRowId(rowId);
+  }, []);
+
+  const handleCellFocus = useCallback((rowId: string, column: ActiveColumn) => {
+    activeRowIdRef.current = rowId;
+    setActiveRowId(rowId);
+    setActiveColumn(column);
+  }, []);
+
+  const updateGeneralExpensesRate = useCallback((value: number) => {
+    setState((current) => ({ ...current, generalExpensesRate: value }));
+  }, []);
+
+  const updateUtilityRate = useCallback((value: number) => {
+    setState((current) => ({ ...current, utilityRate: value }));
+  }, []);
+
+  const updateIgvRate = useCallback((value: number) => {
+    setState((current) => ({ ...current, igvRate: value }));
+  }, []);
+
+  const toggleSummaryCollapsed = useCallback(() => {
+    setSummaryCollapsed((current) => !current);
+  }, []);
+
+  const clearDragState = useCallback(() => {
+    setDragState(null);
+  }, []);
+
+  const scheduleCatalogClose = useCallback((rowId: string) => {
+    scheduleUiTimeout(() => {
+      if (catalogSelectorRowId === rowId) {
+        closeCatalogSelector();
+      }
+    }, 120);
+  }, [catalogSelectorRowId, closeCatalogSelector, scheduleUiTimeout]);
 
   async function saveBudget(isAutosave = false) {
     if (saving) return;
@@ -1248,10 +1502,8 @@ export function BudgetEditor({
 
       const data = await response.json();
 
-      lastSavedPayload.current = serializedSummary;
       lastSavedSnapshot.current = summary;
       setLastSavedAt(Date.now());
-      setSaveClock(Date.now());
       setSaveState("saved");
       broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], data.optimisticBudgets, {
         locallyHandledPaths: ["/budgets"],
@@ -1340,7 +1592,7 @@ export function BudgetEditor({
 
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <div className="flex items-center">
-                  <SaveBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} compact />
+                  <SaveBadge state={saveState} lastSavedAt={lastSavedAt} compact />
                 </div>
                 <Button
                   variant="secondary"
@@ -1396,494 +1648,76 @@ export function BudgetEditor({
             </div>
           </div>
         </CardHeader>
-        <CardContent className={cn("space-y-4", isExcelMode && "space-y-3")}>
-          {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-          {pasteFeedback ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{pasteFeedback}</p> : null}
-
-          <div
-            ref={tableScrollRef}
-            data-testid="budget-table-surface"
-            data-density-mode={effectiveDensityMode}
-            className={getTableFrameClassName(
-              isExcelMode,
-              cn("max-h-[72vh] overflow-auto", !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.22)]" : undefined),
-            )}
-            {...tableScrollProps}
-          >
-            <Table
-              className={cn(
-                "table-fixed min-w-[1100px] w-full",
-                isExcelMode && "[&_td]:px-2 [&_th]:px-2 [&_tr]:border-b [&_tr]:border-slate-200",
-              )}
-            >
-              <colgroup>
-                <col className="w-[130px]" />
-                <col className="w-[420px]" />
-                <col className="w-[90px]" />
-                <col className="w-[92px]" />
-                <col className="w-[96px]" />
-                <col className="w-[96px]" />
-                <col className="w-[110px]" />
-              </colgroup>
-              <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
-                <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90" : "bg-slate-50")}>
-                  <TH className={getHeaderCellClass("code", activeColumn, isExcelMode)}>Código</TH>
-                  <TH className={getHeaderCellClass("description", activeColumn, isExcelMode)}>Descripción</TH>
-                  <TH className={getHeaderCellClass("unit", activeColumn, isExcelMode, "text-center")}>Unidad</TH>
-                  <TH className={getHeaderCellClass("quantity", activeColumn, isExcelMode, "text-right")}>Metrado</TH>
-                  <TH className={getHeaderCellClass("unitPrice", activeColumn, isExcelMode, "text-right")}>P. Unitario</TH>
-                  <TH className={getHeaderCellClass("partial", activeColumn, isExcelMode, "text-right")}>Parcial</TH>
-                  <TH className={getHeaderCellClass("actions", activeColumn, isExcelMode, "right-0 text-right")}>
-                    <span className="inline-flex w-full items-center justify-end">
-                      <MoreHorizontal className="h-4 w-4 text-slate-400" aria-hidden="true" />
-                      <span className="sr-only">Acciones</span>
-                    </span>
-                  </TH>
-                </TR>
-              </THead>
-              <TBody>
-                {virtualBudgetRange.topSpacerHeight > 0 ? (
-                  <TR aria-hidden="true" className="hover:bg-transparent focus-within:bg-transparent">
-                    <TD colSpan={BUDGET_TABLE_COLUMN_COUNT} className="p-0" style={{ height: virtualBudgetRange.topSpacerHeight }} />
-                  </TR>
-                ) : null}
-                {virtualBudgetRange.visibleRows.map((row) =>
-                  row.kind === "level" ? (
-                    <TR
-                      key={row.level.id}
-                      data-budget-row-id={row.level.id}
-                      draggable
-                      onDragStart={() => setDragState({ kind: "level", id: row.level.id })}
-                      onDragOver={(event) => {
-                        if (dragState?.kind === "level") event.preventDefault();
-                      }}
-                      onDrop={() => handleDropRow(row)}
-                      onDragEnd={() => setDragState(null)}
-                      onFocusCapture={() => {
-                        activeRowIdRef.current = row.level.id;
-                        setActiveRowId(row.level.id);
-                      }}
-                      className={cn(
-                        "group hover:bg-transparent",
-                        getLevelRowTone(row.level.type, isExcelMode),
-                        dragState?.kind === "level" && dragState.id === row.level.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
-                        activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
-                      )}
-                    >
-                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
-                        <div className="flex items-center gap-2">
-                          <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
-                          <BufferedInput
-                            value={row.level.code}
-                            onCommit={(value) => updateLevel(row.level.id, { code: value })}
-                            className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
-                            ref={(element) => setCellRef(row.level.id, "code", element)}
-                            onKeyDown={(event) => handleSpreadsheetNavigation(event, row.level.id, "code")}
-                            onPaste={(event) => handlePasteRows(event, row, "code")}
-                            onFocus={() => {
-                              activeRowIdRef.current = row.level.id;
-                              setActiveRowId(row.level.id);
-                              setActiveColumn("code");
-                            }}
-                          />
-                        </div>
-                      </TD>
-                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
-                        <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
-                          <BufferedInput
-                            value={row.level.name}
-                            onCommit={(value) => updateLevel(row.level.id, { name: value })}
-                            className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "flex-1")}
-                            ref={(element) => setCellRef(row.level.id, "description", element)}
-                            onKeyDown={(event) => handleSpreadsheetNavigation(event, row.level.id, "description")}
-                            onPaste={(event) => handlePasteRows(event, row, "description")}
-                            onFocus={() => {
-                              activeRowIdRef.current = row.level.id;
-                              setActiveRowId(row.level.id);
-                              setActiveColumn("description");
-                            }}
-                          />
-                          <span
-                            className={cn(
-                              "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
-                              isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
-                            )}
-                          >
-                            {levelTypeLabel[row.level.type]}
-                          </span>
-                        </div>
-                      </TD>
-                      <TD className={getBodyCellClass("unit", activeColumn, "", effectiveDensityMode, isExcelMode)} colSpan={4} />
-                      <TD
-                        className={cn(
-                          getBodyCellClass("actions", activeColumn, "sticky right-0 align-[initial]", effectiveDensityMode, isExcelMode),
-                          getStickyActionTone(row.level.type, isExcelMode),
-                        )}
-                      >
-                        <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                          <button
-                            type="button"
-                            data-level-action-trigger
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
-                            onClick={(event) => toggleLevelActionMenu(row.level.id, "add", event.currentTarget)}
-                            title="Agregar contenido debajo de este nivel"
-                            aria-label="Agregar contenido debajo de este nivel"
-                            aria-haspopup="menu"
-                            aria-expanded={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "add"}
-                            aria-controls={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "add" ? `budget-level-add-menu-${row.level.id}` : undefined}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                          <IconButton
-                            label="Abrir acciones del nivel"
-                            onClick={(event) => toggleLevelActionMenu(row.level.id, "more", event.currentTarget)}
-                            dataActionTrigger
-                            ariaExpanded={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "more"}
-                            ariaControls={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "more" ? `budget-level-more-menu-${row.level.id}` : undefined}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </IconButton>
-                        </div>
-                      </TD>
-                    </TR>
-                  ) : (
-                    <TR
-                      key={row.item.id}
-                      data-budget-row-id={row.item.id}
-                      draggable
-                      onDragStart={() => setDragState({ kind: "item", id: row.item.id })}
-                      onDragOver={(event) => {
-                        if (dragState?.kind === "item") event.preventDefault();
-                      }}
-                      onDrop={() => handleDropRow(row)}
-                      onDragEnd={() => setDragState(null)}
-                      onFocusCapture={() => {
-                        activeRowIdRef.current = row.item.id;
-                        setActiveRowId(row.item.id);
-                      }}
-                      className={cn(
-                        "group",
-                        isExcelMode && "bg-white",
-                        dragState?.kind === "item" && dragState.id === row.item.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
-                        activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
-                      )}
-                    >
-                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
-                        <div className="flex items-center gap-2">
-                          <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
-                          <BufferedInput
-                            value={row.item.code}
-                            onCommit={(value) => updateItem(row.item.id, { code: value })}
-                            className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
-                            ref={(element) => setCellRef(row.item.id, "code", element)}
-                            onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "code")}
-                            onPaste={(event) => handlePasteRows(event, row, "code")}
-                            onFocus={() => {
-                              activeRowIdRef.current = row.item.id;
-                              setActiveRowId(row.item.id);
-                              setActiveColumn("code");
-                            }}
-                          />
-                        </div>
-                      </TD>
-                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
-                        <div style={{ paddingLeft: `${row.depth * 18}px` }}>
-                          <div className="relative">
-                            <BufferedInput
-                              value={row.item.description}
-                              onCommit={(value) => updateItem(row.item.id, { description: value })}
-                              onValueChange={(value) => {
-                                openCatalogSelector(row.item.id, value);
-                              }}
-                              syncWhileFocused
-                              className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
-                              ref={(element) => setCellRef(row.item.id, "description", element)}
-                              onKeyDown={(event) => {
-                                if (catalogSelectorRowId === row.item.id && catalogSuggestions.length > 0) {
-                                  if (event.key === "ArrowDown") {
-                                    event.preventDefault();
-                                    setCatalogHighlightedIndex((current) => Math.min(current + 1, catalogSuggestions.length - 1));
-                                    return;
-                                  }
-
-                                  if (event.key === "ArrowUp") {
-                                    event.preventDefault();
-                                    setCatalogHighlightedIndex((current) => Math.max(current - 1, 0));
-                                    return;
-                                  }
-
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    const selectedSuggestion = catalogSuggestions[catalogHighlightedIndex];
-                                    if (selectedSuggestion) {
-                                      applyCatalogPartidaToItem(row.item.id, selectedSuggestion);
-                                    }
-                                    return;
-                                  }
-                                }
-
-                                if (event.key === "Escape") {
-                                  closeCatalogSelector();
-                                  return;
-                                }
-                                handleSpreadsheetNavigation(event, row.item.id, "description");
-                              }}
-                              onPaste={(event) => handlePasteRows(event, row, "description")}
-                              onFocus={() => {
-                                activeRowIdRef.current = row.item.id;
-                                setActiveRowId(row.item.id);
-                                setActiveColumn("description");
-                                openCatalogSelector(row.item.id, row.item.description);
-                              }}
-                              onBlur={() => {
-                                scheduleUiTimeout(() => {
-                                  if (catalogSelectorRowId === row.item.id) {
-                                    closeCatalogSelector();
-                                  }
-                                }, 120);
-                              }}
-                            />
-
-                            {false && catalogSelectorRowId === activeRowId && catalogSuggestions.length > 0 ? (
-                              <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-                                <div className="border-b border-slate-100 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                                  Catalogo de partidas
-                                </div>
-                                <div className="max-h-72 overflow-auto py-1">
-                                  {catalogSuggestions.map((partida) => (
-                                    <button
-                                      key={partida.id}
-                                      type="button"
-                                      className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-sky-50"
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        applyCatalogPartidaToItem(activeRowId ?? "", partida);
-                                      }}
-                                    >
-                                      <div className="min-w-0">
-                                        <p className="truncate text-sm font-medium text-slate-900">{partida.description}</p>
-                                        <p className="mt-0.5 text-xs text-slate-500">
-                                          {partida.unit} · {partida.apuRows.length} insumos · {partida.performanceRate ?? `${partida.performance} ${partida.unit}/DIA`}
-                                        </p>
-                                      </div>
-                                  <span className="whitespace-nowrap text-xs font-semibold text-slate-700">
-                                        {formatCurrency(partida.unitPrice, budget.currency, currencyDecimals)}
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </TD>
-                      <TD className={getBodyCellClass("unit", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
-                        <BufferedInput
-                          value={row.item.unit}
-                          onCommit={(value) => updateItem(row.item.id, { unit: value })}
-                          className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-center")}
-                          ref={(element) => setCellRef(row.item.id, "unit", element)}
-                          onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "unit")}
-                          onPaste={(event) => handlePasteRows(event, row, "unit")}
-                          onFocus={() => {
-                            activeRowIdRef.current = row.item.id;
-                            setActiveRowId(row.item.id);
-                            setActiveColumn("unit");
-                          }}
-                        />
-                      </TD>
-                      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", effectiveDensityMode, isExcelMode)}>
-                        <BufferedInput
-                          type="text"
-                          inputMode="decimal"
-                          value={row.item.quantity}
-                          onCommit={(value) => updateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) })}
-                          className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums")}
-                          ref={(element) => setCellRef(row.item.id, "quantity", element)}
-                          onKeyDown={(event) => handleSpreadsheetNavigation(event, row.item.id, "quantity")}
-                          onPaste={(event) => handlePasteRows(event, row, "quantity")}
-                          onFocus={() => {
-                            activeRowIdRef.current = row.item.id;
-                            setActiveRowId(row.item.id);
-                            setActiveColumn("quantity");
-                          }}
-                        />
-                      </TD>
-                      <TD
-                        className={getBodyCellClass(
-                          "unitPrice",
-                          activeColumn,
-                          "align-[initial] whitespace-nowrap text-right text-xs font-medium tabular-nums text-slate-800",
-                          effectiveDensityMode,
-                          isExcelMode,
-                        )}
-                      >
-                        <AnimatedCurrencyValue value={row.item.unitPrice} currency={budget.currency} className="justify-end px-0 py-0 text-inherit" />
-                      </TD>
-                      <TD
-                        className={getBodyCellClass(
-                          "partial",
-                          activeColumn,
-                          "align-[initial] whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-900",
-                          effectiveDensityMode,
-                          isExcelMode,
-                        )}
-                      >
-                        <AnimatedCurrencyValue value={row.item.partial} currency={budget.currency} className="justify-end px-0 py-0 text-inherit" />
-                      </TD>
-                      <TD
-                        className={getBodyCellClass(
-                          "actions",
-                          activeColumn,
-                          cn("sticky right-0 align-[initial]", isExcelMode ? "bg-white/95" : "bg-white"),
-                          effectiveDensityMode,
-                          isExcelMode,
-                        )}
-                      >
-                        <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openApuSheet(row.item)}
-                            className="h-7 gap-1.5 rounded-full border border-slate-200 bg-white/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-slate-600 shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-slate-300 hover:bg-white"
-                            title="Abrir editor APU de esta partida"
-                            aria-label="Abrir editor APU de esta partida"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            APU
-                          </Button>
-                          <IconButton
-                            label="Abrir acciones de la partida"
-                            onClick={(event) => toggleItemActionMenu(row.item.id, event.currentTarget)}
-                            dataActionTrigger
-                            ariaExpanded={itemActionMenu?.rowId === row.item.id}
-                            ariaControls={itemActionMenu?.rowId === row.item.id ? `budget-item-menu-${row.item.id}` : undefined}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </IconButton>
-                        </div>
-                      </TD>
-                    </TR>
-                  ),
-                )}
-                {virtualBudgetRange.bottomSpacerHeight > 0 ? (
-                  <TR aria-hidden="true" className="hover:bg-transparent focus-within:bg-transparent">
-                    <TD colSpan={BUDGET_TABLE_COLUMN_COUNT} className="p-0" style={{ height: virtualBudgetRange.bottomSpacerHeight }} />
-                  </TR>
-                ) : null}
-              </TBody>
-            </Table>
-          </div>
-
-          <div
-            className={cn(
-              "flex flex-wrap items-center justify-between border border-sky-100 bg-[linear-gradient(180deg,rgba(240,249,255,0.98)_0%,rgba(224,242,254,0.9)_100%)] shadow-[0_14px_30px_-26px_rgba(2,132,199,0.28)]",
-              isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3",
-            )}
-          >
-            <p className={cn("font-medium text-sky-900", isExcelMode && "text-sm")}>Total visible y actualizado automáticamente</p>
-            <AnimatedCurrencyValue
-              value={summary.totals.totalAmount}
-              currency={budget.currency}
-              className={cn("px-0 py-0 font-semibold text-sky-700", isExcelMode ? "text-xl" : "text-2xl")}
-            />
-          </div>
-        </CardContent>
+        <BudgetTableSection
+          error={error}
+          pasteFeedback={pasteFeedback}
+          tableScrollRef={tableScrollRef}
+          tableScrollProps={tableScrollProps}
+          densityMode={effectiveDensityMode}
+          isExcelMode={isExcelMode}
+          activeColumn={activeColumn}
+          activeRowId={activeRowId}
+          dragState={dragState}
+          levelActionMenu={levelActionMenu}
+          itemActionMenu={itemActionMenu}
+          catalogSelectorRowId={catalogSelectorRowId}
+          catalogSuggestions={catalogSuggestions}
+          catalogHighlightedIndex={catalogHighlightedIndex}
+          onCatalogHighlightChange={setCatalogHighlightedIndex}
+          currency={budget.currency}
+          totalAmount={summary.totals.totalAmount}
+          virtualBudgetRange={virtualBudgetRange}
+          onDragStart={setDragState}
+          onDragEnd={clearDragState}
+          onDropRow={handleDropRow}
+          onRowFocus={handleRowFocus}
+          onCellFocus={handleCellFocus}
+          onUpdateLevel={updateLevel}
+          onUpdateItem={updateItem}
+          onSetCellRef={setCellRef}
+          onNavigate={handleSpreadsheetNavigation}
+          onPasteRows={handlePasteRows}
+          onToggleLevelActionMenu={toggleLevelActionMenu}
+          onToggleItemActionMenu={toggleItemActionMenu}
+          onOpenCatalogSelector={openCatalogSelector}
+          onCloseCatalogSelector={closeCatalogSelector}
+          onScheduleCatalogClose={scheduleCatalogClose}
+          onApplyCatalogPartida={applyCatalogPartidaToItem}
+          onOpenApuSheet={openApuSheet}
+          itemQualityStateById={itemQualityStateById}
+        />
       </Card>
 
-      <Card
-        data-testid="budget-summary-panel"
-        data-density-mode={effectiveDensityMode}
-        className={cn(
-          "h-fit overflow-hidden border-slate-200/90 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
-          isExcelMode && "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
-        )}
-      >
-        <CardHeader
-          className={cn(
-            "flex flex-row items-center border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)]",
-            summaryCollapsed ? "justify-center px-2 py-3" : "justify-between",
-            isExcelMode && !summaryCollapsed && "px-3 py-2",
-          )}
-        >
-          {!summaryCollapsed ? <CardTitle>Resumen</CardTitle> : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label={summaryCollapsed ? "Expandir resumen" : "Colapsar resumen"}
-            title={summaryCollapsed ? "Expandir resumen" : "Colapsar resumen"}
-            className="h-8 w-8 px-0"
-            onClick={() => setSummaryCollapsed((current) => !current)}
-          >
-            {summaryCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
-        </CardHeader>
-        {!summaryCollapsed ? (
-          <CardContent className={cn(isExcelMode ? "space-y-3 px-3 py-3" : "space-y-4")}>
-            <RateField
-              label="Gastos generales"
-              value={state.generalExpensesRate}
-              onChange={(value) => setState((current) => ({ ...current, generalExpensesRate: value }))}
-              compact={isExcelMode}
-            />
-            <RateField
-              label="Utilidad"
-              value={state.utilityRate}
-              onChange={(value) => setState((current) => ({ ...current, utilityRate: value }))}
-              compact={isExcelMode}
-            />
-            <RateField
-              label="IGV"
-              value={state.igvRate}
-              onChange={(value) => setState((current) => ({ ...current, igvRate: value }))}
-              compact={isExcelMode}
-            />
-            <SummaryRow label="Costo directo" value={summary.totals.totalDirectCost} currency={budget.currency} compact={isExcelMode} />
-            <SummaryRow label="Gastos generales" value={summary.totals.totalGeneralExpenses} currency={budget.currency} compact={isExcelMode} />
-            <SummaryRow label="Utilidad" value={summary.totals.totalUtility} currency={budget.currency} compact={isExcelMode} />
-            <SummaryRow label="IGV" value={summary.totals.totalTax} currency={budget.currency} compact={isExcelMode} />
-            <div className={cn("bg-slate-900 text-white shadow-[0_18px_36px_-26px_rgba(15,23,42,0.45)]", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
-              <p className={cn("text-slate-300", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
-              <AnimatedCurrencyValue
-                value={summary.totals.totalAmount}
-                currency={budget.currency}
-                className={cn("mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
-              />
-            </div>
-            <div className="grid gap-2">
-              <a href={`/api/reports/budget/${budget.id}/excel`} className="inline-flex">
-                <Button variant="outline" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
-                  Exportar Excel
-                </Button>
-              </a>
-              <a href={`/api/reports/apu/${budget.id}/excel`} className="inline-flex">
-                <Button variant="outline" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
-                  Exportar APU Excel
-                </Button>
-              </a>
-              <a href={`/api/reports/budget/${budget.id}/pdf`} className="inline-flex">
-                <Button variant="secondary" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
-                  Exportar PDF
-                </Button>
-              </a>
-            </div>
-            <div className={cn("border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] text-xs text-slate-500", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
-              Atajos: <span className="font-medium text-slate-700">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-slate-700">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-slate-700">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-slate-700">Pegar</span> importa filas desde Excel.
-            </div>
-          </CardContent>
-        ) : null}
-      </Card>
-
-      <ApuSheetController
-        ref={apuSheetControllerRef}
-        resourcesCatalog={resourcesCatalog}
+      <BudgetSummaryPanel
+        budgetId={budget.id}
+        currency={budget.currency}
         densityMode={effectiveDensityMode}
-        onClose={() => {
-          apuSheetOpenRef.current = false;
-        }}
-        onUpdate={handleApuItemUpdate}
+        isExcelMode={isExcelMode}
+        summaryCollapsed={summaryCollapsed}
+        generalExpensesRate={state.generalExpensesRate}
+        utilityRate={state.utilityRate}
+        igvRate={state.igvRate}
+        totals={summary.totals}
+        qualitySummary={qualitySummary}
+        onToggleCollapsed={toggleSummaryCollapsed}
+        onGeneralExpensesRateChange={updateGeneralExpensesRate}
+        onUtilityRateChange={updateUtilityRate}
+        onIgvRateChange={updateIgvRate}
       />
+
+      {apuSheetSession ? (
+        <ApuSheetController
+          key={apuSheetSession.item.id}
+          initialItem={apuSheetSession.item}
+          initialRestoreFocusElement={apuSheetSession.restoreFocusElement}
+          resourcesCatalog={resourcesCatalog}
+          densityMode={effectiveDensityMode}
+          onClose={() => {
+            setApuSheetSession(null);
+          }}
+          onUpdate={handleApuItemUpdate}
+        />
+      ) : null}
 
       {isCatalogMenuOpen && catalogMenu?.rowId === catalogSelectorRowId ? (
         <div
@@ -2151,118 +1985,185 @@ export function BudgetEditor({
                   closeHeaderActionMenu(true);
                 }}
               />
+              <div className="my-1 border-t border-slate-100" />
+              <LevelActionMenuButton
+                label="Limpiar sub presupuesto"
+                className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                onClick={() => {
+                  closeHeaderActionMenu();
+                  openClearSubBudgetDialog();
+                }}
+              />
             </>
           ) : null}
         </div>
       ) : null}
 
-      <CatalogInsertSheet
-        open={Boolean(catalogInsertTarget)}
-        query={catalogInsertQuery}
-        suggestions={catalogInsertSuggestions}
-        selectedIds={catalogSelectedIds}
-        target={catalogInsertTarget}
-        onClose={closeCatalogInsert}
-        onQueryChange={setCatalogInsertQuery}
-        onToggleSelect={(partidaId) =>
-          setCatalogSelectedIds((current) =>
-            current.includes(partidaId) ? current.filter((id) => id !== partidaId) : [...current, partidaId],
-          )
-        }
-        onSelect={(partida) => {
-          if (!catalogInsertTarget) return;
-          insertCatalogPartida(catalogInsertTarget, partida);
-        }}
-        onInsertSelected={() => {
-          if (!catalogInsertTarget) return;
-          insertCatalogPartidas(
-            catalogInsertTarget,
-            catalogSelectedIds
-              .map((partidaId) => partidasById.get(partidaId))
-              .filter((partida): partida is CatalogPartidaRecord => partida !== undefined),
-          );
-        }}
-      />
+      {clearSubBudgetDialogOpen ? (
+        <ClearSubBudgetDialog
+          open
+          levelsCount={summary.levels.length}
+          itemsCount={summary.items.length}
+          onClose={() => setClearSubBudgetDialogOpen(false)}
+          onConfirm={clearSubBudget}
+        />
+      ) : null}
 
-      <ExcelImportSheet
-        open={Boolean(excelImportTarget)}
-        target={excelImportTarget}
-        value={excelImportText}
-        fileName={excelImportFileName}
-        loading={excelImportLoading}
-        onChange={setExcelImportText}
-        onClose={closeExcelImport}
-        onConfirm={prepareExcelImportPreview}
-        onFileSelect={handleExcelFileSelected}
-      />
-
-      <PastePreviewSheet
-        pendingPaste={pendingPaste}
-        onClose={closePastePreview}
-        onConfirm={applyPendingPaste}
-        onLevelTypeChange={(entryIndex, levelType) => {
-          setPendingPaste((current) => {
-            if (!current || current.parsedPaste.mode !== "structured") return current;
-
-            const entries = current.parsedPaste.entries.map((entry, index) =>
-              index === entryIndex && entry.kind === "level"
-                ? {
-                    ...entry,
-                    levelType,
-                  }
-                : entry,
+      {catalogInsertTarget ? (
+        <CatalogInsertSheet
+          open
+          query={catalogInsertQuery}
+          suggestions={catalogInsertSuggestions}
+          selectedIds={catalogSelectedIds}
+          target={catalogInsertTarget}
+          onClose={closeCatalogInsert}
+          onQueryChange={setCatalogInsertQuery}
+          onToggleSelect={(partidaId) =>
+            setCatalogSelectedIds((current) =>
+              current.includes(partidaId) ? current.filter((id) => id !== partidaId) : [...current, partidaId],
+            )
+          }
+          onSelect={(partida) => {
+            insertCatalogPartida(catalogInsertTarget, partida);
+          }}
+          onInsertSelected={() => {
+            insertCatalogPartidas(
+              catalogInsertTarget,
+              catalogSelectedIds
+                .map((partidaId) => partidasById.get(partidaId))
+                .filter((partida): partida is CatalogPartidaRecord => partida !== undefined),
             );
+          }}
+        />
+      ) : null}
 
-            return {
-              ...current,
-              parsedPaste: {
-                ...current.parsedPaste,
-                entries,
-              },
-            };
-          });
-        }}
-      />
+      {excelImportTarget ? (
+        <ExcelImportSheet
+          open
+          target={excelImportTarget}
+          value={excelImportText}
+          fileName={excelImportFileName}
+          loading={excelImportLoading}
+          onChange={setExcelImportText}
+          onClose={closeExcelImport}
+          onConfirm={prepareExcelImportPreview}
+          onFileSelect={handleExcelFileSelected}
+        />
+      ) : null}
+
+      {pendingPaste ? (
+        <PastePreviewSheet
+          pendingPaste={pendingPaste}
+          onClose={closePastePreview}
+          onConfirm={applyPendingPaste}
+          onModeChange={(mode) => {
+            setPendingPaste((current) => {
+              if (!current) return current;
+
+              const guidedPaste = attachPartidaSuggestionsToGuidedPaste(
+                createGuidedBudgetPaste({
+                  rawText: current.rawText,
+                  startColumn: current.startColumn,
+                  targetKind: current.targetRow.kind,
+                  selectedMode: mode,
+                  applyMode: current.guidedPaste.applyMode,
+                }),
+                partidasCatalog,
+              );
+
+              return {
+                ...current,
+                guidedPaste,
+                rowResolutions: createPendingPasteRowResolutions(guidedPaste),
+              };
+            });
+          }}
+          onApplyModeChange={(applyMode) => {
+            setPendingPaste((current) => {
+              if (!current) return current;
+
+              return {
+                ...current,
+                guidedPaste: {
+                  ...current.guidedPaste,
+                  applyMode,
+                },
+              };
+            });
+          }}
+          onLevelTypeChange={(entryIndex, levelType) => {
+            setPendingPaste((current) => {
+              if (!current || current.guidedPaste.selectedMode === "flat") return current;
+
+              const entries = current.guidedPaste.entries.map((entry, index) =>
+                index === entryIndex && entry.kind === "level"
+                  ? {
+                      ...entry,
+                      levelType,
+                    }
+                  : entry,
+              );
+
+              return {
+                ...current,
+                guidedPaste: {
+                  ...current.guidedPaste,
+                  entries,
+                },
+              };
+            });
+          }}
+          onApplySuggestion={(sourceRowIndex, partidaId) => {
+            setPendingPaste((current) => {
+              if (!current) return current;
+
+              return {
+                ...current,
+                rowResolutions: current.rowResolutions.map((resolution) =>
+                  resolution.sourceRowIndex === sourceRowIndex
+                    ? {
+                        ...resolution,
+                        selectedPartidaId: resolution.selectedPartidaId === partidaId ? null : partidaId,
+                      }
+                    : resolution,
+                ),
+              };
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-const ApuSheetController = forwardRef<ApuSheetControllerHandle, {
+function ApuSheetController({
+  initialItem,
+  initialRestoreFocusElement,
+  densityMode,
+  onClose,
+  onUpdate,
+  resourcesCatalog,
+}: {
+  initialItem: BudgetItemRecord;
+  initialRestoreFocusElement: HTMLElement | null;
   densityMode: DensityMode;
   onClose: () => void;
   onUpdate: (item: BudgetItemRecord) => void;
   resourcesCatalog: ResourceRecord[];
-}>(function ApuSheetController({ densityMode, onClose, onUpdate, resourcesCatalog }, ref) {
-  const [draftItem, setDraftItem] = useState<BudgetItemRecord | null>(null);
-  const [openedItemSnapshot, setOpenedItemSnapshot] = useState<string | null>(null);
-  const [restoreFocusElement, setRestoreFocusElement] = useState<HTMLElement | null>(null);
+}) {
+  const [draftItem, setDraftItem] = useState<BudgetItemRecord | null>(initialItem);
+  const [restoreFocusElement, setRestoreFocusElement] = useState<HTMLElement | null>(initialRestoreFocusElement);
+  const openedItemSnapshotRef = useRef(JSON.stringify(initialItem));
 
   const closeSheet = useCallback(() => {
-    if (draftItem && openedItemSnapshot !== JSON.stringify(draftItem)) {
+    if (draftItem && openedItemSnapshotRef.current !== JSON.stringify(draftItem)) {
       onUpdate(draftItem);
     }
 
     setDraftItem(null);
-    setOpenedItemSnapshot(null);
     setRestoreFocusElement(null);
     onClose();
-  }, [draftItem, onClose, onUpdate, openedItemSnapshot]);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      close: () => {
-        closeSheet();
-      },
-      isOpen: () => draftItem !== null,
-      open: (nextItem, nextRestoreFocusElement) => {
-        setOpenedItemSnapshot(JSON.stringify(nextItem));
-        setRestoreFocusElement(nextRestoreFocusElement ?? null);
-        setDraftItem(nextItem);
-      },
-    }),
-    [closeSheet, draftItem],
-  );
+  }, [draftItem, onClose, onUpdate]);
 
   return (
     <ApuEditorSheet
@@ -2275,7 +2176,7 @@ const ApuSheetController = forwardRef<ApuSheetControllerHandle, {
       densityMode={densityMode}
     />
   );
-});
+}
 
 function IconButton({
   label,
@@ -2317,11 +2218,20 @@ function IconButton({
   );
 }
 
-function SaveBadge({ state, lastSavedLabel, compact = false }: { state: SaveState; lastSavedLabel: string | null; compact?: boolean }) {
+function SaveBadge({ state, lastSavedAt, compact = false }: { state: SaveState; lastSavedAt: number | null; compact?: boolean }) {
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!lastSavedAt) return;
+
+    const interval = window.setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [lastSavedAt]);
+
   return (
     <SaveStateBadge
       state={state}
-      lastSavedLabel={lastSavedLabel}
+      lastSavedLabel={formatLastSavedLabel(lastSavedAt, currentTime)}
       compact={compact}
       bordered
       className={compact ? "min-w-[116px]" : "min-w-[132px]"}
@@ -2435,23 +2345,50 @@ function PastePreviewSheet({
   pendingPaste,
   onClose,
   onConfirm,
+  onModeChange,
+  onApplyModeChange,
   onLevelTypeChange,
+  onApplySuggestion,
 }: {
   pendingPaste: PendingPaste | null;
   onClose: () => void;
   onConfirm: () => void;
+  onModeChange: (mode: BudgetPasteMode) => void;
+  onApplyModeChange: (mode: BudgetPasteApplyMode) => void;
   onLevelTypeChange: (entryIndex: number, levelType: BudgetLevelType) => void;
+  onApplySuggestion: (sourceRowIndex: number, partidaId: string) => void;
 }) {
   const { isExcelMode } = useBudgetViewMode();
+  const popupContainerRef = useRef<HTMLDivElement | null>(null);
+  const [popupContainer, setPopupContainer] = useState<HTMLDivElement | null>(null);
+
+  const handlePopupContainerRef = useCallback((element: HTMLDivElement | null) => {
+    popupContainerRef.current = element;
+    setPopupContainer(element);
+  }, []);
 
   if (!pendingPaste) return null;
 
-  const previewRows = getPastePreviewRows(pendingPaste.parsedPaste);
+  const previewRows = getPastePreviewRows(pendingPaste);
   const targetLabel = pendingPaste.targetRow.kind === "level" ? "nivel" : "partida";
+  const issueMap = groupPasteIssuesByRow(pendingPaste.guidedPaste.issues);
+  const applyModeOptions =
+    pendingPaste.targetRow.kind === "level"
+      ? [{ value: "insert-inside-level", label: "Insertar dentro del nivel" }]
+      : [
+          { value: "insert-below", label: "Insertar debajo" },
+          { value: "replace-current", label: "Reemplazar fila actual" },
+        ];
 
   return (
     <div className={cn("fixed inset-0 z-50 bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
-      <div className={cn("mx-auto mt-10 w-[min(960px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
+      <div
+        ref={handlePopupContainerRef}
+        className={cn(
+          "relative mx-auto mt-10 w-[min(960px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white",
+          isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl",
+        )}
+      >
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <p className="text-sm text-slate-500">Previsualización de pegado</p>
@@ -2466,28 +2403,69 @@ function PastePreviewSheet({
         </div>
 
         <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 md:grid-cols-3">
-          <PreviewStat label="Modo" value={pendingPaste.parsedPaste.mode === "structured" ? "Jerárquico" : "Plano"} />
-          <PreviewStat label="Niveles" value={String(pendingPaste.parsedPaste.importedLevels)} />
-          <PreviewStat label="Partidas" value={String(pendingPaste.parsedPaste.importedItems)} />
+          <PreviewStat label="Modo detectado" value={pasteModeLabel[pendingPaste.guidedPaste.detectedMode]} />
+          <PreviewStat label="Niveles" value={String(pendingPaste.guidedPaste.importedLevels)} />
+          <PreviewStat label="Partidas" value={String(pendingPaste.guidedPaste.importedItems)} />
+        </div>
+
+        <div className="grid gap-4 border-b border-slate-200 px-6 py-4 md:grid-cols-2">
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Modo de importación</span>
+            <Select
+              value={pendingPaste.guidedPaste.selectedMode}
+              onChange={(event) => onModeChange(event.target.value as BudgetPasteMode)}
+              className="h-10 w-full rounded-xl"
+              portal
+              portalContainer={popupContainer ?? undefined}
+              contentPosition="popper"
+              contentSideOffset={4}
+              contentClassName="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)] max-w-[min(32rem,var(--radix-select-trigger-width))]"
+              disableBodyScrollLockCompensation
+            >
+              <option value="flat">Plano</option>
+              <option value="structured-by-code">Jerárquico por código</option>
+              <option value="structured-by-indent">Jerárquico por indentación</option>
+            </Select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Acción al aplicar</span>
+            <Select
+              value={pendingPaste.guidedPaste.applyMode}
+              onChange={(event) => onApplyModeChange(event.target.value as BudgetPasteApplyMode)}
+              className="h-10 w-full rounded-xl"
+              portal
+              portalContainer={popupContainer ?? undefined}
+              contentPosition="popper"
+              contentSideOffset={4}
+              contentClassName="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)] max-w-[min(24rem,var(--radix-select-trigger-width))]"
+              disableBodyScrollLockCompensation
+            >
+              {applyModeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </label>
         </div>
 
         <div className="max-h-[52vh] overflow-auto px-6 py-5">
           <div className={getTableFrameClassName(isExcelMode)}>
             <Table className="table-fixed w-full">
               <colgroup>
-                <col className="w-[110px]" />
-                <col className="w-[420px]" />
+                <col className="w-[150px]" />
+                <col className="w-[84px]" />
+                <col className="w-[376px]" />
                 <col className="w-[90px]" />
-                <col className="w-[110px]" />
                 <col className="w-[110px]" />
               </colgroup>
               <THead>
                 <TR className="bg-slate-50 hover:bg-slate-50">
                   <TH>Tipo</TH>
+                  <TH>Código</TH>
                   <TH>Descripción</TH>
                   <TH className="text-center">Unidad</TH>
                   <TH className="text-right">Metrado</TH>
-                  <TH>Código</TH>
                 </TR>
               </THead>
               <TBody>
@@ -2495,27 +2473,108 @@ function PastePreviewSheet({
                   <TR key={`${row.kind}-${index}`} className={row.kind === "level" ? "bg-slate-50/80" : ""}>
                     <TD className="py-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                       {row.kind === "level" && row.entryIndex !== undefined ? (
-                        <Select
-                          value={resolvePreviewLevelTypeValue(row.levelType)}
-                          onChange={(event) => onLevelTypeChange(row.entryIndex ?? 0, event.target.value as BudgetLevelType)}
-                          className="h-8 min-w-[124px] rounded-lg px-2 text-xs"
-                        >
-                          <option value="TITLE">Título</option>
-                          <option value="SUBTITLE">Subtítulo</option>
-                          <option value="ITEM_GROUP">Subpartida</option>
-                        </Select>
+                        <div className="min-w-0 space-y-1 normal-case tracking-normal">
+                          <Select
+                            value={resolvePreviewLevelTypeValue(row.levelType)}
+                            onChange={(event) => onLevelTypeChange(row.entryIndex ?? 0, event.target.value as BudgetLevelType)}
+                            className="h-8 w-full min-w-0 max-w-full rounded-lg px-2 text-xs"
+                            portal
+                            portalContainer={popupContainer ?? undefined}
+                            contentPosition="popper"
+                            contentSideOffset={4}
+                            contentClassName="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)]"
+                            disableBodyScrollLockCompensation
+                          >
+                            <option value="TITLE">Título</option>
+                            <option value="SUBTITLE">Subtítulo</option>
+                            <option value="ITEM_GROUP">Subpartida</option>
+                          </Select>
+                          {pendingPaste.guidedPaste.selectedMode === "structured-by-indent" && !row.code ? (
+                            <p className="text-[11px] text-slate-500">
+                              {getPatternInferenceLabel(previewRows, index)}
+                            </p>
+                          ) : null}
+                        </div>
                       ) : (
                         row.kind === "level" ? row.levelType : "Partida"
                       )}
                     </TD>
+                    <TD className="py-2 text-sm text-slate-600">{row.code ?? "-"}</TD>
                     <TD className="py-2">
-                      <div className="truncate text-sm text-slate-800" style={{ paddingLeft: `${row.depth * 18}px` }}>
-                        {row.description}
+                      <div className="space-y-1">
+                        <div className="truncate text-sm text-slate-800" style={{ paddingLeft: `${row.depth * 18}px` }}>
+                          {row.description}
+                        </div>
+                        {row.kind === "item" && row.itemMatch ? (
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                  row.itemMatch.matchKind === "exact"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : row.itemMatch.matchKind === "suggested"
+                                      ? "bg-sky-100 text-sky-700"
+                                      : "bg-slate-100 text-slate-600",
+                                )}
+                              >
+                                {row.itemMatch.matchKind === "exact"
+                                  ? "Match exacto"
+                                  : row.itemMatch.matchKind === "suggested"
+                                    ? "Sugerencia disponible"
+                                    : "Sin match claro"}
+                              </span>
+                              {row.itemMatch.isSuggestionApplied ? (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                  Sugerencia aplicada
+                                </span>
+                              ) : null}
+                            </div>
+                            {row.itemMatch.bestSuggestion ? (
+                              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                <p className="font-medium text-slate-700">Sugerencia recomendada</p>
+                                <p className="mt-1 text-sm text-slate-900">{row.itemMatch.bestSuggestion.description}</p>
+                                <p className="mt-1">
+                                  {row.itemMatch.bestSuggestion.unit} ·{" "}
+                                  {formatCurrency(row.itemMatch.bestSuggestion.unitPrice, "PEN", 2)}
+                                </p>
+                                {row.itemMatch.matchKind === "suggested" ? (
+                                  <div className="mt-2 flex gap-2">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant={row.itemMatch.isSuggestionApplied ? "secondary" : "outline"}
+                                      onClick={() => onApplySuggestion(row.sourceRowIndex, row.itemMatch?.bestSuggestion?.id ?? "")}
+                                    >
+                                      {row.itemMatch.isSuggestionApplied ? "Quitar sugerencia" : "Aplicar sugerencia"}
+                                    </Button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {issueMap.get(row.sourceRowIndex)?.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {issueMap.get(row.sourceRowIndex)?.map((issue, issueIndex) => (
+                              <span
+                                key={`${row.sourceRowIndex}-${issueIndex}`}
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                  issue.severity === "error"
+                                    ? "bg-rose-100 text-rose-700"
+                                    : "bg-amber-100 text-amber-700",
+                                )}
+                              >
+                                {issue.severity === "error" ? "Error" : "Aviso"}: {issue.message}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </TD>
                     <TD className="py-2 text-center text-sm text-slate-600">{row.unit ?? "-"}</TD>
                     <TD className="py-2 text-right text-sm tabular-nums text-slate-700">{row.quantity ?? "-"}</TD>
-                    <TD className="py-2 text-sm text-slate-600">{row.code ?? "-"}</TD>
                   </TR>
                 ))}
               </TBody>
@@ -2525,12 +2584,18 @@ function PastePreviewSheet({
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <p className="text-sm text-slate-500">Solo se aplicará al confirmar.</p>
+          <p className="text-sm text-slate-500">
+            {pendingPaste.guidedPaste.hasErrors
+              ? "Corrige los errores del bloque o cambia el modo antes de importar."
+              : "Solo se aplicará al confirmar."}
+          </p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
               Seguir revisando después
             </Button>
-            <Button onClick={onConfirm}>Confirmar importación</Button>
+            <Button onClick={onConfirm} disabled={pendingPaste.guidedPaste.hasErrors}>
+              Confirmar importación
+            </Button>
           </div>
         </div>
       </div>
@@ -2777,6 +2842,67 @@ function ExcelImportSheet({
   );
 }
 
+function ClearSubBudgetDialog({
+  open,
+  levelsCount,
+  itemsCount,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  levelsCount: number;
+  itemsCount: number;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const { isExcelMode } = useBudgetViewMode();
+
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={cn("fixed inset-0 z-[96] bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")} />
+        <Dialog.Content
+          className={cn(
+            "fixed left-1/2 top-1/2 z-[97] w-[min(560px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden border border-slate-200 bg-white outline-none",
+            isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl",
+          )}
+          data-testid="clear-sub-budget-dialog"
+        >
+          <div className="border-b border-slate-200 px-6 py-5">
+            <Dialog.Title asChild>
+              <h3 className="text-2xl font-semibold text-slate-900">Limpiar sub presupuesto</h3>
+            </Dialog.Title>
+            <Dialog.Description asChild>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Se eliminarán todas las filas insertadas en este sub presupuesto, incluyendo títulos, subtítulos, subpartidas y partidas.
+              </p>
+            </Dialog.Description>
+          </div>
+
+          <div className="space-y-4 px-6 py-5">
+            <div className={cn("grid gap-3 sm:grid-cols-2", isExcelMode ? "" : "")}>
+              <PreviewStat label="Niveles a eliminar" value={String(levelsCount)} />
+              <PreviewStat label="Partidas a eliminar" value={String(itemsCount)} />
+            </div>
+            <div className={cn("border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+              Esta acción vacía la estructura visible del sub presupuesto actual. Luego podrás guardar o dejar que el autosave persista el cambio.
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-6 py-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={onConfirm}>
+              Sí, eliminar todo
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function buildBudgetStatePatch(
   previous: BudgetRecord & { totals: BudgetTotals },
   current: BudgetRecord & { totals: BudgetTotals },
@@ -3008,8 +3134,14 @@ function applyPastedValuesToItem(item: BudgetItemRecord, row: PastedItemRow): Bu
 function importStructuredPaste(
   current: BudgetRecord & { totals: BudgetTotals },
   targetRow: BudgetDisplayRow,
-  entries: StructuredPasteEntry[],
-  createItem: (levelId: string | null, values: PastedItemRow, sortOrder: number) => BudgetItemRecord,
+  entries: BudgetPasteStructuredEntry[],
+  createItem: (
+    levelId: string | null,
+    values: PastedItemRow,
+    sortOrder: number,
+    entryIndex: number,
+    sourceRowIndex: number,
+  ) => BudgetItemRecord,
 ) {
   const nextLevels = [...current.levels];
   const nextItems = [...current.items];
@@ -3022,7 +3154,7 @@ function importStructuredPaste(
   const levelStack = new Map<number, string | null>();
   const importedLevelCountsByDepth = new Map<number, number>();
 
-  for (const entry of entries) {
+  for (const [entryIndex, entry] of entries.entries()) {
     if (entry.kind === "level") {
       const normalizedDepth = entry.depth - minDepth;
       const absoluteDepth = baseParentDepth + normalizedDepth;
@@ -3049,7 +3181,7 @@ function importStructuredPaste(
     const absoluteParentDepth = baseParentDepth + normalizedParentDepth;
     const levelId = levelStack.get(absoluteParentDepth) ?? baseParentId ?? null;
 
-    nextItems.push(createItem(levelId, entry.values, nextItemSort++));
+    nextItems.push(createItem(levelId, entry.values, nextItemSort++, entryIndex, entry.sourceRowIndex));
   }
 
   return {
@@ -3059,298 +3191,761 @@ function importStructuredPaste(
   };
 }
 
-function parsePastedBudgetRows(rawText: string, startColumn: EditableColumn): ParsedPasteResult | null {
-  const rawRows = rawText
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .filter((line) => line.trim().length > 0)
-    .map((line) => trimTrailingEmptyCells(line.split("\t")));
-
-  if (rawRows.length === 0) return null;
-  if (rawRows.length === 1 && rawRows[0].length === 1) return null;
-
-  const headerIndex = rawRows.findIndex((cells) => detectClipboardHeaderMap(cells) !== null);
-  const headerMap = headerIndex >= 0 ? detectClipboardHeaderMap(rawRows[headerIndex]) : null;
-  const candidateRows = rawRows
-    .map((cells, index) => {
-      if (headerMap && index > headerIndex) {
-        return mapClipboardRowWithHeaderMap(cells, headerMap);
-      }
-
-      return mapClipboardRow(cells, startColumn);
-    })
-    .filter((row): row is ParsedClipboardRow => row !== null);
-
-  const dataStartIndex = candidateRows.findIndex((row) => isClipboardHeaderRowNormalized(row) || isLikelyBudgetDataRow(row));
-  const parsedRows = (dataStartIndex >= 0 ? candidateRows.slice(dataStartIndex) : candidateRows).filter(
-    (row) => !isClipboardHeaderRowNormalized(row) && !isClipboardPreambleRowNormalized(row),
+const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
+  row,
+  densityMode,
+  isExcelMode,
+  activeRowId,
+  activeColumn,
+  isDragging,
+  isActionAddOpen,
+  isActionMoreOpen,
+  onDragStart,
+  onDragEnd,
+  onDropRow,
+  onRowFocus,
+  onCellFocus,
+  onUpdateLevel,
+  onSetCellRef,
+  onNavigate,
+  onPasteRows,
+  onToggleLevelActionMenu,
+}: {
+  row: Extract<BudgetDisplayRow, { kind: "level" }>;
+  densityMode: DensityMode;
+  isExcelMode: boolean;
+  activeRowId: string | null;
+  activeColumn: ActiveColumn;
+  isDragging: boolean;
+  isActionAddOpen: boolean;
+  isActionMoreOpen: boolean;
+  onDragStart: React.Dispatch<React.SetStateAction<DragState>>;
+  onDragEnd: () => void;
+  onDropRow: (row: BudgetDisplayRow) => void;
+  onRowFocus: (rowId: string) => void;
+  onCellFocus: (rowId: string, column: ActiveColumn) => void;
+  onUpdateLevel: (levelId: string, patch: Partial<BudgetLevelRecord>) => void;
+  onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
+  onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
+  onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
+  onToggleLevelActionMenu: (rowId: string, kind: "add" | "more", trigger: HTMLElement) => void;
+}) {
+  return (
+    <TR
+      data-budget-row-id={row.level.id}
+      draggable
+      onDragStart={() => onDragStart({ kind: "level", id: row.level.id })}
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={() => onDropRow(row)}
+      onDragEnd={onDragEnd}
+      onFocusCapture={() => onRowFocus(row.level.id)}
+      className={cn(
+        "group hover:bg-transparent",
+        getLevelRowTone(row.level.type, isExcelMode),
+        isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
+        activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
+      )}
+    >
+      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+        <div className="flex items-center gap-2">
+          <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
+          <BufferedInput
+            value={row.level.code}
+            onCommit={(value) => onUpdateLevel(row.level.id, { code: value })}
+            className={getInputDensityClass(densityMode, isExcelMode)}
+            ref={(element) => onSetCellRef(row.level.id, "code", element)}
+            onKeyDown={(event) => onNavigate(event, row.level.id, "code")}
+            onPaste={(event) => onPasteRows(event, row, "code")}
+            onFocus={() => onCellFocus(row.level.id, "code")}
+          />
+        </div>
+      </TD>
+      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+        <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
+          <BufferedInput
+            value={row.level.name}
+            onCommit={(value) => onUpdateLevel(row.level.id, { name: value })}
+            className={cn(getInputDensityClass(densityMode, isExcelMode), "flex-1")}
+            ref={(element) => onSetCellRef(row.level.id, "description", element)}
+            onKeyDown={(event) => onNavigate(event, row.level.id, "description")}
+            onPaste={(event) => onPasteRows(event, row, "description")}
+            onFocus={() => onCellFocus(row.level.id, "description")}
+          />
+          <span
+            className={cn(
+              "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
+              isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
+            )}
+          >
+            {levelTypeLabel[row.level.type]}
+          </span>
+        </div>
+      </TD>
+      <TD className={getBodyCellClass("unit", activeColumn, "", densityMode, isExcelMode)} colSpan={4} />
+      <TD
+        className={cn(
+          getBodyCellClass("actions", activeColumn, "sticky right-0 align-[initial]", densityMode, isExcelMode),
+          getStickyActionTone(row.level.type, isExcelMode),
+        )}
+      >
+        <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+          <button
+            type="button"
+            data-level-action-trigger
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+            onClick={(event) => onToggleLevelActionMenu(row.level.id, "add", event.currentTarget)}
+            title="Agregar contenido debajo de este nivel"
+            aria-label="Agregar contenido debajo de este nivel"
+            aria-haspopup="menu"
+            aria-expanded={isActionAddOpen}
+            aria-controls={isActionAddOpen ? `budget-level-add-menu-${row.level.id}` : undefined}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <IconButton
+            label="Abrir acciones del nivel"
+            onClick={(event) => onToggleLevelActionMenu(row.level.id, "more", event.currentTarget)}
+            dataActionTrigger
+            ariaExpanded={isActionMoreOpen}
+            ariaControls={isActionMoreOpen ? `budget-level-more-menu-${row.level.id}` : undefined}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </IconButton>
+        </div>
+      </TD>
+    </TR>
   );
+});
 
-  if (parsedRows.length === 0) return null;
-
-  const hasStructuredSignals =
-    startColumn !== "unit" &&
-    startColumn !== "quantity" &&
-    parsedRows.some((row) => isLikelyLevelRow(row));
-
-  if (!hasStructuredSignals) {
-    const rows = parsedRows.map(toPastedItemRow).filter((row) => Object.keys(row).length > 0);
-    return rows.length > 0 ? { mode: "flat", rows, importedItems: rows.length, importedLevels: 0 } : null;
-  }
-
-  const entries: StructuredPasteEntry[] = [];
-  let currentLevelDepth = 0;
-
-  for (const row of parsedRows) {
-    if (isLikelyLevelRow(row)) {
-      const depth = inferLevelDepth(row);
-      entries.push({
-        kind: "level",
-        code: row.code?.trim(),
-        name: row.description?.trim() ?? "Nuevo nivel",
-        depth,
-        levelType: undefined,
-      });
-      currentLevelDepth = depth;
-      continue;
-    }
-
-    const itemValues = toPastedItemRow(row);
-    if (Object.keys(itemValues).length > 0) {
-      entries.push({
-        kind: "item",
-        values: itemValues,
-        parentDepth: inferItemParentDepth(row, currentLevelDepth),
-      });
-    }
-  }
-
-  if (entries.length === 0) return null;
-
-  const importedLevels = entries.filter((entry) => entry.kind === "level").length;
-  const importedItems = entries.length - importedLevels;
-
-  return { mode: "structured", entries, importedItems, importedLevels };
-}
-
-function mapClipboardRow(cells: string[], startColumn: EditableColumn): ParsedClipboardRow | null {
-  const startIndex = editableColumnOrder.indexOf(startColumn);
-  if (startIndex === -1) return null;
-
-  const row: ParsedClipboardRow = {};
-
-  cells.forEach((cell, cellIndex) => {
-    const column = editableColumnOrder[startIndex + cellIndex];
-    if (!column) return;
-
-    if (column === "description") {
-      row.rawDescription = cell;
-      row.description = cell.trim();
-      return;
-    }
-
-    if (column === "quantity") {
-      row.rawQuantity = cell;
-      row.quantity = parseSpreadsheetNumber(cell);
-      return;
-    }
-
-    row[column] = cell.trim();
-  });
-
-  return Object.values(row).some((value) => value !== undefined && value !== "") ? row : null;
-}
-
-function mapClipboardRowWithHeaderMap(cells: string[], headerMap: ClipboardHeaderMap): ParsedClipboardRow | null {
-  const row: ParsedClipboardRow = {};
-
-  if (headerMap.code !== undefined) {
-    row.code = cells[headerMap.code]?.trim();
-  }
-
-  if (headerMap.description !== undefined) {
-    const description = cells[headerMap.description] ?? "";
-    row.rawDescription = description;
-    row.description = description.trim();
-  }
-
-  if (headerMap.unit !== undefined) {
-    row.unit = cells[headerMap.unit]?.trim();
-  }
-
-  if (headerMap.quantity !== undefined) {
-    const quantity = cells[headerMap.quantity] ?? "";
-    row.rawQuantity = quantity;
-    row.quantity = parseSpreadsheetNumber(quantity);
-  }
-
-  return Object.values(row).some((value) => value !== undefined && value !== "") ? row : null;
-}
-
-function detectClipboardHeaderMap(cells: string[]): ClipboardHeaderMap | null {
-  const headerMap: ClipboardHeaderMap = {};
-
-  cells.forEach((cell, index) => {
-    const token = normalizeSpreadsheetText(cell);
-    if (!token) return;
-
-    if (isCodeHeaderToken(token)) {
-      headerMap.code ??= index;
-      return;
-    }
-
-    if (isDescriptionHeaderToken(token)) {
-      headerMap.description ??= index;
-      return;
-    }
-
-    if (isUnitHeaderToken(token)) {
-      headerMap.unit ??= index;
-      return;
-    }
-
-    if (isQuantityHeaderToken(token)) {
-      headerMap.quantity ??= index;
-    }
-  });
-
-  return headerMap.description !== undefined && (headerMap.quantity !== undefined || headerMap.code !== undefined) ? headerMap : null;
-}
-
-function isClipboardHeaderRowNormalized(row: ParsedClipboardRow) {
-  const code = normalizeSpreadsheetText(row.code ?? "");
-  const description = normalizeSpreadsheetText(row.description ?? "");
-  const unit = normalizeSpreadsheetText(row.unit ?? "");
-  const quantity = normalizeSpreadsheetText(row.rawQuantity ?? "");
+const BudgetItemTableRow = memo(function BudgetItemTableRow({
+  row,
+  densityMode,
+  isExcelMode,
+  activeRowId,
+  activeColumn,
+  currency,
+  isDragging,
+  isActionOpen,
+  isCatalogActive,
+  catalogSuggestions,
+  catalogHighlightedIndex,
+  onCatalogHighlightChange,
+  onDragStart,
+  onDragEnd,
+  onDropRow,
+  onRowFocus,
+  onCellFocus,
+  onUpdateItem,
+  onSetCellRef,
+  onNavigate,
+  onPasteRows,
+  onOpenCatalogSelector,
+  onCloseCatalogSelector,
+  onScheduleCatalogClose,
+  onApplyCatalogPartida,
+  onOpenApuSheet,
+  onToggleItemActionMenu,
+  qualityState,
+}: {
+  row: Extract<BudgetDisplayRow, { kind: "item" }>;
+  densityMode: DensityMode;
+  isExcelMode: boolean;
+  activeRowId: string | null;
+  activeColumn: ActiveColumn;
+  currency: BudgetRecord["currency"];
+  isDragging: boolean;
+  isActionOpen: boolean;
+  isCatalogActive: boolean;
+  catalogSuggestions: CatalogPartidaRecord[];
+  catalogHighlightedIndex: number;
+  onCatalogHighlightChange: React.Dispatch<React.SetStateAction<number>>;
+  onDragStart: React.Dispatch<React.SetStateAction<DragState>>;
+  onDragEnd: () => void;
+  onDropRow: (row: BudgetDisplayRow) => void;
+  onRowFocus: (rowId: string) => void;
+  onCellFocus: (rowId: string, column: ActiveColumn) => void;
+  onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
+  onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
+  onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
+  onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
+  onOpenCatalogSelector: (rowId: string, query?: string) => void;
+  onCloseCatalogSelector: () => void;
+  onScheduleCatalogClose: (rowId: string) => void;
+  onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
+  onOpenApuSheet: (item: BudgetItemRecord) => void;
+  onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
+  qualityState?: BudgetItemQualityState;
+}) {
+  const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;
+  const hasNoApu = !row.item.apu;
+  const requiresCatalogReview = qualityState?.requiresCatalogReview ?? !row.item.apu;
+  const itemWarningTone = hasNoUsefulUnitPrice
+    ? isExcelMode
+      ? "bg-rose-50/80 ring-1 ring-rose-200"
+      : "bg-rose-50/70 ring-2 ring-rose-200"
+    : requiresCatalogReview
+      ? isExcelMode
+        ? "bg-amber-50/80 ring-1 ring-amber-200"
+        : "bg-amber-50/70 ring-2 ring-amber-200"
+      : "";
 
   return (
-    isCodeHeaderToken(code) &&
-    isDescriptionHeaderToken(description) &&
-    isUnitHeaderToken(unit) &&
-    isQuantityHeaderToken(quantity)
+    <TR
+      data-budget-row-id={row.item.id}
+      draggable
+      onDragStart={() => onDragStart({ kind: "item", id: row.item.id })}
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={() => onDropRow(row)}
+      onDragEnd={onDragEnd}
+      onFocusCapture={() => onRowFocus(row.item.id)}
+      className={cn(
+        "group",
+        isExcelMode && "bg-white",
+        isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
+        itemWarningTone,
+        activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
+      )}
+    >
+      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+        <div className="flex items-center gap-2">
+          <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
+          <BufferedInput
+            value={row.item.code}
+            onCommit={(value) => onUpdateItem(row.item.id, { code: value })}
+            className={getInputDensityClass(densityMode, isExcelMode)}
+            ref={(element) => onSetCellRef(row.item.id, "code", element)}
+            onKeyDown={(event) => onNavigate(event, row.item.id, "code")}
+            onPaste={(event) => onPasteRows(event, row, "code")}
+            onFocus={() => onCellFocus(row.item.id, "code")}
+          />
+        </div>
+      </TD>
+      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+        <div style={{ paddingLeft: `${row.depth * 18}px` }}>
+          <div className="relative flex min-w-0 flex-wrap items-center gap-2 space-y-1">
+            <div className="min-w-0 flex-1">
+              <BufferedInput
+                value={row.item.description}
+                onCommit={(value) => onUpdateItem(row.item.id, { description: value })}
+                onValueChange={(value) => {
+                  onOpenCatalogSelector(row.item.id, value);
+                }}
+                syncWhileFocused
+                className={cn(getInputDensityClass(densityMode, isExcelMode), "min-w-0")}
+                ref={(element) => onSetCellRef(row.item.id, "description", element)}
+                onKeyDown={(event) => {
+                  if (isCatalogActive && catalogSuggestions.length > 0) {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      onCatalogHighlightChange((current) => Math.min(current + 1, catalogSuggestions.length - 1));
+                      return;
+                    }
+
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      onCatalogHighlightChange((current) => Math.max(current - 1, 0));
+                      return;
+                    }
+
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      const selectedSuggestion = catalogSuggestions[catalogHighlightedIndex];
+                      if (selectedSuggestion) {
+                        onApplyCatalogPartida(row.item.id, selectedSuggestion);
+                      }
+                      return;
+                    }
+                  }
+
+                  if (event.key === "Escape") {
+                    onCloseCatalogSelector();
+                    return;
+                  }
+
+                  onNavigate(event, row.item.id, "description");
+                }}
+                onPaste={(event) => onPasteRows(event, row, "description")}
+                onFocus={() => {
+                  onCellFocus(row.item.id, "description");
+                  onOpenCatalogSelector(row.item.id, row.item.description);
+                }}
+                onBlur={() => onScheduleCatalogClose(row.item.id)}
+              />
+            </div>
+            {hasNoApu ? (
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                Sin APU
+              </span>
+            ) : null}
+            {hasNoUsefulUnitPrice || requiresCatalogReview ? (
+              <div className="flex flex-wrap gap-2">
+                {hasNoUsefulUnitPrice ? (
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">Sin PU</span>
+                ) : null}
+                {requiresCatalogReview && !hasNoApu ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    Revisar match
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </TD>
+      <TD className={getBodyCellClass("unit", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+        <BufferedInput
+          value={row.item.unit}
+          onCommit={(value) => onUpdateItem(row.item.id, { unit: value })}
+          className={cn(getInputDensityClass(densityMode, isExcelMode), "text-center")}
+          ref={(element) => onSetCellRef(row.item.id, "unit", element)}
+          onKeyDown={(event) => onNavigate(event, row.item.id, "unit")}
+          onPaste={(event) => onPasteRows(event, row, "unit")}
+          onFocus={() => onCellFocus(row.item.id, "unit")}
+        />
+      </TD>
+      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+        <BufferedInput
+          type="text"
+          inputMode="decimal"
+          value={row.item.quantity}
+          onCommit={(value) => onUpdateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) })}
+          className={cn(getInputDensityClass(densityMode, isExcelMode), "text-right tabular-nums")}
+          ref={(element) => onSetCellRef(row.item.id, "quantity", element)}
+          onKeyDown={(event) => onNavigate(event, row.item.id, "quantity")}
+          onPaste={(event) => onPasteRows(event, row, "quantity")}
+          onFocus={() => onCellFocus(row.item.id, "quantity")}
+        />
+      </TD>
+      <TD
+        className={getBodyCellClass(
+          "unitPrice",
+          activeColumn,
+          "align-[initial] whitespace-nowrap text-right text-xs font-medium tabular-nums text-slate-800",
+          densityMode,
+          isExcelMode,
+        )}
+      >
+        <AnimatedCurrencyValue value={row.item.unitPrice} currency={currency} className="justify-end px-0 py-0 text-inherit" />
+      </TD>
+      <TD
+        className={getBodyCellClass(
+          "partial",
+          activeColumn,
+          "align-[initial] whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-900",
+          densityMode,
+          isExcelMode,
+        )}
+      >
+        <AnimatedCurrencyValue value={row.item.partial} currency={currency} className="justify-end px-0 py-0 text-inherit" />
+      </TD>
+      <TD
+        className={getBodyCellClass(
+          "actions",
+          activeColumn,
+          cn("sticky right-0 align-[initial]", isExcelMode ? "bg-white/95" : "bg-white"),
+          densityMode,
+          isExcelMode,
+        )}
+      >
+        <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onOpenApuSheet(row.item)}
+            className="h-7 gap-1.5 rounded-full border border-slate-200 bg-white/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-slate-600 shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-slate-300 hover:bg-white"
+            title="Abrir editor APU de esta partida"
+            aria-label="Abrir editor APU de esta partida"
+          >
+            <ExternalLink className="h-4 w-4" />
+            APU
+          </Button>
+          <IconButton
+            label="Abrir acciones de la partida"
+            onClick={(event) => onToggleItemActionMenu(row.item.id, event.currentTarget)}
+            dataActionTrigger
+            ariaExpanded={isActionOpen}
+            ariaControls={isActionOpen ? `budget-item-menu-${row.item.id}` : undefined}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </IconButton>
+        </div>
+      </TD>
+    </TR>
+  );
+}, areBudgetItemRowPropsEqual);
+
+function areBudgetItemRowPropsEqual(
+  previous: Readonly<React.ComponentProps<typeof BudgetItemTableRow>>,
+  current: Readonly<React.ComponentProps<typeof BudgetItemTableRow>>,
+) {
+  return (
+    previous.row === current.row &&
+    previous.densityMode === current.densityMode &&
+    previous.isExcelMode === current.isExcelMode &&
+    previous.activeRowId === current.activeRowId &&
+    previous.activeColumn === current.activeColumn &&
+    previous.currency === current.currency &&
+    previous.isDragging === current.isDragging &&
+    previous.isActionOpen === current.isActionOpen &&
+    previous.isCatalogActive === current.isCatalogActive &&
+    previous.catalogSuggestions === current.catalogSuggestions &&
+    previous.catalogHighlightedIndex === current.catalogHighlightedIndex &&
+    previous.qualityState === current.qualityState
   );
 }
 
-function isClipboardPreambleRowNormalized(row: ParsedClipboardRow) {
-  const code = normalizeSpreadsheetText(row.code ?? "");
-  const description = normalizeSpreadsheetText(row.description ?? "");
-  const combined = [code, description].filter(Boolean).join(" ").trim();
-
-  if (!combined) return true;
-
-  return /^(presupuesto|presupuesto desagregado|proyecto:?|cliente:?|ubicacion:?|fecha base:?|moneda:?|subpresupuesto:?|especialidad:?|item:?|pagina:?|hoja:?)/.test(combined);
-}
-
-function isHeaderClipboardRow(row: ParsedClipboardRow) {
-  const code = normalizeSpreadsheetText(row.code ?? "");
-  const description = normalizeSpreadsheetText(row.description ?? "");
-  const unit = normalizeSpreadsheetText(row.unit ?? "");
-  const quantity = normalizeSpreadsheetText(row.rawQuantity ?? "");
+function QualityStatCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "danger" | "warning" | "neutral" | "info";
+}) {
+  const toneClassName =
+    tone === "danger"
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : tone === "info"
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    (code === "item" || code === "codigo" || code === "código") &&
-    (description === "partida" || description === "descripcion" || description === "descripción") &&
-    (unit === "unidad" || unit === "und") &&
-    (quantity === "metrado" || quantity === "cantidad")
+    <div className={cn("rounded-2xl border px-3 py-2", toneClassName)}>
+      <p className="text-[11px] font-medium uppercase tracking-wide">{label}</p>
+      <p className="mt-1 text-lg font-semibold">{value}</p>
+    </div>
   );
 }
 
-function isPreambleClipboardRow(row: ParsedClipboardRow) {
-  const code = row.code?.trim().toLowerCase() ?? "";
-  const description = row.description?.trim().toLowerCase() ?? "";
-  const combined = [code, description].filter(Boolean).join(" ").trim();
+const BudgetTableSection = memo(function BudgetTableSection({
+  error,
+  pasteFeedback,
+  tableScrollRef,
+  tableScrollProps,
+  densityMode,
+  isExcelMode,
+  activeColumn,
+  activeRowId,
+  dragState,
+  levelActionMenu,
+  itemActionMenu,
+  catalogSelectorRowId,
+  catalogSuggestions,
+  catalogHighlightedIndex,
+  onCatalogHighlightChange,
+  currency,
+  totalAmount,
+  virtualBudgetRange,
+  onDragStart,
+  onDragEnd,
+  onDropRow,
+  onRowFocus,
+  onCellFocus,
+  onUpdateLevel,
+  onUpdateItem,
+  onSetCellRef,
+  onNavigate,
+  onPasteRows,
+  onToggleLevelActionMenu,
+  onToggleItemActionMenu,
+  onOpenCatalogSelector,
+  onCloseCatalogSelector,
+  onScheduleCatalogClose,
+  onApplyCatalogPartida,
+  onOpenApuSheet,
+  itemQualityStateById,
+}: {
+  error: string;
+  pasteFeedback: string;
+  tableScrollRef: React.RefObject<HTMLDivElement | null>;
+  tableScrollProps: React.HTMLAttributes<HTMLDivElement>;
+  densityMode: DensityMode;
+  isExcelMode: boolean;
+  activeColumn: ActiveColumn;
+  activeRowId: string | null;
+  dragState: DragState;
+  levelActionMenu: LevelActionMenuState | null;
+  itemActionMenu: ItemActionMenuState | null;
+  catalogSelectorRowId: string | null;
+  catalogSuggestions: CatalogPartidaRecord[];
+  catalogHighlightedIndex: number;
+  onCatalogHighlightChange: React.Dispatch<React.SetStateAction<number>>;
+  currency: BudgetRecord["currency"];
+  totalAmount: number;
+  virtualBudgetRange: {
+    visibleRows: BudgetDisplayRow[];
+    topSpacerHeight: number;
+    bottomSpacerHeight: number;
+  };
+  onDragStart: React.Dispatch<React.SetStateAction<DragState>>;
+  onDragEnd: () => void;
+  onDropRow: (row: BudgetDisplayRow) => void;
+  onRowFocus: (rowId: string) => void;
+  onCellFocus: (rowId: string, column: ActiveColumn) => void;
+  onUpdateLevel: (levelId: string, patch: Partial<BudgetLevelRecord>) => void;
+  onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
+  onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
+  onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
+  onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
+  onToggleLevelActionMenu: (rowId: string, kind: "add" | "more", trigger: HTMLElement) => void;
+  onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
+  onOpenCatalogSelector: (rowId: string, query?: string) => void;
+  onCloseCatalogSelector: () => void;
+  onScheduleCatalogClose: (rowId: string) => void;
+  onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
+  onOpenApuSheet: (item: BudgetItemRecord) => void;
+  itemQualityStateById: Record<string, BudgetItemQualityState | undefined>;
+}) {
+  return (
+    <CardContent className={cn("space-y-4", isExcelMode && "space-y-3")}>
+      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {pasteFeedback ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{pasteFeedback}</p> : null}
 
-  if (!combined) return true;
+      <div
+        ref={tableScrollRef}
+        data-testid="budget-table-surface"
+        data-density-mode={densityMode}
+        className={getTableFrameClassName(
+          isExcelMode,
+          cn("max-h-[72vh] overflow-auto", !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.22)]" : undefined),
+        )}
+        {...tableScrollProps}
+      >
+        <Table
+          className={cn(
+            "table-fixed min-w-[1100px] w-full",
+            isExcelMode && "[&_td]:px-2 [&_th]:px-2 [&_tr]:border-b [&_tr]:border-slate-200",
+          )}
+        >
+          <colgroup>
+            <col className="w-[130px]" />
+            <col className="w-[420px]" />
+            <col className="w-[90px]" />
+            <col className="w-[92px]" />
+            <col className="w-[96px]" />
+            <col className="w-[96px]" />
+            <col className="w-[110px]" />
+          </colgroup>
+          <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
+            <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90" : "bg-slate-50")}>
+              <TH className={getHeaderCellClass("code", activeColumn, isExcelMode)}>Código</TH>
+              <TH className={getHeaderCellClass("description", activeColumn, isExcelMode)}>Descripción</TH>
+              <TH className={getHeaderCellClass("unit", activeColumn, isExcelMode, "text-center")}>Unidad</TH>
+              <TH className={getHeaderCellClass("quantity", activeColumn, isExcelMode, "text-right")}>Metrado</TH>
+              <TH className={getHeaderCellClass("unitPrice", activeColumn, isExcelMode, "text-right")}>P. Unitario</TH>
+              <TH className={getHeaderCellClass("partial", activeColumn, isExcelMode, "text-right")}>Parcial</TH>
+              <TH className={getHeaderCellClass("actions", activeColumn, isExcelMode, "right-0 text-right")}>
+                <span className="inline-flex w-full items-center justify-end">
+                  <MoreHorizontal className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                  <span className="sr-only">Acciones</span>
+                </span>
+              </TH>
+            </TR>
+          </THead>
+          <TBody>
+            {virtualBudgetRange.topSpacerHeight > 0 ? (
+              <TR aria-hidden="true" className="hover:bg-transparent focus-within:bg-transparent">
+                <TD colSpan={BUDGET_TABLE_COLUMN_COUNT} className="p-0" style={{ height: virtualBudgetRange.topSpacerHeight }} />
+              </TR>
+            ) : null}
+            {virtualBudgetRange.visibleRows.map((row) =>
+              row.kind === "level" ? (
+                <BudgetLevelTableRow
+                  key={row.level.id}
+                  row={row}
+                  densityMode={densityMode}
+                  isExcelMode={isExcelMode}
+                  activeRowId={activeRowId}
+                  activeColumn={activeColumn}
+                  isDragging={dragState?.kind === "level" && dragState.id === row.level.id}
+                  isActionAddOpen={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "add"}
+                  isActionMoreOpen={levelActionMenu?.rowId === row.level.id && levelActionMenu.kind === "more"}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDropRow={onDropRow}
+                  onRowFocus={onRowFocus}
+                  onCellFocus={onCellFocus}
+                  onUpdateLevel={onUpdateLevel}
+                  onSetCellRef={onSetCellRef}
+                  onNavigate={onNavigate}
+                  onPasteRows={onPasteRows}
+                  onToggleLevelActionMenu={onToggleLevelActionMenu}
+                />
+              ) : (
+                <BudgetItemTableRow
+                  key={row.item.id}
+                  row={row}
+                  densityMode={densityMode}
+                  isExcelMode={isExcelMode}
+                  activeRowId={activeRowId}
+                  activeColumn={activeColumn}
+                  currency={currency}
+                  isDragging={dragState?.kind === "item" && dragState.id === row.item.id}
+                  isActionOpen={itemActionMenu?.rowId === row.item.id}
+                  isCatalogActive={catalogSelectorRowId === row.item.id}
+                  catalogSuggestions={catalogSelectorRowId === row.item.id ? catalogSuggestions : EMPTY_CATALOG_SUGGESTIONS}
+                  catalogHighlightedIndex={catalogSelectorRowId === row.item.id ? catalogHighlightedIndex : 0}
+                  onCatalogHighlightChange={onCatalogHighlightChange}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDropRow={onDropRow}
+                  onRowFocus={onRowFocus}
+                  onCellFocus={onCellFocus}
+                  onUpdateItem={onUpdateItem}
+                  onSetCellRef={onSetCellRef}
+                  onNavigate={onNavigate}
+                  onPasteRows={onPasteRows}
+                  onOpenCatalogSelector={onOpenCatalogSelector}
+                  onCloseCatalogSelector={onCloseCatalogSelector}
+                  onScheduleCatalogClose={onScheduleCatalogClose}
+                  onApplyCatalogPartida={onApplyCatalogPartida}
+                  onOpenApuSheet={onOpenApuSheet}
+                  onToggleItemActionMenu={onToggleItemActionMenu}
+                  qualityState={itemQualityStateById[row.item.id]}
+                />
+              ),
+            )}
+            {virtualBudgetRange.bottomSpacerHeight > 0 ? (
+              <TR aria-hidden="true" className="hover:bg-transparent focus-within:bg-transparent">
+                <TD colSpan={BUDGET_TABLE_COLUMN_COUNT} className="p-0" style={{ height: virtualBudgetRange.bottomSpacerHeight }} />
+              </TR>
+            ) : null}
+          </TBody>
+        </Table>
+      </div>
 
-  return /^(presupuesto|presupuesto desagregado|proyecto:|cliente:|ubicacion:|ubicación:|fecha base:|moneda:|subpresupuesto:)/.test(combined);
-}
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between border border-sky-100 bg-[linear-gradient(180deg,rgba(240,249,255,0.98)_0%,rgba(224,242,254,0.9)_100%)] shadow-[0_14px_30px_-26px_rgba(2,132,199,0.28)]",
+          isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3",
+        )}
+      >
+        <p className={cn("font-medium text-sky-900", isExcelMode && "text-sm")}>Total visible y actualizado automáticamente</p>
+        <AnimatedCurrencyValue
+          value={totalAmount}
+          currency={currency}
+          className={cn("px-0 py-0 font-semibold text-sky-700", isExcelMode ? "text-xl" : "text-2xl")}
+        />
+      </div>
+    </CardContent>
+  );
+});
 
-void isHeaderClipboardRow;
-void isPreambleClipboardRow;
-
-function isLikelyBudgetDataRow(row: ParsedClipboardRow) {
-  if (isHierarchyCode(row.code ?? "")) return true;
-  if (row.unit?.trim() && row.rawQuantity?.trim()) return true;
-  return isLikelyLevelRow(row);
-}
-
-function isLikelyLevelRow(row: ParsedClipboardRow) {
-  const description = row.description?.trim();
-  if (!description) return false;
-
-  const hasUnit = !!row.unit?.trim();
-  const hasQuantity = !!row.rawQuantity?.trim();
-  if (hasUnit || hasQuantity) return false;
-  if (isClipboardPreambleRowNormalized(row)) return false;
-
-  if (row.code && isHierarchyCode(row.code)) return true;
-
-  const leadingSpaces = getLeadingSpaces(row.rawDescription ?? "");
-  return looksLikeLevelDescription(description, leadingSpaces);
-}
-
-function inferLevelDepth(row: ParsedClipboardRow) {
-  if (row.code && isHierarchyCode(row.code)) {
-    return row.code.split(".").length - 1;
-  }
-
-  return Math.max(0, Math.floor(getLeadingSpaces(row.rawDescription ?? "") / 2));
-}
-
-function inferItemParentDepth(row: ParsedClipboardRow, fallbackDepth: number) {
-  if (row.code && isHierarchyCode(row.code)) {
-    return Math.max(0, row.code.split(".").length - 2);
-  }
-
-  const indentDepth = Math.max(0, Math.floor(getLeadingSpaces(row.rawDescription ?? "") / 2) - 1);
-  return Math.max(indentDepth, fallbackDepth);
-}
-
-function toPastedItemRow(row: ParsedClipboardRow): PastedItemRow {
-  const item: PastedItemRow = {};
-
-  if (row.code?.trim()) item.code = row.code.trim();
-  if (row.description?.trim()) item.description = row.description.trim();
-  if (row.unit?.trim()) item.unit = row.unit.trim();
-  if (row.rawQuantity?.trim()) item.quantity = row.quantity ?? 0;
-
-  return item;
-}
-
-function trimTrailingEmptyCells(cells: string[]) {
-  const nextCells = [...cells];
-
-  while (nextCells.length > 0 && nextCells[nextCells.length - 1]?.trim() === "") {
-    nextCells.pop();
-  }
-
-  return nextCells;
-}
-
-function normalizeSpreadsheetText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
-function isCodeHeaderToken(token: string) {
-  return token === "item" || token === "codigo" || token === "cod." || token === "cod" || token === "codigo item";
-}
-
-function isDescriptionHeaderToken(token: string) {
-  return token === "partida" || token === "descripcion" || token === "detalle" || token === "subpartida";
-}
-
-function isUnitHeaderToken(token: string) {
-  return token === "unidad" || token === "und" || token === "u.m." || token === "um" || token === "u";
-}
-
-function isQuantityHeaderToken(token: string) {
-  return token === "metrado" || token === "cantidad" || token === "cant." || token === "cant" || token === "metr";
-}
+const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
+  budgetId,
+  currency,
+  densityMode,
+  isExcelMode,
+  summaryCollapsed,
+  generalExpensesRate,
+  utilityRate,
+  igvRate,
+  totals,
+  qualitySummary,
+  onToggleCollapsed,
+  onGeneralExpensesRateChange,
+  onUtilityRateChange,
+  onIgvRateChange,
+}: {
+  budgetId: string;
+  currency: BudgetRecord["currency"];
+  densityMode: DensityMode;
+  isExcelMode: boolean;
+  summaryCollapsed: boolean;
+  generalExpensesRate: number;
+  utilityRate: number;
+  igvRate: number;
+  totals: BudgetTotals;
+  qualitySummary: BudgetQualitySummary;
+  onToggleCollapsed: () => void;
+  onGeneralExpensesRateChange: (value: number) => void;
+  onUtilityRateChange: (value: number) => void;
+  onIgvRateChange: (value: number) => void;
+}) {
+  return (
+    <Card
+      data-testid="budget-summary-panel"
+      data-density-mode={densityMode}
+      className={cn(
+        "h-fit overflow-hidden border-slate-200/90 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
+        isExcelMode && "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
+      )}
+    >
+      <CardHeader
+        className={cn(
+          "flex flex-row items-center border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)]",
+          summaryCollapsed ? "justify-center px-2 py-3" : "justify-between",
+          isExcelMode && !summaryCollapsed && "px-3 py-2",
+        )}
+      >
+        {!summaryCollapsed ? <CardTitle>Resumen</CardTitle> : null}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label={summaryCollapsed ? "Expandir resumen" : "Colapsar resumen"}
+          title={summaryCollapsed ? "Expandir resumen" : "Colapsar resumen"}
+          className="h-8 w-8 px-0"
+          onClick={onToggleCollapsed}
+        >
+          {summaryCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </Button>
+      </CardHeader>
+      {!summaryCollapsed ? (
+        <CardContent className={cn(isExcelMode ? "space-y-3 px-3 py-3" : "space-y-4")}>
+          <div className={cn("grid gap-2", isExcelMode ? "grid-cols-1" : "grid-cols-2")}>
+            <QualityStatCard label="Partidas sin PU útil" value={qualitySummary.itemsWithoutUsefulUnitPrice} tone="danger" />
+            <QualityStatCard label="Partidas por revisar" value={qualitySummary.itemsRequiringCatalogReview} tone="warning" />
+            <QualityStatCard label="Sin APU" value={qualitySummary.itemsWithoutApu} tone="neutral" />
+            <QualityStatCard label="Resueltas por sugerencia" value={qualitySummary.itemsResolvedFromSuggestion} tone="info" />
+          </div>
+          <RateField label="Gastos generales" value={generalExpensesRate} onChange={onGeneralExpensesRateChange} compact={isExcelMode} />
+          <RateField label="Utilidad" value={utilityRate} onChange={onUtilityRateChange} compact={isExcelMode} />
+          <RateField label="IGV" value={igvRate} onChange={onIgvRateChange} compact={isExcelMode} />
+          <SummaryRow label="Costo directo" value={totals.totalDirectCost} currency={currency} compact={isExcelMode} />
+          <SummaryRow label="Gastos generales" value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
+          <SummaryRow label="Utilidad" value={totals.totalUtility} currency={currency} compact={isExcelMode} />
+          <SummaryRow label="IGV" value={totals.totalTax} currency={currency} compact={isExcelMode} />
+          <div className={cn("bg-slate-900 text-white shadow-[0_18px_36px_-26px_rgba(15,23,42,0.45)]", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
+            <p className={cn("text-slate-300", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
+            <AnimatedCurrencyValue
+              value={totals.totalAmount}
+              currency={currency}
+              className={cn("mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
+            />
+          </div>
+          <div className="grid gap-2">
+            <a href={`/api/reports/budget/${budgetId}/excel`} className="inline-flex">
+              <Button variant="outline" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
+                Exportar Excel
+              </Button>
+            </a>
+            <a href={`/api/reports/apu/${budgetId}/excel`} className="inline-flex">
+              <Button variant="outline" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
+                Exportar APU Excel
+              </Button>
+            </a>
+            <a href={`/api/reports/budget/${budgetId}/pdf`} className="inline-flex">
+              <Button variant="secondary" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
+                Exportar PDF
+              </Button>
+            </a>
+          </div>
+          <div className={cn("border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] text-xs text-slate-500", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
+            Atajos: <span className="font-medium text-slate-700">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-slate-700">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-slate-700">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-slate-700">Pegar</span> importa filas desde Excel.
+          </div>
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+});
 
 function formatWorkbookCellValue(value: CellValue | undefined) {
   if (value === null || value === undefined) return "";
@@ -3368,17 +3963,6 @@ function formatWorkbookCellValue(value: CellValue | undefined) {
   return String(value);
 }
 
-function looksLikeLevelDescription(description: string, leadingSpaces: number) {
-  const normalized = description.trim();
-  if (!normalized) return false;
-
-  const isUppercase = normalized === normalized.toUpperCase();
-  const endsWithColon = normalized.endsWith(":");
-  const isShortLabel = normalized.split(" ").length <= 6;
-
-  return (leadingSpaces === 0 && isUppercase) || (leadingSpaces <= 2 && endsWithColon) || (leadingSpaces <= 2 && isShortLabel && isUppercase);
-}
-
 function getPasteFeedbackMessage(importedItems: number, importedLevels: number) {
   if (importedLevels > 0) {
     return `Pegado listo: ${importedLevels} ${importedLevels === 1 ? "nivel" : "niveles"} y ${importedItems} ${importedItems === 1 ? "partida" : "partidas"} importadas.`;
@@ -3387,22 +3971,39 @@ function getPasteFeedbackMessage(importedItems: number, importedLevels: number) 
   return `Pegado listo: ${importedItems} ${importedItems === 1 ? "partida importada" : "partidas importadas"}.`;
 }
 
-function getPastePreviewRows(parsedPaste: ParsedPasteResult): PastePreviewRow[] {
-  if (parsedPaste.mode === "flat") {
-    return parsedPaste.rows.slice(0, 20).map((row) => ({
+function createPendingPasteRowResolutions(guidedPaste: GuidedBudgetPasteWithSuggestions): PendingPasteRowResolution[] {
+  return guidedPaste.itemMatches.map((itemMatch) => ({
+    sourceRowIndex: itemMatch.sourceRowIndex,
+    selectedPartidaId: null,
+  }));
+}
+
+function getPendingPasteSelectedPartidaId(pendingPaste: PendingPaste, sourceRowIndex: number) {
+  return pendingPaste.rowResolutions.find((resolution) => resolution.sourceRowIndex === sourceRowIndex)?.selectedPartidaId ?? null;
+}
+
+function getPastePreviewRows(pendingPaste: PendingPaste): PastePreviewRow[] {
+  const { guidedPaste } = pendingPaste;
+
+  if (guidedPaste.selectedMode === "flat") {
+    return guidedPaste.rows.slice(0, 20).map((row, index) => ({
       kind: "item",
       description: row.description ?? "Nueva partida",
       code: row.code,
       unit: row.unit,
       quantity: row.quantity !== undefined ? String(row.quantity) : undefined,
       depth: 0,
+      itemMatch: resolvePendingPasteItemMatchPresentation(pendingPaste, index),
+      sourceRowIndex: index,
     }));
   }
 
-  const minDepth = Math.min(...parsedPaste.entries.map((entry) => (entry.kind === "level" ? entry.depth : entry.parentDepth)));
+  const minDepth = guidedPaste.entries.length
+    ? Math.min(...guidedPaste.entries.map((entry) => (entry.kind === "level" ? entry.depth : entry.parentDepth)))
+    : 0;
   const importedLevelCountsByDepth = new Map<number, number>();
 
-  return parsedPaste.entries.slice(0, 24).map((entry, entryIndex) => {
+  return guidedPaste.entries.slice(0, 24).map((entry, entryIndex) => {
     if (entry.kind === "level") {
       const normalizedDepth = entry.depth - minDepth;
       const levelType = getImportedLevelType(normalizedDepth, importedLevelCountsByDepth.get(normalizedDepth) ?? 0);
@@ -3416,6 +4017,7 @@ function getPastePreviewRows(parsedPaste: ParsedPasteResult): PastePreviewRow[] 
         depth: entry.depth,
         levelType: levelTypeLabel[resolvedLevelType],
         entryIndex,
+        sourceRowIndex: entry.sourceRowIndex,
       };
     }
 
@@ -3426,8 +4028,66 @@ function getPastePreviewRows(parsedPaste: ParsedPasteResult): PastePreviewRow[] 
       unit: entry.values.unit,
       quantity: entry.values.quantity !== undefined ? String(entry.values.quantity) : undefined,
       depth: entry.parentDepth + 1,
+      itemMatch: resolvePendingPasteItemMatchPresentation(pendingPaste, entry.sourceRowIndex),
+      sourceRowIndex: entry.sourceRowIndex,
     };
   });
+}
+
+function resolvePendingPasteItemMatchPresentation(
+  pendingPaste: PendingPaste,
+  sourceRowIndex: number,
+): PendingPasteItemMatchPresentation | null {
+  const itemMatch = pendingPaste.guidedPaste.itemMatches.find((match) => match.sourceRowIndex === sourceRowIndex) ?? null;
+  if (!itemMatch) return null;
+
+  return {
+    ...itemMatch.match,
+    isSuggestionApplied:
+      itemMatch.match.matchKind === "suggested" &&
+      getPendingPasteSelectedPartidaId(pendingPaste, sourceRowIndex) === itemMatch.match.bestSuggestion?.id,
+  };
+}
+
+function groupPasteIssuesByRow(issues: GuidedBudgetPaste["issues"]) {
+  const issueMap = new Map<number, GuidedBudgetPaste["issues"]>();
+
+  issues.forEach((issue) => {
+    const current = issueMap.get(issue.rowIndex) ?? [];
+    current.push(issue);
+    issueMap.set(issue.rowIndex, current);
+  });
+
+  return issueMap;
+}
+
+function getPatternInferenceLabel(previewRows: PastePreviewRow[], rowIndex: number) {
+  const row = previewRows[rowIndex];
+  if (!row || row.kind !== "level") return "";
+
+  const previousRow = rowIndex > 0 ? previewRows[rowIndex - 1] : null;
+
+  if (!previousRow) {
+    return "Inferido por patrón: primer texto del bloque.";
+  }
+
+  if (previousRow.kind === "level" && previousRow.depth === 0 && row.depth === 1) {
+    return "Inferido por patrón: texto inmediato después del título.";
+  }
+
+  if (previousRow.kind === "item" && row.depth === 1) {
+    return "Inferido por patrón: texto después de partidas del mismo bloque.";
+  }
+
+  if (previousRow.kind === "item" && row.depth === 0) {
+    return "Inferido por patrón: texto después de partidas, inicia un nuevo título.";
+  }
+
+  if (previousRow.kind === "level" && previousRow.depth === 1 && row.depth === 0) {
+    return "Inferido por patrón: inicio de un nuevo bloque de textos.";
+  }
+
+  return "Inferido por patrón.";
 }
 
 function parseSpreadsheetNumber(value: string) {
@@ -3449,15 +4109,6 @@ function parseSpreadsheetNumber(value: string) {
   }
 
   return Number(trimmed.replaceAll(",", "")) || 0;
-}
-
-function isHierarchyCode(value: string) {
-  return /^\d+(?:\.\d+)*$/.test(value.trim());
-}
-
-function getLeadingSpaces(value: string) {
-  const match = value.match(/^\s+/);
-  return match?.[0].length ?? 0;
 }
 
 function resolveDefaultItemLevelId(rows: BudgetDisplayRow[], activeRowId: string | null) {
@@ -3716,6 +4367,10 @@ function resolveTargetRow(rows: BudgetDisplayRow[], target: InsertTarget) {
   return rows.find((row) => row.kind === target.kind && getRowId(row) === target.id) ?? null;
 }
 
+function resolveDefaultPasteApplyMode(targetRow: BudgetDisplayRow): BudgetPasteApplyMode {
+  return targetRow.kind === "level" ? "insert-inside-level" : "insert-below";
+}
+
 function clearDeeperLevels(levelStack: Map<number, string | null>, currentDepth: number) {
   for (const depth of [...levelStack.keys()]) {
     if (depth > currentDepth) {
@@ -3747,19 +4402,6 @@ function getImportedLevelType(depth: number, levelIndexAtDepth: number): BudgetL
 
 function getCellKey(rowId: string, column: EditableColumn) {
   return `${rowId}:${column}`;
-}
-
-function resolveCatalogResource(
-  row: CatalogPartidaRecord["apuRows"][number],
-  resourcesById: Map<string, ResourceRecord>,
-  resourcesByDescriptionUnit: Map<string, ResourceRecord>,
-) {
-  if (row.resourceId) {
-    const byId = resourcesById.get(row.resourceId);
-    if (byId) return byId;
-  }
-
-  return resourcesByDescriptionUnit.get(`${normalizeLookupText(row.description)}|${normalizeLookupText(row.unit)}`) ?? null;
 }
 
 function normalizeLookupText(value: string) {

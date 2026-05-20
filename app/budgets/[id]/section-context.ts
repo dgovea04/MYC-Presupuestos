@@ -27,6 +27,7 @@ export async function getGeneralBudgetSectionContext(id: string) {
 
   return {
     session,
+    currentUser: session.user,
     budget: {
       ...budget,
       igvRate: decimalToNumber(budget.igvRate),

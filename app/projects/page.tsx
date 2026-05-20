@@ -13,7 +13,7 @@ export default async function ProjectsPage() {
   const projects = await getProjectsListByUser(session!.user.id);
 
   return (
-    <AppShell>
+    <AppShell currentUser={session!.user}>
       <Card className="border-slate-200">
         <CardHeader className="flex flex-col gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] md:flex-row md:items-start md:justify-between">
           <PageHeaderCard

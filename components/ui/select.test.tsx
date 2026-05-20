@@ -309,6 +309,47 @@ describe("Select", () => {
     expect(nativeSelect.value).toBe("");
     expect(fallbackChange).not.toHaveBeenCalled();
   });
+
+  it("can disable body scroll lock compensation only while the menu is open", async () => {
+    const { getTrigger } = await renderSelect(
+      <Select defaultValue="materials" disableBodyScrollLockCompensation>
+        <option value="materials">Materials</option>
+        <option value="labor">Labor</option>
+      </Select>,
+    );
+
+    expect(document.body.style.marginRight).toBe("");
+    expect(document.body.style.paddingRight).toBe("");
+
+    await act(async () => {
+      getTrigger().click();
+    });
+
+    await act(async () => {
+      document.body.setAttribute("data-scroll-locked", "1");
+    });
+
+    expect(document.body.style.getPropertyValue("margin-right")).toBe("0px");
+    expect(document.body.style.getPropertyPriority("margin-right")).toBe("important");
+    expect(document.body.style.getPropertyValue("padding-right")).toBe("0px");
+    expect(document.body.style.getPropertyPriority("padding-right")).toBe("important");
+
+    const laborOption = Array.from(document.body.querySelectorAll('[role="option"]')).find(
+      (option) => option.textContent === "Labor",
+    );
+
+    if (!(laborOption instanceof HTMLElement)) {
+      throw new Error("Missing Labor option");
+    }
+
+    await act(async () => {
+      laborOption.click();
+    });
+
+    expect(document.body.style.marginRight).toBe("");
+    expect(document.body.style.paddingRight).toBe("");
+    document.body.removeAttribute("data-scroll-locked");
+  });
 });
 
 async function renderSelect(node: React.ReactNode) {

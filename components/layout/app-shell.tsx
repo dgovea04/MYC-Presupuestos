@@ -35,7 +35,7 @@ export async function AppShell({
   };
   settings?: UserSettingsRecord;
 }) {
-  const session = await getAuthSession();
+  const session = currentUser && initialSettings ? null : await getAuthSession();
   const fallbackSettings: UserSettingsRecord = {
     defaultCurrency: "PEN",
     currencyDecimals: 2,

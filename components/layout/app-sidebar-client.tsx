@@ -2,7 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { BookOpen, FileSpreadsheet, FolderKanban, LayoutDashboard, Rows3, SlidersHorizontal, Wrench } from "lucide-react";
+import { BookOpen, FileSpreadsheet, FolderKanban, LayoutDashboard, Network, Rows3, SlidersHorizontal, Wrench } from "lucide-react";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SidebarNav, type SidebarNavLink } from "@/components/layout/sidebar-nav";
 import { SidebarUserCard } from "@/components/layout/sidebar-user-card";
@@ -29,7 +29,7 @@ const NAV_LINKS: SidebarNavLink[] = [
   { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
   { href: "/resources", label: "Catalogo de Insumos", icon: Wrench },
   { href: "/partidas", label: "Catalogo de Partidas", icon: Rows3 },
-  { href: "/unified-indices", label: "Indices Unificados (IU)", icon: BookOpen },
+  { href: "/unified-indices", label: "Indices Unificados (IU)", icon: Network },
   { href: "/unified-index-dictionary", label: "Diccionario de IU", icon: BookOpen },
   { href: "/settings", label: "Configuracion", icon: SlidersHorizontal },
 ];

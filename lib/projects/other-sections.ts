@@ -11,11 +11,6 @@ export function getProjectOtherSections(generalBudgetId: string | null): Project
 
   return [
     {
-      title: "Programacion de obra",
-      detail: "Cronograma valorizado consolidado, calendario de insumos y curva S del presupuesto general.",
-      href: `/budgets/${generalBudgetId}/work-schedule`,
-    },
-    {
       title: "Lista de insumos",
       detail: "Consolidado funcional de insumos derivado desde los APUs del presupuesto general del proyecto.",
       href: `/budgets/${generalBudgetId}/resources`,
@@ -34,6 +29,11 @@ export function getProjectOtherSections(generalBudgetId: string | null): Project
       title: "Formula polinomica",
       detail: "Acceso a la vista base de formula polinomica dentro del flujo funcional del presupuesto general.",
       href: `/budgets/${generalBudgetId}/polynomial-formula`,
+    },
+    {
+      title: "Programacion de obra",
+      detail: "Cronograma valorizado consolidado, calendario de insumos y curva S del presupuesto general.",
+      href: `/budgets/${generalBudgetId}/work-schedule`,
     },
   ];
 }

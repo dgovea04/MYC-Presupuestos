@@ -13,6 +13,8 @@ const DEFAULT_SAVE_ERROR = "No se pudo guardar la empresa.";
 export function CompanyProfileForm({
   initialCompany,
   onSaved,
+  onCancel,
+  onSubmitSuccess,
 }: {
   initialCompany?: {
     name?: string | null;
@@ -20,15 +22,84 @@ export function CompanyProfileForm({
     logoUrl?: string | null;
   };
   onSaved?: (company: { name?: string | null; ruc?: string | null; logoUrl?: string | null }) => void;
+  onCancel?: () => void;
+  onSubmitSuccess?: () => void;
 }) {
   const [name, setName] = useState(initialCompany?.name ?? "");
   const [ruc, setRuc] = useState(initialCompany?.ruc ?? "");
   const [logoUrl, setLogoUrl] = useState(initialCompany?.logoUrl ?? null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [logoPending, setLogoPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  async function persistCompanyDraft() {
+    const response = await fetch("/api/company", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        ruc,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await getErrorMessage(response));
+    }
+
+    const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
+    const nextCompany = {
+      name: company.name ?? name,
+      ruc: company.ruc ?? ruc,
+      logoUrl: company.logoUrl ?? logoUrl,
+    };
+
+    setName(nextCompany.name ?? "");
+      setRuc(nextCompany.ruc ?? "");
+      setLogoUrl(nextCompany.logoUrl ?? null);
+      onSaved?.(nextCompany);
+
+    return nextCompany;
+  }
+
+  async function persistSelectedLogo() {
+    if (!logoFile) {
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.set("logo", logoFile);
+
+    const response = await fetch("/api/company/logo", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(await getErrorMessage(response));
+    }
+
+    const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
+    const nextCompany = {
+      name: company.name ?? name,
+      ruc: company.ruc ?? ruc,
+      logoUrl: company.logoUrl ?? null,
+    };
+
+    setName(nextCompany.name ?? "");
+    setRuc(nextCompany.ruc ?? "");
+    setLogoUrl(nextCompany.logoUrl);
+    setLogoFile(null);
+    if (logoPreviewUrl) {
+      URL.revokeObjectURL(logoPreviewUrl);
+    }
+    setLogoPreviewUrl(null);
+    onSaved?.(nextCompany);
+
+    return nextCompany;
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,26 +108,15 @@ export function CompanyProfileForm({
     setSuccess("");
 
     try {
-      const response = await fetch("/api/company", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          ruc,
-        }),
-      });
-
-      if (!response.ok) {
-        setError(await getErrorMessage(response));
-        return;
+      await persistCompanyDraft();
+      if (logoFile) {
+        await persistSelectedLogo();
       }
-
-      const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
-      onSaved?.(company);
       broadcastAppDataChange(["/dashboard", "/projects", "/budgets", "/resources", "/settings"], undefined, {
         locallyHandledPaths: ["/settings"],
       });
       setSuccess("Empresa guardada correctamente.");
+      onSubmitSuccess?.();
     } catch {
       setError(DEFAULT_SAVE_ERROR);
     } finally {
@@ -72,23 +132,11 @@ export function CompanyProfileForm({
     setSuccess("");
 
     try {
-      const formData = new FormData();
-      formData.set("logo", logoFile);
-
-      const response = await fetch("/api/company/logo", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        setError(await getErrorMessage(response));
-        return;
+      if (!initialCompany) {
+        await persistCompanyDraft();
       }
 
-      const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
-      setLogoUrl(company.logoUrl ?? null);
-      setLogoFile(null);
-      onSaved?.(company);
+      await persistSelectedLogo();
       broadcastAppDataChange(["/dashboard", "/projects", "/budgets", "/resources", "/settings"], undefined, {
         locallyHandledPaths: ["/settings"],
       });
@@ -116,9 +164,20 @@ export function CompanyProfileForm({
       }
 
       const company = (await response.json()) as { name?: string | null; ruc?: string | null; logoUrl?: string | null };
+      const nextCompany = {
+        name: company.name ?? name,
+        ruc: company.ruc ?? ruc,
+        logoUrl: null,
+      };
+      setName(nextCompany.name ?? "");
+      setRuc(nextCompany.ruc ?? "");
       setLogoUrl(null);
       setLogoFile(null);
-      onSaved?.(company);
+      if (logoPreviewUrl) {
+        URL.revokeObjectURL(logoPreviewUrl);
+      }
+      setLogoPreviewUrl(null);
+      onSaved?.(nextCompany);
       broadcastAppDataChange(["/dashboard", "/projects", "/budgets", "/resources", "/settings"], undefined, {
         locallyHandledPaths: ["/settings"],
       });
@@ -166,8 +225,8 @@ export function CompanyProfileForm({
 
         <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
           <div className="flex h-36 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white">
-            {logoUrl ? (
-              <Image src={logoUrl} alt="Logo de empresa" width={140} height={112} className="max-h-28 max-w-[140px] object-contain" />
+            {logoPreviewUrl || logoUrl ? (
+              <Image src={logoPreviewUrl ?? logoUrl ?? ""} alt="Logo de empresa" width={140} height={112} className="max-h-28 max-w-[140px] object-contain" />
             ) : (
               <div className="flex flex-col items-center gap-2 text-slate-400">
                 <ImageIcon className="h-8 w-8" />
@@ -184,7 +243,15 @@ export function CompanyProfileForm({
                 type="file"
                 accept="image/png,image/jpeg"
                 disabled={logoPending}
-                onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  if (logoPreviewUrl) {
+                    URL.revokeObjectURL(logoPreviewUrl);
+                  }
+
+                  const nextFile = event.target.files?.[0] ?? null;
+                  setLogoFile(nextFile);
+                  setLogoPreviewUrl(nextFile ? URL.createObjectURL(nextFile) : null);
+                }}
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -206,8 +273,13 @@ export function CompanyProfileForm({
       {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {success ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
 
-      <div className="flex items-center justify-end rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <Button className="gap-2 shadow-sm shadow-sky-950/10" disabled={pending}>
+      <div className="flex items-center justify-end gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        {onCancel ? (
+          <Button type="button" variant="outline" disabled={pending || logoPending} onClick={onCancel}>
+            Cancelar
+          </Button>
+        ) : null}
+        <Button type="submit" className="gap-2 shadow-sm shadow-sky-950/10" disabled={pending}>
           <Save className="h-4 w-4" />
           {pending ? "Guardando..." : "Guardar empresa"}
         </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import type { ResourceCategory, ResourcePatchFields, ResourcePatchResult, ResourceRecord, ResourceStatePatch } from "@/types/resource";
 import { ActionButton } from "@/components/ui/action-button";
@@ -109,7 +109,7 @@ export function ResourcesTable({
     resetKey: `${category}:${deferredFilter}`,
   });
 
-  function updateDraft(id: string, patch: Partial<EditableResource>) {
+  const updateDraft = useCallback((id: string, patch: Partial<EditableResource>) => {
     setRows((current) =>
       applyGeneratedCodes(
         current.map((row) => {
@@ -127,9 +127,9 @@ export function ResourcesTable({
         }),
       ),
     );
-  }
+  }, []);
 
-  function startEditing(id: string) {
+  const startEditing = useCallback((id: string) => {
     setRows((current) =>
       current.map((row) =>
         row.id === id
@@ -140,124 +140,9 @@ export function ResourcesTable({
           : row,
       ),
     );
-  }
+  }, []);
 
-  async function persistRow(resource: EditableResource) {
-    const patch = buildResourcePatch(
-      resource.isNew ? null : (baseRowsRef.current.get(resource.id) ?? null),
-      resource,
-      companyId,
-    );
-
-    if (!patch) {
-      return null;
-    }
-
-    const response = await fetch("/api/resources", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error ?? "No se pudo guardar el insumo");
-    }
-
-    return (await response.json()) as ResourcePatchResult;
-  }
-
-  async function saveRow(resource: EditableResource) {
-    setPendingIds((current) => [...current, resource.id]);
-    setError("");
-
-    try {
-      const result = await persistRow(resource);
-      if (result) {
-        reconcilePatchResult(result);
-        updateLastSavedAt(result.savedAt);
-      }
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "No se pudo guardar el insumo");
-    } finally {
-      setPendingIds((current) => current.filter((id) => id !== resource.id));
-    }
-  }
-
-  async function duplicateRow(resource: EditableResource) {
-    setPendingIds((current) => [...current, resource.id]);
-    setError("");
-
-    try {
-      const response = await fetch("/api/resources", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: resource.companyId ?? companyId,
-          description: `${resource.description} (copia)`,
-          category: resource.category,
-          iu: resource.iu ?? "",
-          unit: resource.unit,
-          unitPrice: resource.unitPrice,
-          currency: resource.currency,
-          source: resource.source ?? "",
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "No se pudo duplicar el insumo");
-      }
-
-      const created = (await response.json()) as ResourceRecord;
-      baseRowsRef.current.set(created.id, created);
-      setRows((current) => [...current, { ...created, isEditing: false, isDirty: false, isNew: false }]);
-    } catch (duplicateError) {
-      setError(duplicateError instanceof Error ? duplicateError.message : "No se pudo duplicar el insumo");
-    } finally {
-      setPendingIds((current) => current.filter((id) => id !== resource.id));
-    }
-  }
-
-  async function removeRow(id: string) {
-    const target = rows.find((row) => row.id === id);
-    if (!target) return;
-
-    if (target.isNew) {
-      setRows((current) => current.filter((row) => row.id !== id));
-      return;
-    }
-
-    setPendingIds((current) => [...current, id]);
-    setError("");
-
-    try {
-      const response = await fetch("/api/resources", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          create: [],
-          update: [],
-          delete: [id],
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "No se pudo eliminar el insumo");
-      }
-
-      const result = (await response.json()) as ResourcePatchResult;
-      reconcilePatchResult(result);
-      updateLastSavedAt(result.savedAt);
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "No se pudo eliminar el insumo");
-    } finally {
-      setPendingIds((current) => current.filter((resourceId) => resourceId !== id));
-    }
-  }
-
-  function reconcilePatchResult(result: ResourcePatchResult) {
+  const reconcilePatchResult = useCallback((result: ResourcePatchResult) => {
     for (const entry of result.created) {
       baseRowsRef.current.set(entry.resource.id, entry.resource);
     }
@@ -303,9 +188,132 @@ export function ResourcesTable({
 
       return nextRows;
     });
-  }
+  }, []);
 
-  function cancelRow(id: string) {
+  const updateLastSavedAt = useCallback((savedAt: string) => {
+    const nextSavedAt = Date.parse(savedAt);
+    if (Number.isNaN(nextSavedAt)) return;
+
+    setLastSavedAt(nextSavedAt);
+    setSaveClock(nextSavedAt);
+  }, []);
+
+  const persistRow = useCallback(async (resource: EditableResource) => {
+    const patch = buildResourcePatch(
+      resource.isNew ? null : (baseRowsRef.current.get(resource.id) ?? null),
+      resource,
+      companyId,
+    );
+
+    if (!patch) {
+      return null;
+    }
+
+    const response = await fetch("/api/resources", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error ?? "No se pudo guardar el insumo");
+    }
+
+    return (await response.json()) as ResourcePatchResult;
+  }, [companyId]);
+
+  const saveRow = useCallback(async (resource: EditableResource) => {
+    setPendingIds((current) => [...current, resource.id]);
+    setError("");
+
+    try {
+      const result = await persistRow(resource);
+      if (result) {
+        reconcilePatchResult(result);
+        updateLastSavedAt(result.savedAt);
+      }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "No se pudo guardar el insumo");
+    } finally {
+      setPendingIds((current) => current.filter((id) => id !== resource.id));
+    }
+  }, [persistRow, reconcilePatchResult, updateLastSavedAt]);
+
+  const duplicateRow = useCallback(async (resource: EditableResource) => {
+    setPendingIds((current) => [...current, resource.id]);
+    setError("");
+
+    try {
+      const response = await fetch("/api/resources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: resource.companyId ?? companyId,
+          description: `${resource.description} (copia)`,
+          category: resource.category,
+          iu: resource.iu ?? "",
+          unit: resource.unit,
+          unitPrice: resource.unitPrice,
+          currency: resource.currency,
+          source: resource.source ?? "",
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "No se pudo duplicar el insumo");
+      }
+
+      const created = (await response.json()) as ResourceRecord;
+      baseRowsRef.current.set(created.id, created);
+      setRows((current) => [...current, { ...created, isEditing: false, isDirty: false, isNew: false }]);
+    } catch (duplicateError) {
+      setError(duplicateError instanceof Error ? duplicateError.message : "No se pudo duplicar el insumo");
+    } finally {
+      setPendingIds((current) => current.filter((id) => id !== resource.id));
+    }
+  }, [companyId]);
+
+  const removeRow = useCallback(async (id: string) => {
+    const target = rows.find((row) => row.id === id);
+    if (!target) return;
+
+    if (target.isNew) {
+      setRows((current) => current.filter((row) => row.id !== id));
+      return;
+    }
+
+    setPendingIds((current) => [...current, id]);
+    setError("");
+
+    try {
+      const response = await fetch("/api/resources", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          create: [],
+          update: [],
+          delete: [id],
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "No se pudo eliminar el insumo");
+      }
+
+      const result = (await response.json()) as ResourcePatchResult;
+      reconcilePatchResult(result);
+      updateLastSavedAt(result.savedAt);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "No se pudo eliminar el insumo");
+    } finally {
+      setPendingIds((current) => current.filter((resourceId) => resourceId !== id));
+    }
+  }, [reconcilePatchResult, rows, updateLastSavedAt]);
+
+  const cancelRow = useCallback((id: string) => {
     setRows((current) =>
       current.flatMap((row) => {
         if (row.id !== id) return [row];
@@ -315,17 +323,9 @@ export function ResourcesTable({
         return base ? [toEditableResource(base)] : [row];
       }),
     );
-  }
+  }, []);
 
-  function updateLastSavedAt(savedAt: string) {
-    const nextSavedAt = Date.parse(savedAt);
-    if (Number.isNaN(nextSavedAt)) return;
-
-    setLastSavedAt(nextSavedAt);
-    setSaveClock(nextSavedAt);
-  }
-
-  function handlePaste(event: React.ClipboardEvent<HTMLElement>, targetId: string, startColumn: EditableColumn) {
+  const handlePaste = useCallback((event: React.ClipboardEvent<HTMLElement>, targetId: string, startColumn: EditableColumn) => {
     const pastedRows = parsePastedResourceRows(event.clipboardData.getData("text"), startColumn);
     if (!pastedRows) return;
 
@@ -336,7 +336,7 @@ export function ResourcesTable({
       targetId,
       startColumn,
     });
-  }
+  }, [companyId, rows]);
 
   function applyPendingPaste() {
     if (!pendingPaste) return;
@@ -514,7 +514,7 @@ export function ResourcesTable({
   );
 }
 
-function ResourceTableRow({
+const ResourceTableRow = memo(function ResourceTableRow({
   resource,
   isExcelMode,
   excelRowHeight,
@@ -632,7 +632,7 @@ function ResourceTableRow({
       </TD>
     </TR>
   );
-}
+});
 
 function PastePreviewSheet({
   pendingPaste,
@@ -720,8 +720,8 @@ function ResourceTableColGroup({ includeActions = true }: { includeActions?: boo
       <col style={{ width: "120px" }} />
       <col style={{ width: "170px" }} />
       <col style={{ width: "96px" }} />
-      <col style={{ width: "220px" }} />
-      {includeActions ? <col style={{ width: "220px" }} /> : null}
+      <col style={{ width: "160px" }} />
+      {includeActions ? <col style={{ width: "280px" }} /> : null}
     </colgroup>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useCallback, useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
@@ -33,16 +33,17 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   const [filter, setFilter] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const deferredFilter = useDeferredValue(filter);
 
   const filtered = useMemo(
     () =>
       rows.filter((project) =>
-        `${project.name} ${project.clientName ?? ""} ${project.location ?? ""}`.toLowerCase().includes(filter.toLowerCase()),
+        `${project.name} ${project.clientName ?? ""} ${project.location ?? ""}`.toLowerCase().includes(deferredFilter.toLowerCase()),
       ),
-    [filter, rows],
+    [deferredFilter, rows],
   );
 
-  async function removeProject(id: string) {
+  const removeProject = useCallback(async (id: string) => {
     setPendingId(id);
     setError("");
 
@@ -61,9 +62,9 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
     } finally {
       setPendingId(null);
     }
-  }
+  }, []);
 
-  async function duplicateProject(id: string) {
+  const duplicateProject = useCallback(async (id: string) => {
     const sourceProject = rows.find((project) => project.id === id);
     if (!sourceProject) return;
 
@@ -87,7 +88,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
     } finally {
       setPendingId(null);
     }
-  }
+  }, [rows]);
 
   return (
     <div className="space-y-4">
@@ -129,44 +130,14 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
           <TBody>
             {filtered.length > 0 ? (
               filtered.map((project) => (
-                <TR key={project.id} className="hover:bg-slate-50/80">
-                  <TD className="font-medium text-slate-900">{project.name}</TD>
-                  <TD>{project.clientName || "Pendiente"}</TD>
-                  <TD>{project.location || "Pendiente"}</TD>
-                  <TD>
-                    <ProjectStatusBadge status={project.status} />
-                  </TD>
-                  <TD>{project.budgetsCount}</TD>
-                  <TD>{formatDate(project.updatedAt, dateFormat)}</TD>
-                  <TD>
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/projects/${project.id}`}>
-                        <ActionButton action="open" label="Abrir" size="sm" variant="outline" />
-                      </Link>
-                      <Link href={`/projects/${project.id}/edit`}>
-                        <ActionButton action="edit" label="Editar" size="sm" variant="ghost" />
-                      </Link>
-                      <ActionButton
-                        action="duplicate"
-                        label="Duplicar"
-                        size="sm"
-                        variant="ghost"
-                        disabled={pendingId === project.id}
-                        data-project-action="duplicate"
-                        data-project-id={project.id}
-                        onClick={() => duplicateProject(project.id)}
-                      />
-                      <ActionButton
-                        action="delete"
-                        label="Eliminar"
-                        size="sm"
-                        variant="ghost"
-                        disabled={pendingId === project.id}
-                        onClick={() => removeProject(project.id)}
-                      />
-                    </div>
-                  </TD>
-                </TR>
+                <ProjectTableRow
+                  key={project.id}
+                  project={project}
+                  dateFormat={dateFormat}
+                  isPending={pendingId === project.id}
+                  onDuplicateProject={duplicateProject}
+                  onRemoveProject={removeProject}
+                />
               ))
             ) : (
               <TR>
@@ -184,3 +155,58 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
     </div>
   );
 }
+
+const ProjectTableRow = memo(function ProjectTableRow({
+  project,
+  dateFormat,
+  isPending,
+  onDuplicateProject,
+  onRemoveProject,
+}: {
+  project: ProjectRow;
+  dateFormat: string;
+  isPending: boolean;
+  onDuplicateProject: (id: string) => Promise<void>;
+  onRemoveProject: (id: string) => Promise<void>;
+}) {
+  return (
+    <TR className="hover:bg-slate-50/80">
+      <TD className="font-medium text-slate-900">{project.name}</TD>
+      <TD>{project.clientName || "Pendiente"}</TD>
+      <TD>{project.location || "Pendiente"}</TD>
+      <TD>
+        <ProjectStatusBadge status={project.status} />
+      </TD>
+      <TD>{project.budgetsCount}</TD>
+      <TD>{formatDate(project.updatedAt, dateFormat)}</TD>
+      <TD>
+        <div className="flex justify-end gap-2">
+          <Link href={`/projects/${project.id}`}>
+            <ActionButton action="open" label="Abrir" size="sm" variant="outline" />
+          </Link>
+          <Link href={`/projects/${project.id}/edit`}>
+            <ActionButton action="edit" label="Editar" size="sm" variant="ghost" />
+          </Link>
+          <ActionButton
+            action="duplicate"
+            label="Duplicar"
+            size="sm"
+            variant="ghost"
+            disabled={isPending}
+            data-project-action="duplicate"
+            data-project-id={project.id}
+            onClick={() => void onDuplicateProject(project.id)}
+          />
+          <ActionButton
+            action="delete"
+            label="Eliminar"
+            size="sm"
+            variant="ghost"
+            disabled={isPending}
+            onClick={() => void onRemoveProject(project.id)}
+          />
+        </div>
+      </TD>
+    </TR>
+  );
+});

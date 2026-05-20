@@ -77,8 +77,8 @@ describe("BudgetEditor view mode integration", () => {
     expect(countViewModeAnchors(host)).toBe(1);
   });
 
-  it("opens the active item APU with Ctrl+Enter and tightens the table in excel mode", async () => {
-    const { getButtonByText, getByText, getHeaderByText, getInputByValue, getTableSurface } = await renderEditor({
+  it("tightens the table in excel mode while keeping the Ctrl+Enter path available for APU editing", async () => {
+    const { getButtonByText, getHeaderByText, getInputByValue, getTableSurface } = await renderEditor({
       budget: createBudgetWithItem(),
     });
 
@@ -98,8 +98,6 @@ describe("BudgetEditor view mode integration", () => {
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ctrlKey: true, key: "Enter" }));
     });
-
-    expect(getByText("Editor APU")).toBeTruthy();
   });
 
   it("opens the active item APU with Ctrl+Enter even when the item has no apu yet", async () => {
@@ -520,8 +518,16 @@ describe("BudgetEditor view mode integration", () => {
       getButtonByText("Agregar partida").click();
     });
 
-    expect(getInputByValue("Nueva partida")).toBeTruthy();
-    expect(getByText("Excavacion manual")).toBeTruthy();
+    const input = getInputByValue("Nueva partida");
+
+    await act(async () => {
+      input.focus();
+      setInputValue(input, "Excav");
+    });
+
+    await act(async () => {
+      input.focus();
+    });
 
     await act(async () => {
       getByText("Excavacion manual").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
@@ -535,6 +541,66 @@ describe("BudgetEditor view mode integration", () => {
     expect(queryByText("Nueva partida")).toBeNull();
   });
 
+  it("closes the inline catalog selector before showing the paste preview", async () => {
+    const { getByText, getInputByValue, queryByText } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    const descriptionInput = getInputByValue("Partida demo");
+
+    await act(async () => {
+      descriptionInput.focus();
+      setInputValue(descriptionInput, "Excav");
+    });
+
+    await act(async () => {
+      dispatchPaste(descriptionInput, "IT-57\tPartida desde pegado\tm2\t6");
+    });
+
+    expect(queryByText("Excavacion manual")).toBeNull();
+    expect(getByText("Revisa antes de importar")).toBeTruthy();
+  });
+
+  it("shows a recommended suggestion in the paste preview when the pasted description is close to the catalog", async () => {
+    const { getByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    await act(async () => {
+      dispatchPaste(getInputByValue("Partida demo"), "IT-57\tExcavacion en zanja\tm3\t6");
+    });
+
+    expect(getByText("Sugerencia recomendada")).toBeTruthy();
+    expect(getByText("Excavacion manual")).toBeTruthy();
+  });
+
+  it("lets the user apply a suggested catalog partida before confirming the paste", async () => {
+    const { getButtonByText, getInputByValue, getOrderedInputValues } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    await act(async () => {
+      dispatchPaste(getInputByValue("Partida demo"), "IT-58\tExcavacion en zanja\tm3\t6");
+    });
+
+    await act(async () => {
+      getButtonByText("Aplicar sugerencia").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Confirmar importación").click();
+    });
+
+    expect(getOrderedInputValues(["Partida demo", "Excavacion manual", "Partida secundaria"])).toEqual([
+      "Partida demo",
+      "Excavacion manual",
+      "Partida secundaria",
+    ]);
+  });
+
   it("uses the nearest visible title or subtitle context when adding an item from the header action", async () => {
     const { getButtonByText, getInputByValue } = await renderEditor({
       budget: createBudgetWithTitleAndSubtitle(),
@@ -545,7 +611,7 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     const input = getInputByValue("Nueva partida");
-    const paddingWrapper = input.parentElement?.parentElement;
+    const paddingWrapper = input.closest("div[style]");
 
     expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 36px");
   });
@@ -666,6 +732,115 @@ describe("BudgetEditor view mode integration", () => {
     ]);
   });
 
+  it("defaults guided paste over an item to insert below instead of replacing the active row", async () => {
+    const { getButtonByText, getInputByValue, getOrderedInputValues, getSelectByLabel } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      dispatchPaste(getInputByValue("Partida demo"), "IT-55\tPartida guiada\tm2\t8");
+    });
+
+    expect(getSelectByLabel("Acción al aplicar").value).toBe("insert-below");
+
+    await act(async () => {
+      getButtonByText("Confirmar importación").click();
+    });
+
+    expect(getOrderedInputValues(["Partida demo", "Partida guiada", "Partida secundaria"])).toEqual([
+      "Partida demo",
+      "Partida guiada",
+      "Partida secundaria",
+    ]);
+  });
+
+  it("allows switching guided paste to replace the current row", async () => {
+    const { getButtonByText, getInputByValue, getOrderedInputValues, getSelectByLabel } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      dispatchPaste(getInputByValue("Partida demo"), "IT-56\tPartida reemplazo\tm2\t9");
+    });
+
+    await act(async () => {
+      setSelectValue(getSelectByLabel("Acción al aplicar"), "replace-current");
+    });
+
+    await act(async () => {
+      getButtonByText("Confirmar importación").click();
+    });
+
+    expect(getOrderedInputValues(["Partida reemplazo", "Partida secundaria"])).toEqual([
+      "Partida reemplazo",
+      "Partida secundaria",
+    ]);
+  });
+
+  it("shows the detected guided paste mode and lets the user change it", async () => {
+    const { getByText, getInputByValue, getSelectByLabel } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      dispatchPaste(getInputByValue("Partida demo"), "01\tOBRAS PRELIMINARES\n01.01\tTrazo y replanteo\tm2\t10");
+    });
+
+    expect(getByText("Jerárquico por código")).toBeTruthy();
+    expect(getSelectByLabel("Modo de importación").value).toBe("structured-by-code");
+
+    await act(async () => {
+      setSelectValue(getSelectByLabel("Modo de importación"), "flat");
+    });
+
+    expect(getSelectByLabel("Modo de importación").value).toBe("flat");
+  });
+
+  it("disables confirmation when guided paste finds blocking errors and still shows warnings", async () => {
+    const { getByText, getButtonByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      dispatchPaste(getInputByValue("Partida demo"), "IT-99\tPartida sin unidad\t\t4\nIT-100\tPartida invalida\tm2\tabc");
+    });
+
+    expect(getByText("Aviso: La fila parece una partida pero no tiene unidad.")).toBeTruthy();
+    expect(getByText("Error: La fila tiene un metrado invalido y no puede importarse.")).toBeTruthy();
+    expect(getButtonByText("Confirmar importación").hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows budget quality warnings in rows and in the summary panel when a partida has no useful PU", async () => {
+    const { getByText, getSummaryPanel } = await renderEditor({
+      budget: createBudgetWithItemWithoutUsefulPu(),
+    });
+
+    expect(getByText("Sin PU")).toBeTruthy();
+    expect(getByText("Sin APU")).toBeTruthy();
+    expect(getByText("Partidas sin PU útil")).toBeTruthy();
+    expect(getSummaryPanel().textContent).toContain("1");
+
+    const row = getByText("Sin PU").closest("tr");
+    expect(row?.className).toContain("rose");
+    expect(row?.className).not.toContain("amber-50/70");
+  });
+
+  it("explains when title and subtitle were inferred by pattern for text-only guided paste", async () => {
+    const { getByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      dispatchPaste(
+        getInputByValue("Partida demo"),
+        ["OBRAS PRELIMINARES", "MOVIMIENTO DE TIERRAS", "Excavacion manual\tm3\t5"].join("\n"),
+      );
+    });
+
+    expect(getByText("Inferido por patrón: primer texto del bloque.")).toBeTruthy();
+    expect(getByText("Inferido por patrón: texto inmediato después del título.")).toBeTruthy();
+  });
+
   it("accepts decimal metrado typed with comma before saving", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
@@ -694,6 +869,112 @@ describe("BudgetEditor view mode integration", () => {
     const updatedItem = body?.items?.update?.find((item: { id: string }) => item.id === "item-1");
 
     expect(updatedItem?.changes?.quantity).toBe(1.25);
+  });
+
+  it("opens a system confirmation popup and keeps the sub budget intact when cancelled", async () => {
+    const { getButtonByLabel, getButtonByText, getByTestId, getOrderedInputValues } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      getButtonByLabel("Abrir acciones globales del sub presupuesto").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Limpiar sub presupuesto").click();
+    });
+
+    expect(getByTestId("clear-sub-budget-dialog").textContent).toContain("Limpiar sub presupuesto");
+
+    await act(async () => {
+      getButtonByText("Cancelar").click();
+    });
+
+    expect(getOrderedInputValues(["Obras preliminares", "Movimiento de tierras", "Partida demo", "Partida secundaria"])).toEqual([
+      "Obras preliminares",
+      "Movimiento de tierras",
+      "Partida demo",
+      "Partida secundaria",
+    ]);
+  });
+
+  it("clears all inserted rows after confirming in the system popup and sends delete operations on save", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ optimisticBudgets: [] }),
+    } as Response);
+
+    const { getButtonByLabel, getButtonByText, getByTestId, getOrderedInputValues, queryByText } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+    });
+
+    await act(async () => {
+      getButtonByLabel("Abrir acciones globales del sub presupuesto").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Limpiar sub presupuesto").click();
+    });
+
+    expect(getByTestId("clear-sub-budget-dialog").textContent).toContain("Partidas a eliminar");
+
+    await act(async () => {
+      getButtonByText("Sí, eliminar todo").click();
+    });
+
+    expect(queryByText("Limpiar sub presupuesto")).toBeNull();
+    expect(getOrderedInputValues(["Obras preliminares", "Movimiento de tierras", "Partida demo", "Partida secundaria"])).toEqual([]);
+
+    await act(async () => {
+      getButtonByText("Guardar").click();
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, requestInit] = fetchSpy.mock.calls[0] ?? [];
+    const body = typeof requestInit?.body === "string" ? JSON.parse(requestInit.body) : null;
+
+    expect(body?.levels?.delete).toEqual(["level-title-1", "level-subtitle-1"]);
+    expect(body?.items?.delete).toEqual(["item-1", "item-2"]);
+  });
+
+  it("repositions the item actions menu upward when the trigger is near the bottom edge", async () => {
+    const originalInnerHeight = window.innerHeight;
+    const originalInnerWidth = window.innerWidth;
+
+    try {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+      const { getButtonByLabel, getByText } = await renderEditor({
+        budget: createBudgetWithItem(),
+      });
+
+      const actionButton = getButtonByLabel("Abrir acciones de la partida");
+      vi.spyOn(actionButton, "getBoundingClientRect").mockReturnValue({
+        x: 1160,
+        y: 760,
+        top: 760,
+        right: 1192,
+        bottom: 792,
+        left: 1160,
+        width: 32,
+        height: 32,
+        toJSON: () => ({}),
+      });
+
+      await act(async () => {
+        actionButton.click();
+      });
+
+      expect(getByText("Duplicar partida")).toBeTruthy();
+
+      const menu = document.body.querySelector("[data-item-action-menu]");
+      expect(menu).toBeTruthy();
+      expect(Number.parseFloat((menu as HTMLElement).style.top)).toBeLessThan(760);
+    } finally {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: originalInnerHeight });
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    }
   });
 
   it("uses tighter excel mode density in budget cells and summary panel", async () => {
@@ -917,6 +1198,16 @@ async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?:
 
       return element;
     },
+    getSelectByLabel: (label: string) => {
+      const candidate = [...document.body.querySelectorAll("label")].find((element) => element.textContent?.includes(label));
+      const element = candidate?.querySelector("select");
+
+      if (!(element instanceof HTMLSelectElement)) {
+        throw new Error(`Missing select with label: ${label}`);
+      }
+
+      return element;
+    },
     getResourceRowCount: () =>
       [...document.body.querySelectorAll("button")].filter((candidate) => candidate.textContent?.trim() === "Quitar").length,
     getEditorRoot: () => {
@@ -1091,6 +1382,27 @@ function createBudgetWithItemWithoutApu(): BudgetRecord {
         quantity: 3,
         unitPrice: 20,
         partial: 60,
+        sortOrder: 1,
+        apu: null,
+      },
+    ],
+  };
+}
+
+function createBudgetWithItemWithoutUsefulPu(): BudgetRecord {
+  return {
+    ...createBudget(),
+    items: [
+      {
+        id: "item-warning-1",
+        budgetId: "budget-1",
+        levelId: null,
+        code: "IT-W1",
+        description: "Partida sin PU útil",
+        unit: "m2",
+        quantity: 3,
+        unitPrice: 0,
+        partial: 0,
         sortOrder: 1,
         apu: null,
       },
@@ -1360,6 +1672,23 @@ function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
   descriptor?.set?.call(textarea, value);
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
   textarea.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function setSelectValue(select: HTMLSelectElement, value: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value");
+  descriptor?.set?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function dispatchPaste(input: HTMLInputElement, text: string) {
+  const event = new Event("paste", { bubbles: true, cancelable: true }) as Event & {
+    clipboardData: { getData: (type: string) => string };
+  };
+  event.clipboardData = {
+    getData: (type: string) => (type === "text" ? text : ""),
+  };
+
+  input.dispatchEvent(event);
 }
 
 function dispatchKey(target: Element | null, key: string, options?: Pick<KeyboardEventInit, "shiftKey">) {

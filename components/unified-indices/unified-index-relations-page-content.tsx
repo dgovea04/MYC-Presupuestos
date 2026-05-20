@@ -73,7 +73,8 @@ export function UnifiedIndexRelationsPageContent({ rows }: { rows: UnifiedIndexR
       />
 
       <VirtualizedTableFrame scrollContainerRef={scrollContainerRef} onScroll={scrollProps.onScroll}>
-        <Table>
+        <Table className="table-fixed">
+          <UnifiedIndexRelationsColGroup />
           <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
             <TR className="bg-slate-50 hover:bg-slate-50">
               <TH>CODIGO IU</TH>
@@ -100,4 +101,14 @@ export function UnifiedIndexRelationsPageContent({ rows }: { rows: UnifiedIndexR
 
 function formatCount(value: number, singular: string, plural: string) {
   return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function UnifiedIndexRelationsColGroup() {
+  return (
+    <colgroup>
+      <col style={{ width: "140px" }} />
+      <col />
+      <col style={{ width: "180px" }} />
+    </colgroup>
+  );
 }

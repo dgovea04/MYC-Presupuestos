@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { PartidaCreateSheet } from "@/components/partidas/partida-create-sheet";
 import { ActionButton } from "@/components/ui/action-button";
@@ -80,7 +80,7 @@ export function PartidasTable({
     resetKey: deferredFilter,
   });
 
-  function patchRow(id: string, changes: Partial<EditableCatalogPartida>) {
+  const patchRow = useCallback((id: string, changes: Partial<EditableCatalogPartida>) => {
     setRows((current) =>
       current.map((row) =>
         row.id === id
@@ -93,9 +93,9 @@ export function PartidasTable({
           : row,
       ),
     );
-  }
+  }, []);
 
-  function startEditing(id: string) {
+  const startEditing = useCallback((id: string) => {
     setRows((current) =>
       current.map((row) =>
         row.id === id
@@ -106,9 +106,9 @@ export function PartidasTable({
           : row,
       ),
     );
-  }
+  }, []);
 
-  function cancelRow(id: string) {
+  const cancelRow = useCallback((id: string) => {
     setRows((current) =>
       current.flatMap((row) => {
         if (row.id !== id) return [row];
@@ -118,14 +118,14 @@ export function PartidasTable({
         return base ? [toEditablePartida(base)] : [row];
       }),
     );
-  }
+  }, [partidas]);
 
-  function handlePartidaCreated(partida: CatalogPartidaRecord) {
+  const handlePartidaCreated = useCallback((partida: CatalogPartidaRecord) => {
     setRows((current) => sortEditablePartidas([...current, toEditablePartida(partida)]));
     setIsCreateSheetOpen(false);
-  }
+  }, []);
 
-  function applyPendingPaste() {
+  const applyPendingPaste = useCallback(() => {
     if (!pendingPaste) return;
 
     setRows((current) =>
@@ -140,13 +140,13 @@ export function PartidasTable({
       } para guardar.`,
     );
     setPendingPaste(null);
-  }
+  }, [pendingPaste]);
 
-  function closePastePreview() {
+  const closePastePreview = useCallback(() => {
     setPendingPaste(null);
-  }
+  }, []);
 
-  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+  const handleImportFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -173,9 +173,9 @@ export function PartidasTable({
     } finally {
       event.target.value = "";
     }
-  }
+  }, []);
 
-  function duplicateRow(id: string) {
+  const duplicateRow = useCallback((id: string) => {
     const source = rows.find((row) => row.id === id);
     if (!source) return;
 
@@ -198,9 +198,35 @@ export function PartidasTable({
 
     setRows((current) => [duplicate, ...current]);
     setSelectedId(duplicateId);
-  }
+  }, [rows]);
 
-  async function saveAllDirtyRows() {
+  const reconcilePatchResult = useCallback((result: CatalogPartidaPatchResult) => {
+    setRows((current) => {
+      const createdMap = new Map(result.created.map((entry) => [entry.clientId, entry.partida]));
+      const updatedMap = new Map(result.updated.map((entry) => [entry.id, entry]));
+      const deletedIds = new Set(result.deleted);
+
+      return current
+        .flatMap((row) => {
+          if (deletedIds.has(row.id)) return [];
+
+          if (row.isNew) {
+            const created = createdMap.get(row.id);
+            return created ? [toEditablePartida(created)] : [];
+          }
+
+          const updated = updatedMap.get(row.id);
+          return [updated ? toEditablePartida(updated) : { ...row, isDirty: false, isEditing: false, isNew: false }];
+        })
+        .concat(
+          result.created
+            .filter((entry) => !current.some((row) => row.id === entry.clientId))
+            .map((entry) => toEditablePartida(entry.partida)),
+        );
+    });
+  }, []);
+
+  const saveAllDirtyRows = useCallback(async () => {
     const patch = buildCatalogPartidasPatch(dirtyRows);
     if (!patch) return;
 
@@ -229,9 +255,9 @@ export function PartidasTable({
     } finally {
       setPendingIds([]);
     }
-  }
+  }, [dirtyRows, reconcilePatchResult]);
 
-  async function removeRow(id: string) {
+  const removeRow = useCallback(async (id: string) => {
     const target = rows.find((row) => row.id === id);
     if (!target) return;
 
@@ -275,33 +301,7 @@ export function PartidasTable({
     } finally {
       setPendingIds((current) => current.filter((currentId) => currentId !== id));
     }
-  }
-
-  function reconcilePatchResult(result: CatalogPartidaPatchResult) {
-    setRows((current) => {
-      const createdMap = new Map(result.created.map((entry) => [entry.clientId, entry.partida]));
-      const updatedMap = new Map(result.updated.map((entry) => [entry.id, entry]));
-      const deletedIds = new Set(result.deleted);
-
-      return current
-        .flatMap((row) => {
-          if (deletedIds.has(row.id)) return [];
-
-          if (row.isNew) {
-            const created = createdMap.get(row.id);
-            return created ? [toEditablePartida(created)] : [];
-          }
-
-          const updated = updatedMap.get(row.id);
-          return [updated ? toEditablePartida(updated) : { ...row, isDirty: false, isEditing: false, isNew: false }];
-        })
-        .concat(
-          result.created
-            .filter((entry) => !current.some((row) => row.id === entry.clientId))
-            .map((entry) => toEditablePartida(entry.partida)),
-        );
-    });
-  }
+  }, [reconcilePatchResult, rows, selectedId]);
 
   return (
     <div className="space-y-4">
@@ -424,7 +424,7 @@ export function PartidasTable({
   );
 }
 
-function PartidaTableRow({
+const PartidaTableRow = memo(function PartidaTableRow({
   row,
   currencyDecimals,
   isExcelMode,
@@ -512,7 +512,7 @@ function PartidaTableRow({
       </TD>
     </TR>
   );
-}
+});
 
 function toEditablePartida(partida: CatalogPartidaRecord): EditableCatalogPartida {
   return {

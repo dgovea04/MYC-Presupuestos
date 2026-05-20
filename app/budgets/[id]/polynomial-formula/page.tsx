@@ -8,7 +8,7 @@ import {
 
 export default async function GeneralBudgetPolynomialFormulaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { budget, project, session } = await getGeneralBudgetSectionContext(id);
+  const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const section = await getBudgetPolynomialFormulaSectionData(id, session.user.id);
   const adjustments = section.formula
     ? await listPolynomialFormulaAdjustments(section.formula.id, session.user.id)
@@ -23,6 +23,8 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
       activeSection="polynomial-formula"
       title="Formula polinomica"
       description="Gestiona monomios, indices INEI, coeficiente K y el historial de valorizaciones reajustadas del presupuesto general."
+      currentUser={currentUser}
+      settings={settings}
     >
       <PolynomialFormulaEditor section={section} adjustments={adjustments} />
     </GeneralBudgetSectionShell>

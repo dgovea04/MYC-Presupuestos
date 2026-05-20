@@ -1,22 +1,24 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { Building2, Pencil } from "lucide-react";
-import { CompanyProfileForm } from "@/components/settings/company-profile-form";
+import { CompanyProfileSheet } from "@/components/settings/company-profile-sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
 
 export function CompanyProfileCard({
   company,
+  onSaved,
 }: {
   company?: {
     name?: string | null;
     ruc?: string | null;
     logoUrl?: string | null;
   };
+  onSaved?: (company: { name?: string | null; ruc?: string | null; logoUrl?: string | null }) => void;
 }) {
-  const [companyState, setCompanyState] = useState(company);
   const [isEditing, setIsEditing] = useState(!company);
 
   return (
@@ -36,43 +38,42 @@ export function CompanyProfileCard({
             <Button
               variant="outline"
               className="gap-2 bg-white"
-              onClick={() => setIsEditing((current) => !current)}
+              onClick={() => setIsEditing(true)}
             >
               <Pencil className="h-4 w-4" />
-              {isEditing ? "Ocultar editor" : company ? "Editar" : "Crear empresa"}
+              {company ? "Editar" : "Crear empresa"}
             </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-6 pt-6">
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <InfoCard label="Nombre" value={companyState?.name ?? "Sin empresa"} tone="slate" />
-          <InfoCard label="RUC" value={companyState?.ruc ?? "No definido"} tone="sky" />
-          <InfoCard label="Logo" value={companyState?.logoUrl ? "Disponible" : "Pendiente"} tone="amber" />
-        </div>
-
-        {isEditing ? (
-          <div className="rounded-2xl border border-slate-200/90 bg-white/90 p-5 shadow-sm shadow-slate-100/70">
-            <p className="font-medium text-slate-900">
-              {companyState ? "Actualizar empresa principal" : "Crear empresa principal"}
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
-              Necesitas una empresa o perfil profesional para crear proyectos nuevos y heredar sus Sub Presupuestos base.
-            </p>
-            <div className="mt-4">
-              <CompanyProfileForm
-                initialCompany={companyState}
-                onSaved={(nextCompany) => {
-                  setCompanyState(nextCompany);
-                  setIsEditing(false);
-                }}
-              />
+        <div className="grid gap-4 md:grid-cols-3">
+          <InfoCard label="Nombre" value={company?.name ?? "Sin empresa"} tone="slate" />
+          <InfoCard label="RUC" value={company?.ruc ?? "No definido"} tone="sky" />
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.38)]">
+            <p className="text-sm text-slate-500">Logo</p>
+            <div className="mt-3 flex min-h-12 items-center">
+              {company?.logoUrl ? (
+                <div className="flex h-12 w-20 items-center justify-center rounded-xl border border-amber-200 bg-white px-2">
+                  <Image src={company.logoUrl} alt="Logo de empresa" width={64} height={32} className="max-h-8 w-auto object-contain" />
+                </div>
+              ) : (
+                <p className="text-lg font-semibold tracking-tight text-slate-900">Pendiente</p>
+              )}
             </div>
           </div>
-        ) : null}
+        </div>
       </CardContent>
+
+      <CompanyProfileSheet
+        open={isEditing}
+        company={company}
+        onClose={() => setIsEditing(false)}
+        onSaved={(nextCompany) => {
+          onSaved?.(nextCompany);
+        }}
+      />
     </Card>
   );
 }

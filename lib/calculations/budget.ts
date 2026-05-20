@@ -32,8 +32,7 @@ export function calculateBudgetItem(item: BudgetItemRecord) {
 }
 
 export function calculateBudgetTotals(input: Pick<BudgetRecord, "items" | "igvRate" | "generalExpensesRate" | "utilityRate">): BudgetTotals {
-  const normalizedItems = input.items.map(calculateBudgetItem);
-  const totalDirectCost = round(normalizedItems.reduce((sum, item) => sum + item.partial, 0));
+  const totalDirectCost = round(input.items.reduce((sum, item) => sum + calculateBudgetItem(item).partial, 0));
   const totalGeneralExpenses = round(totalDirectCost * toNumber(input.generalExpensesRate));
   const totalUtility = round(totalDirectCost * toNumber(input.utilityRate));
   const subtotal = round(totalDirectCost + totalGeneralExpenses + totalUtility);

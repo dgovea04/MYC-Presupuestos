@@ -24,6 +24,11 @@ describe("getProjectOtherSections", () => {
         detail: "Acceso a la vista base de formula polinomica dentro del flujo funcional del presupuesto general.",
         href: "/budgets/budget-123/polynomial-formula",
       },
+      {
+        title: "Programacion de obra",
+        detail: "Cronograma valorizado consolidado, calendario de insumos y curva S del presupuesto general.",
+        href: "/budgets/budget-123/work-schedule",
+      },
     ]);
   });
 

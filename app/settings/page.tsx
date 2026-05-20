@@ -15,7 +15,7 @@ export default async function SettingsPage() {
   const company = companies[0];
 
   return (
-    <AppShell settings={settings}>
+    <AppShell currentUser={session!.user} settings={settings}>
       <SettingsPageContent company={company} account={account} initialSettings={settings} />
     </AppShell>
   );

@@ -5,7 +5,7 @@ import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-conte
 
 export default async function GeneralBudgetExpensesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { budget, project, session } = await getGeneralBudgetSectionContext(id);
+  const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const expenses = await getBudgetGeneralExpenses(id, session.user.id);
 
   return (
@@ -17,6 +17,8 @@ export default async function GeneralBudgetExpensesPage({ params }: { params: Pr
       activeSection="general-expenses"
       title="Gastos generales"
       description="Desglose operativo persistente del presupuesto general, separado del calculo oficial por tasa."
+      currentUser={currentUser}
+      settings={settings}
     >
       <GeneralExpensesManager
         budgetId={budget.id}
