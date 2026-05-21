@@ -135,7 +135,8 @@ También puedes crear tu propia cuenta desde `/register`.
 
 ## Scripts disponibles
 
-npm.cmd run dev
+mero<!--  -->
+mero<!--  -->
 ```powershell
 npm.cmd run build
 npm.cmd run lint

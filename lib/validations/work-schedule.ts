@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
+import { parseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 
 const isoDateSchema = z
   .string()
@@ -35,10 +36,24 @@ export const workScheduleItemSaveSchema = z.object({
   startDate: isoDateSchema,
   endDate: isoDateSchema,
   durationDays: z.coerce.number().int().min(1, "La duracion debe ser mayor que cero"),
-  predecessor: z.string().trim().max(80).optional().nullable(),
+  predecessor: z.string().trim().max(240).optional().nullable().superRefine((value, context) => {
+    try {
+      parseWorkSchedulePredecessors(value);
+    } catch (error) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error instanceof Error ? error.message : "Ingresa una predecesora valida",
+      });
+    }
+  }),
   crew: positiveDecimalSchema("La cuadrilla").optional().nullable(),
   monthlyDistributions: z.array(workScheduleDistributionInputSchema).min(1, "Registra al menos un periodo"),
 });
 
+export const workScheduleGenerateBaseSchema = z.object({
+  baseStartDate: isoDateSchema,
+});
+
 export type WorkScheduleDistributionInput = z.infer<typeof workScheduleDistributionInputSchema>;
 export type WorkScheduleItemSaveInput = z.infer<typeof workScheduleItemSaveSchema>;
+export type WorkScheduleGenerateBaseInput = z.infer<typeof workScheduleGenerateBaseSchema>;

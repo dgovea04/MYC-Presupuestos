@@ -3,7 +3,14 @@ import { buildDisplayRows } from "@/lib/budget/structure";
 import { buildWorkScheduleView, validateWorkScheduleInput } from "@/lib/calculations/work-schedule";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
-import { workScheduleItemSaveSchema, type WorkScheduleItemSaveInput } from "@/lib/validations/work-schedule";
+import { validateWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
+import { buildIntelligentWorkScheduleBase } from "@/lib/work-schedule/intelligent-schedule";
+import {
+  workScheduleGenerateBaseSchema,
+  workScheduleItemSaveSchema,
+  type WorkScheduleGenerateBaseInput,
+  type WorkScheduleItemSaveInput,
+} from "@/lib/validations/work-schedule";
 import type { BudgetLevelRecord, BudgetRecord } from "@/types/budget";
 import type { WorkScheduleDisplayRowRecord, WorkScheduleLineRecord, WorkScheduleViewRecord } from "@/types/work-schedule";
 
@@ -142,12 +149,27 @@ export async function saveWorkScheduleItem(
     },
     select: {
       id: true,
+      code: true,
+      budget: {
+        select: {
+          items: {
+            select: {
+              code: true,
+            },
+          },
+        },
+      },
     },
   });
 
   if (!budgetItem) {
     throw new Error("La partida seleccionada no pertenece a este proyecto");
   }
+
+  validateWorkSchedulePredecessors(payload.predecessor, {
+    allowedCodes: new Set(budgetItem.budget.items.map((item) => item.code)),
+    currentItemCode: budgetItem.code,
+  });
 
   await prisma.$transaction(async (tx) => {
     const schedule = await tx.workSchedule.upsert({
@@ -218,6 +240,66 @@ export async function saveWorkScheduleItem(
   return getWorkScheduleSection(budgetId, userId);
 }
 
+export async function generateWorkScheduleBase(
+  budgetId: string,
+  userId: string,
+  input: WorkScheduleGenerateBaseInput,
+): Promise<WorkScheduleViewRecord> {
+  const payload = workScheduleGenerateBaseSchema.parse(input);
+  const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  const lines = await getWorkScheduleLinesForBudget(budget);
+  const generation = buildIntelligentWorkScheduleBase({
+    baseStartDate: payload.baseStartDate,
+    lines,
+  });
+
+  await prisma.$transaction(async (tx) => {
+    const schedule = await tx.workSchedule.upsert({
+      where: { budgetId },
+      update: {},
+      create: { budgetId },
+      select: { id: true },
+    });
+
+    await tx.workScheduleItem.deleteMany({
+      where: { scheduleId: schedule.id },
+    });
+
+    if (generation.generatedItems.length === 0) {
+      return;
+    }
+
+    for (const line of generation.generatedItems) {
+      await tx.workScheduleItem.create({
+        data: {
+          scheduleId: schedule.id,
+          budgetItemId: line.budgetItemId,
+          startDate: new Date(`${line.startDate}T00:00:00.000Z`),
+          endDate: new Date(`${line.endDate}T00:00:00.000Z`),
+          durationDays: line.durationDays,
+          predecessor: line.predecessor,
+          crew: line.crew == null ? null : new Prisma.Decimal(line.crew),
+          distributions: {
+            createMany: {
+              data: line.monthlyDistributions.map((distribution) => ({
+                year: distribution.year,
+                month: distribution.month,
+                percentage: new Prisma.Decimal(distribution.percentage),
+              })),
+            },
+          },
+        },
+      });
+    }
+  });
+
+  const section = await getWorkScheduleSection(budgetId, userId);
+  return {
+    ...section,
+    generationSummary: generation.summary,
+  };
+}
+
 async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
   const budget = await prisma.budget.findFirst({
     where: {
@@ -248,6 +330,105 @@ async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
   }
 
   return budget;
+}
+
+async function getWorkScheduleLinesForBudget(
+  budget: Awaited<ReturnType<typeof getAccessibleGeneralBudget>>,
+): Promise<WorkScheduleLineRecord[]> {
+  const [schedule, subBudgets] = await Promise.all([
+    prisma.workSchedule.findUnique({
+      where: { budgetId: budget.id },
+      include: {
+        items: {
+          include: {
+            distributions: {
+              orderBy: [{ year: "asc" }, { month: "asc" }],
+            },
+          },
+        },
+      },
+    }),
+    prisma.budget.findMany({
+      where: {
+        projectId: budget.projectId,
+        kind: "SUB_BUDGET",
+      },
+      orderBy: { createdAt: "asc" },
+      include: {
+        levels: {
+          orderBy: { sortOrder: "asc" },
+        },
+        items: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            apu: {
+              include: {
+                resources: {
+                  include: {
+                    resource: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const scheduleItemsByBudgetItemId = new Map(
+    (schedule?.items ?? []).map((item) => [item.budgetItemId, item]),
+  );
+
+  return subBudgets.flatMap<WorkScheduleLineRecord>((subBudget) =>
+    subBudget.items
+      .filter((item) => decimalToNumber(item.partial) > 0)
+      .map((item) => {
+        const persisted = scheduleItemsByBudgetItemId.get(item.id);
+        const defaultCrew = item.apu?.resources.reduce((sum, resource) => sum + decimalToNumber(resource.crew), 0) ?? null;
+        const quantityMultiplier = decimalToNumber(item.quantity);
+
+        return {
+          scheduleItemId: persisted?.id,
+          budgetItemId: item.id,
+          levelId: item.levelId,
+          sortOrder: item.sortOrder,
+          itemCode: item.code,
+          description: item.description,
+          unit: item.unit,
+          quantity: quantityMultiplier,
+          unitPrice: decimalToNumber(item.unitPrice),
+          partial: decimalToNumber(item.partial),
+          subBudgetId: subBudget.id,
+          subBudgetName: subBudget.name,
+          startDate: persisted?.startDate.toISOString().slice(0, 10) ?? null,
+          endDate: persisted?.endDate.toISOString().slice(0, 10) ?? null,
+          durationDays: persisted?.durationDays ?? null,
+          predecessor: persisted?.predecessor ?? null,
+          crew: persisted?.crew == null ? defaultCrew : decimalToNumber(persisted.crew),
+          performance: item.apu ? decimalToNumber(item.apu.performance) : null,
+          performanceLabel: item.apu ? `${decimalToNumber(item.apu.performance)} ${item.unit}/DIA` : null,
+          monthlyDistributions:
+            persisted?.distributions.map((distribution) => ({
+              year: distribution.year,
+              month: distribution.month,
+              percentage: decimalToNumber(distribution.percentage),
+            })) ?? [],
+          resources:
+            item.apu?.resources
+              .filter((resource) => resource.resourceId && resource.resource)
+              .map((resource) => ({
+                resourceId: resource.resourceId,
+                code: resource.resource.code,
+                description: resource.resource.description,
+                unit: resource.resource.unit,
+                unitPrice: decimalToNumber(resource.unitPrice),
+                totalQuantity: decimalToNumber(resource.quantity) * quantityMultiplier,
+                totalCost: decimalToNumber(resource.subtotal) * quantityMultiplier,
+              })) ?? [],
+        };
+      }),
+  );
 }
 
 function normalizeOptionalString(value: string | null | undefined) {

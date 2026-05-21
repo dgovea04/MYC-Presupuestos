@@ -228,4 +228,120 @@ describe("buildWorkScheduleView", () => {
       endDate: "2026-03-21",
     });
   });
+
+  it("extends the gantt timeline to the farthest scheduled or distributed date", () => {
+    const result = buildWorkScheduleView({
+      budgetId: "budget-1",
+      budgetName: "Presupuesto General",
+      currency: "PEN",
+      projectName: "Proyecto demo",
+      lines: [
+        {
+          scheduleItemId: "ws-1",
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          description: "Escaleras",
+          unit: "UND",
+          quantity: 1,
+          unitPrice: 1000,
+          partial: 1000,
+          subBudgetId: "sub-1",
+          subBudgetName: "Arquitectura",
+          startDate: "2027-01-10",
+          endDate: "2027-01-16",
+          durationDays: 7,
+          monthlyDistributions: [
+            { year: 2027, month: 1, percentage: 50 },
+            { year: 2027, month: 2, percentage: 50 },
+          ],
+        },
+      ],
+    });
+
+    expect(result.timeline).toMatchObject({
+      startDate: "2027-01-10",
+      endDate: "2027-01-16",
+    });
+  });
+
+  it("falls back to monthly distributions when scheduled dates are missing", () => {
+    const result = buildWorkScheduleView({
+      budgetId: "budget-1",
+      budgetName: "Presupuesto General",
+      currency: "PEN",
+      projectName: "Proyecto demo",
+      lines: [
+        {
+          scheduleItemId: "ws-1",
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          description: "Escaleras",
+          unit: "UND",
+          quantity: 1,
+          unitPrice: 1000,
+          partial: 1000,
+          subBudgetId: "sub-1",
+          subBudgetName: "Arquitectura",
+          monthlyDistributions: [
+            { year: 2027, month: 1, percentage: 50 },
+            { year: 2027, month: 2, percentage: 50 },
+          ],
+        },
+      ],
+    });
+
+    expect(result.timeline).toMatchObject({
+      startDate: "2027-01-01",
+      endDate: "2027-02-28",
+    });
+  });
+
+  it("uses the farthest per-line fallback date for the timeline end", () => {
+    const result = buildWorkScheduleView({
+      budgetId: "budget-1",
+      budgetName: "Presupuesto General",
+      currency: "PEN",
+      projectName: "Proyecto demo",
+      lines: [
+        {
+          scheduleItemId: "ws-1",
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          description: "Trazo y replanteo",
+          unit: "GLB",
+          quantity: 1,
+          unitPrice: 1000,
+          partial: 1000,
+          subBudgetId: "sub-1",
+          subBudgetName: "Arquitectura",
+          startDate: "2027-01-10",
+          endDate: "2027-01-16",
+          durationDays: 7,
+          monthlyDistributions: [{ year: 2027, month: 1, percentage: 100 }],
+        },
+        {
+          scheduleItemId: "ws-2",
+          budgetItemId: "item-2",
+          itemCode: "01.02",
+          description: "Escaleras",
+          unit: "UND",
+          quantity: 1,
+          unitPrice: 1000,
+          partial: 1000,
+          subBudgetId: "sub-1",
+          subBudgetName: "Arquitectura",
+          startDate: "2027-01-20",
+          monthlyDistributions: [
+            { year: 2027, month: 1, percentage: 50 },
+            { year: 2027, month: 2, percentage: 50 },
+          ],
+        },
+      ],
+    });
+
+    expect(result.timeline).toMatchObject({
+      startDate: "2027-01-10",
+      endDate: "2027-02-28",
+    });
+  });
 });

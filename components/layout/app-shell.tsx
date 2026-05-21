@@ -7,7 +7,12 @@ import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode } from "@/lib/budget/view-mod
 import { getUserSettings } from "@/lib/data/settings";
 import { AppBackButton } from "@/components/layout/app-back-button";
 import { AppSidebarClient } from "@/components/layout/app-sidebar-client";
-import { isSidebarMode, SIDEBAR_EXPANDED_WIDTH, SIDEBAR_MINI_WIDTH, SIDEBAR_MODE_COOKIE_NAME } from "@/lib/layout/sidebar-mode";
+import {
+  getSidebarWidthCssValue,
+  isSidebarMode,
+  SIDEBAR_MODE_COOKIE_NAME,
+  SIDEBAR_WIDTH_CSS_VARIABLE,
+} from "@/lib/layout/sidebar-mode";
 import { LiveDataRefresh } from "@/components/layout/live-data-refresh";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import { AppViewModeProvider } from "@/components/view-mode/app-view-mode-provider";
@@ -55,14 +60,17 @@ export async function AppShell({
     const rawValue = cookieStore.get(SIDEBAR_MODE_COOKIE_NAME)?.value;
     return isSidebarMode(rawValue) ? rawValue : null;
   })();
-  const initialSidebarWidth = initialSidebarMode === "mini" ? `${SIDEBAR_MINI_WIDTH}px` : `${SIDEBAR_EXPANDED_WIDTH}px`;
+  const initialSidebarWidth = getSidebarWidthCssValue(initialSidebarMode ?? "expanded");
 
   return (
     <FormattingSettingsProvider settings={settings}>
       <AppViewModeProvider initialViewMode={initialViewMode}>
         <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#eef4f8_40%,#f8fafc_100%)]">
-          <div className="grid min-h-screen grid-cols-1 gap-5 px-3 py-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:px-4 xl:px-5">
-            <div className="shrink-0" style={{ width: `var(--app-sidebar-initial-width, ${initialSidebarWidth})` }}>
+          <div className="grid min-h-screen grid-cols-1 gap-5 px-3 py-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start lg:px-4 xl:px-5">
+            <div
+              className="shrink-0 lg:sticky lg:top-4"
+              style={{ width: `var(${SIDEBAR_WIDTH_CSS_VARIABLE}, ${initialSidebarWidth})` }}
+            >
               <AppSidebarClient
                 initialMode={initialSidebarMode}
                 userAvatarUrl={currentUser?.avatarUrl ?? session?.user?.avatarUrl}

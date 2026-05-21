@@ -13,6 +13,7 @@ let activeContainer: HTMLDivElement | null = null;
 let lastCreatedBlob: Blob | null = null;
 let lastDownloadName = "";
 let clickCount = 0;
+const fetchMock = vi.fn();
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,6 +33,8 @@ describe("WorkSchedulePageContent", () => {
         revokeObjectURL: vi.fn(),
       }),
     );
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockReset();
 
     const originalCreateElement = document.createElement.bind(document);
     vi.spyOn(document, "createElement").mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
@@ -73,8 +76,7 @@ describe("WorkSchedulePageContent", () => {
 
     expect(getByText("Arquitectura")).toBeTruthy();
     expect(getByText("Estructuras")).toBeTruthy();
-    expect(getByText("03/2026 · 60.0000%")).toBeTruthy();
-    expect(getByText("04/2026 · 40.0000%")).toBeTruthy();
+    expect(getByText("2 periodos")).toBeTruthy();
     const segments = getAllByTestId("work-schedule-bar-segment-item-1");
     expect(segments).toHaveLength(2);
     expect(segments[0]?.getAttribute("title")).toContain("03/2026");
@@ -128,6 +130,61 @@ describe("WorkSchedulePageContent", () => {
     });
 
     expect(getInputByLabel("Duracion").value).toBe("11");
+  });
+
+  it("allows inline row editing and autosaves the line when leaving the row", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => createInitialData(),
+    });
+
+    const { getByTestId, getInputByValue } = await renderContent();
+
+    await act(async () => {
+      getByTestId("work-schedule-inline-cell-startDate-item-1").click();
+    });
+
+    const startInput = getInputByValue("2026-03-01");
+
+    await act(async () => {
+      setInputValue(startInput, "2026-03-10");
+      startInput.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
+      method: "PATCH",
+    }));
+  });
+
+  it("opens the intelligent schedule dialog and sends the base generation request", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...createInitialData(),
+        generationSummary: {
+          generatedCount: 2,
+          pendingCount: 1,
+          issues: [{ budgetItemId: "item-9", itemCode: "03.01", reason: "Pendiente" }],
+        },
+      }),
+    });
+
+    const { clickByText, getByText, getInputByLabel } = await renderContent();
+
+    await act(async () => {
+      clickByText("Generar cronograma inteligente");
+    });
+
+    expect(getByText("Cronograma inteligente")).toBeTruthy();
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Fecha base"), "2026-06-01");
+      clickByText("Generar base");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
+      method: "POST",
+    }));
   });
 
   it("proposes an end date automatically when the start date changes and the current end date is earlier", async () => {
@@ -1222,6 +1279,17 @@ async function renderWithView(view: WorkScheduleViewRecord, settings: UserSettin
       const input = labelElement.querySelector("input");
       if (!(input instanceof HTMLInputElement)) {
         throw new Error(`Missing distribution input: ${label}`);
+      }
+
+      return input;
+    },
+    getInputByValue: (value: string) => {
+      const input = [...document.querySelectorAll("input")].find(
+        (candidate) => candidate instanceof HTMLInputElement && candidate.value === value,
+      );
+
+      if (!(input instanceof HTMLInputElement)) {
+        throw new Error(`Missing input with value: ${value}`);
       }
 
       return input;

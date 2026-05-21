@@ -10,12 +10,13 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/data/work-schedule", () => ({
   getWorkScheduleSection: vi.fn(),
+  generateWorkScheduleBase: vi.fn(),
   saveWorkScheduleItem: vi.fn(),
 }));
 
-import { GET, PATCH } from "@/app/api/budgets/[id]/work-schedule/route";
+import { GET, PATCH, POST } from "@/app/api/budgets/[id]/work-schedule/route";
 import { getAuthSession } from "@/lib/auth/session";
-import { getWorkScheduleSection, saveWorkScheduleItem } from "@/lib/data/work-schedule";
+import { generateWorkScheduleBase, getWorkScheduleSection, saveWorkScheduleItem } from "@/lib/data/work-schedule";
 
 describe("budget work schedule route", () => {
   it("returns 401 when unauthenticated", async () => {
@@ -88,5 +89,39 @@ describe("budget work schedule route", () => {
 
     expect(response.status).toBe(200);
     expect(saveWorkScheduleItem).toHaveBeenCalledWith("budget-1", "user-1", payload);
+  });
+
+  it("generates the intelligent base gantt on POST", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(generateWorkScheduleBase).mockResolvedValue({
+      budgetId: "budget-1",
+      budgetName: "Presupuesto General",
+      projectName: "Proyecto demo",
+      currency: "PEN",
+      groups: [],
+      valuationCalendar: { periods: [], rows: [] },
+      resourceCalendar: { periods: [], rows: [] },
+      curveSeries: [],
+      timeline: { startDate: "2026-06-01", endDate: "2026-06-30" },
+      generationSummary: {
+        generatedCount: 4,
+        pendingCount: 1,
+        issues: [{ budgetItemId: "item-9", itemCode: "03.01", reason: "Pendiente" }],
+      },
+    });
+
+    const payload = { baseStartDate: "2026-06-01" };
+
+    const response = await POST(
+      new Request("http://localhost/api/budgets/budget-1/work-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+      { params: Promise.resolve({ id: "budget-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(generateWorkScheduleBase).toHaveBeenCalledWith("budget-1", "user-1", payload);
   });
 });

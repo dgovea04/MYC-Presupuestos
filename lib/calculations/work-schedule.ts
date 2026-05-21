@@ -227,8 +227,8 @@ export function buildWorkScheduleView(input: WorkScheduleViewInput): WorkSchedul
       monthlyTotals,
     }),
     timeline: {
-      startDate: getTimelineBound(lines, "start"),
-      endDate: getTimelineBound(lines, "end"),
+      startDate: getTimelineStart(lines),
+      endDate: getTimelineEnd(lines),
     },
   };
 }
@@ -286,15 +286,53 @@ function diffInDays(startDate: Date, endDate: Date) {
   return Math.round((endDate.getTime() - startDate.getTime()) / millisecondsPerDay);
 }
 
-function getTimelineBound(lines: WorkScheduleLineRecord[], direction: "start" | "end") {
-  const dates = lines
-    .map((line) => (direction === "start" ? line.startDate : line.endDate))
-    .filter((value): value is string => Boolean(value))
-    .sort();
+function getTimelineStart(lines: WorkScheduleLineRecord[]) {
+  let earliestScheduledDate: Date | null = null;
+  let earliestDistributionDate: Date | null = null;
 
-  if (dates.length === 0) {
-    return null;
+  for (const line of lines) {
+    if (line.startDate) {
+      const startDate = parseIsoDate(line.startDate);
+      if (!earliestScheduledDate || startDate.getTime() < earliestScheduledDate.getTime()) {
+        earliestScheduledDate = startDate;
+      }
+    }
+
+    for (const distribution of line.monthlyDistributions) {
+      const distributionStart = new Date(Date.UTC(distribution.year, distribution.month - 1, 1));
+      if (!earliestDistributionDate || distributionStart.getTime() < earliestDistributionDate.getTime()) {
+        earliestDistributionDate = distributionStart;
+      }
+    }
   }
 
-  return direction === "start" ? dates[0] : dates[dates.length - 1];
+  const timelineStart = earliestScheduledDate ?? earliestDistributionDate;
+  return timelineStart ? timelineStart.toISOString().slice(0, 10) : null;
+}
+
+function getTimelineEnd(lines: WorkScheduleLineRecord[]) {
+  let latestDate: Date | null = null;
+
+  for (const line of lines) {
+    let lineLatestDate: Date | null = line.endDate ? parseIsoDate(line.endDate) : null;
+
+    if (!lineLatestDate) {
+      for (const distribution of line.monthlyDistributions) {
+        const distributionEnd = new Date(Date.UTC(distribution.year, distribution.month, 0));
+        if (!lineLatestDate || distributionEnd.getTime() > lineLatestDate.getTime()) {
+          lineLatestDate = distributionEnd;
+        }
+      }
+    }
+
+    if (!lineLatestDate) {
+      continue;
+    }
+
+    if (!latestDate || lineLatestDate.getTime() > latestDate.getTime()) {
+      latestDate = lineLatestDate;
+    }
+  }
+
+  return latestDate ? latestDate.toISOString().slice(0, 10) : null;
 }

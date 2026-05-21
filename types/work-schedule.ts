@@ -103,6 +103,18 @@ export type WorkScheduleCurvePointRecord = {
   accumulatedPercentage: number;
 };
 
+export type WorkScheduleGenerationIssueRecord = {
+  budgetItemId: string;
+  itemCode: string;
+  reason: string;
+};
+
+export type WorkScheduleGenerationSummaryRecord = {
+  generatedCount: number;
+  pendingCount: number;
+  issues: WorkScheduleGenerationIssueRecord[];
+};
+
 export type WorkScheduleGroupRecord = {
   subBudgetId: string;
   subBudgetName: string;
@@ -130,4 +142,5 @@ export type WorkScheduleViewRecord = {
     startDate: string | null;
     endDate: string | null;
   };
+  generationSummary?: WorkScheduleGenerationSummaryRecord | null;
 };

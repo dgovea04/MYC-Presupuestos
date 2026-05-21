@@ -7,11 +7,11 @@ import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SidebarNav, type SidebarNavLink } from "@/components/layout/sidebar-nav";
 import { SidebarUserCard } from "@/components/layout/sidebar-user-card";
 import {
+  getSidebarWidthCssValue,
   isSidebarMode,
-  SIDEBAR_EXPANDED_WIDTH,
-  SIDEBAR_MINI_WIDTH,
   SIDEBAR_MODE_COOKIE_NAME,
   SIDEBAR_MODE_STORAGE_KEY,
+  SIDEBAR_WIDTH_CSS_VARIABLE,
   type SidebarMode,
 } from "@/lib/layout/sidebar-mode";
 import { cn } from "@/lib/utils";
@@ -52,8 +52,8 @@ function syncSidebarWidthCssVariable(mode: SidebarMode) {
   }
 
   document.documentElement.style.setProperty(
-    "--app-sidebar-initial-width",
-    `${mode === "mini" ? SIDEBAR_MINI_WIDTH : SIDEBAR_EXPANDED_WIDTH}px`,
+    SIDEBAR_WIDTH_CSS_VARIABLE,
+    getSidebarWidthCssValue(mode),
   );
 }
 
@@ -168,14 +168,14 @@ export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userNa
   return (
     <aside
       className={cn(
-        "flex min-h-full flex-col overflow-visible rounded-3xl border border-white/70 bg-slate-900 p-4 text-white shadow-xl shadow-slate-900/10 transition-[width,padding] duration-200",
+        "flex min-h-full flex-col overflow-visible rounded-3xl border border-white/70 bg-slate-900 p-4 text-white shadow-xl shadow-slate-900/10 transition-[width,padding] duration-200 lg:h-[calc(100vh-2rem)] lg:min-h-[calc(100vh-2rem)]",
         isMini ? "items-center" : "",
       )}
       data-sidebar-mode={mode}
       style={{
-        width: "var(--app-sidebar-initial-width, 280px)",
-        minWidth: "var(--app-sidebar-initial-width, 280px)",
-        maxWidth: "var(--app-sidebar-initial-width, 280px)",
+        width: `var(${SIDEBAR_WIDTH_CSS_VARIABLE}, 280px)`,
+        minWidth: `var(${SIDEBAR_WIDTH_CSS_VARIABLE}, 280px)`,
+        maxWidth: `var(${SIDEBAR_WIDTH_CSS_VARIABLE}, 280px)`,
       }}
     >
       <SidebarBrand mode={mode} navigationId={SIDEBAR_NAV_ID} onToggle={toggleSidebarMode} />

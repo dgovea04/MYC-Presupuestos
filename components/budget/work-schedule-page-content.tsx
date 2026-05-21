@@ -1,7 +1,20 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent as ReactFocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type UIEvent as ReactUIEvent,
+} from "react";
 import { CalendarDays, ChartSpline, Package2, PenSquare, Save, X } from "lucide-react";
 import type ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
@@ -12,6 +25,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { parseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import type {
   WorkScheduleCurvePointRecord,
   WorkScheduleLineRecord,
@@ -54,14 +68,69 @@ type EditableLine = {
 };
 
 type OverviewFilter = "all" | "pending" | "incomplete_distribution" | "scheduled";
+type OverviewVirtualItem =
+  | {
+      key: string;
+      kind: "group";
+      group: WorkScheduleViewRecord["groups"][number];
+      collapsed: boolean;
+      estimatedHeight: number;
+    }
+  | {
+      key: string;
+      kind: "row";
+      group: WorkScheduleViewRecord["groups"][number];
+      row: WorkScheduleDisplayRowRecord;
+      estimatedHeight: number;
+    };
 
-const dayFormatter = new Intl.DateTimeFormat("es-PE", { weekday: "short" });
+const dayFormatter = new Intl.DateTimeFormat("es-PE", { weekday: "short", timeZone: "UTC" });
+const timelineWeekFormatter = new Intl.DateTimeFormat("es-PE", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
 const DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH = 972;
 const MIN_OVERVIEW_TIMELINE_PANEL_WIDTH = 360;
 const OVERVIEW_HEADER_HEIGHT_CLASS = "h-[72px]";
 const OVERVIEW_GROUP_ROW_HEIGHT_CLASS = "h-10";
 const OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS = "h-[44px]";
 const OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR = "--work-schedule-timeline-panel-width";
+const OVERVIEW_VIRTUAL_SCROLL_FALLBACK_HEIGHT = 720;
+const OVERVIEW_VIRTUAL_OVERSCAN_PX = 320;
+const OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT = 40;
+const OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT = 40;
+const OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT = 40;
+const OVERVIEW_TIMELINE_DAY_WIDTH_PX = 16;
+const OVERVIEW_TIMELINE_DAY_GAP_PX = 1;
+const OVERVIEW_TABLE_COLUMN_WIDTHS = {
+  rowNumber: 36,
+  item: 96,
+  partida: 360,
+  duration: 88,
+  start: 118,
+  end: 118,
+  predecessor: 100,
+  crew: 92,
+  performance: 118,
+  unit: 84,
+  quantity: 88,
+  unitPrice: 98,
+  partial: 110,
+  action: 88,
+} as const;
+
+type OverviewMeasuredHeightsCache = {
+  groups: Record<string, number>;
+  lines: Record<string, number>;
+};
+
+type PredecessorRowNumberMaps = {
+  itemCodeToRowNumber: Map<string, number>;
+  rowNumberToItemCode: Map<number, string>;
+};
+
 export function WorkSchedulePageContent({ initialData }: WorkSchedulePageContentProps) {
   return <WorkSchedulePageContentInner key={initialData.budgetId} initialData={initialData} />;
 }
@@ -71,7 +140,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const { isExcelMode } = useAppViewMode();
   const [data, setData] = useState(initialData);
   const [activeView, setActiveView] = useState<ActiveView>(() => readActiveView(initialData.budgetId));
-  const [editingLine, setEditingLine] = useState<EditableLine | null>(() => readEditingLine(initialData));
+  const [editingLine, setEditingLine] = useState<EditableLine | null>(() =>
+    readEditingLine(initialData, buildPredecessorRowNumberMaps(initialData.groups).itemCodeToRowNumber),
+  );
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => readCollapsedGroups(initialData.budgetId));
   const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(() => readOverviewFilter(initialData.budgetId));
   const [executiveWorkbookScope, setExecutiveWorkbookScope] = useState<WorkbookExportScope>(() =>
@@ -90,6 +161,14 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [highlightedBudgetItemId, setHighlightedBudgetItemId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [error, setError] = useState("");
+  const [activeInlineRowId, setActiveInlineRowId] = useState<string | null>(null);
+  const [inlineDrafts, setInlineDrafts] = useState<Record<string, EditableLine>>({});
+  const [inlineSaveStateById, setInlineSaveStateById] = useState<Record<string, "idle" | "saving" | "error">>({});
+  const [inlineErrorsById, setInlineErrorsById] = useState<Record<string, string>>({});
+  const [isGenerationDialogOpen, setIsGenerationDialogOpen] = useState(false);
+  const [generationBaseDate, setGenerationBaseDate] = useState(() => initialData.timeline.startDate ?? new Date().toISOString().slice(0, 10));
+  const [generationState, setGenerationState] = useState<"idle" | "saving" | "error">("idle");
+  const [generationError, setGenerationError] = useState("");
 
   const timelineDays = useMemo(() => buildTimelineDays(data.timeline.startDate, data.timeline.endDate), [data.timeline.endDate, data.timeline.startDate]);
   const timelineDayIndexByIso = useMemo(
@@ -151,6 +230,25 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     () => (shouldPrepareCurveSeries ? buildCurveSeriesFromValuationRows(filteredValuationRows, data.valuationCalendar.periods) : []),
     [data.valuationCalendar.periods, filteredValuationRows, shouldPrepareCurveSeries],
   );
+  const {
+    itemCodeToRowNumber: predecessorItemCodeToRowNumber,
+    rowNumberToItemCode: predecessorRowNumberToItemCode,
+  } = useMemo(() => buildPredecessorRowNumberMaps(data.groups), [data.groups]);
+
+  async function persistWorkScheduleLine(line: EditableLine) {
+    const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(serializeEditableLine(line, predecessorRowNumberToItemCode)),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      throw new Error(payload.error ?? "No se pudo guardar la programacion");
+    }
+
+    return (await response.json()) as WorkScheduleViewRecord;
+  }
 
   async function handleSave() {
     if (!editingLine) return;
@@ -159,30 +257,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     setError("");
 
     try {
-      const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          budgetItemId: editingLine.budgetItemId,
-          startDate: editingLine.startDate,
-          endDate: editingLine.endDate,
-          durationDays: Number(editingLine.durationDays),
-          predecessor: editingLine.predecessor,
-          crew: editingLine.crew.trim() ? Number(editingLine.crew) : null,
-          monthlyDistributions: editingLine.monthlyDistributions.map((distribution) => ({
-            year: distribution.year,
-            month: distribution.month,
-            percentage: Number(distribution.percentage),
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error ?? "No se pudo guardar la programacion");
-      }
-
-      const nextData = (await response.json()) as WorkScheduleViewRecord;
+      const nextData = await persistWorkScheduleLine(editingLine);
       writeEditingLineBudgetItemId(data.budgetId, null);
       setData(nextData);
       setEditingLine(null);
@@ -192,6 +267,118 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
       setError(saveError instanceof Error ? saveError.message : "No se pudo guardar la programacion");
     }
   }
+
+  async function handleInlineRowSave(rowId: string) {
+    const draft = inlineDrafts[rowId];
+    if (!draft) {
+      return;
+    }
+
+    setInlineSaveStateById((current) => ({ ...current, [rowId]: "saving" }));
+    setInlineErrorsById((current) => ({ ...current, [rowId]: "" }));
+
+    try {
+      const nextData = await persistWorkScheduleLine(draft);
+      setData(nextData);
+      setInlineSaveStateById((current) => ({ ...current, [rowId]: "idle" }));
+      setInlineErrorsById((current) => ({ ...current, [rowId]: "" }));
+      setInlineDrafts((current) => {
+        const nextDrafts = { ...current };
+        delete nextDrafts[rowId];
+        return nextDrafts;
+      });
+      setActiveInlineRowId((current) => (current === rowId ? null : current));
+    } catch (saveError) {
+      setInlineSaveStateById((current) => ({ ...current, [rowId]: "error" }));
+      setInlineErrorsById((current) => ({
+        ...current,
+        [rowId]: saveError instanceof Error ? saveError.message : "No se pudo guardar la programacion",
+      }));
+    }
+  }
+
+  async function handleGenerateIntelligentSchedule() {
+    setGenerationState("saving");
+    setGenerationError("");
+
+    try {
+      const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseStartDate: generationBaseDate,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? "No se pudo generar el cronograma inteligente");
+      }
+
+      const nextData = (await response.json()) as WorkScheduleViewRecord;
+      setData(nextData);
+      setInlineDrafts({});
+      setInlineErrorsById({});
+      setInlineSaveStateById({});
+      setActiveInlineRowId(null);
+      setGenerationState("idle");
+      setIsGenerationDialogOpen(false);
+    } catch (generationSaveError) {
+      setGenerationState("error");
+      setGenerationError(generationSaveError instanceof Error ? generationSaveError.message : "No se pudo generar el cronograma inteligente");
+    }
+  }
+
+  const handleToggleCollapsedGroup = useCallback((subBudgetId: string) => {
+    setCollapsedGroups((current) => ({
+      ...current,
+      [subBudgetId]: !current[subBudgetId],
+    }));
+  }, []);
+
+  const handleCollapseAllGroups = useCallback(() => {
+    setCollapsedGroups(Object.fromEntries(data.groups.map((group) => [group.subBudgetId, true])));
+  }, [data.groups]);
+
+  const handleExpandAllGroups = useCallback(() => {
+    setCollapsedGroups({});
+  }, []);
+
+  const handleScrollRequestHandled = useCallback(() => {
+    setOverviewScrollRequest(null);
+  }, []);
+
+  function handleEditLine(line: WorkScheduleLineRecord) {
+    setEditingLine(createEditableLine(line, predecessorItemCodeToRowNumber));
+  }
+
+  function handleActivateInlineRow(line: WorkScheduleLineRecord) {
+    setActiveInlineRowId(line.budgetItemId);
+    setInlineDrafts((current) =>
+      current[line.budgetItemId]
+        ? current
+        : { ...current, [line.budgetItemId]: createEditableLine(line, predecessorItemCodeToRowNumber) },
+    );
+  }
+
+  const handleInlineDraftChange = useCallback((rowId: string, draft: EditableLine) => {
+    setInlineDrafts((current) => ({ ...current, [rowId]: draft }));
+  }, []);
+
+  function handleInlineRowSaveRequest(rowId: string) {
+    void handleInlineRowSave(rowId);
+  }
+
+  const handleInlineRowCancel = useCallback((rowId: string) => {
+    setInlineDrafts((current) => {
+      const nextDrafts = { ...current };
+      delete nextDrafts[rowId];
+      return nextDrafts;
+    });
+    setInlineErrorsById((current) => ({ ...current, [rowId]: "" }));
+    setInlineSaveStateById((current) => ({ ...current, [rowId]: "idle" }));
+    setActiveInlineRowId((current) => (current === rowId ? null : current));
+  }, []);
 
   useLayoutEffect(() => {
     writeActiveView(data.budgetId, activeView);
@@ -299,7 +486,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
       return;
     }
 
-    setEditingLine(createEditableLine(targetLine));
+    setEditingLine(createEditableLine(targetLine, predecessorItemCodeToRowNumber));
     setActiveView("overview");
     setOverviewScrollRequest(calculateOverviewScrollTarget(targetLine.startDate ?? "", timelineDays, timelineDayIndexByIso));
     setHighlightedBudgetItemId(targetLine.budgetItemId);
@@ -444,6 +631,20 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
             <ViewButton active={activeView === "curve"} icon={<ChartSpline className="h-4 w-4" />} onClick={() => setActiveView("curve")}>
               Curva S
             </ViewButton>
+            {activeView === "overview" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setGenerationBaseDate(data.timeline.startDate ?? new Date().toISOString().slice(0, 10));
+                  setGenerationError("");
+                  setGenerationState("idle");
+                  setIsGenerationDialogOpen(true);
+                }}
+              >
+                Generar cronograma inteligente
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" onClick={handleExportCsv}>
               Exportar CSV
             </Button>
@@ -613,6 +814,25 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
               </Button>
             </div>
           ) : null}
+
+          {data.generationSummary ? (
+            <div className="space-y-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-sky-900">
+                <span className="font-semibold">Cronograma inteligente generado</span>
+                <span>{data.generationSummary.generatedCount} partidas programadas</span>
+                <span>{data.generationSummary.pendingCount} pendientes</span>
+              </div>
+              {data.generationSummary.issues.length > 0 ? (
+                <div className="flex flex-wrap gap-2 text-xs text-sky-800">
+                  {data.generationSummary.issues.slice(0, 4).map((issue) => (
+                    <span key={issue.budgetItemId} className="rounded-full border border-sky-200 bg-white px-2.5 py-1">
+                      {issue.itemCode}: {issue.reason}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -623,23 +843,25 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           timelineDays={timelineDays}
           dateFormat={dateFormat}
           currencyDecimals={currencyDecimals}
+          predecessorItemCodeToRowNumber={predecessorItemCodeToRowNumber}
           collapsedGroups={collapsedGroups}
-          onToggleGroup={(subBudgetId) =>
-            setCollapsedGroups((current) => ({
-              ...current,
-              [subBudgetId]: !current[subBudgetId],
-            }))
-          }
-          onCollapseAll={() =>
-            setCollapsedGroups(Object.fromEntries(data.groups.map((group) => [group.subBudgetId, true])))
-          }
-          onExpandAll={() => setCollapsedGroups({})}
+          onToggleGroup={handleToggleCollapsedGroup}
+          onCollapseAll={handleCollapseAllGroups}
+          onExpandAll={handleExpandAllGroups}
           overviewFilter={overviewFilter}
           onOverviewFilterChange={setOverviewFilter}
           highlightedBudgetItemId={highlightedBudgetItemId}
           scrollRequest={overviewScrollRequest}
-          onScrollRequestHandled={() => setOverviewScrollRequest(null)}
-          onEditLine={(line) => setEditingLine(createEditableLine(line))}
+          onScrollRequestHandled={handleScrollRequestHandled}
+          onEditLine={handleEditLine}
+          activeInlineRowId={activeInlineRowId}
+          inlineDrafts={inlineDrafts}
+          inlineSaveStateById={inlineSaveStateById}
+          inlineErrorsById={inlineErrorsById}
+          onActivateInlineRow={handleActivateInlineRow}
+          onInlineDraftChange={handleInlineDraftChange}
+          onInlineRowSave={handleInlineRowSaveRequest}
+          onInlineRowCancel={handleInlineRowCancel}
         />
       ) : null}
 
@@ -688,6 +910,17 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           onChange={setEditingLine}
         />
       ) : null}
+
+      <WorkScheduleGenerationDialog
+        open={isGenerationDialogOpen}
+        baseStartDate={generationBaseDate}
+        saveState={generationState}
+        error={generationError}
+        hasExistingSchedule={orderedLines.some((line) => line.startDate && line.endDate && line.durationDays != null)}
+        onBaseStartDateChange={setGenerationBaseDate}
+        onClose={() => setIsGenerationDialogOpen(false)}
+        onSubmit={() => void handleGenerateIntelligentSchedule()}
+      />
     </div>
   );
 }
@@ -698,6 +931,7 @@ function WorkScheduleOverview({
   timelineDays,
   dateFormat,
   currencyDecimals,
+  predecessorItemCodeToRowNumber,
   collapsedGroups,
   onToggleGroup,
   onCollapseAll,
@@ -708,12 +942,21 @@ function WorkScheduleOverview({
   scrollRequest,
   onScrollRequestHandled,
   onEditLine,
+  activeInlineRowId,
+  inlineDrafts,
+  inlineSaveStateById,
+  inlineErrorsById,
+  onActivateInlineRow,
+  onInlineDraftChange,
+  onInlineRowSave,
+  onInlineRowCancel,
 }: {
   data: WorkScheduleViewRecord;
   isExcelMode: boolean;
   timelineDays: TimelineDay[];
   dateFormat: string;
   currencyDecimals: number;
+  predecessorItemCodeToRowNumber: Map<string, number>;
   collapsedGroups: Record<string, boolean>;
   onToggleGroup: (subBudgetId: string) => void;
   onCollapseAll: () => void;
@@ -724,22 +967,51 @@ function WorkScheduleOverview({
   scrollRequest: number | null;
   onScrollRequestHandled: () => void;
   onEditLine: (line: WorkScheduleLineRecord) => void;
+  activeInlineRowId: string | null;
+  inlineDrafts: Record<string, EditableLine>;
+  inlineSaveStateById: Record<string, "idle" | "saving" | "error">;
+  inlineErrorsById: Record<string, string>;
+  onActivateInlineRow: (line: WorkScheduleLineRecord) => void;
+  onInlineDraftChange: (rowId: string, draft: EditableLine) => void;
+  onInlineRowSave: (rowId: string) => void;
+  onInlineRowCancel: (rowId: string) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineBottomScrollRef = useRef<HTMLDivElement | null>(null);
+  const verticalScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const overviewCanvasRef = useRef<HTMLDivElement | null>(null);
   const leftPanelRef = useRef<HTMLDivElement | null>(null);
+  const leftScrollViewportRef = useRef<HTMLDivElement | null>(null);
+  const leftBottomScrollRef = useRef<HTMLDivElement | null>(null);
   const timelinePanelRef = useRef<HTMLDivElement | null>(null);
-  const resizeSessionRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const resizeSessionRef = useRef<{ startX: number; startWidth: number; leftPanelWidth: number } | null>(null);
   const pendingScrollWriteFrameRef = useRef<number | null>(null);
+  const pendingVerticalScrollFrameRef = useRef<number | null>(null);
+  const horizontalScrollSyncSourceRef = useRef<"timeline-main" | "timeline-bottom" | "left-main" | "left-bottom" | null>(null);
   const groupRowRefs = useRef(new Map<string, HTMLElement>());
   const lineRowRefs = useRef(new Map<string, HTMLElement>());
+  const groupRowObserverRef = useRef<ResizeObserver | null>(null);
+  const lineRowObserverRef = useRef<ResizeObserver | null>(null);
+  const pendingGroupHeightUpdatesRef = useRef<Record<string, number>>({});
+  const pendingLineHeightUpdatesRef = useRef<Record<string, number>>({});
+  const pendingHeightFlushFrameRef = useRef<number | null>(null);
+  const pendingMeasuredHeightsPersistTimeoutRef = useRef<number | null>(null);
   const [timelinePanelWidth, setTimelinePanelWidth] = useState(() => readOverviewTimelinePanelWidth(data.budgetId));
   const timelinePanelWidthRef = useRef(timelinePanelWidth);
   const pendingViewportMeasureFrameRef = useRef<number | null>(null);
   const [showCostColumns, setShowCostColumns] = useState(() => readOverviewCostColumnsVisibility(data.budgetId));
-  const [tableGroupHeights, setTableGroupHeights] = useState<Record<string, number>>({});
-  const [tableLineHeights, setTableLineHeights] = useState<Record<string, number>>({});
+  const [tableGroupHeights, setTableGroupHeights] = useState<Record<string, number>>(
+    () => readOverviewMeasuredHeights(data.budgetId).groups,
+  );
+  const [tableLineHeights, setTableLineHeights] = useState<Record<string, number>>(
+    () => readOverviewMeasuredHeights(data.budgetId).lines,
+  );
   const [leftTableViewportWidth, setLeftTableViewportWidth] = useState<number | null>(null);
+  const [verticalScrollTop, setVerticalScrollTop] = useState(0);
+  const [verticalViewportHeight, setVerticalViewportHeight] = useState(0);
+  const latestVerticalScrollTopRef = useRef(0);
+  const leftTableViewportWidthRef = useRef<number | null>(null);
+  const OVERVIEW_TIMELINE_RIGHT_OFFSET = 16;
   const hasCollapsedGroups = data.groups.some((group) => collapsedGroups[group.subBudgetId] === true);
   const hasExpandedGroups = data.groups.some((group) => collapsedGroups[group.subBudgetId] !== true);
   const allLines = useMemo(() => data.groups.flatMap((group) => group.lines), [data.groups]);
@@ -813,61 +1085,231 @@ function WorkScheduleOverview({
     },
     [collapsedGroups, data, lineOverviewStats, overviewFilter],
   );
+  const overviewVirtualItems = useMemo<OverviewVirtualItem[]>(() => {
+    const items: OverviewVirtualItem[] = [];
+
+    for (const group of visibleGroups) {
+      const collapsed = collapsedGroups[group.subBudgetId] === true;
+      items.push({
+        key: `group:${group.subBudgetId}`,
+        kind: "group",
+        group,
+        collapsed,
+        estimatedHeight: tableGroupHeights[group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
+      });
+
+      if (collapsed) {
+        continue;
+      }
+
+      for (const row of group.rows) {
+        items.push({
+          key: `row:${row.rowId}`,
+          kind: "row",
+          group,
+          row,
+          estimatedHeight: tableLineHeights[row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
+        });
+      }
+    }
+
+    return items;
+  }, [collapsedGroups, tableGroupHeights, tableLineHeights, visibleGroups]);
+  const overviewVirtualWindow = useMemo(
+    () =>
+      buildOverviewVirtualWindow({
+        items: overviewVirtualItems,
+        scrollTop: verticalScrollTop,
+        viewportHeight: verticalViewportHeight || OVERVIEW_VIRTUAL_SCROLL_FALLBACK_HEIGHT,
+        overscanPx: OVERVIEW_VIRTUAL_OVERSCAN_PX,
+      }),
+    [overviewVirtualItems, verticalScrollTop, verticalViewportHeight],
+  );
   const segmentLegend = [
     { label: "1er periodo", colorClassName: "bg-sky-600" },
     { label: "2do periodo", colorClassName: "bg-cyan-500" },
     { label: "3er periodo", colorClassName: "bg-indigo-500" },
     { label: "4to periodo", colorClassName: "bg-emerald-500" },
   ];
+  const leftTableColumnWidths = useMemo(
+    () => [
+      OVERVIEW_TABLE_COLUMN_WIDTHS.rowNumber,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.item,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.partida,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.duration,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.start,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.end,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.predecessor,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.crew,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.performance,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.unit,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.quantity,
+      ...(showCostColumns
+        ? [OVERVIEW_TABLE_COLUMN_WIDTHS.unitPrice, OVERVIEW_TABLE_COLUMN_WIDTHS.partial]
+        : []),
+      OVERVIEW_TABLE_COLUMN_WIDTHS.action,
+    ],
+    [showCostColumns],
+  );
+  const leftTableWidth = useMemo(
+    () => leftTableColumnWidths.reduce((sum, width) => sum + width, 0),
+    [leftTableColumnWidths],
+  );
+  const overviewRowNumbers = useMemo(() => {
+    const rowNumbers: Record<string, number> = {};
+    let currentRowNumber = 1;
+
+    for (const group of visibleGroups) {
+      rowNumbers[`group:${group.subBudgetId}`] = currentRowNumber;
+      currentRowNumber += 1;
+
+      for (const row of group.rows) {
+        rowNumbers[`row:${row.rowId}`] = currentRowNumber;
+        currentRowNumber += 1;
+      }
+    }
+
+    return rowNumbers;
+  }, [visibleGroups]);
+  const timelineContentWidth = useMemo(
+    () =>
+      Math.max(
+        480,
+        timelineDays.length * OVERVIEW_TIMELINE_DAY_WIDTH_PX +
+          Math.max(0, timelineDays.length - 1) * OVERVIEW_TIMELINE_DAY_GAP_PX,
+      ),
+    [timelineDays.length],
+  );
+  const visibleTimelineLinePositions = useMemo(() => {
+    const positions = new Map<string, VisibleTimelineLinePosition>();
+    let cursorTop = overviewVirtualWindow.topSpacerHeight;
+
+    for (const item of overviewVirtualWindow.visibleItems) {
+      if (item.kind === "group") {
+        cursorTop += normalizeMeasuredHeight(
+          tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
+          OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+        );
+        continue;
+      }
+
+      const rowHeight = normalizeMeasuredHeight(
+        tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
+        OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+      );
+
+      if (item.row.kind === "line") {
+        positions.set(item.row.line.itemCode, {
+          line: item.row.line,
+          top: cursorTop,
+          height: rowHeight,
+        });
+      }
+
+      cursorTop += rowHeight;
+    }
+
+    return positions;
+  }, [overviewVirtualWindow, tableGroupHeights, tableLineHeights]);
+  const timelineDependencyPaths = useMemo(
+    () =>
+      buildTimelineDependencyPaths({
+        visibleLinePositions: visibleTimelineLinePositions,
+        timelineDayIndexByIso,
+      }),
+    [timelineDayIndexByIso, visibleTimelineLinePositions],
+  );
   const setGroupRowRef = useCallback((subBudgetId: string, element: HTMLElement | null) => {
+    const previousElement = groupRowRefs.current.get(subBudgetId);
+    if (previousElement && groupRowObserverRef.current) {
+      groupRowObserverRef.current.unobserve(previousElement);
+    }
+
     if (element) {
       groupRowRefs.current.set(subBudgetId, element);
+      if (groupRowObserverRef.current) {
+        groupRowObserverRef.current.observe(element);
+      }
       return;
     }
 
     groupRowRefs.current.delete(subBudgetId);
   }, []);
   const setLineRowRef = useCallback((rowId: string, element: HTMLElement | null) => {
+    const previousElement = lineRowRefs.current.get(rowId);
+    if (previousElement && lineRowObserverRef.current) {
+      lineRowObserverRef.current.unobserve(previousElement);
+    }
+
     if (element) {
       lineRowRefs.current.set(rowId, element);
+      if (lineRowObserverRef.current) {
+        lineRowObserverRef.current.observe(element);
+      }
       return;
     }
 
     lineRowRefs.current.delete(rowId);
   }, []);
 
-  function measureLeftTableViewportWidth() {
+  const getMeasuredLeftTableViewportWidth = useCallback(() => {
     const leftPanel = leftPanelRef.current;
     const timelinePanel = timelinePanelRef.current;
 
     if (!leftPanel) {
-      return;
+      return null;
     }
 
     if (!timelinePanel) {
-      setLeftTableViewportWidth(null);
-      return;
+      return null;
     }
 
     const leftRect = leftPanel.getBoundingClientRect();
     const timelineRect = timelinePanel.getBoundingClientRect();
     const overlap = Math.max(0, Math.ceil(leftRect.right - timelineRect.left));
-    const nextViewportWidth = overlap > 0 ? Math.max(Math.floor(leftRect.width - overlap), 240) : Math.floor(leftRect.width);
+    return overlap > 0 ? Math.max(Math.floor(leftRect.width - overlap), 240) : Math.floor(leftRect.width);
+  }, []);
 
-    setLeftTableViewportWidth((currentWidth) => (currentWidth === nextViewportWidth ? currentWidth : nextViewportWidth));
-  }
+  const applyLeftTableViewportWidth = useCallback((nextViewportWidth: number | null, syncState: boolean) => {
+    leftTableViewportWidthRef.current = nextViewportWidth;
+
+    const leftScrollViewport = leftScrollViewportRef.current;
+    if (leftScrollViewport) {
+      if (nextViewportWidth == null) {
+        leftScrollViewport.style.removeProperty("width");
+        leftScrollViewport.style.removeProperty("max-width");
+      } else {
+        leftScrollViewport.style.width = `${nextViewportWidth}px`;
+        leftScrollViewport.style.maxWidth = "100%";
+      }
+    }
+
+    if (syncState) {
+      setLeftTableViewportWidth((currentWidth) => (currentWidth === nextViewportWidth ? currentWidth : nextViewportWidth));
+    }
+  }, []);
+
+  const measureLeftTableViewportWidth = useCallback((syncState = true) => {
+    applyLeftTableViewportWidth(getMeasuredLeftTableViewportWidth(), syncState);
+  }, [applyLeftTableViewportWidth, getMeasuredLeftTableViewportWidth]);
+
+  const getViewportWidthFromDragWidths = useCallback((leftPanelWidth: number, timelineWidth: number) => {
+    return Math.max(Math.floor(leftPanelWidth - timelineWidth - OVERVIEW_TIMELINE_RIGHT_OFFSET), 240);
+  }, []);
 
   useEffect(() => {
     if (!scrollContainerRef.current) {
       return;
     }
 
-    scrollContainerRef.current.scrollLeft = readOverviewScrollPosition(data.budgetId);
+    const savedScrollLeft = readOverviewScrollPosition(data.budgetId);
+    scrollContainerRef.current.scrollLeft = savedScrollLeft;
+    if (timelineBottomScrollRef.current) {
+      timelineBottomScrollRef.current.scrollLeft = savedScrollLeft;
+    }
   }, [data.budgetId]);
 
   useLayoutEffect(() => {
-    measureLeftTableViewportWidth();
-
     const scheduleViewportMeasurement = () => {
       if (pendingViewportMeasureFrameRef.current !== null) {
         return;
@@ -878,6 +1320,8 @@ function WorkScheduleOverview({
         measureLeftTableViewportWidth();
       });
     };
+
+    scheduleViewportMeasurement();
 
     const handleResize = () => {
       scheduleViewportMeasurement();
@@ -915,7 +1359,39 @@ function WorkScheduleOverview({
       }
       window.removeEventListener("resize", handleResize);
     };
-  }, [timelinePanelWidth, showCostColumns]);
+  }, [measureLeftTableViewportWidth, showCostColumns, timelinePanelWidth]);
+
+  useLayoutEffect(() => {
+    const element = verticalScrollContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateViewportHeight = () => {
+      const nextHeight = element.clientHeight;
+      setVerticalViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+
+    updateViewportHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateViewportHeight);
+      return () => {
+        window.removeEventListener("resize", updateViewportHeight);
+      };
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateViewportHeight();
+    });
+    observer.observe(element);
+    window.addEventListener("resize", updateViewportHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateViewportHeight);
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRequest === null || !scrollContainerRef.current) {
@@ -923,6 +1399,9 @@ function WorkScheduleOverview({
     }
 
     scrollContainerRef.current.scrollLeft = scrollRequest;
+    if (timelineBottomScrollRef.current) {
+      timelineBottomScrollRef.current.scrollLeft = scrollRequest;
+    }
     writeOverviewScrollPosition(data.budgetId, scrollRequest);
     onScrollRequestHandled();
   }, [data.budgetId, onScrollRequestHandled, scrollRequest]);
@@ -930,6 +1409,12 @@ function WorkScheduleOverview({
   function handleOverviewScroll() {
     if (!scrollContainerRef.current) {
       return;
+    }
+
+    if (horizontalScrollSyncSourceRef.current !== "timeline-bottom" && timelineBottomScrollRef.current) {
+      horizontalScrollSyncSourceRef.current = "timeline-main";
+      timelineBottomScrollRef.current.scrollLeft = scrollContainerRef.current.scrollLeft;
+      horizontalScrollSyncSourceRef.current = null;
     }
 
     if (pendingScrollWriteFrameRef.current !== null) {
@@ -943,6 +1428,118 @@ function WorkScheduleOverview({
     });
   }
 
+  function handleTimelineBottomScroll() {
+    if (!timelineBottomScrollRef.current) {
+      return;
+    }
+
+    if (horizontalScrollSyncSourceRef.current !== "timeline-main" && scrollContainerRef.current) {
+      horizontalScrollSyncSourceRef.current = "timeline-bottom";
+      scrollContainerRef.current.scrollLeft = timelineBottomScrollRef.current.scrollLeft;
+      horizontalScrollSyncSourceRef.current = null;
+    }
+
+    if (pendingScrollWriteFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingScrollWriteFrameRef.current);
+    }
+
+    const nextScrollLeft = timelineBottomScrollRef.current.scrollLeft;
+    pendingScrollWriteFrameRef.current = window.requestAnimationFrame(() => {
+      writeOverviewScrollPosition(data.budgetId, nextScrollLeft);
+      pendingScrollWriteFrameRef.current = null;
+    });
+  }
+
+  function handleLeftTableScroll() {
+    if (!leftScrollViewportRef.current) {
+      return;
+    }
+
+    if (horizontalScrollSyncSourceRef.current !== "left-bottom" && leftBottomScrollRef.current) {
+      horizontalScrollSyncSourceRef.current = "left-main";
+      leftBottomScrollRef.current.scrollLeft = leftScrollViewportRef.current.scrollLeft;
+      horizontalScrollSyncSourceRef.current = null;
+    }
+  }
+
+  function handleLeftBottomScroll() {
+    if (!leftBottomScrollRef.current || !leftScrollViewportRef.current) {
+      return;
+    }
+
+    if (horizontalScrollSyncSourceRef.current !== "left-main") {
+      horizontalScrollSyncSourceRef.current = "left-bottom";
+      leftScrollViewportRef.current.scrollLeft = leftBottomScrollRef.current.scrollLeft;
+      horizontalScrollSyncSourceRef.current = null;
+    }
+  }
+
+  function handleVerticalOverviewScroll(event: ReactUIEvent<HTMLDivElement>) {
+    latestVerticalScrollTopRef.current = event.currentTarget.scrollTop;
+
+    if (pendingVerticalScrollFrameRef.current !== null) {
+      return;
+    }
+
+    pendingVerticalScrollFrameRef.current = window.requestAnimationFrame(() => {
+      pendingVerticalScrollFrameRef.current = null;
+      setVerticalScrollTop((current) =>
+        current === latestVerticalScrollTopRef.current ? current : latestVerticalScrollTopRef.current,
+      );
+    });
+  }
+
+  const flushPendingHeightUpdates = useCallback(() => {
+    pendingHeightFlushFrameRef.current = null;
+
+    const pendingGroupHeights = pendingGroupHeightUpdatesRef.current;
+    const pendingLineHeights = pendingLineHeightUpdatesRef.current;
+    pendingGroupHeightUpdatesRef.current = {};
+    pendingLineHeightUpdatesRef.current = {};
+
+    if (Object.keys(pendingGroupHeights).length > 0) {
+      setTableGroupHeights((current) => {
+        let changed = false;
+        const next = { ...current };
+
+        for (const [rowId, nextHeight] of Object.entries(pendingGroupHeights)) {
+          if (nextHeight > 0 && current[rowId] !== nextHeight) {
+            next[rowId] = nextHeight;
+            changed = true;
+          }
+        }
+
+        return changed ? next : current;
+      });
+    }
+
+    if (Object.keys(pendingLineHeights).length > 0) {
+      setTableLineHeights((current) => {
+        let changed = false;
+        const next = { ...current };
+
+        for (const [rowId, nextHeight] of Object.entries(pendingLineHeights)) {
+          if (nextHeight > 0 && current[rowId] !== nextHeight) {
+            next[rowId] = nextHeight;
+            changed = true;
+          }
+        }
+
+        return changed ? next : current;
+      });
+    }
+  }, []);
+
+  const scheduleHeightFlush = useCallback(() => {
+    if (pendingHeightFlushFrameRef.current !== null) {
+      return;
+    }
+
+    pendingHeightFlushFrameRef.current = window.requestAnimationFrame(() => {
+      flushPendingHeightUpdates();
+    });
+  }, [flushPendingHeightUpdates]);
+
   useEffect(() => {
     syncOverviewTimelinePanelWidthCssVariable(timelinePanelWidth);
     timelinePanelWidthRef.current = timelinePanelWidth;
@@ -953,9 +1550,47 @@ function WorkScheduleOverview({
   }, [data.budgetId, showCostColumns]);
 
   useEffect(() => {
+    const nextCache: OverviewMeasuredHeightsCache = {
+      groups: pruneMeasuredHeightsMap(
+        tableGroupHeights,
+        new Set(data.groups.map((group) => group.subBudgetId)),
+      ),
+      lines: pruneMeasuredHeightsMap(
+        tableLineHeights,
+        new Set(data.groups.flatMap((group) => group.rows.map((row) => row.rowId))),
+      ),
+    };
+
+    if (pendingMeasuredHeightsPersistTimeoutRef.current !== null) {
+      window.clearTimeout(pendingMeasuredHeightsPersistTimeoutRef.current);
+    }
+
+    pendingMeasuredHeightsPersistTimeoutRef.current = window.setTimeout(() => {
+      writeOverviewMeasuredHeights(data.budgetId, nextCache);
+      pendingMeasuredHeightsPersistTimeoutRef.current = null;
+    }, 180);
+
+    return () => {
+      if (pendingMeasuredHeightsPersistTimeoutRef.current !== null) {
+        window.clearTimeout(pendingMeasuredHeightsPersistTimeoutRef.current);
+        pendingMeasuredHeightsPersistTimeoutRef.current = null;
+      }
+    };
+  }, [data.budgetId, data.groups, tableGroupHeights, tableLineHeights]);
+
+  useEffect(() => {
     return () => {
       if (pendingScrollWriteFrameRef.current !== null) {
         window.cancelAnimationFrame(pendingScrollWriteFrameRef.current);
+      }
+      if (pendingVerticalScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingVerticalScrollFrameRef.current);
+      }
+      if (pendingHeightFlushFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingHeightFlushFrameRef.current);
+      }
+      if (pendingMeasuredHeightsPersistTimeoutRef.current !== null) {
+        window.clearTimeout(pendingMeasuredHeightsPersistTimeoutRef.current);
       }
     };
   }, []);
@@ -972,7 +1607,8 @@ function WorkScheduleOverview({
         overviewCanvasRef.current?.clientWidth ?? null,
       );
       timelinePanelWidthRef.current = nextWidth;
-      setTimelinePanelWidth(nextWidth);
+      syncOverviewTimelinePanelWidthCssVariable(nextWidth);
+      applyLeftTableViewportWidth(getViewportWidthFromDragWidths(session.leftPanelWidth, nextWidth), false);
     }
 
     function handlePointerUp() {
@@ -981,6 +1617,8 @@ function WorkScheduleOverview({
       }
 
       resizeSessionRef.current = null;
+      setTimelinePanelWidth(timelinePanelWidthRef.current);
+      measureLeftTableViewportWidth(true);
       writeOverviewTimelinePanelWidth(data.budgetId, timelinePanelWidthRef.current);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
@@ -995,7 +1633,7 @@ function WorkScheduleOverview({
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, [data.budgetId]);
+  }, [applyLeftTableViewportWidth, data.budgetId, getViewportWidthFromDragWidths, measureLeftTableViewportWidth]);
 
   useEffect(() => {
     function measureTableHeights() {
@@ -1005,13 +1643,19 @@ function WorkScheduleOverview({
       for (const group of visibleGroups) {
         const groupRow = groupRowRefs.current.get(group.subBudgetId);
         if (groupRow instanceof HTMLElement && groupRow.offsetHeight > 0) {
-          nextGroupHeights[group.subBudgetId] = groupRow.offsetHeight;
+          nextGroupHeights[group.subBudgetId] = normalizeMeasuredHeight(
+            groupRow.offsetHeight,
+            OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+          );
         }
 
         for (const row of group.rows) {
           const lineRow = lineRowRefs.current.get(row.rowId);
           if (lineRow instanceof HTMLElement && lineRow.offsetHeight > 0) {
-            nextLineHeights[row.rowId] = lineRow.offsetHeight;
+            nextLineHeights[row.rowId] = normalizeMeasuredHeight(
+              lineRow.offsetHeight,
+              OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+            );
           }
         }
       }
@@ -1020,19 +1664,105 @@ function WorkScheduleOverview({
       setTableLineHeights((current) => (areHeightMapsEqual(current, nextLineHeights) ? current : nextLineHeights));
     }
 
+    if (typeof ResizeObserver === "undefined") {
+      measureTableHeights();
+      window.addEventListener("resize", measureTableHeights);
+
+      return () => {
+        window.removeEventListener("resize", measureTableHeights);
+      };
+    }
+
     measureTableHeights();
-    window.addEventListener("resize", measureTableHeights);
+
+    const handleWindowResize = () => {
+      measureTableHeights();
+    };
+    window.addEventListener("resize", handleWindowResize);
+
+    groupRowObserverRef.current = new ResizeObserver((entries) => {
+      let hasPendingUpdates = false;
+
+      for (const entry of entries) {
+        const element = entry.target as HTMLElement;
+        const rowId = element.dataset.groupRowId;
+        if (!rowId) {
+          continue;
+        }
+
+        const nextHeight = normalizeMeasuredHeight(
+          Math.round(entry.contentRect.height),
+          OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+        );
+        if (nextHeight <= 0) {
+          continue;
+        }
+
+        pendingGroupHeightUpdatesRef.current[rowId] = nextHeight;
+        hasPendingUpdates = true;
+      }
+
+      if (hasPendingUpdates) {
+        scheduleHeightFlush();
+      }
+    });
+
+    lineRowObserverRef.current = new ResizeObserver((entries) => {
+      let hasPendingUpdates = false;
+
+      for (const entry of entries) {
+        const element = entry.target as HTMLElement;
+        const rowId = element.dataset.tableRowId;
+        if (!rowId) {
+          continue;
+        }
+
+        const nextHeight = normalizeMeasuredHeight(
+          Math.round(entry.contentRect.height),
+          OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+        );
+        if (nextHeight <= 0) {
+          continue;
+        }
+
+        pendingLineHeightUpdatesRef.current[rowId] = nextHeight;
+        hasPendingUpdates = true;
+      }
+
+      if (hasPendingUpdates) {
+        scheduleHeightFlush();
+      }
+    });
+
+    for (const element of groupRowRefs.current.values()) {
+      groupRowObserverRef.current.observe(element);
+    }
+
+    for (const element of lineRowRefs.current.values()) {
+      lineRowObserverRef.current.observe(element);
+    }
 
     return () => {
-      window.removeEventListener("resize", measureTableHeights);
+      window.removeEventListener("resize", handleWindowResize);
+      groupRowObserverRef.current?.disconnect();
+      lineRowObserverRef.current?.disconnect();
+      if (pendingHeightFlushFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingHeightFlushFrameRef.current);
+        pendingHeightFlushFrameRef.current = null;
+      }
+      pendingGroupHeightUpdatesRef.current = {};
+      pendingLineHeightUpdatesRef.current = {};
+      groupRowObserverRef.current = null;
+      lineRowObserverRef.current = null;
     };
-  }, [showCostColumns, timelinePanelWidth, visibleGroups]);
+  }, [scheduleHeightFlush, visibleGroups]);
 
   function handleTimelineResizeStart(event: ReactMouseEvent<HTMLDivElement>) {
     event.preventDefault();
     resizeSessionRef.current = {
       startX: event.clientX,
       startWidth: timelinePanelWidth,
+      leftPanelWidth: leftPanelRef.current?.clientWidth ?? 0,
     };
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
@@ -1101,144 +1831,299 @@ function WorkScheduleOverview({
           </div>
         </div>
 
-        <div ref={overviewCanvasRef} className="relative px-4 pb-4">
-          <div
-            ref={leftPanelRef}
-            data-testid="work-schedule-left-panel"
-            className={cn(
-              "overflow-hidden border bg-white pt-[32px]",
-              isExcelMode ? "rounded-none border-slate-300" : "rounded-2xl border-slate-200",
-            )}
-          >
+        <div
+          ref={verticalScrollContainerRef}
+          data-testid="work-schedule-overview-vertical-scroll"
+          className="max-h-[68vh] overflow-y-auto px-4 pb-2"
+          onScroll={handleVerticalOverviewScroll}
+        >
+          <div ref={overviewCanvasRef} className="relative">
             <div
-              data-testid="work-schedule-left-scroll"
-              className="overflow-x-auto"
-              style={leftTableViewportWidth ? { width: `${leftTableViewportWidth}px`, maxWidth: "100%" } : undefined}
+              ref={leftPanelRef}
+              data-testid="work-schedule-left-panel"
+              className={cn(
+                "overflow-hidden border bg-white pt-[32px]",
+                isExcelMode ? "rounded-none border-slate-300" : "rounded-2xl border-slate-200",
+              )}
             >
-              <div className="w-[1200px] min-w-[1200px]">
-                <Table className="[&_td]:p-2 [&_td]:text-xs [&_th]:px-2 [&_th]:text-[11px]">
-                  <THead className="bg-slate-50">
-                    <TR className={OVERVIEW_HEADER_HEIGHT_CLASS}>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Item</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Partida</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Duracion</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Inicio</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Fin</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Predecesora</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Cuadrilla</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Rendimiento</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Unidad</TH>
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Metrado</TH>
-                      {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>PU</TH> : null}
-                      {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Parcial</TH> : null}
-                      <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "w-[88px] py-0 align-middle")}>Accion</TH>
-                    </TR>
-                  </THead>
-                  <TBody>
-                    {visibleGroups.map((group) => (
-                      <GroupRows
-                        key={group.subBudgetId}
-                        group={group}
-                        collapsed={collapsedGroups[group.subBudgetId] === true}
-                        dateFormat={dateFormat}
-                        currency={data.currency}
-                        currencyDecimals={currencyDecimals}
-                        showCostColumns={showCostColumns}
-                        highlightedBudgetItemId={highlightedBudgetItemId}
-                        onEditLine={onEditLine}
-                        onRegisterGroupRow={setGroupRowRef}
-                        onRegisterLineRow={setLineRowRef}
-                        onToggleGroup={() => onToggleGroup(group.subBudgetId)}
-                      />
-                    ))}
-                  </TBody>
-                </Table>
-                <div
-                  data-testid="work-schedule-left-footer-spacer"
-                  className={cn(
-                    "border-t bg-slate-50 px-2.5",
-                    OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS,
-                    isExcelMode ? "border-slate-300" : "border-slate-200",
-                  )}
-                />
+              <div
+                ref={leftScrollViewportRef}
+                data-testid="work-schedule-left-scroll"
+                className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                onScroll={handleLeftTableScroll}
+                style={leftTableViewportWidth ? { width: `${leftTableViewportWidth}px`, maxWidth: "100%" } : undefined}
+              >
+                <div style={{ width: `${leftTableWidth}px`, minWidth: `${leftTableWidth}px` }}>
+                  <Table className="table-fixed [&_td]:p-2 [&_td]:text-xs [&_th]:px-2 [&_th]:text-[11px]">
+                    <colgroup>
+                      {leftTableColumnWidths.map((width, index) => (
+                        <col key={`work-schedule-left-col-${index}`} style={{ width: `${width}px` }} />
+                      ))}
+                    </colgroup>
+                    <THead className="bg-slate-50">
+                      <TR className={OVERVIEW_HEADER_HEIGHT_CLASS}>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "bg-slate-100 px-1 py-0 text-center align-middle !text-[10px] text-slate-600")}>#</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Item</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Partida</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Duracion</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Inicio</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Fin</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Predecesora</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Cuadrilla</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Rendimiento</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Unidad</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Metrado</TH>
+                        {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>PU</TH> : null}
+                        {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Parcial</TH> : null}
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "w-[88px] py-0 align-middle")}>Accion</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {overviewVirtualWindow.topSpacerHeight > 0 ? (
+                        <TR aria-hidden="true">
+                          <TD colSpan={showCostColumns ? 14 : 12} className="p-0" style={{ height: overviewVirtualWindow.topSpacerHeight }} />
+                        </TR>
+                      ) : null}
+                      {overviewVirtualWindow.visibleItems.map((item) =>
+                        item.kind === "group" ? (
+                          <TR
+                            key={item.key}
+                            ref={(element) => setGroupRowRef(item.group.subBudgetId, element)}
+                            data-testid={`work-schedule-table-group-row-${item.group.subBudgetId}`}
+                            data-group-row-id={item.group.subBudgetId}
+                            className={cn("bg-slate-50/90 hover:bg-slate-50/90", OVERVIEW_GROUP_ROW_HEIGHT_CLASS)}
+                          >
+                            <TD className="bg-slate-100 px-1 text-center align-middle !text-[10px] font-medium text-slate-500">
+                              {overviewRowNumbers[`group:${item.group.subBudgetId}`] ?? ""}
+                            </TD>
+                            <TD colSpan={showCostColumns ? 11 : 10} className="align-middle font-semibold text-slate-900">
+                              <div className="flex items-center justify-between gap-3">
+                                <span>SP: {item.group.subBudgetName}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => onToggleGroup(item.group.subBudgetId)}
+                                >
+                                  {item.collapsed ? `Expandir ${item.group.subBudgetName}` : `Contraer ${item.group.subBudgetName}`}
+                                </Button>
+                              </div>
+                            </TD>
+                            {showCostColumns ? (
+                              <TD className="align-middle font-semibold text-slate-900">
+                                {formatCurrency(item.group.totalAmount, data.currency, currencyDecimals)}
+                              </TD>
+                            ) : null}
+                            <TD className="bg-slate-50/95" />
+                          </TR>
+                        ) : item.row.kind === "line" ? (
+                          <WorkScheduleLineTableRow
+                            key={item.key}
+                            line={item.row.line}
+                            dateFormat={dateFormat}
+                            currency={data.currency}
+                            currencyDecimals={currencyDecimals}
+                            showCostColumns={showCostColumns}
+                            highlighted={highlightedBudgetItemId === item.row.line.budgetItemId}
+                            displayPredecessor={formatPredecessorForDisplay(item.row.line.predecessor ?? "", predecessorItemCodeToRowNumber)}
+                            onEditLine={onEditLine}
+                            rowNumber={overviewRowNumbers[`row:${item.row.rowId}`] ?? null}
+                            onRegisterRow={setLineRowRef}
+                            inlineDraft={inlineDrafts[item.row.line.budgetItemId] ?? null}
+                            isInlineActive={activeInlineRowId === item.row.line.budgetItemId}
+                            inlineSaveState={inlineSaveStateById[item.row.line.budgetItemId] ?? "idle"}
+                            inlineError={inlineErrorsById[item.row.line.budgetItemId] ?? ""}
+                            onActivateInlineRow={onActivateInlineRow}
+                            onInlineDraftChange={onInlineDraftChange}
+                            onInlineRowSave={onInlineRowSave}
+                            onInlineRowCancel={onInlineRowCancel}
+                          />
+                        ) : (
+                          <WorkScheduleLevelTableRow
+                            key={item.key}
+                            row={item.row}
+                            dateFormat={dateFormat}
+                            currency={data.currency}
+                            currencyDecimals={currencyDecimals}
+                            showCostColumns={showCostColumns}
+                            rowNumber={overviewRowNumbers[`row:${item.row.rowId}`] ?? null}
+                            onRegisterRow={setLineRowRef}
+                          />
+                        ),
+                      )}
+                      {overviewVirtualWindow.bottomSpacerHeight > 0 ? (
+                        <TR aria-hidden="true">
+                          <TD colSpan={showCostColumns ? 14 : 12} className="p-0" style={{ height: overviewVirtualWindow.bottomSpacerHeight }} />
+                        </TR>
+                      ) : null}
+                    </TBody>
+                  </Table>
+                  <div
+                    data-testid="work-schedule-left-footer-spacer"
+                    className={cn(
+                      "border-t bg-slate-50 px-2.5",
+                      OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS,
+                      isExcelMode ? "border-slate-300" : "border-slate-200",
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              ref={timelinePanelRef}
+              data-testid="work-schedule-timeline-panel"
+              suppressHydrationWarning
+              className={cn(
+                "absolute right-0 top-0 bottom-0 z-30 overflow-hidden border bg-white",
+                isExcelMode ? "rounded-none border-slate-300 shadow-none" : "rounded-2xl border-slate-200 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)]",
+              )}
+              style={{ width: `var(${OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR}, ${timelinePanelWidth}px)` }}
+            >
+              <div
+                data-testid="work-schedule-timeline-resize-handle"
+                className={cn(
+                  "absolute inset-y-0 left-0 z-40 flex cursor-col-resize items-center justify-center bg-slate-100/80 backdrop-blur-sm transition hover:bg-slate-200/90",
+                  isExcelMode ? "w-2" : "w-3",
+                )}
+                onMouseDown={handleTimelineResizeStart}
+              >
+                <span className={cn("bg-slate-300", isExcelMode ? "h-8 w-px rounded-sm" : "h-10 w-1 rounded-full")} />
+              </div>
+
+              <div
+                ref={scrollContainerRef}
+                data-testid="work-schedule-overview-scroll"
+                className="h-full overflow-x-auto overflow-y-hidden pl-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                onScroll={handleOverviewScroll}
+              >
+                <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }} className="text-xs">
+                  <TimelineHeader timelineDays={timelineDays} isExcelMode={isExcelMode} />
+                  <div className="relative">
+                    {timelineDependencyPaths.length > 0 ? (
+                      <svg
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 z-10 overflow-visible"
+                        style={{ width: `${timelineContentWidth}px`, height: "100%" }}
+                      >
+                        <defs>
+                          <marker id="work-schedule-dependency-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                            <path d="M0,0 L6,3 L0,6 Z" fill="#64748b" />
+                          </marker>
+                        </defs>
+                        {timelineDependencyPaths.map((path) => (
+                          <path
+                            key={path.key}
+                            d={path.d}
+                            fill="none"
+                            stroke="#64748b"
+                            strokeWidth="1.5"
+                            strokeLinejoin="round"
+                            markerEnd="url(#work-schedule-dependency-arrowhead)"
+                          />
+                        ))}
+                      </svg>
+                    ) : null}
+                    {overviewVirtualWindow.topSpacerHeight > 0 ? (
+                      <div aria-hidden="true" style={{ height: overviewVirtualWindow.topSpacerHeight }} />
+                    ) : null}
+                    {overviewVirtualWindow.visibleItems.map((item) =>
+                      item.kind === "group" ? (
+                        <div
+                          key={item.key}
+                          data-testid={`work-schedule-timeline-group-row-${item.group.subBudgetId}`}
+                          className={cn(
+                            "flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-900",
+                            OVERVIEW_GROUP_ROW_HEIGHT_CLASS,
+                          )}
+                          style={{
+                            height: `${normalizeMeasuredHeight(
+                              tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
+                              OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+                            )}px`,
+                          }}
+                        >
+                          <span>{item.group.subBudgetName}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => onToggleGroup(item.group.subBudgetId)}
+                          >
+                            {item.collapsed ? `Expandir ${item.group.subBudgetName}` : `Contraer ${item.group.subBudgetName}`}
+                          </Button>
+                        </div>
+                      ) : (
+                        <TimelineRow
+                          key={item.key}
+                          row={item.row}
+                          timelineDays={timelineDays}
+                          timelineDayIndexByIso={timelineDayIndexByIso}
+                          currency={data.currency}
+                          currencyDecimals={currencyDecimals}
+                          highlighted={item.row.kind === "line" && highlightedBudgetItemId === item.row.line.budgetItemId}
+                          rowHeight={normalizeMeasuredHeight(
+                            tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
+                            OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+                          )}
+                        />
+                      ),
+                    )}
+                    {overviewVirtualWindow.bottomSpacerHeight > 0 ? (
+                      <div aria-hidden="true" style={{ height: overviewVirtualWindow.bottomSpacerHeight }} />
+                    ) : null}
+                  </div>
+                  <div className={cn("border-t bg-slate-50 px-2.5", OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS, isExcelMode ? "border-slate-300" : "border-slate-200")}>
+                    <div className="flex h-full flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                      <span className="font-semibold text-slate-900">Leyenda de segmentos</span>
+                      {segmentLegend.map((item) => (
+                        <span key={item.label} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1">
+                          <span className={cn("h-2.5 w-2.5 rounded-full", item.colorClassName)} />
+                          {item.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-
-          <div
-            ref={timelinePanelRef}
-            data-testid="work-schedule-timeline-panel"
-            suppressHydrationWarning
-            className={cn(
-              "absolute right-4 top-0 bottom-4 z-30 overflow-hidden border bg-white",
-              isExcelMode ? "rounded-none border-slate-300 shadow-none" : "rounded-2xl border-slate-200 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)]",
-            )}
-            style={{ width: `var(${OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR}, ${timelinePanelWidth}px)` }}
-          >
+        </div>
+        <div className="sticky bottom-0 z-40 px-4 pb-4">
+          <div className="relative">
             <div
-              data-testid="work-schedule-timeline-resize-handle"
               className={cn(
-                "absolute inset-y-0 left-0 z-40 flex cursor-col-resize items-center justify-center bg-slate-100/80 backdrop-blur-sm transition hover:bg-slate-200/90",
-                isExcelMode ? "w-2" : "w-3",
+                "overflow-hidden border bg-white",
+                isExcelMode ? "rounded-none border-slate-300 shadow-none" : "rounded-bl-2xl border-slate-200 shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
               )}
-              onMouseDown={handleTimelineResizeStart}
+              style={leftTableViewportWidth ? { width: `${leftTableViewportWidth}px`, maxWidth: "100%" } : undefined}
             >
-              <span className={cn("bg-slate-300", isExcelMode ? "h-8 w-px rounded-sm" : "h-10 w-1 rounded-full")} />
+              <div
+                ref={leftBottomScrollRef}
+                data-testid="work-schedule-left-bottom-scroll"
+                className="overflow-x-auto overflow-y-hidden"
+                onScroll={handleLeftBottomScroll}
+              >
+                <div style={{ width: `${leftTableWidth}px`, minWidth: `${leftTableWidth}px`, height: "1px" }} />
+              </div>
             </div>
-
             <div
-              ref={scrollContainerRef}
-              data-testid="work-schedule-overview-scroll"
-              className="h-full overflow-x-auto pl-3"
-              onScroll={handleOverviewScroll}
+              className="absolute right-0 top-0"
+              style={{ width: `var(${OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR}, ${timelinePanelWidth}px)` }}
             >
-              <div className="min-w-[480px] text-xs">
-                <TimelineHeader timelineDays={timelineDays} isExcelMode={isExcelMode} />
-                <div className="divide-y divide-slate-100">
-                  {visibleGroups.map((group) => (
-                    <div key={group.subBudgetId}>
-                      <div
-                        data-testid={`work-schedule-timeline-group-row-${group.subBudgetId}`}
-                        className={cn("flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-900", OVERVIEW_GROUP_ROW_HEIGHT_CLASS)}
-                        style={tableGroupHeights[group.subBudgetId] ? { height: `${tableGroupHeights[group.subBudgetId]}px` } : undefined}
-                      >
-                        <span>{group.subBudgetName}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-[11px]"
-                          onClick={() => onToggleGroup(group.subBudgetId)}
-                        >
-                          {collapsedGroups[group.subBudgetId] === true ? `Expandir ${group.subBudgetName}` : `Contraer ${group.subBudgetName}`}
-                        </Button>
-                      </div>
-                      {collapsedGroups[group.subBudgetId] === true
-                        ? null
-                        : group.rows.map((row) => (
-                            <TimelineRow
-                              key={row.rowId}
-                              row={row}
-                              timelineDays={timelineDays}
-                              timelineDayIndexByIso={timelineDayIndexByIso}
-                              currency={data.currency}
-                              currencyDecimals={currencyDecimals}
-                              highlighted={row.kind === "line" && highlightedBudgetItemId === row.line.budgetItemId}
-                              rowHeight={tableLineHeights[row.rowId]}
-                            />
-                          ))}
-                    </div>
-                  ))}
-                </div>
-                <div className={cn("border-t bg-slate-50 px-2.5", OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS, isExcelMode ? "border-slate-300" : "border-slate-200")}>
-                  <div className="flex h-full flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                    <span className="font-semibold text-slate-900">Leyenda de segmentos</span>
-                    {segmentLegend.map((item) => (
-                      <span key={item.label} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1">
-                        <span className={cn("h-2.5 w-2.5 rounded-full", item.colorClassName)} />
-                        {item.label}
-                      </span>
-                    ))}
-                  </div>
+              <div
+                className={cn(
+                  "overflow-hidden border bg-white",
+                  isExcelMode ? "rounded-none border-slate-300 shadow-none" : "rounded-br-2xl border-slate-200 shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
+                )}
+              >
+                <div
+                  ref={timelineBottomScrollRef}
+                  data-testid="work-schedule-timeline-bottom-scroll"
+                  className="overflow-x-auto overflow-y-hidden pl-3"
+                  onScroll={handleTimelineBottomScroll}
+                >
+                  <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px`, height: "1px" }} />
                 </div>
               </div>
             </div>
@@ -1249,91 +2134,10 @@ function WorkScheduleOverview({
   );
 }
 
-function GroupRows({
-  group,
-  collapsed,
-  dateFormat,
-  currency,
-  currencyDecimals,
-  showCostColumns,
-  highlightedBudgetItemId,
-  onEditLine,
-  onRegisterGroupRow,
-  onRegisterLineRow,
-  onToggleGroup,
-}: {
-  group: WorkScheduleViewRecord["groups"][number];
-  collapsed: boolean;
-  dateFormat: string;
-  currency: string;
-  currencyDecimals: number;
-  showCostColumns: boolean;
-  highlightedBudgetItemId: string | null;
-  onEditLine: (line: WorkScheduleLineRecord) => void;
-  onRegisterGroupRow: (subBudgetId: string, element: HTMLElement | null) => void;
-  onRegisterLineRow: (rowId: string, element: HTMLElement | null) => void;
-  onToggleGroup: () => void;
-}) {
-  return (
-    <>
-      <TR
-        ref={(element) => onRegisterGroupRow(group.subBudgetId, element)}
-        data-testid={`work-schedule-table-group-row-${group.subBudgetId}`}
-        className={cn("bg-slate-50/90 hover:bg-slate-50/90", OVERVIEW_GROUP_ROW_HEIGHT_CLASS)}
-      >
-        <TD colSpan={showCostColumns ? 11 : 10} className="align-middle font-semibold text-slate-900">
-          <div className="flex items-center justify-between gap-3">
-            <span>SP: {group.subBudgetName}</span>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={onToggleGroup}>
-              {collapsed ? `Expandir ${group.subBudgetName}` : `Contraer ${group.subBudgetName}`}
-            </Button>
-          </div>
-        </TD>
-        {showCostColumns ? <TD className="align-middle font-semibold text-slate-900">{formatCurrency(group.totalAmount, currency, currencyDecimals)}</TD> : null}
-        <TD className="bg-slate-50/95" />
-      </TR>
-      {collapsed
-        ? null
-        : group.rows.map((row) =>
-            row.kind === "line" ? (
-              <WorkScheduleLineTableRow
-                key={row.rowId}
-                line={row.line}
-                dateFormat={dateFormat}
-                currency={currency}
-                currencyDecimals={currencyDecimals}
-                showCostColumns={showCostColumns}
-                highlighted={highlightedBudgetItemId === row.line.budgetItemId}
-                onEditLine={onEditLine}
-                onRegisterRow={onRegisterLineRow}
-              />
-            ) : (
-              <WorkScheduleLevelTableRow
-                key={row.rowId}
-                row={row}
-                dateFormat={dateFormat}
-                currency={currency}
-                currencyDecimals={currencyDecimals}
-                showCostColumns={showCostColumns}
-                onRegisterRow={onRegisterLineRow}
-              />
-            ),
-          )}
-    </>
-  );
-}
-
-function WorkScheduleLineTableRow({
-  line,
-  dateFormat,
-  currency,
-  currencyDecimals,
-  showCostColumns,
-  highlighted,
-  onEditLine,
-  onRegisterRow,
-}: {
+type WorkScheduleLineTableRowProps = {
   line: WorkScheduleLineRecord;
+  rowNumber: number | null;
+  displayPredecessor: string;
   dateFormat: string;
   currency: string;
   currencyDecimals: number;
@@ -1341,14 +2145,73 @@ function WorkScheduleLineTableRow({
   highlighted: boolean;
   onEditLine: (line: WorkScheduleLineRecord) => void;
   onRegisterRow: (rowId: string, element: HTMLElement | null) => void;
-}) {
+  inlineDraft: EditableLine | null;
+  isInlineActive: boolean;
+  inlineSaveState: "idle" | "saving" | "error";
+  inlineError: string;
+  onActivateInlineRow: (line: WorkScheduleLineRecord) => void;
+  onInlineDraftChange: (rowId: string, draft: EditableLine) => void;
+  onInlineRowSave: (rowId: string) => void;
+  onInlineRowCancel: (rowId: string) => void;
+};
+
+const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
+  line,
+  rowNumber,
+  displayPredecessor,
+  dateFormat,
+  currency,
+  currencyDecimals,
+  showCostColumns,
+  highlighted,
+  onEditLine,
+  onRegisterRow,
+  inlineDraft,
+  isInlineActive,
+  inlineSaveState,
+  inlineError,
+  onActivateInlineRow,
+  onInlineDraftChange,
+  onInlineRowSave,
+  onInlineRowCancel,
+}: WorkScheduleLineTableRowProps) {
+  const inlineRowId = line.budgetItemId;
+
+  function handleInlineBlur(event: ReactFocusEvent<HTMLTableRowElement>) {
+    const nextFocusTarget = event.relatedTarget;
+    if (nextFocusTarget instanceof HTMLElement && nextFocusTarget.closest(`[data-inline-row-id="${inlineRowId}"]`)) {
+      return;
+    }
+
+    if (isInlineActive && inlineDraft) {
+      void onInlineRowSave(inlineRowId);
+    }
+  }
+
+  function handleInlineKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void onInlineRowSave(inlineRowId);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onInlineRowCancel(inlineRowId);
+    }
+  }
+
   return (
     <TR
       ref={(element) => onRegisterRow(line.budgetItemId, element)}
       data-testid={`work-schedule-table-row-${line.budgetItemId}`}
+      data-table-row-id={line.budgetItemId}
+      data-inline-row-id={inlineRowId}
       data-highlighted={highlighted ? "true" : "false"}
-      className={cn("min-h-[42px]", highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200" : "")}
+      className={cn(highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200" : "")}
+      onBlur={handleInlineBlur}
     >
+      <TD className="bg-slate-100 px-1 text-center align-middle !text-[10px] font-medium text-slate-500">{rowNumber ?? ""}</TD>
       <TD className="align-middle">{line.itemCode}</TD>
       <TD className="align-middle">
         <div className="space-y-1 overflow-hidden">
@@ -1378,30 +2241,76 @@ function WorkScheduleLineTableRow({
               <PenSquare className="h-[13px] w-[13px]" style={{ height: "13px", width: "13px" }} />
             </Button>
           </div>
-          {line.monthlyDistributions.length > 0 ? (
-            <div className="flex flex-nowrap items-center gap-1 overflow-hidden pt-0.5 whitespace-nowrap">
-              <span className="shrink-0 truncate whitespace-nowrap text-[11px] text-slate-500">
-                {line.monthlyDistributions.length || 0} periodos
-              </span>
-              {line.monthlyDistributions.map((distribution) => (
-                <span
-                  key={`${line.budgetItemId}-${distribution.year}-${distribution.month}`}
-                  className="shrink-0 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700"
-                  title={formatDistributionLabel(distribution)}
-                >
-                  {formatDistributionLabel(distribution)}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="truncate whitespace-nowrap text-[11px] text-slate-500">{line.monthlyDistributions.length || 0} periodos</p>
-          )}
+          <p className="truncate whitespace-nowrap pt-0.5 text-[11px] text-slate-500">
+            {line.monthlyDistributions.length || 0} periodos
+          </p>
+          {inlineError ? <p className="truncate whitespace-nowrap text-[11px] text-rose-600">{inlineError}</p> : null}
         </div>
       </TD>
-      <TD className="align-middle">{line.durationDays ?? "-"}</TD>
-      <TD className="align-middle">{line.startDate ? formatDate(line.startDate, dateFormat as never) : "Pendiente"}</TD>
-      <TD className="align-middle">{line.endDate ? formatDate(line.endDate, dateFormat as never) : "Pendiente"}</TD>
-      <TD className="align-middle">{line.predecessor || "-"}</TD>
+      <TD
+        className="align-middle"
+        data-testid={`work-schedule-inline-cell-durationDays-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <Input
+            type="number"
+            min="1"
+            value={String(inlineDraft.durationDays || "")}
+            onKeyDown={handleInlineKeyDown}
+            onChange={(event) => onInlineDraftChange(inlineRowId, updateEditableLineDuration(inlineDraft, Number(event.target.value) || 0))}
+          />
+        ) : (
+          line.durationDays ?? "-"
+        )}
+      </TD>
+      <TD
+        className="align-middle"
+        data-testid={`work-schedule-inline-cell-startDate-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <Input
+            type="date"
+            value={inlineDraft.startDate}
+            onKeyDown={handleInlineKeyDown}
+            onChange={(event) => onInlineDraftChange(inlineRowId, updateEditableLineDates(inlineDraft, { startDate: event.target.value }))}
+          />
+        ) : (
+          line.startDate ? formatDate(line.startDate, dateFormat as never) : "Pendiente"
+        )}
+      </TD>
+      <TD
+        className="align-middle"
+        data-testid={`work-schedule-inline-cell-endDate-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <Input
+            type="date"
+            value={inlineDraft.endDate}
+            onKeyDown={handleInlineKeyDown}
+            onChange={(event) => onInlineDraftChange(inlineRowId, updateEditableLineDates(inlineDraft, { endDate: event.target.value }))}
+          />
+        ) : (
+          line.endDate ? formatDate(line.endDate, dateFormat as never) : "Pendiente"
+        )}
+      </TD>
+      <TD
+        className="align-middle"
+        data-testid={`work-schedule-inline-cell-predecessor-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <Input
+            value={inlineDraft.predecessor}
+            onKeyDown={handleInlineKeyDown}
+            onChange={(event) => onInlineDraftChange(inlineRowId, { ...inlineDraft, predecessor: event.target.value })}
+          />
+        ) : (
+          displayPredecessor || "-"
+        )}
+      </TD>
       <TD className="align-middle">{line.crew != null ? formatNumber(line.crew, 2) : "-"}</TD>
       <TD className="align-middle">{line.performanceLabel || (line.performance != null ? `${formatNumber(line.performance, 2)} ${line.unit}/DIA` : "-")}</TD>
       <TD className="align-middle">{line.unit}</TD>
@@ -1409,36 +2318,44 @@ function WorkScheduleLineTableRow({
       {showCostColumns ? <TD className="align-middle">{formatCurrency(line.unitPrice, currency, currencyDecimals)}</TD> : null}
       {showCostColumns ? <TD className="align-middle">{formatCurrency(line.partial, currency, currencyDecimals)}</TD> : null}
       <TD className="align-middle bg-white">
-        <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => onEditLine(line)}>
-          Editar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => onEditLine(line)}>
+            Editar
+          </Button>
+          {inlineSaveState === "saving" ? <span className="text-[11px] text-slate-500">Guardando...</span> : null}
+        </div>
       </TD>
     </TR>
   );
-}
+}, areWorkScheduleLineTableRowPropsEqual);
 
-function WorkScheduleLevelTableRow({
-  row,
-  dateFormat,
-  currency,
-  currencyDecimals,
-  showCostColumns,
-  onRegisterRow,
-}: {
+type WorkScheduleLevelTableRowProps = {
   row: Extract<WorkScheduleDisplayRowRecord, { kind: "level" }>;
+  rowNumber: number | null;
   dateFormat: string;
   currency: string;
   currencyDecimals: number;
   showCostColumns: boolean;
   onRegisterRow: (rowId: string, element: HTMLElement | null) => void;
-}) {
+};
+
+const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
+  row,
+  rowNumber,
+  dateFormat,
+  currency,
+  currencyDecimals,
+  showCostColumns,
+  onRegisterRow,
+}: WorkScheduleLevelTableRowProps) {
   const toneClassName =
     row.levelType === "TITLE"
       ? "bg-slate-200/90 font-semibold text-slate-900"
       : "bg-slate-100/90 font-medium text-slate-800";
 
   return (
-    <TR ref={(element) => onRegisterRow(row.rowId, element)} data-testid={`work-schedule-table-row-${row.rowId}`} className={cn("min-h-[42px]", toneClassName)}>
+    <TR ref={(element) => onRegisterRow(row.rowId, element)} data-testid={`work-schedule-table-row-${row.rowId}`} data-table-row-id={row.rowId} className={cn(toneClassName)}>
+      <TD className="bg-slate-100 px-1 text-center align-middle !text-[10px] font-medium text-slate-500">{rowNumber ?? ""}</TD>
       <TD className="align-middle">{row.itemCode}</TD>
       <TD className="align-middle">
         <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
@@ -1463,9 +2380,15 @@ function WorkScheduleLevelTableRow({
       <TD className="align-middle bg-transparent" />
     </TR>
   );
-}
+}, areWorkScheduleLevelTableRowPropsEqual);
 
-function TimelineHeader({ timelineDays, isExcelMode }: { timelineDays: TimelineDay[]; isExcelMode: boolean }) {
+function TimelineHeader({
+  timelineDays,
+  isExcelMode,
+}: {
+  timelineDays: TimelineDay[];
+  isExcelMode: boolean;
+}) {
   const months = groupTimelineMonths(timelineDays);
   const weeks = groupTimelineWeeks(timelineDays);
 
@@ -1518,15 +2441,7 @@ function TimelineHeader({ timelineDays, isExcelMode }: { timelineDays: TimelineD
   );
 }
 
-function TimelineRow({
-  row,
-  timelineDays,
-  timelineDayIndexByIso,
-  currency,
-  currencyDecimals,
-  highlighted,
-  rowHeight,
-}: {
+type TimelineRowProps = {
   row: WorkScheduleDisplayRowRecord;
   timelineDays: TimelineDay[];
   timelineDayIndexByIso: Map<string, number>;
@@ -1534,16 +2449,29 @@ function TimelineRow({
   currencyDecimals: number;
   highlighted: boolean;
   rowHeight?: number;
-}) {
+};
+
+const TimelineRow = memo(function TimelineRow({
+  row,
+  timelineDays,
+  timelineDayIndexByIso,
+  currency,
+  currencyDecimals,
+  highlighted,
+  rowHeight,
+}: TimelineRowProps) {
   const line = row.kind === "line" ? row.line : null;
   const startDate = row.kind === "line" ? row.line.startDate : row.startDate;
   const endDate = row.kind === "line" ? row.line.endDate : row.endDate;
   const itemCode = row.kind === "line" ? row.line.itemCode : row.itemCode;
   const description = row.kind === "line" ? row.line.description : row.description;
   const partial = row.kind === "line" ? row.line.partial : row.partial;
+  const timelineDayCount = Math.max(timelineDays.length, 1);
   const startIndex = startDate ? (timelineDayIndexByIso.get(startDate) ?? -1) : -1;
   const endIndex = endDate ? (timelineDayIndexByIso.get(endDate) ?? -1) : -1;
   const span = startIndex >= 0 && endIndex >= startIndex ? endIndex - startIndex + 1 : 0;
+  const hasActiveRange = span > 0;
+  const timelineColumnWidth = OVERVIEW_TIMELINE_DAY_WIDTH_PX + OVERVIEW_TIMELINE_DAY_GAP_PX;
   const segmentColors = [
     "bg-sky-600",
     "bg-cyan-500",
@@ -1552,79 +2480,237 @@ function TimelineRow({
     "bg-amber-500",
     "bg-rose-500",
   ] as const;
+  const timelineBarStyle = hasActiveRange
+    ? {
+        left: `${startIndex * timelineColumnWidth}px`,
+        width: `${span * OVERVIEW_TIMELINE_DAY_WIDTH_PX + Math.max(0, span - 1) * OVERVIEW_TIMELINE_DAY_GAP_PX}px`,
+      }
+    : null;
+  const timelineRowBackgroundStyle = {
+    backgroundColor: highlighted ? "rgb(253 230 138 / 0.8)" : "rgb(241 245 249)",
+    backgroundImage: `repeating-linear-gradient(
+      to right,
+      rgb(255 255 255) 0,
+      rgb(255 255 255) calc((100% / ${timelineDayCount}) - 1px),
+      rgb(241 245 249) calc((100% / ${timelineDayCount}) - 1px),
+      rgb(241 245 249) calc(100% / ${timelineDayCount})
+    )`,
+  } as const;
 
   return (
     <div
       data-testid="work-schedule-timeline-row"
       data-line-id={row.rowId}
       data-highlighted={highlighted ? "true" : "false"}
-      className={cn("grid min-h-[42px] gap-px bg-slate-100 px-0.5 py-1", highlighted ? "bg-amber-200/80" : "")}
+      className="relative overflow-visible border-b border-slate-100 px-0.5 py-1"
       style={{
-        gridTemplateColumns: `repeat(${timelineDays.length || 1}, minmax(16px, 1fr))`,
         height: rowHeight ? `${rowHeight}px` : undefined,
+        ...timelineRowBackgroundStyle,
       }}
     >
-      {timelineDays.map((day, index) => {
-        const isActive = span > 0 && index >= startIndex && index <= endIndex;
-
-        return (
-          <div
-            key={`${row.rowId}-${day.iso}`}
-            className={cn("relative bg-white", isActive ? "bg-sky-100" : "bg-white")}
-          >
-            {isActive && index === startIndex ? (
-              <div
-                className={cn(
-                  "absolute inset-y-2 left-0 right-0 z-20 overflow-visible rounded-full",
-                  row.kind === "line"
-                    ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)]"
-                    : "bg-slate-500/90",
-                )}
-                style={{
-                  width: `calc(${Math.max(span, 1)} * 100% + ${(Math.max(span, 1) - 1) * 1}px)`,
-                }}
-                title={description}
-              >
-                <div className="absolute inset-0 flex overflow-hidden rounded-full">
-                  {line && line.monthlyDistributions.length > 0 ? (
-                    line.monthlyDistributions.map((distribution, distributionIndex) => (
-                      <div
-                        key={`${row.rowId}-${distribution.year}-${distribution.month}`}
-                        data-testid={`work-schedule-bar-segment-${row.rowId}`}
-                        className={cn(
-                          "h-full border-r border-white/40 last:border-r-0",
-                          segmentColors[distributionIndex % segmentColors.length],
-                        )}
-                        style={{ width: `${distribution.percentage}%` }}
-                        title={formatDistributionTooltip(distribution, partial, currency, currencyDecimals)}
-                      />
-                    ))
-                  ) : line ? (
-                    <div className="h-full w-full bg-sky-600" />
-                  ) : (
-                    <div className="h-full w-full bg-slate-500" />
+      {timelineBarStyle ? (
+        <div
+          className={cn(
+            "absolute inset-y-2 z-20 overflow-visible rounded-full",
+            row.kind === "line"
+              ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)]"
+              : "bg-slate-500/90",
+          )}
+          style={timelineBarStyle}
+          title={description}
+        >
+          <div className="absolute inset-0 flex overflow-hidden rounded-full">
+            {line && line.monthlyDistributions.length > 0 ? (
+              line.monthlyDistributions.map((distribution, distributionIndex) => (
+                <div
+                  key={`${row.rowId}-${distribution.year}-${distribution.month}`}
+                  data-testid={`work-schedule-bar-segment-${row.rowId}`}
+                  className={cn(
+                    "h-full border-r border-white/40 last:border-r-0",
+                    segmentColors[distributionIndex % segmentColors.length],
                   )}
-                </div>
-                <div className="absolute inset-0 px-1 text-[9px] font-semibold text-white">
-                  <span className="line-clamp-1 block truncate py-1">{itemCode}</span>
-                </div>
-                {highlighted ? (
-                  <div className="absolute -top-5 left-0">
-                    <span
-                      data-testid={`work-schedule-active-timeline-badge-${row.rowId}`}
-                      className="rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800 shadow-sm"
-                    >
-                      Partida activa
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                  style={{ width: `${distribution.percentage}%` }}
+                  title={formatDistributionTooltip(distribution, partial, currency, currencyDecimals)}
+                />
+              ))
+            ) : line ? (
+              <div className="h-full w-full bg-sky-600" />
+            ) : (
+              <div className="h-full w-full bg-slate-500" />
+            )}
           </div>
-        );
-      })}
+          <div className="absolute inset-0 px-1 text-[9px] font-semibold text-white">
+            <span className="line-clamp-1 block truncate py-1">{itemCode}</span>
+          </div>
+          {highlighted ? (
+            <div className="absolute -top-5 left-0">
+              <span
+                data-testid={`work-schedule-active-timeline-badge-${row.rowId}`}
+                className="rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800 shadow-sm"
+              >
+                Partida activa
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
+}, areTimelineRowPropsEqual);
+
+function areWorkScheduleLineTableRowPropsEqual(
+  previousProps: WorkScheduleLineTableRowProps,
+  nextProps: WorkScheduleLineTableRowProps,
+) {
+  return (
+    previousProps.line === nextProps.line &&
+    previousProps.rowNumber === nextProps.rowNumber &&
+    previousProps.displayPredecessor === nextProps.displayPredecessor &&
+    previousProps.dateFormat === nextProps.dateFormat &&
+    previousProps.currency === nextProps.currency &&
+    previousProps.currencyDecimals === nextProps.currencyDecimals &&
+    previousProps.showCostColumns === nextProps.showCostColumns &&
+    previousProps.highlighted === nextProps.highlighted &&
+    previousProps.onEditLine === nextProps.onEditLine &&
+    previousProps.onRegisterRow === nextProps.onRegisterRow &&
+    previousProps.isInlineActive === nextProps.isInlineActive &&
+    previousProps.inlineSaveState === nextProps.inlineSaveState &&
+    previousProps.inlineError === nextProps.inlineError &&
+    previousProps.onActivateInlineRow === nextProps.onActivateInlineRow &&
+    previousProps.onInlineDraftChange === nextProps.onInlineDraftChange &&
+    previousProps.onInlineRowSave === nextProps.onInlineRowSave &&
+    previousProps.onInlineRowCancel === nextProps.onInlineRowCancel &&
+    areEditableLinesEqual(previousProps.inlineDraft, nextProps.inlineDraft)
+  );
+}
+
+function areWorkScheduleLevelTableRowPropsEqual(
+  previousProps: WorkScheduleLevelTableRowProps,
+  nextProps: WorkScheduleLevelTableRowProps,
+) {
+  return (
+    previousProps.row === nextProps.row &&
+    previousProps.rowNumber === nextProps.rowNumber &&
+    previousProps.dateFormat === nextProps.dateFormat &&
+    previousProps.currency === nextProps.currency &&
+    previousProps.currencyDecimals === nextProps.currencyDecimals &&
+    previousProps.showCostColumns === nextProps.showCostColumns &&
+    previousProps.onRegisterRow === nextProps.onRegisterRow
+  );
+}
+
+function areTimelineRowPropsEqual(previousProps: TimelineRowProps, nextProps: TimelineRowProps) {
+  return (
+    previousProps.row === nextProps.row &&
+    previousProps.timelineDays === nextProps.timelineDays &&
+    previousProps.timelineDayIndexByIso === nextProps.timelineDayIndexByIso &&
+    previousProps.currency === nextProps.currency &&
+    previousProps.currencyDecimals === nextProps.currencyDecimals &&
+    previousProps.highlighted === nextProps.highlighted &&
+    previousProps.rowHeight === nextProps.rowHeight
+  );
+}
+
+function areEditableLinesEqual(previousLine: EditableLine | null, nextLine: EditableLine | null) {
+  if (previousLine === nextLine) {
+    return true;
+  }
+
+  if (!previousLine || !nextLine) {
+    return false;
+  }
+
+  return (
+    previousLine.budgetItemId === nextLine.budgetItemId &&
+    previousLine.description === nextLine.description &&
+    previousLine.startDate === nextLine.startDate &&
+    previousLine.endDate === nextLine.endDate &&
+    previousLine.durationDays === nextLine.durationDays &&
+    previousLine.predecessor === nextLine.predecessor &&
+    previousLine.crew === nextLine.crew &&
+    areMonthlyDistributionsEqual(previousLine.monthlyDistributions, nextLine.monthlyDistributions)
+  );
+}
+
+function areMonthlyDistributionsEqual(
+  previousDistributions: WorkScheduleMonthlyDistributionRecord[],
+  nextDistributions: WorkScheduleMonthlyDistributionRecord[],
+) {
+  if (previousDistributions === nextDistributions) {
+    return true;
+  }
+
+  if (previousDistributions.length !== nextDistributions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousDistributions.length; index += 1) {
+    const previousDistribution = previousDistributions[index];
+    const nextDistribution = nextDistributions[index];
+
+    if (
+      previousDistribution?.year !== nextDistribution?.year ||
+      previousDistribution?.month !== nextDistribution?.month ||
+      previousDistribution?.percentage !== nextDistribution?.percentage
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function buildOverviewVirtualWindow({
+  items,
+  scrollTop,
+  viewportHeight,
+  overscanPx,
+}: {
+  items: OverviewVirtualItem[];
+  scrollTop: number;
+  viewportHeight: number;
+  overscanPx: number;
+}) {
+  if (items.length === 0) {
+    return {
+      topSpacerHeight: 0,
+      bottomSpacerHeight: 0,
+      visibleItems: [] as OverviewVirtualItem[],
+    };
+  }
+
+  const normalizedViewportHeight = Math.max(viewportHeight, OVERVIEW_VIRTUAL_SCROLL_FALLBACK_HEIGHT);
+  const prefixHeights: number[] = new Array(items.length + 1).fill(0);
+  for (let index = 0; index < items.length; index += 1) {
+    prefixHeights[index + 1] = prefixHeights[index] + items[index].estimatedHeight;
+  }
+
+  const startOffset = Math.max(0, scrollTop - overscanPx);
+  const endOffset = scrollTop + normalizedViewportHeight + overscanPx;
+  const startIndex = findOverviewVirtualIndex(prefixHeights, startOffset);
+  const endIndex = Math.min(items.length, Math.max(startIndex + 1, findOverviewVirtualIndex(prefixHeights, endOffset) + 1));
+
+  return {
+    topSpacerHeight: prefixHeights[startIndex],
+    bottomSpacerHeight: Math.max(0, prefixHeights[items.length] - prefixHeights[endIndex]),
+    visibleItems: items.slice(startIndex, endIndex),
+  };
+}
+
+function findOverviewVirtualIndex(prefixHeights: number[], targetOffset: number) {
+  let low = 0;
+  let high = prefixHeights.length - 1;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (prefixHeights[middle] <= targetOffset) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  return Math.max(0, low - 1);
 }
 
 function ValuationCalendarView({
@@ -2015,6 +3101,80 @@ function WorkScheduleEditorSheet({
   );
 }
 
+function WorkScheduleGenerationDialog({
+  open,
+  baseStartDate,
+  saveState,
+  error,
+  hasExistingSchedule,
+  onBaseStartDateChange,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  baseStartDate: string;
+  saveState: "idle" | "saving" | "error";
+  error: string;
+  hasExistingSchedule: boolean;
+  onBaseStartDateChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
+        <Dialog.Content asChild>
+          <div className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl outline-none">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title asChild>
+                  <h3 className="text-2xl font-semibold text-slate-900">Cronograma inteligente</h3>
+                </Dialog.Title>
+                <Dialog.Description asChild>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Genera el gantt base usando metrado, rendimiento y cuadrilla, con secuencia por sub presupuesto.
+                  </p>
+                </Dialog.Description>
+              </div>
+              <Button variant="outline" onClick={onClose}>
+                Cerrar
+              </Button>
+            </div>
+
+            <div className="space-y-5">
+              <Card className="border-slate-200">
+                <CardContent className="space-y-4 p-5">
+                  <Field label="Fecha base">
+                    <Input type="date" value={baseStartDate} onChange={(event) => onBaseStartDateChange(event.target.value)} />
+                  </Field>
+
+                  {hasExistingSchedule ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      Se reemplazara la programacion actual de las partidas ya programadas.
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={onClose}>
+                  Cancelar
+                </Button>
+                <Button onClick={onSubmit} disabled={saveState === "saving" || !baseStartDate}>
+                  {saveState === "saving" ? "Generando..." : "Generar base"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function DerivedTableCard({
   title,
   description,
@@ -2118,6 +3278,12 @@ type TimelineDay = {
   date: Date;
 };
 
+type VisibleTimelineLinePosition = {
+  line: WorkScheduleLineRecord;
+  top: number;
+  height: number;
+};
+
 function buildTimelineDays(startDate: string | null, endDate: string | null): TimelineDay[] {
   if (!startDate || !endDate) {
     return [];
@@ -2140,6 +3306,147 @@ function buildTimelineDays(startDate: string | null, endDate: string | null): Ti
   return days;
 }
 
+function buildTimelineDependencyPaths({
+  visibleLinePositions,
+  timelineDayIndexByIso,
+}: {
+  visibleLinePositions: Map<string, VisibleTimelineLinePosition>;
+  timelineDayIndexByIso: Map<string, number>;
+}) {
+  const paths: Array<{ key: string; d: string }> = [];
+
+  for (const successor of visibleLinePositions.values()) {
+    const successorStartIndex =
+      successor.line.startDate ? (timelineDayIndexByIso.get(successor.line.startDate) ?? -1) : -1;
+    const successorEndIndex =
+      successor.line.endDate ? (timelineDayIndexByIso.get(successor.line.endDate) ?? -1) : -1;
+
+    if (successorStartIndex < 0 || successorEndIndex < successorStartIndex) {
+      continue;
+    }
+
+    for (const predecessorReference of parseWorkSchedulePredecessors(successor.line.predecessor)) {
+      const predecessor = visibleLinePositions.get(predecessorReference.code);
+      if (!predecessor) {
+        continue;
+      }
+
+      const predecessorStartIndex =
+        predecessor.line.startDate ? (timelineDayIndexByIso.get(predecessor.line.startDate) ?? -1) : -1;
+      const predecessorEndIndex =
+        predecessor.line.endDate ? (timelineDayIndexByIso.get(predecessor.line.endDate) ?? -1) : -1;
+
+      if (predecessorStartIndex < 0 || predecessorEndIndex < predecessorStartIndex) {
+        continue;
+      }
+
+      const connector = buildTimelineDependencyConnector({
+        predecessor,
+        predecessorReference,
+        predecessorStartIndex,
+        predecessorEndIndex,
+        successor,
+        successorStartIndex,
+        successorEndIndex,
+      });
+
+      if (connector) {
+        paths.push({
+          key: `${successor.line.budgetItemId}-${predecessorReference.code}-${predecessorReference.relation}-${predecessorReference.lagDays}`,
+          d: connector,
+        });
+      }
+    }
+  }
+
+  return paths;
+}
+
+function buildTimelineDependencyConnector({
+  predecessor,
+  predecessorReference,
+  predecessorStartIndex,
+  predecessorEndIndex,
+  successor,
+  successorStartIndex,
+  successorEndIndex,
+}: {
+  predecessor: VisibleTimelineLinePosition;
+  predecessorReference: {
+    relation: "FS" | "SS" | "FF" | "SF";
+  };
+  predecessorStartIndex: number;
+  predecessorEndIndex: number;
+  successor: VisibleTimelineLinePosition;
+  successorStartIndex: number;
+  successorEndIndex: number;
+}) {
+  const predecessorStartX = getTimelineColumnStartX(predecessorStartIndex);
+  const predecessorEndX = getTimelineColumnEndX(predecessorEndIndex);
+  const successorStartX = getTimelineColumnStartX(successorStartIndex);
+  const successorEndX = getTimelineColumnEndX(successorEndIndex);
+  const predecessorY = predecessor.top + predecessor.height / 2;
+  const successorY = successor.top + successor.height / 2;
+  const elbowOffset = 8;
+  const sourceExitOffset = 12;
+  const sourceDropOffset = 15;
+  const arrowOffset = 6;
+  const minimumFinalSegment = 10;
+  const sameDayOrNextDayDelta = (leftIndex: number, rightIndex: number) => rightIndex - leftIndex;
+  const isSameDayHandoff =
+    (predecessorReference.relation === "FS" &&
+      sameDayOrNextDayDelta(predecessorEndIndex, successorStartIndex) >= 0 &&
+      sameDayOrNextDayDelta(predecessorEndIndex, successorStartIndex) <= 1) ||
+    (predecessorReference.relation === "SS" &&
+      sameDayOrNextDayDelta(predecessorStartIndex, successorStartIndex) >= 0 &&
+      sameDayOrNextDayDelta(predecessorStartIndex, successorStartIndex) <= 1) ||
+    (predecessorReference.relation === "FF" &&
+      sameDayOrNextDayDelta(predecessorEndIndex, successorEndIndex) >= 0 &&
+      sameDayOrNextDayDelta(predecessorEndIndex, successorEndIndex) <= 1) ||
+    (predecessorReference.relation === "SF" &&
+      sameDayOrNextDayDelta(predecessorStartIndex, successorEndIndex) >= 0 &&
+      sameDayOrNextDayDelta(predecessorStartIndex, successorEndIndex) <= 1);
+
+  const sourceX =
+    predecessorReference.relation === "FS" || predecessorReference.relation === "FF"
+      ? predecessorEndX
+      : predecessorStartX;
+  const targetX =
+    predecessorReference.relation === "FS" || predecessorReference.relation === "SS"
+      ? successorStartX
+      : successorEndX;
+  const targetApproachX =
+    predecessorReference.relation === "FS" || predecessorReference.relation === "SS"
+      ? Math.max(0, targetX - arrowOffset)
+      : targetX + arrowOffset;
+  const elbowX =
+    predecessorReference.relation === "FS" || predecessorReference.relation === "FF"
+      ? Math.min(
+          Math.max(sourceX + elbowOffset, targetApproachX - elbowOffset),
+          targetApproachX - minimumFinalSegment,
+        )
+      : Math.max(
+          Math.min(sourceX - elbowOffset, targetApproachX + elbowOffset),
+          targetApproachX + minimumFinalSegment,
+        );
+  if (!isSameDayHandoff) {
+    return `M ${sourceX} ${predecessorY} H ${elbowX} V ${successorY} H ${targetApproachX} H ${targetX}`;
+  }
+
+  const sourceExitX = Math.max(sourceX + sourceExitOffset, elbowX + elbowOffset);
+  const breakY = predecessorY + sourceDropOffset;
+
+  return `M ${sourceX} ${predecessorY} H ${sourceExitX} V ${breakY} H ${elbowX} V ${successorY} H ${targetApproachX} H ${targetX}`;
+}
+
+function getTimelineColumnStartX(index: number) {
+  return index * (OVERVIEW_TIMELINE_DAY_WIDTH_PX + OVERVIEW_TIMELINE_DAY_GAP_PX);
+}
+
+function getTimelineColumnEndX(index: number) {
+  return getTimelineColumnStartX(index) + OVERVIEW_TIMELINE_DAY_WIDTH_PX;
+}
+
 function groupTimelineWeeks(days: TimelineDay[]) {
   const groups: Array<{ key: string; label: string; length: number }> = [];
   let currentKey = "";
@@ -2154,7 +3461,7 @@ function groupTimelineWeeks(days: TimelineDay[]) {
       currentKey = key;
       groups.push({
         key,
-        label: formatDate(weekStart, "DD_MMM_YYYY"),
+        label: timelineWeekFormatter.format(weekStart),
         length: 1,
       });
       continue;
@@ -2404,6 +3711,10 @@ function getOverviewFilterStorageKey(budgetId: string) {
   return `work-schedule-overview-filter:${budgetId}`;
 }
 
+function getOverviewMeasuredHeightsStorageKey(budgetId: string) {
+  return `work-schedule-overview-measured-heights:${budgetId}`;
+}
+
 function getExecutiveWorkbookScopeStorageKey(budgetId: string) {
   return `work-schedule-executive-workbook-scope:${budgetId}`;
 }
@@ -2503,14 +3814,41 @@ function writeEditingLineBudgetItemId(budgetId: string, budgetItemId: string | n
   window.localStorage.setItem(getEditingLineStorageKey(budgetId), budgetItemId);
 }
 
-function readEditingLine(data: WorkScheduleViewRecord): EditableLine | null {
+function buildPredecessorRowNumberMaps(groups: WorkScheduleViewRecord["groups"]): PredecessorRowNumberMaps {
+  const itemCodeToRowNumber = new Map<string, number>();
+  const rowNumberToItemCode = new Map<number, string>();
+  let currentRowNumber = 1;
+
+  for (const group of groups) {
+    currentRowNumber += 1;
+
+    for (const row of group.rows) {
+      if (row.kind === "line") {
+        itemCodeToRowNumber.set(row.line.itemCode, currentRowNumber);
+        rowNumberToItemCode.set(currentRowNumber, row.line.itemCode);
+      }
+
+      currentRowNumber += 1;
+    }
+  }
+
+  return {
+    itemCodeToRowNumber,
+    rowNumberToItemCode,
+  };
+}
+
+function readEditingLine(
+  data: WorkScheduleViewRecord,
+  itemCodeToRowNumber: Map<string, number> = new Map<string, number>(),
+): EditableLine | null {
   const budgetItemId = readEditingLineBudgetItemId(data.budgetId);
   if (!budgetItemId) {
     return null;
   }
 
   const matchingLine = data.groups.flatMap((group) => group.lines).find((line) => line.budgetItemId === budgetItemId);
-  return matchingLine ? createEditableLine(matchingLine) : null;
+  return matchingLine ? createEditableLine(matchingLine, itemCodeToRowNumber) : null;
 }
 
 function readOverviewScrollPosition(budgetId: string) {
@@ -2649,6 +3987,75 @@ function writeOverviewFilter(budgetId: string, overviewFilter: OverviewFilter) {
   }
 
   window.localStorage.setItem(getOverviewFilterStorageKey(budgetId), overviewFilter);
+}
+
+function readOverviewMeasuredHeights(budgetId: string): OverviewMeasuredHeightsCache {
+  if (typeof window === "undefined") {
+    return { groups: {}, lines: {} };
+  }
+
+  const storedValue = window.localStorage.getItem(getOverviewMeasuredHeightsStorageKey(budgetId));
+  if (!storedValue) {
+    return { groups: {}, lines: {} };
+  }
+
+  try {
+    const parsedValue = JSON.parse(storedValue) as Partial<OverviewMeasuredHeightsCache>;
+    return {
+      groups: sanitizeMeasuredHeightsMap(parsedValue.groups),
+      lines: sanitizeMeasuredHeightsMap(parsedValue.lines),
+    };
+  } catch {
+    return { groups: {}, lines: {} };
+  }
+}
+
+function writeOverviewMeasuredHeights(budgetId: string, cache: OverviewMeasuredHeightsCache) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (Object.keys(cache.groups).length === 0 && Object.keys(cache.lines).length === 0) {
+    window.localStorage.removeItem(getOverviewMeasuredHeightsStorageKey(budgetId));
+    return;
+  }
+
+  window.localStorage.setItem(getOverviewMeasuredHeightsStorageKey(budgetId), JSON.stringify(cache));
+}
+
+function sanitizeMeasuredHeightsMap(input: unknown) {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+
+  const next: Record<string, number> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+      continue;
+    }
+
+    next[key] = Math.round(value);
+  }
+
+  return next;
+}
+
+function pruneMeasuredHeightsMap(input: Record<string, number>, validKeys: Set<string>) {
+  const next: Record<string, number> = {};
+
+  for (const [key, value] of Object.entries(input)) {
+    if (!validKeys.has(key)) {
+      continue;
+    }
+
+    next[key] = value;
+  }
+
+  return next;
+}
+
+function normalizeMeasuredHeight(height: number, minimumHeight: number) {
+  return Math.max(Math.round(height), minimumHeight);
 }
 
 function readExecutiveWorkbookScope(budgetId: string): WorkbookExportScope {
@@ -3960,7 +5367,10 @@ function formatTimelineRange(startDate: string | null, endDate: string | null, d
   return `${formatDate(startDate, dateFormat as never)} - ${formatDate(endDate, dateFormat as never)}`;
 }
 
-function createEditableLine(line: WorkScheduleLineRecord): EditableLine {
+function createEditableLine(
+  line: WorkScheduleLineRecord,
+  itemCodeToRowNumber: Map<string, number> = new Map<string, number>(),
+): EditableLine {
   const fallbackDistributions =
     line.monthlyDistributions.length > 0
       ? line.monthlyDistributions.map((distribution) => ({ ...distribution }))
@@ -3973,12 +5383,74 @@ function createEditableLine(line: WorkScheduleLineRecord): EditableLine {
       startDate: line.startDate ?? "",
       endDate: line.endDate ?? "",
       durationDays: line.durationDays ?? 0,
-      predecessor: line.predecessor ?? "",
+      predecessor: formatPredecessorForDisplay(line.predecessor ?? "", itemCodeToRowNumber),
       crew: line.crew != null ? String(line.crew) : "",
       monthlyDistributions: fallbackDistributions,
     },
     {},
   );
+}
+
+function serializeEditableLine(line: EditableLine, rowNumberToItemCode: Map<number, string> = new Map<number, string>()) {
+  return {
+    budgetItemId: line.budgetItemId,
+    startDate: line.startDate,
+    endDate: line.endDate,
+    durationDays: Number(line.durationDays),
+    predecessor: formatPredecessorForStorage(line.predecessor, rowNumberToItemCode),
+    crew: line.crew.trim() ? Number(line.crew) : null,
+    monthlyDistributions: line.monthlyDistributions.map((distribution) => ({
+      year: distribution.year,
+      month: distribution.month,
+      percentage: Number(distribution.percentage),
+    })),
+  };
+}
+
+function formatPredecessorForDisplay(value: string, itemCodeToRowNumber: Map<string, number>) {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return "";
+  }
+
+  try {
+    return parseWorkSchedulePredecessors(normalizedValue)
+      .map((reference) => {
+        const rowNumber = itemCodeToRowNumber.get(reference.code);
+        return formatPredecessorReference(rowNumber ? String(rowNumber) : reference.code, reference.relation, reference.lagDays);
+      })
+      .join(",");
+  } catch {
+    return normalizedValue;
+  }
+}
+
+function formatPredecessorForStorage(value: string, rowNumberToItemCode: Map<number, string>) {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return "";
+  }
+
+  try {
+    return parseWorkSchedulePredecessors(normalizedValue)
+      .map((reference) => {
+        const parsedRowNumber = Number(reference.code);
+        const itemCode =
+          Number.isInteger(parsedRowNumber) && String(parsedRowNumber) === reference.code
+            ? rowNumberToItemCode.get(parsedRowNumber) ?? reference.code
+            : reference.code;
+
+        return formatPredecessorReference(itemCode, reference.relation, reference.lagDays);
+      })
+      .join(",");
+  } catch {
+    return normalizedValue;
+  }
+}
+
+function formatPredecessorReference(code: string, relation: string, lagDays: number) {
+  const lagLabel = lagDays === 0 ? "" : `${lagDays > 0 ? "+" : "-"}${Math.abs(lagDays)}d`;
+  return `${code}${relation}${lagLabel}`;
 }
 
 function createNextDistribution(distributions: WorkScheduleMonthlyDistributionRecord[]) {
@@ -4107,6 +5579,27 @@ function updateEditableLineDates(
   };
 }
 
+function updateEditableLineDuration(line: EditableLine, durationDays: number) {
+  const normalizedDuration = Number.isFinite(durationDays) ? Math.max(0, Math.trunc(durationDays)) : 0;
+  if (!line.startDate || normalizedDuration <= 0) {
+    return {
+      ...line,
+      durationDays: normalizedDuration,
+    };
+  }
+
+  const endDate = addIsoDays(line.startDate, normalizedDuration - 1);
+
+  return {
+    ...line,
+    endDate,
+    durationDays: normalizedDuration,
+    monthlyDistributions: shouldHydrateInitialDistribution(line)
+      ? buildInitialDistributionsFromRange(line.startDate, endDate)
+      : line.monthlyDistributions,
+  };
+}
+
 function calculateInclusiveDurationDays(startDate: string, endDate: string) {
   const start = new Date(`${startDate}T00:00:00.000Z`);
   const end = new Date(`${endDate}T00:00:00.000Z`);
@@ -4161,4 +5654,14 @@ function listMonthsInRange(startDate: string, endDate: string) {
   }
 
   return months;
+}
+
+function addIsoDays(startDate: string, days: number) {
+  const date = new Date(`${startDate}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    return startDate;
+  }
+
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }

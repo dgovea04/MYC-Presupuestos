@@ -20,17 +20,22 @@ export function SidebarUserCard({
 
   return (
     <div className={cn("mt-auto w-full rounded-2xl bg-white/10 text-slate-200", isMini ? "p-3" : "p-4")}>
-      <div className={cn("flex items-center", isMini ? "justify-center" : "gap-3")}>
+      <div className={cn("flex items-center", isMini ? "relative left-[-5px] w-fit justify-center" : "gap-3")}>
         {user.avatarUrl ? (
           <Image
             alt={`Avatar de ${user.name}`}
-            className="h-10 w-10 shrink-0 rounded-full object-cover"
-            height={40}
+            className={cn("shrink-0 rounded-full object-cover", isMini ? "h-8 w-8" : "h-10 w-10")}
+            height={isMini ? 32 : 40}
             src={user.avatarUrl}
-            width={40}
+            width={isMini ? 32 : 40}
           />
         ) : (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sm font-semibold text-sky-100">
+          <div
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sm font-semibold text-sky-100",
+              isMini ? "h-8 w-8" : "h-10 w-10",
+            )}
+          >
             {user.initials}
           </div>
         )}
