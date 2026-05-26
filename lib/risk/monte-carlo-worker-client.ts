@@ -43,7 +43,13 @@ export function runRiskSimulationWorker({
     }
 
     if (message.type === "progress") {
-      onProgress(message.completedIterations, message.totalIterations);
+      try {
+        onProgress(message.completedIterations, message.totalIterations);
+      } catch (error) {
+        worker.terminate();
+        throw error;
+      }
+
       return;
     }
 
