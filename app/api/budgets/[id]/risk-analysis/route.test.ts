@@ -1,12 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
-import { normalizeRiskBudgetItems } from "@/lib/risk/data";
+import { prisma } from "@/lib/db/prisma";
+import { getRiskAnalysisPayload, normalizeRiskBudgetItems } from "@/lib/risk/data";
 import { MONTE_CARLO_ITERATIONS } from "@/types/risk";
 import {
   riskSimulationRunInputSchema,
   riskVariableInputSchema,
 } from "@/lib/validations/risk";
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    budget: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
+    riskVariable: {
+      findMany: vi.fn(),
+    },
+    riskSimulationRun: {
+      findFirst: vi.fn(),
+    },
+  },
+}));
 
 describe("risk analysis validation", () => {
   it("accepts a valid quantity triangular variable", () => {
@@ -103,6 +119,55 @@ describe("risk analysis validation", () => {
       sourceBudgetName: "Estructuras",
     });
   });
+
+  it("serializes only variables attached to scoped risk items", async () => {
+    vi.mocked(prisma.budget.findFirst).mockResolvedValueOnce({
+      ...baseBudget,
+      id: "general-1",
+      projectId: "project-1",
+      kind: "GENERAL",
+      name: "Presupuesto general",
+      items: [],
+      childBudgets: [],
+    });
+    vi.mocked(prisma.budget.findMany).mockResolvedValueOnce([
+      {
+        ...baseBudget,
+        id: "sub-1",
+        projectId: "project-1",
+        parentBudgetId: "general-1",
+        kind: "SUB_BUDGET",
+        name: "Estructuras",
+        items: [createBudgetItem({ id: "allowed-item", budgetId: "sub-1" })],
+      },
+    ]);
+    vi.mocked(prisma.riskVariable.findMany).mockResolvedValueOnce([
+      createRiskVariable({ id: "risk-allowed", budgetItemId: "allowed-item" }),
+      createRiskVariable({ id: "risk-stale", budgetItemId: "stale-item" }),
+    ]);
+    vi.mocked(prisma.riskSimulationRun.findFirst).mockResolvedValueOnce(null);
+
+    const payload = await getRiskAnalysisPayload("general-1", "user-1");
+
+    expect(prisma.budget.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          parentBudgetId: "general-1",
+          kind: "SUB_BUDGET",
+          projectId: "project-1",
+        }),
+      }),
+    );
+    expect(prisma.riskVariable.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          budgetId: "general-1",
+          budgetItemId: { in: ["allowed-item"] },
+        }),
+      }),
+    );
+    expect(payload.variables.map((variable) => variable.id)).toEqual(["risk-allowed"]);
+  });
 });
 
 const validRunInput = {
@@ -170,6 +235,22 @@ function createBudgetItem({ id, budgetId }: { id: string; budgetId: string }) {
     unitPrice: new Prisma.Decimal(25),
     partial: new Prisma.Decimal(250),
     sortOrder: 0,
+    createdAt: baseDate,
+    updatedAt: baseDate,
+  };
+}
+
+function createRiskVariable({ id, budgetItemId }: { id: string; budgetItemId: string }) {
+  return {
+    id,
+    budgetId: "general-1",
+    budgetItemId,
+    variableType: "QUANTITY" as const,
+    distributionType: "TRIANGULAR" as const,
+    minimum: new Prisma.Decimal(8),
+    mostLikely: new Prisma.Decimal(10),
+    maximum: new Prisma.Decimal(12),
+    enabled: true,
     createdAt: baseDate,
     updatedAt: baseDate,
   };

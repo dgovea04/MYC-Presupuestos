@@ -16,21 +16,36 @@ import type {
   RiskVariableRecord,
 } from "@/types/risk";
 
-type BudgetWithRiskScope = Prisma.BudgetGetPayload<{
-  include: {
-    items: {
-      orderBy: { sortOrder: "asc" };
-    };
-    childBudgets: {
-      orderBy: { createdAt: "asc" };
-      include: {
-        items: {
-          orderBy: { sortOrder: "asc" };
-        };
-      };
-    };
-  };
+const riskBudgetItemSelect = {
+  id: true,
+  budgetId: true,
+  code: true,
+  description: true,
+  unit: true,
+  quantity: true,
+  unitPrice: true,
+  sortOrder: true,
+} satisfies Prisma.BudgetItemSelect;
+
+type RiskBudgetItemRow = Prisma.BudgetItemGetPayload<{
+  select: typeof riskBudgetItemSelect;
 }>;
+
+type BudgetWithRiskScope = {
+  id: string;
+  projectId: string;
+  kind: "GENERAL" | "SUB_BUDGET";
+  name: string;
+  currency: string;
+  items: RiskBudgetItemRow[];
+  childBudgets: Array<{
+    id: string;
+    projectId: string;
+    kind: "GENERAL" | "SUB_BUDGET";
+    name: string;
+    items: RiskBudgetItemRow[];
+  }>;
+};
 
 type RiskVariableModel = Prisma.RiskVariableGetPayload<Record<string, never>>;
 type RiskSimulationRunModel = Prisma.RiskSimulationRunGetPayload<Record<string, never>>;
@@ -46,9 +61,13 @@ export async function getRiskAnalysisPayload(
   }
 
   const items = normalizeRiskBudgetItems(budget);
+  const scopedItemIds = items.map((item) => item.itemId);
   const [variables, latestRun] = await Promise.all([
     prisma.riskVariable.findMany({
-      where: { budgetId },
+      where: {
+        budgetId,
+        budgetItemId: { in: scopedItemIds },
+      },
       orderBy: { createdAt: "asc" },
     }),
     prisma.riskSimulationRun.findFirst({
@@ -67,7 +86,9 @@ export async function getRiskAnalysisPayload(
       baseTotal: roundBaseTotal(items.reduce((total, item) => total + item.baseTotal, 0)),
     },
     items,
-    variables: variables.map(serializeRiskVariable),
+    variables: variables
+      .filter((variable) => scopedItemIds.includes(variable.budgetItemId))
+      .map(serializeRiskVariable),
     latestRun: latestRun ? serializeRiskSimulationRun(latestRun) : null,
   };
 }
@@ -172,7 +193,7 @@ export async function saveRiskSimulationRun(
 }
 
 async function findAccessibleBudgetWithItems(budgetId: string, userId: string) {
-  return prisma.budget.findFirst({
+  const budget = await prisma.budget.findFirst({
     where: {
       id: budgetId,
       project: {
@@ -181,20 +202,58 @@ async function findAccessibleBudgetWithItems(budgetId: string, userId: string) {
         },
       },
     },
-    include: {
+    select: {
+      id: true,
+      projectId: true,
+      kind: true,
+      name: true,
+      currency: true,
       items: {
         orderBy: { sortOrder: "asc" },
-      },
-      childBudgets: {
-        orderBy: { createdAt: "asc" },
-        include: {
-          items: {
-            orderBy: { sortOrder: "asc" },
-          },
-        },
+        select: riskBudgetItemSelect,
       },
     },
   });
+
+  if (!budget) {
+    return null;
+  }
+
+  if (budget.kind !== "GENERAL") {
+    return {
+      ...budget,
+      childBudgets: [],
+    } satisfies BudgetWithRiskScope;
+  }
+
+  const childBudgets = await prisma.budget.findMany({
+    where: {
+      parentBudgetId: budget.id,
+      kind: "SUB_BUDGET",
+      projectId: budget.projectId,
+      project: {
+        company: {
+          userId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      projectId: true,
+      kind: true,
+      name: true,
+      items: {
+        orderBy: { sortOrder: "asc" },
+        select: riskBudgetItemSelect,
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return {
+    ...budget,
+    childBudgets,
+  } satisfies BudgetWithRiskScope;
 }
 
 export function normalizeRiskBudgetItems(budget: BudgetWithRiskScope): RiskBudgetItem[] {
