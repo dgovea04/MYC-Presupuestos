@@ -84,6 +84,14 @@ enum ActivityEventType {
   ADJUSTMENT_REGISTERED
 }
 
+enum RiskVariableType {
+  QUANTITY
+}
+
+enum RiskDistributionType {
+  TRIANGULAR
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -197,6 +205,8 @@ model Budget {
   workSchedule         WorkSchedule?
   valuations            Valuation[]
   reports               Report[]
+  riskVariables         RiskVariable[]
+  riskSimulationRuns    RiskSimulationRun[]
 
   @@index([projectId])
   @@index([parentBudgetId])
@@ -240,9 +250,54 @@ model BudgetItem {
   apu         Apu?
   workScheduleItems WorkScheduleItem[]
   polynomialMonomialComponents PolynomialMonomialComponent[]
+  riskVariables RiskVariable[]
 
   @@index([budgetId])
   @@index([levelId])
+}
+
+model RiskVariable {
+  id               String               @id @default(cuid())
+  budgetId         String
+  budgetItemId     String
+  variableType     RiskVariableType     @default(QUANTITY)
+  distributionType RiskDistributionType @default(TRIANGULAR)
+  minimum          Decimal              @default(0) @db.Decimal(18, 4)
+  mostLikely       Decimal              @default(0) @db.Decimal(18, 4)
+  maximum          Decimal              @default(0) @db.Decimal(18, 4)
+  enabled          Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  budget           Budget               @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budgetItem       BudgetItem           @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, budgetItemId, variableType])
+  @@index([budgetId])
+  @@index([budgetItemId])
+}
+
+model RiskSimulationRun {
+  id                String   @id @default(cuid())
+  budgetId          String
+  iterations        Int
+  baseTotal         Decimal  @default(0) @db.Decimal(18, 4)
+  mean              Decimal  @default(0) @db.Decimal(18, 4)
+  median            Decimal  @default(0) @db.Decimal(18, 4)
+  variance          Decimal  @default(0) @db.Decimal(24, 6)
+  standardDeviation Decimal  @default(0) @db.Decimal(18, 4)
+  skewness          Decimal  @default(0) @db.Decimal(18, 6)
+  kurtosis          Decimal  @default(0) @db.Decimal(18, 6)
+  p10               Decimal  @default(0) @db.Decimal(18, 4)
+  p50               Decimal  @default(0) @db.Decimal(18, 4)
+  p80               Decimal  @default(0) @db.Decimal(18, 4)
+  p90               Decimal  @default(0) @db.Decimal(18, 4)
+  p95               Decimal  @default(0) @db.Decimal(18, 4)
+  histogramBins     Json
+  sCurvePoints      Json
+  createdAt         DateTime @default(now())
+  budget            Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId, createdAt(sort: Desc)])
 }
 
 model WorkSchedule {
