@@ -449,14 +449,15 @@ function insertWorksheetImage(
     : never,
   range: { tl: { col: number; row: number }; br: { col: number; row: number } },
 ) {
-  const imageBuffer = asset.buffer as unknown as NonNullable<ExcelJS.Image["buffer"]>;
-  const imageRange = range as unknown as Parameters<ExcelJS.Worksheet["addImage"]>[1];
   const imageId = workbook.addImage({
-    buffer: imageBuffer,
+    base64: asset.buffer.toString("base64"),
     extension: asset.extension === "jpg" ? "jpeg" : asset.extension,
   });
 
-  sheet.addImage(imageId, imageRange);
+  sheet.addImage(imageId, {
+    tl: new ExcelJS.Anchor(range.tl),
+    br: new ExcelJS.Anchor(range.br),
+  });
 }
 
 function formatCurrencyColumns(

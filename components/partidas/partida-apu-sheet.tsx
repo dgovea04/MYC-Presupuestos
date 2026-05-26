@@ -308,15 +308,15 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
             style={excelCssVariables}
           >
         <Dialog.Description className="sr-only">
-          Editor APU de la partida {currentPartida.description}. Unidad {currentPartida.unit}.
+          Editor APU de la partida {activePartida.description}. Unidad {activePartida.unit}.
         </Dialog.Description>
         <div className={cn("flex items-start justify-between gap-4", isExcelMode ? "mb-3" : "mb-5")}>
           <div>
             <p className={cn("text-slate-500", isExcelMode ? "text-xs uppercase tracking-wide" : "text-sm")}>Editor APU</p>
             <Dialog.Title asChild>
-              <h3 className={cn("font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>{currentPartida.description}</h3>
+              <h3 className={cn("font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>{activePartida.description}</h3>
             </Dialog.Title>
-            <p className={cn("mt-1 text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentPartida.unit}</p>
+            <p className={cn("mt-1 text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {activePartida.unit}</p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <Link href={buildAiHref("chat", currentPartida.description, currentPartida.unit, "Explica tecnicamente esta partida y valida su rendimiento.")}>
@@ -372,11 +372,11 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
               <Input
                 type="number"
                 step="0.0001"
-                value={currentPartida.performance}
+                value={activePartida.performance}
                 readOnly={isReadonly}
                 onChange={(event) =>
-                  applyCalculatedPartida(currentPartida.apuRows, Number(event.target.value), {
-                    performanceRate: buildPerformanceRate(Number(event.target.value), currentPartida.performanceUnit ?? currentPartida.unit),
+                  applyCalculatedPartida(activePartida.apuRows, Number(event.target.value), {
+                    performanceRate: buildPerformanceRate(Number(event.target.value), activePartida.performanceUnit ?? activePartida.unit),
                   })
                 }
                 className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), isReadonly ? "border-transparent bg-transparent px-0 shadow-none" : undefined)}
@@ -385,7 +385,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
             <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
               <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
               <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
-                {formatCurrency(calculatedUnitPrice, currentPartida.currency, currencyDecimals)}
+                {formatCurrency(calculatedUnitPrice, activePartida.currency, currencyDecimals)}
               </p>
             </div>
           </div>
@@ -401,7 +401,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
                 >
                   <p className={cn("font-medium", isExcelMode ? "text-[11px] uppercase tracking-wide" : "text-sm")}>{presentation.label}</p>
                   <p className={cn("mt-1 font-semibold tabular-nums", isExcelMode ? "text-base" : "text-lg")}>
-                    {formatCurrency(categoryTotal.subtotal, currentPartida.currency, currencyDecimals)}
+                    {formatCurrency(categoryTotal.subtotal, activePartida.currency, currencyDecimals)}
                   </p>
                 </div>
               );
@@ -536,7 +536,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
               </TR>
             </THead>
             <TBody>
-              {currentPartida.apuRows.map((row, index) => {
+              {activePartida.apuRows.map((row, index) => {
                 const calculatedRow = calculatedRows[index] ?? row;
                 const presentationCategory = getApuPresentationCategory(calculatedRow);
                 const categoryPresentation = getApuCategoryPresentation(presentationCategory);
@@ -654,7 +654,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
                       />
                     </TD>
                     <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-right text-xs font-semibold tabular-nums text-slate-900")}>
-                      {formatCurrency(calculatedRow.subtotal, currentPartida.currency, currencyDecimals)}
+                      {formatCurrency(calculatedRow.subtotal, activePartida.currency, currencyDecimals)}
                     </TD>
                     <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
                       <Button

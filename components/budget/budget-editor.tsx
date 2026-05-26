@@ -1,9 +1,10 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, Type, WandSparkles } from "lucide-react";
+import { Activity, BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -1793,6 +1794,13 @@ export function BudgetEditor({
                 <div className="flex items-center">
                   <SaveBadge state={saveState} lastSavedAt={lastSavedAt} compact />
                 </div>
+                <Link
+                  href={`/budgets/${budget.id}/risk-analysis`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 text-[11px] font-semibold tracking-[0.08em] text-sky-700 shadow-[0_12px_24px_-22px_rgba(37,99,235,0.32)] transition hover:border-sky-300 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  <Activity className="h-4 w-4" />
+                  Riesgos
+                </Link>
                 <Button
                   variant="secondary"
                   onClick={() => void saveBudget()}
@@ -1999,11 +2007,7 @@ export function BudgetEditor({
               }}
             />
           ) : null}
-          {levelActionMenu.kind === "add" &&
-          (() => {
-            const levelRow = rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId);
-            return levelRow?.kind === "level" && levelRow.level.type === "TITLE";
-          })() ? (
+          {levelActionMenu.kind === "add" && findLevelRow(rows, levelActionMenu.rowId)?.level.type === "TITLE" ? (
             <LevelActionMenuButton
               label="Agregar subtítulo"
               onClick={() => {
@@ -2014,8 +2018,8 @@ export function BudgetEditor({
           ) : null}
           {levelActionMenu.kind === "add" &&
           (() => {
-            const levelRow = rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId);
-            return levelRow?.kind === "level" && (levelRow.level.type === "SUBTITLE" || levelRow.level.type === "ITEM_GROUP");
+            const levelRow = findLevelRow(rows, levelActionMenu.rowId);
+            return levelRow ? levelRow.level.type === "SUBTITLE" || levelRow.level.type === "ITEM_GROUP" : false;
           })() ? (
             <LevelActionMenuButton
               label="Agregar subpartida"
@@ -4748,6 +4752,10 @@ function getDefaultInsertTarget(rows: BudgetDisplayRow[], activeRowId: string | 
 
 function resolveTargetRow(rows: BudgetDisplayRow[], target: InsertTarget) {
   return rows.find((row) => row.kind === target.kind && getRowId(row) === target.id) ?? null;
+}
+
+function findLevelRow(rows: BudgetDisplayRow[], levelId: string): Extract<BudgetDisplayRow, { kind: "level" }> | null {
+  return rows.find((row): row is Extract<BudgetDisplayRow, { kind: "level" }> => row.kind === "level" && row.level.id === levelId) ?? null;
 }
 
 function resolveDefaultPasteApplyMode(targetRow: BudgetDisplayRow): BudgetPasteApplyMode {
