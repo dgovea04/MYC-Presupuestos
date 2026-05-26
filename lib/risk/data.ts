@@ -50,6 +50,13 @@ type BudgetWithRiskScope = {
 type RiskVariableModel = Prisma.RiskVariableGetPayload<Record<string, never>>;
 type RiskSimulationRunModel = Prisma.RiskSimulationRunGetPayload<Record<string, never>>;
 
+export class RiskBudgetAccessError extends Error {
+  constructor() {
+    super("No tienes permisos para acceder a este presupuesto.");
+    this.name = "RiskBudgetAccessError";
+  }
+}
+
 export async function getRiskAnalysisPayload(
   budgetId: string,
   userId: string,
@@ -57,7 +64,7 @@ export async function getRiskAnalysisPayload(
   const budget = await findAccessibleBudgetWithItems(budgetId, userId);
 
   if (!budget) {
-    throw new Error("No tienes permisos para acceder a este presupuesto.");
+    throw new RiskBudgetAccessError();
   }
 
   const items = normalizeRiskBudgetItems(budget);
