@@ -31,6 +31,24 @@ export function RiskVariablesTable({
     variable: variables.find((variable) => variable.budgetItemId === item.itemId) ?? null,
   }));
 
+  return <RiskVariablesTableGrid currency={currency} currencyDecimals={currencyDecimals} onEditVariable={onEditVariable} rows={rows} />;
+}
+
+function RiskVariablesTableGrid({
+  currency,
+  currencyDecimals,
+  onEditVariable,
+  rows,
+}: {
+  currency: string;
+  currencyDecimals: number;
+  onEditVariable: (itemId: string) => void;
+  rows: RiskVariableRow[];
+}) {
+  "use no memo";
+
+  // React Compiler cannot memoize TanStack Table's function-returning API safely.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: rows,
     columns: [

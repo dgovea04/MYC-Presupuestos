@@ -124,16 +124,20 @@ function RiskVariableModalContent({
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <button className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" type="button">
+              <button
+                aria-label="Cerrar"
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                type="button"
+              >
                 <X className="h-4 w-4" />
               </button>
             </Dialog.Close>
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            <Field label="Min" onChange={setMinimum} value={minimum} />
-            <Field label="Probable" onChange={setMostLikely} value={mostLikely} />
-            <Field label="Max" onChange={setMaximum} value={maximum} />
+            <Field id={`risk-minimum-${item.itemId}`} label="Min" onChange={setMinimum} value={minimum} />
+            <Field id={`risk-most-likely-${item.itemId}`} label="Probable" onChange={setMostLikely} value={mostLikely} />
+            <Field id={`risk-maximum-${item.itemId}`} label="Max" onChange={setMaximum} value={maximum} />
           </div>
 
           <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
@@ -163,11 +167,11 @@ function RiskVariableModalContent({
   );
 }
 
-function Field({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+function Field({ id, label, onChange, value }: { id: string; label: string; onChange: (value: string) => void; value: string }) {
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      <Input inputMode="decimal" onChange={(event) => onChange(event.target.value)} value={value} />
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} inputMode="decimal" onChange={(event) => onChange(event.target.value)} value={value} />
     </div>
   );
 }

@@ -23,6 +23,7 @@ export function RiskAnalysisDashboard({
   payload: RiskAnalysisPayload;
 }) {
   const workerRef = useRef<RiskWorkerController | null>(null);
+  const activeBudgetIdRef = useRef(payload.budget.id);
   const {
     completeSimulation,
     editingItemId,
@@ -45,7 +46,18 @@ export function RiskAnalysisDashboard({
   }, [payload.latestRun, payload.variables, setLatestRun, setVariables]);
 
   useEffect(() => {
-    return () => workerRef.current?.cancel();
+    activeBudgetIdRef.current = payload.budget.id;
+    workerRef.current?.cancel();
+    workerRef.current = null;
+    setEditingItemId(null);
+    useRiskAnalysisStore.setState({ error: "", progress: 0, status: "idle" });
+  }, [payload.budget.id, setEditingItemId]);
+
+  useEffect(() => {
+    return () => {
+      workerRef.current?.cancel();
+      workerRef.current = null;
+    };
   }, []);
 
   const enabledVariableCount = useMemo(() => variables.filter((variable) => variable.enabled).length, [variables]);
@@ -53,15 +65,30 @@ export function RiskAnalysisDashboard({
   const editingVariable = variables.find((variable) => variable.budgetItemId === editingItemId) ?? null;
 
   const persistRun = async (summary: RiskSimulationSummary) => {
-    const response = await fetch(`/api/budgets/${payload.budget.id}/risk-analysis/runs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(summary),
-    });
+    try {
+      const response = await fetch(`/api/budgets/${summary.budgetId}/risk-analysis/runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(summary),
+      });
 
-    const result: unknown = await response.json();
-    if (response.ok && isRiskSimulationSummary(result)) {
-      setLatestRun(result);
+      if (!response.ok) {
+        const result = await readOptionalJson(response);
+        throw new Error(readApiError(result, "La simulacion termino, pero no se pudo guardar el resultado."));
+      }
+
+      const result = await readOptionalJson(response);
+      if (!isRiskSimulationSummary(result)) {
+        throw new Error("La simulacion termino, pero no se pudo guardar el resultado.");
+      }
+
+      if (result.budgetId === activeBudgetIdRef.current) {
+        setLatestRun(result);
+      }
+    } catch {
+      if (summary.budgetId === activeBudgetIdRef.current) {
+        failSimulation("La simulacion termino, pero no se pudo guardar el resultado.");
+      }
     }
   };
 
@@ -80,14 +107,27 @@ export function RiskAnalysisDashboard({
 
     startSimulation();
     workerRef.current?.cancel();
+    const runBudgetId = payload.budget.id;
     workerRef.current = runRiskSimulationWorker({
       input,
-      onProgress: setProgress,
+      onProgress: (completedIterations, totalIterations) => {
+        if (runBudgetId === activeBudgetIdRef.current) {
+          setProgress(completedIterations, totalIterations);
+        }
+      },
       onResult: (summary) => {
+        if (summary.budgetId !== activeBudgetIdRef.current) {
+          return;
+        }
+
         completeSimulation(summary);
         void persistRun(summary);
       },
-      onError: failSimulation,
+      onError: (message) => {
+        if (runBudgetId === activeBudgetIdRef.current) {
+          failSimulation(message);
+        }
+      },
     });
   };
 
@@ -191,6 +231,14 @@ export function RiskAnalysisDashboard({
 
 function readApiError(payload: unknown, fallback: string) {
   return isRecord(payload) && typeof payload.error === "string" ? payload.error : fallback;
+}
+
+async function readOptionalJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 function isRiskAnalysisPayload(value: unknown): value is RiskAnalysisPayload {
