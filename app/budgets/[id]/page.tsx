@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Calculator, FileSpreadsheet, ListTree, ReceiptText, Sigma } from "lucide-react";
+import { Activity, ArrowRight, Calculator, FileSpreadsheet, ListTree, ReceiptText, Sigma } from "lucide-react";
 import { notFound } from "next/navigation";
 import { BudgetFlow } from "@/components/budget/budget-flow";
 import { AppShell } from "@/components/layout/app-shell";
@@ -166,6 +166,12 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                       title="Programacion de obra"
                       description="Cronograma consolidado, calendario valorizado, insumos por periodo y curva S basica."
                       icon={<FileSpreadsheet className="h-5 w-5" />}
+                    />
+                    <BudgetQuickActionLink
+                      href={`/budgets/${budget.id}/risk-analysis`}
+                      title="Riesgos Monte Carlo"
+                      description="Simulacion probabilistica de metrados con percentiles y contingencias del presupuesto."
+                      icon={<Activity className="h-5 w-5" />}
                     />
                   </div>
                 </CardContent>

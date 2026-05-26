@@ -2,9 +2,10 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Type } from "lucide-react";
+import { Activity, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Type } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -1594,6 +1595,13 @@ export function BudgetEditor({
                 <div className="flex items-center">
                   <SaveBadge state={saveState} lastSavedAt={lastSavedAt} compact />
                 </div>
+                <Link
+                  href={`/budgets/${budget.id}/risk-analysis`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 text-[11px] font-semibold tracking-[0.08em] text-sky-700 shadow-[0_12px_24px_-22px_rgba(37,99,235,0.32)] transition hover:border-sky-300 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  <Activity className="h-4 w-4" />
+                  Riesgos
+                </Link>
                 <Button
                   variant="secondary"
                   onClick={() => void saveBudget()}
