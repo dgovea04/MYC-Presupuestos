@@ -28,7 +28,7 @@ export function HeroSection() {
   return (
     <section className="relative w-full overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-[60rem] bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_38%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_30%),linear-gradient(180deg,#ffffff_0%,#f8fafc_72%)]" />
-      <div className="relative mx-auto grid w-full max-w-[1600px] gap-14 px-5 pb-16 pt-28 sm:px-8 md:gap-16 md:pb-24 md:pt-32 lg:grid-cols-[0.96fr_1.04fr] lg:px-12 xl:grid-cols-[0.92fr_1.08fr] xl:px-16 2xl:px-20">
+      <div className="landing-shell relative grid w-full gap-14 pb-16 pt-28 md:gap-16 md:pb-24 md:pt-32 lg:grid-cols-[0.96fr_1.04fr] xl:grid-cols-[0.92fr_1.08fr]">
         <div className="flex flex-col justify-center">
           <Badge className="w-fit border border-blue-100 bg-blue-50 px-3 py-1 text-[11px] font-semibold tracking-[0.22em] text-blue-700 uppercase">
             Plataforma moderna de costos y presupuestos de obra

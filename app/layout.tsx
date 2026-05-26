@@ -3,14 +3,10 @@ import { cookies } from "next/headers";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";
 import type { CSSProperties, ReactNode } from "react";
-import { APP_VIEW_MODE_STORAGE_KEY } from "@/lib/budget/view-mode";
 import {
   getSidebarWidthCssValue,
   isSidebarMode,
-  SIDEBAR_EXPANDED_WIDTH,
-  SIDEBAR_MINI_WIDTH,
   SIDEBAR_MODE_COOKIE_NAME,
-  SIDEBAR_MODE_STORAGE_KEY,
   SIDEBAR_WIDTH_CSS_VARIABLE,
 } from "@/lib/layout/sidebar-mode";
 import "./globals.css";
@@ -42,7 +38,6 @@ export default async function RootLayout({
   const htmlStyle = {
     [SIDEBAR_WIDTH_CSS_VARIABLE]: getSidebarWidthCssValue(isSidebarMode(initialSidebarMode) ? initialSidebarMode : "expanded"),
   } as CSSProperties;
-  const appPreferencesBootstrapScript = `try{var mode=window.localStorage.getItem(${JSON.stringify(APP_VIEW_MODE_STORAGE_KEY)});if(mode==='excel'||mode==='modern'){document.documentElement.dataset.viewMode=mode;}var sidebarMode=window.localStorage.getItem(${JSON.stringify(SIDEBAR_MODE_STORAGE_KEY)});if(sidebarMode==='mini'||sidebarMode==='expanded'){document.documentElement.style.setProperty('--app-sidebar-initial-width',sidebarMode==='mini'?'${SIDEBAR_MINI_WIDTH}px':'${SIDEBAR_EXPANDED_WIDTH}px');}}catch{}`;
 
   return (
     <html
@@ -52,9 +47,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
-        <Script id="app-preferences-bootstrap" strategy="beforeInteractive">
-          {appPreferencesBootstrapScript}
-        </Script>
+        <Script id="app-preferences-bootstrap" src="/app-preferences-bootstrap.js" strategy="beforeInteractive" />
         {children}
       </body>
     </html>

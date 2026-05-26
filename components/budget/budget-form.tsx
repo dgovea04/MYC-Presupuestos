@@ -25,9 +25,9 @@ type BudgetFormProps = {
     name: string;
     projectId: string;
     currency: string;
-    defaultIgvRate?: number;
-    defaultGeneralExpensesRate?: number;
-    defaultUtilityRate?: number;
+    igvRate?: number;
+    generalExpensesRate?: number;
+    utilityRate?: number;
   };
 };
 
@@ -157,7 +157,7 @@ export function BudgetForm({
               name="igvRate"
               type="number"
               step={RATE_INPUT_STEP}
-              defaultValue={formatRateDefault(budget?.defaultIgvRate ?? defaultIgvRate)}
+              defaultValue={formatRateDefault(budget?.igvRate ?? defaultIgvRate)}
             />
           </div>
           <div className="space-y-2">
@@ -167,7 +167,7 @@ export function BudgetForm({
               name="generalExpensesRate"
               type="number"
               step={RATE_INPUT_STEP}
-              defaultValue={formatRateDefault(budget?.defaultGeneralExpensesRate ?? defaultGeneralExpensesRate)}
+              defaultValue={formatRateDefault(budget?.generalExpensesRate ?? defaultGeneralExpensesRate)}
             />
           </div>
           <div className="space-y-2">
@@ -177,7 +177,7 @@ export function BudgetForm({
               name="utilityRate"
               type="number"
               step={RATE_INPUT_STEP}
-              defaultValue={formatRateDefault(budget?.defaultUtilityRate ?? defaultUtilityRate)}
+              defaultValue={formatRateDefault(budget?.utilityRate ?? defaultUtilityRate)}
             />
           </div>
         </div>
@@ -201,12 +201,11 @@ function buildBudgetMetadataPatch(formValues: Record<string, FormDataEntryValue>
 
   return {
     budget: {
-      projectId: getString("projectId"),
       name: getString("name"),
       currency: getString("currency"),
-      defaultIgvRate: getNumber("igvRate"),
-      defaultGeneralExpensesRate: getNumber("generalExpensesRate"),
-      defaultUtilityRate: getNumber("utilityRate"),
+      igvRate: getNumber("igvRate"),
+      generalExpensesRate: getNumber("generalExpensesRate"),
+      utilityRate: getNumber("utilityRate"),
     },
     levels: {
       create: [],

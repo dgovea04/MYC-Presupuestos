@@ -127,21 +127,33 @@ function scoreCatalogPartida(
 
   if (!partidaDescription) return null;
 
+  const normalizedCoreDescription = extractPartidaCoreDescription(normalizedDescription);
   const descriptionTokens = tokenize(normalizedDescription);
+  const coreDescriptionTokens = tokenize(normalizedCoreDescription);
   const partidaTokens = tokenize(partidaDescription);
-  const sharedTokens = descriptionTokens.filter((token) => partidaTokens.includes(token));
+  const comparableDescriptionTokens = descriptionTokens.map(toComparableToken);
+  const comparableCoreDescriptionTokens = coreDescriptionTokens.map(toComparableToken);
+  const comparablePartidaTokens = partidaTokens.map(toComparableToken);
+  const sharedComparableTokens = comparableDescriptionTokens.filter((token) => comparablePartidaTokens.includes(token));
+  const sharedCoreTokens = comparableCoreDescriptionTokens.filter((token) => comparablePartidaTokens.includes(token));
   const tokenCoverage =
-    descriptionTokens.length > 0 ? sharedTokens.length / Math.max(descriptionTokens.length, partidaTokens.length) : 0;
+    comparableDescriptionTokens.length > 0 ? sharedComparableTokens.length / Math.max(comparableDescriptionTokens.length, 1) : 0;
+  const coreTokenCoverage =
+    comparableCoreDescriptionTokens.length > 0 ? sharedCoreTokens.length / Math.max(comparableCoreDescriptionTokens.length, 1) : tokenCoverage;
   const containsEitherWay =
     partidaDescription.includes(normalizedDescription) || normalizedDescription.includes(partidaDescription);
-  const prefixBonus = partidaDescription.startsWith(normalizedDescription) || normalizedDescription.startsWith(partidaDescription) ? 0.08 : 0;
+  const coreContainsEitherWay =
+    partidaDescription.includes(normalizedCoreDescription) || normalizedCoreDescription.includes(partidaDescription);
+  const prefixBonus =
+    partidaDescription.startsWith(normalizedCoreDescription) || normalizedCoreDescription.startsWith(partidaDescription) ? 0.08 : 0;
   const containsBonus = containsEitherWay ? 0.18 : 0;
+  const coreContainsBonus = coreContainsEitherWay ? 0.2 : 0;
   const unitBonus = normalizedUnit && partidaUnit === normalizedUnit ? 0.22 : 0;
   const unitPenalty = normalizedUnit && partidaUnit !== normalizedUnit ? 0.18 : 0;
   const lengthPenalty = Math.abs(partidaDescription.length - normalizedDescription.length) > 24 ? 0.06 : 0;
-  const baseScore = tokenCoverage + containsBonus + prefixBonus + unitBonus - unitPenalty - lengthPenalty;
+  const baseScore = coreTokenCoverage * 0.62 + tokenCoverage * 0.28 + containsBonus + coreContainsBonus + prefixBonus + unitBonus - unitPenalty - lengthPenalty;
 
-  if (sharedTokens.length === 0 && !containsEitherWay) {
+  if (sharedComparableTokens.length === 0 && sharedCoreTokens.length === 0 && !containsEitherWay && !coreContainsEitherWay) {
     return null;
   }
 
@@ -149,10 +161,10 @@ function scoreCatalogPartida(
     return null;
   }
 
-  const confidence = resolveConfidence(baseScore, normalizedUnit && partidaUnit === normalizedUnit);
-  const reasonCodes = sharedTokens.length > 0 ? ["description-close"] : [];
+  const confidence = resolveConfidence(baseScore, Boolean(normalizedUnit && partidaUnit === normalizedUnit));
+  const reasonCodes = sharedComparableTokens.length > 0 ? ["description-close"] : [];
 
-  if (containsEitherWay) {
+  if (containsEitherWay || coreContainsEitherWay) {
     reasonCodes.push("normalized-match");
   }
 
@@ -165,6 +177,29 @@ function scoreCatalogPartida(
   }
 
   return buildSuggestion(partida, roundScore(Math.min(0.99, baseScore)), confidence, reasonCodes);
+}
+
+function extractPartidaCoreDescription(normalizedDescription: string) {
+  const splitIndex = findSpecificationStartIndex(normalizedDescription);
+  const core = splitIndex === -1 ? normalizedDescription : normalizedDescription.slice(0, splitIndex).trim();
+
+  return tokenize(core).length >= 2 ? core : normalizedDescription;
+}
+
+function findSpecificationStartIndex(value: string) {
+  const patterns = [
+    /\b(?:H|ALTURA|PROF|PROFUNDIDAD|D|DIAMETRO|E|ESPESOR)\s+\d/,
+    /\bF\s*C\s+\d/,
+    /\bHASTA\s+\d/,
+    /\bDE\s+\d/,
+    /\bEN\s+TERRENO\b/,
+    /\bTERRENO\s+(?:NORMAL|SUELTO|ROCOSO|SEMIROCOSO|COMPACTO)\b/,
+  ];
+  const indexes = patterns
+    .map((pattern) => value.search(pattern))
+    .filter((index) => index > 0);
+
+  return indexes.length > 0 ? Math.min(...indexes) : -1;
 }
 
 function buildSuggestion(
@@ -205,6 +240,14 @@ function tokenize(value: string) {
     .split(" ")
     .map((token) => token.trim())
     .filter((token) => token.length > 2 && !STOP_WORDS.has(token));
+}
+
+function toComparableToken(token: string) {
+  if (token.length > 4 && token.endsWith("S")) {
+    return token.slice(0, -1);
+  }
+
+  return token;
 }
 
 function roundScore(value: number) {

@@ -134,6 +134,39 @@ describe("AccountPageContent", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/account/avatar", expect.objectContaining({ method: "POST" }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/account/password", expect.objectContaining({ method: "PATCH" }));
   });
+
+  it("shows read-only membership and AI token availability with upgrade actions", async () => {
+    const { container } = await renderContent(
+      <AccountPageContent
+        initialAccount={{
+          id: "user-1",
+          name: "Usuario Operativo",
+          email: "usuario@mycpresupuestos.pe",
+          avatarUrl: null,
+          phone: "",
+          jobTitle: "",
+          bio: "",
+          createdAt: "2026-05-18T10:00:00.000Z",
+        }}
+        membership={{
+          planName: "Starter",
+          planSlug: "starter",
+          monthlyTokenLimit: 100000,
+          extraTokens: 0,
+          consumedTokens: 2500,
+          reservedTokens: 0,
+          availableTokens: 97500,
+          allowance: 100000,
+        }}
+      />,
+    );
+
+    expect(container.textContent).toContain("Membresia e IA");
+    expect(container.textContent).toContain("Starter");
+    expect(container.textContent).toContain("97,500");
+    expect(container.querySelector('a[href^="mailto:"]')?.textContent).toContain("Upgrade");
+    expect([...container.querySelectorAll("input")].some((input) => input.value === "Starter")).toBe(false);
+  });
 });
 
 async function renderContent(element: React.ReactElement) {
@@ -149,6 +182,7 @@ async function renderContent(element: React.ReactElement) {
   });
 
   return {
+    container,
     getButton(pattern: RegExp) {
       const button = [...container.querySelectorAll("button")].find((element) => pattern.test(element.textContent ?? ""));
 

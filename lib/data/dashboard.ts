@@ -63,6 +63,7 @@ export async function getDashboardStats(userId: string) {
         budgets: {
           select: {
             id: true,
+            name: true,
             kind: true,
             totalAmount: true,
             currency: true,

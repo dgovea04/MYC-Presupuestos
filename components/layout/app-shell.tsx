@@ -37,6 +37,7 @@ export async function AppShell({
     avatarUrl?: string | null;
     email?: string | null;
     name?: string | null;
+    role?: "ADMIN" | "USER" | null;
   };
   settings?: UserSettingsRecord;
 }) {
@@ -68,7 +69,7 @@ export async function AppShell({
         <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#eef4f8_40%,#f8fafc_100%)]">
           <div className="grid min-h-screen grid-cols-1 gap-5 px-3 py-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start lg:px-4 xl:px-5">
             <div
-              className="shrink-0 lg:sticky lg:top-4"
+              className="z-[31] shrink-0 lg:sticky lg:top-4"
               style={{ width: `var(${SIDEBAR_WIDTH_CSS_VARIABLE}, ${initialSidebarWidth})` }}
             >
               <AppSidebarClient
@@ -76,6 +77,7 @@ export async function AppShell({
                 userAvatarUrl={currentUser?.avatarUrl ?? session?.user?.avatarUrl}
                 userEmail={currentUser?.email ?? session?.user?.email}
                 userName={currentUser?.name ?? session?.user?.name}
+                userRole={currentUser?.role ?? session?.user?.role}
               />
             </div>
 

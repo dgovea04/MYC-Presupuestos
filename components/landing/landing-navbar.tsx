@@ -38,7 +38,7 @@ export function LandingNavbar() {
           : "border-b border-transparent bg-transparent",
       )}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-8 px-4 py-5 sm:px-6 lg:px-8 xl:px-10">
+      <div className="landing-shell flex items-center justify-between gap-8 py-5">
         <Link href="/" aria-label="MYC Presupuestos">
           <LandingLogo />
         </Link>

@@ -34,7 +34,7 @@ describe("ApuEditorSheet", () => {
 
   it("renders category subtotal cards and colors row grips by category", async () => {
     const item = createBudgetItem();
-    const { getByTestId, getGripForRow } = await renderSheet(item);
+    const { getByTestId, getButtonByText, getGripForRow, getLinkByText } = await renderSheet(item);
 
     expect(getByTestId("apu-summary-card-LABOR").textContent).toContain("S/ 30.00");
     expect(getByTestId("apu-summary-card-MATERIAL").textContent).toContain("S/ 31.00");
@@ -47,10 +47,81 @@ describe("ApuEditorSheet", () => {
     expect(getGripForRow("resource-subpartida").dataset.apuCategory).toBe("SUBPARTIDA");
     expect(getGripForRow("resource-subpartida").className).toContain("text-violet-600");
     expect(getByTestId("apu-add-resource-search").getAttribute("data-excel-field-border-opt-out")).toBe("true");
+    const explainHref = getLinkByText("Explicar partida").getAttribute("href") ?? "";
+    const copilotHref = getLinkByText("Abrir en Copiloto").getAttribute("href") ?? "";
+    expect(explainHref).toContain("/ai?action=chat");
+    expect(explainHref).toContain("selectedItem=Partida+demo");
+    expect(explainHref).toContain("description=Partida+demo");
+    expect(explainHref).toContain("module=Editor+APU+de+sub+presupuesto");
+    expect(getButtonByText("Generar con IA")).toBeTruthy();
+    expect(copilotHref).toContain("/ai?action=apu");
+    expect(copilotHref).toContain("selectedItem=Partida+demo");
+    expect(copilotHref).toContain("description=Partida+demo");
+    expect(copilotHref).toContain("apuUnit=m2");
+  });
+
+  it("generates an AI APU preview and applies it to the budget APU draft", async () => {
+    const onUpdate = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        answer: "Propuesta APU",
+        model: "llama3.1",
+        requestedModel: "mistral",
+        fallbackUsed: true,
+        warnings: ["mistral no instalado"],
+        structuredData: {
+          answer: "Propuesta APU",
+          unit: "m2",
+          performance: "12 m2/dia",
+          crew: "1 operario + 1 peon",
+          materials: [{ description: "Cemento", unit: "bol", quantity: "0,25" }],
+          labor: [{ description: "Operario", unit: "hh", quantity: "1.5" }],
+          equipment: [{ description: "Mezcladora", unit: "hm", quantity: "0.2" }],
+          observations: ["Validar precios."],
+          assumptions: ["Rendimiento referencial."],
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getTextByExactMatch } = await renderSheet(createBudgetItem(), { onUpdate });
+
+    await act(async () => {
+      getButtonByText("Generar con IA").click();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ai/apu/generate",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"query":"Partida demo"'),
+      }),
+    );
+    expect(getTextByExactMatch("Vista previa IA")).toBeTruthy();
+    expect(getTextByExactMatch("Cemento")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Aplicar propuesta").click();
+    });
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        apu: expect.objectContaining({
+          performance: 12,
+          resources: expect.arrayContaining([
+            expect.objectContaining({ resourceType: "MATERIAL", quantity: 0.25, unitPrice: 0 }),
+            expect.objectContaining({ resourceType: "LABOR", quantity: 1.5, unitPrice: 0 }),
+            expect.objectContaining({ resourceType: "EQUIPMENT", quantity: 0.2, unitPrice: 0 }),
+          ]),
+        }),
+      }),
+    );
   });
 });
 
-async function renderSheet(item: BudgetItemRecord) {
+async function renderSheet(item: BudgetItemRecord, overrides?: { onUpdate?: (item: BudgetItemRecord) => void }) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -66,7 +137,7 @@ async function renderSheet(item: BudgetItemRecord) {
             item={item}
             open
             onClose={() => undefined}
-            onUpdate={() => undefined}
+            onUpdate={overrides?.onUpdate ?? (() => undefined)}
             resourcesCatalog={[]}
             densityMode="comfortable"
           />
@@ -88,6 +159,30 @@ async function renderSheet(item: BudgetItemRecord) {
       const element = document.querySelector(`[data-testid='apu-row-grip-${rowId}']`);
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing grip: ${rowId}`);
+      }
+
+      return element;
+    },
+    getButtonByText: (text: string) => {
+      const element = [...document.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
+      if (!(element instanceof HTMLButtonElement)) {
+        throw new Error(`Missing button: ${text}`);
+      }
+
+      return element;
+    },
+    getLinkByText: (text: string) => {
+      const element = [...document.querySelectorAll("a")].find((candidate) => candidate.textContent?.trim() === text);
+      if (!(element instanceof HTMLAnchorElement)) {
+        throw new Error(`Missing link: ${text}`);
+      }
+
+      return element;
+    },
+    getTextByExactMatch: (text: string) => {
+      const element = [...document.querySelectorAll("*")].find((candidate) => candidate.textContent?.trim() === text);
+      if (!(element instanceof HTMLElement)) {
+        throw new Error(`Missing text: ${text}`);
       }
 
       return element;

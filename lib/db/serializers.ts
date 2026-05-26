@@ -38,6 +38,11 @@ export function decimalToFixedString(
   return value.toFixed(decimalPlaces);
 }
 
+function serializeDate(value: Date | string | null | undefined) {
+  if (value == null) return undefined;
+  return typeof value === "string" ? value : value.toISOString();
+}
+
 export function serializeBudget(budget: {
   id: string;
   projectId: string;
@@ -185,8 +190,8 @@ export function serializeResource(resource: {
   unitPrice: Prisma.Decimal;
   currency: string;
   source: string | null;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
 }): ResourceRecord {
   return {
     id: resource.id,
@@ -200,8 +205,8 @@ export function serializeResource(resource: {
     unitPrice: decimalToNumber(resource.unitPrice),
     currency: resource.currency,
     source: resource.source ?? undefined,
-    createdAt: resource.createdAt?.toISOString(),
-    updatedAt: resource.updatedAt?.toISOString(),
+    createdAt: serializeDate(resource.createdAt),
+    updatedAt: serializeDate(resource.updatedAt),
   };
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { GripVertical } from "lucide-react";
+import { BotMessageSquare, GripVertical, Sparkles } from "lucide-react";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -12,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { getApuCategoryPresentation } from "@/lib/apu/presentation";
+import { buildApuResourcesFromCatalogProposal, parseAiDecimal, parseAiPerformance, selectCatalogProposalBasePartida } from "@/lib/ai/apu-suggestion";
+import type { AiApuCatalogGenerationResult, AiApuStructuredData, AiEndpointResult } from "@/lib/ai/types";
 import { getExcelViewCssVariables } from "@/lib/budget/excel-view-css";
 import {
   APU_PRESENTATION_CATEGORY_ORDER,
@@ -22,6 +25,7 @@ import {
   isPercentageBasedApuRow,
 } from "@/lib/calculations/apu";
 import type { BudgetItemRecord } from "@/types/budget";
+import type { ApuResourceRecord } from "@/types/apu";
 import type { ResourceRecord } from "@/types/resource";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -65,6 +69,9 @@ export function ApuEditorSheet({
   const [draggedResourceId, setDraggedResourceId] = useState<string | null>(null);
   const [editingResourceRowId, setEditingResourceRowId] = useState<string | null>(null);
   const [editingResourceQuery, setEditingResourceQuery] = useState("");
+  const [aiApuResult, setAiApuResult] = useState<AiApuPreviewResult | null>(null);
+  const [aiApuError, setAiApuError] = useState("");
+  const [aiApuLoading, setAiApuLoading] = useState(false);
   const [resourceHighlightedIndex, setResourceHighlightedIndex] = useState(0);
   const [resourceMenu, setResourceMenu] = useState<ResourceMenuState | null>(null);
   const effectiveDensityMode = isExcelMode ? "compact" : densityMode;
@@ -296,6 +303,96 @@ export function ApuEditorSheet({
     });
   }
 
+  async function generateAiApuSuggestion() {
+    if (aiApuLoading) return;
+
+    setAiApuLoading(true);
+    setAiApuError("");
+
+    try {
+      const response = await fetch("/api/ai/apu/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: currentItemRecord.description,
+          unit: currentItemRecord.unit,
+          context: {
+            module: "Editor APU de sub presupuesto",
+            selectedItem: currentItemRecord.description,
+            unit: currentItemRecord.unit,
+            currentCost: currentItemRecord.unitPrice,
+            activeTable: "APU de presupuesto",
+          },
+        }),
+      });
+      const payload: unknown = await response.json();
+
+      if (!response.ok) {
+        throw new Error(readAiErrorMessage(payload));
+      }
+
+      setAiApuResult(readAiApuPreviewResult(payload));
+    } catch (caughtError) {
+      setAiApuError(caughtError instanceof Error ? caughtError.message : "No se pudo generar la propuesta IA.");
+    } finally {
+      setAiApuLoading(false);
+    }
+  }
+
+  function applyAiApuSuggestion() {
+    if (!aiApuResult) return;
+
+    if (isAiApuCatalogGenerationResult(aiApuResult)) {
+      onUpdate({
+        ...currentItemRecord,
+        apu: {
+          ...currentApuRecord,
+          resources: [
+            ...currentApuRecord.resources,
+            ...buildApuResourcesFromCatalogProposal({
+              proposal: aiApuResult.proposal,
+              apuId: currentApuRecord.id,
+              resources: resourcesCatalog,
+            }),
+          ],
+        },
+      });
+      setAiApuResult(null);
+      return;
+    }
+
+    if (!isAiApuStructuredData(aiApuResult.structuredData)) return;
+
+    const nextResources = [
+      ...currentApuRecord.resources,
+      ...buildApuResourcesFromAiSuggestion({
+        suggestion: aiApuResult.structuredData,
+        apuId: currentApuRecord.id,
+      }),
+    ];
+    const nextPerformance = parseAiPerformance(aiApuResult.structuredData.performance, currentApuRecord.performance);
+
+    onUpdate({
+      ...currentItemRecord,
+      apu: {
+        ...currentApuRecord,
+        performance: nextPerformance,
+        resources: nextResources,
+      },
+    });
+    setAiApuResult(null);
+  }
+
+  function selectAiApuSimilarPartida(partidaId: string) {
+    setAiApuResult((currentResult) =>
+      isAiApuCatalogGenerationResult(currentResult)
+        ? selectCatalogProposalBasePartida({ result: currentResult, partidaId })
+        : currentResult,
+    );
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
@@ -318,7 +415,7 @@ export function ApuEditorSheet({
             data-testid="apu-editor-sheet-panel"
             style={excelCssVariables}
           >
-            <div className={cn("flex items-start justify-between", isExcelMode ? "mb-3" : "mb-5")}>
+            <div className={cn("flex items-start justify-between gap-4", isExcelMode ? "mb-3" : "mb-5")}>
               <div>
                 <p className={cn("text-slate-500", isExcelMode ? "text-xs uppercase tracking-wide" : "text-sm")}>Editor APU</p>
                 <Dialog.Title asChild>
@@ -328,12 +425,52 @@ export function ApuEditorSheet({
                   <p className={cn("mt-1 text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItemRecord.unit}</p>
                 </Dialog.Description>
               </div>
-              <Dialog.Close asChild>
-                <Button ref={closeButtonRef} variant="outline" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
-                  Cerrar
+              <div className="flex flex-wrap justify-end gap-2">
+                <Link href={buildAiHref("chat", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice, "Explica tecnicamente esta partida y valida su rendimiento.")}>
+                  <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
+                    <BotMessageSquare className="h-4 w-4" />
+                    Explicar partida
+                  </Button>
+                </Link>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}
+                  onClick={() => void generateAiApuSuggestion()}
+                  disabled={aiApuLoading}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {aiApuLoading ? "Generando..." : "Generar con IA"}
                 </Button>
-              </Dialog.Close>
+                <Link href={buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice)}>
+                  <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
+                    Abrir en Copiloto
+                  </Button>
+                </Link>
+                <Dialog.Close asChild>
+                  <Button ref={closeButtonRef} variant="outline" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
+                    Cerrar
+                  </Button>
+                </Dialog.Close>
+              </div>
             </div>
+
+            {aiApuError ? (
+              <div className={cn("mb-4 border border-rose-200 bg-rose-50 text-rose-700", isExcelMode ? "rounded-md px-3 py-2 text-xs" : "rounded-2xl px-4 py-3 text-sm")}>
+                {aiApuError}
+              </div>
+            ) : null}
+
+            {aiApuResult ? (
+              <AiApuPreview
+                result={aiApuResult}
+                isExcelMode={isExcelMode}
+                onApply={applyAiApuSuggestion}
+                onDismiss={() => setAiApuResult(null)}
+                onSelectSimilarPartida={selectAiApuSimilarPartida}
+                copilotHref={buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice)}
+              />
+            ) : null}
 
             <div className={cn("grid", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-4")}>
               <div className={cn("grid md:grid-cols-2", isExcelMode ? "gap-2" : "gap-4")}>
@@ -841,6 +978,401 @@ function normalizeResourceSearchText(value: string) {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+type AiApuPreviewResult = AiEndpointResult | AiApuCatalogGenerationResult;
+
+function AiApuPreview({
+  result,
+  isExcelMode,
+  onApply,
+  onDismiss,
+  onSelectSimilarPartida,
+  copilotHref,
+}: {
+  result: AiApuPreviewResult;
+  isExcelMode: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+  onSelectSimilarPartida: (partidaId: string) => void;
+  copilotHref: string;
+}) {
+  const catalogData = isAiApuCatalogGenerationResult(result) ? result : null;
+  const structuredData = isAiApuCatalogGenerationResult(result)
+    ? null
+    : isAiApuStructuredData(result.structuredData)
+      ? result.structuredData
+      : null;
+
+  return (
+    <section
+      className={cn(
+        "mb-4 border border-sky-200 bg-sky-50/70 shadow-[0_16px_30px_-28px_rgba(2,132,199,0.35)]",
+        isExcelMode ? "rounded-md p-3 text-xs" : "rounded-2xl p-4 text-sm",
+      )}
+      aria-label="Vista previa IA"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Vista previa IA</p>
+          <h4 className={cn("font-semibold text-slate-950", isExcelMode ? "text-base" : "text-lg")}>Propuesta APU pendiente de aplicar</h4>
+          <p className="mt-1 text-xs text-slate-600">
+            Modelo usado: {result.model} · Solicitado: {result.requestedModel}
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          {result.fallbackUsed ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">Fallback activo</span> : null}
+          <Link href={copilotHref}>
+            <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>Abrir en Copiloto</Button>
+          </Link>
+        </div>
+      </div>
+
+      {result.warnings.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{result.warnings.join(" ")}</div>
+      ) : null}
+
+      {catalogData ? (
+        <div className="mt-4 grid gap-3">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <PreviewMetric label="Unidad" value={catalogData.proposal.unit || "Sin unidad"} />
+            <PreviewMetric label="Confianza" value={`${Math.round(catalogData.confidence * 100)}%`} />
+            <PreviewMetric label="Validacion" value={catalogData.validation.isValid ? "Catalogo validado" : "Revisar advertencias"} />
+          </div>
+          <PreviewSimilarPartidas
+            items={catalogData.similar_partidas}
+            selectedId={catalogData.proposal.based_on_partida_id}
+            onSelect={onSelectSimilarPartida}
+          />
+          <PreviewCatalogItems items={catalogData.proposal.items} />
+          <PreviewSuggestedResources items={catalogData.proposal.suggested_new_resources} />
+          <PreviewDebugPanel debug={catalogData.debug} />
+        </div>
+      ) : structuredData ? (
+        <div className="mt-4 grid gap-3">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <PreviewMetric label="Unidad" value={structuredData.unit || "Sin unidad"} />
+            <PreviewMetric label="Rendimiento" value={structuredData.performance || "Sin dato"} />
+            <PreviewMetric label="Cuadrilla" value={structuredData.crew || "Sin dato"} />
+          </div>
+          <PreviewResourceGroup title="Materiales" items={structuredData.materials} />
+          <PreviewResourceGroup title="Mano de obra" items={structuredData.labor} />
+          <PreviewResourceGroup title="Equipos" items={structuredData.equipment} />
+          <PreviewTextList title="Observaciones" items={structuredData.observations} />
+          <PreviewTextList title="Supuestos" items={structuredData.assumptions} />
+          <PreviewDebugPanel debug={result.debug} />
+        </div>
+      ) : (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
+          La IA devolvio texto libre. Puedes revisarlo en el copiloto antes de aplicar cambios manuales.
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onDismiss} className={cn(isExcelMode && "h-8 px-3 text-xs")}>
+          Descartar
+        </Button>
+        <Button type="button" onClick={onApply} disabled={catalogData ? catalogData.proposal.items.length === 0 : !structuredData} className={cn(isExcelMode && "h-8 px-3 text-xs")}>
+          Aplicar propuesta
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function PreviewDebugPanel({ debug }: { debug: AiApuCatalogGenerationResult["debug"] | AiEndpointResult["debug"] }) {
+  if (!debug) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-950 text-slate-100">
+      <div className="border-b border-slate-800 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
+        Debug IA desarrollo
+      </div>
+      <div className="grid gap-2 p-3">
+        <DebugJsonBlock title="Contexto backend" value={"context" in debug ? debug.context : null} />
+        <DebugJsonBlock title="Mensajes enviados a Ollama" value={"messages" in debug ? debug.messages : null} />
+        <DebugJsonBlock title="Respuesta cruda IA" value={"ai" in debug ? debug.ai : debug} />
+        <DebugJsonBlock title="Fallback y sugerencias" value={"fallback" in debug ? debug.fallback : null} />
+        <DebugJsonBlock title="Advertencias de validacion" value={"validationWarnings" in debug ? debug.validationWarnings : null} />
+      </div>
+    </div>
+  );
+}
+
+function DebugJsonBlock({ title, value }: { title: string; value: unknown }) {
+  if (value === null || value === undefined) return null;
+
+  return (
+    <details className="rounded-lg border border-slate-800 bg-slate-900">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-200">{title}</summary>
+      <pre className="max-h-80 overflow-auto border-t border-slate-800 px-3 py-2 text-[11px] leading-relaxed text-slate-300">
+        {formatDebugValue(value)}
+      </pre>
+    </details>
+  );
+}
+
+function formatDebugValue(value: unknown) {
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+function PreviewMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-sky-100 bg-white px-3 py-2">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function PreviewSimilarPartidas({
+  items,
+  selectedId,
+  onSelect,
+}: {
+  items: AiApuCatalogGenerationResult["similar_partidas"];
+  selectedId?: string;
+  onSelect: (partidaId: string) => void;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Partidas similares</div>
+      <div className="divide-y divide-slate-100">
+        {items.map((item) => {
+          const isSelected = item.id === selectedId;
+          const hasItems = item.items.length > 0;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => hasItems && onSelect(item.id)}
+              disabled={!hasItems}
+              className={cn(
+                "grid w-full gap-2 px-3 py-2 text-left transition sm:grid-cols-[1fr_64px_72px_76px]",
+                isSelected ? "bg-sky-50" : "hover:bg-slate-50",
+                !hasItems && "cursor-not-allowed opacity-60",
+              )}
+            >
+              <span className="font-medium text-slate-900">{item.description}</span>
+              <span className="text-slate-600">{item.unit}</span>
+              <span className="text-right tabular-nums text-slate-700">{Math.round(item.similarity * 100)}%</span>
+              <span className={cn("text-right text-xs font-semibold", isSelected ? "text-sky-700" : "text-slate-500")}>
+                {isSelected ? "Base" : hasItems ? "Usar" : "Sin APU"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PreviewCatalogItems({ items }: { items: AiApuCatalogGenerationResult["proposal"]["items"] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Insumos del catalogo</div>
+      {items.length > 0 ? (
+        <div className="divide-y divide-slate-100">
+          {items.map((item) => (
+            <div key={item.resource_id} className="grid gap-2 px-3 py-2 sm:grid-cols-[1fr_72px_96px]">
+              <span className="font-medium text-slate-900">{item.name}</span>
+              <span className="text-slate-600">{item.unit}</span>
+              <span className="text-right tabular-nums text-slate-700">{item.quantity}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="px-3 py-2 text-xs text-slate-500">Sin insumos validos sugeridos.</p>
+      )}
+    </div>
+  );
+}
+
+function PreviewSuggestedResources({ items }: { items: AiApuCatalogGenerationResult["proposal"]["suggested_new_resources"] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Insumos faltantes</p>
+      <ul className="mt-2 space-y-1 text-xs text-amber-800">
+        {items.map((item, index) => (
+          <li key={`${item.based_on}-${index}`}>{item.based_on}: {item.reason}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PreviewResourceGroup({ title, items }: { title: string; items: AiApuStructuredData["materials"] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</div>
+      {items.length > 0 ? (
+        <div className="divide-y divide-slate-100">
+          {items.map((item, index) => (
+            <div key={`${title}-${index}-${item.description}`} className="grid gap-2 px-3 py-2 sm:grid-cols-[1fr_72px_96px]">
+              <span className="font-medium text-slate-900">{item.description || "Recurso sugerido sin descripcion"}</span>
+              <span className="text-slate-600">{item.unit || "s/u"}</span>
+              <span className="text-right tabular-nums text-slate-700">{item.quantity || "0"}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="px-3 py-2 text-xs text-slate-500">Sin recursos sugeridos.</p>
+      )}
+    </div>
+  );
+}
+
+function PreviewTextList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</p>
+      <ul className="mt-2 space-y-1 text-xs text-slate-600">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function buildApuResourcesFromAiSuggestion({ suggestion, apuId }: { suggestion: AiApuStructuredData; apuId: string }): ApuResourceRecord[] {
+  const buckets: Array<{ resourceType: "MATERIAL" | "LABOR" | "EQUIPMENT"; items: AiApuStructuredData["materials"] }> = [
+    { resourceType: "MATERIAL", items: suggestion.materials },
+    { resourceType: "LABOR", items: suggestion.labor },
+    { resourceType: "EQUIPMENT", items: suggestion.equipment },
+  ];
+
+  return buckets.flatMap(({ resourceType, items }) =>
+    items.map((item) => {
+      const resource: ResourceRecord = {
+        id: `ai-${crypto.randomUUID()}`,
+        code: "IA",
+        description: item.description.trim() || "Recurso sugerido sin descripcion",
+        category: resourceType,
+        unit: item.unit.trim(),
+        unitPrice: 0,
+        currency: "PEN",
+        source: "IA local",
+      };
+
+      return {
+        id: `ai-apu-${crypto.randomUUID()}`,
+        apuId,
+        resourceId: resource.id,
+        resourceType,
+        crew: null,
+        quantity: parseAiDecimal(item.quantity) ?? 0,
+        unitPrice: 0,
+        subtotal: 0,
+        resource,
+      };
+    }),
+  );
+}
+
+function readAiApuPreviewResult(payload: unknown): AiApuPreviewResult {
+  if (isAiApuCatalogGenerationResult(payload)) return payload;
+  return readAiEndpointResult(payload);
+}
+
+function readAiEndpointResult(payload: unknown): AiEndpointResult {
+  if (!isRecord(payload)) throw new Error("La respuesta de IA no tiene el formato esperado.");
+
+  return {
+    answer: readString(payload.answer),
+    model: readString(payload.model),
+    requestedModel: readString(payload.requestedModel),
+    fallbackUsed: payload.fallbackUsed === true,
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((warning): warning is string => typeof warning === "string") : [],
+    latencyMs: typeof payload.latencyMs === "number" ? payload.latencyMs : undefined,
+    structuredData: payload.structuredData,
+  };
+}
+
+function isAiApuCatalogGenerationResult(value: unknown): value is AiApuCatalogGenerationResult {
+  return (
+    isRecord(value) &&
+    isRecord(value.proposal) &&
+    Array.isArray(value.similar_partidas) &&
+    Array.isArray(value.matching_resources) &&
+    typeof value.confidence === "number" &&
+    isRecord(value.validation) &&
+    typeof value.model === "string" &&
+    typeof value.requestedModel === "string" &&
+    typeof value.fallbackUsed === "boolean"
+  );
+}
+
+function readAiErrorMessage(payload: unknown): string {
+  if (!isRecord(payload)) return "No se pudo completar la solicitud de IA.";
+  if (typeof payload.error === "string") return payload.error;
+  if (typeof payload.message === "string") return payload.message;
+  return "No se pudo completar la solicitud de IA.";
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function isAiApuStructuredData(value: unknown): value is AiApuStructuredData {
+  return (
+    isRecord(value) &&
+    typeof value.answer === "string" &&
+    typeof value.unit === "string" &&
+    typeof value.performance === "string" &&
+    typeof value.crew === "string" &&
+    isAiLineItemArray(value.materials) &&
+    isAiLineItemArray(value.labor) &&
+    isAiLineItemArray(value.equipment) &&
+    isStringArray(value.observations) &&
+    isStringArray(value.assumptions)
+  );
+}
+
+function isAiLineItemArray(value: unknown): value is AiApuStructuredData["materials"] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.description === "string" &&
+        typeof item.unit === "string" &&
+        typeof item.quantity === "string" &&
+        (item.notes === undefined || typeof item.notes === "string"),
+    )
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function buildAiHref(action: "chat" | "apu" | "autocomplete" | "review", description: string, unit?: string, currentCost?: number, message?: string) {
+  const params = new URLSearchParams({
+    action,
+    selectedItem: description,
+    description,
+    module: "Editor APU de sub presupuesto",
+    activeTable: "APU de presupuesto",
+  });
+
+  if (unit) params.set("unit", unit);
+  if (unit) params.set("apuUnit", unit);
+  if (typeof currentCost === "number") params.set("currentCost", String(currentCost));
+  if (message) params.set("message", message);
+
+  return `/ai?${params.toString()}`;
 }
 
 function buildResourceSearchText(resource: ResourceRecord) {

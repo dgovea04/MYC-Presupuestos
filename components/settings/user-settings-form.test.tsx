@@ -255,6 +255,23 @@ describe("UserSettingsForm", () => {
     expect(getButton(/Guardar configuracion/)).toBeTruthy();
   });
 
+  it("shows a fallback error when a successful settings response is not JSON", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      text: async () => "<!DOCTYPE html><html><body>Login</body></html>",
+    }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { form, getText } = await renderForm(<UserSettingsForm initialSettings={baseSettings} />);
+
+    await act(async () => {
+      form.requestSubmit();
+    });
+
+    expect(getText(/No se pudo guardar la configuracion/)).toBeTruthy();
+  });
+
   it("allows adding and removing initial sub budgets from the table before submit", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

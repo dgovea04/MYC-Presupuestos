@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { accountPasswordSchema, accountProfileSchema, type AccountPasswordInput, type AccountProfileInput } from "@/lib/validations/account";
-import type { AccountRecord } from "@/types/account";
+import { getCurrentAiUsagePeriod } from "@/lib/ai/usage";
+import type { AccountMembershipRecord, AccountRecord } from "@/types/account";
 import { z } from "zod";
 
 export class AccountCurrentPasswordError extends Error {
@@ -93,6 +94,52 @@ export async function getUserAccount(userId: string): Promise<AccountRecord> {
   const account = normalizeAccountRow(rows[0]);
 
   return toAccountRecord(account);
+}
+
+export async function getUserAccountMembership(userId: string): Promise<AccountMembershipRecord> {
+  const periodStart = getCurrentAiUsagePeriod();
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      aiTokenExtraMonthly: true,
+      membershipPlan: {
+        select: {
+          name: true,
+          slug: true,
+          monthlyTokenLimit: true,
+        },
+      },
+      aiUsagePeriods: {
+        where: { periodStart },
+        select: {
+          consumedTokens: true,
+          reservedTokens: true,
+        },
+        take: 1,
+      },
+    },
+  });
+
+  if (!user) {
+    throw new Error("Usuario no encontrado.");
+  }
+
+  const monthlyTokenLimit = user.membershipPlan?.monthlyTokenLimit ?? 0;
+  const extraTokens = user.aiTokenExtraMonthly;
+  const consumedTokens = user.aiUsagePeriods[0]?.consumedTokens ?? 0;
+  const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
+  const allowance = Math.max(0, monthlyTokenLimit + extraTokens);
+
+  return {
+    planName: user.membershipPlan?.name ?? "Sin membresia",
+    planSlug: user.membershipPlan?.slug ?? "",
+    monthlyTokenLimit,
+    extraTokens,
+    consumedTokens,
+    reservedTokens,
+    allowance,
+    availableTokens: Math.max(0, allowance - consumedTokens - reservedTokens),
+  };
 }
 
 export async function updateUserAccountProfile(userId: string, input: AccountProfileInput): Promise<AccountRecord> {

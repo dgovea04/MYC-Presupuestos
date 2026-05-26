@@ -420,6 +420,18 @@ export function GeneralBudgetOverview({
                       currency={currency}
                       className="px-0 py-0 text-xl font-semibold text-slate-900"
                     />
+                    <Link
+                      href={buildBudgetReviewHref({
+                        projectId,
+                        budgetName: "Presupuesto general",
+                        summary: `Consolidado del proyecto con ${orderedSubBudgets.length} sub presupuestos, ${consolidatedTotals.itemsCount} partidas y total ${formatCurrency(consolidatedTotals.totalAmount, currency, currencyDecimals)}.`,
+                      })}
+                    >
+                      <Button size="sm" variant="ghost" className="gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Revisar con IA
+                      </Button>
+                    </Link>
                     <Link href={`/budgets/${generalBudgetId}`}>
                       <ActionButton action="open" label="Abrir presupuesto general" variant="outline" />
                     </Link>
@@ -530,6 +542,18 @@ export function GeneralBudgetOverview({
                       currency={activeBudget.currency}
                       className="px-0 py-0 text-xl font-semibold text-slate-900"
                     />
+                    <Link
+                      href={buildBudgetReviewHref({
+                        projectId,
+                        budgetName: activeBudget.name,
+                        summary: `${activeBudget.name}: ${activeBudget.itemsCount} partidas, ${activeBudget.levelsCount} niveles, total ${formatCurrency(activeBudget.totalAmount, activeBudget.currency, currencyDecimals)}.`,
+                      })}
+                    >
+                      <Button size="sm" variant="ghost" className="gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Revisar con IA
+                      </Button>
+                    </Link>
                     <Link href={`/budgets/${activeBudget.id}`}>
                       <ActionButton action="open" label="Abrir Sub Presupuesto" variant="outline" />
                     </Link>
@@ -641,6 +665,27 @@ export function GeneralBudgetOverview({
 
 function formatCurrencyCell(value: number, currency: string, currencyDecimals: number) {
   return formatCurrency(value, currency, currencyDecimals);
+}
+
+function buildBudgetReviewHref({
+  projectId,
+  budgetName,
+  summary,
+}: {
+  projectId: string;
+  budgetName: string;
+  summary: string;
+}) {
+  const params = new URLSearchParams({
+    action: "review",
+    project: projectId,
+    module: "Presupuesto",
+    selectedItem: budgetName,
+    activeTable: "Resumen de presupuesto",
+    budgetSummary: summary,
+  });
+
+  return `/ai?${params.toString()}`;
 }
 
 function getLevelTypeLabel(type: BudgetRecord["levels"][number]["type"]) {

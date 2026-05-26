@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Image from "next/image";
 import { Settings2 } from "lucide-react";
 import { CompanyProfileCard } from "@/components/settings/company-profile-card";
+import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
 import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
@@ -67,6 +68,8 @@ export function SettingsPageContent({
       <section className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <div className="space-y-6">
           <CompanyProfileCard company={companyState} onSaved={setCompanyState} />
+
+          <LocalAiSettingsCard />
 
           <Card className="border-slate-200">
             <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#fffdf8_0%,#fffaf0_100%)]">

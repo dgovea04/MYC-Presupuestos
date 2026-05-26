@@ -103,7 +103,7 @@ export function UserSettingsForm({
         return;
       }
 
-      const savedSettings = (await response.json()) as UserSettingsRecord;
+      const savedSettings = await readUserSettingsResponse(response);
       dispatchAppViewModeSettingsUpdated({
         defaultViewMode: savedSettings.defaultViewMode,
         excelShowFieldBorders: savedSettings.excelShowFieldBorders,
@@ -444,6 +444,19 @@ async function getErrorMessage(response: Response) {
   }
 
   return DEFAULT_SAVE_ERROR;
+}
+
+async function readUserSettingsResponse(response: Response): Promise<UserSettingsRecord> {
+  try {
+    if (typeof response.text !== "function") {
+      return (await response.json()) as UserSettingsRecord;
+    }
+
+    const text = await response.text();
+    return JSON.parse(text) as UserSettingsRecord;
+  } catch {
+    throw new Error(DEFAULT_SAVE_ERROR);
+  }
 }
 
 function parseBudgetRates(inputs: {

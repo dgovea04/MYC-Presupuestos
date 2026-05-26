@@ -8,6 +8,8 @@ declare module "next-auth" {
       phone?: string | null;
       jobTitle?: string | null;
       bio?: string | null;
+      role?: "ADMIN" | "USER";
+      status?: "ACTIVE" | "SUSPENDED";
     };
   }
 }
@@ -19,5 +21,7 @@ declare module "next-auth/jwt" {
     phone?: string | null;
     jobTitle?: string | null;
     bio?: string | null;
+    role?: "ADMIN" | "USER";
+    status?: "ACTIVE" | "SUSPENDED";
   }
 }

@@ -110,10 +110,12 @@ describe("landing primitives", () => {
     );
 
     const featureSection = container.querySelector("#features");
+    const heroInner = container.querySelector("section > .landing-shell");
     const heroChip = [...container.querySelectorAll("span")].find((node) => node.textContent?.includes("Normativa peruana"));
 
     expect(featureSection?.className).toContain("landing-section");
     expect(featureSection?.className).toContain("landing-shell");
+    expect(heroInner?.className).toContain("landing-shell");
     expect(heroChip?.className).toContain("landing-chip");
   });
 
@@ -181,9 +183,11 @@ describe("landing primitives", () => {
   it("keeps the navbar login action on the shared secondary CTA treatment", async () => {
     const container = await renderNode(<LandingNavbar />);
     const loginLink = container.querySelector('a[href="/login"]');
+    const navbarInner = container.querySelector("header > div");
 
     expect(loginLink?.className).toContain("border-slate-200/90");
     expect(loginLink?.className).toContain("bg-white/90");
+    expect(navbarInner?.className).toContain("landing-shell");
   });
 });
 

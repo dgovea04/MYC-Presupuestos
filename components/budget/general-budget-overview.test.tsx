@@ -38,12 +38,13 @@ describe("GeneralBudgetOverview", () => {
   });
 
   it("shows the consolidated general budget tab by default and lets the user switch back to a sub budget detail", async () => {
-    const { clickButton, getByText, queryByText, getByTestId } = await renderOverview();
+    const { clickButton, getByText, queryByText, getByTestId, getLinkByText } = await renderOverview();
 
     expect(getByText("Presupuesto general")).toBeTruthy();
     expect(getByText("Consolidado activo")).toBeTruthy();
     expect(getByText("Movimiento de tierras")).toBeTruthy();
     expect(getByText("Acero fy=4200")).toBeTruthy();
+    expect(getLinkByText("Revisar con IA").getAttribute("href")).toContain("/ai?action=review");
     const generalTableText = getByTestId("general-budget-tab-table").textContent ?? "";
     expect(generalTableText).not.toContain("Sub presupuesto");
     expect(generalTableText).not.toContain("Acciones");
@@ -130,6 +131,14 @@ async function renderOverview() {
 
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing test id: ${testId}`);
+      }
+
+      return element;
+    },
+    getLinkByText: (text: string) => {
+      const element = Array.from(document.querySelectorAll("a")).find((node) => node.textContent?.includes(text));
+      if (!(element instanceof HTMLAnchorElement)) {
+        throw new Error(`Missing link: ${text}`);
       }
 
       return element;

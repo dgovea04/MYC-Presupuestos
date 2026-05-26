@@ -16,6 +16,8 @@ const authUserSchema = z.object({
   phone: z.string().nullable().optional(),
   jobTitle: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
+  role: z.enum(["ADMIN", "USER"]).optional().default("USER"),
+  status: z.enum(["ACTIVE", "SUSPENDED"]).optional().default("ACTIVE"),
 });
 
 type AuthUserRecord = z.infer<typeof authUserSchema>;
@@ -33,13 +35,15 @@ function normalizeAuthUser(row: unknown): AuthUserRecord | null {
     phone: parsedUser.data.phone ?? null,
     jobTitle: parsedUser.data.jobTitle ?? null,
     bio: parsedUser.data.bio ?? null,
+    role: parsedUser.data.role,
+    status: parsedUser.data.status,
   };
 }
 
 async function getAuthUserByEmail(email: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
-    SELECT "id", "name", "email", "passwordHash"
+    SELECT "id", "name", "email", "passwordHash", "role", "status"
     ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
     ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
     ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
@@ -55,7 +59,7 @@ async function getAuthUserByEmail(email: string) {
 async function getAuthUserById(userId: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
-    SELECT "id", "name", "email"
+    SELECT "id", "name", "email", "role", "status"
     ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
     ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
     ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
@@ -68,7 +72,7 @@ async function getAuthUserById(userId: string) {
   return normalizeAuthUser(rows[0]);
 }
 
-function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "avatarUrl" | "phone" | "jobTitle" | "bio">) {
+function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "avatarUrl" | "phone" | "jobTitle" | "bio" | "role" | "status">) {
   return {
     id: user.id,
     name: user.name,
@@ -77,6 +81,8 @@ function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "
     phone: user.phone,
     jobTitle: user.jobTitle,
     bio: user.bio,
+    role: user.role,
+    status: user.status,
   };
 }
 
@@ -103,7 +109,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await getAuthUserByEmail(parsed.data.email);
 
-        if (!user?.passwordHash) {
+        if (!user?.passwordHash || user.status === "SUSPENDED") {
           return null;
         }
 
@@ -127,6 +133,8 @@ export const authOptions: NextAuthOptions = {
         token.phone = "phone" in user ? (user.phone as string | null | undefined) ?? null : null;
         token.jobTitle = "jobTitle" in user ? (user.jobTitle as string | null | undefined) ?? null : null;
         token.bio = "bio" in user ? (user.bio as string | null | undefined) ?? null : null;
+        token.role = "role" in user ? (user.role as "ADMIN" | "USER" | undefined) ?? "USER" : "USER";
+        token.status = "status" in user ? (user.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE" : "ACTIVE";
       }
 
       return token;
@@ -142,6 +150,8 @@ export const authOptions: NextAuthOptions = {
         session.user.phone = currentUser?.phone ?? (token.phone as string | null | undefined) ?? null;
         session.user.jobTitle = currentUser?.jobTitle ?? (token.jobTitle as string | null | undefined) ?? null;
         session.user.bio = currentUser?.bio ?? (token.bio as string | null | undefined) ?? null;
+        session.user.role = currentUser?.role ?? (token.role as "ADMIN" | "USER" | undefined) ?? "USER";
+        session.user.status = currentUser?.status ?? (token.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE";
       }
 
       return session;

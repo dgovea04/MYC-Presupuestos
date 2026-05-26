@@ -1,11 +1,11 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
-import { KeyRound, Mail, Shield, Upload, UserRound } from "lucide-react";
+import { ArrowUpRight, Bot, Coins, KeyRound, Mail, Shield, Upload, UserRound, Zap } from "lucide-react";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { formatDate } from "@/lib/utils";
-import type { AccountRecord } from "@/types/account";
+import type { AccountMembershipRecord, AccountRecord } from "@/types/account";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,13 @@ const DEFAULT_PROFILE_ERROR = "No se pudo guardar tu perfil.";
 const DEFAULT_AVATAR_ERROR = "No se pudo guardar la imagen de perfil.";
 const DEFAULT_PASSWORD_ERROR = "No se pudo actualizar la contrasena.";
 
-export function AccountPageContent({ initialAccount }: { initialAccount: AccountRecord }) {
+export function AccountPageContent({
+  initialAccount,
+  membership,
+}: {
+  initialAccount: AccountRecord;
+  membership?: AccountMembershipRecord;
+}) {
   const [account, setAccount] = useState(initialAccount);
 
   return (
@@ -42,6 +48,7 @@ export function AccountPageContent({ initialAccount }: { initialAccount: Account
       </div>
 
       <div className="space-y-6 xl:sticky xl:top-5">
+        {membership ? <AccountMembershipCard account={account} membership={membership} /> : null}
         <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
           <CardHeader>
             <CardTitle>Resumen de cuenta</CardTitle>
@@ -80,6 +87,111 @@ export function AccountPageContent({ initialAccount }: { initialAccount: Account
       </div>
     </div>
   );
+}
+
+function AccountMembershipCard({
+  account,
+  membership,
+}: {
+  account: AccountRecord;
+  membership: AccountMembershipRecord;
+}) {
+  const upgradeHref = buildMembershipMailto(account, "upgrade");
+  const tokensHref = buildMembershipMailto(account, "tokens");
+  const usagePercent = membership.allowance > 0 ? Math.min(100, Math.round((membership.consumedTokens / membership.allowance) * 100)) : 0;
+
+  return (
+    <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-sky-600 p-2 text-white">
+            <Bot className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle>Membresia e IA</CardTitle>
+            <CardDescription>Consulta tu plan y tokens disponibles. Estos datos no son editables desde tu cuenta.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Plan actual</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950">{membership.planName}</p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm">
+              {membership.planSlug || "sin-plan"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <TokenMetric icon={<Zap className="h-4 w-4" />} label="Disponibles" value={formatTokenNumber(membership.availableTokens)} />
+          <TokenMetric icon={<Coins className="h-4 w-4" />} label="Cupo mensual" value={formatTokenNumber(membership.allowance)} />
+          <TokenMetric icon={<Bot className="h-4 w-4" />} label="Consumidos" value={formatTokenNumber(membership.consumedTokens)} />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>Uso del periodo</span>
+            <span>{usagePercent}%</span>
+          </div>
+          <progress
+            aria-label="Uso de tokens IA del periodo"
+            className="h-2 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-sky-600 [&::-webkit-progress-bar]:bg-slate-100 [&::-webkit-progress-value]:bg-sky-600"
+            max={100}
+            value={usagePercent}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <AccountActionLink href={upgradeHref} label="Upgrade membresia" />
+          <AccountActionLink href={tokensHref} label="Agregar tokens" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TokenMetric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <span className="flex items-center gap-2 text-sm text-slate-500">
+        <span className="text-sky-600">{icon}</span>
+        {label}
+      </span>
+      <span className="text-sm font-semibold text-slate-950">{value}</span>
+    </div>
+  );
+}
+
+function AccountActionLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30"
+    >
+      {label}
+      <ArrowUpRight className="h-4 w-4" />
+    </a>
+  );
+}
+
+function formatTokenNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function buildMembershipMailto(account: AccountRecord, intent: "upgrade" | "tokens") {
+  const subject = intent === "upgrade" ? "Solicitud de upgrade de membresia" : "Solicitud para agregar tokens IA";
+  const body =
+    intent === "upgrade"
+      ? `Hola equipo MYC,\n\nQuiero solicitar un upgrade de membresia para la cuenta ${account.email}.\n\nGracias.`
+      : `Hola equipo MYC,\n\nQuiero agregar tokens IA para la cuenta ${account.email}.\n\nGracias.`;
+
+  return `mailto:soporte@mycpresupuestos.pe?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 function AccountProfileForm({ account, onSaved }: { account: AccountRecord; onSaved: (account: AccountRecord) => void }) {

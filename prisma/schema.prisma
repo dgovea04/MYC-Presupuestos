@@ -84,20 +84,98 @@ enum ActivityEventType {
   ADJUSTMENT_REGISTERED
 }
 
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum AiTokenLedgerType {
+  RESERVE
+  CONSUME
+  RELEASE
+  ADJUSTMENT
+}
+
 model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  avatarUrl    String?
-  phone        String?
-  jobTitle     String?
-  bio          String?
-  passwordHash String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  companies    Company[]
-  settings     UserSettings?
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  avatarUrl           String?
+  phone               String?
+  jobTitle            String?
+  bio                 String?
+  role                UserRole  @default(USER)
+  status              UserStatus @default(ACTIVE)
+  membershipPlanId    String?
+  aiTokenExtraMonthly Int       @default(0)
+  passwordHash        String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  companies           Company[]
+  settings            UserSettings?
   activityEvents ActivityEvent[]
+  membershipPlan      MembershipPlan? @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
+  aiUsagePeriods      AiUsagePeriod[]
+  aiTokenLedger       AiTokenLedger[] @relation("AiTokenLedgerUser")
+  aiTokenAdjustments  AiTokenLedger[] @relation("AiTokenLedgerAdmin")
+
+  @@index([role])
+  @@index([status])
+  @@index([membershipPlanId])
+}
+
+model MembershipPlan {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  monthlyTokenLimit Int
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  users             User[]
+
+  @@index([isActive])
+}
+
+model AiUsagePeriod {
+  id             String   @id @default(cuid())
+  userId         String
+  periodStart    DateTime
+  consumedTokens Int      @default(0)
+  reservedTokens Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodStart])
+  @@index([periodStart])
+}
+
+model AiTokenLedger {
+  id              String            @id @default(cuid())
+  userId          String
+  adminUserId     String?
+  periodStart     DateTime
+  type            AiTokenLedgerType
+  tokens          Int
+  estimatedTokens Int?
+  actualTokens    Int?
+  provider        String
+  model           String
+  action          String
+  notes           String?
+  createdAt       DateTime          @default(now())
+  user            User              @relation("AiTokenLedgerUser", fields: [userId], references: [id], onDelete: Cascade)
+  adminUser       User?             @relation("AiTokenLedgerAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId, periodStart])
+  @@index([adminUserId])
+  @@index([action, createdAt(sort: Desc)])
 }
 
 model ActivityEvent {

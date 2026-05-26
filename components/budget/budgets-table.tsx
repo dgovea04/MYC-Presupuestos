@@ -16,6 +16,7 @@ import { OperationalFilterSummary, OperationalMetricBadge, OperationalPanel } fr
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { StaticTableFrame } from "@/components/ui/virtualized-table-frame";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import type { DateFormatOption } from "@/types/settings";
 
 type BudgetRow = {
   id: string;
@@ -183,7 +184,7 @@ const BudgetTableRow = memo(function BudgetTableRow({
 }: {
   budget: BudgetRow;
   currencyDecimals: number;
-  dateFormat: string;
+  dateFormat: DateFormatOption;
   isPending: boolean;
   onRemoveBudget: (id: string) => Promise<void>;
 }) {

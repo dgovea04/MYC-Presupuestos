@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
@@ -32,8 +33,12 @@ export default async function DashboardPage({
   searchParams?: Promise<{ priority?: string; pendingPage?: string; activityPage?: string }>;
 }) {
   const session = await getAuthSession();
+  if (!session) {
+    redirect("/login");
+  }
+
   const resolvedSearchParams = (await searchParams) ?? {};
-  const [stats, settings] = await Promise.all([getDashboardStats(session!.user.id), getUserSettings(session!.user.id)]);
+  const [stats, settings] = await Promise.all([getDashboardStats(session.user.id), getUserSettings(session.user.id)]);
   const selectedPriority = resolvePendingPriorityFilter(resolvedSearchParams.priority);
   const requestedPendingPage = resolvePageNumber(resolvedSearchParams.pendingPage);
   const requestedActivityPage = resolvePageNumber(resolvedSearchParams.activityPage);

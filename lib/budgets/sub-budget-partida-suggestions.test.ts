@@ -78,6 +78,76 @@ describe("suggestPartidaMatches", () => {
     expect(result.suggestions[1]!.score).toBeGreaterThan(result.suggestions[2]!.score);
   });
 
+  it("prioritizes the base partida name over depth and terrain specifications", () => {
+    const result = suggestPartidaMatches({
+      item: {
+        code: "IT-3B",
+        description: "EXCAVACION MANUAL H=1.00 EN TERRENO NORMAL",
+        unit: "m3",
+      },
+      catalog: [
+        createCatalogPartida({
+          id: "excavacion-manual",
+          description: "EXCAVACION MANUAL",
+          unit: "m3",
+          unitPrice: 120,
+        }),
+        createCatalogPartida({
+          id: "nivelacion-terreno",
+          description: "NIVELACION EN TERRENO NORMAL",
+          unit: "m3",
+          unitPrice: 80,
+        }),
+        createCatalogPartida({
+          id: "relleno",
+          description: "RELLENO EN TERRENO NORMAL",
+          unit: "m3",
+          unitPrice: 70,
+        }),
+      ],
+      limit: 3,
+    });
+
+    expect(result.matchKind).toBe("suggested");
+    expect(result.suggestions[0]?.partida.id).toBe("excavacion-manual");
+    expect(result.suggestions[0]?.confidence).toBe("high");
+  });
+
+  it("suggests concrete partidas from a long slab description with strength specifications", () => {
+    const result = suggestPartidaMatches({
+      item: {
+        code: "IT-3C",
+        description: "CONCRETO PARA LOSAS ALIGERADAS F´C=210 KG/CM2",
+        unit: "m3",
+      },
+      catalog: [
+        createCatalogPartida({
+          id: "concreto-losa",
+          description: "CONCRETO PARA LOSA ALIGERADA F'C=210 KG/CM2",
+          unit: "m3",
+          unitPrice: 420,
+        }),
+        createCatalogPartida({
+          id: "concreto-zapata",
+          description: "CONCRETO PARA ZAPATAS F'C=210 KG/CM2",
+          unit: "m3",
+          unitPrice: 390,
+        }),
+        createCatalogPartida({
+          id: "acero",
+          description: "ACERO DE REFUERZO FY=4200 KG/CM2",
+          unit: "kg",
+          unitPrice: 6,
+        }),
+      ],
+      limit: 3,
+    });
+
+    expect(result.matchKind).toBe("suggested");
+    expect(result.suggestions[0]?.partida.id).toBe("concreto-losa");
+    expect(result.suggestions.map((suggestion) => suggestion.partida.id)).toContain("concreto-zapata");
+  });
+
   it("boosts the confidence when the unit matches", () => {
     const matchingUnit = suggestPartidaMatches({
       item: {

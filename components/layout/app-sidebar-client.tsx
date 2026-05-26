@@ -2,9 +2,22 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { BookOpen, FileSpreadsheet, FolderKanban, LayoutDashboard, Network, Rows3, SlidersHorizontal, Wrench } from "lucide-react";
+import {
+  BookOpen,
+  BotMessageSquare,
+  FileSpreadsheet,
+  FolderKanban,
+  LayoutDashboard,
+  Library,
+  Network,
+  Rows3,
+  ShieldCheck,
+  SlidersHorizontal,
+  Table2,
+  Wrench,
+} from "lucide-react";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
-import { SidebarNav, type SidebarNavLink } from "@/components/layout/sidebar-nav";
+import { SidebarNav, type SidebarNavItem, type SidebarNavLink } from "@/components/layout/sidebar-nav";
 import { SidebarUserCard } from "@/components/layout/sidebar-user-card";
 import {
   getSidebarWidthCssValue,
@@ -21,18 +34,36 @@ type AppSidebarClientProps = {
   userAvatarUrl?: string | null;
   userName?: string | null;
   userEmail?: string | null;
+  userRole?: "ADMIN" | "USER" | null;
 };
 
-const NAV_LINKS: SidebarNavLink[] = [
+const NAV_ITEMS: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
   { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
-  { href: "/resources", label: "Catalogo de Insumos", icon: Wrench },
-  { href: "/partidas", label: "Catalogo de Partidas", icon: Rows3 },
-  { href: "/unified-indices", label: "Indices Unificados (IU)", icon: Network },
-  { href: "/unified-index-dictionary", label: "Diccionario de IU", icon: BookOpen },
+  { href: "/ai", label: "IA Local", icon: BotMessageSquare },
+  {
+    id: "catalogos",
+    label: "Catalogos",
+    icon: Library,
+    children: [
+      { href: "/resources", label: "Catalogo de Insumos", icon: Wrench },
+      { href: "/partidas", label: "Catalogo de Partidas", icon: Rows3 },
+    ],
+  },
+  {
+    id: "tablas",
+    label: "Tablas",
+    icon: Table2,
+    children: [
+      { href: "/unified-indices", label: "Indices Unificados (IU)", icon: Network },
+      { href: "/unified-index-dictionary", label: "Diccionario de IU", icon: BookOpen },
+    ],
+  },
   { href: "/settings", label: "Configuracion", icon: SlidersHorizontal },
 ];
+
+const ADMIN_NAV_LINK: SidebarNavLink = { href: "/admin", label: "Administracion", icon: ShieldCheck };
 
 const FULL_WIDTH_QUERY = "(min-width: 1536px)";
 const SIDEBAR_MODE_EVENT = "myc:sidebar-mode-change";
@@ -131,7 +162,7 @@ function getInitials(userName?: string | null, userEmail?: string | null) {
   return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
 }
 
-export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userName }: AppSidebarClientProps) {
+export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userName, userRole }: AppSidebarClientProps) {
   const pathname = usePathname() ?? "";
   const mode = useSyncExternalStore(
     subscribeToSidebarMode,
@@ -142,6 +173,7 @@ export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userNa
   const initials = getInitials(userName, userEmail);
   const displayName = userName?.trim() || "Equipo tecnico";
   const displayEmail = userEmail?.trim() || "Sin correo";
+  const items = userRole === "ADMIN" ? [...NAV_ITEMS, ADMIN_NAV_LINK] : NAV_ITEMS;
 
   useEffect(() => {
     if (!initialMode) {
@@ -179,7 +211,7 @@ export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userNa
       }}
     >
       <SidebarBrand mode={mode} navigationId={SIDEBAR_NAV_ID} onToggle={toggleSidebarMode} />
-      <SidebarNav links={NAV_LINKS} mode={mode} navigationId={SIDEBAR_NAV_ID} pathname={pathname} />
+      <SidebarNav items={items} mode={mode} navigationId={SIDEBAR_NAV_ID} pathname={pathname} />
       <SidebarUserCard mode={mode} user={{ avatarUrl: userAvatarUrl ?? null, email: displayEmail, initials, name: displayName }} />
     </aside>
   );

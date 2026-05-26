@@ -54,16 +54,63 @@ async function seedUnifiedIndicesFromWorkbook() {
 
 async function main() {
   const passwordHash = await hashPassword("Demo12345");
+  await seedMembershipPlans();
 
   const user = await prisma.user.upsert({
     where: { email: "demo@mycpresupuestos.pe" },
-    update: {},
+    update: {
+      role: "ADMIN",
+      status: "ACTIVE",
+      membershipPlan: {
+        connect: { slug: "empresa" },
+      },
+    },
     create: {
       email: "demo@mycpresupuestos.pe",
       name: "Usuario Demo",
       passwordHash,
+      role: "ADMIN",
+      status: "ACTIVE",
+      membershipPlan: {
+        connect: { slug: "empresa" },
+      },
     },
   });
+  const demoUser = await prisma.user.upsert({
+    where: { email: "usuario@mycpresupuestos.pe" },
+    update: {
+      role: "USER",
+      status: "ACTIVE",
+      membershipPlan: {
+        connect: { slug: "starter" },
+      },
+    },
+    create: {
+      email: "usuario@mycpresupuestos.pe",
+      name: "Usuario Operativo",
+      passwordHash,
+      role: "USER",
+      status: "ACTIVE",
+      membershipPlan: {
+        connect: { slug: "starter" },
+      },
+    },
+  });
+
+  const existingDemoUserCompany = await prisma.company.findFirst({
+    where: { userId: demoUser.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!existingDemoUserCompany) {
+    await prisma.company.create({
+      data: {
+        userId: demoUser.id,
+        name: "Constructora Demo",
+        ruc: "20987654321",
+      },
+    });
+  }
 
   const existingCompany = await prisma.company.findFirst({
     where: { userId: user.id },
@@ -360,6 +407,26 @@ async function main() {
 
   await refreshBudgetTotals(budget.id);
   await refreshGeneralBudgetTotals(generalBudget.id);
+}
+
+async function seedMembershipPlans() {
+  const plans = [
+    { name: "Starter", slug: "starter", monthlyTokenLimit: 100000 },
+    { name: "Pro", slug: "pro", monthlyTokenLimit: 500000 },
+    { name: "Empresa", slug: "empresa", monthlyTokenLimit: 2000000 },
+  ];
+
+  for (const plan of plans) {
+    await prisma.membershipPlan.upsert({
+      where: { slug: plan.slug },
+      update: {
+        name: plan.name,
+        monthlyTokenLimit: plan.monthlyTokenLimit,
+        isActive: true,
+      },
+      create: plan,
+    });
+  }
 }
 
 async function seedGeneralResourcesCatalog() {

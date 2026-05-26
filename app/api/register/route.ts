@@ -21,6 +21,16 @@ export async function POST(request: Request) {
         name: data.name,
         email: data.email,
         passwordHash: await hashPassword(data.password),
+        membershipPlan: {
+          connectOrCreate: {
+            where: { slug: "starter" },
+            create: {
+              name: "Starter",
+              slug: "starter",
+              monthlyTokenLimit: 100000,
+            },
+          },
+        },
       },
     });
 

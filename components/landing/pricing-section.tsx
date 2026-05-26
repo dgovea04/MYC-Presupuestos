@@ -5,19 +5,19 @@ import { SectionHeading } from "@/components/landing/section-heading";
 
 const planMeta: Record<string, { audience: string; cadence: string; note: string }> = {
   Starter: {
-    audience: "Para independientes y equipos pequeños",
-    cadence: "por usuario / mes",
-    note: "Arranque rápido para presupuestos y APUs base.",
+    audience: "Para independientes y equipos pequenos",
+    cadence: "gratis por lanzamiento",
+    note: "Activa el plan Starter con 100% de descuento durante esta etapa inicial.",
   },
   Pro: {
-    audience: "Para oficinas técnicas con mayor volumen",
+    audience: "Para oficinas tecnicas con mayor volumen",
     cadence: "por equipo / mes",
-    note: "El plan más equilibrado para control técnico y reportes.",
+    note: "El plan mas equilibrado para control tecnico y reportes.",
   },
   Empresa: {
-    audience: "Para constructoras con operación multiusuario",
+    audience: "Para constructoras con operacion multiusuario",
     cadence: "pricing consultivo",
-    note: "Configuración y acompañamiento para estandarización interna.",
+    note: "Configuracion y acompanamiento para estandarizacion interna.",
   },
 };
 
@@ -27,14 +27,14 @@ export function PricingSection() {
       <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 xl:px-12">
         <SectionHeading
           badge="Precios"
-          title="Planes claros para profesionales, oficinas técnicas y constructoras."
-          description="Cada plan se enfoca en el nivel de operación que necesita el equipo, desde presupuestos individuales hasta estandarización empresarial."
+          title="Planes claros para profesionales, oficinas tecnicas y constructoras."
+          description="Cada plan se enfoca en el nivel de operacion que necesita el equipo, desde presupuestos individuales hasta estandarizacion empresarial."
           align="center"
         />
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-500">
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Implementación simple</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Implementacion simple</span>
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Sin curva tipo ERP</span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Escala por tipo de operación</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Escala por tipo de operacion</span>
         </div>
         <div className="mt-14 grid gap-6 xl:grid-cols-[0.96fr_1.08fr_0.96fr]">
           {pricingPlans.map((plan, index) => (
@@ -67,8 +67,22 @@ export function PricingSection() {
                       {plan.name}
                     </p>
                   </div>
+                  {plan.badge ? (
+                    <span
+                      className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                        plan.highlight
+                          ? "border-white/15 bg-white/10 text-sky-200"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {plan.badge}
+                    </span>
+                  ) : null}
                   <p className={`mt-4 text-sm ${plan.highlight ? "text-slate-300" : "text-slate-500"}`}>{planMeta[plan.name].audience}</p>
-                  <p className="font-display mt-3 text-[2.7rem] font-semibold tracking-tight">{plan.price}</p>
+                  {plan.originalPrice ? (
+                    <p className={`mt-3 text-sm line-through ${plan.highlight ? "text-slate-500" : "text-slate-400"}`}>{plan.originalPrice}</p>
+                  ) : null}
+                  <p className="font-display mt-1 text-[2.7rem] font-semibold tracking-tight">{plan.price}</p>
                   <p className={`mt-2 text-sm ${plan.highlight ? "text-slate-400" : "text-slate-500"}`}>{planMeta[plan.name].cadence}</p>
                 </div>
                 {plan.highlight ? (

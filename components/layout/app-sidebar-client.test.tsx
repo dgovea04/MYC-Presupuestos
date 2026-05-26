@@ -131,6 +131,7 @@ describe("AppSidebarClient", () => {
       "/dashboard",
       "/projects",
       "/budgets",
+      "/ai",
       "/resources",
       "/partidas",
       "/unified-indices",
@@ -229,6 +230,22 @@ describe("AppSidebarClient", () => {
     expect(window.localStorage.getItem("myc:sidebar-mode")).toBe("expanded");
     expect(document.cookie).toContain("myc_sidebar_mode=expanded");
     expect(container.querySelector("[data-sidebar-mode]")?.getAttribute("data-sidebar-mode")).toBe("expanded");
+  });
+
+  it("shows the administration link only for admin users", async () => {
+    mockMatchMedia(false);
+
+    await act(async () => {
+      root.render(<AppSidebarClient userEmail="admin@example.com" userName="Admin MYC" userRole="ADMIN" />);
+    });
+
+    expect(container.querySelector('a[href="/admin"]')).not.toBeNull();
+
+    await act(async () => {
+      root.render(<AppSidebarClient userEmail="user@example.com" userName="Usuario MYC" userRole="USER" />);
+    });
+
+    expect(container.querySelector('a[href="/admin"]')).toBeNull();
   });
 
   it("respects a stored manual preference even on full-width desktop", async () => {

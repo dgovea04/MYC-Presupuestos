@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AccountPageContent } from "@/components/account/account-page-content";
 import { AppShell } from "@/components/layout/app-shell";
 import { getAuthSession } from "@/lib/auth/session";
-import { getUserAccount } from "@/lib/data/account";
+import { getUserAccount, getUserAccountMembership } from "@/lib/data/account";
 import { getUserSettings } from "@/lib/data/settings";
 
 export default async function AccountPage() {
@@ -12,8 +12,9 @@ export default async function AccountPage() {
     redirect("/login");
   }
 
-  const [account, settings] = await Promise.all([
+  const [account, membership, settings] = await Promise.all([
     getUserAccount(session.user.id),
+    getUserAccountMembership(session.user.id),
     getUserSettings(session.user.id),
   ]);
 
@@ -23,10 +24,11 @@ export default async function AccountPage() {
         avatarUrl: account.avatarUrl,
         email: account.email,
         name: account.name,
+        role: session.user.role,
       }}
       settings={settings}
     >
-      <AccountPageContent initialAccount={account} />
+      <AccountPageContent initialAccount={account} membership={membership} />
     </AppShell>
   );
 }

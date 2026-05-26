@@ -55,12 +55,94 @@ describe("PartidaApuSheet", () => {
 
   it("uses the same editor base language as the budget APU and keeps search enabled for editable partidas", async () => {
     const partida = createPartida();
-    const { getByTestId, getHeadingByText, getTextByExactMatch } = await renderSheet(partida);
+    const { getByTestId, getButtonByText, getHeadingByText, getTextByExactMatch, getLinkByText } = await renderSheet(partida);
 
     expect(getTextByExactMatch("Editor APU")).toBeTruthy();
     expect(getHeadingByText("Partida demo")).toBeTruthy();
     expect(getByTestId("partida-apu-add-resource-search").getAttribute("disabled")).toBeNull();
     expect(getByTestId("partida-apu-add-manual-row-button").getAttribute("disabled")).toBeNull();
+    expect(getButtonByText("Generar con IA")).toBeTruthy();
+    expect(getLinkByText("Abrir en Copiloto").getAttribute("href")).toContain("/ai?action=apu");
+    expect(getLinkByText("Explicar partida").getAttribute("href")).toContain("/ai?action=chat");
+  });
+
+  it("generates an AI APU preview and applies it as a draft without saving", async () => {
+    const onChange = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        answer: "Propuesta APU",
+        model: "llama3.1",
+        requestedModel: "mistral",
+        fallbackUsed: true,
+        warnings: ["mistral no instalado"],
+        structuredData: {
+          answer: "Propuesta APU",
+          unit: "m2",
+          performance: "12 m2/dia",
+          crew: "1 operario + 1 peon",
+          materials: [{ description: "Cemento", unit: "bol", quantity: "0,25" }],
+          labor: [{ description: "Operario", unit: "hh", quantity: "1.5" }],
+          equipment: [{ description: "Mezcladora", unit: "hm", quantity: "0.2" }],
+          observations: ["Validar precios."],
+          assumptions: ["Rendimiento referencial."],
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const partida = createPartida();
+    const { getButtonByText, getTextByExactMatch } = await renderSheet(partida, { onChange });
+
+    await act(async () => {
+      getButtonByText("Generar con IA").click();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ai/apu/generate",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"query":"Partida demo"'),
+      }),
+    );
+    expect(getTextByExactMatch("Vista previa IA")).toBeTruthy();
+    expect(getTextByExactMatch("Cemento")).toBeTruthy();
+    expect(getTextByExactMatch("Fallback activo")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Aplicar propuesta").click();
+    });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        isDirty: true,
+        isEditing: true,
+        performance: 12,
+      }),
+    );
+    expect(onChange.mock.calls[0]?.[0].apuRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ description: "Cemento", unit: "bol", quantity: 0.25, unitPrice: 0, resourceType: "MATERIAL" }),
+        expect.objectContaining({ description: "Operario", unit: "hh", quantity: 1.5, unitPrice: 0, resourceType: "LABOR" }),
+        expect.objectContaining({ description: "Mezcladora", unit: "hm", quantity: 0.2, unitPrice: 0, resourceType: "EQUIPMENT" }),
+      ]),
+    );
+  });
+
+  it("does not allow readonly partidas to generate AI APU suggestions", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const partida = createReadonlyPartida();
+    const { getButtonByText } = await renderSheet(partida);
+
+    expect(getButtonByText("Generar con IA").getAttribute("disabled")).not.toBeNull();
+    await act(async () => {
+      getButtonByText("Generar con IA").click();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("closes when clicking outside the off-canvas", async () => {
@@ -76,7 +158,7 @@ describe("PartidaApuSheet", () => {
   });
 });
 
-async function renderSheet(partida: CatalogPartidaRecord, overrides?: { onClose?: () => void }) {
+async function renderSheet(partida: CatalogPartidaRecord, overrides?: { onChange?: (partida: CatalogPartidaRecord) => void; onClose?: () => void }) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -87,7 +169,7 @@ async function renderSheet(partida: CatalogPartidaRecord, overrides?: { onClose?
   await act(async () => {
     root.render(
       <FormattingSettingsProvider settings={createSettings()}>
-        <PartidaApuSheet partida={partida} open onClose={overrides?.onClose ?? (() => undefined)} onChange={() => undefined} resourcesCatalog={[]} />
+        <PartidaApuSheet partida={partida} open onClose={overrides?.onClose ?? (() => undefined)} onChange={overrides?.onChange ?? (() => undefined)} resourcesCatalog={[]} />
       </FormattingSettingsProvider>,
     );
   });
@@ -113,6 +195,22 @@ async function renderSheet(partida: CatalogPartidaRecord, overrides?: { onClose?
       const element = [...document.querySelectorAll("*")].find((candidate) => candidate.textContent?.trim() === text);
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing text: ${text}`);
+      }
+
+      return element;
+    },
+    getLinkByText: (text: string) => {
+      const element = [...document.querySelectorAll("a")].find((candidate) => candidate.textContent?.trim() === text);
+      if (!(element instanceof HTMLAnchorElement)) {
+        throw new Error(`Missing link: ${text}`);
+      }
+
+      return element;
+    },
+    getButtonByText: (text: string) => {
+      const element = [...document.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
+      if (!(element instanceof HTMLButtonElement)) {
+        throw new Error(`Missing button: ${text}`);
       }
 
       return element;

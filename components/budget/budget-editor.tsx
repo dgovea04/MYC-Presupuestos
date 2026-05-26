@@ -1,10 +1,9 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import dynamic from "next/dynamic";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Type } from "lucide-react";
+import { BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -19,10 +18,12 @@ import { applyCatalogPartidaToDraftItem, resolveCatalogResource } from "@/lib/bu
 import { calculateBudgetQualitySummary, type BudgetItemQualityState, type BudgetQualitySummary } from "@/lib/budgets/budget-quality";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
+import { buildAiBudgetReviewSummary } from "@/lib/ai/budget-review";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { cn } from "@/lib/utils";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { ViewModeToggle } from "@/components/budget/view-mode-toggle";
+import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type { BudgetLevelRecord, BudgetLevelType, BudgetRecord, BudgetItemRecord, BudgetStatePatch, BudgetTotals } from "@/types/budget";
 import type { ResourceRecord } from "@/types/resource";
@@ -38,7 +39,8 @@ import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles"
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import type { CellValue } from "exceljs";
-import type { BudgetPasteSuggestedMatch } from "@/lib/budgets/sub-budget-partida-suggestions";
+import { suggestPartidaMatches, type BudgetPasteSuggestedMatch } from "@/lib/budgets/sub-budget-partida-suggestions";
+import type { AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type DragState = { kind: "level" | "item"; id: string } | null;
@@ -103,6 +105,30 @@ type HeaderActionMenuState = {
   left: number;
   trigger: HTMLElement | null;
 };
+type AiBudgetPanelState =
+  | {
+      kind: "chat";
+      title: string;
+      itemId: string;
+      result: AiEndpointResult | null;
+      loading: boolean;
+      error: string;
+    }
+  | {
+      kind: "autocomplete";
+      title: string;
+      itemId: string;
+      result: AiEndpointResult | null;
+      loading: boolean;
+      error: string;
+    }
+  | {
+      kind: "review";
+      title: string;
+      result: AiEndpointResult | null;
+      loading: boolean;
+      error: string;
+    };
 type FixedMenuSize = {
   width: number;
   height: number;
@@ -130,9 +156,6 @@ const pasteModeLabel: Record<BudgetPasteMode, string> = {
   "structured-by-code": "Jerárquico por código",
   "structured-by-indent": "Jerárquico por indentación",
 };
-const ApuEditorSheet = dynamic(() =>
-  import("@/components/apu/apu-editor-sheet").then((module) => module.ApuEditorSheet),
-);
 const BUDGET_ROW_OVERSCAN = 10;
 const BUDGET_TABLE_COLUMN_COUNT = 7;
 const ACTION_MENU_OFFSET = 6;
@@ -146,6 +169,46 @@ const ITEM_ACTION_MENU_ESTIMATED_HEIGHT = 146;
 const HEADER_ADD_MENU_ESTIMATED_HEIGHT = 216;
 const HEADER_MORE_MENU_ESTIMATED_HEIGHT = 112;
 const EMPTY_CATALOG_SUGGESTIONS: CatalogPartidaRecord[] = [];
+
+type IndexedCatalogPartida = {
+  partida: CatalogPartidaRecord;
+  searchText: string;
+};
+
+function findCatalogPartidaSuggestions({
+  query,
+  catalog,
+  fallbackIndex,
+  limit,
+}: {
+  query: string;
+  catalog: CatalogPartidaRecord[];
+  fallbackIndex: IndexedCatalogPartida[];
+  limit: number;
+}) {
+  if (!query) {
+    return catalog.slice(0, limit);
+  }
+
+  const scoredMatches = suggestPartidaMatches({
+    item: {
+      code: "",
+      description: query,
+      unit: "",
+    },
+    catalog,
+    limit,
+  }).suggestions.map((suggestion) => suggestion.partida);
+
+  if (scoredMatches.length > 0) {
+    return scoredMatches;
+  }
+
+  return fallbackIndex
+    .filter(({ searchText }) => searchText.includes(query))
+    .map(({ partida }) => partida)
+    .slice(0, limit);
+}
 
 function getFixedMenuPosition(triggerRect: DOMRect, menuSize: FixedMenuSize) {
   const viewportWidth = window.innerWidth;
@@ -223,6 +286,7 @@ export function BudgetEditor({
   const [levelActionMenu, setLevelActionMenu] = useState<LevelActionMenuState | null>(null);
   const [itemActionMenu, setItemActionMenu] = useState<ItemActionMenuState | null>(null);
   const [headerActionMenu, setHeaderActionMenu] = useState<HeaderActionMenuState | null>(null);
+  const [aiPanel, setAiPanel] = useState<AiBudgetPanelState | null>(null);
   const [catalogInsertTarget, setCatalogInsertTarget] = useState<InsertTarget | null>(null);
   const [catalogInsertQuery, setCatalogInsertQuery] = useState("");
   const [catalogSelectedIds, setCatalogSelectedIds] = useState<string[]>([]);
@@ -293,27 +357,25 @@ export function BudgetEditor({
 
     const normalizedQuery = deferredCatalogQuery.trim().toLowerCase() === "nueva partida" ? "" : deferredCatalogQuery.trim().toLowerCase();
 
-    return indexedPartidasCatalog
-      .filter(({ searchText }) => {
-        if (!normalizedQuery) return true;
-        return searchText.includes(normalizedQuery);
-      })
-      .map(({ partida }) => partida)
-      .slice(0, 8);
-  }, [catalogSelectorRowId, deferredCatalogQuery, indexedPartidasCatalog]);
-  const isCatalogMenuOpen = Boolean(catalogSelectorRowId && catalogSuggestions.length > 0 && catalogMenu);
+    return findCatalogPartidaSuggestions({
+      query: normalizedQuery,
+      catalog: partidasCatalog,
+      fallbackIndex: indexedPartidasCatalog,
+      limit: 8,
+    });
+  }, [catalogSelectorRowId, deferredCatalogQuery, indexedPartidasCatalog, partidasCatalog]);
+  const isCatalogMenuOpen = Boolean(catalogSelectorRowId && catalogMenu);
   const catalogInsertSuggestions = useMemo(() => {
     if (!catalogInsertTarget) return [];
 
     const query = deferredCatalogInsertQuery.trim().toLowerCase();
-    return indexedPartidasCatalog
-      .filter(({ searchText }) => {
-        if (!query) return true;
-        return searchText.includes(query);
-      })
-      .map(({ partida }) => partida)
-      .slice(0, 40);
-  }, [catalogInsertTarget, deferredCatalogInsertQuery, indexedPartidasCatalog]);
+    return findCatalogPartidaSuggestions({
+      query,
+      catalog: partidasCatalog,
+      fallbackIndex: indexedPartidasCatalog,
+      limit: 40,
+    });
+  }, [catalogInsertTarget, deferredCatalogInsertQuery, indexedPartidasCatalog, partidasCatalog]);
   const editableCells = rowNavigationLookup.orderedEditableCells;
   const levelIdSet = useMemo(() => new Set(summary.levels.map((level) => level.id)), [summary.levels]);
   const effectiveDensityMode: DensityMode = isExcelMode ? "compact" : densityMode;
@@ -324,7 +386,9 @@ export function BudgetEditor({
   const cellRefs = useRef(new Map<string, HTMLInputElement>());
   const editorRootRef = useRef<HTMLDivElement>(null);
   const activeRowIdRef = useRef<string | null>(null);
+  const activeColumnRef = useRef<ActiveColumn>(null);
   const pendingUiTimeoutsRef = useRef<number[]>([]);
+  const pendingCatalogCloseTimeoutRef = useRef<number | null>(null);
   const levelActionMenuRef = useRef<HTMLDivElement | null>(null);
   const itemActionMenuRef = useRef<HTMLDivElement | null>(null);
   const headerActionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -336,6 +400,9 @@ export function BudgetEditor({
         window.clearTimeout(timeoutId);
       }
       pendingUiTimeoutsRef.current = [];
+      if (pendingCatalogCloseTimeoutRef.current !== null) {
+        window.clearTimeout(pendingCatalogCloseTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -777,6 +844,99 @@ export function BudgetEditor({
     }));
   }, []);
 
+  async function runAiItemAction(kind: "chat" | "autocomplete", itemId: string) {
+    const item = state.items.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+
+    const title = kind === "chat" ? "Explicacion tecnica IA" : "Sugerencia IA";
+    setAiPanel({ kind, title, itemId, result: null, loading: true, error: "" });
+
+    try {
+      const endpoint = kind === "chat" ? "/api/ai/chat" : "/api/ai/autocomplete";
+      const body =
+        kind === "chat"
+          ? {
+              message: `Explica tecnicamente esta partida de presupuesto y advierte inconsistencias basicas: ${item.description}`,
+              context: buildAiItemContext(item, budget.name),
+            }
+          : {
+              input: item.description,
+              context: buildAiItemContext(item, budget.name),
+            };
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const payload: unknown = await response.json();
+
+      if (!response.ok) {
+        throw new Error(readAiErrorMessage(payload));
+      }
+
+      setAiPanel({ kind, title, itemId, result: readAiEndpointResult(payload), loading: false, error: "" });
+    } catch (caughtError) {
+      setAiPanel({
+        kind,
+        title,
+        itemId,
+        result: null,
+        loading: false,
+        error: caughtError instanceof Error ? caughtError.message : "No se pudo completar la accion IA.",
+      });
+    }
+  }
+
+  async function runAiBudgetReview() {
+    const title = "Revision IA del presupuesto";
+    setAiPanel({ kind: "review", title, result: null, loading: true, error: "" });
+
+    try {
+      const response = await fetch("/api/ai/review", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          budgetSummary: buildAiBudgetReviewSummary({
+            budgetName: summary.name,
+            currency: summary.currency,
+            items: summary.items,
+            totalDirectCost: summary.totals.totalDirectCost,
+          }),
+          context: {
+            project: projectName,
+            module: "Editor de presupuesto",
+            activeTable: "Presupuesto",
+          },
+        }),
+      });
+      const payload: unknown = await response.json();
+
+      if (!response.ok) {
+        throw new Error(readAiErrorMessage(payload));
+      }
+
+      setAiPanel({ kind: "review", title, result: readAiEndpointResult(payload), loading: false, error: "" });
+    } catch (caughtError) {
+      setAiPanel({
+        kind: "review",
+        title,
+        result: null,
+        loading: false,
+        error: caughtError instanceof Error ? caughtError.message : "No se pudo revisar el presupuesto con IA.",
+      });
+    }
+  }
+
+  function applyAiAutocomplete() {
+    if (aiPanel?.kind !== "autocomplete" || !aiPanel.result?.answer.trim()) return;
+    updateItem(aiPanel.itemId, { description: aiPanel.result.answer.trim() });
+    setAiPanel(null);
+  }
+
   function applyCatalogPartidaToItem(itemId: string, partida: CatalogPartidaRecord) {
     const unresolvedRows = partida.apuRows.filter((row) => !resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit));
 
@@ -952,12 +1112,32 @@ export function BudgetEditor({
   }
 
   const openCatalogSelector = useCallback((rowId: string, query = "") => {
+    if (pendingCatalogCloseTimeoutRef.current !== null) {
+      window.clearTimeout(pendingCatalogCloseTimeoutRef.current);
+      pendingCatalogCloseTimeoutRef.current = null;
+    }
+
+    const element = cellRefs.current.get(getCellKey(rowId, "description"));
+    if (element) {
+      const rect = element.getBoundingClientRect();
+      setCatalogMenu({
+        rowId,
+        top: rect.bottom + 6,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+
     setCatalogSelectorRowId(rowId);
     setCatalogQuery(query);
     setCatalogHighlightedIndex(0);
   }, []);
 
   const closeCatalogSelector = useCallback(() => {
+    if (pendingCatalogCloseTimeoutRef.current !== null) {
+      window.clearTimeout(pendingCatalogCloseTimeoutRef.current);
+      pendingCatalogCloseTimeoutRef.current = null;
+    }
     setCatalogSelectorRowId(null);
     setCatalogQuery("");
     setCatalogMenu(null);
@@ -1301,6 +1481,10 @@ export function BudgetEditor({
         }
       }
 
+      if (targetRow.kind !== "level") {
+        return current;
+      }
+
       const insertion = resolveItemInsertionFromTarget({ kind: "level", id: targetRow.level.id }, current.items);
       const extraItems = pastedRows.map((row, index) =>
         applySuggestedOrMatchedPartida(
@@ -1428,6 +1612,7 @@ export function BudgetEditor({
 
   const handleCellFocus = useCallback((rowId: string, column: ActiveColumn) => {
     activeRowIdRef.current = rowId;
+    activeColumnRef.current = column;
     setActiveRowId(rowId);
     setActiveColumn(column);
   }, []);
@@ -1453,12 +1638,20 @@ export function BudgetEditor({
   }, []);
 
   const scheduleCatalogClose = useCallback((rowId: string) => {
-    scheduleUiTimeout(() => {
+    if (pendingCatalogCloseTimeoutRef.current !== null) {
+      window.clearTimeout(pendingCatalogCloseTimeoutRef.current);
+    }
+
+    pendingCatalogCloseTimeoutRef.current = window.setTimeout(() => {
+      pendingCatalogCloseTimeoutRef.current = null;
+      const element = cellRefs.current.get(getCellKey(rowId, "description"));
+      if (document.activeElement === element) return;
+      if (activeRowIdRef.current === rowId && activeColumnRef.current === "description") return;
       if (catalogSelectorRowId === rowId) {
         closeCatalogSelector();
       }
     }, 120);
-  }, [catalogSelectorRowId, closeCatalogSelector, scheduleUiTimeout]);
+  }, [catalogSelectorRowId, closeCatalogSelector]);
 
   async function saveBudget(isAutosave = false) {
     if (saving) return;
@@ -1535,9 +1728,15 @@ export function BudgetEditor({
         if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
 
         activeRowIdRef.current = null;
+        activeColumnRef.current = null;
         setActiveRowId(null);
         setActiveColumn(null);
-        setCatalogSelectorRowId(null);
+
+        scheduleUiTimeout(() => {
+          const activeElement = document.activeElement;
+          if (activeElement instanceof Node && editorRootRef.current?.contains(activeElement)) return;
+          closeCatalogSelector();
+        }, 0);
       }}
     >
       <Card className={cn("overflow-hidden border-slate-200/90 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.28)]", isExcelMode && "rounded-md shadow-[0_10px_24px_-20px_rgba(15,23,42,0.18)]")}>
@@ -1601,6 +1800,15 @@ export function BudgetEditor({
                   className="h-8 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]"
                 >
                   {saving ? "Guardando..." : "Guardar"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void runAiBudgetReview()}
+                  className="h-8 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.24)]"
+                >
+                  <BotMessageSquare className="mr-2 h-4 w-4" />
+                  Revisar Presupuesto
                 </Button>
                 <div className="flex items-center gap-1 rounded-full border border-slate-200/90 bg-white/90 px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
                   <button
@@ -1684,6 +1892,7 @@ export function BudgetEditor({
           onScheduleCatalogClose={scheduleCatalogClose}
           onApplyCatalogPartida={applyCatalogPartidaToItem}
           onOpenApuSheet={openApuSheet}
+          onRunAiItemAction={(kind, itemId) => void runAiItemAction(kind, itemId)}
           itemQualityStateById={itemQualityStateById}
         />
       </Card>
@@ -1719,6 +1928,10 @@ export function BudgetEditor({
         />
       ) : null}
 
+      {aiPanel ? (
+        <AiBudgetActionDialog panel={aiPanel} onClose={() => setAiPanel(null)} onApplyAutocomplete={applyAiAutocomplete} />
+      ) : null}
+
       {isCatalogMenuOpen && catalogMenu?.rowId === catalogSelectorRowId ? (
         <div
           className="fixed z-[90] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
@@ -1732,7 +1945,7 @@ export function BudgetEditor({
             Catalogo de partidas
           </div>
           <div className="max-h-72 overflow-auto py-1">
-            {catalogSuggestions.map((partida, index) => (
+            {catalogSuggestions.length > 0 ? catalogSuggestions.map((partida, index) => (
               <button
                 key={partida.id}
                 type="button"
@@ -1757,7 +1970,9 @@ export function BudgetEditor({
                   {formatCurrency(partida.unitPrice, budget.currency, currencyDecimals)}
                 </span>
               </button>
-            ))}
+            )) : (
+              <p className="px-3 py-3 text-sm text-slate-500">No se encontro ninguna partida similar.</p>
+            )}
           </div>
         </div>
       ) : null}
@@ -1784,7 +1999,11 @@ export function BudgetEditor({
               }}
             />
           ) : null}
-          {levelActionMenu.kind === "add" && rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId)?.level.type === "TITLE" ? (
+          {levelActionMenu.kind === "add" &&
+          (() => {
+            const levelRow = rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId);
+            return levelRow?.kind === "level" && levelRow.level.type === "TITLE";
+          })() ? (
             <LevelActionMenuButton
               label="Agregar subtítulo"
               onClick={() => {
@@ -1902,6 +2121,34 @@ export function BudgetEditor({
           />
           <div className="my-1 border-t border-slate-100" />
           <LevelActionMenuButton
+            label="Explicar partida con IA"
+            icon={<BotMessageSquare className="h-4 w-4" />}
+            onClick={() => {
+              void runAiItemAction("chat", itemActionMenu.rowId);
+              closeItemActionMenu(true);
+            }}
+          />
+          <LevelActionMenuButton
+            label="Autocompletar descripcion"
+            icon={<WandSparkles className="h-4 w-4" />}
+            onClick={() => {
+              void runAiItemAction("autocomplete", itemActionMenu.rowId);
+              closeItemActionMenu(true);
+            }}
+          />
+          <LevelActionMenuButton
+            label="Sugerir APU"
+            icon={<Sparkles className="h-4 w-4" />}
+            onClick={() => {
+              const item = summary.items.find((candidate) => candidate.id === itemActionMenu.rowId);
+              if (item) {
+                scheduleUiTimeout(() => openApuSheet(item), 0);
+              }
+              closeItemActionMenu(true);
+            }}
+          />
+          <div className="my-1 border-t border-slate-100" />
+          <LevelActionMenuButton
             label="Duplicar partida"
             onClick={() => {
               duplicateItem(itemActionMenu.rowId);
@@ -1982,6 +2229,14 @@ export function BudgetEditor({
                 label="Importar desde Excel"
                 onClick={() => {
                   openExcelImport(null);
+                  closeHeaderActionMenu(true);
+                }}
+              />
+              <LevelActionMenuButton
+                label="Revisar presupuesto con IA"
+                icon={<BotMessageSquare className="h-4 w-4" />}
+                onClick={() => {
+                  void runAiBudgetReview();
                   closeHeaderActionMenu(true);
                 }}
               />
@@ -2239,6 +2494,89 @@ function SaveBadge({ state, lastSavedAt, compact = false }: { state: SaveState; 
   );
 }
 
+function AiBudgetActionDialog({
+  panel,
+  onClose,
+  onApplyAutocomplete,
+}: {
+  panel: AiBudgetPanelState;
+  onClose: () => void;
+  onApplyAutocomplete: () => void;
+}) {
+  const reviewData = panel.result && isAiReviewStructuredData(panel.result.structuredData) ? panel.result.structuredData : null;
+
+  return (
+    <Dialog.Root open onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[96] bg-slate-950/30 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[97] flex max-h-[min(86vh,760px)] w-[min(92vw,680px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div className="flex shrink-0 items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Sugerencia IA</p>
+              <Dialog.Title className="mt-1 text-xl font-semibold text-slate-950">{panel.title}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-slate-500">
+                La IA no modifica el presupuesto automaticamente. Revisa y confirma cualquier cambio.
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <Button type="button" variant="outline" className="h-8 px-3 text-xs">
+                Cerrar
+              </Button>
+            </Dialog.Close>
+          </div>
+
+          {panel.loading ? <p className="mt-4 shrink-0 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-700">Consultando Ollama local...</p> : null}
+          {panel.error ? <p className="mt-4 shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{panel.error}</p> : null}
+
+          {panel.result ? (
+            <div className="mt-4 flex min-h-0 flex-1 flex-col">
+              <div data-testid="ai-budget-review-scroll-area" className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span>Modelo: {panel.result.model}</span>
+                  <span>Solicitado: {panel.result.requestedModel}</span>
+                  {panel.result.fallbackUsed ? <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">Fallback activo</span> : null}
+                </div>
+                {panel.result.warnings.length > 0 ? (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{panel.result.warnings.join(" ")}</p>
+                ) : null}
+                {reviewData ? (
+                  <div className="space-y-2">
+                    {reviewData.findings.map((finding, index) => (
+                      <div key={`${finding.type}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{finding.severity}</span>
+                          <span className="text-sm font-semibold text-slate-900">{finding.type}</span>
+                        </div>
+                        <p className="mt-2 text-sm text-slate-700">{finding.description}</p>
+                        <p className="mt-1 text-xs text-slate-500">Impacto: {finding.impact}</p>
+                        <p className="mt-1 text-xs text-slate-500">Accion recomendada: {finding.recommendedAction}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+                    {panel.result.answer}
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-slate-100 pt-3">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Descartar
+                </Button>
+                {panel.kind === "autocomplete" ? (
+                  <Button type="button" onClick={onApplyAutocomplete}>
+                    Aplicar texto
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function LevelActionMenuButton({
   label,
   onClick,
@@ -2316,6 +2654,22 @@ function SummaryRow({ label, value, currency, compact = false }: { label: string
   );
 }
 
+function shouldCancelRowDragStart(event: React.DragEvent<HTMLElement>, isEditingField: boolean) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return false;
+
+  const editableField = target.closest("input, textarea, select, [contenteditable='true']");
+  if (!isEditingField && (!editableField || document.activeElement !== editableField)) return false;
+
+  event.preventDefault();
+  event.stopPropagation();
+  return true;
+}
+
+function isEditableActiveColumn(column: ActiveColumn) {
+  return column === "code" || column === "description" || column === "unit" || column === "quantity";
+}
+
 function RateField({
   label,
   value,
@@ -2381,34 +2735,34 @@ function PastePreviewSheet({
         ];
 
   return (
-    <div className={cn("fixed inset-0 z-50 bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
+    <div className={cn("fixed inset-0 z-50 overflow-hidden bg-slate-950/30 px-4 py-6", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
       <div
         ref={handlePopupContainerRef}
         className={cn(
-          "relative mx-auto mt-10 w-[min(960px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white",
+          "relative mx-auto flex h-[calc(100vh-3rem)] w-full max-w-[960px] flex-col overflow-hidden border border-slate-200 bg-white",
           isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl",
         )}
       >
-        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
-          <div>
+        <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <p className="text-sm text-slate-500">Previsualización de pegado</p>
             <h3 className="text-2xl font-semibold text-slate-900">Revisa antes de importar</h3>
             <p className="mt-1 text-sm text-slate-500">
               Destino: {targetLabel} desde columna <span className="font-medium text-slate-700">{pendingPaste.startColumn}</span>
             </p>
           </div>
-          <Button variant="outline" onClick={onClose}>
+          <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
             Cancelar
           </Button>
         </div>
 
-        <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 md:grid-cols-3">
+        <div className="grid shrink-0 gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 md:grid-cols-3">
           <PreviewStat label="Modo detectado" value={pasteModeLabel[pendingPaste.guidedPaste.detectedMode]} />
           <PreviewStat label="Niveles" value={String(pendingPaste.guidedPaste.importedLevels)} />
           <PreviewStat label="Partidas" value={String(pendingPaste.guidedPaste.importedItems)} />
         </div>
 
-        <div className="grid gap-4 border-b border-slate-200 px-6 py-4 md:grid-cols-2">
+        <div className="grid shrink-0 gap-4 border-b border-slate-200 px-6 py-4 md:grid-cols-2">
           <label className="space-y-2">
             <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Modo de importación</span>
             <Select
@@ -2449,9 +2803,10 @@ function PastePreviewSheet({
           </label>
         </div>
 
-        <div className="max-h-[52vh] overflow-auto px-6 py-5">
-          <div className={getTableFrameClassName(isExcelMode)}>
-            <Table className="table-fixed w-full">
+        <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
+          <div className={getTableFrameClassName(isExcelMode, "h-full")}>
+            <div className="h-full overflow-auto">
+            <Table className="w-full min-w-[810px] table-fixed">
               <colgroup>
                 <col className="w-[150px]" />
                 <col className="w-[84px]" />
@@ -2579,21 +2934,22 @@ function PastePreviewSheet({
                 ))}
               </TBody>
             </Table>
+            </div>
           </div>
           {previewRows.length === 0 ? <p className="text-sm text-slate-500">No hay filas para mostrar.</p> : null}
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
+        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">
             {pendingPaste.guidedPaste.hasErrors
               ? "Corrige los errores del bloque o cambia el modo antes de importar."
               : "Solo se aplicará al confirmar."}
           </p>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
               Seguir revisando después
             </Button>
-            <Button onClick={onConfirm} disabled={pendingPaste.guidedPaste.hasErrors}>
+            <Button className="w-full sm:w-auto" onClick={onConfirm} disabled={pendingPaste.guidedPaste.hasErrors}>
               Confirmar importación
             </Button>
           </div>
@@ -2770,17 +3126,17 @@ function ExcelImportSheet({
   if (!open || !target) return null;
 
   return (
-    <div className={cn("fixed inset-0 z-[95] bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
-      <div className={cn("mx-auto mt-10 w-[min(980px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
-        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
-          <div>
+    <div className={cn("fixed inset-0 z-[95] overflow-y-auto bg-slate-950/30 px-4 py-6", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
+      <div className={cn("mx-auto w-full max-w-[980px] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
+        <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <p className="text-sm text-slate-500">Importación desde Excel</p>
             <h3 className="text-2xl font-semibold text-slate-900">Pega subpartidas y partidas</h3>
             <p className="mt-1 text-sm text-slate-500">
               Destino: {target.kind === "level" ? "nivel" : "partida"}. Puedes pegar columnas tipo código, descripción, unidad y metrado.
             </p>
           </div>
-          <Button variant="outline" onClick={onClose}>
+          <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
             Cerrar
           </Button>
         </div>
@@ -2826,13 +3182,13 @@ function ExcelImportSheet({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">Se abrirá una previsualización antes de importar.</p>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button onClick={onConfirm} disabled={!value.trim()}>
+            <Button className="w-full sm:w-auto" onClick={onConfirm} disabled={!value.trim()}>
               Revisar importación
             </Button>
           </div>
@@ -3230,11 +3586,16 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
   onToggleLevelActionMenu: (rowId: string, kind: "add" | "more", trigger: HTMLElement) => void;
 }) {
+  const isEditingField = activeRowId === row.level.id && isEditableActiveColumn(activeColumn);
+
   return (
     <TR
       data-budget-row-id={row.level.id}
-      draggable
-      onDragStart={() => onDragStart({ kind: "level", id: row.level.id })}
+      draggable={!isEditingField}
+      onDragStart={(event) => {
+        if (shouldCancelRowDragStart(event, isEditingField)) return;
+        onDragStart({ kind: "level", id: row.level.id });
+      }}
       onDragOver={(event) => {
         event.preventDefault();
       }}
@@ -3319,6 +3680,38 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   );
 });
 
+type BudgetItemTableRowProps = {
+  row: Extract<BudgetDisplayRow, { kind: "item" }>;
+  densityMode: DensityMode;
+  isExcelMode: boolean;
+  activeRowId: string | null;
+  activeColumn: ActiveColumn;
+  currency: BudgetRecord["currency"];
+  isDragging: boolean;
+  isActionOpen: boolean;
+  isCatalogActive: boolean;
+  catalogSuggestions: CatalogPartidaRecord[];
+  catalogHighlightedIndex: number;
+  onCatalogHighlightChange: React.Dispatch<React.SetStateAction<number>>;
+  onDragStart: React.Dispatch<React.SetStateAction<DragState>>;
+  onDragEnd: () => void;
+  onDropRow: (row: BudgetDisplayRow) => void;
+  onRowFocus: (rowId: string) => void;
+  onCellFocus: (rowId: string, column: ActiveColumn) => void;
+  onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
+  onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
+  onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
+  onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
+  onOpenCatalogSelector: (rowId: string, query?: string) => void;
+  onCloseCatalogSelector: () => void;
+  onScheduleCatalogClose: (rowId: string) => void;
+  onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
+  onOpenApuSheet: (item: BudgetItemRecord) => void;
+  onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
+  onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
+  qualityState?: BudgetItemQualityState;
+};
+
 const BudgetItemTableRow = memo(function BudgetItemTableRow({
   row,
   densityMode,
@@ -3346,38 +3739,11 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onScheduleCatalogClose,
   onApplyCatalogPartida,
   onOpenApuSheet,
+  onRunAiItemAction,
   onToggleItemActionMenu,
   qualityState,
-}: {
-  row: Extract<BudgetDisplayRow, { kind: "item" }>;
-  densityMode: DensityMode;
-  isExcelMode: boolean;
-  activeRowId: string | null;
-  activeColumn: ActiveColumn;
-  currency: BudgetRecord["currency"];
-  isDragging: boolean;
-  isActionOpen: boolean;
-  isCatalogActive: boolean;
-  catalogSuggestions: CatalogPartidaRecord[];
-  catalogHighlightedIndex: number;
-  onCatalogHighlightChange: React.Dispatch<React.SetStateAction<number>>;
-  onDragStart: React.Dispatch<React.SetStateAction<DragState>>;
-  onDragEnd: () => void;
-  onDropRow: (row: BudgetDisplayRow) => void;
-  onRowFocus: (rowId: string) => void;
-  onCellFocus: (rowId: string, column: ActiveColumn) => void;
-  onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
-  onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
-  onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
-  onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
-  onOpenCatalogSelector: (rowId: string, query?: string) => void;
-  onCloseCatalogSelector: () => void;
-  onScheduleCatalogClose: (rowId: string) => void;
-  onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
-  onOpenApuSheet: (item: BudgetItemRecord) => void;
-  onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
-  qualityState?: BudgetItemQualityState;
-}) {
+}: BudgetItemTableRowProps) {
+  const isEditingField = activeRowId === row.item.id && isEditableActiveColumn(activeColumn);
   const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;
   const hasNoApu = !row.item.apu;
   const requiresCatalogReview = qualityState?.requiresCatalogReview ?? !row.item.apu;
@@ -3394,8 +3760,11 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   return (
     <TR
       data-budget-row-id={row.item.id}
-      draggable
-      onDragStart={() => onDragStart({ kind: "item", id: row.item.id })}
+      draggable={!isEditingField}
+      onDragStart={(event) => {
+        if (shouldCancelRowDragStart(event, isEditingField)) return;
+        onDragStart({ kind: "item", id: row.item.id });
+      }}
       onDragOver={(event) => {
         event.preventDefault();
       }}
@@ -3555,6 +3924,17 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
           <Button
             size="sm"
             variant="ghost"
+            onClick={() => onRunAiItemAction("chat", row.item.id)}
+            className="h-7 gap-1 rounded-full border border-sky-100 bg-sky-50/80 px-2 text-[10px] font-medium tracking-[0.08em] text-sky-700 hover:border-sky-200 hover:bg-sky-100"
+            title="Explicar esta partida con IA"
+            aria-label="Explicar esta partida con IA"
+          >
+            <BotMessageSquare className="h-3.5 w-3.5" />
+            IA
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={() => onOpenApuSheet(row.item)}
             className="h-7 gap-1.5 rounded-full border border-slate-200 bg-white/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-slate-600 shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-slate-300 hover:bg-white"
             title="Abrir editor APU de esta partida"
@@ -3579,8 +3959,8 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
 }, areBudgetItemRowPropsEqual);
 
 function areBudgetItemRowPropsEqual(
-  previous: Readonly<React.ComponentProps<typeof BudgetItemTableRow>>,
-  current: Readonly<React.ComponentProps<typeof BudgetItemTableRow>>,
+  previous: Readonly<BudgetItemTableRowProps>,
+  current: Readonly<BudgetItemTableRowProps>,
 ) {
   return (
     previous.row === current.row &&
@@ -3660,6 +4040,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onScheduleCatalogClose,
   onApplyCatalogPartida,
   onOpenApuSheet,
+  onRunAiItemAction,
   itemQualityStateById,
 }: {
   error: string;
@@ -3701,6 +4082,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onScheduleCatalogClose: (rowId: string) => void;
   onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
   onOpenApuSheet: (item: BudgetItemRecord) => void;
+  onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
   itemQualityStateById: Record<string, BudgetItemQualityState | undefined>;
 }) {
   return (
@@ -3725,13 +4107,13 @@ const BudgetTableSection = memo(function BudgetTableSection({
           )}
         >
           <colgroup>
-            <col className="w-[130px]" />
+            <col className="w-[70px]" />
             <col className="w-[420px]" />
             <col className="w-[90px]" />
             <col className="w-[92px]" />
             <col className="w-[96px]" />
             <col className="w-[96px]" />
-            <col className="w-[110px]" />
+            <col className="w-[170px]" />
           </colgroup>
           <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
             <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90" : "bg-slate-50")}>
@@ -3807,6 +4189,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onScheduleCatalogClose={onScheduleCatalogClose}
                   onApplyCatalogPartida={onApplyCatalogPartida}
                   onOpenApuSheet={onOpenApuSheet}
+                  onRunAiItemAction={onRunAiItemAction}
                   onToggleItemActionMenu={onToggleItemActionMenu}
                   qualityState={itemQualityStateById[row.item.id]}
                 />
@@ -4556,6 +4939,50 @@ function resequenceItems(items: BudgetItemRecord[]) {
     ...item,
     sortOrder: index + 1,
   }));
+}
+
+function buildAiItemContext(item: BudgetItemRecord, budgetName: string) {
+  return {
+    project: budgetName,
+    module: "Editor de presupuesto",
+    selectedItem: item.description,
+    unit: item.unit,
+    currentCost: item.unitPrice,
+    activeTable: "Presupuesto",
+  };
+}
+
+function readAiEndpointResult(payload: unknown): AiEndpointResult {
+  if (!isRecord(payload)) throw new Error("La respuesta de IA no tiene el formato esperado.");
+
+  return {
+    answer: readString(payload.answer),
+    model: readString(payload.model),
+    requestedModel: readString(payload.requestedModel),
+    fallbackUsed: payload.fallbackUsed === true,
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((warning): warning is string => typeof warning === "string") : [],
+    latencyMs: typeof payload.latencyMs === "number" ? payload.latencyMs : undefined,
+    structuredData: payload.structuredData,
+  };
+}
+
+function readAiErrorMessage(payload: unknown): string {
+  if (!isRecord(payload)) return "No se pudo completar la solicitud de IA.";
+  if (typeof payload.error === "string") return payload.error;
+  if (typeof payload.message === "string") return payload.message;
+  return "No se pudo completar la solicitud de IA.";
+}
+
+function isAiReviewStructuredData(value: unknown): value is AiReviewStructuredData {
+  return isRecord(value) && typeof value.answer === "string" && Array.isArray(value.findings) && Array.isArray(value.assumptions);
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function getHeaderCellClass(column: ActiveColumn, activeColumn: ActiveColumn, isExcelMode: boolean, extraClassName?: string) {

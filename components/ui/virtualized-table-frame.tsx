@@ -5,18 +5,22 @@ import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName, getTableViewportClassName } from "@/components/view-mode/view-mode-styles";
 import { cn } from "@/lib/utils";
 
+type StaticTableFrameProps = {
+  children: ReactNode;
+  "data-testid"?: string;
+} & HTMLAttributes<HTMLDivElement>;
+
 export function StaticTableFrame({
   children,
   className,
+  "data-testid": dataTestId = "static-table-frame",
   ...props
-}: {
-  children: ReactNode;
-} & HTMLAttributes<HTMLDivElement>) {
+}: StaticTableFrameProps) {
   const { isExcelMode } = useAppViewMode();
 
   return (
     <div
-      data-testid={props["data-testid"] ?? "static-table-frame"}
+      data-testid={dataTestId}
       {...props}
       className={getTableFrameClassName(isExcelMode, className)}
     >

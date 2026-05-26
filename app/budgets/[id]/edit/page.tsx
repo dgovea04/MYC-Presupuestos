@@ -1,5 +1,5 @@
 import { FileSpreadsheet } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { BudgetForm } from "@/components/budget/budget-form";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,7 +11,11 @@ import { getProjectsByUser } from "@/lib/data/projects";
 export default async function EditBudgetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getAuthSession();
-  const [budget, projects] = await Promise.all([getBudgetById(id, session!.user.id), getProjectsByUser(session!.user.id)]);
+  if (!session) {
+    redirect("/login");
+  }
+
+  const [budget, projects] = await Promise.all([getBudgetById(id, session.user.id), getProjectsByUser(session.user.id)]);
 
   if (!budget) {
     notFound();
@@ -35,9 +39,9 @@ export default async function EditBudgetPage({ params }: { params: Promise<{ id:
               name: budget.name,
               projectId: budget.projectId,
               currency: budget.currency,
-              defaultIgvRate: budget.defaultIgvRate,
-              defaultGeneralExpensesRate: budget.defaultGeneralExpensesRate,
-              defaultUtilityRate: budget.defaultUtilityRate,
+              igvRate: budget.igvRate,
+              generalExpensesRate: budget.generalExpensesRate,
+              utilityRate: budget.utilityRate,
             }}
           />
         </CardContent>

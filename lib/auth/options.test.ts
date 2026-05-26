@@ -36,6 +36,8 @@ describe("authOptions callbacks", () => {
         phone: "987654321",
         jobTitle: "Ingeniera Residente",
         bio: "Especialista en costos",
+        role: "USER",
+        status: "ACTIVE",
       },
       ]);
 
@@ -67,6 +69,8 @@ describe("authOptions callbacks", () => {
       phone: "987654321",
       jobTitle: "Ingeniera Residente",
       bio: "Especialista en costos",
+      role: "USER",
+      status: "ACTIVE",
     });
   });
 
@@ -96,6 +100,8 @@ describe("authOptions callbacks", () => {
         phone: "999888777",
         jobTitle: "Coordinador de obra",
         bio: "Perfil desde token",
+        role: "USER",
+        status: "ACTIVE",
       },
       user: undefined,
       newSession: undefined,
@@ -110,6 +116,8 @@ describe("authOptions callbacks", () => {
       phone: "999888777",
       jobTitle: "Coordinador de obra",
       bio: "Perfil desde token",
+      role: "USER",
+      status: "ACTIVE",
     });
   });
 
@@ -152,6 +160,8 @@ describe("authOptions callbacks", () => {
       phone: null,
       jobTitle: null,
       bio: null,
+      role: "USER",
+      status: "ACTIVE",
     });
   });
 });

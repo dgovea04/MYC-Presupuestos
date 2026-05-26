@@ -220,7 +220,7 @@ describe("BudgetEditor view mode integration", () => {
       dispatchKey(document.activeElement, "Tab");
     });
 
-    expect(document.activeElement).toBe(getButtonByText("Cerrar"));
+    expect(document.activeElement?.textContent).toContain("Explicar partida");
 
     await act(async () => {
       dispatchKey(document.activeElement, "Tab", { shiftKey: true });
@@ -560,6 +560,89 @@ describe("BudgetEditor view mode integration", () => {
 
     expect(queryByText("Excavacion manual")).toBeNull();
     expect(getByText("Revisa antes de importar")).toBeTruthy();
+  });
+
+  it("shows inline catalog suggestions for a complete partida name with technical specs", async () => {
+    const { getByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    const descriptionInput = getInputByValue("Partida demo");
+
+    await act(async () => {
+      descriptionInput.focus();
+      setInputValue(descriptionInput, "EXCAVACION MANUAL H=1.00 EN TERRENO NORMAL");
+    });
+
+    await act(async () => {
+      descriptionInput.focus();
+    });
+
+    expect(getByText("Excavacion manual")).toBeTruthy();
+  });
+
+  it("keeps inline catalog suggestions open when the description is refocused before the deferred close runs", async () => {
+    const { getByText, getInputByValue, getOutsideFocusTarget } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    await act(async () => {
+      const descriptionInput = getInputByValue("Partida demo");
+      descriptionInput.focus();
+      setInputValue(descriptionInput, "Excav");
+    });
+
+    await act(async () => {
+      getOutsideFocusTarget().focus();
+    });
+
+    await act(async () => {
+      getInputByValue("Excav").focus();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    });
+
+    expect(getByText("Excavacion manual")).toBeTruthy();
+  });
+
+  it("shows an empty inline catalog message when no similar partida is found", async () => {
+    const { getByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithTwoSectionItems(),
+      partidasCatalog: [createCatalogPartida()],
+    });
+
+    await act(async () => {
+      const descriptionInput = getInputByValue("Partida demo");
+      descriptionInput.focus();
+      setInputValue(descriptionInput, "Texto sin coincidencia tecnica");
+    });
+
+    expect(getByText("No se encontro ninguna partida similar.")).toBeTruthy();
+  });
+
+  it("does not start row drag when selecting text inside a focused level title field", async () => {
+    const { getInputByValue } = await renderEditor({
+      budget: createBudgetWithTitleAndSubtitle(),
+    });
+
+    const titleInput = getInputByValue("Obras preliminares");
+
+    await act(async () => {
+      titleInput.focus();
+    });
+
+    const titleRow = titleInput.closest("tr");
+    expect(titleRow?.getAttribute("draggable")).toBe("false");
+
+    const dragStartEvent = new Event("dragstart", { bubbles: true, cancelable: true });
+    await act(async () => {
+      titleInput.dispatchEvent(dragStartEvent);
+    });
+    expect(dragStartEvent.defaultPrevented).toBe(true);
   });
 
   it("shows a recommended suggestion in the paste preview when the pasted description is close to the catalog", async () => {
@@ -1054,6 +1137,113 @@ describe("BudgetEditor view mode integration", () => {
     ]);
   });
 
+  it("offers AI actions from the item action menu", async () => {
+    const { getButtonByLabel, getByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    await act(async () => {
+      getButtonByLabel("Abrir acciones de la partida").click();
+    });
+
+    expect(getByText("Explicar partida con IA")).toBeTruthy();
+    expect(getByText("Autocompletar descripcion")).toBeTruthy();
+    expect(getByText("Sugerir APU")).toBeTruthy();
+  });
+
+  it("offers a visible budget review action and sends the enriched budget context to IA", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        answer: "Se encontraron partidas por revisar.",
+        model: "llama3.1",
+        requestedModel: "llama3.1",
+        fallbackUsed: false,
+        warnings: [],
+        structuredData: {
+          answer: "Se encontraron partidas por revisar.",
+          findings: [
+            {
+              severity: "high",
+              type: "duplicate",
+              description: "Partidas de concreto similares con unidades distintas.",
+              impact: "Puede duplicar metrados o distorsionar el costo directo.",
+              recommendedAction: "Comparar alcance, unidad y metrado antes de aprobar.",
+            },
+          ],
+          assumptions: ["Revision basada en el presupuesto visible."],
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { getButtonByText, getByTestId, getByText } = await renderEditor({
+      budget: createBudgetWithDuplicateReviewSignals(),
+    });
+
+    await act(async () => {
+      getButtonByText("Revisar Presupuesto").click();
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      budgetSummary: string;
+      context: { project?: string; module?: string; activeTable?: string };
+    };
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/ai/review", expect.objectContaining({ method: "POST" }));
+    expect(requestBody.budgetSummary).toContain("Presupuesto: Presupuesto Demo");
+    expect(requestBody.budgetSummary).toContain("Duplicados potenciales");
+    expect(requestBody.budgetSummary).toContain("Unidades poco especificas o sospechosas");
+    expect(requestBody.context).toMatchObject({
+      project: "Proyecto Demo",
+      module: "Editor de presupuesto",
+      activeTable: "Presupuesto",
+    });
+    expect(getByText("Revision IA del presupuesto")).toBeTruthy();
+    expect(getByText("Partidas de concreto similares con unidades distintas.")).toBeTruthy();
+    expect(getByTestId("ai-budget-review-scroll-area").className).toContain("overflow-y-auto");
+  });
+
+  it("previews AI autocomplete before applying a description to the budget item", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        answer: "Partida demo mejorada tecnicamente",
+        model: "llama3.1",
+        requestedModel: "mistral",
+        fallbackUsed: true,
+        warnings: ["mistral no instalado"],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { getButtonByLabel, getButtonByText, getByText, getInputByValue } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    await act(async () => {
+      getButtonByLabel("Abrir acciones de la partida").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Autocompletar descripcion").click();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ai/autocomplete",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    expect(getByText("Sugerencia IA")).toBeTruthy();
+    expect(getByText("Partida demo mejorada tecnicamente")).toBeTruthy();
+    expect(getByText("Fallback activo")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Aplicar texto").click();
+    });
+
+    expect(getInputByValue("Partida demo mejorada tecnicamente")).toBeTruthy();
+  });
+
 });
 
 async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?: CatalogPartidaRecord[]; resourcesCatalog?: ResourceRecord[] }) {
@@ -1310,6 +1500,46 @@ function createBudgetWithItem(): BudgetRecord {
           totalUnitCost: 20,
           resources: [],
         },
+      },
+    ],
+  };
+}
+
+function createBudgetWithDuplicateReviewSignals(): BudgetRecord {
+  return {
+    ...createBudget(),
+    name: "Presupuesto Demo",
+    totalDirectCost: 12900,
+    totalGeneralExpenses: 1290,
+    totalUtility: 1032,
+    totalTax: 2739.96,
+    totalAmount: 17961.96,
+    items: [
+      {
+        id: "item-review-1",
+        budgetId: "budget-1",
+        levelId: null,
+        code: "01.01",
+        description: "Concreto f'c=210 kg/cm2",
+        unit: "m3",
+        quantity: 10,
+        unitPrice: 420,
+        partial: 4200,
+        sortOrder: 1,
+        apu: null,
+      },
+      {
+        id: "item-review-2",
+        budgetId: "budget-1",
+        levelId: null,
+        code: "01.02",
+        description: "concreto fc 210 kg cm2",
+        unit: "glb",
+        quantity: 1,
+        unitPrice: 8700,
+        partial: 8700,
+        sortOrder: 2,
+        apu: null,
       },
     ],
   };
