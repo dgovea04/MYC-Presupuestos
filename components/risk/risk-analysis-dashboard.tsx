@@ -24,6 +24,7 @@ export function RiskAnalysisDashboard({
 }) {
   const workerRef = useRef<RiskWorkerController | null>(null);
   const activeBudgetIdRef = useRef(payload.budget.id);
+  const modelVersionRef = useRef(0);
   const {
     completeSimulation,
     editingItemId,
@@ -69,7 +70,7 @@ export function RiskAnalysisDashboard({
       const response = await fetch(`/api/budgets/${summary.budgetId}/risk-analysis/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(summary),
+        body: JSON.stringify({ iterations: summary.iterations }),
       });
 
       if (!response.ok) {
@@ -108,6 +109,7 @@ export function RiskAnalysisDashboard({
     startSimulation();
     workerRef.current?.cancel();
     const runBudgetId = payload.budget.id;
+    const runModelVersion = modelVersionRef.current;
     workerRef.current = runRiskSimulationWorker({
       input,
       onProgress: (completedIterations, totalIterations) => {
@@ -116,7 +118,7 @@ export function RiskAnalysisDashboard({
         }
       },
       onResult: (summary) => {
-        if (summary.budgetId !== activeBudgetIdRef.current) {
+        if (summary.budgetId !== activeBudgetIdRef.current || runModelVersion !== modelVersionRef.current) {
           return;
         }
 
@@ -132,6 +134,10 @@ export function RiskAnalysisDashboard({
   };
 
   const saveVariable = async (variable: RiskVariableRecord) => {
+    if (status === "running") {
+      throw new Error("Espera a que termine la simulacion antes de editar variables.");
+    }
+
     const response = await fetch(`/api/budgets/${payload.budget.id}/risk-analysis/variables`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -147,12 +153,17 @@ export function RiskAnalysisDashboard({
       throw new Error("No se pudo leer la respuesta de variables de riesgo.");
     }
 
+    modelVersionRef.current += 1;
     setVariables(result.variables);
     setLatestRun(result.latestRun);
     setEditingItemId(null);
   };
 
   const deleteVariable = async (variable: RiskVariableRecord) => {
+    if (status === "running") {
+      throw new Error("Espera a que termine la simulacion antes de editar variables.");
+    }
+
     const response = await fetch(`/api/budgets/${payload.budget.id}/risk-analysis/variables`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -168,6 +179,7 @@ export function RiskAnalysisDashboard({
       throw new Error("No se pudo leer la respuesta de variables de riesgo.");
     }
 
+    modelVersionRef.current += 1;
     setVariables(result.variables);
     setLatestRun(result.latestRun);
     setEditingItemId(null);
@@ -196,6 +208,7 @@ export function RiskAnalysisDashboard({
             <RiskVariablesTable
               currency={payload.budget.currency}
               currencyDecimals={currencyDecimals}
+              disabled={status === "running"}
               items={payload.items}
               onEditVariable={setEditingItemId}
               variables={variables}

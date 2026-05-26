@@ -16,12 +16,14 @@ const columnHelper = createColumnHelper<RiskVariableRow>();
 export function RiskVariablesTable({
   currency,
   currencyDecimals,
+  disabled = false,
   items,
   onEditVariable,
   variables,
 }: {
   currency: string;
   currencyDecimals: number;
+  disabled?: boolean;
   items: RiskBudgetItem[];
   onEditVariable: (itemId: string) => void;
   variables: RiskVariableRecord[];
@@ -31,17 +33,19 @@ export function RiskVariablesTable({
     variable: variables.find((variable) => variable.budgetItemId === item.itemId) ?? null,
   }));
 
-  return <RiskVariablesTableGrid currency={currency} currencyDecimals={currencyDecimals} onEditVariable={onEditVariable} rows={rows} />;
+  return <RiskVariablesTableGrid currency={currency} currencyDecimals={currencyDecimals} disabled={disabled} onEditVariable={onEditVariable} rows={rows} />;
 }
 
 function RiskVariablesTableGrid({
   currency,
   currencyDecimals,
+  disabled,
   onEditVariable,
   rows,
 }: {
   currency: string;
   currencyDecimals: number;
+  disabled: boolean;
   onEditVariable: (itemId: string) => void;
   rows: RiskVariableRow[];
 }) {
@@ -97,7 +101,7 @@ function RiskVariablesTableGrid({
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <Button size="sm" variant="outline" onClick={() => onEditVariable(row.original.itemId)}>
+          <Button disabled={disabled} size="sm" variant="outline" onClick={() => onEditVariable(row.original.itemId)}>
             <Pencil className="mr-2 h-3.5 w-3.5" />
             Editar
           </Button>

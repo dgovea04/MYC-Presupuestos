@@ -1302,6 +1302,10 @@ export function BudgetEditor({
         }
       }
 
+      if (targetRow.kind !== "level") {
+        return current;
+      }
+
       const insertion = resolveItemInsertionFromTarget({ kind: "level", id: targetRow.level.id }, current.items);
       const extraItems = pastedRows.map((row, index) =>
         applySuggestedOrMatchedPartida(
@@ -1792,7 +1796,7 @@ export function BudgetEditor({
               }}
             />
           ) : null}
-          {levelActionMenu.kind === "add" && rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId)?.level.type === "TITLE" ? (
+          {levelActionMenu.kind === "add" && findLevelRow(rows, levelActionMenu.rowId)?.level.type === "TITLE" ? (
             <LevelActionMenuButton
               label="Agregar subtítulo"
               onClick={() => {
@@ -1803,8 +1807,8 @@ export function BudgetEditor({
           ) : null}
           {levelActionMenu.kind === "add" &&
           (() => {
-            const levelRow = rows.find((row) => row.kind === "level" && row.level.id === levelActionMenu.rowId);
-            return levelRow?.kind === "level" && (levelRow.level.type === "SUBTITLE" || levelRow.level.type === "ITEM_GROUP");
+            const levelRow = findLevelRow(rows, levelActionMenu.rowId);
+            return levelRow ? levelRow.level.type === "SUBTITLE" || levelRow.level.type === "ITEM_GROUP" : false;
           })() ? (
             <LevelActionMenuButton
               label="Agregar subpartida"
@@ -3327,6 +3331,37 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   );
 });
 
+type BudgetItemTableRowProps = {
+  row: Extract<BudgetDisplayRow, { kind: "item" }>;
+  densityMode: DensityMode;
+  isExcelMode: boolean;
+  activeRowId: string | null;
+  activeColumn: ActiveColumn;
+  currency: BudgetRecord["currency"];
+  isDragging: boolean;
+  isActionOpen: boolean;
+  isCatalogActive: boolean;
+  catalogSuggestions: CatalogPartidaRecord[];
+  catalogHighlightedIndex: number;
+  onCatalogHighlightChange: React.Dispatch<React.SetStateAction<number>>;
+  onDragStart: React.Dispatch<React.SetStateAction<DragState>>;
+  onDragEnd: () => void;
+  onDropRow: (row: BudgetDisplayRow) => void;
+  onRowFocus: (rowId: string) => void;
+  onCellFocus: (rowId: string, column: ActiveColumn) => void;
+  onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
+  onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
+  onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
+  onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
+  onOpenCatalogSelector: (rowId: string, query?: string) => void;
+  onCloseCatalogSelector: () => void;
+  onScheduleCatalogClose: (rowId: string) => void;
+  onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
+  onOpenApuSheet: (item: BudgetItemRecord) => void;
+  onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
+  qualityState?: BudgetItemQualityState;
+};
+
 const BudgetItemTableRow = memo(function BudgetItemTableRow({
   row,
   densityMode,
@@ -3356,36 +3391,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onOpenApuSheet,
   onToggleItemActionMenu,
   qualityState,
-}: {
-  row: Extract<BudgetDisplayRow, { kind: "item" }>;
-  densityMode: DensityMode;
-  isExcelMode: boolean;
-  activeRowId: string | null;
-  activeColumn: ActiveColumn;
-  currency: BudgetRecord["currency"];
-  isDragging: boolean;
-  isActionOpen: boolean;
-  isCatalogActive: boolean;
-  catalogSuggestions: CatalogPartidaRecord[];
-  catalogHighlightedIndex: number;
-  onCatalogHighlightChange: React.Dispatch<React.SetStateAction<number>>;
-  onDragStart: React.Dispatch<React.SetStateAction<DragState>>;
-  onDragEnd: () => void;
-  onDropRow: (row: BudgetDisplayRow) => void;
-  onRowFocus: (rowId: string) => void;
-  onCellFocus: (rowId: string, column: ActiveColumn) => void;
-  onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
-  onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
-  onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
-  onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
-  onOpenCatalogSelector: (rowId: string, query?: string) => void;
-  onCloseCatalogSelector: () => void;
-  onScheduleCatalogClose: (rowId: string) => void;
-  onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
-  onOpenApuSheet: (item: BudgetItemRecord) => void;
-  onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
-  qualityState?: BudgetItemQualityState;
-}) {
+}: BudgetItemTableRowProps) {
   const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;
   const hasNoApu = !row.item.apu;
   const requiresCatalogReview = qualityState?.requiresCatalogReview ?? !row.item.apu;
@@ -3587,8 +3593,8 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
 }, areBudgetItemRowPropsEqual);
 
 function areBudgetItemRowPropsEqual(
-  previous: Readonly<React.ComponentProps<typeof BudgetItemTableRow>>,
-  current: Readonly<React.ComponentProps<typeof BudgetItemTableRow>>,
+  previous: Readonly<BudgetItemTableRowProps>,
+  current: Readonly<BudgetItemTableRowProps>,
 ) {
   return (
     previous.row === current.row &&
@@ -4373,6 +4379,10 @@ function getDefaultInsertTarget(rows: BudgetDisplayRow[], activeRowId: string | 
 
 function resolveTargetRow(rows: BudgetDisplayRow[], target: InsertTarget) {
   return rows.find((row) => row.kind === target.kind && getRowId(row) === target.id) ?? null;
+}
+
+function findLevelRow(rows: BudgetDisplayRow[], levelId: string): Extract<BudgetDisplayRow, { kind: "level" }> | null {
+  return rows.find((row): row is Extract<BudgetDisplayRow, { kind: "level" }> => row.kind === "level" && row.level.id === levelId) ?? null;
 }
 
 function resolveDefaultPasteApplyMode(targetRow: BudgetDisplayRow): BudgetPasteApplyMode {

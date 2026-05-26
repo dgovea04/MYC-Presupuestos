@@ -43,20 +43,6 @@ export const riskSCurvePointSchema = z.object({
 
 export const riskSimulationRunInputSchema = z.object({
   iterations: z.literal(MONTE_CARLO_ITERATIONS),
-  baseTotal: finiteNonnegativeNumber,
-  mean: finiteNonnegativeNumber,
-  median: finiteNonnegativeNumber,
-  variance: finiteNonnegativeNumber,
-  standardDeviation: finiteNonnegativeNumber,
-  skewness: z.number().finite(),
-  kurtosis: z.number().finite(),
-  p10: finiteNonnegativeNumber,
-  p50: finiteNonnegativeNumber,
-  p80: finiteNonnegativeNumber,
-  p90: finiteNonnegativeNumber,
-  p95: finiteNonnegativeNumber,
-  histogramBins: z.array(riskHistogramBinSchema).min(1),
-  sCurvePoints: z.array(riskSCurvePointSchema).min(1),
 });
 
 export type RiskVariablesSaveInput = z.infer<typeof riskVariablesSaveSchema>;

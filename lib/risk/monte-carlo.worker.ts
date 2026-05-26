@@ -1,3 +1,5 @@
+/// <reference lib="webworker" />
+
 import { runMonteCarloSimulation } from "@/lib/risk/monte-carlo-engine";
 import type { RiskWorkerMessage, RiskWorkerRequestMessage } from "@/types/risk";
 

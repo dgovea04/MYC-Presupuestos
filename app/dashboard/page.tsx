@@ -54,7 +54,7 @@ export default async function DashboardPage({
   const groupedPendingItems = groupPendingItemsByPriority(paginatedPendingItems.items);
 
   return (
-    <AppShell currentUser={session.user} settings={settings}>
+    <AppShell currentUser={session!.user} settings={settings}>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Proyectos activos"

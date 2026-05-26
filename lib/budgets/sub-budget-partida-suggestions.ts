@@ -136,8 +136,10 @@ function scoreCatalogPartida(
     partidaDescription.includes(normalizedDescription) || normalizedDescription.includes(partidaDescription);
   const prefixBonus = partidaDescription.startsWith(normalizedDescription) || normalizedDescription.startsWith(partidaDescription) ? 0.08 : 0;
   const containsBonus = containsEitherWay ? 0.18 : 0;
-  const unitBonus = normalizedUnit && partidaUnit === normalizedUnit ? 0.22 : 0;
-  const unitPenalty = normalizedUnit && partidaUnit !== normalizedUnit ? 0.18 : 0;
+  const hasUnit = normalizedUnit.length > 0;
+  const unitMatches = hasUnit && partidaUnit === normalizedUnit;
+  const unitBonus = unitMatches ? 0.22 : 0;
+  const unitPenalty = hasUnit && !unitMatches ? 0.18 : 0;
   const lengthPenalty = Math.abs(partidaDescription.length - normalizedDescription.length) > 24 ? 0.06 : 0;
   const baseScore = tokenCoverage + containsBonus + prefixBonus + unitBonus - unitPenalty - lengthPenalty;
 
@@ -149,18 +151,18 @@ function scoreCatalogPartida(
     return null;
   }
 
-  const confidence = resolveConfidence(baseScore, normalizedUnit && partidaUnit === normalizedUnit);
+  const confidence = resolveConfidence(baseScore, unitMatches);
   const reasonCodes = sharedTokens.length > 0 ? ["description-close"] : [];
 
   if (containsEitherWay) {
     reasonCodes.push("normalized-match");
   }
 
-  if (normalizedUnit && partidaUnit === normalizedUnit) {
+  if (unitMatches) {
     reasonCodes.push("unit-match");
   }
 
-  if (normalizedUnit && partidaUnit !== normalizedUnit) {
+  if (hasUnit && !unitMatches) {
     reasonCodes.push("unit-mismatch");
   }
 

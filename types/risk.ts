@@ -24,6 +24,7 @@ export type RiskBudgetItem = {
   baseQuantity: number;
   unitPrice: number;
   baseTotal: number;
+  updatedAt: string;
 };
 
 export type RiskVariableRecord = {

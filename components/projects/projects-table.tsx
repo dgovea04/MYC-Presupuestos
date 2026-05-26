@@ -13,6 +13,7 @@ import { OperationalFilterSummary, OperationalMetricBadge, OperationalPanel } fr
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { StaticTableFrame } from "@/components/ui/virtualized-table-frame";
 import { formatDate } from "@/lib/utils";
+import type { DateFormatOption } from "@/types/settings";
 
 type ProjectRow = ProjectRecord & {
   budgetsCount: number;
@@ -164,7 +165,7 @@ const ProjectTableRow = memo(function ProjectTableRow({
   onRemoveProject,
 }: {
   project: ProjectRow;
-  dateFormat: string;
+  dateFormat: DateFormatOption;
   isPending: boolean;
   onDuplicateProject: (id: string) => Promise<void>;
   onRemoveProject: (id: string) => Promise<void>;

@@ -201,12 +201,11 @@ function buildBudgetMetadataPatch(formValues: Record<string, FormDataEntryValue>
 
   return {
     budget: {
-      projectId: getString("projectId"),
       name: getString("name"),
       currency: getString("currency"),
-      defaultIgvRate: getNumber("igvRate"),
-      defaultGeneralExpensesRate: getNumber("generalExpensesRate"),
-      defaultUtilityRate: getNumber("utilityRate"),
+      igvRate: getNumber("igvRate"),
+      generalExpensesRate: getNumber("generalExpensesRate"),
+      utilityRate: getNumber("utilityRate"),
     },
     levels: {
       create: [],

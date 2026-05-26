@@ -46,7 +46,7 @@ export function BudgetFooterDocumentSignatureCard({
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge className="bg-sky-100 text-sky-700">Lista para portada</Badge>
-            <Badge variant="outline">Metadatos sincronizados</Badge>
+            <Badge className="border border-slate-200 bg-white text-slate-600">Metadatos sincronizados</Badge>
           </div>
         </div>
       </CardHeader>

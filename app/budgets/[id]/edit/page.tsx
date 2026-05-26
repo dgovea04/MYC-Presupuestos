@@ -35,9 +35,9 @@ export default async function EditBudgetPage({ params }: { params: Promise<{ id:
               name: budget.name,
               projectId: budget.projectId,
               currency: budget.currency,
-              defaultIgvRate: budget.defaultIgvRate,
-              defaultGeneralExpensesRate: budget.defaultGeneralExpensesRate,
-              defaultUtilityRate: budget.defaultUtilityRate,
+              defaultIgvRate: budget.igvRate,
+              defaultGeneralExpensesRate: budget.generalExpensesRate,
+              defaultUtilityRate: budget.utilityRate,
             }}
           />
         </CardContent>

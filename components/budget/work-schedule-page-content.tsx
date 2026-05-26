@@ -568,14 +568,12 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   async function handleExportActiveViewXlsx() {
     const exportPayload = await buildWorkScheduleActiveViewWorkbook({
       activeView,
-      overviewLines: filteredVisibleLines,
       valuationRows: filteredValuationRows,
       resourceRows: filteredResourceRows,
       curvePoints: filteredCurveSeries,
       periods: data.valuationCalendar.periods,
       currency: data.currency,
       currencyDecimals,
-      dateFormat,
       curveWorkbookScope,
       valuationWorkbookScope,
       resourceWorkbookScope,

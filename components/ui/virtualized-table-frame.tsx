@@ -8,15 +8,16 @@ import { cn } from "@/lib/utils";
 export function StaticTableFrame({
   children,
   className,
+  "data-testid": dataTestId = "static-table-frame",
   ...props
 }: {
   children: ReactNode;
-} & HTMLAttributes<HTMLDivElement>) {
+} & HTMLAttributes<HTMLDivElement> & { "data-testid"?: string }) {
   const { isExcelMode } = useAppViewMode();
 
   return (
     <div
-      data-testid={props["data-testid"] ?? "static-table-frame"}
+      data-testid={dataTestId}
       {...props}
       className={getTableFrameClassName(isExcelMode, className)}
     >

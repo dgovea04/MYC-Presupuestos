@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { runMonteCarloSimulation } from "@/lib/risk/monte-carlo-engine";
 import {
   riskHistogramBinSchema,
   riskSCurvePointSchema,
@@ -25,6 +26,7 @@ const riskBudgetItemSelect = {
   quantity: true,
   unitPrice: true,
   sortOrder: true,
+  updatedAt: true,
 } satisfies Prisma.BudgetItemSelect;
 
 type RiskBudgetItemRow = Prisma.BudgetItemGetPayload<{
@@ -83,6 +85,9 @@ export async function getRiskAnalysisPayload(
     }),
   ]);
 
+  const modelChangedAt = getRiskModelChangedAt(items, variables);
+  const currentLatestRun = latestRun && latestRun.createdAt >= modelChangedAt ? latestRun : null;
+
   return {
     budget: {
       id: budget.id,
@@ -96,7 +101,7 @@ export async function getRiskAnalysisPayload(
     variables: variables
       .filter((variable) => scopedItemIds.includes(variable.budgetItemId))
       .map(serializeRiskVariable),
-    latestRun: latestRun ? serializeRiskSimulationRun(latestRun) : null,
+    latestRun: currentLatestRun ? serializeRiskSimulationRun(currentLatestRun) : null,
   };
 }
 
@@ -175,24 +180,41 @@ export async function saveRiskSimulationRun(
     throw new Error("No tienes permisos para guardar esta simulacion.");
   }
 
+  const items = normalizeRiskBudgetItems(budget);
+  const scopedItemIds = items.map((item) => item.itemId);
+  const variables = await prisma.riskVariable.findMany({
+    where: {
+      budgetId,
+      budgetItemId: { in: scopedItemIds },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const summary = runMonteCarloSimulation({
+    budgetId,
+    baseTotal: roundBaseTotal(items.reduce((total, item) => total + item.baseTotal, 0)),
+    iterations: parsed.iterations,
+    items,
+    variables: variables.map(serializeRiskVariable),
+  });
+
   const created = await prisma.riskSimulationRun.create({
     data: {
       budgetId,
-      iterations: parsed.iterations,
-      baseTotal: parsed.baseTotal,
-      mean: parsed.mean,
-      median: parsed.median,
-      variance: parsed.variance,
-      standardDeviation: parsed.standardDeviation,
-      skewness: parsed.skewness,
-      kurtosis: parsed.kurtosis,
-      p10: parsed.p10,
-      p50: parsed.p50,
-      p80: parsed.p80,
-      p90: parsed.p90,
-      p95: parsed.p95,
-      histogramBins: parsed.histogramBins,
-      sCurvePoints: parsed.sCurvePoints,
+      iterations: summary.iterations,
+      baseTotal: summary.baseTotal,
+      mean: summary.mean,
+      median: summary.median,
+      variance: summary.variance,
+      standardDeviation: summary.standardDeviation,
+      skewness: summary.skewness,
+      kurtosis: summary.kurtosis,
+      p10: summary.p10,
+      p50: summary.p50,
+      p80: summary.p80,
+      p90: summary.p90,
+      p95: summary.p95,
+      histogramBins: summary.histogramBins,
+      sCurvePoints: summary.sCurvePoints,
     },
   });
 
@@ -294,6 +316,7 @@ function normalizeSingleBudgetItems(
       baseQuantity,
       unitPrice,
       baseTotal: roundBaseTotal(baseQuantity * unitPrice),
+      updatedAt: item.updatedAt.toISOString(),
     };
   });
 }
@@ -345,6 +368,15 @@ function parseHistogramBins(value: Prisma.JsonValue) {
 function parseSCurvePoints(value: Prisma.JsonValue) {
   const parsed = riskSCurvePointSchema.array().safeParse(value);
   return parsed.success ? parsed.data : [];
+}
+
+function getRiskModelChangedAt(items: RiskBudgetItem[], variables: RiskVariableModel[]) {
+  const timestamps = [
+    ...items.map((item) => Date.parse(item.updatedAt)),
+    ...variables.map((variable) => variable.updatedAt.getTime()),
+  ].filter((timestamp) => Number.isFinite(timestamp));
+
+  return new Date(timestamps.length > 0 ? Math.max(...timestamps) : 0);
 }
 
 function roundBaseTotal(value: number) {

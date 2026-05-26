@@ -450,11 +450,14 @@ function insertWorksheetImage(
   range: { tl: { col: number; row: number }; br: { col: number; row: number } },
 ) {
   const imageId = workbook.addImage({
-    buffer: asset.buffer,
+    base64: asset.buffer.toString("base64"),
     extension: asset.extension === "jpg" ? "jpeg" : asset.extension,
   });
 
-  sheet.addImage(imageId, range);
+  sheet.addImage(imageId, {
+    tl: new ExcelJS.Anchor(range.tl),
+    br: new ExcelJS.Anchor(range.br),
+  });
 }
 
 function formatCurrencyColumns(

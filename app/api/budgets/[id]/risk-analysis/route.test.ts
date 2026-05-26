@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getRiskAnalysisPayload, normalizeRiskBudgetItems } from "@/lib/risk/data";
+import { getRiskAnalysisPayload, normalizeRiskBudgetItems, saveRiskSimulationRun } from "@/lib/risk/data";
 import { MONTE_CARLO_ITERATIONS } from "@/types/risk";
 import {
   riskSimulationRunInputSchema,
@@ -19,6 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: vi.fn(),
     },
     riskSimulationRun: {
+      create: vi.fn(),
       findFirst: vi.fn(),
     },
   },
@@ -72,6 +73,42 @@ describe("risk analysis validation", () => {
     ).toThrow(ZodError);
 
     expect(riskSimulationRunInputSchema.parse(validRunInput).iterations).toBe(MONTE_CARLO_ITERATIONS);
+  });
+
+  it("does not accept client-computed simulation totals when saving a run", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    vi.mocked(prisma.budget.findFirst).mockResolvedValueOnce({
+      ...baseBudget,
+      id: "budget-1",
+      projectId: "project-1",
+      kind: "SUB_BUDGET",
+      name: "Estructuras",
+      items: [createBudgetItem({ id: "item-1", budgetId: "budget-1" })],
+    });
+    vi.mocked(prisma.riskVariable.findMany).mockResolvedValueOnce([
+      createRiskVariable({ id: "risk-1", budgetItemId: "item-1" }),
+    ]);
+    vi.mocked(prisma.riskSimulationRun.create).mockImplementationOnce(async (args) => ({
+      ...createRiskRun({ id: "run-1", budgetId: "budget-1" }),
+      ...args.data,
+      createdAt: baseDate,
+    }));
+
+    const summary = await saveRiskSimulationRun("budget-1", "user-1", {
+      ...validRunInput,
+      baseTotal: 1,
+      p95: 999_999_999,
+    });
+
+    expect(summary.baseTotal).toBe(250);
+    expect(summary.p95).not.toBe(999_999_999);
+    expect(prisma.riskSimulationRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          baseTotal: 250,
+        }),
+      }),
+    );
   });
 
   it("limits general budget scope to child sub-budgets from the same project", () => {
@@ -168,6 +205,34 @@ describe("risk analysis validation", () => {
     );
     expect(payload.variables.map((variable) => variable.id)).toEqual(["risk-allowed"]);
   });
+
+  it("hides the latest run when risk variables changed after it was created", async () => {
+    vi.mocked(prisma.budget.findFirst).mockResolvedValueOnce({
+      ...baseBudget,
+      id: "budget-1",
+      projectId: "project-1",
+      kind: "SUB_BUDGET",
+      name: "Estructuras",
+      items: [createBudgetItem({ id: "item-1", budgetId: "budget-1" })],
+    });
+    vi.mocked(prisma.riskVariable.findMany).mockResolvedValueOnce([
+      {
+        ...createRiskVariable({ id: "risk-1", budgetItemId: "item-1" }),
+        updatedAt: new Date("2026-05-26T10:00:00.000Z"),
+      },
+    ]);
+    vi.mocked(prisma.riskSimulationRun.findFirst).mockResolvedValueOnce(
+      createRiskRun({
+        id: "stale-run",
+        budgetId: "budget-1",
+        createdAt: new Date("2026-05-26T09:00:00.000Z"),
+      }),
+    );
+
+    const payload = await getRiskAnalysisPayload("budget-1", "user-1");
+
+    expect(payload.latestRun).toBeNull();
+  });
 });
 
 const validRunInput = {
@@ -253,5 +318,49 @@ function createRiskVariable({ id, budgetItemId }: { id: string; budgetItemId: st
     enabled: true,
     createdAt: baseDate,
     updatedAt: baseDate,
+  };
+}
+
+function createRiskRun({
+  budgetId,
+  createdAt = baseDate,
+  id,
+}: {
+  budgetId: string;
+  createdAt?: Date;
+  id: string;
+}) {
+  return {
+    id,
+    budgetId,
+    iterations: MONTE_CARLO_ITERATIONS,
+    baseTotal: new Prisma.Decimal(250),
+    mean: new Prisma.Decimal(250),
+    median: new Prisma.Decimal(250),
+    variance: new Prisma.Decimal(0),
+    standardDeviation: new Prisma.Decimal(0),
+    skewness: new Prisma.Decimal(0),
+    kurtosis: new Prisma.Decimal(0),
+    p10: new Prisma.Decimal(250),
+    p50: new Prisma.Decimal(250),
+    p80: new Prisma.Decimal(250),
+    p90: new Prisma.Decimal(250),
+    p95: new Prisma.Decimal(250),
+    histogramBins: [
+      {
+        min: 250,
+        max: 250,
+        midpoint: 250,
+        frequency: MONTE_CARLO_ITERATIONS,
+        probability: 1,
+      },
+    ],
+    sCurvePoints: [
+      {
+        cost: 250,
+        cumulativeProbability: 1,
+      },
+    ],
+    createdAt,
   };
 }
