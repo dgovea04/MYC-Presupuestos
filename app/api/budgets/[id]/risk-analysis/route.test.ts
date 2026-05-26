@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
+import { Prisma } from "@prisma/client";
+import { normalizeRiskBudgetItems } from "@/lib/risk/data";
 import { MONTE_CARLO_ITERATIONS } from "@/types/risk";
 import {
   riskSimulationRunInputSchema,
@@ -55,6 +57,52 @@ describe("risk analysis validation", () => {
 
     expect(riskSimulationRunInputSchema.parse(validRunInput).iterations).toBe(MONTE_CARLO_ITERATIONS);
   });
+
+  it("limits general budget scope to child sub-budgets from the same project", () => {
+    const items = normalizeRiskBudgetItems({
+      ...baseBudget,
+      id: "general-1",
+      projectId: "project-1",
+      kind: "GENERAL",
+      name: "Presupuesto general",
+      items: [createBudgetItem({ id: "general-item", budgetId: "general-1" })],
+      childBudgets: [
+        {
+          ...baseBudget,
+          id: "sub-1",
+          projectId: "project-1",
+          parentBudgetId: "general-1",
+          kind: "SUB_BUDGET",
+          name: "Estructuras",
+          items: [createBudgetItem({ id: "allowed-item", budgetId: "sub-1" })],
+        },
+        {
+          ...baseBudget,
+          id: "general-child",
+          projectId: "project-1",
+          parentBudgetId: "general-1",
+          kind: "GENERAL",
+          name: "General anidado",
+          items: [createBudgetItem({ id: "wrong-kind-item", budgetId: "general-child" })],
+        },
+        {
+          ...baseBudget,
+          id: "foreign-sub",
+          projectId: "project-2",
+          parentBudgetId: "general-1",
+          kind: "SUB_BUDGET",
+          name: "Proyecto externo",
+          items: [createBudgetItem({ id: "wrong-project-item", budgetId: "foreign-sub" })],
+        },
+      ],
+    });
+
+    expect(items.map((item) => item.itemId)).toEqual(["allowed-item"]);
+    expect(items[0]).toMatchObject({
+      budgetId: "sub-1",
+      sourceBudgetName: "Estructuras",
+    });
+  });
 });
 
 const validRunInput = {
@@ -87,3 +135,42 @@ const validRunInput = {
     },
   ],
 };
+
+const decimalZero = new Prisma.Decimal(0);
+const baseDate = new Date("2026-05-26T00:00:00.000Z");
+
+const baseBudget = {
+  id: "budget-1",
+  projectId: "project-1",
+  parentBudgetId: null,
+  kind: "SUB_BUDGET" as const,
+  name: "Base",
+  currency: "PEN",
+  igvRate: decimalZero,
+  generalExpensesRate: decimalZero,
+  utilityRate: decimalZero,
+  totalDirectCost: decimalZero,
+  totalGeneralExpenses: decimalZero,
+  totalUtility: decimalZero,
+  totalTax: decimalZero,
+  totalAmount: decimalZero,
+  createdAt: baseDate,
+  updatedAt: baseDate,
+};
+
+function createBudgetItem({ id, budgetId }: { id: string; budgetId: string }) {
+  return {
+    id,
+    budgetId,
+    levelId: null,
+    code: "01.01",
+    description: "Excavacion",
+    unit: "m3",
+    quantity: new Prisma.Decimal(10),
+    unitPrice: new Prisma.Decimal(25),
+    partial: new Prisma.Decimal(250),
+    sortOrder: 0,
+    createdAt: baseDate,
+    updatedAt: baseDate,
+  };
+}

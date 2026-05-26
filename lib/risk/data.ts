@@ -197,11 +197,13 @@ async function findAccessibleBudgetWithItems(budgetId: string, userId: string) {
   });
 }
 
-function normalizeRiskBudgetItems(budget: BudgetWithRiskScope): RiskBudgetItem[] {
+export function normalizeRiskBudgetItems(budget: BudgetWithRiskScope): RiskBudgetItem[] {
   if (budget.kind === "GENERAL") {
-    return budget.childBudgets.flatMap((childBudget) =>
-      normalizeSingleBudgetItems(childBudget.name, childBudget.id, childBudget.items),
-    );
+    return budget.childBudgets
+      .filter((childBudget) => childBudget.kind === "SUB_BUDGET" && childBudget.projectId === budget.projectId)
+      .flatMap((childBudget) =>
+        normalizeSingleBudgetItems(childBudget.name, childBudget.id, childBudget.items),
+      );
   }
 
   return normalizeSingleBudgetItems(budget.name, budget.id, budget.items);
