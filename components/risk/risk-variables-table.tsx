@@ -1,0 +1,136 @@
+"use client";
+
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { formatCurrency, formatNumber } from "@/lib/utils";
+import type { RiskBudgetItem, RiskVariableRecord } from "@/types/risk";
+
+type RiskVariableRow = RiskBudgetItem & {
+  variable: RiskVariableRecord | null;
+};
+
+const columnHelper = createColumnHelper<RiskVariableRow>();
+
+export function RiskVariablesTable({
+  currency,
+  currencyDecimals,
+  items,
+  onEditVariable,
+  variables,
+}: {
+  currency: string;
+  currencyDecimals: number;
+  items: RiskBudgetItem[];
+  onEditVariable: (itemId: string) => void;
+  variables: RiskVariableRecord[];
+}) {
+  const rows = items.map((item) => ({
+    ...item,
+    variable: variables.find((variable) => variable.budgetItemId === item.itemId) ?? null,
+  }));
+
+  const table = useReactTable({
+    data: rows,
+    columns: [
+      columnHelper.accessor("code", {
+        header: "Codigo",
+        cell: (info) => info.getValue() || "-",
+      }),
+      columnHelper.accessor("description", {
+        header: "Partida",
+        cell: (info) => <span className="font-medium text-slate-800">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor("sourceBudgetName", {
+        header: "Presupuesto origen",
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor("baseQuantity", {
+        header: "Cant. base",
+        cell: (info) => formatNumber(info.getValue(), 4),
+      }),
+      columnHelper.display({
+        id: "minimum",
+        header: "Min",
+        cell: ({ row }) => formatOptionalNumber(row.original.variable?.minimum),
+      }),
+      columnHelper.display({
+        id: "mostLikely",
+        header: "Mas probable",
+        cell: ({ row }) => formatOptionalNumber(row.original.variable?.mostLikely),
+      }),
+      columnHelper.display({
+        id: "maximum",
+        header: "Max",
+        cell: ({ row }) => formatOptionalNumber(row.original.variable?.maximum),
+      }),
+      columnHelper.display({
+        id: "baseTotal",
+        header: "Parcial base",
+        cell: ({ row }) => formatCurrency(row.original.baseTotal, currency, currencyDecimals),
+      }),
+      columnHelper.display({
+        id: "enabled",
+        header: "Estado",
+        cell: ({ row }) => <VariableState variable={row.original.variable} />,
+      }),
+      columnHelper.display({
+        id: "actions",
+        header: "",
+        cell: ({ row }) => (
+          <Button size="sm" variant="outline" onClick={() => onEditVariable(row.original.itemId)}>
+            <Pencil className="mr-2 h-3.5 w-3.5" />
+            Editar
+          </Button>
+        ),
+      }),
+    ],
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return (
+    <div className="max-h-[560px] overflow-auto">
+      <Table className="min-w-[1120px] text-xs">
+        <THead className="sticky top-0 z-10 bg-slate-100">
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TR key={headerGroup.id} className="hover:bg-slate-100">
+              {headerGroup.headers.map((header) => (
+                <TH key={header.id} className="border-r border-slate-200 px-3 py-2 text-[11px] uppercase tracking-wide">
+                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                </TH>
+              ))}
+            </TR>
+          ))}
+        </THead>
+        <TBody>
+          {table.getRowModel().rows.map((row) => (
+            <TR key={row.id} className="h-10">
+              {row.getVisibleCells().map((cell) => (
+                <TD key={cell.id} className="border-r border-slate-100 px-3 py-2">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TD>
+              ))}
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+    </div>
+  );
+}
+
+function VariableState({ variable }: { variable: RiskVariableRecord | null }) {
+  if (!variable) {
+    return <span className="text-slate-400">Sin variable</span>;
+  }
+
+  return (
+    <span className={variable.enabled ? "font-medium text-emerald-700" : "font-medium text-slate-500"}>
+      {variable.enabled ? "Activa" : "Inactiva"}
+    </span>
+  );
+}
+
+function formatOptionalNumber(value: number | undefined) {
+  return typeof value === "number" ? formatNumber(value, 4) : "-";
+}
