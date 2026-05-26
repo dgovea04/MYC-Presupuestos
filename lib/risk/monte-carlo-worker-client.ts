@@ -1,3 +1,5 @@
+"use client";
+
 import type { RiskSimulationInput, RiskSimulationSummary, RiskWorkerMessage, RiskWorkerRequestMessage } from "@/types/risk";
 
 export type RiskWorkerController = {
@@ -17,15 +19,28 @@ export function runRiskSimulationWorker({
   onProgress,
   onResult,
 }: RunRiskSimulationWorkerOptions): RiskWorkerController {
+  if (typeof Worker === "undefined") {
+    onError("No se pudo iniciar el worker de simulacion.");
+
+    return {
+      cancel: () => undefined,
+    };
+  }
+
   const worker = new Worker(new URL("./monte-carlo.worker.ts", import.meta.url), { type: "module" });
 
   const terminateWithError = (message: string) => {
-    onError(message);
     worker.terminate();
+    onError(message);
   };
 
-  worker.onmessage = (event: MessageEvent<RiskWorkerMessage>) => {
+  worker.onmessage = (event: MessageEvent<unknown>) => {
     const message = event.data;
+
+    if (!isRiskWorkerMessage(message)) {
+      terminateWithError("No se pudo leer la respuesta del worker de simulacion.");
+      return;
+    }
 
     if (message.type === "progress") {
       onProgress(message.completedIterations, message.totalIterations);
@@ -33,8 +48,8 @@ export function runRiskSimulationWorker({
     }
 
     if (message.type === "result") {
-      onResult(message.summary);
       worker.terminate();
+      onResult(message.summary);
       return;
     }
 
@@ -50,4 +65,28 @@ export function runRiskSimulationWorker({
   return {
     cancel: () => worker.terminate(),
   };
+}
+
+function isRiskWorkerMessage(message: unknown): message is RiskWorkerMessage {
+  if (!isRecord(message) || typeof message.type !== "string") {
+    return false;
+  }
+
+  if (message.type === "progress") {
+    return Number.isFinite(message.completedIterations) && Number.isFinite(message.totalIterations);
+  }
+
+  if (message.type === "result") {
+    return isRecord(message.summary);
+  }
+
+  if (message.type === "error") {
+    return typeof message.message === "string";
+  }
+
+  return false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

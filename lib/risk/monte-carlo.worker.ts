@@ -3,10 +3,11 @@ import type { RiskWorkerMessage, RiskWorkerRequestMessage } from "@/types/risk";
 
 const ctx: DedicatedWorkerGlobalScope = self as DedicatedWorkerGlobalScope;
 
-ctx.onmessage = (event: MessageEvent<RiskWorkerRequestMessage>) => {
+ctx.onmessage = (event: MessageEvent<unknown>) => {
   const message = event.data;
 
-  if (message.type !== "run") {
+  if (!isRiskWorkerRequestMessage(message)) {
+    postError("No se pudo leer la solicitud de simulacion de riesgo.");
     return;
   }
 
@@ -29,3 +30,15 @@ ctx.onmessage = (event: MessageEvent<RiskWorkerRequestMessage>) => {
     } satisfies RiskWorkerMessage);
   }
 };
+
+function isRiskWorkerRequestMessage(message: unknown): message is RiskWorkerRequestMessage {
+  return isRecord(message) && message.type === "run" && isRecord(message.input);
+}
+
+function postError(message: string): void {
+  ctx.postMessage({ type: "error", message } satisfies RiskWorkerMessage);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
