@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, Type, WandSparkles } from "lucide-react";
+import { Activity, BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -32,6 +32,8 @@ import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExportPanel } from "@/components/exports/export-panel";
+import { openNoteDraft } from "@/components/notes/notes-drawer";
 import { Input } from "@/components/ui/input";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
@@ -42,6 +44,8 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import type { CellValue } from "exceljs";
 import { suggestPartidaMatches, type BudgetPasteSuggestedMatch } from "@/lib/budgets/sub-budget-partida-suggestions";
 import type { AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
+import { getExportDefinition } from "@/lib/exports/definitions";
+import type { NoteTaskRecord } from "@/types/notes";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type DragState = { kind: "level" | "item"; id: string } | null;
@@ -166,7 +170,7 @@ const ITEM_ACTION_MENU_WIDTH = 192;
 const HEADER_ACTION_MENU_WIDTH = 208;
 const LEVEL_ADD_MENU_ESTIMATED_HEIGHT = 152;
 const LEVEL_MORE_MENU_ESTIMATED_HEIGHT = 336;
-const ITEM_ACTION_MENU_ESTIMATED_HEIGHT = 146;
+const ITEM_ACTION_MENU_ESTIMATED_HEIGHT = 184;
 const HEADER_ADD_MENU_ESTIMATED_HEIGHT = 216;
 const HEADER_MORE_MENU_ESTIMATED_HEIGHT = 112;
 const EMPTY_CATALOG_SUGGESTIONS: CatalogPartidaRecord[] = [];
@@ -1865,6 +1869,8 @@ export function BudgetEditor({
           </div>
         </CardHeader>
         <BudgetTableSection
+          projectId={budget.projectId}
+          budgetId={budget.id}
           error={error}
           pasteFeedback={pasteFeedback}
           tableScrollRef={tableScrollRef}
@@ -2147,6 +2153,24 @@ export function BudgetEditor({
               const item = summary.items.find((candidate) => candidate.id === itemActionMenu.rowId);
               if (item) {
                 scheduleUiTimeout(() => openApuSheet(item), 0);
+              }
+              closeItemActionMenu(true);
+            }}
+          />
+          <LevelActionMenuButton
+            label="Nota"
+            icon={<StickyNote className="h-4 w-4" />}
+            onClick={() => {
+              const item = summary.items.find((candidate) => candidate.id === itemActionMenu.rowId);
+              if (item) {
+                openNoteDraft({
+                  projectId: budget.projectId,
+                  budgetId: budget.id,
+                  budgetItemId: item.id,
+                  budgetItemCode: item.code,
+                  budgetItemDescription: item.description,
+                  sourcePath: `/budgets/${budget.id}`,
+                });
               }
               closeItemActionMenu(true);
             }}
@@ -3591,6 +3615,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   onToggleLevelActionMenu: (rowId: string, kind: "add" | "more", trigger: HTMLElement) => void;
 }) {
   const isEditingField = activeRowId === row.level.id && isEditableActiveColumn(activeColumn);
+  const isTitleOrSubtitle = row.level.type === "TITLE" || row.level.type === "SUBTITLE";
 
   return (
     <TR
@@ -3619,7 +3644,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
           <BufferedInput
             value={row.level.code}
             onCommit={(value) => onUpdateLevel(row.level.id, { code: value })}
-            className={getInputDensityClass(densityMode, isExcelMode)}
+            className={cn(getInputDensityClass(densityMode, isExcelMode), isTitleOrSubtitle && "font-medium")}
             ref={(element) => onSetCellRef(row.level.id, "code", element)}
             onKeyDown={(event) => onNavigate(event, row.level.id, "code")}
             onPaste={(event) => onPasteRows(event, row, "code")}
@@ -3632,7 +3657,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
           <BufferedInput
             value={row.level.name}
             onCommit={(value) => onUpdateLevel(row.level.id, { name: value })}
-            className={cn(getInputDensityClass(densityMode, isExcelMode), "flex-1")}
+            className={cn(getInputDensityClass(densityMode, isExcelMode), "flex-1", isTitleOrSubtitle && "font-medium")}
             ref={(element) => onSetCellRef(row.level.id, "description", element)}
             onKeyDown={(event) => onNavigate(event, row.level.id, "description")}
             onPaste={(event) => onPasteRows(event, row, "description")}
@@ -3685,6 +3710,8 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
 });
 
 type BudgetItemTableRowProps = {
+  projectId: string;
+  budgetId: string;
   row: Extract<BudgetDisplayRow, { kind: "item" }>;
   densityMode: DensityMode;
   isExcelMode: boolean;
@@ -3716,7 +3743,112 @@ type BudgetItemTableRowProps = {
   qualityState?: BudgetItemQualityState;
 };
 
+type ItemNotePreviewState = {
+  loading: boolean;
+  error: string;
+  notes: NoteTaskRecord[];
+};
+
+function BudgetItemIssueNoteBadge({
+  label,
+  projectId,
+  budgetId,
+  item,
+  initialBody,
+}: {
+  label: string;
+  projectId: string;
+  budgetId: string;
+  item: BudgetItemRecord;
+  initialBody: string;
+}) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewState, setPreviewState] = useState<ItemNotePreviewState>({
+    loading: false,
+    error: "",
+    notes: [],
+  });
+
+  const sourcePath = `/budgets/${budgetId}`;
+
+  const openLinkedDraft = useCallback(() => {
+    openNoteDraft({
+      projectId,
+      budgetId,
+      budgetItemId: item.id,
+      budgetItemCode: item.code,
+      budgetItemDescription: item.description,
+      sourcePath,
+      initialBody,
+    });
+  }, [budgetId, initialBody, item.code, item.description, item.id, projectId, sourcePath]);
+
+  const loadPreview = useCallback(async () => {
+    setIsPreviewOpen(true);
+    setPreviewState((current) => ({ ...current, loading: true, error: "" }));
+
+    try {
+      const response = await fetch(`/api/notes?status=OPEN&budgetItemId=${encodeURIComponent(item.id)}`);
+      const payload = (await response.json()) as { notes?: NoteTaskRecord[]; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "No se pudieron cargar las notas");
+      }
+      setPreviewState({ loading: false, error: "", notes: payload.notes ?? [] });
+    } catch (previewError) {
+      setPreviewState({
+        loading: false,
+        error: previewError instanceof Error ? previewError.message : "No se pudieron cargar las notas",
+        notes: [],
+      });
+    }
+  }, [item.id]);
+
+  return (
+    <span
+      className="relative inline-flex shrink-0"
+      onClick={openLinkedDraft}
+      onMouseOver={() => void loadPreview()}
+      onFocus={() => void loadPreview()}
+      onMouseLeave={() => setIsPreviewOpen(false)}
+      onBlur={() => setIsPreviewOpen(false)}
+    >
+      <button
+        type="button"
+        className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-200 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-1"
+        title="Agregar nota para esta partida"
+        aria-label={`Agregar nota para ${item.code || item.description}`}
+      >
+        {label}
+      </button>
+      {isPreviewOpen ? (
+        <span className="absolute left-0 top-full z-[80] mt-2 block w-72 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-xs text-slate-700 shadow-xl shadow-slate-900/12">
+          <span className="mb-2 flex items-center gap-2 font-semibold text-amber-900">
+            <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
+            Notas de la partida
+          </span>
+          {previewState.loading ? <span className="block text-slate-500">Cargando notas...</span> : null}
+          {!previewState.loading && previewState.error ? <span className="block text-rose-700">{previewState.error}</span> : null}
+          {!previewState.loading && !previewState.error && previewState.notes.length === 0 ? (
+            <span className="block text-slate-500">Sin notas abiertas para esta partida.</span>
+          ) : null}
+          {!previewState.loading && !previewState.error && previewState.notes.length > 0 ? (
+            <span className="block space-y-2">
+              {previewState.notes.slice(0, 3).map((note) => (
+                <span key={note.id} className="block rounded-lg border border-amber-200/80 bg-white/80 px-2 py-1.5 text-slate-700">
+                  {note.body}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 const BudgetItemTableRow = memo(function BudgetItemTableRow({
+  projectId,
+  budgetId,
   row,
   densityMode,
   isExcelMode,
@@ -3857,7 +3989,13 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             {hasNoUsefulUnitPrice || requiresCatalogReview ? (
               <div className="flex flex-wrap gap-2">
                 {hasNoUsefulUnitPrice ? (
-                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">Sin PU</span>
+                  <BudgetItemIssueNoteBadge
+                    label="Sin PU"
+                    projectId={projectId}
+                    budgetId={budgetId}
+                    item={row.item}
+                    initialBody={`Revisar precio unitario de la partida ${row.item.code} - ${row.item.description}.`}
+                  />
                 ) : null}
                 {requiresCatalogReview && !hasNoApu ? (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
@@ -3968,6 +4106,8 @@ function areBudgetItemRowPropsEqual(
 ) {
   return (
     previous.row === current.row &&
+    previous.projectId === current.projectId &&
+    previous.budgetId === current.budgetId &&
     previous.densityMode === current.densityMode &&
     previous.isExcelMode === current.isExcelMode &&
     previous.activeRowId === current.activeRowId &&
@@ -4009,6 +4149,8 @@ function QualityStatCard({
 }
 
 const BudgetTableSection = memo(function BudgetTableSection({
+  projectId,
+  budgetId,
   error,
   pasteFeedback,
   tableScrollRef,
@@ -4047,6 +4189,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onRunAiItemAction,
   itemQualityStateById,
 }: {
+  projectId: string;
+  budgetId: string;
   error: string;
   pasteFeedback: string;
   tableScrollRef: React.RefObject<HTMLDivElement | null>;
@@ -4167,6 +4311,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
               ) : (
                 <BudgetItemTableRow
                   key={row.item.id}
+                  projectId={projectId}
+                  budgetId={budgetId}
                   row={row}
                   densityMode={densityMode}
                   isExcelMode={isExcelMode}
@@ -4309,21 +4455,20 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
             />
           </div>
           <div className="grid gap-2">
-            <a href={`/api/reports/budget/${budgetId}/excel`} className="inline-flex">
-              <Button variant="outline" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
-                Exportar Excel
-              </Button>
-            </a>
-            <a href={`/api/reports/apu/${budgetId}/excel`} className="inline-flex">
-              <Button variant="outline" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
-                Exportar APU Excel
-              </Button>
-            </a>
-            <a href={`/api/reports/budget/${budgetId}/pdf`} className="inline-flex">
-              <Button variant="secondary" className={cn("w-full", isExcelMode && "h-8 text-xs")}>
-                Exportar PDF
-              </Button>
-            </a>
+            <ExportPanel
+              buttonLabel="Exportar presupuesto"
+              className={cn("w-full", isExcelMode && "h-8 text-xs")}
+              defaultPreset="presupuesto_detallado"
+              definition={getExportDefinition("budget")}
+              targetId={budgetId}
+            />
+            <ExportPanel
+              buttonLabel="Exportar APU"
+              className={cn("w-full", isExcelMode && "h-8 text-xs")}
+              defaultPreset="apu_consolidado"
+              definition={getExportDefinition("apu")}
+              targetId={budgetId}
+            />
           </div>
           <div className={cn("border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] text-xs text-slate-500", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
             Atajos: <span className="font-medium text-slate-700">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-slate-700">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-slate-700">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-slate-700">Pegar</span> importa filas desde Excel.

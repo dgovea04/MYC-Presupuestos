@@ -95,6 +95,53 @@ describe("WorkSchedulePageContent", () => {
     expect(getByText("Distribucion mensual")).toBeTruthy();
   });
 
+  it("keeps empty sub budget groups visible in the cronograma overview", async () => {
+    const view = createView();
+    const { getByText } = await renderWithView(
+      {
+        ...view,
+        groups: [
+          ...view.groups,
+          {
+            subBudgetId: "sub-empty",
+            subBudgetName: "Instalaciones Electricas",
+            totalAmount: 0,
+            lines: [],
+            rows: [],
+          },
+        ],
+      },
+      createSettings(),
+    );
+
+    expect(getByText("SP: Instalaciones Electricas")).toBeTruthy();
+  });
+
+  it("shows the CPM critical path only when the user enables it", async () => {
+    const { clickByText, getByText, queryByText, getByTestId, getTimelineRowByLineId } = await renderContent();
+
+    expect(queryByText("1 partidas criticas")).toBeNull();
+    expect(queryByText("38 dias CPM")).toBeNull();
+    expect(queryByText("Critica")).toBeNull();
+    expect(getByTestId("work-schedule-table-row-item-1").getAttribute("data-critical")).toBe("false");
+    expect(getTimelineRowByLineId("item-1").getAttribute("data-critical")).toBe("false");
+    expect(getByText("Mostrar ruta critica")).toBeTruthy();
+
+    await act(async () => {
+      clickByText("Mostrar ruta critica");
+    });
+
+    expect(getByText("1 partidas criticas")).toBeTruthy();
+    expect(getByText("38 dias CPM")).toBeTruthy();
+    expect(getByText("Ocultar ruta critica")).toBeTruthy();
+    expect(getByTestId("work-schedule-critical-badge-item-1")).toBeTruthy();
+    expect(getByTestId("work-schedule-table-row-item-1").getAttribute("data-critical")).toBe("true");
+    expect(getByTestId("work-schedule-table-row-item-2").getAttribute("data-critical")).toBe("false");
+    expect(getTimelineRowByLineId("item-2").getAttribute("data-critical")).toBe("false");
+    expect(getTimelineRowByLineId("item-1").getAttribute("data-critical")).toBe("true");
+    expect(window.localStorage.getItem("work-schedule-critical-path-visibility:budget-1")).toBe("true");
+  });
+
   it("switches to the resource calendar view", async () => {
     const { clickByText, getByText } = await renderContent();
 
@@ -379,6 +426,39 @@ describe("WorkSchedulePageContent", () => {
     expect(getAllByTestId("work-schedule-month-band").length).toBeGreaterThan(0);
   });
 
+  it("scales the gantt timeline with a zoom percentage between 10 and 500", async () => {
+    const { getByTestId, getInputByLabel } = await renderContent();
+    const scrollContainer = getByTestId("work-schedule-overview-scroll");
+    const timelineContent = scrollContainer.firstElementChild;
+
+    if (!(timelineContent instanceof HTMLElement)) {
+      throw new Error("Missing timeline content");
+    }
+
+    expect(getInputByLabel("Zoom").value).toBe("100");
+    const initialWidth = Number.parseFloat(timelineContent.style.width);
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Zoom"), "200");
+    });
+
+    expect(getInputByLabel("Zoom").value).toBe("200");
+    expect(Number.parseFloat(timelineContent.style.width)).toBeGreaterThan(initialWidth);
+    expect(window.localStorage.getItem("work-schedule-overview-timeline-zoom:budget-1")).toBe("200");
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Zoom"), "900");
+    });
+
+    expect(getInputByLabel("Zoom").value).toBe("500");
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Zoom"), "1");
+    });
+
+    expect(getInputByLabel("Zoom").value).toBe("10");
+  });
+
   it("syncs gantt row heights from the table rows", async () => {
     const { getByTestId, getTimelineRowByLineId } = await renderContent();
 
@@ -614,6 +694,78 @@ describe("WorkSchedulePageContent", () => {
     expect(queryByText("Cemento")).toBeNull();
   });
 
+  it("renders calendario valorizado as a compact single-line horizontally scrollable table", async () => {
+    const { clickByText, getByTestId } = await renderContent();
+
+    await act(async () => {
+      clickByText("Calendario valorizado");
+    });
+
+    const scrollFrame = getByTestId("valuation-calendar-table-scroll");
+    const table = scrollFrame.querySelector("table");
+    const descriptionCell = scrollFrame.querySelector("tbody td:nth-child(2)");
+    const amountCell = scrollFrame.querySelector("tbody td:nth-child(6)");
+
+    expect(scrollFrame.className).toContain("overflow-x-auto");
+    expect(table?.className).toContain("text-[11px]");
+    expect(table?.getAttribute("style")).toContain("min-width");
+    expect(descriptionCell?.className).toContain("whitespace-nowrap");
+    expect(amountCell?.className).toContain("text-right");
+    expect(amountCell?.className).toContain("whitespace-nowrap");
+  });
+
+  it("renders calendario de insumos as a compact single-line horizontally scrollable table", async () => {
+    const { clickByText, getByTestId } = await renderContent();
+
+    await act(async () => {
+      clickByText("Calendario de insumos");
+    });
+
+    const scrollFrame = getByTestId("resource-calendar-table-scroll");
+    const table = scrollFrame.querySelector("table");
+    const descriptionCell = scrollFrame.querySelector("tbody td:nth-child(2)");
+    const amountCell = scrollFrame.querySelector("tbody td:nth-child(6)");
+    const periodCell = scrollFrame.querySelector("tbody td:nth-child(7)");
+
+    expect(scrollFrame.className).toContain("overflow-x-auto");
+    expect(table?.className).toContain("text-[11px]");
+    expect(table?.getAttribute("style")).toContain("min-width");
+    expect(descriptionCell?.className).toContain("whitespace-nowrap");
+    expect(amountCell?.className).toContain("text-right");
+    expect(periodCell?.className).toContain("whitespace-nowrap");
+  });
+
+  it("switches calendario de insumos between valued amounts and quantities", async () => {
+    const { clickByText, getByText, getByTestId, queryByText } = await renderContent();
+
+    await act(async () => {
+      clickByText("Calendario de insumos");
+    });
+
+    const scrollFrame = getByTestId("resource-calendar-table-scroll");
+    const getFirstPeriodCell = () => {
+      const cell = scrollFrame.querySelector("tbody tr:first-child td:nth-child(7)");
+
+      if (!(cell instanceof HTMLElement)) {
+        throw new Error("Missing first period cell");
+      }
+
+      return cell;
+    };
+
+    expect(getByText("Valorizado")).toBeTruthy();
+    expect(getByText("Cantidades")).toBeTruthy();
+    expect(getFirstPeriodCell().textContent).toBe("S/ 240.00");
+
+    await act(async () => {
+      clickByText("Cantidades");
+    });
+
+    expect(getFirstPeriodCell().textContent).toBe("12.00");
+    expect(queryByText("Mostrando cantidades mensuales programadas.")).toBeTruthy();
+    expect(window.localStorage.getItem("work-schedule-resource-calendar-mode:budget-1")).toBe("quantities");
+  });
+
   it("applies the active filter to curva s", async () => {
     const { clickByText, getByText, queryByText } = await renderContentWithIncompleteDistribution();
 
@@ -628,6 +780,28 @@ describe("WorkSchedulePageContent", () => {
     expect(getByText("Curva S basica")).toBeTruthy();
     expect(getByText("S/ 200.00")).toBeTruthy();
     expect(queryByText("S/ 600.00")).toBeNull();
+  });
+
+  it("draws curva s as accumulated amount over time with labels at each point", async () => {
+    const { clickByText, getByTestId, getByText } = await renderWithView(createViewWithMultiPointCurve(), createSettings());
+
+    await act(async () => {
+      clickByText("Curva S");
+    });
+
+    const chart = getByTestId("work-schedule-curve-chart");
+    const line = getByTestId("work-schedule-curve-line");
+    const points = chart.querySelectorAll("[data-testid='work-schedule-curve-point']");
+    const labels = chart.querySelectorAll("[data-testid='work-schedule-curve-point-label']");
+
+    expect(getByText("Monto acumulado")).toBeTruthy();
+    expect(getByText("Tiempo")).toBeTruthy();
+    expect(line.getAttribute("data-d")).toContain("L");
+    expect(points).toHaveLength(3);
+    expect(labels).toHaveLength(3);
+    expect(chart.textContent).toContain("S/ 100.00");
+    expect(chart.textContent).toContain("S/ 350.00");
+    expect(chart.textContent).toContain("S/ 500.00");
   });
 
   it("shows an active filter indicator across derived views", async () => {
@@ -761,7 +935,7 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the active filtered curva s view as xlsx in detail-only mode when configured", async () => {
-    const { clickByText, queryByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction, queryByText } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
@@ -778,7 +952,7 @@ describe("WorkSchedulePageContent", () => {
     });
 
     await act(async () => {
-      clickByText("Exportar XLSX");
+      await clickExportAction("Exportar XLSX");
     });
 
     await waitFor(() => clickCount > 0);
@@ -793,7 +967,7 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the active filtered calendario valorizado view as csv", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
@@ -804,7 +978,7 @@ describe("WorkSchedulePageContent", () => {
     });
 
     await act(async () => {
-      clickByText("Exportar CSV");
+      await clickExportAction("Exportar CSV");
     });
 
     expect(lastDownloadName).toContain("calendario-valorizado");
@@ -818,7 +992,7 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the active filtered calendario valorizado view as xlsx", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
@@ -829,7 +1003,7 @@ describe("WorkSchedulePageContent", () => {
     });
 
     await act(async () => {
-      clickByText("Exportar XLSX");
+      await clickExportAction("Exportar XLSX");
     });
 
     await waitFor(() => clickCount > 0);
@@ -861,7 +1035,7 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the active filtered calendario valorizado view as xlsx in detail-only mode when configured", async () => {
-    const { clickByText, queryByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction, queryByText } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
@@ -878,7 +1052,7 @@ describe("WorkSchedulePageContent", () => {
     });
 
     await act(async () => {
-      clickByText("Exportar XLSX");
+      await clickExportAction("Exportar XLSX");
     });
 
     await waitFor(() => clickCount > 0);
@@ -892,7 +1066,7 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the active filtered calendario de insumos view as xlsx", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
@@ -903,7 +1077,7 @@ describe("WorkSchedulePageContent", () => {
     });
 
     await act(async () => {
-      clickByText("Exportar XLSX");
+      await clickExportAction("Exportar XLSX");
     });
 
     await waitFor(() => clickCount > 0);
@@ -934,7 +1108,7 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the active filtered calendario de insumos view as xlsx in detail-only mode when configured", async () => {
-    const { clickByText, queryByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction, queryByText } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
@@ -951,7 +1125,7 @@ describe("WorkSchedulePageContent", () => {
     });
 
     await act(async () => {
-      clickByText("Exportar XLSX");
+      await clickExportAction("Exportar XLSX");
     });
 
     await waitFor(() => clickCount > 0);
@@ -965,7 +1139,7 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the active filtered curva s view as xlsx", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
@@ -976,7 +1150,7 @@ describe("WorkSchedulePageContent", () => {
     });
 
     await act(async () => {
-      clickByText("Exportar XLSX");
+      await clickExportAction("Exportar XLSX");
     });
 
     await waitFor(() => clickCount > 0);
@@ -1003,14 +1177,14 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the filtered cronograma overview as csv", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
     });
 
     await act(async () => {
-      clickByText("Exportar CSV");
+      await clickExportAction("Exportar CSV");
     });
 
     expect(lastDownloadName).toContain("cronograma");
@@ -1025,14 +1199,14 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the filtered cronograma summary as csv by subbudget", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
     });
 
     await act(async () => {
-      clickByText("Exportar resumen CSV");
+      await clickExportAction("Exportar resumen CSV");
     });
 
     expect(lastDownloadName).toContain("resumen");
@@ -1047,14 +1221,14 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the filtered cronograma monthly summary as csv", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
     });
 
     await act(async () => {
-      clickByText("Exportar resumen mensual CSV");
+      await clickExportAction("Exportar resumen mensual CSV");
     });
 
     expect(lastDownloadName).toContain("resumen-mensual");
@@ -1068,14 +1242,14 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the filtered cronograma executive package as a combined csv", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
     });
 
     await act(async () => {
-      clickByText("Exportar paquete ejecutivo CSV");
+      await clickExportAction("Exportar paquete ejecutivo CSV");
     });
 
     expect(lastDownloadName).toContain("paquete-ejecutivo");
@@ -1093,14 +1267,14 @@ describe("WorkSchedulePageContent", () => {
   });
 
   it("exports the filtered cronograma executive package as xlsx", async () => {
-    const { clickByText } = await renderContentWithIncompleteDistribution();
+    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
 
     await act(async () => {
       clickByText("Distribucion incompleta (1)");
     });
 
     await act(async () => {
-      clickByText("Exportar paquete ejecutivo XLSX");
+      await clickExportAction("Exportar paquete ejecutivo XLSX");
     });
 
     await waitFor(() => clickCount > 0);
@@ -1207,6 +1381,22 @@ async function renderWithView(view: WorkScheduleViewRecord, settings: UserSettin
       const element = findElementByText(text);
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing clickable text: ${text}`);
+      }
+
+      element.click();
+    },
+    clickExportAction: async (text: string) => {
+      const trigger = document.querySelector<HTMLButtonElement>("[aria-label='Abrir acciones de exportacion']");
+      if (!trigger) {
+        throw new Error("Missing export action trigger");
+      }
+
+      trigger.click();
+      await Promise.resolve();
+
+      const element = findElementByText(text);
+      if (!(element instanceof HTMLElement)) {
+        throw new Error(`Missing export action: ${text}`);
       }
 
       element.click();
@@ -1355,6 +1545,14 @@ function createView(): WorkScheduleViewRecord {
             startDate: "2026-03-08",
             endDate: "2026-03-21",
             durationDays: 14,
+            criticalPath: {
+              earlyStartDay: 0,
+              earlyFinishDay: 13,
+              lateStartDay: 24,
+              lateFinishDay: 37,
+              totalSlackDays: 24,
+              isCritical: false,
+            },
             monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
             resources: [
               {
@@ -1390,6 +1588,14 @@ function createView(): WorkScheduleViewRecord {
               startDate: "2026-03-01",
               endDate: "2026-04-07",
               durationDays: 38,
+              criticalPath: {
+                earlyStartDay: 0,
+                earlyFinishDay: 37,
+                lateStartDay: 0,
+                lateFinishDay: 37,
+                totalSlackDays: 0,
+                isCritical: true,
+              },
               monthlyDistributions: [
                 { year: 2026, month: 3, percentage: 60 },
                 { year: 2026, month: 4, percentage: 40 },
@@ -1500,6 +1706,13 @@ function createView(): WorkScheduleViewRecord {
       startDate: "2026-03-01",
       endDate: "2026-04-07",
     },
+    criticalPath: {
+      status: "calculated",
+      projectDurationDays: 38,
+      scheduledItemCount: 2,
+      criticalItemCount: 1,
+      issues: [],
+    },
   };
 }
 
@@ -1564,6 +1777,66 @@ function createViewWithIncompleteDistribution(): WorkScheduleViewRecord {
   return {
     ...view,
     groups: rebuildTestWorkScheduleRows(groups),
+  };
+}
+
+function createViewWithMultiPointCurve(): WorkScheduleViewRecord {
+  const view = createView();
+
+  return {
+    ...view,
+    valuationCalendar: {
+      periods: [
+        { year: 2026, month: 3, key: "2026-03" },
+        { year: 2026, month: 4, key: "2026-04" },
+        { year: 2026, month: 5, key: "2026-05" },
+      ],
+      rows: [
+        {
+          scheduleItemId: "ws-curve",
+          budgetItemId: "item-curve",
+          itemCode: "01.99",
+          description: "Partida curva",
+          unit: "GLB",
+          quantity: 1,
+          unitPrice: 500,
+          partial: 500,
+          subBudgetName: "General",
+          rowTotal: 500,
+          periodAmounts: {
+            "2026-03": 100,
+            "2026-04": 250,
+            "2026-05": 150,
+          },
+        },
+      ],
+    },
+    curveSeries: [
+      {
+        year: 2026,
+        month: 3,
+        key: "2026-03",
+        monthlyAmount: 100,
+        accumulatedAmount: 100,
+        accumulatedPercentage: 20,
+      },
+      {
+        year: 2026,
+        month: 4,
+        key: "2026-04",
+        monthlyAmount: 250,
+        accumulatedAmount: 350,
+        accumulatedPercentage: 70,
+      },
+      {
+        year: 2026,
+        month: 5,
+        key: "2026-05",
+        monthlyAmount: 150,
+        accumulatedAmount: 500,
+        accumulatedPercentage: 100,
+      },
+    ],
   };
 }
 

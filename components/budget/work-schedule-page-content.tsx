@@ -15,16 +15,18 @@ import {
   type MouseEvent as ReactMouseEvent,
   type UIEvent as ReactUIEvent,
 } from "react";
-import { CalendarDays, ChartSpline, Package2, PenSquare, Save, X } from "lucide-react";
+import { CalendarDays, ChartSpline, MoreHorizontal, Package2, PenSquare, Save, WandSparkles, X } from "lucide-react";
 import type ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ExportPanel } from "@/components/exports/export-panel";
 import { Input } from "@/components/ui/input";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { getExportDefinition } from "@/lib/exports/definitions";
 import { parseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import type {
   WorkScheduleCurvePointRecord,
@@ -68,6 +70,7 @@ type EditableLine = {
 };
 
 type OverviewFilter = "all" | "pending" | "incomplete_distribution" | "scheduled";
+type ResourceCalendarMode = "amounts" | "quantities";
 type OverviewVirtualItem =
   | {
       key: string;
@@ -104,6 +107,9 @@ const OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT = 40;
 const OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT = 40;
 const OVERVIEW_TIMELINE_DAY_WIDTH_PX = 16;
 const OVERVIEW_TIMELINE_DAY_GAP_PX = 1;
+const MIN_OVERVIEW_TIMELINE_ZOOM_PERCENT = 10;
+const MAX_OVERVIEW_TIMELINE_ZOOM_PERCENT = 500;
+const DEFAULT_OVERVIEW_TIMELINE_ZOOM_PERCENT = 100;
 const OVERVIEW_TABLE_COLUMN_WIDTHS = {
   rowNumber: 36,
   item: 96,
@@ -145,6 +151,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   );
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => readCollapsedGroups(initialData.budgetId));
   const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(() => readOverviewFilter(initialData.budgetId));
+  const [showCriticalPath, setShowCriticalPath] = useState(() => readCriticalPathVisibility(initialData.budgetId));
+  const [resourceCalendarMode, setResourceCalendarMode] = useState<ResourceCalendarMode>(() => readResourceCalendarMode(initialData.budgetId));
   const [executiveWorkbookScope, setExecutiveWorkbookScope] = useState<WorkbookExportScope>(() =>
     readExecutiveWorkbookScope(initialData.budgetId),
   );
@@ -169,6 +177,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [generationBaseDate, setGenerationBaseDate] = useState(() => initialData.timeline.startDate ?? new Date().toISOString().slice(0, 10));
   const [generationState, setGenerationState] = useState<"idle" | "saving" | "error">("idle");
   const [generationError, setGenerationError] = useState("");
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
 
   const timelineDays = useMemo(() => buildTimelineDays(data.timeline.startDate, data.timeline.endDate), [data.timeline.endDate, data.timeline.startDate]);
   const timelineDayIndexByIso = useMemo(
@@ -393,6 +403,14 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   }, [data.budgetId, overviewFilter]);
 
   useEffect(() => {
+    writeCriticalPathVisibility(data.budgetId, showCriticalPath);
+  }, [data.budgetId, showCriticalPath]);
+
+  useEffect(() => {
+    writeResourceCalendarMode(data.budgetId, resourceCalendarMode);
+  }, [data.budgetId, resourceCalendarMode]);
+
+  useEffect(() => {
     writeExecutiveWorkbookScope(data.budgetId, executiveWorkbookScope);
   }, [data.budgetId, executiveWorkbookScope]);
 
@@ -407,6 +425,24 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   useEffect(() => {
     writeCurveWorkbookScope(data.budgetId, curveWorkbookScope);
   }, [data.budgetId, curveWorkbookScope]);
+
+  useEffect(() => {
+    if (!isExportMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node) || exportMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsExportMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isExportMenuOpen]);
 
   useEffect(() => {
     writeEditingLineBudgetItemId(data.budgetId, editingLine?.budgetItemId ?? null);
@@ -602,6 +638,16 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
                   {summary.programmedItems} partidas programadas
                 </span>
+                {showCriticalPath && data.criticalPath ? (
+                  <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
+                    {data.criticalPath.criticalItemCount} partidas criticas
+                  </span>
+                ) : null}
+                {showCriticalPath && data.criticalPath?.status === "calculated" ? (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                    {data.criticalPath.projectDurationDays} dias CPM
+                  </span>
+                ) : null}
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
                   {summary.periods} periodos valorizados
                 </span>
@@ -616,61 +662,124 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
             <InfoTile label="Insumos derivados" value={`${data.resourceCalendar.rows.length}`} />
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <ViewButton active={activeView === "overview"} icon={<CalendarDays className="h-4 w-4" />} onClick={() => setActiveView("overview")}>
-              Cronograma
-            </ViewButton>
-            <ViewButton active={activeView === "valuation"} icon={<PenSquare className="h-4 w-4" />} onClick={() => setActiveView("valuation")}>
-              Calendario valorizado
-            </ViewButton>
-            <ViewButton active={activeView === "resources"} icon={<Package2 className="h-4 w-4" />} onClick={() => setActiveView("resources")}>
-              Calendario de insumos
-            </ViewButton>
-            <ViewButton active={activeView === "curve"} icon={<ChartSpline className="h-4 w-4" />} onClick={() => setActiveView("curve")}>
-              Curva S
-            </ViewButton>
-            {activeView === "overview" ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setGenerationBaseDate(data.timeline.startDate ?? new Date().toISOString().slice(0, 10));
-                  setGenerationError("");
-                  setGenerationState("idle");
-                  setIsGenerationDialogOpen(true);
-                }}
-              >
-                Generar cronograma inteligente
-              </Button>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={handleExportCsv}>
-              Exportar CSV
-            </Button>
-            {activeView !== "overview" ? (
-              <Button variant="outline" size="sm" onClick={() => void handleExportActiveViewXlsx()}>
-                Exportar XLSX
-              </Button>
-            ) : null}
-            {activeView === "overview" ? (
-              <Button variant="outline" size="sm" onClick={handleExportOverviewSummaryCsv}>
-                Exportar resumen CSV
-              </Button>
-            ) : null}
-            {activeView === "overview" ? (
-              <Button variant="outline" size="sm" onClick={handleExportOverviewMonthlySummaryCsv}>
-                Exportar resumen mensual CSV
-              </Button>
-            ) : null}
-            {activeView === "overview" ? (
-              <Button variant="outline" size="sm" onClick={handleExportOverviewExecutivePackageCsv}>
-                Exportar paquete ejecutivo CSV
-              </Button>
-            ) : null}
-            {activeView === "overview" ? (
-              <Button variant="outline" size="sm" onClick={() => void handleExportOverviewExecutivePackageXlsx()}>
-                Exportar paquete ejecutivo XLSX
-              </Button>
-            ) : null}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <ViewButton active={activeView === "overview"} icon={<CalendarDays className="h-4 w-4" />} onClick={() => setActiveView("overview")}>
+                Cronograma
+              </ViewButton>
+              <ViewButton active={activeView === "valuation"} icon={<PenSquare className="h-4 w-4" />} onClick={() => setActiveView("valuation")}>
+                Calendario valorizado
+              </ViewButton>
+              <ViewButton active={activeView === "resources"} icon={<Package2 className="h-4 w-4" />} onClick={() => setActiveView("resources")}>
+                Calendario de insumos
+              </ViewButton>
+              <ViewButton active={activeView === "curve"} icon={<ChartSpline className="h-4 w-4" />} onClick={() => setActiveView("curve")}>
+                Curva S
+              </ViewButton>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 lg:ml-auto">
+              {activeView === "overview" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-10 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em]"
+                  onClick={() => {
+                    setGenerationBaseDate(data.timeline.startDate ?? new Date().toISOString().slice(0, 10));
+                    setGenerationError("");
+                    setGenerationState("idle");
+                    setIsGenerationDialogOpen(true);
+                  }}
+                >
+                  <WandSparkles className="h-4 w-4" />
+                  Generar cronograma inteligente
+                </Button>
+              ) : null}
+              <ExportPanel
+                buttonLabel="Exportar central"
+                className="h-10 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em]"
+                contextOptions={{ currencyDecimals }}
+                defaultPreset="cronograma_ejecutivo"
+                definition={getExportDefinition("work_schedule")}
+                targetId={data.budgetId}
+              />
+              <div ref={exportMenuRef} className="relative flex h-10 items-center gap-1 rounded-full border border-slate-200/90 bg-white/90 px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
+                <button
+                  type="button"
+                  aria-label="Abrir acciones de exportacion"
+                  aria-haspopup="menu"
+                  aria-expanded={isExportMenuOpen}
+                  aria-controls="work-schedule-export-menu"
+                  onClick={() => setIsExportMenuOpen((current) => !current)}
+                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  Exportar
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+                {isExportMenuOpen ? (
+                  <div
+                    id="work-schedule-export-menu"
+                    role="menu"
+                    aria-label="Acciones de exportacion del cronograma"
+                    className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setIsExportMenuOpen(false);
+                      }
+                    }}
+                  >
+                    <WorkScheduleExportMenuButton
+                      label="Exportar CSV"
+                      onClick={() => {
+                        handleExportCsv();
+                        setIsExportMenuOpen(false);
+                      }}
+                    />
+                    {activeView !== "overview" ? (
+                      <WorkScheduleExportMenuButton
+                        label="Exportar XLSX"
+                        onClick={() => {
+                          void handleExportActiveViewXlsx();
+                          setIsExportMenuOpen(false);
+                        }}
+                      />
+                    ) : null}
+                    {activeView === "overview" ? (
+                      <>
+                        <div className="my-1 border-t border-slate-100" />
+                        <WorkScheduleExportMenuButton
+                          label="Exportar resumen CSV"
+                          onClick={() => {
+                            handleExportOverviewSummaryCsv();
+                            setIsExportMenuOpen(false);
+                          }}
+                        />
+                        <WorkScheduleExportMenuButton
+                          label="Exportar resumen mensual CSV"
+                          onClick={() => {
+                            handleExportOverviewMonthlySummaryCsv();
+                            setIsExportMenuOpen(false);
+                          }}
+                        />
+                        <WorkScheduleExportMenuButton
+                          label="Exportar paquete ejecutivo CSV"
+                          onClick={() => {
+                            handleExportOverviewExecutivePackageCsv();
+                            setIsExportMenuOpen(false);
+                          }}
+                        />
+                        <WorkScheduleExportMenuButton
+                          label="Exportar paquete ejecutivo XLSX"
+                          onClick={() => {
+                            void handleExportOverviewExecutivePackageXlsx();
+                            setIsExportMenuOpen(false);
+                          }}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           {activeView === "overview" || activeView === "valuation" || activeView === "resources" || activeView === "curve" ? (
@@ -848,6 +957,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           onExpandAll={handleExpandAllGroups}
           overviewFilter={overviewFilter}
           onOverviewFilterChange={setOverviewFilter}
+          showCriticalPath={showCriticalPath}
+          onShowCriticalPathChange={setShowCriticalPath}
           highlightedBudgetItemId={highlightedBudgetItemId}
           scrollRequest={overviewScrollRequest}
           onScrollRequestHandled={handleScrollRequestHandled}
@@ -879,6 +990,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           periods={data.resourceCalendar.periods}
           currency={data.currency}
           currencyDecimals={currencyDecimals}
+          mode={resourceCalendarMode}
+          onModeChange={setResourceCalendarMode}
           activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
         />
       ) : null}
@@ -936,6 +1049,8 @@ function WorkScheduleOverview({
   onExpandAll,
   overviewFilter,
   onOverviewFilterChange,
+  showCriticalPath,
+  onShowCriticalPathChange,
   highlightedBudgetItemId,
   scrollRequest,
   onScrollRequestHandled,
@@ -961,6 +1076,8 @@ function WorkScheduleOverview({
   onExpandAll: () => void;
   overviewFilter: OverviewFilter;
   onOverviewFilterChange: (filter: OverviewFilter) => void;
+  showCriticalPath: boolean;
+  onShowCriticalPathChange: (visible: boolean) => void;
   highlightedBudgetItemId: string | null;
   scrollRequest: number | null;
   onScrollRequestHandled: () => void;
@@ -998,6 +1115,7 @@ function WorkScheduleOverview({
   const timelinePanelWidthRef = useRef(timelinePanelWidth);
   const pendingViewportMeasureFrameRef = useRef<number | null>(null);
   const [showCostColumns, setShowCostColumns] = useState(() => readOverviewCostColumnsVisibility(data.budgetId));
+  const [timelineZoomPercent, setTimelineZoomPercent] = useState(() => readOverviewTimelineZoomPercent(data.budgetId));
   const [tableGroupHeights, setTableGroupHeights] = useState<Record<string, number>>(
     () => readOverviewMeasuredHeights(data.budgetId).groups,
   );
@@ -1066,11 +1184,11 @@ function WorkScheduleOverview({
         const visibleRows = group.rows.filter((row) => isVisibleOverviewRow(row, visibleLineIds));
         const isCollapsed = collapsedGroups[group.subBudgetId] === true;
 
-        if (!isCollapsed && visibleRows.length === 0) {
+        if (overviewFilter !== "all" && !isCollapsed && visibleRows.length === 0) {
           continue;
         }
 
-        if (visibleRows.length > 0 || isCollapsed) {
+        if (overviewFilter === "all" || visibleRows.length > 0 || isCollapsed) {
           groups.push({
             ...group,
             lines: visibleLines,
@@ -1173,10 +1291,10 @@ function WorkScheduleOverview({
     () =>
       Math.max(
         480,
-        timelineDays.length * OVERVIEW_TIMELINE_DAY_WIDTH_PX +
-          Math.max(0, timelineDays.length - 1) * OVERVIEW_TIMELINE_DAY_GAP_PX,
+        timelineDays.length * getZoomedTimelineDayWidth(timelineZoomPercent) +
+          Math.max(0, timelineDays.length - 1) * getZoomedTimelineDayGap(timelineZoomPercent),
       ),
-    [timelineDays.length],
+    [timelineDays.length, timelineZoomPercent],
   );
   const visibleTimelineLinePositions = useMemo(() => {
     const positions = new Map<string, VisibleTimelineLinePosition>();
@@ -1214,8 +1332,10 @@ function WorkScheduleOverview({
       buildTimelineDependencyPaths({
         visibleLinePositions: visibleTimelineLinePositions,
         timelineDayIndexByIso,
+        timelineDayWidth: getZoomedTimelineDayWidth(timelineZoomPercent),
+        timelineDayGap: getZoomedTimelineDayGap(timelineZoomPercent),
       }),
-    [timelineDayIndexByIso, visibleTimelineLinePositions],
+    [timelineDayIndexByIso, timelineZoomPercent, visibleTimelineLinePositions],
   );
   const setGroupRowRef = useCallback((subBudgetId: string, element: HTMLElement | null) => {
     const previousElement = groupRowRefs.current.get(subBudgetId);
@@ -1548,6 +1668,10 @@ function WorkScheduleOverview({
   }, [data.budgetId, showCostColumns]);
 
   useEffect(() => {
+    writeOverviewTimelineZoomPercent(data.budgetId, timelineZoomPercent);
+  }, [data.budgetId, timelineZoomPercent]);
+
+  useEffect(() => {
     const nextCache: OverviewMeasuredHeightsCache = {
       groups: pruneMeasuredHeightsMap(
         tableGroupHeights,
@@ -1807,9 +1931,29 @@ function WorkScheduleOverview({
               <Button variant="outline" size="sm" onClick={onExpandAll} disabled={!hasCollapsedGroups}>
                 Expandir todo
               </Button>
+              <Button
+                variant={showCriticalPath ? "default" : "outline"}
+                size="sm"
+                onClick={() => onShowCriticalPathChange(!showCriticalPath)}
+              >
+                {showCriticalPath ? "Ocultar ruta critica" : "Mostrar ruta critica"}
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setShowCostColumns((current) => !current)}>
                 {showCostColumns ? "Ocultar PU y Parcial" : "Mostrar PU y Parcial"}
               </Button>
+              <label className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700">
+                <span>Zoom</span>
+                <Input
+                  type="number"
+                  min={MIN_OVERVIEW_TIMELINE_ZOOM_PERCENT}
+                  max={MAX_OVERVIEW_TIMELINE_ZOOM_PERCENT}
+                  step="10"
+                  value={timelineZoomPercent}
+                  onChange={(event) => setTimelineZoomPercent(clampOverviewTimelineZoomPercent(Number(event.target.value)))}
+                  className="h-7 w-20 px-2 text-xs"
+                />
+                <span>%</span>
+              </label>
             </div>
           </div>
         </div>
@@ -1922,6 +2066,7 @@ function WorkScheduleOverview({
                             currency={data.currency}
                             currencyDecimals={currencyDecimals}
                             showCostColumns={showCostColumns}
+                            showCriticalPath={showCriticalPath}
                             highlighted={highlightedBudgetItemId === item.row.line.budgetItemId}
                             displayPredecessor={formatPredecessorForDisplay(item.row.line.predecessor ?? "", predecessorItemCodeToRowNumber)}
                             onEditLine={onEditLine}
@@ -1996,7 +2141,11 @@ function WorkScheduleOverview({
                 onScroll={handleOverviewScroll}
               >
                 <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }} className="text-xs">
-                  <TimelineHeader timelineDays={timelineDays} isExcelMode={isExcelMode} />
+                  <TimelineHeader
+                    timelineDays={timelineDays}
+                    isExcelMode={isExcelMode}
+                    timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
+                  />
                   <div className="relative">
                     {timelineDependencyPaths.length > 0 ? (
                       <svg
@@ -2059,6 +2208,9 @@ function WorkScheduleOverview({
                           timelineDayIndexByIso={timelineDayIndexByIso}
                           currency={data.currency}
                           currencyDecimals={currencyDecimals}
+                          showCriticalPath={showCriticalPath}
+                          timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
+                          timelineDayGap={getZoomedTimelineDayGap(timelineZoomPercent)}
                           highlighted={item.row.kind === "line" && highlightedBudgetItemId === item.row.line.budgetItemId}
                           rowHeight={normalizeMeasuredHeight(
                             tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
@@ -2140,6 +2292,7 @@ type WorkScheduleLineTableRowProps = {
   currency: string;
   currencyDecimals: number;
   showCostColumns: boolean;
+  showCriticalPath: boolean;
   highlighted: boolean;
   onEditLine: (line: WorkScheduleLineRecord) => void;
   onRegisterRow: (rowId: string, element: HTMLElement | null) => void;
@@ -2161,6 +2314,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
   currency,
   currencyDecimals,
   showCostColumns,
+  showCriticalPath,
   highlighted,
   onEditLine,
   onRegisterRow,
@@ -2206,7 +2360,11 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       data-table-row-id={line.budgetItemId}
       data-inline-row-id={inlineRowId}
       data-highlighted={highlighted ? "true" : "false"}
-      className={cn(highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200" : "")}
+      data-critical={showCriticalPath && line.criticalPath?.isCritical ? "true" : "false"}
+      className={cn(
+        showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-50/80" : "",
+        highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200" : "",
+      )}
       onBlur={handleInlineBlur}
     >
       <TD className="bg-slate-100 px-1 text-center align-middle !text-[10px] font-medium text-slate-500">{rowNumber ?? ""}</TD>
@@ -2224,6 +2382,15 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
                   className="shrink-0 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
                 >
                   Partida activa
+                </span>
+              ) : null}
+              {showCriticalPath && line.criticalPath?.isCritical ? (
+                <span
+                  data-testid={`work-schedule-critical-badge-${line.budgetItemId}`}
+                  className="shrink-0 rounded-full border border-rose-300 bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800"
+                  title={`Holgura total: ${line.criticalPath.totalSlackDays} dias`}
+                >
+                  Critica
                 </span>
               ) : null}
             </div>
@@ -2383,16 +2550,19 @@ const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
 function TimelineHeader({
   timelineDays,
   isExcelMode,
+  timelineDayWidth,
 }: {
   timelineDays: TimelineDay[];
   isExcelMode: boolean;
+  timelineDayWidth: number;
 }) {
   const months = groupTimelineMonths(timelineDays);
   const weeks = groupTimelineWeeks(timelineDays);
+  const gridTemplateColumns = `repeat(${timelineDays.length || 1}, minmax(${timelineDayWidth}px, 1fr))`;
 
   return (
     <div className="border-b border-slate-200 bg-white">
-      <div className="grid gap-px bg-slate-200" style={{ gridTemplateColumns: `repeat(${timelineDays.length || 1}, minmax(16px, 1fr))` }}>
+      <div className="grid gap-px bg-slate-200" style={{ gridTemplateColumns }}>
         {months.map((month, index) => (
           <div
             key={month.key}
@@ -2413,7 +2583,7 @@ function TimelineHeader({
           </div>
         ))}
       </div>
-      <div className="grid gap-px bg-slate-200" style={{ gridTemplateColumns: `repeat(${timelineDays.length || 1}, minmax(16px, 1fr))` }}>
+      <div className="grid gap-px bg-slate-200" style={{ gridTemplateColumns }}>
         {weeks.map((week) => (
           <div
             key={week.key}
@@ -2424,7 +2594,7 @@ function TimelineHeader({
           </div>
         ))}
       </div>
-      <div className="grid gap-px bg-slate-100" style={{ gridTemplateColumns: `repeat(${timelineDays.length || 1}, minmax(16px, 1fr))` }}>
+      <div className="grid gap-px bg-slate-100" style={{ gridTemplateColumns }}>
         {timelineDays.map((day) => (
           <div
             key={day.iso}
@@ -2445,6 +2615,9 @@ type TimelineRowProps = {
   timelineDayIndexByIso: Map<string, number>;
   currency: string;
   currencyDecimals: number;
+  showCriticalPath: boolean;
+  timelineDayWidth: number;
+  timelineDayGap: number;
   highlighted: boolean;
   rowHeight?: number;
 };
@@ -2455,6 +2628,9 @@ const TimelineRow = memo(function TimelineRow({
   timelineDayIndexByIso,
   currency,
   currencyDecimals,
+  showCriticalPath,
+  timelineDayWidth,
+  timelineDayGap,
   highlighted,
   rowHeight,
 }: TimelineRowProps) {
@@ -2469,7 +2645,7 @@ const TimelineRow = memo(function TimelineRow({
   const endIndex = endDate ? (timelineDayIndexByIso.get(endDate) ?? -1) : -1;
   const span = startIndex >= 0 && endIndex >= startIndex ? endIndex - startIndex + 1 : 0;
   const hasActiveRange = span > 0;
-  const timelineColumnWidth = OVERVIEW_TIMELINE_DAY_WIDTH_PX + OVERVIEW_TIMELINE_DAY_GAP_PX;
+  const timelineColumnWidth = timelineDayWidth + timelineDayGap;
   const segmentColors = [
     "bg-sky-600",
     "bg-cyan-500",
@@ -2481,7 +2657,7 @@ const TimelineRow = memo(function TimelineRow({
   const timelineBarStyle = hasActiveRange
     ? {
         left: `${startIndex * timelineColumnWidth}px`,
-        width: `${span * OVERVIEW_TIMELINE_DAY_WIDTH_PX + Math.max(0, span - 1) * OVERVIEW_TIMELINE_DAY_GAP_PX}px`,
+        width: `${span * timelineDayWidth + Math.max(0, span - 1) * timelineDayGap}px`,
       }
     : null;
   const timelineRowBackgroundStyle = {
@@ -2500,6 +2676,7 @@ const TimelineRow = memo(function TimelineRow({
       data-testid="work-schedule-timeline-row"
       data-line-id={row.rowId}
       data-highlighted={highlighted ? "true" : "false"}
+      data-critical={showCriticalPath && line?.criticalPath?.isCritical ? "true" : "false"}
       className="relative overflow-visible border-b border-slate-100 px-0.5 py-1"
       style={{
         height: rowHeight ? `${rowHeight}px` : undefined,
@@ -2510,7 +2687,9 @@ const TimelineRow = memo(function TimelineRow({
         <div
           className={cn(
             "absolute inset-y-2 z-20 overflow-visible rounded-full",
-            row.kind === "line"
+            showCriticalPath && line?.criticalPath?.isCritical
+              ? "shadow-[0_10px_20px_-16px_rgba(225,29,72,0.9)] ring-1 ring-rose-300"
+              : row.kind === "line"
               ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)]"
               : "bg-slate-500/90",
           )}
@@ -2525,14 +2704,14 @@ const TimelineRow = memo(function TimelineRow({
                   data-testid={`work-schedule-bar-segment-${row.rowId}`}
                   className={cn(
                     "h-full border-r border-white/40 last:border-r-0",
-                    segmentColors[distributionIndex % segmentColors.length],
+                    showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600" : segmentColors[distributionIndex % segmentColors.length],
                   )}
                   style={{ width: `${distribution.percentage}%` }}
                   title={formatDistributionTooltip(distribution, partial, currency, currencyDecimals)}
                 />
               ))
             ) : line ? (
-              <div className="h-full w-full bg-sky-600" />
+              <div className={cn("h-full w-full", showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600" : "bg-sky-600")} />
             ) : (
               <div className="h-full w-full bg-slate-500" />
             )}
@@ -2568,6 +2747,7 @@ function areWorkScheduleLineTableRowPropsEqual(
     previousProps.currency === nextProps.currency &&
     previousProps.currencyDecimals === nextProps.currencyDecimals &&
     previousProps.showCostColumns === nextProps.showCostColumns &&
+    previousProps.showCriticalPath === nextProps.showCriticalPath &&
     previousProps.highlighted === nextProps.highlighted &&
     previousProps.onEditLine === nextProps.onEditLine &&
     previousProps.onRegisterRow === nextProps.onRegisterRow &&
@@ -2604,6 +2784,9 @@ function areTimelineRowPropsEqual(previousProps: TimelineRowProps, nextProps: Ti
     previousProps.timelineDayIndexByIso === nextProps.timelineDayIndexByIso &&
     previousProps.currency === nextProps.currency &&
     previousProps.currencyDecimals === nextProps.currencyDecimals &&
+    previousProps.showCriticalPath === nextProps.showCriticalPath &&
+    previousProps.timelineDayWidth === nextProps.timelineDayWidth &&
+    previousProps.timelineDayGap === nextProps.timelineDayGap &&
     previousProps.highlighted === nextProps.highlighted &&
     previousProps.rowHeight === nextProps.rowHeight
   );
@@ -2730,36 +2913,51 @@ function ValuationCalendarView({
       description="Vista mensual valorizada inspirada en el archivo Calendario_Valorizado.xlsx."
       activeFilterLabel={activeFilterLabel}
     >
-      <Table>
-        <THead className="bg-slate-50">
-          <TR>
-            <TH>Item</TH>
-            <TH>Partida</TH>
-            <TH>Unidad</TH>
-            <TH>Metrado</TH>
-            <TH>PU</TH>
-            <TH>Parcial</TH>
-            {periods.map((period) => (
-              <TH key={period.key}>{formatPeriodLabel(period)}</TH>
-            ))}
-          </TR>
-        </THead>
-        <TBody>
-          {rows.map((row) => (
-            <TR key={row.budgetItemId}>
-              <TD>{row.itemCode}</TD>
-              <TD>{row.description}</TD>
-              <TD>{row.unit}</TD>
-              <TD>{formatNumber(row.quantity, 2)}</TD>
-              <TD>{formatCurrency(row.unitPrice, currency, currencyDecimals)}</TD>
-              <TD>{formatCurrency(row.partial, currency, currencyDecimals)}</TD>
+      <div data-testid="valuation-calendar-table-scroll" className="overflow-x-auto rounded-2xl border border-slate-200">
+        <Table
+          className="min-w-max text-[11px]"
+          style={{
+            minWidth: `${760 + periods.length * 112}px`,
+          }}
+        >
+          <THead className="bg-slate-50">
+            <TR className="whitespace-nowrap">
+              <TH className="w-24 whitespace-nowrap px-2 py-2 text-[11px]">Item</TH>
+              <TH className="w-80 whitespace-nowrap px-2 py-2 text-[11px]">Partida</TH>
+              <TH className="w-16 whitespace-nowrap px-2 py-2 text-[11px]">Und.</TH>
+              <TH className="w-20 whitespace-nowrap px-2 py-2 text-right text-[11px]">Metrado</TH>
+              <TH className="w-24 whitespace-nowrap px-2 py-2 text-right text-[11px]">PU</TH>
+              <TH className="w-28 whitespace-nowrap px-2 py-2 text-right text-[11px]">Parcial</TH>
               {periods.map((period) => (
-                <TD key={period.key}>{formatCurrency(row.periodAmounts[period.key] ?? 0, currency, currencyDecimals)}</TD>
+                <TH key={period.key} className="w-28 whitespace-nowrap px-2 py-2 text-right text-[11px]">
+                  {formatPeriodLabel(period)}
+                </TH>
               ))}
             </TR>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {rows.map((row) => (
+              <TR key={row.budgetItemId} className="whitespace-nowrap">
+                <TD className="whitespace-nowrap px-2 py-2 text-[11px]">{row.itemCode}</TD>
+                <TD className="max-w-80 whitespace-nowrap px-2 py-2 text-[11px]">
+                  <span className="block truncate" title={row.description}>
+                    {row.description}
+                  </span>
+                </TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-[11px]">{row.unit}</TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-right text-[11px]">{formatNumber(row.quantity, 2)}</TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-right text-[11px]">{formatCurrency(row.unitPrice, currency, currencyDecimals)}</TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-right text-[11px]">{formatCurrency(row.partial, currency, currencyDecimals)}</TD>
+                {periods.map((period) => (
+                  <TD key={period.key} className="whitespace-nowrap px-2 py-2 text-right text-[11px]">
+                    {formatCurrency(row.periodAmounts[period.key] ?? 0, currency, currencyDecimals)}
+                  </TD>
+                ))}
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </div>
     </DerivedTableCard>
   );
 }
@@ -2769,12 +2967,16 @@ function ResourceCalendarView({
   periods,
   currency,
   currencyDecimals,
+  mode,
+  onModeChange,
   activeFilterLabel,
 }: {
   rows: WorkScheduleResourceCalendarRow[];
   periods: WorkSchedulePeriodRecord[];
   currency: string;
   currencyDecimals: number;
+  mode: ResourceCalendarMode;
+  onModeChange: (mode: ResourceCalendarMode) => void;
   activeFilterLabel: string | null;
 }) {
   return (
@@ -2783,41 +2985,76 @@ function ResourceCalendarView({
       description="Consumo y valorizacion mensual de materiales e insumos derivado desde la programacion de partidas."
       activeFilterLabel={activeFilterLabel}
     >
-      <Table>
-        <THead className="bg-slate-50">
-          <TR>
-            <TH>Item</TH>
-            <TH>Insumo</TH>
-            <TH>Unidad</TH>
-            <TH>Cantidad</TH>
-            <TH>PU</TH>
-            <TH>Parcial</TH>
-            {periods.map((period) => (
-              <TH key={period.key}>{formatPeriodLabel(period)}</TH>
-            ))}
-          </TR>
-        </THead>
-        <TBody>
-          {rows.map((row, index) => (
-            <TR key={row.resourceId}>
-              <TD>{index + 1}</TD>
-              <TD>{row.description}</TD>
-              <TD>{row.unit}</TD>
-              <TD>{formatNumber(row.quantity, 2)}</TD>
-              <TD>{formatCurrency(row.unitPrice, currency, currencyDecimals)}</TD>
-              <TD>{formatCurrency(row.partial, currency, currencyDecimals)}</TD>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <Button
+            variant={mode === "amounts" ? "default" : "ghost"}
+            size="sm"
+            className="h-8 px-3 text-xs"
+            onClick={() => onModeChange("amounts")}
+          >
+            Valorizado
+          </Button>
+          <Button
+            variant={mode === "quantities" ? "default" : "ghost"}
+            size="sm"
+            className="h-8 px-3 text-xs"
+            onClick={() => onModeChange("quantities")}
+          >
+            Cantidades
+          </Button>
+        </div>
+        <span className="text-xs text-slate-500">
+          {mode === "amounts" ? "Mostrando importes mensuales valorizados." : "Mostrando cantidades mensuales programadas."}
+        </span>
+      </div>
+      <div data-testid="resource-calendar-table-scroll" className="overflow-x-auto rounded-2xl border border-slate-200">
+        <Table
+          className="min-w-max text-[11px]"
+          style={{
+            minWidth: `${760 + periods.length * 132}px`,
+          }}
+        >
+          <THead className="bg-slate-50">
+            <TR className="whitespace-nowrap">
+              <TH className="w-16 whitespace-nowrap px-2 py-2 text-[11px]">Item</TH>
+              <TH className="w-80 whitespace-nowrap px-2 py-2 text-[11px]">Insumo</TH>
+              <TH className="w-16 whitespace-nowrap px-2 py-2 text-[11px]">Und.</TH>
+              <TH className="w-24 whitespace-nowrap px-2 py-2 text-right text-[11px]">Cantidad</TH>
+              <TH className="w-24 whitespace-nowrap px-2 py-2 text-right text-[11px]">PU</TH>
+              <TH className="w-28 whitespace-nowrap px-2 py-2 text-right text-[11px]">Parcial</TH>
               {periods.map((period) => (
-                <TD key={period.key}>
-                  <div className="space-y-1">
-                    <p>{formatNumber(row.periodQuantities[period.key] ?? 0, 2)}</p>
-                    <p className="text-xs text-slate-500">{formatCurrency(row.periodAmounts[period.key] ?? 0, currency, currencyDecimals)}</p>
-                  </div>
-                </TD>
+                <TH key={period.key} className="w-32 whitespace-nowrap px-2 py-2 text-right text-[11px]">
+                  {formatPeriodLabel(period)}
+                </TH>
               ))}
             </TR>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {rows.map((row, index) => (
+              <TR key={row.resourceId} className="whitespace-nowrap">
+                <TD className="whitespace-nowrap px-2 py-2 text-[11px]">{index + 1}</TD>
+                <TD className="max-w-80 whitespace-nowrap px-2 py-2 text-[11px]">
+                  <span className="block truncate" title={row.description}>
+                    {row.description}
+                  </span>
+                </TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-[11px]">{row.unit}</TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-right text-[11px]">{formatNumber(row.quantity, 2)}</TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-right text-[11px]">{formatCurrency(row.unitPrice, currency, currencyDecimals)}</TD>
+                <TD className="whitespace-nowrap px-2 py-2 text-right text-[11px]">{formatCurrency(row.partial, currency, currencyDecimals)}</TD>
+                {periods.map((period) => (
+                  <TD key={period.key} className="whitespace-nowrap px-2 py-2 text-right text-[11px]">
+                    {mode === "amounts"
+                      ? formatCurrency(row.periodAmounts[period.key] ?? 0, currency, currencyDecimals)
+                      : formatNumber(row.periodQuantities[period.key] ?? 0, 2)}
+                  </TD>
+                ))}
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </div>
     </DerivedTableCard>
   );
 }
@@ -2834,6 +3071,34 @@ function CurveSView({
   activeFilterLabel: string | null;
 }) {
   const maxAmount = Math.max(...points.map((point) => point.accumulatedAmount), 0);
+  const chartWidth = 980;
+  const chartHeight = 420;
+  const chartPadding = { top: 40, right: 44, bottom: 66, left: 128 };
+  const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
+  const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const yAxisMax = maxAmount > 0 ? maxAmount : 1;
+  const curvePoints = points.map((point, index) => {
+    const x =
+      points.length <= 1
+        ? chartPadding.left + plotWidth / 2
+        : chartPadding.left + (plotWidth * index) / (points.length - 1);
+    const y = chartPadding.top + plotHeight - (point.accumulatedAmount / yAxisMax) * plotHeight;
+
+    return {
+      point,
+      x,
+      y,
+    };
+  });
+  const curvePath = curvePoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+    .join(" ");
+  const yTicks = Array.from({ length: 5 }, (_, index) => {
+    const ratio = index / 4;
+    const value = yAxisMax * (1 - ratio);
+    const y = chartPadding.top + plotHeight * ratio;
+    return { value, y };
+  });
 
   return (
     <Card className="border-slate-200">
@@ -2850,24 +3115,64 @@ function CurveSView({
           ) : null}
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex h-56 items-end gap-3">
-            {points.map((point) => {
-              const height = maxAmount > 0 ? Math.max((point.accumulatedAmount / maxAmount) * 100, 4) : 0;
-              return (
-                <div key={point.key} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="flex w-full flex-col justify-end rounded-t-2xl bg-sky-100 px-2" style={{ height: `${height}%` }}>
-                    <div className="rounded-t-xl bg-sky-600 px-2 py-2 text-center text-xs font-semibold text-white">
-                      {point.accumulatedPercentage.toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="text-center text-xs text-slate-600">
-                    <p className="font-medium">{formatPeriodLabel(point)}</p>
-                    <p>{formatCurrency(point.monthlyAmount, currency, currencyDecimals)}</p>
-                  </div>
-                </div>
-              );
-            })}
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div data-testid="work-schedule-curve-chart" className="min-w-[980px]">
+            <span data-testid="work-schedule-curve-line" data-d={curvePath} className="sr-only" />
+            <span className="sr-only">Monto acumulado</span>
+            <span className="sr-only">Tiempo</span>
+            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Curva S acumulada de montos contra tiempo" className="h-[420px] w-full">
+              <rect x={chartPadding.left} y={chartPadding.top} width={plotWidth} height={plotHeight} fill="#ffffff" stroke="#e2e8f0" />
+              {yTicks.map((tick) => (
+                <g key={tick.y}>
+                  <line x1={chartPadding.left} x2={chartPadding.left + plotWidth} y1={tick.y} y2={tick.y} stroke="#e2e8f0" strokeDasharray="4 4" />
+                  <text x={chartPadding.left - 12} y={tick.y + 3} textAnchor="end" className="fill-slate-500 text-[9px]">
+                    {formatCurrency(tick.value, currency, currencyDecimals)}
+                  </text>
+                </g>
+              ))}
+              {curvePoints.map(({ point, x }) => (
+                <line key={`x-${point.key}`} x1={x} x2={x} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="#f1f5f9" />
+              ))}
+              <line x1={chartPadding.left} x2={chartPadding.left} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="#334155" strokeWidth="1.5" />
+              <line x1={chartPadding.left} x2={chartPadding.left + plotWidth} y1={chartPadding.top + plotHeight} y2={chartPadding.top + plotHeight} stroke="#334155" strokeWidth="1.5" />
+              {curvePath ? (
+                <path d={curvePath} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              ) : null}
+              {curvePoints.map(({ point, x, y }) => (
+                <g key={point.key}>
+                  <circle data-testid="work-schedule-curve-point" cx={x} cy={y} r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                  <text
+                    data-testid="work-schedule-curve-point-label"
+                    x={x}
+                    y={Math.max(chartPadding.top + 12, y - 12)}
+                    textAnchor="middle"
+                    className="fill-slate-900 text-[10px] font-semibold"
+                  >
+                    {formatCurrency(point.accumulatedAmount, currency, currencyDecimals)}
+                  </text>
+                  <text x={x} y={chartPadding.top + plotHeight + 22} textAnchor="middle" className="fill-slate-600 text-[11px]">
+                    {formatPeriodLabel(point)}
+                  </text>
+                </g>
+              ))}
+              <text
+                x={chartPadding.left + plotWidth / 2}
+                y={chartHeight - 8}
+                textAnchor="middle"
+                className="fill-slate-700 text-[12px] font-semibold"
+              >
+                Tiempo
+              </text>
+              <text
+                x={22}
+                y={chartPadding.top + plotHeight / 2}
+                textAnchor="middle"
+                transform={`rotate(-90 22 ${chartPadding.top + plotHeight / 2})`}
+                className="fill-slate-700 text-[12px] font-semibold"
+              >
+                Monto acumulado
+              </text>
+            </svg>
           </div>
         </div>
 
@@ -3262,6 +3567,25 @@ function ExportPreferenceButton({
   );
 }
 
+function WorkScheduleExportMenuButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
+    >
+      {label}
+    </button>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-2 text-sm">
@@ -3307,9 +3631,13 @@ function buildTimelineDays(startDate: string | null, endDate: string | null): Ti
 function buildTimelineDependencyPaths({
   visibleLinePositions,
   timelineDayIndexByIso,
+  timelineDayWidth,
+  timelineDayGap,
 }: {
   visibleLinePositions: Map<string, VisibleTimelineLinePosition>;
   timelineDayIndexByIso: Map<string, number>;
+  timelineDayWidth: number;
+  timelineDayGap: number;
 }) {
   const paths: Array<{ key: string; d: string }> = [];
 
@@ -3346,6 +3674,8 @@ function buildTimelineDependencyPaths({
         successor,
         successorStartIndex,
         successorEndIndex,
+        timelineDayWidth,
+        timelineDayGap,
       });
 
       if (connector) {
@@ -3368,6 +3698,8 @@ function buildTimelineDependencyConnector({
   successor,
   successorStartIndex,
   successorEndIndex,
+  timelineDayWidth,
+  timelineDayGap,
 }: {
   predecessor: VisibleTimelineLinePosition;
   predecessorReference: {
@@ -3378,11 +3710,13 @@ function buildTimelineDependencyConnector({
   successor: VisibleTimelineLinePosition;
   successorStartIndex: number;
   successorEndIndex: number;
+  timelineDayWidth: number;
+  timelineDayGap: number;
 }) {
-  const predecessorStartX = getTimelineColumnStartX(predecessorStartIndex);
-  const predecessorEndX = getTimelineColumnEndX(predecessorEndIndex);
-  const successorStartX = getTimelineColumnStartX(successorStartIndex);
-  const successorEndX = getTimelineColumnEndX(successorEndIndex);
+  const predecessorStartX = getTimelineColumnStartX(predecessorStartIndex, timelineDayWidth, timelineDayGap);
+  const predecessorEndX = getTimelineColumnEndX(predecessorEndIndex, timelineDayWidth, timelineDayGap);
+  const successorStartX = getTimelineColumnStartX(successorStartIndex, timelineDayWidth, timelineDayGap);
+  const successorEndX = getTimelineColumnEndX(successorEndIndex, timelineDayWidth, timelineDayGap);
   const predecessorY = predecessor.top + predecessor.height / 2;
   const successorY = successor.top + successor.height / 2;
   const elbowOffset = 8;
@@ -3437,12 +3771,12 @@ function buildTimelineDependencyConnector({
   return `M ${sourceX} ${predecessorY} H ${sourceExitX} V ${breakY} H ${elbowX} V ${successorY} H ${targetApproachX} H ${targetX}`;
 }
 
-function getTimelineColumnStartX(index: number) {
-  return index * (OVERVIEW_TIMELINE_DAY_WIDTH_PX + OVERVIEW_TIMELINE_DAY_GAP_PX);
+function getTimelineColumnStartX(index: number, timelineDayWidth: number, timelineDayGap: number) {
+  return index * (timelineDayWidth + timelineDayGap);
 }
 
-function getTimelineColumnEndX(index: number) {
-  return getTimelineColumnStartX(index) + OVERVIEW_TIMELINE_DAY_WIDTH_PX;
+function getTimelineColumnEndX(index: number, timelineDayWidth: number, timelineDayGap: number) {
+  return getTimelineColumnStartX(index, timelineDayWidth, timelineDayGap) + timelineDayWidth;
 }
 
 function groupTimelineWeeks(days: TimelineDay[]) {
@@ -3705,6 +4039,18 @@ function getOverviewCostColumnsVisibilityStorageKey(budgetId: string) {
   return `work-schedule-overview-cost-columns:${budgetId}`;
 }
 
+function getOverviewTimelineZoomStorageKey(budgetId: string) {
+  return `work-schedule-overview-timeline-zoom:${budgetId}`;
+}
+
+function getResourceCalendarModeStorageKey(budgetId: string) {
+  return `work-schedule-resource-calendar-mode:${budgetId}`;
+}
+
+function getCriticalPathVisibilityStorageKey(budgetId: string) {
+  return `work-schedule-critical-path-visibility:${budgetId}`;
+}
+
 function getOverviewFilterStorageKey(budgetId: string) {
   return `work-schedule-overview-filter:${budgetId}`;
 }
@@ -3961,6 +4307,76 @@ function writeOverviewCostColumnsVisibility(budgetId: string, visible: boolean) 
   window.localStorage.setItem(getOverviewCostColumnsVisibilityStorageKey(budgetId), "true");
 }
 
+function readOverviewTimelineZoomPercent(budgetId: string) {
+  if (typeof window === "undefined") {
+    return DEFAULT_OVERVIEW_TIMELINE_ZOOM_PERCENT;
+  }
+
+  const storedValue = Number(window.localStorage.getItem(getOverviewTimelineZoomStorageKey(budgetId)));
+  return clampOverviewTimelineZoomPercent(storedValue || DEFAULT_OVERVIEW_TIMELINE_ZOOM_PERCENT);
+}
+
+function writeOverviewTimelineZoomPercent(budgetId: string, zoomPercent: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedZoom = clampOverviewTimelineZoomPercent(zoomPercent);
+  if (normalizedZoom === DEFAULT_OVERVIEW_TIMELINE_ZOOM_PERCENT) {
+    window.localStorage.removeItem(getOverviewTimelineZoomStorageKey(budgetId));
+    return;
+  }
+
+  window.localStorage.setItem(getOverviewTimelineZoomStorageKey(budgetId), String(normalizedZoom));
+}
+
+function readCriticalPathVisibility(budgetId: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(getCriticalPathVisibilityStorageKey(budgetId)) === "true";
+}
+
+function writeCriticalPathVisibility(budgetId: string, visible: boolean) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!visible) {
+    window.localStorage.removeItem(getCriticalPathVisibilityStorageKey(budgetId));
+    return;
+  }
+
+  window.localStorage.setItem(getCriticalPathVisibilityStorageKey(budgetId), "true");
+}
+
+function isResourceCalendarMode(value: string): value is ResourceCalendarMode {
+  return value === "amounts" || value === "quantities";
+}
+
+function readResourceCalendarMode(budgetId: string): ResourceCalendarMode {
+  if (typeof window === "undefined") {
+    return "amounts";
+  }
+
+  const storedValue = window.localStorage.getItem(getResourceCalendarModeStorageKey(budgetId));
+  return storedValue && isResourceCalendarMode(storedValue) ? storedValue : "amounts";
+}
+
+function writeResourceCalendarMode(budgetId: string, mode: ResourceCalendarMode) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (mode === "amounts") {
+    window.localStorage.removeItem(getResourceCalendarModeStorageKey(budgetId));
+    return;
+  }
+
+  window.localStorage.setItem(getResourceCalendarModeStorageKey(budgetId), mode);
+}
+
 function isOverviewFilter(value: string): value is OverviewFilter {
   return value === "all" || value === "pending" || value === "incomplete_distribution" || value === "scheduled";
 }
@@ -4054,6 +4470,25 @@ function pruneMeasuredHeightsMap(input: Record<string, number>, validKeys: Set<s
 
 function normalizeMeasuredHeight(height: number, minimumHeight: number) {
   return Math.max(Math.round(height), minimumHeight);
+}
+
+function clampOverviewTimelineZoomPercent(value: number) {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_OVERVIEW_TIMELINE_ZOOM_PERCENT;
+  }
+
+  return Math.min(
+    Math.max(Math.round(value), MIN_OVERVIEW_TIMELINE_ZOOM_PERCENT),
+    MAX_OVERVIEW_TIMELINE_ZOOM_PERCENT,
+  );
+}
+
+function getZoomedTimelineDayWidth(zoomPercent: number) {
+  return Math.max(1, Math.round((OVERVIEW_TIMELINE_DAY_WIDTH_PX * zoomPercent) / 100));
+}
+
+function getZoomedTimelineDayGap(zoomPercent: number) {
+  return Math.max(1, Math.round((OVERVIEW_TIMELINE_DAY_GAP_PX * zoomPercent) / 100));
 }
 
 function readExecutiveWorkbookScope(budgetId: string): WorkbookExportScope {

@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { RefreshCw, Save } from "lucide-react";
 
 import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
+import { ExportPanel } from "@/components/exports/export-panel";
 import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-math";
 import { PolynomialKCalculator } from "@/components/budget/polynomial-k-calculator";
 import { PolynomialMonomialsTable } from "@/components/budget/polynomial-monomials-table";
@@ -17,6 +18,7 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
+import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
 import type {
@@ -504,6 +506,14 @@ export function PolynomialFormulaEditor({
                   <p className="text-sm text-slate-500">
                     La generación inicial toma los coeficientes del presupuesto general y prepara el editor para la asignación de índices.
                   </p>
+                  {section.budgetId ? (
+                    <ExportPanel
+                      buttonLabel="Exportar"
+                      defaultPreset="formula_polinomica_detallada"
+                      definition={getExportDefinition("polynomial_formula")}
+                      targetId={section.budgetId}
+                    />
+                  ) : null}
                   {error ? <p className="text-sm text-rose-600">{error}</p> : null}
                 </div>
               }
@@ -580,6 +590,14 @@ export function PolynomialFormulaEditor({
                     <div className="flex items-center gap-2">
                       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
                       {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+                      {section.budgetId ? (
+                        <ExportPanel
+                          buttonLabel="Exportar"
+                          defaultPreset="formula_polinomica_detallada"
+                          definition={getExportDefinition("polynomial_formula")}
+                          targetId={section.budgetId}
+                        />
+                      ) : null}
                     </div>
                   </div>
                 }

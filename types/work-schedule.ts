@@ -36,6 +36,16 @@ export type WorkScheduleLineRecord = {
   performanceLabel?: string | null;
   monthlyDistributions: WorkScheduleMonthlyDistributionRecord[];
   resources?: WorkScheduleResourceRecord[];
+  criticalPath?: WorkScheduleCriticalPathLineRecord | null;
+};
+
+export type WorkScheduleCriticalPathLineRecord = {
+  earlyStartDay: number;
+  earlyFinishDay: number;
+  lateStartDay: number;
+  lateFinishDay: number;
+  totalSlackDays: number;
+  isCritical: boolean;
 };
 
 export type WorkScheduleLevelSummaryRecord = {
@@ -142,5 +152,14 @@ export type WorkScheduleViewRecord = {
     startDate: string | null;
     endDate: string | null;
   };
+  criticalPath?: WorkScheduleCriticalPathSummaryRecord | null;
   generationSummary?: WorkScheduleGenerationSummaryRecord | null;
+};
+
+export type WorkScheduleCriticalPathSummaryRecord = {
+  status: "calculated" | "cycle";
+  projectDurationDays: number;
+  scheduledItemCount: number;
+  criticalItemCount: number;
+  issues: string[];
 };

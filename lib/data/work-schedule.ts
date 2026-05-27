@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { buildDisplayRows } from "@/lib/budget/structure";
+import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { buildWorkScheduleView, validateWorkScheduleInput } from "@/lib/calculations/work-schedule";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
@@ -57,11 +58,12 @@ export async function getWorkScheduleSection(budgetId: string, userId: string): 
     }),
   ]);
 
+  const orderedSubBudgets = orderSubBudgetsBySpecialty(subBudgets);
   const scheduleItemsByBudgetItemId = new Map(
     (schedule?.items ?? []).map((item) => [item.budgetItemId, item]),
   );
 
-  const lines = subBudgets.flatMap<WorkScheduleLineRecord>((subBudget) =>
+  const lines = orderedSubBudgets.flatMap<WorkScheduleLineRecord>((subBudget) =>
     subBudget.items
       .filter((item) => decimalToNumber(item.partial) > 0)
       .map((item) => {
@@ -120,11 +122,16 @@ export async function getWorkScheduleSection(budgetId: string, userId: string): 
 
   return {
     ...view,
-    groups: view.groups.map((group) => {
-      const sourceSubBudget = subBudgets.find((subBudget) => subBudget.id === group.subBudgetId);
+    groups: orderedSubBudgets.map((subBudget) => {
+      const group = view.groups.find((candidate) => candidate.subBudgetId === subBudget.id);
+      const lines = group?.lines ?? [];
+
       return {
-        ...group,
-        rows: sourceSubBudget ? buildWorkScheduleGroupRows(sourceSubBudget, group.lines) : group.lines.map((line) => ({ kind: "line", rowId: line.budgetItemId, line })),
+        subBudgetId: subBudget.id,
+        subBudgetName: subBudget.name,
+        totalAmount: group?.totalAmount ?? 0,
+        lines,
+        rows: buildWorkScheduleGroupRows(subBudget, lines),
       };
     }),
   };

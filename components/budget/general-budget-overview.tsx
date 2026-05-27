@@ -467,10 +467,15 @@ export function GeneralBudgetOverview({
                                   className="flex items-center gap-3"
                                   style={{ paddingLeft: `${row.depth * 18}px` }}
                                 >
-                                  <Badge className="bg-white/80 text-slate-700">
+                                  <span className="min-w-0 font-medium text-slate-900">{row.level.name}</span>
+                                  <span
+                                    className={cn(
+                                      "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
+                                      isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
+                                    )}
+                                  >
                                     {getLevelTypeLabel(row.level.type)}
-                                  </Badge>
-                                  <span className="font-medium text-slate-900">{row.level.name}</span>
+                                  </span>
                                 </div>
                               </TD>
                               <TD colSpan={4} />
@@ -582,10 +587,15 @@ export function GeneralBudgetOverview({
                                 className="flex items-center gap-3"
                                 style={{ paddingLeft: `${row.depth * 18}px` }}
                               >
-                                <Badge className="bg-white/80 text-slate-700">
+                                <span className="min-w-0 font-medium text-slate-900">{row.level.name}</span>
+                                <span
+                                  className={cn(
+                                    "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
+                                    isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
+                                  )}
+                                >
                                   {getLevelTypeLabel(row.level.type)}
-                                </Badge>
-                                <span className="font-medium text-slate-900">{row.level.name}</span>
+                                </span>
                               </div>
                             </TD>
                             <TD colSpan={4} />

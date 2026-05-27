@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
 import type {
   WorkScheduleCurvePointRecord,
   WorkScheduleLineRecord,
@@ -170,13 +171,23 @@ export function buildWorkScheduleCurveSeries(input: CurveSeriesInput): WorkSched
 }
 
 export function buildWorkScheduleView(input: WorkScheduleViewInput): WorkScheduleViewRecord {
-  const lines = [...input.lines].sort((left, right) => {
-    const subBudgetComparison = left.subBudgetName.localeCompare(right.subBudgetName, "es");
-    if (subBudgetComparison !== 0) {
-      return subBudgetComparison;
-    }
+  const criticalPathResult = calculateWorkScheduleCriticalPath(input.lines);
+  const lines = input.lines.map((line) => {
+    const criticalPathItem = criticalPathResult.itemsByBudgetItemId.get(line.budgetItemId);
 
-    return left.itemCode.localeCompare(right.itemCode, "es", { numeric: true });
+    return {
+      ...line,
+      criticalPath: criticalPathItem
+        ? {
+            earlyStartDay: criticalPathItem.earlyStartDay,
+            earlyFinishDay: criticalPathItem.earlyFinishDay,
+            lateStartDay: criticalPathItem.lateStartDay,
+            lateFinishDay: criticalPathItem.lateFinishDay,
+            totalSlackDays: criticalPathItem.totalSlackDays,
+            isCritical: criticalPathItem.isCritical,
+          }
+        : null,
+    };
   });
 
   const groupsMap = new Map<string, WorkScheduleViewRecord["groups"][number]>();
@@ -213,7 +224,7 @@ export function buildWorkScheduleView(input: WorkScheduleViewInput): WorkSchedul
     budgetName: input.budgetName,
     projectName: input.projectName,
     currency: input.currency,
-    groups: [...groupsMap.values()].sort((left, right) => left.subBudgetName.localeCompare(right.subBudgetName, "es")),
+    groups: [...groupsMap.values()],
     valuationCalendar: buildWorkScheduleValuationCalendar({
       currency: input.currency,
       lines,
@@ -229,6 +240,13 @@ export function buildWorkScheduleView(input: WorkScheduleViewInput): WorkSchedul
     timeline: {
       startDate: getTimelineStart(lines),
       endDate: getTimelineEnd(lines),
+    },
+    criticalPath: {
+      status: criticalPathResult.status,
+      projectDurationDays: criticalPathResult.projectDurationDays,
+      scheduledItemCount: criticalPathResult.itemsByBudgetItemId.size,
+      criticalItemCount: [...criticalPathResult.itemsByBudgetItemId.values()].filter((item) => item.isCritical).length,
+      issues: criticalPathResult.issues,
     },
   };
 }

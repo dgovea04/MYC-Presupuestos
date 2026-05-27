@@ -106,6 +106,15 @@ describe("report excel exports", () => {
     expect(sheet?.getCell("E6").value).toBe("987654321");
   });
 
+  it("quotes currency literals in Excel number formats", async () => {
+    const workbookBuffer = await createBudgetWorkbook(budgetFixture, undefined, 2, undefined);
+    const workbook = new ExcelJS.Workbook();
+
+    await workbook.xlsx.load(workbookBuffer);
+
+    expect(workbook.getWorksheet("Presupuesto")?.getCell("E8").numFmt).toBe('"S/" #,##0.00');
+  });
+
   it("writes responsible technical metadata into the APU workbook header", async () => {
     const workbookBuffer = await createApuWorkbook(
       budgetFixture,

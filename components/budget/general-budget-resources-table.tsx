@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { ExportPanel } from "@/components/exports/export-panel";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
@@ -12,14 +13,17 @@ import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { StaticTableFrame } from "@/components/ui/virtualized-table-frame";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import type { GeneralBudgetResourceSummaryResult } from "@/types/budget-sections";
 
 export function GeneralBudgetResourcesTable({
+  budgetId,
   summary,
   currency,
 }: {
+  budgetId: string;
   summary: GeneralBudgetResourceSummaryResult;
   currency: string;
 }) {
@@ -66,7 +70,7 @@ export function GeneralBudgetResourcesTable({
           description="Consolidado automatico a partir de los APUs de los Sub Presupuestos del proyecto. Esta vista es operativa y de solo lectura."
           metrics={<OperationalMetricBadge tone="accent">{summary.resources.length} insumos en origen</OperationalMetricBadge>}
           controls={
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_220px_240px]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_220px_240px_auto]">
               <Input
                 placeholder="Buscar por codigo, descripcion o unidad"
                 value={query}
@@ -87,6 +91,12 @@ export function GeneralBudgetResourcesTable({
                   </option>
                 ))}
               </Select>
+              <ExportPanel
+                buttonLabel="Exportar"
+                defaultPreset="lista_insumos_derivada"
+                definition={getExportDefinition("budget_resources")}
+                targetId={budgetId}
+              />
             </div>
           }
         />

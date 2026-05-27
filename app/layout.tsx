@@ -46,8 +46,10 @@ export default async function RootLayout({
       style={htmlStyle}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
+      <head>
         <Script id="app-preferences-bootstrap" src="/app-preferences-bootstrap.js" strategy="beforeInteractive" />
+      </head>
+      <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
         {children}
       </body>
     </html>

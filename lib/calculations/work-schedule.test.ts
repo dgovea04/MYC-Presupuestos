@@ -172,6 +172,75 @@ describe("buildWorkScheduleCurveSeries", () => {
 });
 
 describe("buildWorkScheduleView", () => {
+  it("attaches critical path metadata and summary to scheduled lines", () => {
+    const result = buildWorkScheduleView({
+      budgetId: "budget-1",
+      budgetName: "Presupuesto General",
+      currency: "PEN",
+      projectName: "Proyecto demo",
+      lines: [
+        {
+          budgetItemId: "item-1",
+          itemCode: "01",
+          description: "Ruta principal",
+          unit: "UND",
+          quantity: 1,
+          unitPrice: 1,
+          partial: 1,
+          subBudgetId: "sub-1",
+          subBudgetName: "General",
+          startDate: "2026-03-01",
+          endDate: "2026-03-05",
+          durationDays: 5,
+          monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
+        },
+        {
+          budgetItemId: "item-2",
+          itemCode: "02",
+          description: "Rama secundaria",
+          unit: "UND",
+          quantity: 1,
+          unitPrice: 1,
+          partial: 1,
+          subBudgetId: "sub-1",
+          subBudgetName: "General",
+          startDate: "2026-03-01",
+          endDate: "2026-03-02",
+          durationDays: 2,
+          monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
+        },
+        {
+          budgetItemId: "item-3",
+          itemCode: "03",
+          description: "Cierre",
+          unit: "UND",
+          quantity: 1,
+          unitPrice: 1,
+          partial: 1,
+          subBudgetId: "sub-1",
+          subBudgetName: "General",
+          startDate: "2026-03-06",
+          endDate: "2026-03-06",
+          durationDays: 1,
+          predecessor: "01FS,02FS",
+          monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
+        },
+      ],
+    });
+
+    const lines = result.groups.flatMap((group) => group.lines);
+
+    expect(result.criticalPath).toMatchObject({
+      status: "calculated",
+      criticalItemCount: 2,
+      projectDurationDays: 6,
+      issues: [],
+    });
+    expect(lines.find((line) => line.budgetItemId === "item-1")?.criticalPath).toMatchObject({ isCritical: true, totalSlackDays: 0 });
+    expect(lines.find((line) => line.budgetItemId === "item-2")?.criticalPath).toMatchObject({ isCritical: false, totalSlackDays: 3 });
+    expect(lines.find((line) => line.budgetItemId === "item-3")?.criticalPath).toMatchObject({ isCritical: true, totalSlackDays: 0 });
+  });
+
   it("groups lines by sub budget and exposes timeline bounds for the gantt view", () => {
     const result = buildWorkScheduleView({
       budgetId: "budget-1",
@@ -216,13 +285,14 @@ describe("buildWorkScheduleView", () => {
 
     expect(result.groups).toHaveLength(2);
     expect(result.groups[0]).toMatchObject({
-      subBudgetName: "Arquitectura",
-      totalAmount: 200,
-    });
-    expect(result.groups[1]).toMatchObject({
       subBudgetName: "Estructuras",
       totalAmount: 1000,
     });
+    expect(result.groups[1]).toMatchObject({
+      subBudgetName: "Arquitectura",
+      totalAmount: 200,
+    });
+    expect(result.valuationCalendar.rows.map((row) => row.budgetItemId)).toEqual(["item-1", "item-2"]);
     expect(result.timeline).toMatchObject({
       startDate: "2026-03-01",
       endDate: "2026-03-21",

@@ -14,6 +14,7 @@ import {
   SIDEBAR_WIDTH_CSS_VARIABLE,
 } from "@/lib/layout/sidebar-mode";
 import { LiveDataRefresh } from "@/components/layout/live-data-refresh";
+import { NotesDrawer } from "@/components/notes/notes-drawer";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import { AppViewModeProvider } from "@/components/view-mode/app-view-mode-provider";
 import { ViewModeToggle } from "@/components/budget/view-mode-toggle";
@@ -97,12 +98,15 @@ export async function AppShell({
                     <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">Vista global</p>
                     <ViewModeToggle />
                   </div>
-                  <Link href="/projects/new">
-                    <Button className="gap-2 shadow-sm shadow-sky-950/10">
-                      <Plus className="h-4 w-4" />
-                      Nuevo proyecto
-                    </Button>
-                  </Link>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center md:justify-end">
+                    <NotesDrawer />
+                    <Link href="/projects/new">
+                      <Button className="w-full gap-2 shadow-sm shadow-sky-950/10 sm:w-auto">
+                        <Plus className="h-4 w-4" />
+                        Nuevo proyecto
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </header>
 

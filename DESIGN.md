@@ -69,7 +69,7 @@ The interface should be professional enough for engineers but simple enough for 
 | Background | `#F8FAFC` | Main page background |
 | White | `#FFFFFF` | Cards and panels |
 
-### Supporting Colors
+### Supporting Colorsestra dos valor
 
 | Name | Hex | Usage |
 |---|---:|---|

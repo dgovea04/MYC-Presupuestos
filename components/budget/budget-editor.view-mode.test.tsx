@@ -9,10 +9,18 @@ import type { BudgetRecord } from "@/types/budget";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
 
+const notesMocks = vi.hoisted(() => ({
+  openNoteDraft: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     refresh: vi.fn(),
   }),
+}));
+
+vi.mock("@/components/notes/notes-drawer", () => ({
+  openNoteDraft: notesMocks.openNoteDraft,
 }));
 
 let activeContainer: HTMLDivElement | null = null;
@@ -115,6 +123,29 @@ describe("BudgetEditor view mode integration", () => {
 
     expect(getByText("Editor APU")).toBeTruthy();
     expect(getByText("Partida sin APU")).toBeTruthy();
+  });
+
+  it("opens a linked note draft from the item action menu", async () => {
+    const { getButtonByLabel, getButtonByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    await act(async () => {
+      getButtonByLabel("Abrir acciones de la partida").click();
+    });
+
+    await act(async () => {
+      getButtonByText("Nota").click();
+    });
+
+    expect(notesMocks.openNoteDraft).toHaveBeenCalledWith({
+      projectId: "project-1",
+      budgetId: "budget-1",
+      budgetItemId: "item-1",
+      budgetItemCode: "IT-1",
+      budgetItemDescription: "Partida demo",
+      sourcePath: "/budgets/budget-1",
+    });
   });
 
   it("passes effective compact density to the APU sheet when excel mode forces compact", async () => {
@@ -906,6 +937,55 @@ describe("BudgetEditor view mode integration", () => {
     const row = getByText("Sin PU").closest("tr");
     expect(row?.className).toContain("rose");
     expect(row?.className).not.toContain("amber-50/70");
+  });
+
+  it("opens a linked note draft when the Sin PU badge is clicked", async () => {
+    const { getButtonByText } = await renderEditor({
+      budget: createBudgetWithItemWithoutUsefulPu(),
+    });
+
+    await act(async () => {
+      getButtonByText("Sin PU").click();
+    });
+
+    expect(notesMocks.openNoteDraft).toHaveBeenCalledWith({
+      projectId: "project-1",
+      budgetId: "budget-1",
+      budgetItemId: "item-warning-1",
+      budgetItemCode: "IT-W1",
+      budgetItemDescription: "Partida sin PU útil",
+      sourcePath: "/budgets/budget-1",
+      initialBody: "Revisar precio unitario de la partida IT-W1 - Partida sin PU útil.",
+    });
+  });
+
+  it("shows a floating item note preview when hovering the Sin PU badge", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        notes: [
+          {
+            id: "note-1",
+            body: "Validar precio unitario antes de cerrar el presupuesto.",
+            priority: "HIGH",
+            status: "OPEN",
+            sourcePath: "/budgets/budget-1",
+            createdAt: "2026-05-27T10:00:00.000Z",
+            updatedAt: "2026-05-27T10:00:00.000Z",
+          },
+        ],
+      }),
+    } as Response);
+    const { getButtonByText, getByText } = await renderEditor({
+      budget: createBudgetWithItemWithoutUsefulPu(),
+    });
+
+    await act(async () => {
+      getButtonByText("Sin PU").dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith("/api/notes?status=OPEN&budgetItemId=item-warning-1");
+    expect(getByText("Validar precio unitario antes de cerrar el presupuesto.")).toBeTruthy();
   });
 
   it("explains when title and subtitle were inferred by pattern for text-only guided paste", async () => {

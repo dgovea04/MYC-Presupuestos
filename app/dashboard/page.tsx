@@ -11,6 +11,7 @@ import {
   FolderKanban,
   Settings2,
   Sigma,
+  StickyNote,
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -22,7 +23,7 @@ import { FilterPillLink } from "@/components/ui/filter-pill-link";
 import { ToneBadge } from "@/components/ui/context-badges";
 import { OperationalPanel, OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { getAuthSession } from "@/lib/auth/session";
-import { getDashboardStats } from "@/lib/data/dashboard";
+import { getDashboardStats, type DashboardPendingItem } from "@/lib/data/dashboard";
 import { getProjectStatusLabel } from "@/lib/project-status";
 import { getUserSettings } from "@/lib/data/settings";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -30,7 +31,7 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ priority?: string; pendingPage?: string; activityPage?: string }>;
+  searchParams?: Promise<{ priority?: string; pendingPage?: string; activityPage?: string; pendingTab?: string }>;
 }) {
   const session = await getAuthSession();
   if (!session) {
@@ -40,20 +41,30 @@ export default async function DashboardPage({
   const resolvedSearchParams = (await searchParams) ?? {};
   const [stats, settings] = await Promise.all([getDashboardStats(session.user.id), getUserSettings(session.user.id)]);
   const selectedPriority = resolvePendingPriorityFilter(resolvedSearchParams.priority);
+  const selectedPendingTab = resolvePendingTab(resolvedSearchParams.pendingTab);
   const requestedPendingPage = resolvePageNumber(resolvedSearchParams.pendingPage);
   const requestedActivityPage = resolvePageNumber(resolvedSearchParams.activityPage);
+  const actionPendingItems = stats.pendingItems.filter((item) => item.type !== "USER_NOTE_TASK");
+  const notePendingItems = stats.pendingItems.filter((item) => item.type === "USER_NOTE_TASK");
+  const visiblePendingItems = selectedPendingTab === "notes" ? notePendingItems : actionPendingItems;
   const pendingCounts = {
     all: stats.pendingItems.length,
     high: stats.pendingItems.filter((item) => item.priority === "high").length,
     medium: stats.pendingItems.filter((item) => item.priority === "medium").length,
     low: stats.pendingItems.filter((item) => item.priority === "low").length,
   };
+  const visiblePendingCounts = {
+    all: visiblePendingItems.length,
+    high: visiblePendingItems.filter((item) => item.priority === "high").length,
+    medium: visiblePendingItems.filter((item) => item.priority === "medium").length,
+    low: visiblePendingItems.filter((item) => item.priority === "low").length,
+  };
   const filteredPendingItems =
     selectedPriority === "all"
-      ? stats.pendingItems
-      : stats.pendingItems.filter((item) => item.priority === selectedPriority);
+      ? visiblePendingItems
+      : visiblePendingItems.filter((item) => item.priority === selectedPriority);
   const recentActivitySummary = summarizeRecentActivity(stats.recentActivity);
-  const pendingTypeSummary = summarizePendingTypes(stats.pendingItems);
+  const pendingTypeSummary = summarizePendingTypes(actionPendingItems);
   const paginatedPendingItems = paginateItems(filteredPendingItems, requestedPendingPage, DASHBOARD_SECTION_PAGE_SIZE);
   const paginatedRecentActivity = paginateItems(stats.recentActivity, requestedActivityPage, DASHBOARD_SECTION_PAGE_SIZE);
   const groupedPendingItems = groupPendingItemsByPriority(paginatedPendingItems.items);
@@ -196,9 +207,34 @@ export default async function DashboardPage({
           <CardContent className="space-y-4 p-6">
             <OperationalPanel
               title="Pendientes por atender"
-              description="Bandeja operativa para detectar proyectos sin presupuesto, formula o reajustes registrados."
+              description="Bandeja operativa para separar acciones automaticas y notas creadas por el equipo."
             />
-            {stats.pendingItems.length > 0 ? (
+            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+              <PendingTabLink
+                href={buildDashboardHref({
+                  pendingTab: "actions",
+                  priority: undefined,
+                  pendingPage: 1,
+                  activityPage: paginatedRecentActivity.page,
+                })}
+                label="Acciones pendientes"
+                count={actionPendingItems.length}
+                active={selectedPendingTab === "actions"}
+              />
+              <PendingTabLink
+                href={buildDashboardHref({
+                  pendingTab: "notes",
+                  priority: undefined,
+                  pendingPage: 1,
+                  activityPage: paginatedRecentActivity.page,
+                })}
+                label="Notas por atender"
+                count={notePendingItems.length}
+                active={selectedPendingTab === "notes"}
+                icon={<StickyNote className="h-3.5 w-3.5" />}
+              />
+            </div>
+            {selectedPendingTab === "actions" && actionPendingItems.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <CompactStatCard label="Sin presupuesto" value={String(pendingTypeSummary.missingGeneralBudget)} tone="rose" />
                 <CompactStatCard label="Sin formula" value={String(pendingTypeSummary.missingFormula)} tone="amber" />
@@ -209,54 +245,66 @@ export default async function DashboardPage({
             <div className="flex flex-wrap gap-2">
               <FilterPillLink
                 href={buildDashboardHref({
+                  pendingTab: selectedPendingTab,
                   priority: undefined,
                   pendingPage: 1,
                   activityPage: paginatedRecentActivity.page,
                 })}
                 label="Todos"
-                count={pendingCounts.all}
+                count={visiblePendingCounts.all}
                 active={selectedPriority === "all"}
               />
               <FilterPillLink
                 href={buildDashboardHref({
+                  pendingTab: selectedPendingTab,
                   priority: "high",
                   pendingPage: 1,
                   activityPage: paginatedRecentActivity.page,
                 })}
                 label="Alta"
-                count={pendingCounts.high}
+                count={visiblePendingCounts.high}
                 active={selectedPriority === "high"}
                 tone="rose"
               />
               <FilterPillLink
                 href={buildDashboardHref({
+                  pendingTab: selectedPendingTab,
                   priority: "medium",
                   pendingPage: 1,
                   activityPage: paginatedRecentActivity.page,
                 })}
                 label="Media"
-                count={pendingCounts.medium}
+                count={visiblePendingCounts.medium}
                 active={selectedPriority === "medium"}
                 tone="amber"
               />
               <FilterPillLink
                 href={buildDashboardHref({
+                  pendingTab: selectedPendingTab,
                   priority: "low",
                   pendingPage: 1,
                   activityPage: paginatedRecentActivity.page,
                 })}
                 label="Baja"
-                count={pendingCounts.low}
+                count={visiblePendingCounts.low}
                 active={selectedPriority === "low"}
                 tone="slate"
               />
             </div>
             {filteredPendingItems.length === 0 ? (
               <EmptyState
-                title={stats.pendingItems.length === 0 ? "Todo al dia" : "Sin pendientes en este filtro"}
+                title={
+                  visiblePendingItems.length === 0
+                    ? selectedPendingTab === "notes"
+                      ? "Sin notas por atender"
+                      : "Todo al dia"
+                    : "Sin pendientes en este filtro"
+                }
                 description={
-                  stats.pendingItems.length === 0
-                    ? "No encontramos pendientes operativos en proyectos, presupuestos ni reajustes."
+                  visiblePendingItems.length === 0
+                    ? selectedPendingTab === "notes"
+                      ? "Las notas abiertas apareceran aqui como una lista separada de seguimiento."
+                      : "No encontramos pendientes operativos en proyectos, presupuestos ni reajustes."
                     : "Prueba otra prioridad para revisar el resto de pendientes operativos."
                 }
               />
@@ -297,7 +345,7 @@ export default async function DashboardPage({
                     <div className="space-y-3 border-t border-slate-100 px-4 py-4">
                       {group.items.map((item) => (
                         <DashboardRecordLink
-                          key={`${item.projectId}-${item.type}`}
+                          key={item.id}
                           href={item.href}
                           tone="amber"
                           metaTitle={getPendingActionLabel(item.type)}
@@ -306,7 +354,7 @@ export default async function DashboardPage({
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-medium text-slate-900">{item.projectName}</p>
-                              <ProjectStatusBadge status={item.status} />
+                              {item.type === "USER_NOTE_TASK" ? null : <ProjectStatusBadge status={item.status} />}
                               <ToneBadge label={getPendingTypeLabel(item.type)} tone={getPendingTypeTone(item.type)} />
                             </div>
                             <p className="text-sm text-slate-600">{item.companyName}</p>
@@ -321,11 +369,13 @@ export default async function DashboardPage({
                   currentPage={paginatedPendingItems.page}
                   totalPages={paginatedPendingItems.totalPages}
                   previousHref={buildDashboardHref({
+                    pendingTab: selectedPendingTab,
                     priority: selectedPriority === "all" ? undefined : selectedPriority,
                     pendingPage: paginatedPendingItems.page - 1,
                     activityPage: paginatedRecentActivity.page,
                   })}
                   nextHref={buildDashboardHref({
+                    pendingTab: selectedPendingTab,
                     priority: selectedPriority === "all" ? undefined : selectedPriority,
                     pendingPage: paginatedPendingItems.page + 1,
                     activityPage: paginatedRecentActivity.page,
@@ -382,11 +432,13 @@ export default async function DashboardPage({
                   currentPage={paginatedRecentActivity.page}
                   totalPages={paginatedRecentActivity.totalPages}
                   previousHref={buildDashboardHref({
+                    pendingTab: selectedPendingTab,
                     priority: selectedPriority === "all" ? undefined : selectedPriority,
                     pendingPage: paginatedPendingItems.page,
                     activityPage: paginatedRecentActivity.page - 1,
                   })}
                   nextHref={buildDashboardHref({
+                    pendingTab: selectedPendingTab,
                     priority: selectedPriority === "all" ? undefined : selectedPriority,
                     pendingPage: paginatedPendingItems.page,
                     activityPage: paginatedRecentActivity.page + 1,
@@ -680,6 +732,44 @@ function SecondaryLink({ href, children }: { href: string; children: ReactNode }
   );
 }
 
+function PendingTabLink({
+  href,
+  label,
+  count,
+  active,
+  icon,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  active: boolean;
+  icon?: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition sm:flex-none",
+        active
+          ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
+          : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
+      )}
+      aria-current={active ? "page" : undefined}
+    >
+      {icon}
+      <span>{label}</span>
+      <span
+        className={cn(
+          "rounded-full px-2 py-0.5 text-[11px]",
+          active ? "bg-sky-50 text-sky-700" : "bg-slate-200/70 text-slate-600",
+        )}
+      >
+        {count}
+      </span>
+    </Link>
+  );
+}
+
 function getPriorityLabel(priority: "high" | "medium" | "low") {
   if (priority === "high") return "Alta";
   if (priority === "medium") return "Media";
@@ -698,6 +788,14 @@ function resolvePendingPriorityFilter(value: string | undefined) {
   }
 
   return "all";
+}
+
+function resolvePendingTab(value: string | undefined) {
+  if (value === "notes") {
+    return "notes";
+  }
+
+  return "actions";
 }
 
 function resolvePageNumber(value: string | undefined) {
@@ -723,15 +821,21 @@ function paginateItems<T>(items: T[], requestedPage: number, pageSize: number) {
 }
 
 function buildDashboardHref({
+  pendingTab,
   priority,
   pendingPage,
   activityPage,
 }: {
+  pendingTab?: "actions" | "notes";
   priority?: "high" | "medium" | "low";
   pendingPage?: number;
   activityPage?: number;
 }) {
   const searchParams = new URLSearchParams();
+
+  if (pendingTab === "notes") {
+    searchParams.set("pendingTab", pendingTab);
+  }
 
   if (priority) {
     searchParams.set("priority", priority);
@@ -945,39 +1049,35 @@ function getEventTypeIconConfig(
   };
 }
 
-function getPendingTypeLabel(
-  type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
-) {
+function getPendingTypeLabel(type: DashboardPendingItem["type"]) {
   if (type === "MISSING_GENERAL_BUDGET") return "Presupuesto";
   if (type === "MISSING_POLYNOMIAL_FORMULA") return "Formula";
   if (type === "MISSING_ADJUSTMENTS") return "Reajuste";
+  if (type === "USER_NOTE_TASK") return "Nota";
   return "Seguimiento";
 }
 
-function getPendingActionLabel(
-  type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
-) {
+function getPendingActionLabel(type: DashboardPendingItem["type"]) {
   if (type === "MISSING_GENERAL_BUDGET") return "Crear presupuesto";
   if (type === "MISSING_POLYNOMIAL_FORMULA") return "Generar formula";
   if (type === "MISSING_ADJUSTMENTS") return "Registrar reajuste";
+  if (type === "USER_NOTE_TASK") return "Abrir nota";
   return "Revisar proyecto";
 }
 
-function getPendingTypeTone(
-  type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
-) {
+function getPendingTypeTone(type: DashboardPendingItem["type"]) {
   if (type === "MISSING_GENERAL_BUDGET") return "rose" as const;
   if (type === "MISSING_POLYNOMIAL_FORMULA") return "amber" as const;
   if (type === "MISSING_ADJUSTMENTS") return "sky" as const;
+  if (type === "USER_NOTE_TASK") return "violet" as const;
   return "slate" as const;
 }
 
-function getPendingSummaryBadgeClass(
-  type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY",
-) {
+function getPendingSummaryBadgeClass(type: DashboardPendingItem["type"]) {
   if (type === "MISSING_GENERAL_BUDGET") return "bg-rose-50 text-rose-700";
   if (type === "MISSING_POLYNOMIAL_FORMULA") return "bg-amber-50 text-amber-700";
   if (type === "MISSING_ADJUSTMENTS") return "bg-sky-50 text-sky-700";
+  if (type === "USER_NOTE_TASK") return "bg-violet-50 text-violet-700";
   return "bg-slate-100 text-slate-700";
 }
 
@@ -1032,7 +1132,7 @@ function formatRelativeActivityDay(value: Date) {
 
 function summarizePendingTypes(
   items: Array<{
-    type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY";
+    type: DashboardPendingItem["type"];
   }>,
 ) {
   return {
@@ -1045,13 +1145,14 @@ function summarizePendingTypes(
 
 function summarizePendingGroupTypes(
   items: Array<{
-    type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY";
+    type: DashboardPendingItem["type"];
   }>,
 ) {
   const orderedTypes = [
     "MISSING_GENERAL_BUDGET",
     "MISSING_POLYNOMIAL_FORMULA",
     "MISSING_ADJUSTMENTS",
+    "USER_NOTE_TASK",
     "NO_RECENT_ACTIVITY",
   ] as const;
 
@@ -1065,6 +1166,7 @@ function summarizePendingGroupTypes(
 
 function groupPendingItemsByPriority(
   items: Array<{
+    id: string;
     projectId: string;
     projectName: string;
     companyName: string;
@@ -1073,7 +1175,7 @@ function groupPendingItemsByPriority(
     priority: "high" | "medium" | "low";
     updatedAt: Date;
     href: string;
-    type: "MISSING_GENERAL_BUDGET" | "MISSING_POLYNOMIAL_FORMULA" | "MISSING_ADJUSTMENTS" | "NO_RECENT_ACTIVITY";
+    type: DashboardPendingItem["type"];
   }>,
 ) {
   const orderedPriorities = ["high", "medium", "low"] as const;

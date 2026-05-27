@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
+import { ExportPanel } from "@/components/exports/export-panel";
 import { Button } from "@/components/ui/button";
 import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { calculateGeneralExpenseStructure } from "@/lib/calculations/general-expense-structure";
+import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import type {
   GeneralExpenseItemInput,
@@ -373,6 +375,12 @@ export function GeneralExpensesManager({
             <div className="flex items-center gap-2">
               {error ? <p className="text-sm text-rose-600">{error}</p> : null}
               {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+              <ExportPanel
+                buttonLabel="Exportar"
+                defaultPreset="gastos_generales_detallado"
+                definition={getExportDefinition("general_expenses")}
+                targetId={budgetId}
+              />
               <ToolbarIconButton
                 label={saving ? "Guardando" : "Guardar ahora"}
                 onClick={() => void saveStructure()}

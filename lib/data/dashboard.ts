@@ -1,12 +1,15 @@
 import type { ActivityEventType } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { listNoteTasks } from "@/lib/data/notes";
+import type { NoteTaskPriority, NoteTaskRecord } from "@/types/notes";
 
 type DashboardPendingType =
   | "MISSING_GENERAL_BUDGET"
   | "MISSING_POLYNOMIAL_FORMULA"
   | "MISSING_ADJUSTMENTS"
-  | "NO_RECENT_ACTIVITY";
+  | "NO_RECENT_ACTIVITY"
+  | "USER_NOTE_TASK";
 
 type DashboardActivityType =
   | "PROJECT_UPDATED"
@@ -18,6 +21,7 @@ type DashboardActivityType =
   | "ADJUSTMENT_REGISTERED";
 
 export type DashboardPendingItem = {
+  id: string;
   projectId: string;
   projectName: string;
   companyName: string;
@@ -39,7 +43,7 @@ export type DashboardActivityItem = {
 };
 
 export async function getDashboardStats(userId: string) {
-  const [companiesCount, projects, activityEvents] = await Promise.all([
+  const [companiesCount, projects, activityEvents, noteTasks] = await Promise.all([
     prisma.company.count({
       where: { userId },
     }),
@@ -111,6 +115,7 @@ export async function getDashboardStats(userId: string) {
           orderBy: { createdAt: "desc" },
           take: 25,
         }),
+    listNoteTasks(userId, { status: "OPEN" }),
   ]);
 
   const projectsWithCompany = projects.map((project) => ({
@@ -156,6 +161,7 @@ export async function getDashboardStats(userId: string) {
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
+  const pendingItems = [...getPendingItems(projectsWithCompany), ...mapNoteTasksToPendingItems(noteTasks)];
 
   return {
     companiesCount,
@@ -165,7 +171,7 @@ export async function getDashboardStats(userId: string) {
     monthlyAdjustmentsCount: adjustments.filter(
       (adjustment) => adjustment.month === currentMonth && adjustment.year === currentYear,
     ).length,
-    pendingCount: getPendingItems(projectsWithCompany).length,
+    pendingCount: pendingItems.length,
     recentProject: projectsWithCompany[0]
       ? {
           id: projectsWithCompany[0].id,
@@ -199,12 +205,35 @@ export async function getDashboardStats(userId: string) {
       totalAmount: decimalToNumber(budget.totalAmount),
       currency: budget.currency,
     })),
-    pendingItems: getPendingItems(projectsWithCompany),
+    pendingItems,
     recentActivity: (activityEvents.length > 0
       ? activityEvents.map(mapActivityEvent)
       : getRecentActivity(projectsWithCompany, generalBudgets, formulas, adjustments)
     ).slice(0, 25),
   };
+}
+
+export function mapNoteTasksToPendingItems(notes: NoteTaskRecord[]): DashboardPendingItem[] {
+  return notes
+    .filter((note) => note.status === "OPEN")
+    .map((note) => ({
+      id: `note-${note.id}`,
+      projectId: note.projectId ?? note.id,
+      projectName: note.projectName ?? note.budgetName ?? "Nota general",
+      companyName: "Sticky note",
+      status: "PLANNING",
+      observation: note.body,
+      priority: mapNotePriority(note.priority),
+      updatedAt: new Date(note.updatedAt),
+      href: note.sourcePath || "/dashboard",
+      type: "USER_NOTE_TASK",
+    }));
+}
+
+function mapNotePriority(priority: NoteTaskPriority): DashboardPendingItem["priority"] {
+  if (priority === "HIGH") return "high";
+  if (priority === "MEDIUM") return "medium";
+  return "low";
 }
 
 function getPendingItems(
@@ -237,6 +266,7 @@ function getPendingItems(
 
     if (!generalBudget) {
       items.push({
+        id: `missing-general-budget-${project.id}`,
         projectId: project.id,
         projectName: project.name,
         companyName: project.companyName,
@@ -252,6 +282,7 @@ function getPendingItems(
 
     if (!latestFormula) {
       items.push({
+        id: `missing-polynomial-formula-${project.id}`,
         projectId: project.id,
         projectName: project.name,
         companyName: project.companyName,
@@ -267,6 +298,7 @@ function getPendingItems(
 
     if (latestFormula.adjustments.length === 0) {
       items.push({
+        id: `missing-adjustments-${project.id}`,
         projectId: project.id,
         projectName: project.name,
         companyName: project.companyName,
@@ -281,6 +313,7 @@ function getPendingItems(
 
     if (Date.now() - project.updatedAt.getTime() > staleThresholdMs) {
       items.push({
+        id: `no-recent-activity-${project.id}`,
         projectId: project.id,
         projectName: project.name,
         companyName: project.companyName,

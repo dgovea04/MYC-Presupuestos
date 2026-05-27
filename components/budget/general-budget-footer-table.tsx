@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Save, Trash2 } from "lucide-react";
+import { ExportPanel } from "@/components/exports/export-panel";
 import { Button } from "@/components/ui/button";
 import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn } from "@/lib/utils";
 import type { BudgetFooterStructure, BudgetFooterRowInput } from "@/types/budget-sections";
 
@@ -216,6 +218,12 @@ export function GeneralBudgetFooterTable({
             <div className="flex items-center gap-2">
               {error ? <p className="text-sm text-rose-600">{error}</p> : null}
               {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+              <ExportPanel
+                buttonLabel="Exportar"
+                defaultPreset="pie_presupuesto_detallado"
+                definition={getExportDefinition("budget_footer")}
+                targetId={budgetId}
+              />
               <ToolbarIconButton label="Agregar fila" onClick={addRow} disabled={saving}>
                 <Plus className="h-4 w-4" />
               </ToolbarIconButton>

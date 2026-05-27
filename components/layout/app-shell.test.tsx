@@ -61,6 +61,10 @@ vi.mock("@/components/budget/view-mode-toggle", () => ({
   ViewModeToggle: () => <div>Toggle</div>,
 }));
 
+vi.mock("@/components/notes/notes-drawer", () => ({
+  NotesDrawer: () => <button>Notas</button>,
+}));
+
 import { getAuthSession } from "@/lib/auth/session";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppShell } from "@/components/layout/app-shell";
@@ -97,6 +101,7 @@ describe("AppShell", () => {
     expect(markup).toContain('data-avatar="/uploads/avatars/user-1.webp"');
     expect(markup).toContain('data-name="Maria Actualizada"');
     expect(markup).toContain('data-email="maria@example.com"');
+    expect(markup).toContain("Notas");
   });
 
   it("skips fetching the session when currentUser and settings are provided", async () => {

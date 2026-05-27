@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ExportPanel } from "@/components/exports/export-panel";
 import { ResourceCreateSheet } from "@/components/resources/resource-create-sheet";
 import { ResourcesTable } from "@/components/resources/resources-table";
+import { getExportDefinition } from "@/lib/exports/definitions";
 import type { ResourceCategory, ResourceRecord } from "@/types/resource";
 
 export function ResourcesPageContent({
@@ -43,6 +45,15 @@ export function ResourcesPageContent({
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <ExportPanel
+          buttonLabel="Exportar catalogo"
+          defaultPreset="catalogo_insumos"
+          definition={getExportDefinition("resources")}
+          targetId="catalog"
+        />
+      </div>
+
       <ResourceCreateSheet
         open={isCreateFormOpen}
         companyId={companyId}

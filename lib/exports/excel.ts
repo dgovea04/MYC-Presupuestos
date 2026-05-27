@@ -37,7 +37,11 @@ function buildDecimalFormat(decimalPlaces: number) {
 }
 
 function createCurrencyNumberFormat(currency: string, decimalPlaces: number) {
-  return `${getCurrencySymbol(currency)} ${buildDecimalFormat(decimalPlaces)}`;
+  return `${quoteExcelNumberFormatLiteral(getCurrencySymbol(currency))} ${buildDecimalFormat(decimalPlaces)}`;
+}
+
+function quoteExcelNumberFormatLiteral(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 export async function createBudgetWorkbook(
@@ -454,10 +458,12 @@ function insertWorksheetImage(
     extension: asset.extension === "jpg" ? "jpeg" : asset.extension,
   });
 
-  sheet.addImage(imageId, {
-    tl: new ExcelJS.Anchor(range.tl),
-    br: new ExcelJS.Anchor(range.br),
-  });
+  const imageRange = {
+    tl: range.tl,
+    br: range.br,
+  } as unknown as Parameters<ExcelJS.Worksheet["addImage"]>[1];
+
+  sheet.addImage(imageId, imageRange);
 }
 
 function formatCurrencyColumns(

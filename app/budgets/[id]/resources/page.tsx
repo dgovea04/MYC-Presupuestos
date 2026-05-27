@@ -20,7 +20,7 @@ export default async function GeneralBudgetResourcesPage({ params }: { params: P
       currentUser={currentUser}
       settings={settings}
     >
-      <GeneralBudgetResourcesTable summary={summary} currency={budget.currency} />
+      <GeneralBudgetResourcesTable budgetId={budget.id} summary={summary} currency={budget.currency} />
     </GeneralBudgetSectionShell>
   );
 }

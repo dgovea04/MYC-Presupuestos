@@ -7,6 +7,81 @@ import { buildBudgetCoverSummary, buildDocumentSignatureSummary, type DocumentSi
 import { loadReportIdentityAssets, type ReportIdentityAssets } from "@/lib/exports/report-assets";
 
 const MAX_CURRENCY_DECIMALS = 4;
+const PDF_PAGE_MARGIN = 36;
+const PDF_TABLE_WIDTH = 523;
+const PDF_TABLE_HEADER_HEIGHT = 22;
+const PDF_PAGE_CONTENT_BOTTOM = 730;
+const APU_PARTIDA_GAP = 18;
+
+type BudgetPdfTableRowInput = {
+  code: string;
+  description: string;
+  unit: string;
+  quantity: string;
+  unitPrice: string;
+  partial: string;
+  depth: number;
+};
+
+type ApuPdfTableRowInput = {
+  resource: string;
+  unit: string;
+  crew: string;
+  quantity: string;
+  unitPrice: string;
+  subtotal: string;
+};
+
+export type BudgetPdfTableCellLayout = {
+  key: keyof Omit<BudgetPdfTableRowInput, "depth">;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  align?: "center" | "right";
+};
+
+export type ApuPdfTableCellLayout = {
+  key: keyof ApuPdfTableRowInput;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  align?: "center" | "right";
+};
+
+export type ApuPdfPartidaBlockInput = {
+  title: string;
+  subtitle: string;
+  rows: ApuPdfTableRowInput[];
+};
+
+export type PdfExportTable = {
+  title: string;
+  headers: string[];
+  rows: string[][];
+  columnWidths?: number[];
+  fontSize?: number;
+  headerFontSize?: number;
+  hideHeader?: boolean;
+  sectionRows?: number[];
+  emphasisRows?: number[];
+  startOnNewPage?: boolean;
+};
+
+type BudgetPdfTableColumn = {
+  key: BudgetPdfTableCellLayout["key"];
+  offset: number;
+  width: number;
+  align?: BudgetPdfTableCellLayout["align"];
+};
+
+type ApuPdfTableColumn = {
+  key: ApuPdfTableCellLayout["key"];
+  offset: number;
+  width: number;
+  align?: ApuPdfTableCellLayout["align"];
+};
 
 function normalizeDecimalPlaces(decimalPlaces: number) {
   if (!Number.isFinite(decimalPlaces)) {
@@ -30,7 +105,7 @@ export async function createBudgetPdf(
   const normalized = calculateBudgetRecord(budget);
   const rows = buildDisplayRows(normalized);
   const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
-  const doc = new PDFDocument({ size: "A4", margin: 36 });
+  const doc = new PDFDocument({ size: "A4", margin: PDF_PAGE_MARGIN });
   const chunks: Buffer[] = [];
   const identityAssets = await loadReportIdentityAssets(responsible);
 
@@ -44,39 +119,40 @@ export async function createBudgetPdf(
   doc.fontSize(12).text(normalized.name, { align: "center" });
   doc.moveDown();
 
-  doc.fontSize(10).fillColor("#334155");
   for (const line of buildResponsibleMetaLines(project, responsible)) {
-    doc.text(line);
+    drawHeaderMetaLine(doc, line.label, line.value);
   }
-  doc.text(`Moneda: ${normalized.currency}`);
+  drawHeaderMetaLine(doc, "Moneda", normalized.currency);
   doc.moveDown();
 
-  drawTableHeader(doc);
+  drawBudgetTableHeader(doc);
 
   for (const row of rows) {
-    ensurePage(doc);
-
     if (row.kind === "level") {
+      ensurePage(doc, 18);
       doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(9);
-      doc.text(row.level.code, 36, doc.y, { width: 55 });
-      doc.text(`${levelTypeLabel[row.level.type]}: ${row.level.name}`, 96 + row.depth * 12, doc.y, { width: 270 });
+      const y = doc.y;
+      doc.text(row.level.code, PDF_PAGE_MARGIN + 6, y, { width: 49 });
+      doc.text(`${levelTypeLabel[row.level.type]}: ${row.level.name}`, 96 + row.depth * 12, y, { width: 270 });
+      doc.y = y + 12;
       doc.moveDown(0.5);
       doc.font("Helvetica");
       continue;
     }
 
-    doc.fillColor("#334155").font("Helvetica").fontSize(8.5);
-    doc.text(row.item.code, 36, doc.y, { width: 55 });
-    doc.text(row.item.description, 96 + row.depth * 12, doc.y, { width: 250 });
-    doc.text(row.item.unit, 355, doc.y, { width: 35, align: "center" });
-    doc.text(row.item.quantity.toFixed(normalizedDecimals), 395, doc.y, { width: 55, align: "right" });
-    doc.text(row.item.unitPrice.toFixed(normalizedDecimals), 455, doc.y, { width: 60, align: "right" });
-    doc.text(row.item.partial.toFixed(normalizedDecimals), 520, doc.y, { width: 55, align: "right" });
-    doc.moveDown(0.55);
+    drawBudgetTableRow(doc, {
+      code: row.item.code,
+      description: row.item.description,
+      unit: row.item.unit,
+      quantity: row.item.quantity.toFixed(normalizedDecimals),
+      unitPrice: row.item.unitPrice.toFixed(normalizedDecimals),
+      partial: row.item.partial.toFixed(normalizedDecimals),
+      depth: row.depth,
+    });
   }
 
   doc.moveDown();
-  const summaryX = 360;
+  const summaryX = PDF_PAGE_MARGIN + PDF_TABLE_WIDTH - 196;
   drawSummaryLine(doc, summaryX, "Costo directo", normalized.totals.totalDirectCost, false, normalizedDecimals);
   drawSummaryLine(doc, summaryX, "Gastos generales", normalized.totals.totalGeneralExpenses, false, normalizedDecimals);
   drawSummaryLine(doc, summaryX, "Utilidad", normalized.totals.totalUtility, false, normalizedDecimals);
@@ -90,46 +166,237 @@ export async function createBudgetPdf(
   return Buffer.concat(chunks);
 }
 
+export async function createApuPdf(
+  budget: BudgetRecord,
+  project?: DocumentSignatureProjectMeta,
+  currencyDecimals = 2,
+  responsible?: ReportResponsibleMeta,
+) {
+  const normalized = calculateBudgetRecord(budget);
+  const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
+  const doc = new PDFDocument({ size: "A4", margin: PDF_PAGE_MARGIN });
+  const chunks: Buffer[] = [];
+  const identityAssets = await loadReportIdentityAssets(responsible);
+
+  doc.on("data", (chunk) => chunks.push(chunk));
+
+  doc.fillColor("#0f172a").fontSize(18).text("ANALISIS DE COSTOS UNITARIOS", { align: "center" });
+  doc.moveDown(0.3);
+  doc.fontSize(12).text(normalized.name, { align: "center" });
+  doc.moveDown();
+
+  for (const line of buildResponsibleMetaLines(project, responsible)) {
+    drawHeaderMetaLine(doc, line.label, line.value);
+  }
+  doc.moveDown();
+
+  for (const item of normalized.items) {
+    if (!item.apu) continue;
+
+    const resourceRows = item.apu.resources.map((resource) => ({
+      crew: resource.crew != null ? String(resource.crew) : "",
+      quantity: resource.quantity.toFixed(normalizedDecimals),
+      resource: resource.resource?.description ?? resource.resourceType,
+      subtotal: resource.subtotal.toFixed(normalizedDecimals),
+      unit: resource.resource?.unit ?? "",
+      unitPrice: resource.unitPrice.toFixed(normalizedDecimals),
+    }));
+    ensureApuPartidaStartsTogether(doc, {
+      rows: resourceRows,
+      subtitle: `Unidad: ${item.unit}  |  Precio unitario: ${item.unitPrice.toFixed(normalizedDecimals)}`,
+      title: `${item.code} - ${item.description}`,
+    });
+    resetPdfCursor(doc);
+    doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(10).text(`${item.code} - ${item.description}`, PDF_PAGE_MARGIN, doc.y, {
+      width: PDF_TABLE_WIDTH,
+    });
+    resetPdfCursor(doc);
+    doc.font("Helvetica").fontSize(8.5).fillColor("#475569").text(`Unidad: ${item.unit}  |  Precio unitario: ${item.unitPrice.toFixed(normalizedDecimals)}`, PDF_PAGE_MARGIN, doc.y, {
+      width: PDF_TABLE_WIDTH,
+    });
+    doc.moveDown(0.4);
+    drawApuTableHeader(doc);
+
+    for (const resourceRow of resourceRows) {
+      drawApuTableRow(doc, resourceRow);
+    }
+
+    doc.moveDown(0.5);
+    drawSummaryLine(doc, PDF_PAGE_MARGIN + PDF_TABLE_WIDTH - 196, "Total unitario", item.unitPrice, true, normalizedDecimals);
+    doc.y += APU_PARTIDA_GAP;
+  }
+
+  drawDocumentSignatureBlock(doc, normalized.name, project, responsible, identityAssets);
+
+  doc.end();
+
+  await new Promise<void>((resolve) => doc.on("end", resolve));
+  return Buffer.concat(chunks);
+}
+
+export async function createTablesPdf(title: string, tables: PdfExportTable[], subtitle?: string) {
+  const doc = new PDFDocument({ size: "A4", margin: PDF_PAGE_MARGIN });
+  const chunks: Buffer[] = [];
+
+  doc.on("data", (chunk) => chunks.push(chunk));
+  doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(17).text(title, { align: "center" });
+  if (subtitle) {
+    doc.moveDown(0.25);
+    doc.fillColor("#475569").font("Helvetica").fontSize(10).text(subtitle, { align: "center" });
+  }
+  doc.moveDown();
+
+  for (const [tableIndex, table] of tables.entries()) {
+    if (table.startOnNewPage && tableIndex > 0) {
+      doc.addPage();
+    } else if (tableIndex > 0) {
+      doc.moveDown(0.8);
+    }
+    drawGenericTable(doc, table);
+  }
+
+  doc.end();
+  await new Promise<void>((resolve) => doc.on("end", resolve));
+  return Buffer.concat(chunks);
+}
+
 export function buildResponsibleMetaLines(
   project?: DocumentSignatureProjectMeta,
   responsible?: ReportResponsibleMeta,
 ) {
   const lines = [
-    `Proyecto: ${project?.name ?? "Sin proyecto"}`,
-    `Cliente: ${project?.clientName ?? "No definido"}`,
-    `Ubicacion: ${project?.location ?? "No definida"}`,
+    { label: "Proyecto", value: project?.name ?? "Sin proyecto" },
+    { label: "Cliente", value: project?.clientName ?? "No definido" },
+    { label: "Ubicacion", value: project?.location ?? "No definida" },
   ];
 
   if (responsible?.name) {
-    lines.push(`Responsable: ${responsible.name}`);
+    lines.push({ label: "Responsable", value: responsible.name });
   }
 
   if (responsible?.jobTitle) {
-    lines.push(`Cargo: ${responsible.jobTitle}`);
+    lines.push({ label: "Cargo", value: responsible.jobTitle });
   }
 
   if (responsible?.phone) {
-    lines.push(`Telefono: ${responsible.phone}`);
+    lines.push({ label: "Telefono", value: responsible.phone });
   }
 
   if (responsible?.companyName) {
-    lines.push(`Empresa: ${responsible.companyName}`);
+    lines.push({ label: "Empresa", value: responsible.companyName });
   }
 
   return lines;
 }
 
-function drawTableHeader(doc: PDFKit.PDFDocument) {
-  doc.rect(36, doc.y, 555, 18).fill("#0f172a");
+function drawHeaderMetaLine(doc: PDFKit.PDFDocument, label: string, value: string) {
+  const x = doc.x;
+  const y = doc.y;
+  doc.fillColor("#334155").font("Helvetica-Bold").fontSize(10).text(`${label}: `, x, y, { continued: true });
+  doc.font("Helvetica").text(value);
+}
+
+export function buildBudgetPdfTableRowLayout(
+  row: BudgetPdfTableRowInput,
+  startX: number,
+  y: number,
+  printableWidth: number,
+): BudgetPdfTableCellLayout[] {
+  const columns: BudgetPdfTableColumn[] = [
+    { key: "code", offset: 6, width: 49 },
+    { key: "description", offset: 60 + row.depth * 10, width: Math.max(160, printableWidth - 283 - row.depth * 10) },
+    { key: "unit", offset: printableWidth - 192, width: 32, align: "center" },
+    { key: "quantity", offset: printableWidth - 155, width: 48, align: "right" },
+    { key: "unitPrice", offset: printableWidth - 102, width: 48, align: "right" },
+    { key: "partial", offset: printableWidth - 55, width: 49, align: "right" },
+  ];
+
+  return columns.map((column) => ({
+    align: column.align,
+    height: estimatePdfCellHeight(String(row[column.key]), column.width),
+    key: column.key,
+    width: column.width,
+    x: startX + column.offset,
+    y,
+  }));
+}
+
+export function buildApuPdfTableRowLayout(
+  row: ApuPdfTableRowInput,
+  startX: number,
+  y: number,
+  printableWidth: number,
+): ApuPdfTableCellLayout[] {
+  const columns: ApuPdfTableColumn[] = [
+    { key: "resource", offset: 6, width: 205 },
+    { key: "unit", offset: 218, width: 32, align: "center" },
+    { key: "crew", offset: 255, width: 50, align: "right" },
+    { key: "quantity", offset: 310, width: 58, align: "right" },
+    { key: "unitPrice", offset: 373, width: 66, align: "right" },
+    { key: "subtotal", offset: printableWidth - 78, width: 72, align: "right" },
+  ];
+
+  return columns.map((column) => ({
+    align: column.align,
+    height: estimatePdfCellHeight(String(row[column.key]), column.width),
+    key: column.key,
+    width: column.width,
+    x: startX + column.offset,
+    y,
+  }));
+}
+
+export function estimateApuPdfPartidaBlockHeight(block: ApuPdfPartidaBlockInput) {
+  const titleHeight = estimatePdfCellHeight(block.title, PDF_TABLE_WIDTH);
+  const subtitleHeight = estimatePdfCellHeight(block.subtitle, PDF_TABLE_WIDTH);
+  const rowsHeight = block.rows.reduce((total, row) => {
+    const cells = buildApuPdfTableRowLayout(row, PDF_PAGE_MARGIN, 0, PDF_TABLE_WIDTH);
+    return total + Math.max(12, ...cells.map((cell) => cell.height)) + 5;
+  }, 0);
+
+  return titleHeight + subtitleHeight + PDF_TABLE_HEADER_HEIGHT + rowsHeight + 58;
+}
+
+function estimatePdfCellHeight(value: string, width: number) {
+  const charactersPerLine = Math.max(8, Math.floor(width / 4.5));
+  return Math.max(10, Math.ceil(value.length / charactersPerLine) * 10);
+}
+
+function drawBudgetTableHeader(doc: PDFKit.PDFDocument) {
+  doc.rect(PDF_PAGE_MARGIN, doc.y, PDF_TABLE_WIDTH, PDF_TABLE_HEADER_HEIGHT).fill("#0f172a");
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(8.5);
-  const y = doc.y + 5;
-  doc.text("Codigo", 40, y, { width: 50 });
-  doc.text("Descripcion", 96, y, { width: 250 });
-  doc.text("Und.", 355, y, { width: 35, align: "center" });
-  doc.text("Metrado", 395, y, { width: 55, align: "right" });
-  doc.text("P.Unit", 455, y, { width: 60, align: "right" });
-  doc.text("Parcial", 520, y, { width: 55, align: "right" });
-  doc.moveDown(1.5);
+  const y = doc.y + 7;
+  doc.text("Codigo", 42, y, { width: 48 });
+  doc.text("Descripcion", 98, y, { width: 243 });
+  doc.text("Und.", 367, y, { width: 32, align: "center" });
+  doc.text("Metrado", 402, y, { width: 50, align: "right" });
+  doc.text("P.Unit", 455, y, { width: 50, align: "right" });
+  doc.text("Parcial", 502, y, { width: 51, align: "right" });
+  doc.y += PDF_TABLE_HEADER_HEIGHT + 8;
+}
+
+function drawBudgetTableRow(doc: PDFKit.PDFDocument, row: BudgetPdfTableRowInput) {
+  doc.fillColor("#334155").font("Helvetica").fontSize(8);
+  const y = doc.y;
+  const cells = buildBudgetPdfTableRowLayout(row, PDF_PAGE_MARGIN, y, PDF_TABLE_WIDTH);
+  const rowHeight = Math.max(
+    12,
+    ...cells.map((cell) => doc.heightOfString(String(row[cell.key]), { width: cell.width, align: cell.align })),
+  );
+
+  ensurePage(doc, rowHeight + 8);
+  const rowY = doc.y;
+  const visibleCells = buildBudgetPdfTableRowLayout(row, PDF_PAGE_MARGIN, rowY, PDF_TABLE_WIDTH);
+
+  for (const cell of visibleCells) {
+    doc.text(String(row[cell.key]), cell.x, rowY, {
+      align: cell.align,
+      height: rowHeight,
+      width: cell.width,
+    });
+  }
+
+  doc.y = rowY + rowHeight + 5;
 }
 
 function drawSummaryLine(
@@ -148,17 +415,177 @@ function drawSummaryLine(
     doc.fillColor("#0f172a").font("Helvetica-Bold");
   }
 
-  doc.text(label, x + 8, y, { width: 90 });
-  doc.text(value.toFixed(currencyDecimals), x + 95, y, { width: 85, align: "right" });
+  const textY = strong ? y + 3 : y;
+  doc.text(label, x + 8, textY, { width: 90 });
+  doc.text(value.toFixed(currencyDecimals), x + 95, textY, { width: 95, align: "right" });
   doc.moveDown(0.6);
+  resetPdfCursor(doc);
   doc.fillColor("#334155").font("Helvetica");
 }
 
-function ensurePage(doc: PDFKit.PDFDocument) {
-  if (doc.y > 730) {
-    doc.addPage();
-    drawTableHeader(doc);
+function resetPdfCursor(doc: PDFKit.PDFDocument) {
+  doc.x = doc.page.margins.left;
+}
+
+function drawGenericTable(doc: PDFKit.PDFDocument, table: PdfExportTable) {
+  ensureGenericPdfSpace(doc, 52);
+  doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(12).text(table.title, PDF_PAGE_MARGIN, doc.y, {
+    width: PDF_TABLE_WIDTH,
+  });
+  doc.moveDown(0.4);
+
+  const widths = normalizeGenericColumnWidths(table.columnWidths, table.headers.length);
+  if (!table.hideHeader) {
+    drawGenericTableHeader(doc, table.headers, widths, table.headerFontSize ?? 7.5);
   }
+
+  const sectionRows = new Set(table.sectionRows ?? []);
+  const emphasisRows = new Set(table.emphasisRows ?? []);
+  for (const [rowIndex, row] of table.rows.entries()) {
+    drawGenericTableRow(doc, row, widths, table.fontSize ?? 7.5, {
+      isEmphasized: emphasisRows.has(rowIndex),
+      isSection: sectionRows.has(rowIndex),
+    });
+  }
+}
+
+function buildGenericColumnWidths(columnCount: number) {
+  if (columnCount <= 0) return [];
+  const firstWidth = columnCount > 3 ? 130 : 170;
+  const remainingWidth = PDF_TABLE_WIDTH - firstWidth;
+  return Array.from({ length: columnCount }, (_, index) => (index === 0 ? firstWidth : remainingWidth / (columnCount - 1)));
+}
+
+function normalizeGenericColumnWidths(widths: number[] | undefined, columnCount: number) {
+  if (!widths || widths.length !== columnCount) {
+    return buildGenericColumnWidths(columnCount);
+  }
+
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  if (total <= 0) {
+    return buildGenericColumnWidths(columnCount);
+  }
+
+  return widths.map((width) => (width / total) * PDF_TABLE_WIDTH);
+}
+
+function drawGenericTableHeader(doc: PDFKit.PDFDocument, headers: string[], widths: number[], fontSize: number) {
+  const startY = doc.y;
+  doc.rect(PDF_PAGE_MARGIN, startY, PDF_TABLE_WIDTH, PDF_TABLE_HEADER_HEIGHT).fill("#0f172a");
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(fontSize);
+  let x = PDF_PAGE_MARGIN;
+  headers.forEach((header, index) => {
+    doc.text(header, x + 4, startY + 7, { width: Math.max(20, widths[index] - 8) });
+    x += widths[index] ?? 0;
+  });
+  doc.y = startY + PDF_TABLE_HEADER_HEIGHT + 6;
+}
+
+function drawGenericTableRow(
+  doc: PDFKit.PDFDocument,
+  row: string[],
+  widths: number[],
+  fontSize: number,
+  options: { isSection?: boolean; isEmphasized?: boolean } = {},
+) {
+  if (options.isSection) {
+    ensureGenericPdfSpace(doc, 28);
+    const startY = doc.y;
+    const label = row.find((value) => value.trim().length > 0) ?? "";
+
+    doc.roundedRect(PDF_PAGE_MARGIN, startY, PDF_TABLE_WIDTH, 20, 4).fill("#e2e8f0");
+    doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(Math.max(fontSize, 7));
+    doc.text(label, PDF_PAGE_MARGIN + 8, startY + 6, {
+      width: PDF_TABLE_WIDTH - 16,
+      height: 10,
+      ellipsis: true,
+    });
+    doc.y = startY + 28;
+    return;
+  }
+
+  const height = Math.max(
+    12,
+    ...row.map((value, index) => doc.fontSize(fontSize).heightOfString(value, { width: Math.max(20, (widths[index] ?? 80) - 8) })),
+  );
+  ensureGenericPdfSpace(doc, height + 8);
+  const startY = doc.y;
+  if (options.isEmphasized) {
+    doc.rect(PDF_PAGE_MARGIN, startY - 2, PDF_TABLE_WIDTH, height + 6).fill("#f8fafc");
+  }
+  doc.fillColor(options.isEmphasized ? "#0f172a" : "#334155").font(options.isEmphasized ? "Helvetica-Bold" : "Helvetica").fontSize(fontSize);
+  let x = PDF_PAGE_MARGIN;
+  row.forEach((value, index) => {
+    doc.text(value, x + 4, startY, { width: Math.max(20, (widths[index] ?? 80) - 8), height });
+    x += widths[index] ?? 0;
+  });
+  doc.y = startY + height + 5;
+}
+
+function ensureGenericPdfSpace(doc: PDFKit.PDFDocument, requiredHeight: number) {
+  if (doc.y + requiredHeight > PDF_PAGE_CONTENT_BOTTOM) {
+    doc.addPage();
+  }
+}
+
+function ensurePage(doc: PDFKit.PDFDocument, requiredHeight = 0) {
+  if (doc.y + requiredHeight > 730) {
+    doc.addPage();
+    drawBudgetTableHeader(doc);
+  }
+}
+
+function ensureApuPage(doc: PDFKit.PDFDocument, requiredHeight = 0) {
+  if (doc.y + requiredHeight > PDF_PAGE_CONTENT_BOTTOM) {
+    doc.addPage();
+    drawApuTableHeader(doc);
+  }
+}
+
+function ensureApuPartidaStartsTogether(doc: PDFKit.PDFDocument, block: ApuPdfPartidaBlockInput) {
+  const estimatedHeight = estimateApuPdfPartidaBlockHeight(block);
+  const usablePageHeight = PDF_PAGE_CONTENT_BOTTOM - doc.page.margins.top;
+
+  if (estimatedHeight <= usablePageHeight && doc.y + estimatedHeight > PDF_PAGE_CONTENT_BOTTOM) {
+    doc.addPage();
+  }
+}
+
+function drawApuTableHeader(doc: PDFKit.PDFDocument) {
+  doc.rect(PDF_PAGE_MARGIN, doc.y, PDF_TABLE_WIDTH, PDF_TABLE_HEADER_HEIGHT).fill("#0f172a");
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(8);
+  const y = doc.y + 7;
+  doc.text("Insumo", 42, y, { width: 208 });
+  doc.text("Und.", 255, y, { width: 42, align: "center" });
+  doc.text("Cuad.", 302, y, { width: 48, align: "right" });
+  doc.text("Cantidad", 355, y, { width: 58, align: "right" });
+  doc.text("Precio", 418, y, { width: 58, align: "right" });
+  doc.text("Subtotal", 481, y, { width: 72, align: "right" });
+  doc.y += PDF_TABLE_HEADER_HEIGHT + 8;
+}
+
+function drawApuTableRow(doc: PDFKit.PDFDocument, row: ApuPdfTableRowInput) {
+  doc.fillColor("#334155").font("Helvetica").fontSize(8);
+  const y = doc.y;
+  const cells = buildApuPdfTableRowLayout(row, PDF_PAGE_MARGIN, y, PDF_TABLE_WIDTH);
+  const rowHeight = Math.max(
+    12,
+    ...cells.map((cell) => doc.heightOfString(String(row[cell.key]), { width: cell.width, align: cell.align })),
+  );
+
+  ensureApuPage(doc, rowHeight + 8);
+  const rowY = doc.y;
+  const visibleCells = buildApuPdfTableRowLayout(row, PDF_PAGE_MARGIN, rowY, PDF_TABLE_WIDTH);
+
+  for (const cell of visibleCells) {
+    doc.text(String(row[cell.key]), cell.x, rowY, {
+      align: cell.align,
+      height: rowHeight,
+      width: cell.width,
+    });
+  }
+
+  doc.y = rowY + rowHeight + 5;
 }
 
 function drawBudgetCoverPage(
@@ -253,7 +680,7 @@ function drawDocumentSignatureBlock(
   identityAssets?: ReportIdentityAssets,
 ) {
   const summary = buildDocumentSignatureSummary(budgetName, project, responsible);
-  const blockHeight = 228;
+  const blockHeight = 276;
 
   if (doc.y + blockHeight > 760) {
     doc.addPage();
@@ -288,7 +715,7 @@ function drawDocumentSignatureBlock(
   drawSignatureLineBox(
     doc,
     leftX + 16,
-    startY + 168,
+    startY + 176,
     sectionWidth - 24,
     "FIRMA DEL RESPONSABLE",
     summary.responsibleSigner,
@@ -298,7 +725,7 @@ function drawDocumentSignatureBlock(
   drawSignatureLineBox(
     doc,
     rightX + 8,
-    startY + 168,
+    startY + 176,
     sectionWidth - 24,
     "VO. BO. / APROBACION",
     summary.approverLabel,
@@ -342,19 +769,19 @@ function drawSignatureLineBox(
   secondary: string,
   imageBuffer: Buffer | null,
 ) {
-  doc.roundedRect(x, y, width, 48, 12).dash(4, { space: 4 }).stroke("#94a3b8");
+  doc.roundedRect(x, y, width, 72, 12).dash(4, { space: 4 }).stroke("#94a3b8");
   doc.undash();
   doc.fillColor("#64748b").font("Helvetica-Bold").fontSize(7.5).text(title, x + 10, y + 8, { width: width - 20 });
   if (imageBuffer) {
-    doc.image(imageBuffer, x + 10, y + 20, {
-      fit: [24, 24],
+    doc.image(imageBuffer, x + 12, y + 20, {
+      fit: [26, 26],
       align: "center",
       valign: "center",
     });
   }
-  doc.moveTo(x + 10, y + 28).lineTo(x + width - 10, y + 28).stroke("#94a3b8");
-  const textX = imageBuffer ? x + 40 : x + 10;
-  const textWidth = imageBuffer ? width - 50 : width - 20;
-  doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(8).text(primary, textX, y + 32, { width: textWidth, align: "center" });
-  doc.fillColor("#64748b").font("Helvetica").fontSize(7.5).text(secondary, textX, y + 42, { width: textWidth, align: "center" });
+  doc.moveTo(x + 10, y + 50).lineTo(x + width - 10, y + 50).stroke("#94a3b8");
+  const textX = imageBuffer ? x + 44 : x + 10;
+  const textWidth = imageBuffer ? width - 54 : width - 20;
+  doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(8).text(primary, textX, y + 54, { width: textWidth, align: "center" });
+  doc.fillColor("#64748b").font("Helvetica").fontSize(7.5).text(secondary, textX, y + 64, { width: textWidth, align: "center" });
 }
