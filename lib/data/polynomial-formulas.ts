@@ -13,7 +13,8 @@ import {
   calculateMonomialCoefficients,
   validatePolynomialFormula,
 } from "@/lib/calculations/polynomial-formula";
-import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
+import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
+import type { PolynomialFormulaSectionData, PolynomialFormulaSectionsData } from "@/types/budget-sections";
 import type {
   AdjustmentCalculationRecord,
   PolynomialCostGroupKey,
@@ -122,6 +123,7 @@ type FormulaBudgetItemInput = {
 type ComposeBudgetPolynomialFormulaBudgetInput = {
   id: string;
   projectId: string;
+  name?: string;
   totalGeneralExpenses: number | Decimal;
   totalUtility: number | Decimal;
   items: FormulaBudgetItemInput[];
@@ -382,7 +384,9 @@ export async function getBudgetPolynomialFormulaSectionData(
   const budget = await prisma.budget.findFirst({
     where: {
       id: budgetId,
-      kind: "GENERAL",
+      kind: {
+        in: ["GENERAL", "SUB_BUDGET"],
+      },
       project: {
         company: {
           userId,
@@ -392,11 +396,12 @@ export async function getBudgetPolynomialFormulaSectionData(
     select: {
       id: true,
       name: true,
+      kind: true,
     },
   });
 
   if (!budget) {
-    throw new Error("No tienes permisos para acceder a este presupuesto general");
+    throw new Error("No tienes permisos para acceder a este presupuesto");
   }
 
   const latestFormula = await prisma.polynomialFormula.findFirst({
@@ -425,7 +430,7 @@ export async function getBudgetPolynomialFormulaSectionData(
   const formula = latestFormula ? serializePolynomialFormula(latestFormula) : null;
 
   return {
-    title: "Formula polinomica",
+    title: budget.kind === "SUB_BUDGET" ? `Formula polinomica - ${budget.name}` : "Formula polinomica",
     coefficients: buildMonomialPreview(formula),
     notes:
       formula === null
@@ -440,6 +445,69 @@ export async function getBudgetPolynomialFormulaSectionData(
     budgetId: budget.id,
     formula,
     summary: buildSectionSummary(formula),
+  };
+}
+
+export async function getBudgetPolynomialFormulaSectionsData(
+  budgetId: string,
+  userId: string,
+): Promise<PolynomialFormulaSectionsData> {
+  const budget = await prisma.budget.findFirst({
+    where: {
+      id: budgetId,
+      kind: {
+        in: ["GENERAL", "SUB_BUDGET"],
+      },
+      project: {
+        company: {
+          userId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      childBudgets: {
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!budget) {
+    throw new Error("No tienes permisos para acceder a este presupuesto general");
+  }
+
+  if (budget.childBudgets.length === 0) {
+    const section = await getBudgetPolynomialFormulaSectionData(budget.id, userId);
+    return {
+      title: "Formula polinomica",
+      notes: section.notes,
+      sections: [section],
+      hasSubBudgetSections: false,
+    };
+  }
+
+  const orderedChildBudgets = orderSubBudgetsBySpecialty(budget.childBudgets);
+  const sections = await Promise.all(
+    orderedChildBudgets.map((childBudget) =>
+      getBudgetPolynomialFormulaSectionData(childBudget.id, userId),
+    ),
+  );
+
+  return {
+    title: "Formula polinomica por subpresupuesto",
+    notes: [
+      "Cada subpresupuesto tiene una formula polinomica independiente.",
+      "Los coeficientes, expresion K y cuadro de monomios se calculan solo con las partidas del subpresupuesto correspondiente.",
+    ],
+    sections,
+    hasSubBudgetSections: true,
   };
 }
 
@@ -868,6 +936,7 @@ async function loadBudgetForFormulaGeneration(budgetId: string, userId: string) 
       id: true,
       projectId: true,
       name: true,
+      kind: true,
       totalGeneralExpenses: true,
       totalUtility: true,
       items: {
@@ -924,10 +993,10 @@ async function loadBudgetForFormulaGeneration(budgetId: string, userId: string) 
   });
 
   if (!budget) {
-    throw new Error("No tienes permisos para acceder a este presupuesto general");
+    throw new Error("No tienes permisos para acceder a este presupuesto");
   }
 
-  const childItems = budget.childBudgets.flatMap((childBudget) => childBudget.items);
+  const childItems = budget.kind === "GENERAL" ? budget.childBudgets.flatMap((childBudget) => childBudget.items) : [];
   const items = [...budget.items, ...childItems];
 
   return {

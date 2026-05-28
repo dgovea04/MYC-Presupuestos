@@ -33,6 +33,9 @@ export type ExportOptions = {
   useVisibleFilters: boolean;
   currencyDecimals: number;
   includeSignature: boolean;
+  includeGanttChart: boolean;
+  includeCurveChart: boolean;
+  includeCriticalPath: boolean;
   pdfOrientation: PdfOrientation;
   fileName?: string;
 };
@@ -73,6 +76,9 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   useVisibleFilters: false,
   currencyDecimals: 2,
   includeSignature: true,
+  includeGanttChart: true,
+  includeCurveChart: true,
+  includeCriticalPath: false,
   pdfOrientation: "portrait",
 };
 

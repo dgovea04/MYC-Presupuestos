@@ -38,6 +38,7 @@ export type DashboardActivityItem = {
   type: DashboardActivityType;
   title: string;
   detail: string;
+  projectName: string | null;
   href: string;
   createdAt: Date;
 };
@@ -157,6 +158,10 @@ export async function getDashboardStats(userId: string) {
     )
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
   const generalBudgetByProjectId = new Map(generalBudgets.map((budget) => [budget.projectId, budget]));
+  const projectNameByProjectId = new Map(projectsWithCompany.map((project) => [project.id, project.name]));
+  const projectNameByBudgetId = new Map(
+    projectsWithCompany.flatMap((project) => project.budgets.map((budget) => [budget.id, project.name] as const)),
+  );
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -207,7 +212,7 @@ export async function getDashboardStats(userId: string) {
     })),
     pendingItems,
     recentActivity: (activityEvents.length > 0
-      ? activityEvents.map(mapActivityEvent)
+      ? activityEvents.map((event) => mapActivityEvent(event, { projectNameByBudgetId, projectNameByProjectId }))
       : getRecentActivity(projectsWithCompany, generalBudgets, formulas, adjustments)
     ).slice(0, 25),
   };
@@ -350,6 +355,7 @@ function getRecentActivity(
       type: "PROJECT_UPDATED" as const,
       title: "Proyecto actualizado",
       detail: project.name,
+      projectName: project.name,
       href: `/projects/${project.id}`,
       createdAt: project.updatedAt,
     })),
@@ -358,6 +364,7 @@ function getRecentActivity(
       type: "GENERAL_BUDGET_UPDATED" as const,
       title: "Presupuesto general actualizado",
       detail: budget.projectName,
+      projectName: budget.projectName,
       href: `/budgets/${budget.id}`,
       createdAt: budget.updatedAt,
     })),
@@ -366,6 +373,7 @@ function getRecentActivity(
       type: "POLYNOMIAL_FORMULA_UPDATED" as const,
       title: "Formula polinomica actualizada",
       detail: formula.projectName,
+      projectName: formula.projectName,
       href: `/budgets/${formula.budgetId}/polynomial-formula`,
       createdAt: formula.updatedAt,
     })),
@@ -374,6 +382,7 @@ function getRecentActivity(
       type: "ADJUSTMENT_REGISTERED" as const,
       title: "Reajuste registrado",
       detail: adjustment.projectName,
+      projectName: adjustment.projectName,
       href: `/projects/${adjustment.projectId}`,
       createdAt: adjustment.createdAt,
     })),
@@ -389,15 +398,39 @@ function mapActivityEvent(event: {
   detail: string;
   href: string;
   createdAt: Date;
+}, lookups: {
+  projectNameByBudgetId: Map<string, string>;
+  projectNameByProjectId: Map<string, string>;
 }): DashboardActivityItem {
   return {
     id: event.id,
     type: normalizeActivityEventType(event.type),
     title: event.title,
     detail: event.detail,
+    projectName: resolveActivityProjectName(event.href, lookups),
     href: event.href,
     createdAt: event.createdAt,
   };
+}
+
+function resolveActivityProjectName(
+  href: string,
+  lookups: {
+    projectNameByBudgetId: Map<string, string>;
+    projectNameByProjectId: Map<string, string>;
+  },
+): string | null {
+  const budgetMatch = href.match(/^\/budgets\/([^/]+)/);
+  if (budgetMatch) {
+    return lookups.projectNameByBudgetId.get(budgetMatch[1]) ?? null;
+  }
+
+  const projectMatch = href.match(/^\/projects\/([^/]+)/);
+  if (projectMatch) {
+    return lookups.projectNameByProjectId.get(projectMatch[1]) ?? null;
+  }
+
+  return null;
 }
 
 function normalizeActivityEventType(type: ActivityEventType): DashboardActivityType {

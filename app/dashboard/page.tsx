@@ -417,12 +417,13 @@ export default async function DashboardPage({
                     <div className="flex items-start gap-3">
                       <EventTypeIcon type={item.type} />
                       <div className="min-w-0 flex-1">
-                        <div className="min-w-0">
+                        <div className="min-w-0 space-y-1.5">
                           <div className="flex flex-wrap items-center gap-2">
                             <EventTypeBadge type={item.type} />
-                            <p className="font-medium text-slate-900">{item.title}</p>
+                            {item.projectName ? <ProjectActivityBadge projectName={item.projectName} /> : null}
                           </div>
-                          <p className="mt-1 truncate text-sm text-slate-600">{item.detail}</p>
+                          <p className="truncate font-medium text-slate-900">{item.title}</p>
+                          <p className="max-w-full truncate text-sm text-slate-600">{item.detail}</p>
                         </div>
                       </div>
                     </div>
@@ -667,11 +668,11 @@ function DashboardRecordLink({
     <Link
       href={href}
       className={cn(
-        "flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition lg:flex-row lg:items-center lg:justify-between",
+        "flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition lg:flex-row lg:items-center lg:justify-between",
         tones[tone],
       )}
     >
-      {children}
+      <div className="min-w-0 flex-1">{children}</div>
       <DashboardRecordMeta title={metaTitle} detail={metaDetail} />
     </Link>
   );
@@ -679,9 +680,9 @@ function DashboardRecordLink({
 
 function DashboardRecordMeta({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:text-right">
-      <p className="font-medium text-slate-700">{title}</p>
-      <p>{detail}</p>
+    <div className="w-full min-w-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:w-44 lg:shrink-0 lg:text-right">
+      <p className="truncate font-medium text-slate-700">{title}</p>
+      <p className="truncate">{detail}</p>
     </div>
   );
 }
@@ -926,6 +927,17 @@ function EventTypeBadge({
   const config = getEventTypeBadgeConfig(type);
 
   return <ToneBadge label={config.label} tone={config.tone} />;
+}
+
+function ProjectActivityBadge({ projectName }: { projectName: string }) {
+  return (
+    <span
+      className="inline-flex max-w-[10rem] shrink-0 items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600"
+      title={projectName}
+    >
+      <span className="block min-w-0 truncate whitespace-nowrap">{projectName}</span>
+    </span>
+  );
 }
 
 function EventTypeIcon({

@@ -500,11 +500,11 @@ export function PolynomialFormulaEditor({
             <CardContent className="space-y-5 p-6">
             <OperationalPanel
               title={section.title}
-              description="Genera la fórmula polinómica desde el presupuesto general y luego asigna los índices INEI correspondientes a cada monomio."
+              description="Genera la fórmula polinómica desde este presupuesto y luego asigna los índices INEI correspondientes a cada monomio."
               controls={
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-slate-500">
-                    La generación inicial toma los coeficientes del presupuesto general y prepara el editor para la asignación de índices.
+                    La generación inicial toma los coeficientes de este presupuesto y prepara el editor para la asignación de índices.
                   </p>
                   {section.budgetId ? (
                     <ExportPanel
@@ -585,7 +585,7 @@ export function PolynomialFormulaEditor({
                 controls={
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-slate-500">
-                      Guarda la fórmula antes de registrar reajustes para mantener consistente el historial del presupuesto general.
+                      Guarda la fórmula antes de registrar reajustes para mantener consistente el historial de este presupuesto.
                     </p>
                     <div className="flex items-center gap-2">
                       {error ? <p className="text-sm text-rose-600">{error}</p> : null}

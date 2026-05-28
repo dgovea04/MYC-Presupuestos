@@ -113,6 +113,66 @@ describe("composeBudgetPolynomialFormulaInput", () => {
     ]);
     expect(result.componentsByGroup.get("GENERAL_EXPENSES_PROFIT")).toEqual([]);
   });
+
+  it("keeps monomial coefficients independent when composing separate sub budgets", () => {
+    const estructuras = composeBudgetPolynomialFormulaInput({
+      id: "sub-budget-estructuras",
+      projectId: "project-1",
+      name: "Estructuras",
+      totalGeneralExpenses: 100,
+      totalUtility: 50,
+      items: [
+        {
+          id: "item-estructuras",
+          quantity: 10,
+          apu: {
+            resources: [
+              {
+                id: "mo-estructuras",
+                resourceType: "MO",
+                subtotal: 10,
+                resource: { category: "LABOR", iu: "47" },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const arquitectura = composeBudgetPolynomialFormulaInput({
+      id: "sub-budget-arquitectura",
+      projectId: "project-1",
+      name: "Arquitectura",
+      totalGeneralExpenses: 20,
+      totalUtility: 30,
+      items: [
+        {
+          id: "item-arquitectura",
+          quantity: 5,
+          apu: {
+            resources: [
+              {
+                id: "mat-arquitectura",
+                resourceType: "Material",
+                subtotal: 30,
+                resource: { category: "MATERIAL", iu: "30" },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(estructuras.totalBaseAmount).toBe("250.0000");
+    expect(Object.fromEntries(estructuras.monomials.map((monomial) => [monomial.code, monomial.coefficient]))).toMatchObject({
+      MO: "0.400",
+      GU: "0.600",
+    });
+    expect(arquitectura.totalBaseAmount).toBe("200.0000");
+    expect(Object.fromEntries(arquitectura.monomials.map((monomial) => [monomial.code, monomial.coefficient]))).toMatchObject({
+      MAT: "0.750",
+      GU: "0.250",
+    });
+  });
 });
 
 describe("sanitizePolynomialMonomialComponents", () => {

@@ -46,6 +46,9 @@ export function ExportPanel({
   const [includeSignature, setIncludeSignature] = useState(contextOptions?.includeSignature ?? true);
   const [includeSubtotals, setIncludeSubtotals] = useState(contextOptions?.includeSubtotals ?? true);
   const [includeTotals, setIncludeTotals] = useState(contextOptions?.includeTotals ?? true);
+  const [includeGanttChart, setIncludeGanttChart] = useState(contextOptions?.includeGanttChart ?? true);
+  const [includeCurveChart, setIncludeCurveChart] = useState(contextOptions?.includeCurveChart ?? true);
+  const [includeCriticalPath, setIncludeCriticalPath] = useState(contextOptions?.includeCriticalPath ?? false);
   const [currencyDecimals, setCurrencyDecimals] = useState(contextOptions?.currencyDecimals ?? 2);
   const [status, setStatus] = useState<"idle" | "downloading" | "previewing" | "error">("idle");
   const [error, setError] = useState("");
@@ -63,10 +66,13 @@ export function ExportPanel({
         includeSignature,
         includeSubtotals,
         includeTotals,
+        includeGanttChart,
+        includeCurveChart,
+        includeCriticalPath,
         currencyDecimals,
       },
     }),
-    [contextOptions, currencyDecimals, definition.target, includeSignature, includeSubtotals, includeTotals, preset.id, resolvedFormat, targetId],
+    [contextOptions, currencyDecimals, definition.target, includeCriticalPath, includeCurveChart, includeGanttChart, includeSignature, includeSubtotals, includeTotals, preset.id, resolvedFormat, targetId],
   );
   const payloadKey = useMemo(() => JSON.stringify(payload), [payload]);
   const canPreviewPdf = resolvedFormat === "pdf";
@@ -208,6 +214,15 @@ export function ExportPanel({
               <ExportCheckbox checked={includeSubtotals} label="Incluir subtotales" onChange={setIncludeSubtotals} />
               <ExportCheckbox checked={includeTotals} label="Incluir total general" onChange={setIncludeTotals} />
               <ExportCheckbox checked={includeSignature} label="Incluir logo y firma" onChange={setIncludeSignature} />
+              {definition.target === "work_schedule" && resolvedFormat === "pdf" && (preset.id === "cronograma_ejecutivo" || preset.id === "cronograma_partidas") ? (
+                <ExportCheckbox checked={includeGanttChart} label="Incluir Gantt" onChange={setIncludeGanttChart} />
+              ) : null}
+              {definition.target === "work_schedule" && resolvedFormat === "pdf" && includeGanttChart && (preset.id === "cronograma_ejecutivo" || preset.id === "cronograma_partidas") ? (
+                <ExportCheckbox checked={includeCriticalPath} label="Incluir ruta critica" onChange={setIncludeCriticalPath} />
+              ) : null}
+              {definition.target === "work_schedule" && resolvedFormat === "pdf" && (preset.id === "cronograma_ejecutivo" || preset.id === "curva_s") ? (
+                <ExportCheckbox checked={includeCurveChart} label="Incluir grafico Curva S" onChange={setIncludeCurveChart} />
+              ) : null}
               <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
                 Decimales
                 <input

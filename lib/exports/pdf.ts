@@ -56,10 +56,37 @@ export type ApuPdfPartidaBlockInput = {
   rows: ApuPdfTableRowInput[];
 };
 
+export type PdfGanttChartRow = {
+  label: string;
+  group: string;
+  startDate: string;
+  endDate: string;
+  durationDays?: number | null;
+  isCritical?: boolean;
+};
+
+export type PdfCurveChartPoint = {
+  label: string;
+  monthlyAmount: number;
+  accumulatedAmount: number;
+  accumulatedPercentage: number;
+};
+
+export type PdfExportChart =
+  | {
+      kind: "gantt";
+      rows: PdfGanttChartRow[];
+    }
+  | {
+      kind: "curve";
+      points: PdfCurveChartPoint[];
+    };
+
 export type PdfExportTable = {
   title: string;
   headers: string[];
   rows: string[][];
+  chart?: PdfExportChart;
   columnWidths?: number[];
   fontSize?: number;
   headerFontSize?: number;
@@ -234,8 +261,13 @@ export async function createApuPdf(
   return Buffer.concat(chunks);
 }
 
-export async function createTablesPdf(title: string, tables: PdfExportTable[], subtitle?: string) {
-  const doc = new PDFDocument({ size: "A4", margin: PDF_PAGE_MARGIN });
+export async function createTablesPdf(
+  title: string,
+  tables: PdfExportTable[],
+  subtitle?: string,
+  options: { layout?: "portrait" | "landscape" } = {},
+) {
+  const doc = new PDFDocument({ size: "A4", layout: options.layout ?? "portrait", margin: PDF_PAGE_MARGIN });
   const chunks: Buffer[] = [];
 
   doc.on("data", (chunk) => chunks.push(chunk));
@@ -428,50 +460,283 @@ function resetPdfCursor(doc: PDFKit.PDFDocument) {
 }
 
 function drawGenericTable(doc: PDFKit.PDFDocument, table: PdfExportTable) {
+  const tableWidth = getGenericPdfTableWidth(doc);
   ensureGenericPdfSpace(doc, 52);
   doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(12).text(table.title, PDF_PAGE_MARGIN, doc.y, {
-    width: PDF_TABLE_WIDTH,
+    width: tableWidth,
   });
   doc.moveDown(0.4);
 
-  const widths = normalizeGenericColumnWidths(table.columnWidths, table.headers.length);
+  const widths = normalizeGenericColumnWidths(table.columnWidths, table.headers.length, tableWidth);
+  if (table.chart) {
+    drawGenericChart(doc, table.chart, tableWidth);
+    if (table.rows.length === 0) {
+      return;
+    }
+    doc.moveDown(0.6);
+  }
+
   if (!table.hideHeader) {
-    drawGenericTableHeader(doc, table.headers, widths, table.headerFontSize ?? 7.5);
+    drawGenericTableHeader(doc, table.headers, widths, table.headerFontSize ?? 7.5, tableWidth);
   }
 
   const sectionRows = new Set(table.sectionRows ?? []);
   const emphasisRows = new Set(table.emphasisRows ?? []);
   for (const [rowIndex, row] of table.rows.entries()) {
-    drawGenericTableRow(doc, row, widths, table.fontSize ?? 7.5, {
+    drawGenericTableRow(doc, row, widths, table.fontSize ?? 7.5, tableWidth, {
       isEmphasized: emphasisRows.has(rowIndex),
       isSection: sectionRows.has(rowIndex),
     });
   }
 }
 
-function buildGenericColumnWidths(columnCount: number) {
+function drawGenericChart(doc: PDFKit.PDFDocument, chart: PdfExportChart, tableWidth: number) {
+  if (chart.kind === "gantt") {
+    drawGanttChart(doc, chart.rows, tableWidth);
+    return;
+  }
+
+  drawCurveChart(doc, chart.points, tableWidth);
+}
+
+function drawGanttChart(doc: PDFKit.PDFDocument, rows: PdfGanttChartRow[], tableWidth: number) {
+  const scheduledRows = rows.filter((row) => isValidPdfDate(row.startDate) && isValidPdfDate(row.endDate));
+  if (scheduledRows.length === 0) {
+    doc.fillColor("#64748b").font("Helvetica").fontSize(8).text("No hay partidas programadas para graficar.", PDF_PAGE_MARGIN, doc.y, {
+      width: tableWidth,
+    });
+    return;
+  }
+
+  const minTime = Math.min(...scheduledRows.map((row) => new Date(row.startDate).getTime()));
+  const maxTime = Math.max(...scheduledRows.map((row) => new Date(row.endDate).getTime()));
+  const totalDays = Math.max(1, Math.ceil((maxTime - minTime) / 86400000) + 1);
+  const labelWidth = Math.min(230, tableWidth * 0.32);
+  const durationWidth = 42;
+  const chartStartX = PDF_PAGE_MARGIN + labelWidth + durationWidth + 18;
+  const chartWidth = tableWidth - labelWidth - durationWidth - 18;
+  const rowHeight = 15;
+  const headerHeight = 34;
+  const monthTicks = buildGanttMonthTicks(new Date(minTime), new Date(maxTime), totalDays, chartWidth);
+  let rowIndex = 0;
+
+  while (rowIndex < scheduledRows.length) {
+    const availableHeight = getGenericPdfContentBottom(doc) - doc.y - headerHeight - 8;
+    const rowsInPage = Math.max(6, Math.floor(availableHeight / rowHeight));
+    const chunk = scheduledRows.slice(rowIndex, rowIndex + rowsInPage);
+    ensureGenericPdfSpace(doc, headerHeight + chunk.length * rowHeight + 8);
+    const startY = doc.y;
+
+    drawGanttHeader(doc, {
+      chartStartX,
+      chartWidth,
+      durationWidth,
+      labelWidth,
+      monthTicks,
+      startY,
+    });
+    drawGanttMonthGrid(doc, monthTicks, chartStartX, startY + headerHeight, chunk.length * rowHeight + 4);
+
+    chunk.forEach((row, index) => {
+      const y = startY + headerHeight + index * rowHeight;
+      const startOffsetDays = Math.max(0, Math.floor((new Date(row.startDate).getTime() - minTime) / 86400000));
+      const durationDays = Math.max(1, Math.ceil((new Date(row.endDate).getTime() - new Date(row.startDate).getTime()) / 86400000) + 1);
+      const x = chartStartX + (startOffsetDays / totalDays) * chartWidth;
+      const width = Math.max(4, (durationDays / totalDays) * chartWidth);
+
+      doc.fillColor("#334155").font("Helvetica").fontSize(6.6).text(row.label, PDF_PAGE_MARGIN, y, {
+        ellipsis: true,
+        height: 9,
+        width: labelWidth - 6,
+      });
+      doc.fillColor("#334155").font("Helvetica").fontSize(6.6).text(String(row.durationDays ?? durationDays), PDF_PAGE_MARGIN + labelWidth + 4, y, {
+        align: "right",
+        height: 9,
+        width: durationWidth - 8,
+      });
+      doc.rect(chartStartX, y + 3, chartWidth, 5).fill(index % 2 === 0 ? "#f8fafc" : "#ffffff");
+      doc.roundedRect(x, y + 1, Math.min(width, chartWidth - (x - chartStartX)), 8, 3).fill(row.isCritical ? "#ef4444" : "#0084d1");
+    });
+
+    doc.y = startY + headerHeight + chunk.length * rowHeight + 10;
+    rowIndex += chunk.length;
+    if (rowIndex < scheduledRows.length) {
+      doc.addPage();
+    }
+  }
+}
+
+function drawGanttHeader(
+  doc: PDFKit.PDFDocument,
+  input: {
+    chartStartX: number;
+    chartWidth: number;
+    durationWidth: number;
+    labelWidth: number;
+    monthTicks: Array<{ label: string; x: number; isMajor: boolean }>;
+    startY: number;
+  },
+) {
+  const { chartStartX, chartWidth, durationWidth, labelWidth, monthTicks, startY } = input;
+  const tableHeaderHeight = 24;
+
+  doc.roundedRect(PDF_PAGE_MARGIN, startY, labelWidth + durationWidth + 10, tableHeaderHeight, 4).fill("#0f172a");
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(7.2);
+  doc.text("Partida", PDF_PAGE_MARGIN + 8, startY + 8, { width: labelWidth - 12 });
+  doc.text("Dias", PDF_PAGE_MARGIN + labelWidth + 4, startY + 8, { align: "right", width: durationWidth - 8 });
+
+  doc.roundedRect(chartStartX, startY, chartWidth, tableHeaderHeight, 4).fill("#eff6ff");
+  doc.fillColor("#475569").font("Helvetica").fontSize(5.8);
+  drawGanttMonthLabels(doc, monthTicks, chartStartX, startY + 9);
+}
+
+function buildGanttMonthTicks(startDate: Date, endDate: Date, totalDays: number, chartWidth: number) {
+  const ticks: Array<{ label: string; x: number; isMajor: boolean }> = [];
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const startTime = startDate.getTime();
+
+  while (cursor <= endDate) {
+    const offsetDays = Math.max(0, Math.floor((cursor.getTime() - startTime) / 86400000));
+    ticks.push({
+      isMajor: cursor.getMonth() === 0 || ticks.length === 0,
+      label: `${String(cursor.getMonth() + 1).padStart(2, "0")}/${String(cursor.getFullYear()).slice(-2)}`,
+      x: (offsetDays / totalDays) * chartWidth,
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return ticks;
+}
+
+function drawGanttMonthGrid(
+  doc: PDFKit.PDFDocument,
+  ticks: Array<{ label: string; x: number; isMajor: boolean }>,
+  chartStartX: number,
+  y: number,
+  height: number,
+) {
+  ticks.forEach((tick) => {
+    const x = chartStartX + tick.x;
+    doc.strokeColor(tick.isMajor ? "#94a3b8" : "#e2e8f0").lineWidth(tick.isMajor ? 0.8 : 0.5);
+    doc.moveTo(x, y).lineTo(x, y + height).stroke();
+  });
+}
+
+function drawGanttMonthLabels(
+  doc: PDFKit.PDFDocument,
+  ticks: Array<{ label: string; x: number; isMajor: boolean }>,
+  chartStartX: number,
+  y: number,
+) {
+  ticks.forEach((tick, index) => {
+    if (index % Math.ceil(Math.max(1, ticks.length / 8)) === 0) {
+      const x = chartStartX + tick.x;
+      doc.fillColor("#475569").font(tick.isMajor ? "Helvetica-Bold" : "Helvetica").fontSize(5.8).text(tick.label, x - 14, y, {
+        align: "center",
+        width: 28,
+      });
+    }
+  });
+}
+
+function drawCurveChart(doc: PDFKit.PDFDocument, points: PdfCurveChartPoint[], tableWidth: number) {
+  if (points.length === 0) {
+    doc.fillColor("#64748b").font("Helvetica").fontSize(8).text("No hay datos de Curva S para graficar.", PDF_PAGE_MARGIN, doc.y, {
+      width: tableWidth,
+    });
+    return;
+  }
+
+  const chartHeight = 220;
+  ensureGenericPdfSpace(doc, chartHeight + 28);
+  const startX = PDF_PAGE_MARGIN;
+  const startY = doc.y;
+  const axisLeft = startX + 44;
+  const axisTop = startY + 10;
+  const axisWidth = tableWidth - 62;
+  const axisHeight = chartHeight - 52;
+  const maxAmount = Math.max(...points.map((point) => point.accumulatedAmount), 1);
+
+  doc.rect(startX, startY, tableWidth, chartHeight).fill("#f8fafc");
+  doc.strokeColor("#cbd5e1").lineWidth(1);
+  doc.moveTo(axisLeft, axisTop).lineTo(axisLeft, axisTop + axisHeight).lineTo(axisLeft + axisWidth, axisTop + axisHeight).stroke();
+
+  for (let tick = 0; tick <= 4; tick++) {
+    const y = axisTop + axisHeight - (tick / 4) * axisHeight;
+    doc.strokeColor("#e2e8f0").moveTo(axisLeft, y).lineTo(axisLeft + axisWidth, y).stroke();
+    doc.fillColor("#64748b").font("Helvetica").fontSize(6.5).text(`${tick * 25}%`, startX + 8, y - 4, { align: "right", width: 28 });
+  }
+
+  const pointCoordinates = points.map((point, index) => {
+    const x = axisLeft + (points.length === 1 ? 0 : (index / (points.length - 1)) * axisWidth);
+    const percentageY = axisTop + axisHeight - (Math.min(100, Math.max(0, point.accumulatedPercentage)) / 100) * axisHeight;
+    const amountY = axisTop + axisHeight - (point.accumulatedAmount / maxAmount) * axisHeight;
+    return { point, x, y: Number.isFinite(percentageY) ? percentageY : amountY };
+  });
+
+  const path = pointCoordinates.map(({ x, y }, index) => `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  if (path) {
+    doc.path(path).strokeColor("#2563eb").lineWidth(2.4).stroke();
+  }
+
+  pointCoordinates.forEach(({ point, x, y }, index) => {
+    doc.circle(x, y, 3.4).fill("#2563eb");
+    if (index === 0 || index === pointCoordinates.length - 1 || index % Math.ceil(pointCoordinates.length / 6) === 0) {
+      doc.fillColor("#475569").font("Helvetica").fontSize(6.3).text(point.label, x - 24, axisTop + axisHeight + 8, {
+        align: "center",
+        width: 48,
+      });
+    }
+  });
+
+  const lastPoint = points.at(-1);
+  if (lastPoint) {
+    doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(8).text(
+      `Acumulado final: ${lastPoint.accumulatedAmount.toFixed(2)} | ${lastPoint.accumulatedPercentage.toFixed(2)}%`,
+      axisLeft,
+      startY + chartHeight - 18,
+      { width: axisWidth },
+    );
+  }
+
+  doc.y = startY + chartHeight + 10;
+}
+
+function isValidPdfDate(value: string) {
+  return !Number.isNaN(new Date(value).getTime());
+}
+
+function getGenericPdfTableWidth(doc: PDFKit.PDFDocument) {
+  return doc.page.width - PDF_PAGE_MARGIN * 2;
+}
+
+function getGenericPdfContentBottom(doc: PDFKit.PDFDocument) {
+  return doc.page.height - PDF_PAGE_MARGIN;
+}
+
+function buildGenericColumnWidths(columnCount: number, tableWidth: number) {
   if (columnCount <= 0) return [];
   const firstWidth = columnCount > 3 ? 130 : 170;
-  const remainingWidth = PDF_TABLE_WIDTH - firstWidth;
+  const remainingWidth = tableWidth - firstWidth;
   return Array.from({ length: columnCount }, (_, index) => (index === 0 ? firstWidth : remainingWidth / (columnCount - 1)));
 }
 
-function normalizeGenericColumnWidths(widths: number[] | undefined, columnCount: number) {
+function normalizeGenericColumnWidths(widths: number[] | undefined, columnCount: number, tableWidth: number) {
   if (!widths || widths.length !== columnCount) {
-    return buildGenericColumnWidths(columnCount);
+    return buildGenericColumnWidths(columnCount, tableWidth);
   }
 
   const total = widths.reduce((sum, width) => sum + width, 0);
   if (total <= 0) {
-    return buildGenericColumnWidths(columnCount);
+    return buildGenericColumnWidths(columnCount, tableWidth);
   }
 
-  return widths.map((width) => (width / total) * PDF_TABLE_WIDTH);
+  return widths.map((width) => (width / total) * tableWidth);
 }
 
-function drawGenericTableHeader(doc: PDFKit.PDFDocument, headers: string[], widths: number[], fontSize: number) {
+function drawGenericTableHeader(doc: PDFKit.PDFDocument, headers: string[], widths: number[], fontSize: number, tableWidth: number) {
   const startY = doc.y;
-  doc.rect(PDF_PAGE_MARGIN, startY, PDF_TABLE_WIDTH, PDF_TABLE_HEADER_HEIGHT).fill("#0f172a");
+  doc.rect(PDF_PAGE_MARGIN, startY, tableWidth, PDF_TABLE_HEADER_HEIGHT).fill("#0f172a");
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(fontSize);
   let x = PDF_PAGE_MARGIN;
   headers.forEach((header, index) => {
@@ -486,6 +751,7 @@ function drawGenericTableRow(
   row: string[],
   widths: number[],
   fontSize: number,
+  tableWidth: number,
   options: { isSection?: boolean; isEmphasized?: boolean } = {},
 ) {
   if (options.isSection) {
@@ -493,10 +759,10 @@ function drawGenericTableRow(
     const startY = doc.y;
     const label = row.find((value) => value.trim().length > 0) ?? "";
 
-    doc.roundedRect(PDF_PAGE_MARGIN, startY, PDF_TABLE_WIDTH, 20, 4).fill("#e2e8f0");
+    doc.roundedRect(PDF_PAGE_MARGIN, startY, tableWidth, 20, 4).fill("#e2e8f0");
     doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(Math.max(fontSize, 7));
     doc.text(label, PDF_PAGE_MARGIN + 8, startY + 6, {
-      width: PDF_TABLE_WIDTH - 16,
+      width: tableWidth - 16,
       height: 10,
       ellipsis: true,
     });
@@ -511,7 +777,7 @@ function drawGenericTableRow(
   ensureGenericPdfSpace(doc, height + 8);
   const startY = doc.y;
   if (options.isEmphasized) {
-    doc.rect(PDF_PAGE_MARGIN, startY - 2, PDF_TABLE_WIDTH, height + 6).fill("#f8fafc");
+    doc.rect(PDF_PAGE_MARGIN, startY - 2, tableWidth, height + 6).fill("#f8fafc");
   }
   doc.fillColor(options.isEmphasized ? "#0f172a" : "#334155").font(options.isEmphasized ? "Helvetica-Bold" : "Helvetica").fontSize(fontSize);
   let x = PDF_PAGE_MARGIN;
@@ -523,7 +789,7 @@ function drawGenericTableRow(
 }
 
 function ensureGenericPdfSpace(doc: PDFKit.PDFDocument, requiredHeight: number) {
-  if (doc.y + requiredHeight > PDF_PAGE_CONTENT_BOTTOM) {
+  if (doc.y + requiredHeight > getGenericPdfContentBottom(doc)) {
     doc.addPage();
   }
 }

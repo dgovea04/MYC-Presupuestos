@@ -12,7 +12,7 @@ import { buildDisplayRows, levelTypeLabel } from "@/lib/budget/structure";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { createApuWorkbook, createBudgetWorkbook } from "@/lib/exports/excel";
-import { createApuPdf, createBudgetPdf, createTablesPdf, type PdfExportTable } from "@/lib/exports/pdf";
+import { createApuPdf, createBudgetPdf, createTablesPdf, type PdfCurveChartPoint, type PdfExportTable, type PdfGanttChartRow } from "@/lib/exports/pdf";
 import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { formatDate } from "@/lib/utils";
 import {
@@ -527,8 +527,9 @@ async function createWorkScheduleExport(request: NormalizedExportRequest, userId
   }
 
   if (request.format === "pdf") {
+    const pdfTables = buildWorkSchedulePdfTables(request, selectedTables, section);
     return {
-      content: await createTablesPdf("Programacion de obra", selectedTables, `Presupuesto ${section.budgetId}`),
+      content: await createTablesPdf("Programacion de obra", pdfTables, `Presupuesto ${section.budgetId}`, { layout: "landscape" }),
       contentType: CONTENT_TYPES.pdf,
       fileName: request.options.fileName ?? `cronograma-${section.budgetId}-${selectedTables[0]?.slug ?? "export"}.pdf`,
     };
@@ -539,6 +540,76 @@ async function createWorkScheduleExport(request: NormalizedExportRequest, userId
     contentType: CONTENT_TYPES.csv,
     fileName: request.options.fileName ?? `cronograma-${section.budgetId}-${selectedTables[0]?.slug ?? "export"}.csv`,
   };
+}
+
+function buildWorkSchedulePdfTables(
+  request: NormalizedExportRequest,
+  selectedTables: WorkScheduleExportTable[],
+  section: WorkScheduleViewRecord,
+): WorkScheduleExportTable[] {
+  const tables: WorkScheduleExportTable[] = [];
+  const shouldIncludeGantt =
+    request.options.includeGanttChart &&
+    (request.preset === "cronograma_ejecutivo" || request.preset === "cronograma_partidas");
+  const shouldIncludeCurve =
+    request.options.includeCurveChart &&
+    (request.preset === "cronograma_ejecutivo" || request.preset === "curva_s");
+
+  if (shouldIncludeGantt) {
+    tables.push({
+      slug: "gantt",
+      title: "Diagrama Gantt",
+      headers: ["Gantt"],
+      hideHeader: true,
+      rows: [],
+      chart: {
+        kind: "gantt",
+        rows: buildWorkScheduleGanttRows(section, request.options.includeCriticalPath),
+      },
+    });
+  }
+
+  tables.push(...selectedTables.map((table, index) => (shouldIncludeGantt && index === 0 ? { ...table, startOnNewPage: true } : table)));
+
+  if (shouldIncludeCurve) {
+    tables.push({
+      slug: "grafico-curva-s",
+      title: "Grafico Curva S",
+      headers: ["Curva S"],
+      hideHeader: true,
+      rows: [],
+      chart: {
+        kind: "curve",
+        points: buildWorkScheduleCurveChartPoints(section.curveSeries),
+      },
+    });
+  }
+
+  return tables;
+}
+
+function buildWorkScheduleGanttRows(section: WorkScheduleViewRecord, includeCriticalPath: boolean): PdfGanttChartRow[] {
+  return section.groups.flatMap((group) =>
+    group.lines
+      .filter((line) => line.startDate && line.endDate)
+      .map((line) => ({
+        durationDays: line.durationDays,
+        endDate: line.endDate ?? "",
+        group: group.subBudgetName,
+        isCritical: includeCriticalPath && (line.criticalPath?.isCritical ?? false),
+        label: `${line.itemCode} - ${line.description}`,
+        startDate: line.startDate ?? "",
+      })),
+  );
+}
+
+function buildWorkScheduleCurveChartPoints(curveSeries: WorkScheduleCurvePointRecord[]): PdfCurveChartPoint[] {
+  return curveSeries.map((point) => ({
+    accumulatedAmount: point.accumulatedAmount,
+    accumulatedPercentage: point.accumulatedPercentage,
+    label: formatPeriod(point),
+    monthlyAmount: point.monthlyAmount,
+  }));
 }
 
 async function createTableExportResult(
@@ -678,17 +749,41 @@ type WorkScheduleExportTable = {
   title: string;
   headers: string[];
   rows: string[][];
+  columnWidths?: number[];
+  fontSize?: number;
+  headerFontSize?: number;
+  sectionRows?: number[];
+  emphasisRows?: number[];
+  hideHeader?: boolean;
+  chart?: PdfExportTable["chart"];
 };
 
 function buildWorkScheduleTables(section: WorkScheduleViewRecord, decimals: number, dateFormat: string): Record<string, WorkScheduleExportTable> {
   const lines = section.groups.flatMap((group) => group.lines);
+  const overviewRows: string[][] = [];
+  const overviewSectionRows: number[] = [];
+  let currentSubBudgetName = "";
+
+  for (const line of lines) {
+    if (line.subBudgetName !== currentSubBudgetName) {
+      currentSubBudgetName = line.subBudgetName;
+      overviewSectionRows.push(overviewRows.length);
+      overviewRows.push([line.subBudgetName, "", "", "", "", "", "", "", "", ""]);
+    }
+
+    overviewRows.push(formatWorkScheduleOverviewRow(line, decimals, dateFormat));
+  }
 
   return {
     overview: {
       slug: "cronograma-partidas",
       title: "Cronograma de partidas",
-      headers: ["Subpresupuesto", "Codigo", "Descripcion", "Unidad", "Metrado", "PU", "Parcial", "Inicio", "Fin", "Duracion", "Predecesora"],
-      rows: lines.map((line) => formatWorkScheduleOverviewRow(line, decimals, dateFormat)),
+      headers: ["Codigo", "Descripcion", "Unidad", "Metrado", "PU", "Parcial", "Inicio", "Fin", "Duracion", "Predecesora"],
+      columnWidths: [42, 164, 30, 44, 42, 48, 48, 48, 42, 55],
+      fontSize: 5.9,
+      headerFontSize: 6.1,
+      sectionRows: overviewSectionRows,
+      rows: overviewRows,
     },
     summary: buildWorkScheduleSummaryTable(lines, decimals),
     monthly: buildWorkScheduleMonthlyTable(section.valuationCalendar.rows, section.valuationCalendar.periods, decimals),
@@ -708,7 +803,6 @@ function selectWorkScheduleTables(preset: ExportPreset, tables: Record<string, W
 
 function formatWorkScheduleOverviewRow(line: WorkScheduleLineRecord, decimals: number, dateFormat: string) {
   return [
-    line.subBudgetName,
     line.itemCode,
     line.description,
     line.unit,
@@ -736,6 +830,9 @@ function buildWorkScheduleSummaryTable(lines: WorkScheduleLineRecord[], decimals
     slug: "resumen-subpresupuesto",
     title: "Resumen por subpresupuesto",
     headers: ["Subpresupuesto", "Partidas", "Programadas", "Total"],
+    columnWidths: [275, 70, 78, 100],
+    fontSize: 7.4,
+    headerFontSize: 7.5,
     rows: [...rowsBySubBudget.entries()].map(([name, row]) => [name, String(row.count), String(row.scheduled), row.total.toFixed(decimals)]),
   };
 }
@@ -752,6 +849,9 @@ function buildWorkScheduleMonthlyTable(
     slug: "resumen-mensual",
     title: "Resumen mensual",
     headers: ["Periodo", "Partidas con monto", "Programado mensual", "Acumulado", "% acumulado"],
+    columnWidths: [86, 92, 126, 126, 93],
+    fontSize: 7.3,
+    headerFontSize: 7.4,
     rows: periods.map((period) => {
       const monthlyRows = valuationRows.filter((row) => (row.periodAmounts[period.key] ?? 0) > 0);
       const monthly = monthlyRows.reduce((sum, row) => sum + (row.periodAmounts[period.key] ?? 0), 0);
@@ -767,18 +867,35 @@ function buildWorkScheduleValuationTable(
   decimals: number,
 ): WorkScheduleExportTable {
   const periodHeaders = periods.map(formatPeriod);
-  return {
-    slug: "calendario-valorizado",
-    title: "Calendario valorizado",
-    headers: ["Subpresupuesto", "Codigo", "Descripcion", "Parcial", ...periodHeaders, "Total"],
-    rows: valuationRows.map((row) => [
-      row.subBudgetName,
+  const rows: string[][] = [];
+  const sectionRows: number[] = [];
+  let currentSubBudgetName = "";
+
+  for (const row of valuationRows) {
+    if (row.subBudgetName !== currentSubBudgetName) {
+      currentSubBudgetName = row.subBudgetName;
+      sectionRows.push(rows.length);
+      rows.push([row.subBudgetName, "", "", ...periods.map(() => ""), ""]);
+    }
+
+    rows.push([
       row.itemCode,
       row.description,
       row.partial.toFixed(decimals),
       ...periods.map((period) => (row.periodAmounts[period.key] ?? 0).toFixed(decimals)),
       row.rowTotal.toFixed(decimals),
-    ]),
+    ]);
+  }
+
+  return {
+    slug: "calendario-valorizado",
+    title: "Calendario valorizado",
+    headers: ["Codigo", "Descripcion", "Parcial", ...periodHeaders, "Total"],
+    columnWidths: [42, 150, 50, ...periods.map(() => 46), 52],
+    fontSize: periods.length > 8 ? 5.6 : 6.2,
+    headerFontSize: periods.length > 8 ? 5.7 : 6.3,
+    sectionRows,
+    rows,
   };
 }
 
@@ -791,6 +908,9 @@ function buildWorkScheduleResourcesTable(
     slug: "calendario-insumos",
     title: "Calendario de insumos",
     headers: ["Codigo", "Insumo", "Unidad", "Cantidad", "Precio", "Parcial", ...periods.map(formatPeriod)],
+    columnWidths: [42, 142, 32, 48, 46, 48, ...periods.map(() => 45)],
+    fontSize: periods.length > 8 ? 5.5 : 6.1,
+    headerFontSize: periods.length > 8 ? 5.6 : 6.2,
     rows: resourceRows.map((row) => [
       row.code,
       row.description,
@@ -808,6 +928,9 @@ function buildWorkScheduleCurveTable(curveRows: WorkScheduleCurvePointRecord[], 
     slug: "curva-s",
     title: "Curva S",
     headers: ["Periodo", "Programado mensual", "Acumulado", "% acumulado"],
+    columnWidths: [100, 150, 150, 123],
+    fontSize: 7.5,
+    headerFontSize: 7.6,
     rows: curveRows.map((row) => [
       formatPeriod(row),
       row.monthlyAmount.toFixed(decimals),

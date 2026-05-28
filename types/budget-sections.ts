@@ -111,3 +111,10 @@ export type PolynomialFormulaSectionData = {
   formula: PolynomialFormulaRecord | null;
   summary: PolynomialFormulaSectionSummary;
 };
+
+export type PolynomialFormulaSectionsData = {
+  title: string;
+  notes: string[];
+  sections: PolynomialFormulaSectionData[];
+  hasSubBudgetSections: boolean;
+};
