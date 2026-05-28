@@ -56,4 +56,15 @@ describe("validateMetradoSheet", () => {
 
     expect(issues.some((issue) => issue.id === "sheet-linked-unit-mismatch")).toBe(true);
   });
+
+  test("accepts uppercase linked partida unit when it matches the metrado unit", () => {
+    const issues = validateMetradoSheet({
+      sheetUnit: "m3",
+      templateFormulaKeys: ["volume"],
+      linkedPartidaUnit: " M3 ",
+      rows: [validRow],
+    });
+
+    expect(issues.some((issue) => issue.id === "sheet-linked-unit-mismatch")).toBe(false);
+  });
 });

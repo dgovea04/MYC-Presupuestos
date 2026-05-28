@@ -8,6 +8,10 @@ import type {
 
 const validUnits = new Set<MetradoUnit>(["m", "m2", "m3", "kg", "und", "glb"]);
 
+function normalizeLinkedUnit(unit: string): string {
+  return unit.trim().toLowerCase();
+}
+
 export function validateMetradoSheet({
   sheetUnit,
   templateFormulaKeys,
@@ -38,7 +42,7 @@ export function validateMetradoSheet({
     });
   }
 
-  if (linkedPartidaUnit && linkedPartidaUnit !== sheetUnit) {
+  if (linkedPartidaUnit && normalizeLinkedUnit(linkedPartidaUnit) !== sheetUnit) {
     issues.push({
       id: "sheet-linked-unit-mismatch",
       severity: "error",
