@@ -13,20 +13,31 @@ import type {
 
 const metradoUnits: MetradoUnit[] = ["m", "m2", "m3", "kg", "und", "glb"];
 
-export function calculateMetradoRow(row: MetradoRowRecord): MetradoRowRecord {
+function evaluateMetradoRow(row: MetradoRowRecord): {
+  row: MetradoRowRecord;
+  issues: MetradoValidationIssue[];
+} {
   const result = evaluateMetradoFormula(row.formulaKey, row.inputs, row.id);
 
   return {
-    ...row,
-    partial: result.value,
+    row: {
+      ...row,
+      partial: result.value,
+    },
+    issues: result.issues,
   };
+}
+
+export function calculateMetradoRow(row: MetradoRowRecord): MetradoRowRecord {
+  return evaluateMetradoRow(row).row;
 }
 
 export function calculateMetradoSheet(input: {
   unit: MetradoUnit;
   rows: MetradoRowRecord[];
 }): MetradoCalculationResult {
-  const rows = input.rows.map(calculateMetradoRow);
+  const evaluatedRows = input.rows.map(evaluateMetradoRow);
+  const rows = evaluatedRows.map((evaluatedRow) => evaluatedRow.row);
   const totalsByUnit = metradoUnits.reduce<Record<MetradoUnit, number>>(
     (totals, unit) => {
       const total = rows
@@ -38,9 +49,7 @@ export function calculateMetradoSheet(input: {
     },
     { m: 0, m2: 0, m3: 0, kg: 0, und: 0, glb: 0 },
   );
-  const issues: MetradoValidationIssue[] = rows.flatMap((row) =>
-    evaluateMetradoFormula(row.formulaKey, row.inputs, row.id).issues,
-  );
+  const issues = evaluatedRows.flatMap((evaluatedRow) => evaluatedRow.issues);
 
   return {
     rows,
