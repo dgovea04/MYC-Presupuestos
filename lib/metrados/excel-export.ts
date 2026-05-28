@@ -18,32 +18,40 @@ const inputColumns = [
 
 const partialColumn = 18;
 
+type MetradoWorksheetColumn = {
+  header: string;
+  key: string;
+  width: number;
+};
+
+const worksheetColumns: MetradoWorksheetColumn[] = [
+  { header: "Sector", key: "sector", width: 14 },
+  { header: "Eje", key: "eje", width: 12 },
+  { header: "Nivel", key: "nivel", width: 12 },
+  { header: "Descripcion", key: "description", width: 36 },
+  { header: "Formula", key: "formulaKey", width: 18 },
+  { header: "Unidad", key: "unit", width: 10 },
+  { header: "Largo", key: "largo", width: 10 },
+  { header: "Ancho", key: "ancho", width: 10 },
+  { header: "Alto", key: "alto", width: 10 },
+  { header: "Cantidad", key: "cantidad", width: 12 },
+  { header: "Longitud", key: "longitud", width: 12 },
+  { header: "Peso unitario", key: "pesoUnitario", width: 14 },
+  { header: "Perimetro", key: "perimetro", width: 12 },
+  { header: "Altura", key: "altura", width: 10 },
+  { header: "Area", key: "area", width: 10 },
+  { header: "Factor", key: "factor", width: 10 },
+  { header: "Manual", key: "manual", width: 10 },
+  { header: "Parcial", key: "partial", width: 14 },
+];
+
 export async function createMetradoWorkbook(sheet: MetradoSheetRecord) {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Metrado");
 
   workbook.creator = "MYC Presupuestos";
   worksheet.views = [{ state: "frozen", ySplit: 7 }];
-  worksheet.columns = [
-    { header: "Sector", key: "sector", width: 14 },
-    { header: "Eje", key: "eje", width: 12 },
-    { header: "Nivel", key: "nivel", width: 12 },
-    { header: "Descripcion", key: "description", width: 36 },
-    { header: "Formula", key: "formulaKey", width: 18 },
-    { header: "Unidad", key: "unit", width: 10 },
-    { header: "Largo", key: "largo", width: 10 },
-    { header: "Ancho", key: "ancho", width: 10 },
-    { header: "Alto", key: "alto", width: 10 },
-    { header: "Cantidad", key: "cantidad", width: 12 },
-    { header: "Longitud", key: "longitud", width: 12 },
-    { header: "Peso unitario", key: "pesoUnitario", width: 14 },
-    { header: "Perimetro", key: "perimetro", width: 12 },
-    { header: "Altura", key: "altura", width: 10 },
-    { header: "Area", key: "area", width: 10 },
-    { header: "Factor", key: "factor", width: 10 },
-    { header: "Manual", key: "manual", width: 10 },
-    { header: "Parcial", key: "partial", width: 14 },
-  ];
+  worksheet.columns = worksheetColumns;
 
   worksheet.mergeCells("A1:R1");
   worksheet.getCell("A1").value = "METRADO AVANZADO";
@@ -64,7 +72,7 @@ export async function createMetradoWorkbook(sheet: MetradoSheetRecord) {
   worksheet.getCell("E4").value = sheet.unit;
 
   const header = worksheet.getRow(7);
-  header.values = worksheet.columns.map((column) => column.header);
+  header.values = worksheetColumns.map((column) => column.header);
   header.font = { bold: true, color: { argb: "FFFFFFFF" } };
   header.fill = {
     type: "pattern",
