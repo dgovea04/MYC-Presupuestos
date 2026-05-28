@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 
-import type { MetradoSheetRecord } from "@/types/metrado";
+import type { MetradoFormulaInputKey, MetradoSheetRecord } from "@/types/metrado";
 
 const inputColumns = [
   "largo",
@@ -9,7 +9,14 @@ const inputColumns = [
   "cantidad",
   "longitud",
   "pesoUnitario",
-] as const;
+  "perimetro",
+  "altura",
+  "area",
+  "factor",
+  "manual",
+] as const satisfies MetradoFormulaInputKey[];
+
+const partialColumn = 18;
 
 export async function createMetradoWorkbook(sheet: MetradoSheetRecord) {
   const workbook = new ExcelJS.Workbook();
@@ -30,10 +37,15 @@ export async function createMetradoWorkbook(sheet: MetradoSheetRecord) {
     { header: "Cantidad", key: "cantidad", width: 12 },
     { header: "Longitud", key: "longitud", width: 12 },
     { header: "Peso unitario", key: "pesoUnitario", width: 14 },
+    { header: "Perimetro", key: "perimetro", width: 12 },
+    { header: "Altura", key: "altura", width: 10 },
+    { header: "Area", key: "area", width: 10 },
+    { header: "Factor", key: "factor", width: 10 },
+    { header: "Manual", key: "manual", width: 10 },
     { header: "Parcial", key: "partial", width: 14 },
   ];
 
-  worksheet.mergeCells("A1:M1");
+  worksheet.mergeCells("A1:R1");
   worksheet.getCell("A1").value = "METRADO AVANZADO";
   worksheet.getCell("A1").font = {
     bold: true,
@@ -71,12 +83,12 @@ export async function createMetradoWorkbook(sheet: MetradoSheetRecord) {
     inputColumns.forEach((key, inputIndex) => {
       excelRow.getCell(inputIndex + 7).value = row.inputs[key] ?? "";
     });
-    excelRow.getCell(13).value = row.partial;
+    excelRow.getCell(partialColumn).value = row.partial;
   });
 
   const totalRowNumber = sheet.rows.length + 9;
-  worksheet.getCell(`L${totalRowNumber}`).value = "Total";
-  worksheet.getCell(`M${totalRowNumber}`).value = sheet.totalQuantity;
+  worksheet.getCell(`Q${totalRowNumber}`).value = "Total";
+  worksheet.getCell(`R${totalRowNumber}`).value = sheet.totalQuantity;
   worksheet.getRow(totalRowNumber).font = { bold: true };
 
   return workbook.xlsx.writeBuffer();

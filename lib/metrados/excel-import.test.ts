@@ -26,4 +26,25 @@ describe("normalizeMetradoImportRows", () => {
     });
     expect(result.issues).toEqual([]);
   });
+
+  test("reports invalid unit and formula with safe fallbacks", () => {
+    const result = normalizeMetradoImportRows([
+      {
+        sector: "B",
+        unit: "pies",
+        formulaKey: "unsupported",
+        manual: 4,
+      },
+    ]);
+
+    expect(result.rows[0]).toMatchObject({
+      unit: "und",
+      formulaKey: "manual",
+      inputs: { manual: 4 },
+    });
+    expect(result.issues).toEqual([
+      expect.objectContaining({ field: "unit", rowId: "import-row-1" }),
+      expect.objectContaining({ field: "formulaKey", rowId: "import-row-1" }),
+    ]);
+  });
 });

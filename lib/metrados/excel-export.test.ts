@@ -28,7 +28,13 @@ const sheet: MetradoSheetRecord = {
       description: "Zapata",
       unit: "m3",
       formulaKey: "volume",
-      inputs: { largo: 2, ancho: 3, alto: 1 },
+      inputs: {
+        largo: 2,
+        ancho: 3,
+        alto: 1,
+        factor: 1.2,
+        manual: 6,
+      },
       partial: 6,
       sortOrder: 1,
     },
@@ -44,6 +50,18 @@ describe("createMetradoWorkbook", () => {
     const worksheet = workbook.getWorksheet("Metrado");
     expect(worksheet?.getCell("A1").value).toBe("METRADO AVANZADO");
     expect(worksheet?.getCell("B3").value).toBe("Obra Demo");
+    expect(worksheet?.getCell("E3").value).toBe("Presupuesto Demo");
+    expect(worksheet?.getCell("B4").value).toBe("Metrado de concreto");
+    expect(worksheet?.getCell("E4").value).toBe("m3");
+    expect(worksheet?.views[0]).toMatchObject({ state: "frozen", ySplit: 7 });
+    expect(worksheet?.getCell("A7").value).toBe("Sector");
+    expect(worksheet?.getCell("Q7").value).toBe("Manual");
+    expect(worksheet?.getCell("A8").value).toBe("A");
     expect(worksheet?.getCell("E8").value).toBe("volume");
+    expect(worksheet?.getCell("P8").value).toBe(1.2);
+    expect(worksheet?.getCell("Q8").value).toBe(6);
+    expect(worksheet?.getCell("R8").value).toBe(6);
+    expect(worksheet?.getCell("Q10").value).toBe("Total");
+    expect(worksheet?.getCell("R10").value).toBe(6);
   });
 });
