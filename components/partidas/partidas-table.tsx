@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { GitCompareArrows, Plus } from "lucide-react";
 import { PartidaCreateSheet } from "@/components/partidas/partida-create-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
@@ -345,6 +346,12 @@ export function PartidasTable({
                   <Plus className="h-4 w-4" />
                   Nueva partida
                 </Button>
+                <Link href="/partidas/generar">
+                  <Button variant="outline" size="sm" className="gap-2 bg-white">
+                    <GitCompareArrows className="h-4 w-4" />
+                    Generar por similitud
+                  </Button>
+                </Link>
                 <Button variant="outline" size="sm" className="bg-white" onClick={() => fileInputRef.current?.click()}>
                   Importar Excel
                 </Button>

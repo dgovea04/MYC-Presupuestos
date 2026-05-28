@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BotMessageSquare, GripVertical, Sparkles } from "lucide-react";
+import { BotMessageSquare, GitCompareArrows, GripVertical, Sparkles } from "lucide-react";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -442,6 +442,12 @@ export function ApuEditorSheet({
                   <Sparkles className="h-4 w-4" />
                   {aiApuLoading ? "Generando..." : "Generar con IA"}
                 </Button>
+                <Link href={buildPartidaGeneratorHref(currentItemRecord.description, currentItemRecord.unit)}>
+                  <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
+                    <GitCompareArrows className="h-4 w-4" />
+                    Generador de partidas
+                  </Button>
+                </Link>
                 <Link href={buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice)}>
                   <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
                     Abrir en Copiloto
@@ -1373,6 +1379,17 @@ function buildAiHref(action: "chat" | "apu" | "autocomplete" | "review", descrip
   if (message) params.set("message", message);
 
   return `/ai?${params.toString()}`;
+}
+
+function buildPartidaGeneratorHref(description: string, unit?: string) {
+  const params = new URLSearchParams({
+    sourceText: description,
+    generatedName: description,
+  });
+
+  if (unit) params.set("unit", unit);
+
+  return `/partidas/generar?${params.toString()}`;
 }
 
 function buildResourceSearchText(resource: ResourceRecord) {

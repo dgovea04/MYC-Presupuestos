@@ -92,7 +92,7 @@ Esto crea:
 ## 6. Levantar el proyecto
 
 ```powershell
-npm.cmd run dev
+b presu
 ```
 
 Luego abre:

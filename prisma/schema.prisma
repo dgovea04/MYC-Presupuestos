@@ -143,6 +143,7 @@ model User {
   aiTokenLedger       AiTokenLedger[] @relation("AiTokenLedgerUser")
   aiTokenAdjustments  AiTokenLedger[] @relation("AiTokenLedgerAdmin")
   noteTasks           NoteTask[]
+  generatedPartidas   GeneratedPartida[]
 
   @@index([role])
   @@index([status])
@@ -481,6 +482,7 @@ model Resource {
   company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   apuResources ApuResource[]
   partidaRows  PartidaApuRow[]
+  generatedPartidaInsumos GeneratedPartidaInsumo[]
 
   @@index([companyId])
 }
@@ -498,8 +500,66 @@ model CatalogPartida {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   apuRows         PartidaApuRow[]
+  generatedAsResult GeneratedPartida[] @relation("GeneratedCatalogPartida")
+  generatedSources  GeneratedPartidaSource[] @relation("GeneratedPartidaSourceCatalog")
 
   @@index([description])
+}
+
+model GeneratedPartida {
+  id                        String                    @id @default(cuid())
+  sourceText                String
+  generatedName             String
+  unit                      String
+  similarityScore           Decimal                   @default(0) @db.Decimal(10, 4)
+  createdById               String
+  generatedCatalogPartidaId String?
+  metadata                  Json                      @default("{}")
+  createdAt                 DateTime                  @default(now())
+  createdBy                 User                      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  generatedCatalogPartida   CatalogPartida?           @relation("GeneratedCatalogPartida", fields: [generatedCatalogPartidaId], references: [id], onDelete: SetNull)
+  sources                   GeneratedPartidaSource[]
+  insumos                   GeneratedPartidaInsumo[]
+
+  @@index([createdById, createdAt(sort: Desc)])
+  @@index([generatedCatalogPartidaId])
+}
+
+model GeneratedPartidaSource {
+  id                 String           @id @default(cuid())
+  generatedPartidaId String
+  partidaSourceId    String
+  score              Decimal          @default(0) @db.Decimal(10, 4)
+  isPrimary          Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  generatedPartida   GeneratedPartida @relation(fields: [generatedPartidaId], references: [id], onDelete: Cascade)
+  partidaSource      CatalogPartida   @relation("GeneratedPartidaSourceCatalog", fields: [partidaSourceId], references: [id], onDelete: Restrict)
+
+  @@unique([generatedPartidaId, partidaSourceId])
+  @@index([partidaSourceId])
+}
+
+model GeneratedPartidaInsumo {
+  id                 String           @id @default(cuid())
+  generatedPartidaId String
+  resourceId         String?
+  description        String
+  unit               String
+  resourceType       String?
+  suggestedQuantity  Decimal          @default(0) @db.Decimal(18, 4)
+  finalQuantity      Decimal          @default(0) @db.Decimal(18, 4)
+  unitPrice          Decimal          @default(0) @db.Decimal(18, 4)
+  confidence         Decimal          @default(0) @db.Decimal(10, 4)
+  confidenceLevel    String
+  calculationMethod  String
+  sourcePartidaIds   String[]         @default([])
+  statistics         Json             @default("{}")
+  createdAt          DateTime         @default(now())
+  generatedPartida   GeneratedPartida @relation(fields: [generatedPartidaId], references: [id], onDelete: Cascade)
+  resource           Resource?        @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([generatedPartidaId])
+  @@index([resourceId])
 }
 
 model PartidaApuRow {

@@ -13,6 +13,7 @@ import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { createApuWorkbook, createBudgetWorkbook } from "@/lib/exports/excel";
 import { createApuPdf, createBudgetPdf, createTablesPdf, type PdfExportTable } from "@/lib/exports/pdf";
+import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { formatDate } from "@/lib/utils";
 import {
   DEFAULT_EXPORT_OPTIONS,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/exports/definitions";
 import type { BudgetRecord } from "@/types/budget";
 import type { ReportResponsibleMeta } from "@/types/report-meta";
+import type { ResourceCategory } from "@/types/resource";
 import type {
   WorkScheduleCurvePointRecord,
   WorkScheduleLineRecord,
@@ -248,22 +250,50 @@ async function createResourcesExport(request: NormalizedExportRequest, userId: s
   const settings = await getUserSettings(userId);
   const resources = await getResourcesByUser(userId);
   const decimals = request.options.currencyDecimals ?? settings.currencyDecimals;
+  const sortedResources = [...resources].sort((left, right) => {
+    const categoryComparison = left.category.localeCompare(right.category);
+    return categoryComparison === 0 ? left.description.localeCompare(right.description) : categoryComparison;
+  });
+  const rows: string[][] = [];
+  const sectionRows: number[] = [];
+  let currentCategory: ResourceCategory | null = null;
+
+  for (const resource of sortedResources) {
+    if (resource.category !== currentCategory) {
+      currentCategory = resource.category;
+      sectionRows.push(rows.length);
+      rows.push([formatResourceCategoryLabel(resource.category).toUpperCase(), "", "", "", "", ""]);
+    }
+
+    rows.push([
+      resource.code,
+      resource.description,
+      resource.unit,
+      normalizeResourceIuCode(resource.iu) ?? "",
+      resource.currency,
+      decimalToNumber(resource.unitPrice).toFixed(decimals),
+    ]);
+  }
+
   const table: ExportTable = {
     slug: "catalogo-insumos",
     title: "Catalogo de insumos",
-    headers: ["Codigo", "Descripcion", "Categoria", "Unidad", "IU", "Moneda", "Precio"],
-    rows: resources.map((resource) => [
-      resource.code,
-      resource.description,
-      resource.category,
-      resource.unit,
-      resource.iu ?? "",
-      resource.currency,
-      decimalToNumber(resource.unitPrice).toFixed(decimals),
-    ]),
+    headers: ["Codigo", "Descripcion", "Unidad", "IU", "Moneda", "Precio"],
+    columnWidths: [56, 254, 45, 45, 50, 73],
+    fontSize: 7,
+    headerFontSize: 7.2,
+    sectionRows,
+    rows,
   };
 
   return createTableExportResult(request, [table], "catalogo-insumos", "Catalogo de insumos");
+}
+
+function formatResourceCategoryLabel(category: ResourceCategory) {
+  if (category === "LABOR") return "Mano de obra";
+  if (category === "EQUIPMENT") return "Equipos";
+  if (category === "TOOLS") return "Herramientas";
+  return "Materiales";
 }
 
 async function createBudgetResourcesExport(request: NormalizedExportRequest, userId: string): Promise<ExportResult> {

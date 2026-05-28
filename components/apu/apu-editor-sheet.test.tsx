@@ -49,11 +49,16 @@ describe("ApuEditorSheet", () => {
     expect(getByTestId("apu-add-resource-search").getAttribute("data-excel-field-border-opt-out")).toBe("true");
     const explainHref = getLinkByText("Explicar partida").getAttribute("href") ?? "";
     const copilotHref = getLinkByText("Abrir en Copiloto").getAttribute("href") ?? "";
+    const generatorHref = getLinkByText("Generador de partidas").getAttribute("href") ?? "";
     expect(explainHref).toContain("/ai?action=chat");
     expect(explainHref).toContain("selectedItem=Partida+demo");
     expect(explainHref).toContain("description=Partida+demo");
     expect(explainHref).toContain("module=Editor+APU+de+sub+presupuesto");
     expect(getButtonByText("Generar con IA")).toBeTruthy();
+    expect(generatorHref).toContain("/partidas/generar?");
+    expect(generatorHref).toContain("sourceText=Partida+demo");
+    expect(generatorHref).toContain("generatedName=Partida+demo");
+    expect(generatorHref).toContain("unit=m2");
     expect(copilotHref).toContain("/ai?action=apu");
     expect(copilotHref).toContain("selectedItem=Partida+demo");
     expect(copilotHref).toContain("description=Partida+demo");
