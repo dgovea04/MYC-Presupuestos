@@ -3,6 +3,10 @@ import Decimal from "decimal.js";
 
 import { calculateMetradoSheet } from "@/lib/calculations/metrados";
 import { prisma } from "@/lib/db/prisma";
+import {
+  hasBlockingMetradoIssues,
+  validateMetradoSheet,
+} from "@/lib/metrados/validation";
 import { metradoTemplates } from "@/lib/metrados/templates";
 import type {
   MetradoFormulaInputKey,
@@ -71,6 +75,19 @@ type MetradoPartidaLinkCreateInput = {
   budgetItemId: string;
 };
 
+type MetradoRowCreateData = {
+  sheetId: string;
+  sector: string;
+  eje: string;
+  nivel: string;
+  description: string;
+  unit: MetradoUnit;
+  formulaKey: MetradoFormulaKey;
+  inputs: MetradoFormulaInputs;
+  partial: number;
+  sortOrder: number;
+};
+
 type MetradoCreationOptions = {
   projects: Array<{ id: string; name: string }>;
   budgets: Array<{ id: string; projectId: string; name: string }>;
@@ -96,17 +113,70 @@ export function parseMetradoInputs(value: Prisma.JsonValue): MetradoFormulaInput
       return inputs;
     }
 
-    if (typeof rawValue !== "number" && typeof rawValue !== "string") {
-      return inputs;
-    }
-
-    const parsed = new Decimal(rawValue);
-    if (parsed.isFinite()) {
-      inputs[key] = parsed.toNumber();
+    const parsed = parseFiniteDecimal(rawValue);
+    if (parsed !== null) {
+      inputs[key] = parsed;
     }
 
     return inputs;
   }, {});
+}
+
+function parseFiniteDecimal(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = new Decimal(trimmed);
+    if (parsed.isFinite()) {
+      return parsed.toNumber();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function buildMetradoRowCreateData(
+  row: MetradoRowRecord,
+  sheetId: string,
+): MetradoRowCreateData {
+  return {
+    sheetId,
+    sector: row.sector,
+    eje: row.eje,
+    nivel: row.nivel,
+    description: row.description,
+    unit: row.unit,
+    formulaKey: row.formulaKey,
+    inputs: row.inputs,
+    partial: row.partial,
+    sortOrder: row.sortOrder,
+  };
+}
+
+export function assertMetradoRowsArePersistable(input: {
+  sheetUnit: MetradoUnit;
+  templateFormulaKeys: MetradoFormulaKey[];
+  linkedPartidaUnit?: string | null;
+  rows: MetradoRowRecord[];
+}): void {
+  const issues = validateMetradoSheet(input);
+
+  if (hasBlockingMetradoIssues(issues)) {
+    throw new Error("No se pueden guardar filas de metrado con errores de validacion.");
+  }
 }
 
 export function buildBudgetItemQuantityPatch(primaryTotal: number): { quantity: number } {
@@ -373,20 +443,57 @@ export async function replaceMetradoRows(
 ): Promise<MetradoSheetRecord | null> {
   const existing = await prisma.metradoSheet.findFirst({
     where: { id: sheetId, userId },
-    select: { id: true, unit: true },
+    select: {
+      id: true,
+      unit: true,
+      template: {
+        select: {
+          formulas: {
+            select: {
+              key: true,
+            },
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      },
+      partidaLinks: {
+        include: {
+          budgetItem: {
+            select: {
+              unit: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+        take: 1,
+      },
+    },
   });
 
   if (!existing) {
     return null;
   }
 
+  const sheetUnit = toMetradoUnit(existing.unit);
+  const normalizedRows = rows.map((row, index) => ({
+    ...row,
+    sheetId,
+    sortOrder: row.sortOrder ?? index + 1,
+  }));
+  assertMetradoRowsArePersistable({
+    sheetUnit,
+    templateFormulaKeys: existing.template.formulas.map((formula) => toMetradoFormulaKey(formula.key)),
+    linkedPartidaUnit: existing.partidaLinks[0]?.budgetItem.unit ?? null,
+    rows: normalizedRows,
+  });
+
   const calculated = calculateMetradoSheet({
-    unit: toMetradoUnit(existing.unit),
-    rows: rows.map((row, index) => ({
-      ...row,
-      sheetId,
-      sortOrder: row.sortOrder ?? index + 1,
-    })),
+    unit: sheetUnit,
+    rows: normalizedRows,
   });
 
   await prisma.$transaction(async (tx) => {
@@ -396,19 +503,7 @@ export async function replaceMetradoRows(
 
     for (const row of calculated.rows) {
       await tx.metradoRow.create({
-        data: {
-          ...buildPersistedRowIdPatch(row.id),
-          sheetId,
-          sector: row.sector,
-          eje: row.eje,
-          nivel: row.nivel,
-          description: row.description,
-          unit: row.unit,
-          formulaKey: row.formulaKey,
-          inputs: row.inputs,
-          partial: row.partial,
-          sortOrder: row.sortOrder,
-        },
+        data: buildMetradoRowCreateData(row, sheetId),
       });
     }
 
@@ -543,14 +638,6 @@ function mapMetradoRowRecord(row: {
     partial: Number(row.partial),
     sortOrder: row.sortOrder,
   };
-}
-
-function buildPersistedRowIdPatch(id: string): { id?: string } {
-  if (!id || id.startsWith("row-")) {
-    return {};
-  }
-
-  return { id };
 }
 
 function isFormulaInputKey(value: string): value is MetradoFormulaInputKey {
