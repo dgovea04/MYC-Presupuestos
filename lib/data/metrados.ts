@@ -484,12 +484,15 @@ export async function replaceMetradoRows(
     sheetId,
     sortOrder: row.sortOrder ?? index + 1,
   }));
-  assertMetradoRowsArePersistable({
-    sheetUnit,
-    templateFormulaKeys: existing.template.formulas.map((formula) => toMetradoFormulaKey(formula.key)),
-    linkedPartidaUnit: existing.partidaLinks[0]?.budgetItem.unit ?? null,
-    rows: normalizedRows,
-  });
+
+  if (normalizedRows.length > 0) {
+    assertMetradoRowsArePersistable({
+      sheetUnit,
+      templateFormulaKeys: existing.template.formulas.map((formula) => toMetradoFormulaKey(formula.key)),
+      linkedPartidaUnit: existing.partidaLinks[0]?.budgetItem.unit ?? null,
+      rows: normalizedRows,
+    });
+  }
 
   const calculated = calculateMetradoSheet({
     unit: sheetUnit,

@@ -68,8 +68,9 @@ export function MetradoExportActions({
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/json,.json"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,.json"
         className="hidden"
+        aria-label="Importar metrado"
         onChange={(event) => {
           const file = event.currentTarget.files?.[0] ?? null;
           event.currentTarget.value = "";

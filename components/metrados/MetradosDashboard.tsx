@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import type { CellValue, Worksheet } from "exceljs";
 import { Calculator, FileSpreadsheet, Plus } from "lucide-react";
 
 import {
@@ -108,15 +109,22 @@ export function MetradosDashboard({
     [templateType],
   );
   const calculated = useMemo(() => calculateMetradoSheet({ unit: sheetUnit, rows }), [rows, sheetUnit]);
+  const selectedPartida = partidas.find((partida) => partida.id === partidaId) ?? null;
   const validationIssues = useMemo(
     () =>
       validateMetradoSheet({
         sheetUnit,
         templateFormulaKeys: template.formulaKeys,
-        linkedPartidaUnit: selectedSheet?.partidaLink?.budgetItemUnit ?? null,
+        linkedPartidaUnit: selectedSheet?.partidaLink?.budgetItemUnit ?? selectedPartida?.unit ?? null,
         rows: calculated.rows,
       }),
-    [calculated.rows, selectedSheet?.partidaLink?.budgetItemUnit, sheetUnit, template.formulaKeys],
+    [
+      calculated.rows,
+      selectedPartida?.unit,
+      selectedSheet?.partidaLink?.budgetItemUnit,
+      sheetUnit,
+      template.formulaKeys,
+    ],
   );
   const issues = useMemo(
     () => mergeIssues([...calculated.issues, ...validationIssues]),
@@ -129,7 +137,7 @@ export function MetradosDashboard({
   const activeFormula =
     template.formulas.find((formula) => formula.key === activeRow?.formulaKey) ?? template.formulas[0] ?? null;
   const exportHref = selectedSheet ? `/api/metrados-avanzados/${selectedSheet.id}/export` : null;
-  const selectedPartida = partidas.find((partida) => partida.id === partidaId) ?? null;
+  const persistedSheetSelected = Boolean(selectedSheet);
 
   function selectSheet(sheetId: string) {
     const nextSheet = sheets.find((sheet) => sheet.id === sheetId) ?? null;
@@ -177,9 +185,7 @@ export function MetradosDashboard({
         const draftRows = calculated.rows;
         const sheet = await createSheetRecord();
         selectCreatedSheet(sheet, draftRows);
-        if (draftRows.length > 0) {
-          await persistDraft(sheet.id, draftRows);
-        }
+        await persistDraft(sheet.id, draftRows);
         setFeedback("Borrador guardado.");
       }, "No se pudo guardar el borrador.");
       return;
@@ -217,8 +223,7 @@ export function MetradosDashboard({
     }
 
     await runAction(async () => {
-      const parsed = JSON.parse(await file.text()) as unknown;
-      const rawRows = extractRowsArray(parsed);
+      const rawRows = await extractRowsFromFile(file);
       const response = await fetch(`/api/metrados-avanzados/${selectedSheet.id}/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -268,14 +273,7 @@ export function MetradosDashboard({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: sheetName, unit: sheetUnit }),
     });
-    const metadataPayload = await readJson<SheetResponse>(metadataResponse);
-
-    if (draftRows.length === 0) {
-      setSheets((current) =>
-        current.map((sheet) => (sheet.id === metadataPayload.sheet.id ? metadataPayload.sheet : sheet)),
-      );
-      return;
-    }
+    await readJson<SheetResponse>(metadataResponse);
 
     const rowsResponse = await fetch(`/api/metrados-avanzados/${sheetId}/rows`, {
       method: "PUT",
@@ -324,7 +322,11 @@ export function MetradosDashboard({
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <Field label="Hoja">
-              <Select value={selectedSheetId} onChange={(event) => selectSheet(event.currentTarget.value)}>
+              <Select
+                id="metrado-sheet-select"
+                value={selectedSheetId}
+                onChange={(event) => selectSheet(event.currentTarget.value)}
+              >
                 <option value="">Nueva hoja</option>
                 {sheets.map((sheet) => (
                   <option key={sheet.id} value={sheet.id}>
@@ -335,7 +337,9 @@ export function MetradosDashboard({
             </Field>
             <Field label="Proyecto">
               <Select
+                id="metrado-project-select"
                 value={projectId}
+                disabled={persistedSheetSelected}
                 onChange={(event) => {
                   const nextProjectId = event.currentTarget.value;
                   const nextBudgetId = budgets.find((budget) => budget.projectId === nextProjectId)?.id ?? "";
@@ -353,7 +357,9 @@ export function MetradosDashboard({
             </Field>
             <Field label="Presupuesto">
               <Select
+                id="metrado-budget-select"
                 value={budgetId}
+                disabled={persistedSheetSelected}
                 onChange={(event) => {
                   const nextBudgetId = event.currentTarget.value;
                   setBudgetId(nextBudgetId);
@@ -368,16 +374,25 @@ export function MetradosDashboard({
               </Select>
             </Field>
             <Field label="Partida">
-              <Select value={partidaId} onChange={(event) => setPartidaId(event.currentTarget.value)}>
+              <Select
+                id="metrado-partida-select"
+                value={partidaId}
+                disabled={persistedSheetSelected}
+                onChange={(event) => setPartidaId(event.currentTarget.value)}
+              >
                 {filteredPartidas.map((partida) => (
                   <option key={partida.id} value={partida.id}>
-                    {partida.code} · {partida.unit}
+                    {partida.code} - {partida.unit}
                   </option>
                 ))}
               </Select>
             </Field>
             <Field label="Unidad">
-              <Select value={sheetUnit} onChange={(event) => setSheetUnit(event.currentTarget.value as MetradoUnit)}>
+              <Select
+                id="metrado-unit-select"
+                value={sheetUnit}
+                onChange={(event) => setSheetUnit(event.currentTarget.value as MetradoUnit)}
+              >
                 {units.map((unit) => (
                   <option key={unit} value={unit}>
                     {unit}
@@ -388,7 +403,11 @@ export function MetradosDashboard({
           </div>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,360px)]">
             <Field label="Nombre">
-              <Input value={sheetName} onChange={(event) => setSheetName(event.currentTarget.value)} />
+              <Input
+                id="metrado-name-input"
+                value={sheetName}
+                onChange={(event) => setSheetName(event.currentTarget.value)}
+              />
             </Field>
             <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               <span className="block truncate font-medium text-slate-900">
@@ -480,9 +499,11 @@ export function MetradosDashboard({
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
+  const controlId = getChildControlId(children);
+
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={controlId}>{label}</Label>
       {children}
     </div>
   );
@@ -517,6 +538,101 @@ async function readJson<TPayload>(response: Response): Promise<TPayload> {
   return body;
 }
 
+async function extractRowsFromFile(file: File): Promise<Record<string, unknown>[]> {
+  if (isExcelFile(file)) {
+    return parseExcelRows(file);
+  }
+
+  const parsed = JSON.parse(await file.text()) as unknown;
+  return extractRowsArray(parsed);
+}
+
+async function parseExcelRows(file: File): Promise<Record<string, unknown>[]> {
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await file.arrayBuffer());
+  const worksheet = workbook.getWorksheet("Metrado") ?? workbook.worksheets[0];
+
+  if (!worksheet) {
+    throw new Error("El archivo Excel no contiene una hoja de metrado.");
+  }
+
+  return mapWorksheetRows(worksheet);
+}
+
+function mapWorksheetRows(worksheet: Worksheet): Record<string, unknown>[] {
+  const rows: Record<string, unknown>[] = [];
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber < 8) {
+      return;
+    }
+
+    const totalMarker = cellToImportValue(row.getCell(17).value);
+    if (typeof totalMarker === "string" && totalMarker.trim().toLowerCase() === "total") {
+      return;
+    }
+
+    const record: Record<string, unknown> = {
+      sector: cellToImportValue(row.getCell(1).value),
+      eje: cellToImportValue(row.getCell(2).value),
+      nivel: cellToImportValue(row.getCell(3).value),
+      description: cellToImportValue(row.getCell(4).value),
+      formulaKey: cellToImportValue(row.getCell(5).value),
+      unit: cellToImportValue(row.getCell(6).value),
+      largo: cellToImportValue(row.getCell(7).value),
+      ancho: cellToImportValue(row.getCell(8).value),
+      alto: cellToImportValue(row.getCell(9).value),
+      cantidad: cellToImportValue(row.getCell(10).value),
+      longitud: cellToImportValue(row.getCell(11).value),
+      pesoUnitario: cellToImportValue(row.getCell(12).value),
+      perimetro: cellToImportValue(row.getCell(13).value),
+      altura: cellToImportValue(row.getCell(14).value),
+      area: cellToImportValue(row.getCell(15).value),
+      factor: cellToImportValue(row.getCell(16).value),
+      manual: cellToImportValue(row.getCell(17).value),
+    };
+
+    if (!isEmptyImportRecord(record)) {
+      rows.push(record);
+    }
+  });
+
+  return rows;
+}
+
+function cellToImportValue(value: CellValue): string | number | boolean | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(cellToImportValue).filter((item) => item !== null).join(" ");
+  }
+
+  if (hasStringProperty(value, "text")) {
+    return value.text;
+  }
+
+  if (hasCellValueProperty(value, "result")) {
+    return cellToImportValue(value.result);
+  }
+
+  if (hasRichText(value)) {
+    return value.richText.map((item) => item.text).join("");
+  }
+
+  return null;
+}
+
 function extractRowsArray(value: unknown): Record<string, unknown>[] {
   if (Array.isArray(value) && value.every(isRecord)) {
     return value;
@@ -527,6 +643,50 @@ function extractRowsArray(value: unknown): Record<string, unknown>[] {
   }
 
   throw new Error("El archivo debe contener filas JSON.");
+}
+
+function getChildControlId(children: ReactNode): string | undefined {
+  if (typeof children !== "object" || children === null || !("props" in children)) {
+    return undefined;
+  }
+
+  const props = children.props as { id?: unknown };
+  return typeof props.id === "string" ? props.id : undefined;
+}
+
+function hasStringProperty<TProperty extends string>(
+  value: object,
+  property: TProperty,
+): value is Record<TProperty, string> {
+  return property in value && typeof (value as Record<TProperty, unknown>)[property] === "string";
+}
+
+function hasCellValueProperty<TProperty extends string>(
+  value: object,
+  property: TProperty,
+): value is Record<TProperty, CellValue> {
+  return property in value;
+}
+
+function hasRichText(value: object): value is { richText: Array<{ text: string }> } {
+  if (!("richText" in value) || !Array.isArray(value.richText)) {
+    return false;
+  }
+
+  return value.richText.every((item) => isRecord(item) && typeof item.text === "string");
+}
+
+function isExcelFile(file: File): boolean {
+  return (
+    file.name.toLowerCase().endsWith(".xlsx") ||
+    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+}
+
+function isEmptyImportRecord(record: Record<string, unknown>): boolean {
+  return Object.values(record).every(
+    (value) => value === null || value === undefined || String(value).trim() === "",
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -97,24 +97,28 @@ export function MetradoSheetTable({
               <TR key={row.id} className="h-11">
                 <TD className="px-2 py-1 text-center text-xs text-slate-400">{row.sortOrder}</TD>
                 <TextCell
+                  ariaLabel={`Sector fila ${row.sortOrder}`}
                   value={row.sector}
                   active={isActive(activeCell, row.id, "sector")}
                   onFocus={() => onActiveCellChange({ rowId: row.id, field: "sector" })}
                   onChange={(value) => onPatchRow(row.id, { sector: value })}
                 />
                 <TextCell
+                  ariaLabel={`Eje fila ${row.sortOrder}`}
                   value={row.eje}
                   active={isActive(activeCell, row.id, "eje")}
                   onFocus={() => onActiveCellChange({ rowId: row.id, field: "eje" })}
                   onChange={(value) => onPatchRow(row.id, { eje: value })}
                 />
                 <TextCell
+                  ariaLabel={`Nivel fila ${row.sortOrder}`}
                   value={row.nivel}
                   active={isActive(activeCell, row.id, "nivel")}
                   onFocus={() => onActiveCellChange({ rowId: row.id, field: "nivel" })}
                   onChange={(value) => onPatchRow(row.id, { nivel: value })}
                 />
                 <TextCell
+                  ariaLabel={`Descripcion fila ${row.sortOrder}`}
                   value={row.description}
                   active={isActive(activeCell, row.id, "description")}
                   onFocus={() => onActiveCellChange({ rowId: row.id, field: "description" })}
@@ -122,6 +126,7 @@ export function MetradoSheetTable({
                 />
                 <TD className="px-1 py-1">
                   <Select
+                    aria-label={`Formula fila ${row.sortOrder}`}
                     value={row.formulaKey}
                     portal={false}
                     className="h-8 rounded-md text-xs"
@@ -138,6 +143,7 @@ export function MetradoSheetTable({
                 </TD>
                 <TD className="px-1 py-1">
                   <Select
+                    aria-label={`Unidad fila ${row.sortOrder}`}
                     value={row.unit}
                     portal={false}
                     className="h-8 rounded-md text-xs"
@@ -153,6 +159,7 @@ export function MetradoSheetTable({
                 {inputColumns.map((key) => (
                   <NumericCell
                     key={key}
+                    ariaLabel={`${key} fila ${row.sortOrder}`}
                     value={row.inputs[key]}
                     active={isActive(activeCell, row.id, key)}
                     onFocus={() => onActiveCellChange({ rowId: row.id, field: key })}
@@ -194,11 +201,13 @@ export function MetradoSheetTable({
 }
 
 function TextCell({
+  ariaLabel,
   value,
   active,
   onFocus,
   onChange,
 }: {
+  ariaLabel: string;
   value: string;
   active: boolean;
   onFocus: () => void;
@@ -207,6 +216,7 @@ function TextCell({
   return (
     <TD className="px-1 py-1">
       <Input
+        aria-label={ariaLabel}
         value={value}
         onFocus={onFocus}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -217,11 +227,13 @@ function TextCell({
 }
 
 function NumericCell({
+  ariaLabel,
   value,
   active,
   onFocus,
   onChange,
 }: {
+  ariaLabel: string;
   value: number | undefined;
   active: boolean;
   onFocus: () => void;
@@ -230,6 +242,7 @@ function NumericCell({
   return (
     <TD className="px-1 py-1">
       <Input
+        aria-label={ariaLabel}
         type="number"
         value={value ?? ""}
         step="0.001"
