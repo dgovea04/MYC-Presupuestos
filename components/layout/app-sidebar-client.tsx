@@ -11,6 +11,7 @@ import {
   Library,
   Network,
   Rows3,
+  Ruler,
   ShieldCheck,
   SlidersHorizontal,
   Table2,
@@ -41,6 +42,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
   { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
+  { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
   { href: "/ai", label: "IA Local", icon: BotMessageSquare },
   {
     id: "catalogos",
