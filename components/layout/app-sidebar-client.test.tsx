@@ -134,6 +134,7 @@ describe("AppSidebarClient", () => {
       "/ai",
       "/resources",
       "/partidas",
+      "/partidas/generar",
       "/unified-indices",
       "/unified-index-dictionary",
       "/settings",

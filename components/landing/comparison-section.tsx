@@ -8,7 +8,7 @@ const comparisonRows: Array<{ category: string; excel: ComparisonValue; software
   { category: "APU conectado con partidas", excel: "partial", software: "no", myc: "yes" },
   { category: "Fórmula polinómica integrada", excel: "no", software: "partial", myc: "yes" },
   { category: "Reportes listos para obra", excel: "partial", software: "partial", myc: "yes" },
-  { category: "Flujo moderno multiusuario", excel: "no", software: "no", myc: "yes" },
+  { category: "Flujo moderno para oficina técnica", excel: "no", software: "no", myc: "yes" },
 ];
 
 const comparisonStatusLabel: Record<ComparisonValue, string> = {

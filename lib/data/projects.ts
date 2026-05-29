@@ -3,6 +3,7 @@ import { getUserSettings } from "@/lib/data/settings";
 import { projectSchema, type ProjectInput } from "@/lib/validations/project";
 import { Prisma } from "@prisma/client";
 import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
+import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 
 const defaultBudgetTotals = {
   totalDirectCost: 0,
@@ -307,6 +308,7 @@ export async function getProjectHeaderById(id: string, userId: string) {
 
 export async function createProject(userId: string, input: ProjectInput) {
   const data = projectSchema.parse(input);
+  await assertWithinPlanLimit({ userId, resource: "projects" });
 
   const company = await prisma.company.findFirst({
     where: {

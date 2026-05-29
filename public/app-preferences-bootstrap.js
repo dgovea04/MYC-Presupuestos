@@ -1,7 +1,10 @@
 try {
+  var isLandingPage = window.location.pathname === "/" || window.location.pathname === "/landing-v2";
   var mode = window.localStorage.getItem("app_view_mode");
 
-  if (mode === "excel" || mode === "modern") {
+  if (isLandingPage) {
+    delete document.documentElement.dataset.viewMode;
+  } else if (mode === "excel" || mode === "modern") {
     document.documentElement.dataset.viewMode = mode;
   }
 

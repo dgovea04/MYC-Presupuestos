@@ -12,6 +12,13 @@ export type AccountRecord = {
 export type AccountMembershipRecord = {
   planName: string;
   planSlug: string;
+  effectivePlanSlug: "starter" | "pro" | "empresa";
+  billingProvider: "STRIPE" | "MANUAL" | null;
+  billingStatus: string | null;
+  currentPeriodEnd: string | null;
+  graceEndsAt: string | null;
+  canManageBilling: boolean;
+  canUpgrade: boolean;
   monthlyTokenLimit: number;
   extraTokens: number;
   consumedTokens: number;

@@ -46,7 +46,7 @@ const ACTION_LABELS: Record<AiAction, string> = {
   json: "JSON estructurado",
 };
 
-const CONTEXT_SOURCES = ["Proyecto actual", "Modulo abierto", "Partida seleccionada", "Unidad", "Costo actual", "Tabla activa"] as const;
+const CONTEXT_SOURCES = ["Proyecto actual", "Módulo abierto", "Partida seleccionada", "Unidad", "Costo actual", "Tabla activa"] as const;
 
 const FUTURE_CAPABILITIES = ["Streaming de respuestas", "RAG con normativa peruana", "Catalogos S10", "Memoria por proyecto", "DeepSeek para parsing avanzado"] as const;
 

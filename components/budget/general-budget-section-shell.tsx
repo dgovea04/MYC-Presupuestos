@@ -35,9 +35,11 @@ export function GeneralBudgetSectionShell({
   title: string;
   description: string;
   currentUser?: {
+    id?: string | null;
     avatarUrl?: string | null;
     email?: string | null;
     name?: string | null;
+    role?: "ADMIN" | "USER" | null;
   };
   settings?: UserSettingsRecord;
   children: React.ReactNode;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
+import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { createBudget } from "@/lib/data/budgets";
 
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const budget = await createBudget(body);
+    const budget = await createBudget(session.user.id, body);
     await recordActivityEvent({
       userId: session.user.id,
       type: "BUDGET_CREATED",
@@ -27,6 +28,9 @@ export async function POST(request: Request) {
     revalidatePath(`/budgets/${budget.id}`);
     return NextResponse.json(budget, { status: 201 });
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) return billingResponse;
+
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo crear el presupuesto" }, { status: 400 });
   }
 }

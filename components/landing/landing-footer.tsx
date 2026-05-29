@@ -3,10 +3,10 @@ import { footerLinks } from "@/components/landing/landing-content";
 import { LandingLogo } from "@/components/landing/landing-logo";
 
 const footerLinkMap: Record<string, string> = {
-  Presupuestos: "#features",
-  APU: "#features",
-  "Fórmula polinómica": "#features",
-  Reportes: "#preview",
+  "Presupuesto y APU": "#features",
+  "IA local": "#features",
+  Cronograma: "#flows",
+  Exportaciones: "#preview",
   Nosotros: "#comparison",
   Clientes: "#comparison",
   Seguridad: "#pricing",

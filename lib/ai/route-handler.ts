@@ -4,6 +4,8 @@ import { AiRuntimeError } from "@/lib/ai/errors";
 import { AiTokenLimitExceededError } from "@/lib/ai/usage";
 import { getAuthSession } from "@/lib/auth/session";
 import { OllamaConnectionError, OllamaResponseError } from "@/lib/ai/ollama";
+import { createBillingErrorResponse } from "@/lib/billing/api";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 type AiRouteSession = NonNullable<Awaited<ReturnType<typeof getAuthSession>>>;
 
@@ -18,8 +20,14 @@ export async function withAiRoute(handler: (session: AiRouteSession) => Promise<
   }
 
   try {
+    await assertFeatureAccess({ userId: session.user.id, feature: "ai.local" });
     return await handler(session);
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) {
+      return billingResponse;
+    }
+
     if (error instanceof ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message ?? "Solicitud invalida" }, { status: 400 });
     }

@@ -27,6 +27,7 @@ import type { BudgetFooterStructure, GeneralBudgetResourceSummaryResult, General
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import type { Prisma } from "@prisma/client";
 import type { BudgetLiveUpdateSummary } from "@/lib/client/live-updates";
+import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 
 export async function getBudgetsByUser(userId: string) {
   return prisma.budget.findMany({
@@ -790,8 +791,35 @@ export async function getBudgetLiveUpdateSummaries(id: string, userId: string): 
   }));
 }
 
-export async function createBudget(input: BudgetInput) {
-  const data = budgetSchema.parse(input);
+export async function createBudget(userId: string, input: BudgetInput): Promise<Awaited<ReturnType<typeof prisma.budget.create>>>;
+export async function createBudget(input: BudgetInput): Promise<Awaited<ReturnType<typeof prisma.budget.create>>>;
+export async function createBudget(userIdOrInput: string | BudgetInput, input?: BudgetInput) {
+  const userId = typeof userIdOrInput === "string" ? userIdOrInput : null;
+  const rawInput = typeof userIdOrInput === "string" ? input : userIdOrInput;
+
+  if (!rawInput) {
+    throw new Error("No se recibieron datos para crear el presupuesto");
+  }
+
+  const data = budgetSchema.parse(rawInput);
+
+  if (userId) {
+    await assertWithinPlanLimit({ userId, resource: "budgets" });
+
+    const project = await prisma.project.findFirst({
+      where: {
+        id: data.projectId,
+        company: {
+          userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!project) {
+      throw new Error("No puedes crear presupuestos en un proyecto que no te pertenece");
+    }
+  }
 
   if (data.parentBudgetId) {
     const parentBudget = await prisma.budget.findFirst({

@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType } from "react";
+import type { FeatureKey } from "@/lib/billing/entitlements";
 import { cn } from "@/lib/utils";
 
 export type SidebarNavLink = {
   href: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
+  requiredFeature?: FeatureKey;
 };
 
 export type SidebarNavGroup = {
@@ -45,11 +47,13 @@ export function SidebarNav({
   pathname,
   navigationId,
   items,
+  unlockedFeatures = [],
 }: {
   mode: "expanded" | "mini";
   pathname: string;
   navigationId: string;
   items: SidebarNavItem[];
+  unlockedFeatures?: FeatureKey[];
 }) {
   const isMini = mode === "mini";
   const navRef = useRef<HTMLElement>(null);
@@ -143,6 +147,7 @@ export function SidebarNav({
                     {item.children.map((child) => {
                       const ChildIcon = child.icon;
                       const childActive = isActivePath(pathname, child.href);
+                      const childLocked = child.requiredFeature ? !unlockedFeatures.includes(child.requiredFeature) : false;
 
                       return (
                         <Link
@@ -150,12 +155,15 @@ export function SidebarNav({
                           className={cn(
                             "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
                             childActive ? "bg-white/14 text-white" : "text-slate-200 hover:bg-white/10 hover:text-white",
+                            childLocked && "text-slate-500 hover:bg-white/[0.04] hover:text-slate-400",
                           )}
                           href={child.href}
                           key={child.href}
+                          title={childLocked ? `${child.label} disponible en Pro` : undefined}
                         >
                           <ChildIcon className="h-4 w-4 shrink-0" />
-                          <span>{child.label}</span>
+                          <span className="min-w-0 flex-1">{child.label}</span>
+                          {childLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : null}
                         </Link>
                       );
                     })}
@@ -168,6 +176,7 @@ export function SidebarNav({
                       {item.children.map((child) => {
                         const ChildIcon = child.icon;
                         const childActive = isActivePath(pathname, child.href);
+                        const childLocked = child.requiredFeature ? !unlockedFeatures.includes(child.requiredFeature) : false;
 
                         return (
                           <Link
@@ -175,12 +184,15 @@ export function SidebarNav({
                             className={cn(
                               "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900",
                               childActive ? "bg-white/14 text-white" : "text-slate-300 hover:bg-white/10 hover:text-white",
+                              childLocked && "text-slate-500 hover:bg-white/[0.04] hover:text-slate-400",
                             )}
                             href={child.href}
                             key={child.href}
+                            title={childLocked ? `${child.label} disponible en Pro` : undefined}
                           >
                             <ChildIcon className="h-4 w-4 shrink-0" />
-                            <span>{child.label}</span>
+                            <span className="min-w-0 flex-1">{child.label}</span>
+                            {childLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : null}
                           </Link>
                         );
                       })}
@@ -193,21 +205,37 @@ export function SidebarNav({
         }
 
         const active = isActivePath(pathname, item.href);
+        const locked = item.requiredFeature ? !unlockedFeatures.includes(item.requiredFeature) : false;
 
         return (
           <Link
             key={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex items-center rounded-2xl px-3 py-3 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900",
+              "relative flex items-center rounded-2xl px-3 py-3 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900",
               active ? "bg-white/14 text-white" : "text-slate-200 hover:bg-white/10",
+              locked && "text-slate-500 hover:bg-white/[0.04] hover:text-slate-400",
               isMini ? "w-14 justify-center px-0" : "gap-3.5",
             )}
             href={item.href}
-            title={isMini ? item.label : undefined}
+            title={locked ? `${item.label} disponible en Pro` : isMini ? item.label : undefined}
           >
             <Icon className="h-5 w-5 shrink-0" />
-            {isMini ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
+            {isMini ? (
+              <>
+                <span className="sr-only">{item.label}</span>
+                {locked ? (
+                  <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-400 shadow-sm">
+                    <Lock className="h-3 w-3" />
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <span className="min-w-0 flex-1">{item.label}</span>
+                {locked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : null}
+              </>
+            )}
           </Link>
         );
       })}

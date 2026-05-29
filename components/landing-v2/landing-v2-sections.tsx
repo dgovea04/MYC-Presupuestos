@@ -24,7 +24,7 @@ export function LandingV2FeaturesSection() {
     <section id="producto" className="bg-[#0f0f0f] px-4 py-20 sm:px-6 md:py-24">
       <div className="mx-auto max-w-[1200px]">
         <SectionHeading
-          badge="Modulos clave"
+          badge="Módulos clave"
           title="Todo el flujo de costos de obra en una sola superficie oscura y clara."
           description="La version v2 prueba una presencia mas tecnica: menos brochure, mas consola operativa para presupuestos, APU, catalogos, reportes y reajustes."
           align="center"
@@ -181,7 +181,7 @@ export function LandingV2BenefitsSection() {
             <SectionHeading
               badge="Beneficios"
               title="Rigor tecnico sin cargar la operacion."
-              description="Pensado para equipos que necesitan precision financiera, continuidad entre modulos y entregables claros para obra."
+              description="Pensado para equipos que necesitan precision financiera, continuidad entre módulos y entregables claros para obra."
             />
             <div className="grid gap-4 sm:grid-cols-2">
               {landingV2BenefitItems.map((benefit) => (
@@ -305,9 +305,13 @@ export function LandingV2FinalCtaSection() {
 }
 
 const footerLinkMap: Record<string, string> = {
+  "Presupuesto y APU": "#producto",
+  "IA local": "#flujo",
+  Cronograma: "#flujo",
+  Exportaciones: "#producto",
   Presupuestos: "#producto",
   APU: "#producto",
-  "Formula polinomica": "#flujo",
+  "Fórmula polinómica": "#flujo",
   Reportes: "#producto",
   Nosotros: "#comparacion",
   Clientes: "#comparacion",
@@ -315,6 +319,7 @@ const footerLinkMap: Record<string, string> = {
   Contacto: "#contacto",
   Demo: "#producto",
   "Guia de inicio": "/register",
+  "Guía de inicio": "/register",
   "Casos de uso": "#comparacion",
   Soporte: "#contacto",
 };

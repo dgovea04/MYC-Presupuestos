@@ -925,7 +925,9 @@ async function loadBudgetForFormulaGeneration(budgetId: string, userId: string) 
   const budget = await prisma.budget.findFirst({
     where: {
       id: budgetId,
-      kind: "GENERAL",
+      kind: {
+        in: ["GENERAL", "SUB_BUDGET"],
+      },
       project: {
         company: {
           userId,

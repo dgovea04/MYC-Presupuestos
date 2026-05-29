@@ -8,11 +8,11 @@ export function ContextSidebar({ context, onChange }: { context: AiContext; onCh
     <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="space-y-1">
         <p className="text-sm font-semibold text-slate-900">Contexto activo</p>
-        <p className="text-sm leading-6 text-slate-500">Estos datos viajan al prompt para que la IA responda como copiloto del modulo actual.</p>
+        <p className="text-sm leading-6 text-slate-500">Estos datos viajan al prompt para que la IA responda como copiloto del módulo actual.</p>
       </div>
       <div className="mt-5 grid gap-3">
         <ContextInput label="Proyecto" value={context.project ?? ""} onChange={(project) => onChange({ ...context, project })} />
-        <ContextInput label="Modulo" value={context.module ?? ""} onChange={(module) => onChange({ ...context, module })} />
+        <ContextInput label="Módulo" value={context.module ?? ""} onChange={(module) => onChange({ ...context, module })} />
         <ContextInput
           label="Partida seleccionada"
           value={context.selectedItem ?? ""}

@@ -7,6 +7,7 @@ import {
   BotMessageSquare,
   FileSpreadsheet,
   FolderKanban,
+  Sparkles,
   LayoutDashboard,
   Library,
   Network,
@@ -16,6 +17,7 @@ import {
   Table2,
   Wrench,
 } from "lucide-react";
+import type { FeatureKey } from "@/lib/billing/entitlements";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SidebarNav, type SidebarNavItem, type SidebarNavLink } from "@/components/layout/sidebar-nav";
 import { SidebarUserCard } from "@/components/layout/sidebar-user-card";
@@ -35,13 +37,14 @@ type AppSidebarClientProps = {
   userName?: string | null;
   userEmail?: string | null;
   userRole?: "ADMIN" | "USER" | null;
+  unlockedFeatures?: FeatureKey[];
 };
 
 const NAV_ITEMS: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
   { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
-  { href: "/ai", label: "IA Local", icon: BotMessageSquare },
+  { href: "/ai", label: "IA Local", icon: BotMessageSquare, requiredFeature: "ai.local" },
   {
     id: "catalogos",
     label: "Catalogos",
@@ -49,6 +52,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
     children: [
       { href: "/resources", label: "Catalogo de Insumos", icon: Wrench },
       { href: "/partidas", label: "Catalogo de Partidas", icon: Rows3 },
+      { href: "/partidas/generar", label: "Generador de partidas", icon: Sparkles, requiredFeature: "partidas.similarity" },
     ],
   },
   {
@@ -162,7 +166,7 @@ function getInitials(userName?: string | null, userEmail?: string | null) {
   return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
 }
 
-export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userName, userRole }: AppSidebarClientProps) {
+export function AppSidebarClient({ initialMode, unlockedFeatures, userAvatarUrl, userEmail, userName, userRole }: AppSidebarClientProps) {
   const pathname = usePathname() ?? "";
   const mode = useSyncExternalStore(
     subscribeToSidebarMode,
@@ -211,7 +215,7 @@ export function AppSidebarClient({ initialMode, userAvatarUrl, userEmail, userNa
       }}
     >
       <SidebarBrand mode={mode} navigationId={SIDEBAR_NAV_ID} onToggle={toggleSidebarMode} />
-      <SidebarNav items={items} mode={mode} navigationId={SIDEBAR_NAV_ID} pathname={pathname} />
+      <SidebarNav items={items} mode={mode} navigationId={SIDEBAR_NAV_ID} pathname={pathname} unlockedFeatures={unlockedFeatures} />
       <SidebarUserCard mode={mode} user={{ avatarUrl: userAvatarUrl ?? null, email: displayEmail, initials, name: displayName }} />
     </aside>
   );

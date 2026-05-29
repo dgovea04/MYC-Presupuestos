@@ -109,7 +109,7 @@ export const workflowItems: Array<{ title: string; description: string; icon: Lu
     icon: PackageSearch,
   },
   {
-    title: "Formula polinomica",
+    title: "Fórmula polinómica",
     description: "Prepara coeficientes y reajustes con precision de tres decimales.",
     icon: Sigma,
   },
@@ -126,7 +126,7 @@ export const toolkitItems: Array<{ title: string; description: string; icon: Luc
 
 export const comparisonRows = [
   { label: "APU conectado con presupuesto", excel: "Parcial", traditional: "Parcial", myc: "Completo" },
-  { label: "Formula polinomica integrada", excel: "Manual", traditional: "Variable", myc: "Integrada" },
+  { label: "Fórmula polinómica integrada", excel: "Manual", traditional: "Variable", myc: "Integrada" },
   { label: "Exportables para obra", excel: "Manual", traditional: "Limitado", myc: "Excel y PDF" },
-  { label: "Experiencia moderna multiusuario", excel: "No", traditional: "Pesada", myc: "SaaS" },
+  { label: "Experiencia moderna para oficina tecnica", excel: "No", traditional: "Pesada", myc: "SaaS" },
 ];

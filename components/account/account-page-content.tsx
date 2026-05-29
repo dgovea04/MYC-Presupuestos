@@ -2,10 +2,11 @@
 
 import { useId, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
-import { ArrowUpRight, Bot, Coins, KeyRound, Mail, Shield, Upload, UserRound, Zap } from "lucide-react";
+import { Bot, Coins, KeyRound, Mail, Shield, Upload, UserRound, Zap } from "lucide-react";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { formatDate } from "@/lib/utils";
 import type { AccountMembershipRecord, AccountRecord } from "@/types/account";
+import { BillingActionButtons } from "@/components/billing/billing-action-buttons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,7 @@ export function AccountPageContent({
       </div>
 
       <div className="space-y-6 xl:sticky xl:top-5">
-        {membership ? <AccountMembershipCard account={account} membership={membership} /> : null}
+        {membership ? <AccountMembershipCard membership={membership} /> : null}
         <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
           <CardHeader>
             <CardTitle>Resumen de cuenta</CardTitle>
@@ -90,14 +91,10 @@ export function AccountPageContent({
 }
 
 function AccountMembershipCard({
-  account,
   membership,
 }: {
-  account: AccountRecord;
   membership: AccountMembershipRecord;
 }) {
-  const upgradeHref = buildMembershipMailto(account, "upgrade");
-  const tokensHref = buildMembershipMailto(account, "tokens");
   const usagePercent = membership.allowance > 0 ? Math.min(100, Math.round((membership.consumedTokens / membership.allowance) * 100)) : 0;
 
   return (
@@ -119,6 +116,7 @@ function AccountMembershipCard({
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Plan actual</p>
               <p className="mt-2 text-2xl font-semibold text-slate-950">{membership.planName}</p>
+              <p className="mt-1 text-sm text-slate-500">Acceso efectivo: {formatPlanSlug(membership.effectivePlanSlug)}</p>
             </div>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm">
               {membership.planSlug || "sin-plan"}
@@ -130,6 +128,13 @@ function AccountMembershipCard({
           <TokenMetric icon={<Zap className="h-4 w-4" />} label="Disponibles" value={formatTokenNumber(membership.availableTokens)} />
           <TokenMetric icon={<Coins className="h-4 w-4" />} label="Cupo mensual" value={formatTokenNumber(membership.allowance)} />
           <TokenMetric icon={<Bot className="h-4 w-4" />} label="Consumidos" value={formatTokenNumber(membership.consumedTokens)} />
+        </div>
+
+        <div className="space-y-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+          <SummaryRow label="Facturacion" value={membership.billingProvider ?? "Sin proveedor"} />
+          <SummaryRow label="Estado" value={formatBillingStatus(membership.billingStatus)} />
+          <SummaryRow label="Periodo" value={membership.currentPeriodEnd ? formatDate(membership.currentPeriodEnd, "DD_MMM_YYYY") : "No aplica"} />
+          {membership.graceEndsAt ? <SummaryRow label="Gracia Pro" value={formatDate(membership.graceEndsAt, "DD_MMM_YYYY")} /> : null}
         </div>
 
         <div className="space-y-2">
@@ -145,10 +150,7 @@ function AccountMembershipCard({
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-          <AccountActionLink href={upgradeHref} label="Upgrade membresia" />
-          <AccountActionLink href={tokensHref} label="Agregar tokens" />
-        </div>
+        <BillingActionButtons canManageBilling={membership.canManageBilling} canUpgrade={membership.canUpgrade} />
       </CardContent>
     </Card>
   );
@@ -166,32 +168,21 @@ function TokenMetric({ icon, label, value }: { icon: ReactNode; label: string; v
   );
 }
 
-function AccountActionLink({ href, label }: { href: string; label: string }) {
-  return (
-    <a
-      href={href}
-      className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30"
-    >
-      {label}
-      <ArrowUpRight className="h-4 w-4" />
-    </a>
-  );
-}
-
 function formatTokenNumber(value: number) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
   }).format(value);
 }
 
-function buildMembershipMailto(account: AccountRecord, intent: "upgrade" | "tokens") {
-  const subject = intent === "upgrade" ? "Solicitud de upgrade de membresia" : "Solicitud para agregar tokens IA";
-  const body =
-    intent === "upgrade"
-      ? `Hola equipo MYC,\n\nQuiero solicitar un upgrade de membresia para la cuenta ${account.email}.\n\nGracias.`
-      : `Hola equipo MYC,\n\nQuiero agregar tokens IA para la cuenta ${account.email}.\n\nGracias.`;
+function formatPlanSlug(slug: AccountMembershipRecord["effectivePlanSlug"]) {
+  if (slug === "empresa") return "Empresa";
+  if (slug === "pro") return "Pro";
+  return "Starter";
+}
 
-  return `mailto:soporte@mycpresupuestos.pe?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+function formatBillingStatus(status: string | null) {
+  if (!status) return "Sin suscripcion";
+  return status.replaceAll("_", " ").toLowerCase();
 }
 
 function AccountProfileForm({ account, onSaved }: { account: AccountRecord; onSaved: (account: AccountRecord) => void }) {

@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { accountPasswordSchema, accountProfileSchema, type AccountPasswordInput, type AccountProfileInput } from "@/lib/validations/account";
 import { getCurrentAiUsagePeriod } from "@/lib/ai/usage";
+import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
 import type { AccountMembershipRecord, AccountRecord } from "@/types/account";
 import { z } from "zod";
 
@@ -109,6 +110,17 @@ export async function getUserAccountMembership(userId: string): Promise<AccountM
           monthlyTokenLimit: true,
         },
       },
+      billingSubscriptions: {
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+        select: {
+          provider: true,
+          status: true,
+          stripeCustomerId: true,
+          currentPeriodEnd: true,
+          pastDueStartedAt: true,
+        },
+      },
       aiUsagePeriods: {
         where: { periodStart },
         select: {
@@ -129,10 +141,23 @@ export async function getUserAccountMembership(userId: string): Promise<AccountM
   const consumedTokens = user.aiUsagePeriods[0]?.consumedTokens ?? 0;
   const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
   const allowance = Math.max(0, monthlyTokenLimit + extraTokens);
+  const license = await getEffectiveUserLicense({ userId });
+  const billingSubscription = user.billingSubscriptions[0] ?? null;
+  const graceEndsAt =
+    billingSubscription?.status === "PAST_DUE" && billingSubscription.pastDueStartedAt
+      ? new Date(billingSubscription.pastDueStartedAt.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+      : null;
 
   return {
     planName: user.membershipPlan?.name ?? "Sin membresia",
     planSlug: user.membershipPlan?.slug ?? "",
+    effectivePlanSlug: license.planSlug,
+    billingProvider: billingSubscription?.provider ?? null,
+    billingStatus: billingSubscription?.status ?? null,
+    currentPeriodEnd: billingSubscription?.currentPeriodEnd?.toISOString() ?? null,
+    graceEndsAt,
+    canManageBilling: Boolean(billingSubscription?.stripeCustomerId),
+    canUpgrade: license.planSlug === "starter",
     monthlyTokenLimit,
     extraTokens,
     consumedTokens,

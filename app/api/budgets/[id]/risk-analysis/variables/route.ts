@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { createBillingErrorResponse } from "@/lib/billing/api";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { saveRiskVariables } from "@/lib/risk/data";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,11 +13,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 
   try {
+    await assertFeatureAccess({ userId: session.user.id, feature: "risk_analysis" });
     const { id } = await params;
     const payload = await request.json();
     const result = await saveRiskVariables(id, session.user.id, payload);
     return NextResponse.json(result);
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) return billingResponse;
+
     return NextResponse.json({ error: getRiskRouteErrorMessage(error) }, { status: 400 });
   }
 }

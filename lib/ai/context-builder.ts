@@ -7,7 +7,7 @@ export function buildContextBlock(context?: AiContext) {
 
   const entries = [
     ["Proyecto", context.project],
-    ["Modulo", context.module],
+    ["Módulo", context.module],
     ["Partida seleccionada", context.selectedItem],
     ["Unidad", context.unit],
     ["Costo actual", typeof context.currentCost === "number" ? String(context.currentCost) : undefined],

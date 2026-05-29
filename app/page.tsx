@@ -8,6 +8,7 @@ import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingNavbar } from "@/components/landing/landing-navbar";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { ProductPreviewSection } from "@/components/landing/product-preview-section";
+import { SmartFlowsSection } from "@/components/landing/smart-flows-section";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
 import { getAuthSession } from "@/lib/auth/session";
 
@@ -23,6 +24,7 @@ export default async function Home() {
       <LandingNavbar />
       <HeroSection />
       <FeaturesSection />
+      <SmartFlowsSection />
       <ProductPreviewSection />
       <ComparisonSection />
       <BenefitsSection />

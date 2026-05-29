@@ -410,10 +410,44 @@ async function main() {
 }
 
 async function seedMembershipPlans() {
+  const proEntitlements = [
+    "ai.local",
+    "partidas.similarity",
+    "work_schedule.intelligent",
+    "polynomial_formula",
+    "polynomial_formula.adjustments",
+    "risk_analysis",
+    "exports.advanced",
+    "exports.basic",
+  ];
   const plans = [
-    { name: "Starter", slug: "starter", monthlyTokenLimit: 100000 },
-    { name: "Pro", slug: "pro", monthlyTokenLimit: 500000 },
-    { name: "Empresa", slug: "empresa", monthlyTokenLimit: 2000000 },
+    {
+      name: "Starter",
+      slug: "starter",
+      monthlyTokenLimit: 100000,
+      billingMode: "FREE" as const,
+      projectLimit: 3,
+      budgetLimit: 5,
+      entitlements: ["exports.basic", "polynomial_formula"],
+    },
+    {
+      name: "Pro",
+      slug: "pro",
+      monthlyTokenLimit: 500000,
+      billingMode: "STRIPE" as const,
+      projectLimit: null,
+      budgetLimit: null,
+      entitlements: proEntitlements,
+    },
+    {
+      name: "Empresa",
+      slug: "empresa",
+      monthlyTokenLimit: 2000000,
+      billingMode: "MANUAL" as const,
+      projectLimit: null,
+      budgetLimit: null,
+      entitlements: proEntitlements,
+    },
   ];
 
   for (const plan of plans) {
@@ -422,6 +456,10 @@ async function seedMembershipPlans() {
       update: {
         name: plan.name,
         monthlyTokenLimit: plan.monthlyTokenLimit,
+        billingMode: plan.billingMode,
+        projectLimit: plan.projectLimit,
+        budgetLimit: plan.budgetLimit,
+        entitlements: plan.entitlements,
         isActive: true,
       },
       create: plan,

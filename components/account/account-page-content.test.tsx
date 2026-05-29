@@ -151,6 +151,13 @@ describe("AccountPageContent", () => {
         membership={{
           planName: "Starter",
           planSlug: "starter",
+          effectivePlanSlug: "starter",
+          billingProvider: null,
+          billingStatus: null,
+          currentPeriodEnd: null,
+          graceEndsAt: null,
+          canManageBilling: false,
+          canUpgrade: true,
           monthlyTokenLimit: 100000,
           extraTokens: 0,
           consumedTokens: 2500,
@@ -164,7 +171,9 @@ describe("AccountPageContent", () => {
     expect(container.textContent).toContain("Membresia e IA");
     expect(container.textContent).toContain("Starter");
     expect(container.textContent).toContain("97,500");
-    expect(container.querySelector('a[href^="mailto:"]')?.textContent).toContain("Upgrade");
+    expect(container.textContent).toContain("Pagar con tarjeta");
+    expect(container.textContent).toContain("Pagar con Yape");
+    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
     expect([...container.querySelectorAll("input")].some((input) => input.value === "Starter")).toBe(false);
   });
 });

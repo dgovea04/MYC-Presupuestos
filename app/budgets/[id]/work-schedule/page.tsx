@@ -1,12 +1,16 @@
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
+import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
 import { WorkSchedulePageContent } from "@/components/budget/work-schedule-page-content";
+import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 
 export default async function WorkSchedulePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
-  const section = await getWorkScheduleSection(id, session.user.id);
+  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  const hasAccess = hasFeatureAccess(license, "work_schedule.intelligent");
+  const section = hasAccess ? await getWorkScheduleSection(id, session.user.id) : null;
 
   return (
     <GeneralBudgetSectionShell
@@ -20,7 +24,14 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
       currentUser={currentUser}
       settings={settings}
     >
-      <WorkSchedulePageContent initialData={section} />
+      {section ? (
+        <WorkSchedulePageContent initialData={section} />
+      ) : (
+        <UpgradeCTA
+          title="Cronograma inteligente disponible en Pro"
+          description="Activa programacion de obra, calendario valorizado, calendario de insumos y Curva S desde el presupuesto."
+        />
+      )}
     </GeneralBudgetSectionShell>
   );
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { Activity, Bot, ShieldCheck, Users } from "lucide-react";
 import { AdminUserAccessForm } from "@/components/admin/admin-user-access-form";
+import { ManualPaymentRequests } from "@/components/admin/manual-payment-requests";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -98,6 +99,18 @@ export default async function AdminPage({
         </Card>
       </section>
 
+      <section>
+        <Card>
+          <CardContent className="space-y-4 p-6">
+            <OperationalSectionHeader
+              title="Solicitudes Yape pendientes"
+              description="Pagos manuales registrados por usuarios. Valida el comprobante antes de activar Pro."
+            />
+            <ManualPaymentRequests requests={stats.manualPaymentRequests} />
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
         <Card>
           <CardContent className="space-y-4 p-6">
@@ -110,9 +123,10 @@ export default async function AdminPage({
             </div>
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
               <div className="min-w-[760px]">
-                <div className="grid grid-cols-[1.2fr_0.8fr_0.7fr_0.8fr_0.8fr] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                   <span>Usuario</span>
                   <span>Plan</span>
+                  <span>Licencia</span>
                   <span>Estado</span>
                   <span>Tokens</span>
                   <span>Cupo</span>
@@ -120,7 +134,7 @@ export default async function AdminPage({
                 {stats.users.map((user) => (
                   <div
                     key={user.id}
-                    className="grid grid-cols-[1.2fr_0.8fr_0.7fr_0.8fr_0.8fr] border-t border-slate-100 px-4 py-3 text-sm text-slate-700"
+                    className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] border-t border-slate-100 px-4 py-3 text-sm text-slate-700"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-slate-900">{user.name}</p>
@@ -128,6 +142,7 @@ export default async function AdminPage({
                       <p className="truncate text-xs text-slate-400">{user.companyName}</p>
                     </div>
                     <span>{user.planName}</span>
+                    <span>{formatBillingState(user.billingMode, user.billingStatus)}</span>
                     <span>{user.status === "ACTIVE" ? "Activo" : "Suspendido"}</span>
                     <span>{formatTokenCount(user.consumedTokens)}</span>
                     <span>{formatTokenCount(user.allowance)}</span>
@@ -147,6 +162,12 @@ export default async function AdminPage({
       </section>
     </AppShell>
   );
+}
+
+function formatBillingState(mode: string, status: string | null) {
+  if (mode === "MANUAL") return "Manual";
+  if (mode === "STRIPE") return status ? `Stripe ${status.toLowerCase()}` : "Stripe pendiente";
+  return "Gratis";
 }
 
 function AdminStatCard({

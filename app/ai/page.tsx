@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { AIWorkspace } from "@/components/ai/AIWorkspace";
+import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { getAuthSession } from "@/lib/auth/session";
+import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 
 export default async function AIPage({
@@ -16,6 +18,18 @@ export default async function AIPage({
 
   const resolvedSearchParams = await searchParams;
   const settings = await getUserSettings(session.user.id);
+  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  if (!hasFeatureAccess(license, "ai.local")) {
+    return (
+      <AppShell currentUser={session.user} settings={settings}>
+        <UpgradeCTA
+          title="IA local disponible en Pro"
+          description="Activa el copiloto tecnico para chat, generacion de APU, revision de presupuesto y autocompletado asistido."
+        />
+      </AppShell>
+    );
+  }
+
   const initialAction = readActionParam(readStringParam(resolvedSearchParams.action)) ?? "chat";
   const selectedItem = readStringParam(resolvedSearchParams.selectedItem) ?? readStringParam(resolvedSearchParams.item);
   const unit = readStringParam(resolvedSearchParams.unit) ?? readStringParam(resolvedSearchParams.apuUnit);

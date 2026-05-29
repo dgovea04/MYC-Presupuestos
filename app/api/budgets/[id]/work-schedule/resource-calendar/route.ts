@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
+import { createBillingErrorResponse } from "@/lib/billing/api";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -9,10 +11,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 
   try {
+    await assertFeatureAccess({ userId: session.user.id, feature: "work_schedule.intelligent" });
     const { id } = await params;
     const section = await getWorkScheduleSection(id, session.user.id);
     return NextResponse.json(section.resourceCalendar);
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) return billingResponse;
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo cargar el calendario de insumos" },
       { status: 400 },

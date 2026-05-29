@@ -3,6 +3,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { RefreshCw, Save } from "lucide-react";
 
+import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-math";
@@ -131,9 +132,11 @@ function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
 export function PolynomialFormulaEditor({
   section,
   adjustments,
+  canUsePolynomialAdjustments,
 }: {
   section: PolynomialFormulaSectionData;
   adjustments: AdjustmentCalculationRecord[];
+  canUsePolynomialAdjustments: boolean;
 }) {
   const { dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
@@ -166,6 +169,7 @@ export function PolynomialFormulaEditor({
     [formula],
   );
   const canCalculatePreview =
+    canUsePolynomialAdjustments &&
     formula !== null &&
     formula.monomials.length > 0 &&
     !hasPendingBaseIndices(formula.monomials) &&
@@ -671,26 +675,35 @@ export function PolynomialFormulaEditor({
             baseIndicesLoading={baseIndicesLoading}
             onChangeMonomial={updateMonomial}
           />
-          <PolynomialKCalculator
-            previewMonth={previewMonth}
-            previewYear={previewYear}
-            originalAmount={originalAmount}
-            onPreviewMonthChange={setPreviewMonth}
-            onPreviewYearChange={setPreviewYear}
-            onOriginalAmountChange={setOriginalAmount}
-            result={kPreview}
-            resultError={kPreviewError}
-            isLoading={previewLoading}
-            adjustedAmounts={previewAdjustedAmounts}
-            canApply={Boolean(kPreview && previewAdjustedAmounts && !kPreviewError)}
-            onApplyAdjustment={() => void applyAdjustment()}
-            isApplyingAdjustment={isApplyingAdjustment}
-          />
-          <PolynomialAdjustmentHistory adjustments={history} />
+          {canUsePolynomialAdjustments ? (
+            <>
+              <PolynomialKCalculator
+                previewMonth={previewMonth}
+                previewYear={previewYear}
+                originalAmount={originalAmount}
+                onPreviewMonthChange={setPreviewMonth}
+                onPreviewYearChange={setPreviewYear}
+                onOriginalAmountChange={setOriginalAmount}
+                result={kPreview}
+                resultError={kPreviewError}
+                isLoading={previewLoading}
+                adjustedAmounts={previewAdjustedAmounts}
+                canApply={Boolean(kPreview && previewAdjustedAmounts && !kPreviewError)}
+                onApplyAdjustment={() => void applyAdjustment()}
+                isApplyingAdjustment={isApplyingAdjustment}
+              />
+              <PolynomialAdjustmentHistory adjustments={history} />
+            </>
+          ) : (
+            <UpgradeCTA
+              title="Calculo de K y valorizacion disponible en Pro"
+              description="Starter incluye generar, editar y validar la formula polinomica. Pro desbloquea el calculo de K, valorizaciones reajustadas e historial operativo."
+            />
+          )}
         </>
       )}
 
-      {history.length > 0 ? (
+      {canUsePolynomialAdjustments && history.length > 0 ? (
         <p className="text-xs text-slate-500">
           Último reajuste registrado: {formatDate(history[0]?.createdAt ?? null, dateFormat)}
         </p>

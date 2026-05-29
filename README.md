@@ -146,9 +146,9 @@ npm.cmd run prisma:migrate
 npm.cmd run prisma:seed
 ```
 
-## Modulo de Formula Polinomica
+## Módulo de Fórmula Polinómica
 
-El proyecto ya incluye un modulo base para Formula Polinomica de obras de edificacion, orientado a normativa peruana y a reajuste de valorizaciones.
+El proyecto ya incluye un módulo base para Fórmula Polinómica de obras de edificacion, orientado a normativa peruana y a reajuste de valorizaciones.
 
 Fuentes de referencia usadas en la implementacion:
 
@@ -164,7 +164,7 @@ Capacidades actuales:
 - calcular preview de `K`
 - aplicar reajuste a una valorizacion y guardar historial
 
-Rutas principales del modulo:
+Rutas principales del módulo:
 
 - `GET/POST/PATCH /api/budgets/[id]/polynomial-formula`
 - `POST /api/polynomial-formulas/[id]/calculate`
@@ -173,7 +173,7 @@ Rutas principales del modulo:
 
 Notas importantes:
 
-- La base de la formula polinomica excluye IGV.
+- La base de la fórmula polinómica excluye IGV.
 - Los indices INEI se cargan desde el seed del proyecto.
 - Si cambias la fuente Excel de indices, vuelve a ejecutar:
 
@@ -181,7 +181,7 @@ Notas importantes:
 npm.cmd run prisma:seed
 ```
 
-Verificacion recomendada para este modulo:
+Verificacion recomendada para este módulo:
 
 ```powershell
 npm.cmd test -- lib/calculations/polynomial-formula.test.ts lib/data/polynomial-formulas.test.ts

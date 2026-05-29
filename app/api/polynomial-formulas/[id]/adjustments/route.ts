@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { createBillingErrorResponse } from "@/lib/billing/api";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -16,10 +18,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 
   try {
+    await assertFeatureAccess({ userId: session.user.id, feature: "polynomial_formula.adjustments" });
     const { id } = await params;
     const adjustments = await listPolynomialFormulaAdjustments(id, session.user.id);
     return NextResponse.json(adjustments);
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) return billingResponse;
+
     return NextResponse.json(
       {
         error:
@@ -39,6 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
+    await assertFeatureAccess({ userId: session.user.id, feature: "polynomial_formula.adjustments" });
     const { id } = await params;
     const body = await request.json();
     const payload = polynomialAdjustmentCreateSchema.parse(body);
@@ -72,6 +79,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json(adjustment, { status: 201 });
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) return billingResponse;
+
     return NextResponse.json(
       {
         error:

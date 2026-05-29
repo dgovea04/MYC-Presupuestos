@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { createBillingErrorResponse } from "@/lib/billing/api";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { calculateCoefficientK } from "@/lib/calculations/polynomial-formula";
 import { calculatePolynomialFormulaKPreview } from "@/lib/data/polynomial-formulas";
 import { polynomialKCalculationSchema } from "@/lib/validations/polynomial-formula";
@@ -18,6 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
+    await assertFeatureAccess({ userId: session.user.id, feature: "polynomial_formula.adjustments" });
     const { id } = await params;
     const body = await request.json();
 
@@ -31,6 +34,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const calculation = await calculatePolynomialFormulaKPreview(id, session.user.id, payload);
     return NextResponse.json(calculation);
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) return billingResponse;
+
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "No se pudo calcular el coeficiente K",

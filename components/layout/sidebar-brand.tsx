@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+const LOGO_VERSION = "20260529b";
+
 export function SidebarBrand({
   mode,
   navigationId,
@@ -19,7 +21,7 @@ export function SidebarBrand({
       <div className={cn("flex", isMini ? "flex-col items-center" : "flex-col items-start gap-2")}>
         <div className={cn("relative overflow-hidden", isMini ? "w-10" : "w-[140px]")}>
           <Image
-            src={isMini ? "/myc-logo-tr-mini.png" : "/myc-logo-white-tr-300px-v1.png"}
+            src={isMini ? `/myc-logo-tr-mini.png?v=${LOGO_VERSION}` : `/myc-logo-white-tr-300px-v1.png?v=${LOGO_VERSION}`}
             alt="MYC Presupuestos"
             priority
             width={140}

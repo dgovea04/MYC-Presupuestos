@@ -14,6 +14,11 @@ type AdminUserRow = {
   role: "ADMIN" | "USER";
   status: "ACTIVE" | "SUSPENDED";
   planSlug: string;
+  billingMode?: string;
+  billingProvider?: string | null;
+  billingStatus?: string | null;
+  currentPeriodEnd?: string | null;
+  graceEndsAt?: string | null;
   aiTokenExtraMonthly: number;
 };
 
@@ -132,6 +137,15 @@ export function AdminUserAccessForm({
         </div>
       </div>
 
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <p className="font-medium text-slate-900">Licencia efectiva</p>
+        <p className="mt-1">
+          {selectedUser.billingMode ?? "FREE"} · {selectedUser.billingProvider ?? "Manual/app"} · {selectedUser.billingStatus ?? "sin suscripcion"}
+        </p>
+        {selectedUser.currentPeriodEnd ? <p>Periodo hasta {formatDateLabel(selectedUser.currentPeriodEnd)}</p> : null}
+        {selectedUser.graceEndsAt ? <p>Gracia Pro hasta {formatDateLabel(selectedUser.graceEndsAt)}</p> : null}
+      </div>
+
       <Button type="submit" disabled={isPending} className="w-full gap-2">
         <Save className="h-4 w-4" />
         {isPending ? "Guardando..." : "Guardar acceso"}
@@ -140,4 +154,8 @@ export function AdminUserAccessForm({
       {message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{message}</p> : null}
     </form>
   );
+}
+
+function formatDateLabel(value: string) {
+  return new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }

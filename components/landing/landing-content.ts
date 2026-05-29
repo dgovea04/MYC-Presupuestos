@@ -1,15 +1,17 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
-  Blocks,
-  Calculator,
+  BotMessageSquare,
   CheckCircle2,
   ClipboardList,
+  FileArchive,
   FileSpreadsheet,
   FolderKanban,
+  GitCompareArrows,
   HardHat,
-  LineChart,
-  PackageSearch,
+  Search,
+  StickyNote,
+  TableProperties,
 } from "lucide-react";
 
 export type FeatureItem = {
@@ -21,6 +23,13 @@ export type FeatureItem = {
 export type BenefitItem = {
   title: string;
   description: string;
+  icon: LucideIcon;
+};
+
+export type SmartFlowItem = {
+  title: string;
+  description: string;
+  steps: string[];
   icon: LucideIcon;
 };
 
@@ -43,78 +52,99 @@ export type PricingPlan = {
 
 export const featureItems: FeatureItem[] = [
   {
-    title: "Presupuestos",
-    description: "Estructura presupuestos generales por partidas, subtitulos y metrados con claridad operativa.",
+    title: "Presupuesto y APU conectado",
+    description: "Arma partidas, metrados y análisis unitarios en el mismo flujo, con totales siempre trazables.",
     icon: FileSpreadsheet,
   },
   {
-    title: "APU",
-    description: "Analiza costos unitarios con materiales, mano de obra, equipos y rendimientos en un solo flujo.",
-    icon: Calculator,
+    title: "Catálogo con búsqueda avanzada",
+    description: "Encuentra insumos y partidas por descripción, unidad, código o familia para reutilizar información sin duplicar datos.",
+    icon: Search,
   },
   {
-    title: "Catalogo de Insumos",
-    description: "Consolida precios, unidades y recursos reutilizables para evitar duplicidad y desorden.",
-    icon: PackageSearch,
+    title: "Generador de partidas por similitud",
+    description: "Compara partidas existentes, sugiere insumos y conserva fuentes, scores y criterios antes de guardar.",
+    icon: GitCompareArrows,
   },
   {
-    title: "Formula Polinomica",
-    description: "Prepara reajustes y seguimiento de indices unificados segun normativa peruana.",
-    icon: LineChart,
+    title: "IA local para revisión y APU",
+    description: "Usa copiloto con Ollama para chat técnico, generación de APU, revisión de costos y autocompletado.",
+    icon: BotMessageSquare,
   },
   {
-    title: "Programacion",
-    description: "Relaciona partidas y cronogramas para mantener costo, avance y secuencia tecnica alineados.",
+    title: "Cronograma inteligente",
+    description: "Genera programación, calendario valorizado, calendario de insumos, ruta crítica visual y Curva S.",
     icon: FolderKanban,
   },
   {
-    title: "Reportes",
-    description: "Exporta entregables claros para oficina tecnica, clientes y control de obra en Excel o PDF.",
+    title: "Exportaciones profesionales",
+    description: "Prepara PDF, Excel, CSV o paquetes ZIP con presets, logo, firma, vista previa y decimales configurables.",
+    icon: FileArchive,
+  },
+];
+
+export const smartFlowItems: SmartFlowItem[] = [
+  {
+    title: "De partida nueva a APU sugerido",
+    description: "Busca partidas similares, agrega insumos recomendados y revisa cantidades antes de convertirlas en catálogo.",
+    steps: ["Buscar similitud", "Comparar fuentes", "Guardar APU revisado"],
+    icon: GitCompareArrows,
+  },
+  {
+    title: "De presupuesto a cronograma valorizado",
+    description: "Parte de las partidas del presupuesto, genera programación y revisa valorización, recursos y Curva S.",
+    steps: ["Generar cronograma", "Ajustar fechas", "Exportar paquete"],
     icon: BarChart3,
+  },
+  {
+    title: "De revisión técnica a pendientes",
+    description: "Convierte observaciones en notas contextuales vinculadas a proyecto, presupuesto o partida.",
+    steps: ["Detectar alerta", "Crear nota", "Resolver pendiente"],
+    icon: StickyNote,
   },
 ];
 
 export const benefitItems: BenefitItem[] = [
   {
-    title: "Pensado para flujos reales de obra",
-    description: "Desde presupuesto base hasta reajuste, la interfaz mantiene el lenguaje y la jerarquia que usa una oficina tecnica.",
-    icon: HardHat,
+    title: "Menos saltos entre hojas",
+    description: "Presupuesto, APU, catálogo, programación, notas y reportes comparten contexto para reducir retrabajo manual.",
+    icon: TableProperties,
   },
   {
-    title: "Menos tiempo corrigiendo hojas",
-    description: "La informacion queda conectada entre APU, insumos, resumen y reportes para reducir retrabajo manual.",
+    title: "Automatización revisable",
+    description: "Las sugerencias de IA, partidas similares y cronogramas se aplican solo después de revisión humana.",
     icon: CheckCircle2,
   },
   {
-    title: "Mas claridad para decidir costos",
-    description: "Totales, incidencias y comparativos aparecen en pantallas legibles para tomar decisiones mas rapido.",
+    title: "Entregables listos para obra",
+    description: "Exporta presupuestos, APU, fórmula polinómica, gastos, recursos y cronograma con formatos consistentes.",
     icon: ClipboardList,
   },
   {
-    title: "Base moderna para crecer",
-    description: "Reutiliza datos, estandariza criterios y deja atras archivos dispersos y software tradicional pesado.",
-    icon: Blocks,
+    title: "Control técnico para crecer",
+    description: "Planes, tokens IA, administración y estándares dejan una base ordenada para oficinas técnicas y constructoras.",
+    icon: HardHat,
   },
 ];
 
 export const testimonials: TestimonialItem[] = [
   {
-    quote: "Pasamos de revisar varias hojas por presupuesto a trabajar en una vista unica mucho mas clara para metrados, APU y resumen.",
+    quote: "Pasamos de revisar varias hojas por presupuesto a trabajar en una vista única mucho más clara para metrados, APU y resumen.",
     name: "Ing. Carlos Paredes",
-    role: "Jefe de Oficina Tecnica",
+    role: "Jefe de Oficina Técnica",
     company: "Constructora AndeSur",
   },
   {
-    quote: "La tabla se siente familiar para el equipo, pero con mucho mas orden. Exportamos mas rapido y con menos ajustes de ultimo minuto.",
+    quote: "La tabla se siente familiar para el equipo, pero con mucho más orden. Exportamos más rápido y con menos ajustes de último minuto.",
     name: "Arq. Daniela Salazar",
     role: "Coordinadora de Presupuestos",
     company: "Grupo Obra Urbana",
   },
   {
-    quote: "Lo valioso no es solo el presupuesto: es tener catalogo, formula polinomica y reportes conectados en el mismo flujo.",
-    name: "Luis Huaman",
+    quote: "Lo valioso no es solo el presupuesto: es tener catálogo, cronograma, notas y exportes conectados en el mismo flujo.",
+    name: "Luis Huamán",
     role: "Gerente de Costos",
-    company: "Proyectos Civiles del Pacifico",
+    company: "Proyectos Civiles del Pacífico",
   },
 ];
 
@@ -123,42 +153,49 @@ export const pricingPlans: PricingPlan[] = [
     name: "Starter",
     price: "Gratis",
     originalPrice: "S/ 89",
-    description: "Para profesionales y equipos pequenos que quieren comenzar sin costo durante el lanzamiento.",
-    badge: "100% de descuento",
+    description: "Para profesionales que necesitan presupuestar y revisar APU sin empezar desde una demo limitada.",
+    badge: "Gratis útil",
     features: [
-      "Hasta 3 proyectos activos",
-      "Presupuestos y APUs base",
-      "Catalogo de insumos",
-      "Exportacion a Excel y PDF",
+      "Presupuestos y subpresupuestos básicos con límites",
+      "APU manual y catálogo de insumos básico",
+      "Modo moderno y modo Excel",
+      "Notas básicas para seguimiento",
+      "Exportación básica a PDF y Excel",
+      "Búsqueda simple en catálogos",
     ],
   },
   {
     name: "Pro",
     price: "S/ 189",
-    description: "Para oficinas tecnicas que trabajan varios presupuestos y requieren mas control operativo.",
+    description: "Para oficinas técnicas que quieren automatización, IA y reportes avanzados sin perder control.",
     highlight: true,
     features: [
-      "Proyectos y presupuestos ilimitados",
-      "Formula polinomica y reajustes",
-      "Programacion y seguimiento",
-      "Reportes avanzados por obra",
+      "Copiloto IA local con tokens mensuales incluidos",
+      "Generador de partidas por similitud",
+      "Búsqueda, sugerencias y pegado avanzado",
+      "Cronograma inteligente con valorización, recursos y Curva S",
+      "Fórmula polinómica y reajustes",
+      "Exportaciones avanzadas PDF, Excel, CSV y ZIP",
+      "Notas contextuales por proyecto, presupuesto o partida",
     ],
   },
   {
     name: "Empresa",
     price: "A medida",
-    description: "Para constructoras que necesitan estandarizacion, visibilidad multiusuario y acompanamiento.",
+    description: "Para constructoras que necesitan administración, límites altos y estandarización interna.",
     features: [
-      "Multiusuario por area o sede",
-      "Configuracion empresarial",
-      "Soporte prioritario",
-      "Onboarding y acompanamiento tecnico",
+      "Todo Pro con tokens IA ampliados",
+      "Administración de usuarios, roles, estado y planes",
+      "Ajustes manuales de cupos y control operativo",
+      "Reportes ejecutivos y paquetes ZIP avanzados",
+      "Configuración de estándares, plantillas y datos maestros",
+      "Soporte prioritario, onboarding y acompañamiento técnico",
     ],
   },
 ];
 
 export const footerLinks = {
-  producto: ["Presupuestos", "APU", "Formula polinomica", "Reportes"],
+  producto: ["Presupuesto y APU", "IA local", "Cronograma", "Exportaciones"],
   empresa: ["Nosotros", "Clientes", "Seguridad", "Contacto"],
-  recursos: ["Demo", "Guia de inicio", "Casos de uso", "Soporte"],
+  recursos: ["Demo", "Guía de inicio", "Casos de uso", "Soporte"],
 };

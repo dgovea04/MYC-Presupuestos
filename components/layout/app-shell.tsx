@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { Plus } from "lucide-react";
 import { getAuthSession } from "@/lib/auth/session";
 import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode } from "@/lib/budget/view-mode";
+import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppBackButton } from "@/components/layout/app-back-button";
 import { AppSidebarClient } from "@/components/layout/app-sidebar-client";
@@ -35,6 +36,7 @@ export async function AppShell({
 }: {
   children: ReactNode;
   currentUser?: {
+    id?: string | null;
     avatarUrl?: string | null;
     email?: string | null;
     name?: string | null;
@@ -55,7 +57,9 @@ export async function AppShell({
     defaultUtilityRate: 0.08,
     defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
   };
-  const settings = initialSettings ?? (session?.user?.id ? await getUserSettings(session.user.id) : fallbackSettings);
+  const userId = session?.user?.id ?? currentUser?.id;
+  const settings = initialSettings ?? (userId ? await getUserSettings(userId) : fallbackSettings);
+  const license = userId ? await getEffectiveUserLicense({ userId }) : null;
   const cookieStore = await cookies();
   const initialViewMode = coerceViewMode(cookieStore.get(APP_VIEW_MODE_COOKIE_NAME)?.value);
   const initialSidebarMode = (() => {
@@ -79,6 +83,7 @@ export async function AppShell({
                 userEmail={currentUser?.email ?? session?.user?.email}
                 userName={currentUser?.name ?? session?.user?.name}
                 userRole={currentUser?.role ?? session?.user?.role}
+                unlockedFeatures={license?.availableFeatures}
               />
             </div>
 

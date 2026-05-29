@@ -1,6 +1,7 @@
 import { PolynomialFormulaEditor } from "@/components/budget/polynomial-formula-editor";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
+import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import {
   getBudgetPolynomialFormulaSectionsData,
   listPolynomialFormulaAdjustments,
@@ -9,11 +10,14 @@ import {
 export default async function GeneralBudgetPolynomialFormulaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
+  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  const canUsePolynomialAdjustments = hasFeatureAccess(license, "polynomial_formula.adjustments");
+
   const sectionsData = await getBudgetPolynomialFormulaSectionsData(id, session.user.id);
   const sectionAdjustments = await Promise.all(
     sectionsData.sections.map(async (section) => ({
       budgetId: section.budgetId,
-      adjustments: section.formula
+      adjustments: section.formula && canUsePolynomialAdjustments
         ? await listPolynomialFormulaAdjustments(section.formula.id, session.user.id)
         : [],
     })),
@@ -49,6 +53,7 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
             key={section.budgetId ?? section.title}
             section={section}
             adjustments={adjustmentsByBudgetId.get(section.budgetId) ?? []}
+            canUsePolynomialAdjustments={canUsePolynomialAdjustments}
           />
         ))}
       </div>

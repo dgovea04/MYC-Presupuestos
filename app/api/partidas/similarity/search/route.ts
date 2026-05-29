@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
+import { createBillingErrorResponse } from "@/lib/billing/api";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { searchPartidaGenerationCandidates } from "@/lib/data/partida-generation";
 
 export async function POST(request: Request) {
@@ -9,10 +11,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    await assertFeatureAccess({ userId: session.user.id, feature: "partidas.similarity" });
     const body = await request.json();
     const result = await searchPartidaGenerationCandidates(session.user.id, body);
     return NextResponse.json(result);
   } catch (error) {
+    const billingResponse = createBillingErrorResponse(error);
+    if (billingResponse) return billingResponse;
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudieron buscar partidas similares" },
       { status: 400 },

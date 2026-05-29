@@ -19,15 +19,21 @@ vi.mock("@/lib/data/settings", () => ({
   getUserSettings: vi.fn(),
 }));
 
+vi.mock("@/lib/billing/entitlements", () => ({
+  getEffectiveUserLicense: vi.fn(),
+}));
+
 vi.mock("@/components/layout/app-sidebar-client", () => ({
   SIDEBAR_EXPANDED_WIDTH: 280,
   SIDEBAR_MINI_WIDTH: 80,
   SIDEBAR_MODE_COOKIE_NAME: "myc_sidebar_mode",
   AppSidebarClient: ({
+    unlockedFeatures,
     userAvatarUrl,
     userEmail,
     userName,
   }: {
+    unlockedFeatures?: string[];
     userAvatarUrl?: string | null;
     userEmail?: string | null;
     userName?: string | null;
@@ -35,6 +41,7 @@ vi.mock("@/components/layout/app-sidebar-client", () => ({
     <div
       data-avatar={userAvatarUrl ?? ""}
       data-email={userEmail ?? ""}
+      data-features={unlockedFeatures?.join(",") ?? ""}
       data-name={userName ?? ""}
       data-testid="sidebar-user"
     />
@@ -66,6 +73,7 @@ vi.mock("@/components/notes/notes-drawer", () => ({
 }));
 
 import { getAuthSession } from "@/lib/auth/session";
+import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppShell } from "@/components/layout/app-shell";
 
@@ -91,6 +99,16 @@ describe("AppShell", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: ["Estructuras"],
     });
+    vi.mocked(getEffectiveUserLicense).mockResolvedValue({
+      availableFeatures: ["exports.basic"],
+      budgetLimit: 5,
+      budgetUsage: 0,
+      isInGracePeriod: false,
+      planName: "Starter",
+      planSlug: "starter",
+      projectLimit: 3,
+      projectUsage: 0,
+    });
 
     const markup = renderToStaticMarkup(
       await AppShell({
@@ -101,17 +119,29 @@ describe("AppShell", () => {
     expect(markup).toContain('data-avatar="/uploads/avatars/user-1.webp"');
     expect(markup).toContain('data-name="Maria Actualizada"');
     expect(markup).toContain('data-email="maria@example.com"');
+    expect(markup).toContain('data-features="exports.basic"');
     expect(markup).toContain("Notas");
   });
 
   it("skips fetching the session when currentUser and settings are provided", async () => {
     vi.mocked(getAuthSession).mockReset();
     vi.mocked(getUserSettings).mockReset();
+    vi.mocked(getEffectiveUserLicense).mockResolvedValue({
+      availableFeatures: ["exports.basic", "ai.local", "partidas.similarity"],
+      budgetLimit: null,
+      budgetUsage: 0,
+      isInGracePeriod: false,
+      planName: "Empresa",
+      planSlug: "empresa",
+      projectLimit: null,
+      projectUsage: 0,
+    });
 
     const markup = renderToStaticMarkup(
       await AppShell({
         children: <div>Contenido</div>,
         currentUser: {
+          id: "user-2",
           avatarUrl: "/uploads/avatars/user-2.webp",
           email: "ana@example.com",
           name: "Ana",
@@ -134,7 +164,9 @@ describe("AppShell", () => {
     expect(markup).toContain('data-avatar="/uploads/avatars/user-2.webp"');
     expect(markup).toContain('data-name="Ana"');
     expect(markup).toContain('data-email="ana@example.com"');
+    expect(markup).toContain('data-features="exports.basic,ai.local,partidas.similarity"');
     expect(getAuthSession).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
+    expect(getEffectiveUserLicense).toHaveBeenCalledWith({ userId: "user-2" });
   });
 });

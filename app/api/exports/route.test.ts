@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth/session", () => ({
   getAuthSession: vi.fn(),
@@ -15,11 +15,25 @@ vi.mock("@/lib/exports/centralized", () => ({
     }),
 }));
 
+vi.mock("@/lib/billing/entitlements", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/billing/entitlements")>();
+
+  return {
+    ...actual,
+    assertFeatureAccess: vi.fn(),
+  };
+});
+
 import { POST } from "@/app/api/exports/route";
 import { getAuthSession } from "@/lib/auth/session";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { createCentralizedExport } from "@/lib/exports/centralized";
 
 describe("central exports route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("returns a binary export response with download headers", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
     vi.mocked(createCentralizedExport).mockResolvedValue({
@@ -54,6 +68,30 @@ describe("central exports route", () => {
     );
   });
 
+  it("allows standard polynomial formula exports without advanced export access", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(createCentralizedExport).mockResolvedValue({
+      content: Buffer.from("xlsx"),
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      fileName: "formula-budget-1.xlsx",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/exports", {
+        method: "POST",
+        body: JSON.stringify({
+          target: "polynomial_formula",
+          targetId: "budget-1",
+          format: "xlsx",
+          preset: "formula_polinomica_detallada",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(assertFeatureAccess).not.toHaveBeenCalled();
+  });
+
   it("rejects unsupported export combinations with a 400 response", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
     vi.mocked(createCentralizedExport).mockRejectedValue(new Error("La combinacion de modulo, formato y preset no esta disponible"));
@@ -71,6 +109,7 @@ describe("central exports route", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "exports.advanced" });
     await expect(response.json()).resolves.toEqual({
       error: "La combinacion de modulo, formato y preset no esta disponible",
     });
