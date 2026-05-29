@@ -141,6 +141,25 @@ enum NoteTaskStatus {
   RESOLVED
 }
 
+enum MetradoTemplateType {
+  CONCRETE
+  REBAR
+  FORMWORK
+  MASONRY
+  PLASTER
+  PAINT
+  EXCAVATION
+  FLOORING
+  ROOFING
+  CUSTOM
+}
+
+enum MetradoSheetStatus {
+  DRAFT
+  VALIDATED
+  SENT_TO_BUDGET
+}
+
 model User {
   id                  String    @id @default(cuid())
   name                String
@@ -166,6 +185,8 @@ model User {
   billingSubscriptions BillingSubscription[]
   noteTasks           NoteTask[]
   generatedPartidas   GeneratedPartida[]
+  metradoSheets       MetradoSheet[]
+  customMetradoFormulas CustomMetradoFormula[]
 
   @@index([role])
   @@index([status])
@@ -324,6 +345,7 @@ model Project {
   budgets     Budget[]
   polynomialFormulas PolynomialFormula[]
   noteTasks   NoteTask[]
+  metradoSheets MetradoSheet[]
 
   @@index([companyId])
 }
@@ -360,6 +382,7 @@ model Budget {
   riskVariables         RiskVariable[]
   riskSimulationRuns    RiskSimulationRun[]
   noteTasks             NoteTask[]
+  metradoSheets         MetradoSheet[]
 
   @@index([projectId])
   @@index([parentBudgetId])
@@ -405,9 +428,128 @@ model BudgetItem {
   polynomialMonomialComponents PolynomialMonomialComponent[]
   riskVariables RiskVariable[]
   noteTasks     NoteTask[]
+  metradoLinks  MetradoPartidaLink[]
 
   @@index([budgetId])
   @@index([levelId])
+  @@unique([id, budgetId])
+}
+
+model MetradoTemplate {
+  id          String              @id @default(cuid())
+  type        MetradoTemplateType @unique
+  name        String
+  description String
+  defaultUnit String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  sheets      MetradoSheet[]
+  formulas    MetradoFormula[]
+
+  @@map("metrado_templates")
+}
+
+model MetradoFormula {
+  id             String          @id @default(cuid())
+  templateId     String
+  key            String
+  label          String
+  expression     String
+  requiredInputs String[]        @default([])
+  resultUnit     String
+  sortOrder      Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  template       MetradoTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, key])
+  @@index([templateId])
+  @@map("metrado_formulas")
+}
+
+model MetradoSheet {
+  id            String              @id @default(cuid())
+  userId        String
+  projectId     String
+  budgetId      String
+  templateId    String
+  name          String
+  status        MetradoSheetStatus  @default(DRAFT)
+  unit          String
+  totalQuantity Decimal             @default(0) @db.Decimal(18, 4)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget        Budget              @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  template      MetradoTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  rows          MetradoRow[]
+  partidaLinks  MetradoPartidaLink[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([projectId])
+  @@index([budgetId])
+  @@index([templateId])
+  @@unique([id, budgetId])
+  @@map("metrado_sheets")
+}
+
+model MetradoRow {
+  id          String       @id @default(cuid())
+  sheetId     String
+  sector      String       @default("")
+  eje         String       @default("")
+  nivel       String       @default("")
+  description String
+  unit        String
+  formulaKey  String
+  inputs      Json         @default("{}")
+  partial     Decimal      @default(0) @db.Decimal(18, 4)
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  sheet       MetradoSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+
+  @@index([sheetId, sortOrder])
+  @@map("metrado_rows")
+}
+
+model MetradoPartidaLink {
+  id               String       @id @default(cuid())
+  sheetId          String
+  budgetId         String
+  budgetItemId     String
+  lastSentQuantity Decimal?     @db.Decimal(18, 4)
+  sentAt           DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  sheet            MetradoSheet @relation(fields: [sheetId, budgetId], references: [id, budgetId], onDelete: Cascade)
+  budgetItem       BudgetItem   @relation(fields: [budgetItemId, budgetId], references: [id, budgetId], onDelete: Cascade)
+
+  @@unique([sheetId, budgetItemId])
+  @@index([sheetId, budgetId])
+  @@index([budgetItemId])
+  @@index([budgetItemId, budgetId])
+  @@map("metrado_partida_links")
+}
+
+model CustomMetradoFormula {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  description    String   @default("")
+  category       String   @default("Personalizado")
+  expression     String
+  requiredInputs String[] @default([])
+  resultUnit     String
+  showInSuggestions Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+  @@unique([userId, name])
+  @@map("custom_metrado_formulas")
 }
 
 model NoteTask {

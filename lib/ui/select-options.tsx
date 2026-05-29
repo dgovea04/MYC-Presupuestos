@@ -4,6 +4,7 @@ export type SelectOptionRecord = {
   value: string;
   label: string;
   disabled: boolean;
+  tone: "default" | "warning";
 };
 
 export type SelectOptionElement = ReactElement<OptionHTMLAttributes<HTMLOptionElement>, "option">;
@@ -52,10 +53,11 @@ function extractSelectOptionsFromNode(node: ReactNode): SelectOptionRecord[] {
   }
 
   if (node.type === "option") {
-    const { value, disabled, children: optionChildren } = node.props as {
+    const { value, disabled, children: optionChildren, "data-tone": tone } = node.props as {
       value?: string;
       disabled?: boolean;
       children?: ReactNode;
+      "data-tone"?: string;
     };
 
     return [
@@ -63,6 +65,7 @@ function extractSelectOptionsFromNode(node: ReactNode): SelectOptionRecord[] {
         value: typeof value === "string" ? value : String(value ?? ""),
         label: flattenOptionLabel(optionChildren),
         disabled: Boolean(disabled),
+        tone: tone === "warning" ? "warning" : "default",
       },
     ];
   }

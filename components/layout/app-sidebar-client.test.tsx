@@ -131,6 +131,7 @@ describe("AppSidebarClient", () => {
       "/dashboard",
       "/projects",
       "/budgets",
+      "/metrados-avanzados",
       "/ai",
       "/resources",
       "/partidas",

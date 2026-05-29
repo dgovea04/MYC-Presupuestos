@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   extractSelectOptions,
   partitionSelectOptions,
+  type SelectOptionRecord,
   type SelectOptionChildren,
 } from "@/lib/ui/select-options";
 
@@ -60,7 +61,7 @@ const VISUALLY_HIDDEN_SELECT_STYLES: React.CSSProperties = {
   pointerEvents: "none",
 };
 
-function mapRenderableOption(option: { disabled: boolean; label: string; value: string }, index: number) {
+function mapRenderableOption(option: SelectOptionRecord, index: number) {
   return {
     ...option,
     radixValue: option.value === "" ? `${EMPTY_OPTION_RADIX_PREFIX}${index}` : option.value,
@@ -222,9 +223,12 @@ export function Select({
       data-view-mode={viewMode}
       position={contentPosition}
       sideOffset={contentSideOffset}
-      className={cn("ui-select-content z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl", contentClassName)}
+      className={cn(
+        "ui-select-content z-50 max-h-96 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl",
+        contentClassName,
+      )}
     >
-      <SelectPrimitive.Viewport className="p-1">
+      <SelectPrimitive.Viewport className="max-h-96 overflow-y-auto p-1">
         {renderableOptions.map((option) => (
           <SelectPrimitive.Item
             data-view-mode={viewMode}
@@ -235,6 +239,8 @@ export function Select({
               "ui-select-item relative flex min-h-9 cursor-default select-none items-center rounded-lg py-2 pl-8 pr-3 text-sm text-slate-700 outline-none",
               "data-[highlighted]:bg-slate-900 data-[highlighted]:text-white",
               "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+              option.tone === "warning" &&
+                "bg-amber-50 font-medium text-amber-800 data-[highlighted]:bg-amber-500 data-[highlighted]:text-white",
             )}
           >
             <span className="absolute left-2 inline-flex h-4 w-4 items-center justify-center">
@@ -265,7 +271,12 @@ export function Select({
         onChange={() => undefined}
       >
         {rawRenderableOptions.map((option) => (
-          <option key={`${option.value}-${option.label}`} value={option.value} disabled={option.disabled}>
+          <option
+            key={`${option.value}-${option.label}`}
+            value={option.value}
+            disabled={option.disabled}
+            className={option.tone === "warning" ? "bg-amber-50 text-amber-800" : undefined}
+          >
             {option.label}
           </option>
         ))}
