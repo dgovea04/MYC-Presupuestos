@@ -2,6 +2,7 @@ import type {
   MetradoFormulaInputKey,
   MetradoFormulaKey,
   MetradoRowRecord,
+  MetradoTemplateType,
   MetradoUnit,
 } from "@/types/metrado";
 
@@ -126,3 +127,52 @@ export const buildDefaultMetradoSheetName = ({
 
   return `Metrado - ${templateName}`;
 };
+
+export type MetradoBudgetDraftOption = {
+  id: string;
+  projectId: string;
+};
+
+export type NewMetradoSheetDraft = {
+  budgetId: string;
+  partidaId: string;
+  projectId: string;
+  sheetName: string;
+  sheetUnit: MetradoUnit;
+  templateType: MetradoTemplateType;
+};
+
+export function buildNewMetradoSheetDraft({
+  budgets,
+  currentBudgetId,
+  currentProjectId,
+  defaultProjectId,
+  templateDefaultUnit,
+  templateName,
+  templateType,
+}: {
+  budgets: readonly MetradoBudgetDraftOption[];
+  currentBudgetId: string;
+  currentProjectId: string;
+  defaultProjectId: string;
+  templateDefaultUnit: MetradoUnit;
+  templateName: string;
+  templateType: MetradoTemplateType;
+}): NewMetradoSheetDraft {
+  const projectId = currentProjectId || defaultProjectId;
+  const currentBudgetStillApplies = budgets.some(
+    (budget) => budget.id === currentBudgetId && budget.projectId === projectId,
+  );
+  const budgetId = currentBudgetStillApplies
+    ? currentBudgetId
+    : budgets.find((budget) => budget.projectId === projectId)?.id ?? "";
+
+  return {
+    budgetId,
+    partidaId: "",
+    projectId,
+    sheetName: buildDefaultMetradoSheetName({ templateName }),
+    sheetUnit: templateDefaultUnit,
+    templateType,
+  };
+}

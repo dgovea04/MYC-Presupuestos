@@ -9,6 +9,7 @@ import { Calculator, ChevronRight, FileSpreadsheet, Plus, Trash2 } from "lucide-
 import {
   addMetradoRow,
   buildDefaultMetradoSheetName,
+  buildNewMetradoSheetDraft,
   deleteMetradoRow,
   duplicateMetradoRow,
   updateMetradoRowInput,
@@ -289,21 +290,24 @@ export function MetradosDashboard({
   }
 
   function startNewSheet() {
-    const nextProjectId = projectId || projects[0]?.id || "";
-    const currentBudgetStillApplies = budgets.some((budget) => budget.id === budgetId && budget.projectId === nextProjectId);
-    const nextBudgetId = currentBudgetStillApplies
-      ? budgetId
-      : budgets.find((budget) => budget.projectId === nextProjectId)?.id ?? "";
-    const nextPartida = partidas.find((partida) => partida.budgetId === nextBudgetId) ?? null;
     const nextTemplate = metradoTemplates[0];
+    const draft = buildNewMetradoSheetDraft({
+      budgets,
+      currentBudgetId: budgetId,
+      currentProjectId: projectId,
+      defaultProjectId: projects[0]?.id ?? "",
+      templateDefaultUnit: nextTemplate.defaultUnit,
+      templateName: nextTemplate.name,
+      templateType: nextTemplate.type,
+    });
 
     setSelectedSheetId("");
-    setProjectId(nextProjectId);
-    setBudgetId(nextBudgetId);
-    setPartidaId(nextPartida?.id ?? "");
-    setTemplateType(nextTemplate.type);
-    setSheetUnit(nextTemplate.defaultUnit);
-    setSheetName(buildDefaultMetradoSheetName({ templateName: nextTemplate.name, partidaCode: nextPartida?.code }));
+    setProjectId(draft.projectId);
+    setBudgetId(draft.budgetId);
+    setPartidaId(draft.partidaId);
+    setTemplateType(draft.templateType);
+    setSheetUnit(draft.sheetUnit);
+    setSheetName(draft.sheetName);
     setRows([]);
     setPreferredFormulaKey("manual");
     setActiveCell(null);
@@ -642,12 +646,11 @@ export function MetradosDashboard({
                 onChange={(event) => {
                   const nextProjectId = event.currentTarget.value;
                   const nextBudgetId = budgets.find((budget) => budget.projectId === nextProjectId)?.id ?? "";
-                  const nextPartida = partidas.find((partida) => partida.budgetId === nextBudgetId) ?? null;
                   setProjectId(nextProjectId);
                   setBudgetId(nextBudgetId);
-                  setPartidaId(nextPartida?.id ?? "");
+                  setPartidaId("");
                   if (isCreatingSheet) {
-                    setSheetName(buildDefaultMetradoSheetName({ templateName: template.name, partidaCode: nextPartida?.code }));
+                    setSheetName(buildDefaultMetradoSheetName({ templateName: template.name }));
                   }
                 }}
               >
@@ -665,11 +668,10 @@ export function MetradosDashboard({
                 disabled={persistedSheetSelected}
                 onChange={(event) => {
                   const nextBudgetId = event.currentTarget.value;
-                  const nextPartida = partidas.find((partida) => partida.budgetId === nextBudgetId) ?? null;
                   setBudgetId(nextBudgetId);
-                  setPartidaId(nextPartida?.id ?? "");
+                  setPartidaId("");
                   if (isCreatingSheet) {
-                    setSheetName(buildDefaultMetradoSheetName({ templateName: template.name, partidaCode: nextPartida?.code }));
+                    setSheetName(buildDefaultMetradoSheetName({ templateName: template.name }));
                   }
                 }}
               >
@@ -703,6 +705,9 @@ export function MetradosDashboard({
                     }
                   }}
                 >
+                  <option value="" disabled>
+                    Seleccionar partida
+                  </option>
                   {filteredPartidas.map((partida) => {
                     const activeSheet = activeSheetByPartidaId.get(partida.id) ?? null;
 

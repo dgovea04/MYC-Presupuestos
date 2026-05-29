@@ -5,6 +5,7 @@ import type { MetradoRowRecord } from "@/types/metrado";
 import {
   addMetradoRow,
   buildDefaultMetradoSheetName,
+  buildNewMetradoSheetDraft,
   deleteMetradoRow,
   duplicateMetradoRow,
   updateMetradoRowInput,
@@ -152,5 +153,29 @@ describe("metrado editor view model", () => {
       "Metrado - Concreto - 01.02.03",
     );
     expect(buildDefaultMetradoSheetName({ templateName: "Concreto" })).toBe("Metrado - Concreto");
+  });
+
+  it("keeps the current project and budget but clears partida when starting a new sheet", () => {
+    expect(
+      buildNewMetradoSheetDraft({
+        budgets: [
+          { id: "budget-1", projectId: "project-1" },
+          { id: "budget-2", projectId: "project-2" },
+        ],
+        currentBudgetId: "budget-1",
+        currentProjectId: "project-1",
+        defaultProjectId: "project-2",
+        templateDefaultUnit: "m3",
+        templateName: "Personalizado",
+        templateType: "CUSTOM",
+      }),
+    ).toEqual({
+      budgetId: "budget-1",
+      partidaId: "",
+      projectId: "project-1",
+      sheetName: "Metrado - Personalizado",
+      sheetUnit: "m3",
+      templateType: "CUSTOM",
+    });
   });
 });
