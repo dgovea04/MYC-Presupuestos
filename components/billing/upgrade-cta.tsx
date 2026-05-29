@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Lock, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function UpgradeCTA({
@@ -26,15 +25,13 @@ export function UpgradeCTA({
             <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
           </div>
         </div>
-        <Button
-          asChild
-          className="min-w-[10.75rem] shrink-0 whitespace-nowrap bg-slate-900 text-white shadow-sm hover:bg-slate-800"
+        <Link
+          className="inline-flex h-10 min-w-[10.75rem] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          href="/account"
         >
-          <Link className="inline-flex items-center justify-center gap-2 whitespace-nowrap" href="/account">
-            <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
-            <span className="whitespace-nowrap">Actualizar a Pro</span>
-          </Link>
-        </Button>
+          <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
+          <span className="whitespace-nowrap">Actualizar a Pro</span>
+        </Link>
       </div>
     </div>
   );

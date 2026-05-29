@@ -10,6 +10,10 @@ type BillingActionButtonsProps = {
   canUpgrade: boolean;
 };
 
+type BillingErrorPayload = {
+  error?: string;
+};
+
 export function BillingActionButtons({ canManageBilling, canUpgrade }: BillingActionButtonsProps) {
   const [pendingAction, setPendingAction] = useState<"checkout" | "portal" | "yape" | null>(null);
   const [error, setError] = useState("");
@@ -44,7 +48,13 @@ export function BillingActionButtons({ canManageBilling, canUpgrade }: BillingAc
       const response = await fetch("/api/billing/yape/request", { method: "POST" });
       const payload = (await response.json()) as YapeRequest | { error?: string };
 
-      if (!response.ok || "error" in payload) {
+      if (!response.ok) {
+        const errorPayload = payload as BillingErrorPayload;
+        setError(errorPayload.error ?? "No se pudo registrar la solicitud Yape.");
+        return;
+      }
+
+      if (isBillingErrorPayload(payload)) {
         setError(payload.error ?? "No se pudo registrar la solicitud Yape.");
         return;
       }
@@ -113,6 +123,10 @@ type YapeRequest = {
     qrImageUrl: string;
   };
 };
+
+function isBillingErrorPayload(payload: YapeRequest | BillingErrorPayload): payload is BillingErrorPayload {
+  return "error" in payload;
+}
 
 function YapeRequestPanel({ request }: { request: YapeRequest }) {
   return (

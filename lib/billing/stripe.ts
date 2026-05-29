@@ -133,7 +133,7 @@ export async function createProCheckoutSession({
 }: {
   prisma?: BillingPrismaClient;
   stripe?: StripeBillingClient;
-  user: { id: string; email: string; name?: string | null };
+  user: { id: string; email?: string | null; name?: string | null };
 }) {
   const priceId = getRequiredEnv("STRIPE_PRICE_PRO_MONTHLY");
   const appUrl = getAppUrl();
@@ -152,9 +152,19 @@ export async function createProCheckoutSession({
     },
   });
   const stripeCustomerId = billingUser?.billingSubscriptions[0]?.stripeCustomerId;
+  const customerEmail = user.email ?? billingUser?.email ?? null;
+
+  if (!stripeCustomerId && !customerEmail) {
+    throw new Error("El usuario necesita un correo para iniciar checkout.");
+  }
+
+  const customerParams: { customer: string } | { customer_email: string } = stripeCustomerId
+    ? { customer: stripeCustomerId }
+    : { customer_email: customerEmail ?? "" };
+
   const session = await stripe.checkout.sessions.create({
     client_reference_id: user.id,
-    ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: user.email }),
+    ...customerParams,
     line_items: [{ price: priceId, quantity: 1 }],
     metadata: { userId: user.id, plan: "pro" },
     mode: "subscription",

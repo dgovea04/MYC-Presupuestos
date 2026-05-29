@@ -30,6 +30,24 @@ describe("Stripe billing service", () => {
     expect(session.url).toBe("https://checkout.stripe.test/session");
   });
 
+  it("falls back to the stored user email when the session email is missing", async () => {
+    const stripe = createStripeMock();
+    const prisma = createBillingPrismaMock({ customerId: null });
+
+    await createProCheckoutSession({
+      prisma,
+      stripe,
+      user: { id: "user-1", email: null, name: "User Uno" },
+    });
+
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client_reference_id: "user-1",
+        customer_email: "user@example.com",
+      }),
+    );
+  });
+
   it("requires an existing Stripe customer before opening the portal", async () => {
     const stripe = createStripeMock();
     const prisma = createBillingPrismaMock({ customerId: null });
