@@ -24,7 +24,7 @@ SET
   "billingMode" = 'FREE',
   "projectLimit" = 3,
   "budgetLimit" = 5,
-  "entitlements" = ARRAY['exports.basic', 'polynomial_formula']::TEXT[]
+  "entitlements" = ARRAY['exports.basic']::TEXT[]
 WHERE "slug" = 'starter';
 
 UPDATE "MembershipPlan"
@@ -38,7 +38,6 @@ SET
     'partidas.similarity',
     'work_schedule.intelligent',
     'polynomial_formula',
-    'polynomial_formula.adjustments',
     'risk_analysis',
     'exports.advanced',
     'exports.basic'
@@ -55,7 +54,6 @@ SET
     'partidas.similarity',
     'work_schedule.intelligent',
     'polynomial_formula',
-    'polynomial_formula.adjustments',
     'risk_analysis',
     'exports.advanced',
     'exports.basic'
