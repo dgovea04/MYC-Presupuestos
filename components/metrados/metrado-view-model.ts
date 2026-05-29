@@ -112,3 +112,17 @@ export const updateMetradoRowInput = (
         : row,
     ),
   );
+
+export const buildDefaultMetradoSheetName = ({
+  templateName,
+  partidaCode,
+}: {
+  templateName: string;
+  partidaCode?: string | null;
+}): string => {
+  if (partidaCode?.trim()) {
+    return `Metrado - ${templateName} - ${partidaCode.trim()}`;
+  }
+
+  return `Metrado - ${templateName}`;
+};

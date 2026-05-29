@@ -4,8 +4,11 @@ import {
   calculateMetradoRow,
   calculateMetradoSheet,
 } from "@/lib/calculations/metrados";
-import { evaluateMetradoFormula } from "@/lib/metrados/formula-engine";
-import type { MetradoRowRecord } from "@/types/metrado";
+import {
+  evaluateMetradoFormula,
+  validateCustomMetradoExpression,
+} from "@/lib/metrados/formula-engine";
+import type { MetradoFormulaRecord, MetradoRowRecord } from "@/types/metrado";
 
 function row(overrides: Partial<MetradoRowRecord>): MetradoRowRecord {
   return {
@@ -25,6 +28,17 @@ function row(overrides: Partial<MetradoRowRecord>): MetradoRowRecord {
 }
 
 describe("metrado calculations", () => {
+  const customFormula: MetradoFormulaRecord = {
+    id: "custom-1",
+    templateId: "custom",
+    key: "custom-1",
+    label: "Area de muro con vanos",
+    expression: "(largo * alto) - areaVanos",
+    requiredInputs: ["largo", "alto", "areaVanos"],
+    resultUnit: "m2",
+    source: "user",
+  };
+
   test("calculates concrete volume with decimal-safe math", () => {
     const result = calculateMetradoRow(
       row({ inputs: { largo: 1.1, ancho: 2.2, alto: 3.3 } }),
@@ -73,6 +87,29 @@ describe("metrado calculations", () => {
     expect(result.primaryTotal).toBe(26);
     expect(result.totalsByUnit.m2).toBe(26);
     expect(result.totalsByUnit.kg).toBe(9);
+  });
+
+  test("calculates custom saved formulas with decimal-safe math", () => {
+    const result = calculateMetradoRow(
+      row({
+        unit: "m2",
+        formulaKey: customFormula.key,
+        inputs: { largo: 4.2, alto: 2.4, areaVanos: 1.35 },
+      }),
+      [customFormula],
+    );
+
+    expect(result.partial).toBe(8.73);
+  });
+
+  test("validates custom formula expressions before saving them", () => {
+    expect(validateCustomMetradoExpression(customFormula)).toBeNull();
+    expect(
+      validateCustomMetradoExpression({
+        ...customFormula,
+        expression: "largo * * alto",
+      }),
+    ).toBe("La formula esta incompleta.");
   });
 
   test("returns deterministic issues for invalid formula inputs", () => {

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import {
+  listCustomMetradoFormulas,
   listMetradoCreationOptions,
   listMetradoSheetsByUser,
 } from "@/lib/data/metrados";
@@ -18,9 +19,10 @@ export default async function MetradosAvanzadosPage() {
     redirect("/login");
   }
 
-  const [initialSheets, creationOptions] = await Promise.all([
+  const [initialSheets, creationOptions, customFormulas] = await Promise.all([
     listMetradoSheetsByUser(session.user.id),
     listMetradoCreationOptions(session.user.id),
+    listCustomMetradoFormulas(session.user.id),
   ]);
 
   return (
@@ -40,6 +42,7 @@ export default async function MetradosAvanzadosPage() {
             projects={creationOptions.projects}
             budgets={creationOptions.budgets}
             partidas={creationOptions.partidas}
+            customFormulas={customFormulas}
           />
         </CardContent>
       </Card>

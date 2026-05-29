@@ -164,6 +164,7 @@ model User {
   noteTasks           NoteTask[]
   generatedPartidas   GeneratedPartida[]
   metradoSheets       MetradoSheet[]
+  customMetradoFormulas CustomMetradoFormula[]
 
   @@index([role])
   @@index([status])
@@ -470,6 +471,25 @@ model MetradoPartidaLink {
   @@index([budgetItemId])
   @@index([budgetItemId, budgetId])
   @@map("metrado_partida_links")
+}
+
+model CustomMetradoFormula {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  description    String   @default("")
+  category       String   @default("Personalizado")
+  expression     String
+  requiredInputs String[] @default([])
+  resultUnit     String
+  showInSuggestions Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+  @@unique([userId, name])
+  @@map("custom_metrado_formulas")
 }
 
 model NoteTask {

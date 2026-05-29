@@ -4,6 +4,7 @@ import type { MetradoRowRecord } from "@/types/metrado";
 
 import {
   addMetradoRow,
+  buildDefaultMetradoSheetName,
   deleteMetradoRow,
   duplicateMetradoRow,
   updateMetradoRowInput,
@@ -144,5 +145,12 @@ describe("metrado editor view model", () => {
 
     expect(result).toEqual([{ ...rows[0], sortOrder: 1 }]);
     expect(result[0]).not.toBe(rows[0]);
+  });
+
+  it("builds descriptive default sheet names from template and partida", () => {
+    expect(buildDefaultMetradoSheetName({ templateName: "Concreto", partidaCode: "01.02.03" })).toBe(
+      "Metrado - Concreto - 01.02.03",
+    );
+    expect(buildDefaultMetradoSheetName({ templateName: "Concreto" })).toBe("Metrado - Concreto");
   });
 });

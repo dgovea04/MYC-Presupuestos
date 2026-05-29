@@ -14,27 +14,9 @@ export type MetradoUnit = "m" | "m2" | "m3" | "kg" | "und" | "glb";
 
 export type MetradoSheetStatus = "DRAFT" | "VALIDATED" | "SENT_TO_BUDGET";
 
-export type MetradoFormulaKey =
-  | "volume"
-  | "area"
-  | "linear"
-  | "rebarWeight"
-  | "formworkArea"
-  | "factorArea"
-  | "manual";
+export type MetradoFormulaKey = string;
 
-export type MetradoFormulaInputKey =
-  | "largo"
-  | "ancho"
-  | "alto"
-  | "cantidad"
-  | "longitud"
-  | "pesoUnitario"
-  | "perimetro"
-  | "altura"
-  | "area"
-  | "factor"
-  | "manual";
+export type MetradoFormulaInputKey = string;
 
 export type MetradoFormulaInputs = Partial<
   Record<MetradoFormulaInputKey, number>
@@ -48,6 +30,19 @@ export type MetradoFormulaRecord = {
   expression: string;
   requiredInputs: MetradoFormulaInputKey[];
   resultUnit: MetradoUnit;
+  category?: string | null;
+  source?: "system" | "user" | "suggestion";
+};
+
+export type CustomMetradoFormulaRecord = MetradoFormulaRecord & {
+  userId: string;
+  name: string;
+  description: string;
+  category: string;
+  showInSuggestions: boolean;
+  source: "user";
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 };
 
 export type MetradoTemplateRecord = {

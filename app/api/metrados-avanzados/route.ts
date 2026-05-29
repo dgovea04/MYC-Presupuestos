@@ -23,6 +23,7 @@ const createSheetSchema = z.object({
   budgetId: z.string().trim().min(1),
   budgetItemId: z.string().trim().min(1).optional(),
   templateType: z.enum(templateTypes),
+  unit: z.enum(["m", "m2", "m3", "kg", "und", "glb"]).optional(),
   name: z.string().trim().min(1).default("Nuevo metrado"),
 });
 
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
       budgetId: body.budgetId,
       budgetItemId: body.budgetItemId,
       templateType: body.templateType,
+      unit: body.unit,
       name: body.name,
     });
 

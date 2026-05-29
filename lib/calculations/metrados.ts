@@ -6,6 +6,7 @@ import {
 } from "@/lib/metrados/formula-engine";
 import type {
   MetradoCalculationResult,
+  MetradoFormulaRecord,
   MetradoRowRecord,
   MetradoUnit,
   MetradoValidationIssue,
@@ -13,11 +14,12 @@ import type {
 
 const metradoUnits: MetradoUnit[] = ["m", "m2", "m3", "kg", "und", "glb"];
 
-function evaluateMetradoRow(row: MetradoRowRecord): {
+function evaluateMetradoRow(row: MetradoRowRecord, formulas: MetradoFormulaRecord[] = []): {
   row: MetradoRowRecord;
   issues: MetradoValidationIssue[];
 } {
-  const result = evaluateMetradoFormula(row.formulaKey, row.inputs, row.id);
+  const formula = formulas.find((entry) => entry.key === row.formulaKey) ?? null;
+  const result = evaluateMetradoFormula(row.formulaKey, row.inputs, row.id, formula);
 
   return {
     row: {
@@ -28,15 +30,16 @@ function evaluateMetradoRow(row: MetradoRowRecord): {
   };
 }
 
-export function calculateMetradoRow(row: MetradoRowRecord): MetradoRowRecord {
-  return evaluateMetradoRow(row).row;
+export function calculateMetradoRow(row: MetradoRowRecord, formulas: MetradoFormulaRecord[] = []): MetradoRowRecord {
+  return evaluateMetradoRow(row, formulas).row;
 }
 
 export function calculateMetradoSheet(input: {
   unit: MetradoUnit;
   rows: MetradoRowRecord[];
+  formulas?: MetradoFormulaRecord[];
 }): MetradoCalculationResult {
-  const evaluatedRows = input.rows.map(evaluateMetradoRow);
+  const evaluatedRows = input.rows.map((row) => evaluateMetradoRow(row, input.formulas));
   const rows = evaluatedRows.map((evaluatedRow) => evaluatedRow.row);
   const totalsByUnit = metradoUnits.reduce<Record<MetradoUnit, number>>(
     (totals, unit) => {

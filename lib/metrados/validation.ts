@@ -1,6 +1,7 @@
 import { evaluateMetradoFormula } from "@/lib/metrados/formula-engine";
 import type {
   MetradoFormulaKey,
+  MetradoFormulaRecord,
   MetradoRowRecord,
   MetradoUnit,
   MetradoValidationIssue,
@@ -15,11 +16,13 @@ function normalizeLinkedUnit(unit: string): string {
 export function validateMetradoSheet({
   sheetUnit,
   templateFormulaKeys,
+  formulas = [],
   linkedPartidaUnit,
   rows,
 }: {
   sheetUnit: MetradoUnit;
   templateFormulaKeys: MetradoFormulaKey[];
+  formulas?: MetradoFormulaRecord[];
   linkedPartidaUnit?: string | null;
   rows: MetradoRowRecord[];
 }): MetradoValidationIssue[] {
@@ -72,7 +75,8 @@ export function validateMetradoSheet({
       });
     }
 
-    issues.push(...evaluateMetradoFormula(row.formulaKey, row.inputs, row.id).issues);
+    const formula = formulas.find((entry) => entry.key === row.formulaKey) ?? null;
+    issues.push(...evaluateMetradoFormula(row.formulaKey, row.inputs, row.id, formula).issues);
   }
 
   return issues;

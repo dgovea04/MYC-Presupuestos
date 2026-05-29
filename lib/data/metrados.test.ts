@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   assertMetradoRowsArePersistable,
   buildBudgetItemQuantityPatch,
+  buildMetradoSheetUnit,
   buildMetradoRowCreateData,
   buildMetradoPartidaLinkCreateInput,
   parseMetradoInputs,
@@ -58,6 +59,11 @@ describe("metrado data helpers", () => {
       budgetId: "budget-1",
       budgetItemId: "item-1",
     });
+  });
+
+  test("uses the requested sheet unit when creating a custom formula sheet", () => {
+    expect(buildMetradoSheetUnit("und", "m3")).toBe("m3");
+    expect(buildMetradoSheetUnit("und")).toBe("und");
   });
 
   test("builds row create data without persisting caller-provided row ids", () => {

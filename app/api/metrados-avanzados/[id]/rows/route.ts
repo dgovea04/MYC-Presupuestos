@@ -4,45 +4,12 @@ import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { replaceMetradoRows } from "@/lib/data/metrados";
 import type {
-  MetradoFormulaInputKey,
-  MetradoFormulaKey,
   MetradoRowRecord,
   MetradoUnit,
 } from "@/types/metrado";
 
 const units = ["m", "m2", "m3", "kg", "und", "glb"] as const satisfies MetradoUnit[];
-const formulaKeys = [
-  "volume",
-  "area",
-  "linear",
-  "rebarWeight",
-  "formworkArea",
-  "factorArea",
-  "manual",
-] as const satisfies MetradoFormulaKey[];
-const inputKeys = [
-  "largo",
-  "ancho",
-  "alto",
-  "cantidad",
-  "longitud",
-  "pesoUnitario",
-  "perimetro",
-  "altura",
-  "area",
-  "factor",
-  "manual",
-] as const satisfies MetradoFormulaInputKey[];
-
-const inputsSchema = z
-  .object(
-    Object.fromEntries(inputKeys.map((key) => [key, z.number().finite().optional()])) as Record<
-      MetradoFormulaInputKey,
-      z.ZodOptional<z.ZodNumber>
-    >,
-  )
-  .partial()
-  .default({});
+const inputsSchema = z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.number().finite()).default({});
 
 const rowSchema = z.object({
   id: z.string().trim().min(1).optional(),
@@ -52,7 +19,7 @@ const rowSchema = z.object({
   nivel: z.string().default(""),
   description: z.string().default(""),
   unit: z.enum(units),
-  formulaKey: z.enum(formulaKeys),
+  formulaKey: z.string().trim().min(1),
   inputs: inputsSchema,
   partial: z.number().finite().default(0),
   sortOrder: z.number().int().positive().optional(),

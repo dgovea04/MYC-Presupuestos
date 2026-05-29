@@ -9,9 +9,11 @@ import {
 } from "@/lib/metrados/validation";
 import { metradoTemplates } from "@/lib/metrados/templates";
 import type {
+  CustomMetradoFormulaRecord,
   MetradoFormulaInputKey,
   MetradoFormulaInputs,
   MetradoFormulaKey,
+  MetradoFormulaRecord,
   MetradoRowRecord,
   MetradoSheetRecord,
   MetradoSheetStatus,
@@ -32,16 +34,6 @@ const formulaInputKeys = [
   "factor",
   "manual",
 ] as const satisfies MetradoFormulaInputKey[];
-
-const formulaKeys = [
-  "volume",
-  "area",
-  "linear",
-  "rebarWeight",
-  "formworkArea",
-  "factorArea",
-  "manual",
-] as const satisfies MetradoFormulaKey[];
 
 const metradoUnits = ["m", "m2", "m3", "kg", "und", "glb"] as const satisfies MetradoUnit[];
 
@@ -101,6 +93,21 @@ type MetradoCreationOptions = {
   }>;
 };
 
+type CustomMetradoFormulaCreateInput = {
+  userId: string;
+  name: string;
+  description?: string;
+  category: string;
+  expression: string;
+  requiredInputs: MetradoFormulaInputKey[];
+  resultUnit: MetradoUnit;
+  showInSuggestions?: boolean;
+};
+
+type CustomMetradoFormulaUpdateInput = CustomMetradoFormulaCreateInput & {
+  id: string;
+};
+
 export function parseMetradoInputs(value: Prisma.JsonValue): MetradoFormulaInputs {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -109,7 +116,7 @@ export function parseMetradoInputs(value: Prisma.JsonValue): MetradoFormulaInput
   const jsonObject = value as Record<string, unknown>;
 
   return Object.entries(jsonObject).reduce<MetradoFormulaInputs>((inputs, [key, rawValue]) => {
-    if (!isFormulaInputKey(key)) {
+    if (!isFormulaInputKey(key) && !isCustomFormulaInputKey(key)) {
       return inputs;
     }
 
@@ -169,6 +176,7 @@ export function buildMetradoRowCreateData(
 export function assertMetradoRowsArePersistable(input: {
   sheetUnit: MetradoUnit;
   templateFormulaKeys: MetradoFormulaKey[];
+  formulas?: MetradoFormulaRecord[];
   linkedPartidaUnit?: string | null;
   rows: MetradoRowRecord[];
 }): void {
@@ -177,6 +185,71 @@ export function assertMetradoRowsArePersistable(input: {
   if (hasBlockingMetradoIssues(issues)) {
     throw new Error("No se pueden guardar filas de metrado con errores de validacion.");
   }
+}
+
+export async function listCustomMetradoFormulas(userId: string): Promise<CustomMetradoFormulaRecord[]> {
+  const formulas = await prisma.customMetradoFormula.findMany({
+    where: { userId },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+  });
+
+  return formulas.map(mapCustomMetradoFormulaRecord);
+}
+
+export async function createCustomMetradoFormula(
+  input: CustomMetradoFormulaCreateInput,
+): Promise<CustomMetradoFormulaRecord> {
+  const formula = await prisma.customMetradoFormula.create({
+    data: {
+      userId: input.userId,
+      name: input.name.trim(),
+      description: input.description?.trim() ?? "",
+      category: input.category.trim() || "Personalizado",
+      expression: input.expression.trim(),
+      requiredInputs: input.requiredInputs,
+      resultUnit: input.resultUnit,
+      showInSuggestions: input.showInSuggestions ?? false,
+    },
+  });
+
+  return mapCustomMetradoFormulaRecord(formula);
+}
+
+export async function updateCustomMetradoFormula(
+  input: CustomMetradoFormulaUpdateInput,
+): Promise<CustomMetradoFormulaRecord> {
+  const result = await prisma.customMetradoFormula.updateMany({
+    where: {
+      id: input.id,
+      userId: input.userId,
+    },
+    data: {
+      name: input.name.trim(),
+      description: input.description?.trim() ?? "",
+      category: input.category.trim() || "Personalizado",
+      expression: input.expression.trim(),
+      requiredInputs: input.requiredInputs,
+      resultUnit: input.resultUnit,
+      showInSuggestions: input.showInSuggestions ?? false,
+    },
+  });
+
+  if (result.count === 0) {
+    throw new Error("La formula personalizada no existe.");
+  }
+
+  const formula = await prisma.customMetradoFormula.findFirst({
+    where: {
+      id: input.id,
+      userId: input.userId,
+    },
+  });
+
+  if (!formula) {
+    throw new Error("No se pudo cargar la formula actualizada.");
+  }
+
+  return mapCustomMetradoFormulaRecord(formula);
 }
 
 export function buildBudgetItemQuantityPatch(primaryTotal: number): { quantity: number } {
@@ -314,6 +387,7 @@ export async function createMetradoSheet(input: {
   budgetId: string;
   budgetItemId: string;
   templateType: MetradoTemplateType;
+  unit?: MetradoUnit;
   name: string;
 }): Promise<MetradoSheetRecord> {
   await ensureMetradoTemplates();
@@ -357,7 +431,7 @@ export async function createMetradoSheet(input: {
         budgetId: input.budgetId,
         templateId: template.id,
         name: input.name.trim() || "Nuevo metrado",
-        unit: template.defaultUnit,
+        unit: buildMetradoSheetUnit(toMetradoUnit(template.defaultUnit), input.unit),
       },
       select: { id: true },
     });
@@ -379,6 +453,10 @@ export async function createMetradoSheet(input: {
   }
 
   return created;
+}
+
+export function buildMetradoSheetUnit(templateDefaultUnit: MetradoUnit, requestedUnit?: MetradoUnit): MetradoUnit {
+  return requestedUnit ?? templateDefaultUnit;
 }
 
 export async function getMetradoSheetById(
@@ -448,9 +526,16 @@ export async function replaceMetradoRows(
       unit: true,
       template: {
         select: {
+          type: true,
           formulas: {
             select: {
               key: true,
+              id: true,
+              templateId: true,
+              label: true,
+              expression: true,
+              requiredInputs: true,
+              resultUnit: true,
             },
             orderBy: {
               sortOrder: "asc",
@@ -479,6 +564,11 @@ export async function replaceMetradoRows(
   }
 
   const sheetUnit = toMetradoUnit(existing.unit);
+  const formulaRecords = await getAvailableFormulaRecords({
+    userId,
+    templateType: toMetradoTemplateType(existing.template.type),
+    templateFormulas: existing.template.formulas,
+  });
   const normalizedRows = rows.map((row, index) => ({
     ...row,
     sheetId,
@@ -488,7 +578,8 @@ export async function replaceMetradoRows(
   if (normalizedRows.length > 0) {
     assertMetradoRowsArePersistable({
       sheetUnit,
-      templateFormulaKeys: existing.template.formulas.map((formula) => toMetradoFormulaKey(formula.key)),
+      templateFormulaKeys: formulaRecords.map((formula) => formula.key),
+      formulas: formulaRecords,
       linkedPartidaUnit: existing.partidaLinks[0]?.budgetItem.unit ?? null,
       rows: normalizedRows,
     });
@@ -497,6 +588,7 @@ export async function replaceMetradoRows(
   const calculated = calculateMetradoSheet({
     unit: sheetUnit,
     rows: normalizedRows,
+    formulas: formulaRecords,
   });
 
   await prisma.$transaction(async (tx) => {
@@ -530,6 +622,15 @@ export async function sendMetradoTotalToPartida(
     where: { id: sheetId, userId },
     include: {
       rows: { orderBy: { sortOrder: "asc" } },
+      template: {
+        include: {
+          formulas: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      },
       partidaLinks: {
         include: { budgetItem: true },
         orderBy: { createdAt: "asc" },
@@ -547,9 +648,15 @@ export async function sendMetradoTotalToPartida(
     throw new Error("La partida vinculada no pertenece al presupuesto de la hoja.");
   }
 
+  const formulaRecords = await getAvailableFormulaRecords({
+    userId,
+    templateType: toMetradoTemplateType(sheet.template.type),
+    templateFormulas: sheet.template.formulas,
+  });
   const calculation = calculateMetradoSheet({
     unit: toMetradoUnit(sheet.unit),
     rows: sheet.rows.map(mapMetradoRowRecord),
+    formulas: formulaRecords,
   });
   const patch = buildBudgetItemQuantityPatch(calculation.primaryTotal);
 
@@ -580,6 +687,86 @@ export async function sendMetradoTotalToPartida(
   ]);
 
   return patch;
+}
+
+async function getAvailableFormulaRecords({
+  userId,
+  templateType,
+  templateFormulas,
+}: {
+  userId: string;
+  templateType: MetradoTemplateType;
+  templateFormulas: Array<{
+    id: string;
+    templateId: string;
+    key: string;
+    label: string;
+    expression: string;
+    requiredInputs: string[];
+    resultUnit: string;
+  }>;
+}): Promise<MetradoFormulaRecord[]> {
+  const formulas = templateFormulas.map(mapTemplateFormulaRecord);
+
+  if (templateType !== "CUSTOM") {
+    return formulas;
+  }
+
+  const customFormulas = await listCustomMetradoFormulas(userId);
+  return [...formulas, ...customFormulas];
+}
+
+function mapTemplateFormulaRecord(formula: {
+  id: string;
+  templateId: string;
+  key: string;
+  label: string;
+  expression: string;
+  requiredInputs: string[];
+  resultUnit: string;
+}): MetradoFormulaRecord {
+  return {
+    id: formula.id,
+    templateId: formula.templateId,
+    key: formula.key,
+    label: formula.label,
+    expression: formula.expression,
+    requiredInputs: formula.requiredInputs.filter(isFormulaInputKey),
+    resultUnit: toMetradoUnit(formula.resultUnit),
+    source: "system",
+  };
+}
+
+function mapCustomMetradoFormulaRecord(formula: {
+  id: string;
+  userId: string;
+  name: string;
+  description: string;
+  category: string;
+  expression: string;
+  requiredInputs: string[];
+  resultUnit: string;
+  showInSuggestions?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): CustomMetradoFormulaRecord {
+  return {
+    id: formula.id,
+    userId: formula.userId,
+    templateId: "custom-user",
+    key: formula.id,
+    label: formula.name,
+    name: formula.name,
+    description: formula.description,
+    category: formula.category,
+    showInSuggestions: formula.showInSuggestions ?? false,
+    expression: formula.expression,
+    requiredInputs: formula.requiredInputs.filter(isCustomFormulaInputKey),
+    resultUnit: toMetradoUnit(formula.resultUnit),
+    source: "user",
+    createdAt: formula.createdAt,
+    updatedAt: formula.updatedAt,
+  };
 }
 
 function mapMetradoSheetRecord(sheet: MetradoSheetWithRelations): MetradoSheetRecord {
@@ -647,8 +834,12 @@ function isFormulaInputKey(value: string): value is MetradoFormulaInputKey {
   return formulaInputKeys.some((key) => key === value);
 }
 
+function isCustomFormulaInputKey(value: string): value is MetradoFormulaInputKey {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
+}
+
 function toMetradoFormulaKey(value: string): MetradoFormulaKey {
-  return formulaKeys.find((key) => key === value) ?? "manual";
+  return value.trim() || "manual";
 }
 
 function toMetradoUnit(value: string): MetradoUnit {
