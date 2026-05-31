@@ -4,11 +4,15 @@ import type { ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  BookOpenCheck,
   Calculator,
+  CheckCircle2,
   ChevronRight,
   CircleDollarSign,
   FileSpreadsheet,
   FolderKanban,
+  ListChecks,
+  Ruler,
   Settings2,
   Sigma,
   StickyNote,
@@ -23,7 +27,8 @@ import { FilterPillLink } from "@/components/ui/filter-pill-link";
 import { ToneBadge } from "@/components/ui/context-badges";
 import { OperationalPanel, OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { getAuthSession } from "@/lib/auth/session";
-import { getDashboardStats, type DashboardPendingItem } from "@/lib/data/dashboard";
+import { buildDashboardOnboardingSteps, type DashboardOnboardingStep } from "@/lib/dashboard/onboarding";
+import { getDashboardStats, type DashboardActivityItem, type DashboardPendingItem } from "@/lib/data/dashboard";
 import { getProjectStatusLabel } from "@/lib/project-status";
 import { getUserSettings } from "@/lib/data/settings";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -68,6 +73,7 @@ export default async function DashboardPage({
   const paginatedPendingItems = paginateItems(filteredPendingItems, requestedPendingPage, DASHBOARD_SECTION_PAGE_SIZE);
   const paginatedRecentActivity = paginateItems(stats.recentActivity, requestedActivityPage, DASHBOARD_SECTION_PAGE_SIZE);
   const groupedPendingItems = groupPendingItemsByPriority(paginatedPendingItems.items);
+  const onboardingSteps = buildDashboardOnboardingSteps(stats);
 
   return (
     <AppShell currentUser={session!.user} settings={settings}>
@@ -103,6 +109,88 @@ export default async function DashboardPage({
           tone="primary"
         />
       </section>
+
+      {onboardingSteps.some((step) => !step.completed) ? (
+        <Card className="border-sky-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4fbff_52%,#eff6ff_100%)]">
+          <CardContent className="space-y-4 p-6">
+            <OperationalSectionHeader
+              title="Primeros pasos"
+              description="Completa el flujo base para dejar lista la obra: empresa, proyecto, presupuesto, formula y primer seguimiento."
+            />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              {onboardingSteps.map((step) => (
+                <OnboardingStepCard key={step.title} {...step} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+        <CardContent className="space-y-4 p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <OperationalSectionHeader
+              title="Plantillas reutilizables"
+              description="Indicadores de biblioteca para acelerar nuevos presupuestos sin perder trazabilidad tecnica."
+            />
+            <SecondaryLink href="/templates">Abrir biblioteca</SecondaryLink>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <CompactStatCard
+              label="Guardadas"
+              value={String(stats.templateSummary.savedTemplatesCount)}
+              tone="emerald"
+            />
+            <CompactStatCard
+              label="Aplicadas"
+              value={String(stats.templateSummary.templateBudgetApplicationCount)}
+              tone="sky"
+            />
+            <CompactStatCard
+              label="Mantenimiento"
+              value={String(stats.templateSummary.templateMaintenanceEventCount)}
+              tone="violet"
+            />
+            <CompactStatCard
+              label="Partidas capturadas"
+              value={String(stats.templateSummary.totalTemplateItems)}
+              tone="amber"
+            />
+            <CompactStatCard
+              label="Promedio por plantilla"
+              value={String(stats.templateSummary.averageItemsPerTemplate)}
+              tone="slate"
+            />
+          </div>
+          {stats.templateSummary.latestTemplate ? (
+            <DashboardRecordLink
+              href={`/templates/budget/${stats.templateSummary.latestTemplate.id}`}
+              tone="sky"
+              metaTitle="Ver plantilla"
+              metaDetail={`Actualizada ${formatDate(stats.templateSummary.latestTemplate.updatedAt, settings.dateFormat)}`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <BookOpenCheck className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 space-y-1">
+                  <p className="font-medium text-slate-900">{stats.templateSummary.latestTemplate.name}</p>
+                  <p className="text-sm text-slate-600">
+                    Ultima plantilla guardada con {stats.templateSummary.latestTemplate.itemCount} partidas capturadas.
+                  </p>
+                </div>
+              </div>
+            </DashboardRecordLink>
+          ) : (
+            <EmptyState
+              title="Aun no hay plantillas guardadas"
+              description="Guarda un presupuesto como plantilla para reutilizar estructura, partidas y APU en futuros proyectos."
+              href="/templates"
+              action="Explorar biblioteca"
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <Card className="h-full border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)]">
@@ -646,6 +734,49 @@ function ActionLink({
   );
 }
 
+function OnboardingStepCard({
+  completed,
+  description,
+  href,
+  title,
+}: {
+} & DashboardOnboardingStep) {
+  const content = (
+    <div
+      className={cn(
+        "group flex h-full flex-col justify-between rounded-2xl border px-4 py-4 transition",
+        completed
+          ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
+          : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50/50",
+      )}
+    >
+      <div className="space-y-3">
+        <span
+          className={cn(
+            "inline-flex h-9 w-9 items-center justify-center rounded-xl",
+            completed ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600 group-hover:bg-sky-100 group-hover:text-sky-700",
+          )}
+        >
+          {completed ? <CheckCircle2 className="h-4 w-4" /> : <ListChecks className="h-4 w-4" />}
+        </span>
+        <div>
+          <p className="font-medium text-slate-950">{title}</p>
+          <p className={cn("mt-1 text-sm leading-5", completed ? "text-emerald-800" : "text-slate-500")}>{description}</p>
+        </div>
+      </div>
+      <span className={cn("mt-4 text-xs font-semibold uppercase tracking-[0.16em]", completed ? "text-emerald-700" : "text-sky-700")}>
+        {completed ? "Completado" : "Continuar"}
+      </span>
+    </div>
+  );
+
+  if (completed) {
+    return content;
+  }
+
+  return <Link href={href}>{content}</Link>;
+}
+
 function DashboardRecordLink({
   href,
   children,
@@ -915,14 +1046,7 @@ function MinimalPaginationLink({
 function EventTypeBadge({
   type,
 }: {
-  type:
-    | "PROJECT_UPDATED"
-    | "PROJECT_CREATED"
-    | "GENERAL_BUDGET_UPDATED"
-    | "GENERAL_BUDGET_CREATED"
-    | "POLYNOMIAL_FORMULA_UPDATED"
-    | "POLYNOMIAL_FORMULA_GENERATED"
-    | "ADJUSTMENT_REGISTERED";
+  type: DashboardActivityItem["type"];
 }) {
   const config = getEventTypeBadgeConfig(type);
 
@@ -943,14 +1067,7 @@ function ProjectActivityBadge({ projectName }: { projectName: string }) {
 function EventTypeIcon({
   type,
 }: {
-  type:
-    | "PROJECT_UPDATED"
-    | "PROJECT_CREATED"
-    | "GENERAL_BUDGET_UPDATED"
-    | "GENERAL_BUDGET_CREATED"
-    | "POLYNOMIAL_FORMULA_UPDATED"
-    | "POLYNOMIAL_FORMULA_GENERATED"
-    | "ADJUSTMENT_REGISTERED";
+  type: DashboardActivityItem["type"];
 }) {
   const config = getEventTypeIconConfig(type);
   const Icon = config.icon;
@@ -962,16 +1079,7 @@ function EventTypeIcon({
   );
 }
 
-function getActivityActionLabel(
-  type:
-    | "PROJECT_UPDATED"
-    | "PROJECT_CREATED"
-    | "GENERAL_BUDGET_UPDATED"
-    | "GENERAL_BUDGET_CREATED"
-    | "POLYNOMIAL_FORMULA_UPDATED"
-    | "POLYNOMIAL_FORMULA_GENERATED"
-    | "ADJUSTMENT_REGISTERED",
-) {
+function getActivityActionLabel(type: DashboardActivityItem["type"]) {
   if (type === "PROJECT_UPDATED" || type === "PROJECT_CREATED") {
     return "Abrir proyecto";
   }
@@ -984,19 +1092,18 @@ function getActivityActionLabel(
     return "Revisar formula";
   }
 
+  if (type === "METRADO_DUPLICATED") {
+    return "Abrir metrados";
+  }
+
+  if (type === "TEMPLATE_CHANGED") {
+    return "Abrir biblioteca";
+  }
+
   return "Ver reajuste";
 }
 
-function getEventTypeBadgeConfig(
-  type:
-    | "PROJECT_UPDATED"
-    | "PROJECT_CREATED"
-    | "GENERAL_BUDGET_UPDATED"
-    | "GENERAL_BUDGET_CREATED"
-    | "POLYNOMIAL_FORMULA_UPDATED"
-    | "POLYNOMIAL_FORMULA_GENERATED"
-    | "ADJUSTMENT_REGISTERED",
-) {
+function getEventTypeBadgeConfig(type: DashboardActivityItem["type"]) {
   if (type === "PROJECT_UPDATED" || type === "PROJECT_CREATED") {
     return {
       label: "Proyecto",
@@ -1018,22 +1125,27 @@ function getEventTypeBadgeConfig(
     };
   }
 
+  if (type === "METRADO_DUPLICATED") {
+    return {
+      label: "Metrado",
+      tone: "emerald" as const,
+    };
+  }
+
+  if (type === "TEMPLATE_CHANGED") {
+    return {
+      label: "Plantilla",
+      tone: "amber" as const,
+    };
+  }
+
   return {
     label: "Reajuste",
     tone: "emerald" as const,
   };
 }
 
-function getEventTypeIconConfig(
-  type:
-    | "PROJECT_UPDATED"
-    | "PROJECT_CREATED"
-    | "GENERAL_BUDGET_UPDATED"
-    | "GENERAL_BUDGET_CREATED"
-    | "POLYNOMIAL_FORMULA_UPDATED"
-    | "POLYNOMIAL_FORMULA_GENERATED"
-    | "ADJUSTMENT_REGISTERED",
-) {
+function getEventTypeIconConfig(type: DashboardActivityItem["type"]) {
   if (type === "PROJECT_UPDATED" || type === "PROJECT_CREATED") {
     return {
       icon: FolderKanban,
@@ -1052,6 +1164,20 @@ function getEventTypeIconConfig(
     return {
       icon: Sigma,
       className: "bg-violet-100 text-violet-700",
+    };
+  }
+
+  if (type === "METRADO_DUPLICATED") {
+    return {
+      icon: Ruler,
+      className: "bg-emerald-100 text-emerald-700",
+    };
+  }
+
+  if (type === "TEMPLATE_CHANGED") {
+    return {
+      icon: BookOpenCheck,
+      className: "bg-amber-100 text-amber-700",
     };
   }
 
@@ -1095,14 +1221,7 @@ function getPendingSummaryBadgeClass(type: DashboardPendingItem["type"]) {
 
 function summarizeRecentActivity(
   items: Array<{
-    type:
-      | "PROJECT_UPDATED"
-      | "PROJECT_CREATED"
-      | "GENERAL_BUDGET_UPDATED"
-      | "GENERAL_BUDGET_CREATED"
-      | "POLYNOMIAL_FORMULA_UPDATED"
-      | "POLYNOMIAL_FORMULA_GENERATED"
-      | "ADJUSTMENT_REGISTERED";
+    type: DashboardActivityItem["type"];
     createdAt: Date;
   }>,
 ) {

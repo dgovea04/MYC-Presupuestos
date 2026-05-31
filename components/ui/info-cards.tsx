@@ -13,7 +13,7 @@ export function InfoCard({
 }: {
   label: string;
   value: string;
-  tone?: "slate" | "sky" | "amber";
+  tone?: "slate" | "sky" | "amber" | "emerald";
   layout?: "stacked" | "inline";
   previewLabel?: string;
   previewValue?: string;
@@ -24,7 +24,9 @@ export function InfoCard({
       ? "border-sky-200 bg-sky-50"
       : tone === "amber"
         ? "border-amber-200 bg-amber-50"
-        : "border-slate-200 bg-slate-50";
+        : tone === "emerald"
+          ? "border-emerald-200 bg-emerald-50"
+          : "border-slate-200 bg-slate-50";
 
   return (
     <div

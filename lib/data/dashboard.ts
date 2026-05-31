@@ -16,6 +16,8 @@ type DashboardActivityType =
   | "PROJECT_CREATED"
   | "GENERAL_BUDGET_UPDATED"
   | "GENERAL_BUDGET_CREATED"
+  | "METRADO_DUPLICATED"
+  | "TEMPLATE_CHANGED"
   | "POLYNOMIAL_FORMULA_UPDATED"
   | "POLYNOMIAL_FORMULA_GENERATED"
   | "ADJUSTMENT_REGISTERED";
@@ -43,8 +45,37 @@ export type DashboardActivityItem = {
   createdAt: Date;
 };
 
+export type DashboardTemplateSummary = {
+  savedTemplatesCount: number;
+  templateBudgetApplicationCount: number;
+  templateMaintenanceEventCount: number;
+  totalTemplateItems: number;
+  averageItemsPerTemplate: number;
+  latestTemplate: {
+    id: string;
+    name: string;
+    updatedAt: Date;
+    itemCount: number;
+  } | null;
+};
+
+type DashboardBudgetTemplateRow = {
+  id: string;
+  name: string;
+  updatedAt: Date;
+  payload: unknown;
+};
+
 export async function getDashboardStats(userId: string) {
-  const [companiesCount, projects, activityEvents, noteTasks] = await Promise.all([
+  const [
+    companiesCount,
+    projects,
+    activityEvents,
+    noteTasks,
+    budgetTemplates,
+    templateBudgetApplicationCount,
+    templateMaintenanceEventCount,
+  ] = await Promise.all([
     prisma.company.count({
       where: { userId },
     }),
@@ -117,6 +148,9 @@ export async function getDashboardStats(userId: string) {
           take: 25,
         }),
     listNoteTasks(userId, { status: "OPEN" }),
+    listDashboardBudgetTemplates(userId),
+    countTemplateBudgetApplications(userId),
+    countTemplateMaintenanceEvents(userId),
   ]);
 
   const projectsWithCompany = projects.map((project) => ({
@@ -211,10 +245,44 @@ export async function getDashboardStats(userId: string) {
       currency: budget.currency,
     })),
     pendingItems,
+    templateSummary: buildTemplateDashboardSummary(
+      budgetTemplates,
+      templateBudgetApplicationCount,
+      templateMaintenanceEventCount,
+    ),
     recentActivity: (activityEvents.length > 0
       ? activityEvents.map((event) => mapActivityEvent(event, { projectNameByBudgetId, projectNameByProjectId }))
       : getRecentActivity(projectsWithCompany, generalBudgets, formulas, adjustments)
     ).slice(0, 25),
+  };
+}
+
+export function buildTemplateDashboardSummary(
+  templates: DashboardBudgetTemplateRow[],
+  templateBudgetApplicationCount: number,
+  templateMaintenanceEventCount = 0,
+): DashboardTemplateSummary {
+  const templatesWithItemCount = templates.map((template) => ({
+    ...template,
+    itemCount: readTemplateItemCount(template.payload),
+  }));
+  const totalTemplateItems = templatesWithItemCount.reduce((sum, template) => sum + template.itemCount, 0);
+  const latestTemplate = templatesWithItemCount[0] ?? null;
+
+  return {
+    savedTemplatesCount: templates.length,
+    templateBudgetApplicationCount,
+    templateMaintenanceEventCount,
+    totalTemplateItems,
+    averageItemsPerTemplate: templates.length > 0 ? Math.round(totalTemplateItems / templates.length) : 0,
+    latestTemplate: latestTemplate
+      ? {
+          id: latestTemplate.id,
+          name: latestTemplate.name,
+          updatedAt: latestTemplate.updatedAt,
+          itemCount: latestTemplate.itemCount,
+        }
+      : null,
   };
 }
 
@@ -233,6 +301,87 @@ export function mapNoteTasksToPendingItems(notes: NoteTaskRecord[]): DashboardPe
       href: note.sourcePath || "/dashboard",
       type: "USER_NOTE_TASK",
     }));
+}
+
+async function listDashboardBudgetTemplates(userId: string): Promise<DashboardBudgetTemplateRow[]> {
+  const client = prisma as typeof prisma & {
+    budgetTemplate?: {
+      findMany(args: {
+        where: { userId: string; module: "BUDGET" };
+        select: { id: true; name: true; updatedAt: true; payload: true };
+        orderBy: { updatedAt: "desc" };
+      }): Promise<DashboardBudgetTemplateRow[]>;
+    };
+  };
+
+  if (!client.budgetTemplate) {
+    return [];
+  }
+
+  return client.budgetTemplate.findMany({
+    where: { userId, module: "BUDGET" },
+    select: { id: true, name: true, updatedAt: true, payload: true },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+async function countTemplateMaintenanceEvents(userId: string): Promise<number> {
+  const client = prisma as typeof prisma & {
+    activityEvent?: {
+      count(args: {
+        where: {
+          userId: string;
+          title: { startsWith: "Plantilla " };
+        };
+      }): Promise<number>;
+    };
+  };
+
+  if (!client.activityEvent) {
+    return 0;
+  }
+
+  return client.activityEvent.count({
+    where: {
+      userId,
+      title: { startsWith: "Plantilla " },
+    },
+  });
+}
+
+async function countTemplateBudgetApplications(userId: string): Promise<number> {
+  const client = prisma as typeof prisma & {
+    activityEvent?: {
+      count(args: {
+        where: {
+          userId: string;
+          type: "BUDGET_CREATED";
+          title: "Presupuesto creado desde plantilla";
+        };
+      }): Promise<number>;
+    };
+  };
+
+  if (!client.activityEvent) {
+    return 0;
+  }
+
+  return client.activityEvent.count({
+    where: {
+      userId,
+      type: "BUDGET_CREATED",
+      title: "Presupuesto creado desde plantilla",
+    },
+  });
+}
+
+function readTemplateItemCount(payload: unknown) {
+  if (!isRecord(payload) || !isRecord(payload.summary)) {
+    return 0;
+  }
+
+  const itemCount = payload.summary.itemCount;
+  return typeof itemCount === "number" && Number.isFinite(itemCount) ? itemCount : 0;
 }
 
 function mapNotePriority(priority: NoteTaskPriority): DashboardPendingItem["priority"] {
@@ -404,7 +553,7 @@ function mapActivityEvent(event: {
 }): DashboardActivityItem {
   return {
     id: event.id,
-    type: normalizeActivityEventType(event.type),
+    type: normalizeDashboardActivityEventType(event),
     title: event.title,
     detail: event.detail,
     projectName: resolveActivityProjectName(event.href, lookups),
@@ -433,8 +582,20 @@ function resolveActivityProjectName(
   return null;
 }
 
-function normalizeActivityEventType(type: ActivityEventType): DashboardActivityType {
-  switch (type) {
+export function normalizeDashboardActivityEventType(event: {
+  type: ActivityEventType;
+  title: string;
+  href: string;
+}): DashboardActivityType {
+  if (event.title === "Metrado duplicado" || event.href.startsWith("/metrados-avanzados")) {
+    return "METRADO_DUPLICATED";
+  }
+
+  if (event.title.startsWith("Plantilla ") || event.href.startsWith("/templates/budget/")) {
+    return "TEMPLATE_CHANGED";
+  }
+
+  switch (event.type) {
     case "PROJECT_CREATED":
       return "PROJECT_CREATED";
     case "PROJECT_UPDATED":
@@ -450,6 +611,10 @@ function normalizeActivityEventType(type: ActivityEventType): DashboardActivityT
     case "ADJUSTMENT_REGISTERED":
       return "ADJUSTMENT_REGISTERED";
     default:
-      throw new Error(`Unsupported activity event type: ${type satisfies never}`);
+      throw new Error(`Unsupported activity event type: ${event.type satisfies never}`);
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

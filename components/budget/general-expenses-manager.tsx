@@ -25,19 +25,20 @@ import type {
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 const RATE_PERCENTAGE_DECIMALS = 2;
+type GeneralExpenseTemplateFocus = "FIXED" | "VARIABLE";
 
 export function GeneralExpensesManager({
   budgetId,
   currency,
   totalDirectCost,
-  generalExpensesRate,
   initialStructure,
+  initialTemplateFocus,
 }: {
   budgetId: string;
   currency: string;
   totalDirectCost: number;
-  generalExpensesRate: number;
   initialStructure: GeneralExpenseStructure;
+  initialTemplateFocus?: GeneralExpenseTemplateFocus | null;
 }) {
   const { currencyDecimals } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
@@ -56,6 +57,7 @@ export function GeneralExpensesManager({
     () =>
       calculateGeneralExpenseStructure({
         totalDirectCost,
+        currencyDecimals,
         groups: structure.groups.map((group) => ({
           ...group,
           titles: group.titles.map((title) => ({
@@ -66,7 +68,7 @@ export function GeneralExpensesManager({
           })),
         })),
       }),
-    [structure, totalDirectCost],
+    [currencyDecimals, structure, totalDirectCost],
   );
   const breakdownRows = useMemo(() => {
     const fixedTotal = preview.groups.find((group) => group.kind === "FIXED")?.subtotal ?? 0;
@@ -370,7 +372,7 @@ export function GeneralExpensesManager({
         controls={
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-500">
-              Reglas: `Parcial = Cantidad x PU` o `Cantidad x % Part x Costo Directo`, segun categoria.
+              Reglas: `Parcial = Cant. desc. x Cantidad x PU` o `Cant. desc. x Cantidad x % Part x Costo Directo`, segun categoria.
             </p>
             <div className="flex items-center gap-2">
               {error ? <p className="text-sm text-rose-600">{error}</p> : null}
@@ -394,9 +396,19 @@ export function GeneralExpensesManager({
       />
 
       <div className={cn("border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.98)_0%,rgba(254,243,199,0.92)_100%)] px-4 py-3 text-sm text-amber-800", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_14px_30px_-26px_rgba(217,119,6,0.22)]")}>
-        El total oficial del presupuesto sigue saliendo de la tasa general actual: {formatNumber(generalExpensesRate, 4)}.
-        Esta sección trabaja con el desagregado operativo de la plantilla base.
+        La tasa oficial sincronizada desde este desagregado es {formatPercentageValue(getDirectCostPercentage(preview.total, totalDirectCost))}.
+        Esta sección trabaja con la plantilla base y actualiza los Sub Presupuestos.
       </div>
+
+      {initialTemplateFocus ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          <p className="font-semibold text-sky-900">{getTemplateFocusTitle(initialTemplateFocus)}</p>
+          <p className="mt-1 text-sky-700">
+            La biblioteca te trajo a este desagregado. El grupo correspondiente queda resaltado para revisar sus
+            titulos, partidas operativas y porcentajes.
+          </p>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <InfoCard label="Costo directo" value={formatCurrency(totalDirectCost, currency, currencyDecimals)} tone="slate" />
@@ -411,7 +423,16 @@ export function GeneralExpensesManager({
 
       <div className="space-y-5">
         {preview.groups.map((group) => (
-          <section key={group.id} className={cn("space-y-4 border bg-white p-4", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
+          <section
+            key={group.id}
+            className={cn(
+              "space-y-4 border bg-white p-4",
+              isExcelMode
+                ? "rounded-md border-slate-300 shadow-none"
+                : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]",
+              initialTemplateFocus === group.kind ? "border-sky-300 ring-2 ring-sky-100" : null,
+            )}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
@@ -722,4 +743,8 @@ function getDirectCostPercentage(amount: number, totalDirectCost: number) {
 
 function formatPercentageValue(value: number) {
   return `${formatNumber(value * 100, RATE_PERCENTAGE_DECIMALS)}%`;
+}
+
+function getTemplateFocusTitle(focus: GeneralExpenseTemplateFocus) {
+  return focus === "FIXED" ? "Plantilla de gastos generales fijos" : "Plantilla de gastos generales variables";
 }

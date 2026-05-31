@@ -8,6 +8,7 @@ import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { ActionButton } from "@/components/ui/action-button";
 import { AnimatedCurrencyValue } from "@/components/ui/animated-currency-value";
 import { Badge } from "@/components/ui/badge";
+import { BudgetComparisonPanel } from "@/components/budget/budget-comparison-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
@@ -15,6 +16,7 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { buildGeneralBudgetTraceability } from "@/lib/budget/general-budget-traceability";
 import {
   getAppDataChangeEventName,
   getAppDataChangeStorageKey,
@@ -191,7 +193,15 @@ export function GeneralBudgetOverview({
       .map((budget) => new Date(budget.updatedAt))
       .sort((left, right) => right.getTime() - left.getTime())[0]
       ?.toISOString() ?? null;
-
+  const traceability = useMemo(
+    () =>
+      buildGeneralBudgetTraceability({
+        subBudgetCount: orderedSubBudgets.length,
+        detailCount: calculatedSubBudgetDetails.length,
+        latestUpdatedAt,
+      }),
+    [calculatedSubBudgetDetails.length, latestUpdatedAt, orderedSubBudgets.length],
+  );
   return (
     <div className="space-y-5">
       <Card className="border-slate-200">
@@ -216,6 +226,32 @@ export function GeneralBudgetOverview({
               tone="slate"
             />
           </div>
+
+          <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Trazabilidad del consolidado</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Origen: {traceability.sourceLabel}. Motor: {traceability.calculationLabel}.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                  {traceability.coverageLabel}
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                  Actualizado: {traceability.latestUpdatedAt ? formatDate(traceability.latestUpdatedAt, dateFormat) : "Sin fecha"}
+                </span>
+              </div>
+            </div>
+            {traceability.warning ? <p className="mt-2 text-xs leading-5 text-amber-700">{traceability.warning}</p> : null}
+          </div>
+
+          <BudgetComparisonPanel
+            budgets={calculatedSubBudgetDetails}
+            currencyDecimals={currencyDecimals}
+            isExcelMode={isExcelMode}
+          />
 
           <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
             {orderedSubBudgets.map((budget) => {

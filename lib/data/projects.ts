@@ -4,6 +4,7 @@ import { projectSchema, type ProjectInput } from "@/lib/validations/project";
 import { Prisma } from "@prisma/client";
 import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
+import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 
 const defaultBudgetTotals = {
   totalDirectCost: 0,
@@ -323,13 +324,23 @@ export async function createProject(userId: string, input: ProjectInput) {
   }
 
   const settings = await getUserSettings(userId);
+  const template = data.templateId ? getTemplateLibraryItem(data.templateId) : null;
+  if (data.templateId && template?.module !== "BUDGET") {
+    throw new Error("La plantilla seleccionada no esta disponible para crear proyectos");
+  }
+
   const defaultBudgetData = createBudgetData(createDefaultBudgetContext(settings));
   const defaultBudgetNames = getDefaultSubBudgetNames(settings);
 
   return prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
       data: {
-        ...data,
+        companyId: data.companyId,
+        name: data.name,
+        clientName: data.clientName,
+        location: data.location,
+        projectType: data.projectType || (template?.id === "budget-edificacion-base" ? "Edificacion" : undefined),
+        status: data.status,
         startDate: data.startDate ? new Date(data.startDate) : undefined,
         endDate: data.endDate ? new Date(data.endDate) : undefined,
       },

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { FormActionBar, FormSectionPanel } from "@/components/ui/operational-surfaces";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import type { TemplateLibraryItem } from "@/lib/templates/template-library";
 
 type CompanyOption = {
   id: string;
@@ -17,6 +18,7 @@ type CompanyOption = {
 
 type ProjectFormProps = {
   companies: CompanyOption[];
+  selectedTemplate?: TemplateLibraryItem | null;
   project?: {
     id: string;
     companyId: string;
@@ -30,7 +32,7 @@ type ProjectFormProps = {
   };
 };
 
-export function ProjectForm({ companies, project }: ProjectFormProps) {
+export function ProjectForm({ companies, project, selectedTemplate }: ProjectFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -73,6 +75,16 @@ export function ProjectForm({ companies, project }: ProjectFormProps) {
           <ProjectInfoCard label="Proyecto" value={project.name} />
           <ProjectInfoCard label="Cliente" value={project.clientName || "Pendiente"} />
           <ProjectInfoCard label="Estado" value={getProjectStatusLabel(project.status)} />
+        </div>
+      ) : null}
+
+      {!project && selectedTemplate ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+          <input name="templateId" type="hidden" value={selectedTemplate.id} />
+          <p className="text-sm font-semibold text-sky-950">Plantilla seleccionada: {selectedTemplate.name}</p>
+          <p className="mt-1 text-sm leading-6 text-sky-800">
+            Se creara el presupuesto general y los Sub Presupuestos iniciales configurados para tu cuenta. La plantilla queda como origen del flujo de creacion.
+          </p>
         </div>
       ) : null}
 

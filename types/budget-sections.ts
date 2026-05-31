@@ -69,14 +69,6 @@ export type GeneralBudgetResourceSummaryResult = {
   budgetCount: number;
 };
 
-export type BudgetFooterDraft = {
-  title: string;
-  sections: Array<{
-    title: string;
-    detail: string;
-  }>;
-};
-
 export type BudgetFooterStructure = CalculatedBudgetFooterStructureRecord;
 
 export type BudgetFooterRowInput = {

@@ -227,7 +227,7 @@ function AccountProfileForm({ account, onSaved }: { account: AccountRecord; onSa
     <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5" onSubmit={handleSubmit}>
       <div className="space-y-1">
         <p className="text-sm font-semibold text-slate-900">Perfil personal</p>
-        <p className="text-sm text-slate-500">Tu correo se muestra como referencia y no es editable en esta version.</p>
+        <p className="text-sm text-slate-500">Tu correo identifica el acceso y solo puede cambiarlo un administrador.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

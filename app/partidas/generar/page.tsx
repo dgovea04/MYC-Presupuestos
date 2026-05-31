@@ -39,6 +39,11 @@ export default async function GeneratePartidaPage({
             <UpgradeCTA
               title="Generador de partidas disponible en Pro"
               description="Desbloquea busqueda por similitud, sugerencias de insumos y guardado asistido en tu catalogo."
+              benefits={[
+                "Busqueda por similitud",
+                "Insumos sugeridos con trazabilidad",
+                "Guardado revisado en catalogo",
+              ]}
             />
           </CardContent>
         </Card>

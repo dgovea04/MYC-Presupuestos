@@ -25,6 +25,11 @@ export default async function AIPage({
         <UpgradeCTA
           title="IA local disponible en Pro"
           description="Activa el copiloto tecnico para chat, generacion de APU, revision de presupuesto y autocompletado asistido."
+          benefits={[
+            "Chat tecnico con contexto de obra",
+            "Generacion y revision asistida de APU",
+            "Autocompletado sin enviar datos externos",
+          ]}
         />
       </AppShell>
     );

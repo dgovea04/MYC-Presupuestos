@@ -40,8 +40,8 @@ export function BudgetFooterDocumentSignatureCard({
           <div className="space-y-1">
             <CardTitle>Firma documental</CardTitle>
             <CardDescription>
-              Vista base para la futura portada o cierre documental del presupuesto, reutilizando el responsable tecnico que ya
-              sale en exportes.
+              Datos de portada, cierre y firma del presupuesto, reutilizando el responsable tecnico que se incluye en
+              las exportaciones.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -57,8 +57,8 @@ export function BudgetFooterDocumentSignatureCard({
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Resumen documental</p>
               <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                Este bloque anticipa la firma visible del documento final y deja alineado el responsable que aparecerá en la
-                portada, pie o versión exportada del presupuesto general.
+                Este bloque alinea la firma visible del documento final y el responsable que aparecera en la portada,
+                pie o version exportada del presupuesto general.
               </p>
             </div>
 
@@ -100,7 +100,7 @@ export function BudgetFooterDocumentSignatureCard({
           <SignatureBox
             title="Vo. Bo. / aprobacion"
             subtitle={clientName || "Cliente o aprobador"}
-            detail="Espacio reservado para la aprobacion final del documento"
+            detail="Linea de conformidad para la aprobacion final del documento"
           />
         </div>
       </CardContent>

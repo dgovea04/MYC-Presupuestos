@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import Decimal from "decimal.js";
 import { decimalToNumber, serializeBudget } from "@/lib/db/serializers";
 import { budgetSchema, budgetStatePatchSchema, type BudgetInput } from "@/lib/validations/budget";
 import { aggregateGeneralBudgetResources } from "@/lib/calculations/general-budget-sections";
@@ -255,10 +256,16 @@ export async function getBudgetGeneralExpenses(budgetId: string, userId: string)
   });
 
   const groups = await loadBudgetGeneralExpenseGroups(budgetId);
-  return calculateGeneralExpenseStructure({
+  const expenses = calculateGeneralExpenseStructure({
     totalDirectCost: decimalToNumber(budget.totalDirectCost),
     groups,
   });
+
+  await prisma.$transaction(async (tx) => {
+    await syncGeneralExpensesRateFromStructure(tx, budget.id, expenses.total);
+  });
+
+  return expenses;
 }
 
 export async function initializeBudgetGeneralExpenses(budgetId: string, userId: string): Promise<GeneralExpenseStructure> {
@@ -271,7 +278,11 @@ export async function initializeBudgetGeneralExpenses(budgetId: string, userId: 
   return getBudgetGeneralExpenses(budgetId, userId);
 }
 
-export async function getBudgetFooterStructure(budgetId: string, userId: string): Promise<BudgetFooterStructure> {
+export async function getBudgetFooterStructure(
+  budgetId: string,
+  userId: string,
+  currencyDecimals = 2,
+): Promise<BudgetFooterStructure> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
   const expenses = await getBudgetGeneralExpenses(budgetId, userId);
 
@@ -288,6 +299,11 @@ export async function getBudgetFooterStructure(budgetId: string, userId: string)
     rows,
     totalDirectCost: decimalToNumber(budget.totalDirectCost),
     totalGeneralExpenses: expenses.total,
+    totalUtility: decimalToNumber(budget.totalUtility),
+    subtotal: decimalToNumber(budget.totalDirectCost) + expenses.total + decimalToNumber(budget.totalUtility),
+    totalTax: decimalToNumber(budget.totalTax),
+    totalAmount: decimalToNumber(budget.totalAmount),
+    currencyDecimals,
   });
 }
 
@@ -295,6 +311,7 @@ export async function saveBudgetFooterStructure(
   budgetId: string,
   userId: string,
   input: BudgetFooterStructureSaveInput,
+  currencyDecimals = 2,
 ): Promise<BudgetFooterStructure> {
   await getAccessibleGeneralBudget(budgetId, userId);
   const parsed = budgetFooterStructureSaveSchema.parse(input);
@@ -356,7 +373,7 @@ export async function saveBudgetFooterStructure(
     }
   });
 
-  return getBudgetFooterStructure(budgetId, userId);
+  return getBudgetFooterStructure(budgetId, userId, currencyDecimals);
 }
 
 export async function saveBudgetGeneralExpensesStructure(
@@ -1215,6 +1232,95 @@ async function refreshGeneralBudgetTotals(
   });
 }
 
+async function syncGeneralExpensesRateFromStructure(
+  tx: Prisma.TransactionClient,
+  generalBudgetId: string,
+  detailedGeneralExpensesTotal: number,
+) {
+  const generalBudget = await tx.budget.findUnique({
+    where: { id: generalBudgetId },
+    select: {
+      id: true,
+      totalDirectCost: true,
+    },
+  });
+
+  if (!generalBudget) return;
+
+  const totalDirectCost = decimalToNumber(generalBudget.totalDirectCost);
+  const generalExpensesRate = totalDirectCost > 0
+    ? new Decimal(detailedGeneralExpensesTotal).dividedBy(totalDirectCost).toDecimalPlaces(10, Decimal.ROUND_HALF_UP).toNumber()
+    : 0;
+
+  const childBudgets = await tx.budget.findMany({
+    where: { parentBudgetId: generalBudgetId },
+    select: {
+      id: true,
+      totalDirectCost: true,
+      utilityRate: true,
+      igvRate: true,
+    },
+  });
+
+  for (const childBudget of childBudgets) {
+    const totals = calculateBudgetTotalsFromDirectCost({
+      totalDirectCost: decimalToNumber(childBudget.totalDirectCost),
+      generalExpensesRate,
+      utilityRate: decimalToNumber(childBudget.utilityRate),
+      igvRate: decimalToNumber(childBudget.igvRate),
+    });
+
+    await tx.budget.update({
+      where: { id: childBudget.id },
+      data: {
+        generalExpensesRate,
+        ...totals,
+      },
+    });
+  }
+
+  await tx.budget.update({
+    where: { id: generalBudgetId },
+    data: {
+      generalExpensesRate,
+      totalGeneralExpenses: detailedGeneralExpensesTotal,
+    },
+  });
+
+  await refreshGeneralBudgetTotals(tx, generalBudgetId);
+
+  await tx.budget.update({
+    where: { id: generalBudgetId },
+    data: { generalExpensesRate },
+  });
+}
+
+function calculateBudgetTotalsFromDirectCost(input: {
+  totalDirectCost: number;
+  generalExpensesRate: number;
+  utilityRate: number;
+  igvRate: number;
+}) {
+  const totalDirectCost = new Decimal(input.totalDirectCost);
+  const totalGeneralExpenses = totalDirectCost.times(input.generalExpensesRate);
+  const totalUtility = totalDirectCost.times(input.utilityRate);
+  const subtotal = totalDirectCost.plus(totalGeneralExpenses).plus(totalUtility);
+  const totalTax = subtotal.times(input.igvRate);
+  const totalAmount = subtotal.plus(totalTax);
+
+  return {
+    totalDirectCost: roundMoney(totalDirectCost),
+    totalGeneralExpenses: roundMoney(totalGeneralExpenses),
+    totalUtility: roundMoney(totalUtility),
+    totalTax: roundMoney(totalTax),
+    totalAmount: roundMoney(totalAmount),
+  };
+}
+
+function roundMoney(value: Decimal.Value) {
+  return new Decimal(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
+}
+
 async function resolvePersistableApuResourceId(
   tx: Prisma.TransactionClient,
   userId: string,
@@ -1302,6 +1408,9 @@ async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
       name: true,
       currency: true,
       totalDirectCost: true,
+      totalUtility: true,
+      totalTax: true,
+      totalAmount: true,
     },
   });
 

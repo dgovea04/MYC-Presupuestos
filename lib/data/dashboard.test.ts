@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { mapNoteTasksToPendingItems } from "@/lib/data/dashboard";
+import {
+  buildTemplateDashboardSummary,
+  mapNoteTasksToPendingItems,
+  normalizeDashboardActivityEventType,
+} from "@/lib/data/dashboard";
 import type { NoteTaskRecord } from "@/types/notes";
 
 describe("dashboard note pending items", () => {
@@ -36,5 +40,72 @@ describe("dashboard note pending items", () => {
         type: "USER_NOTE_TASK",
       },
     ]);
+  });
+});
+
+describe("dashboard template summary", () => {
+  it("summarizes saved templates, application count, and latest snapshot", () => {
+    const summary = buildTemplateDashboardSummary(
+      [
+        {
+          id: "template-2",
+          name: "Arquitectura costa",
+          updatedAt: new Date("2026-05-30T10:00:00.000Z"),
+          payload: { summary: { itemCount: 12 } },
+        },
+        {
+          id: "template-1",
+          name: "Arquitectura base",
+          updatedAt: new Date("2026-05-29T10:00:00.000Z"),
+          payload: { summary: { itemCount: 8 } },
+        },
+      ],
+      3,
+      5,
+    );
+
+    expect(summary).toEqual({
+      savedTemplatesCount: 2,
+      templateBudgetApplicationCount: 3,
+      templateMaintenanceEventCount: 5,
+      totalTemplateItems: 20,
+      averageItemsPerTemplate: 10,
+      latestTemplate: {
+        id: "template-2",
+        name: "Arquitectura costa",
+        updatedAt: new Date("2026-05-30T10:00:00.000Z"),
+        itemCount: 12,
+      },
+    });
+  });
+});
+
+describe("dashboard activity normalization", () => {
+  it("maps metrado duplication activity to the metrado dashboard type", () => {
+    expect(
+      normalizeDashboardActivityEventType({
+        type: "BUDGET_UPDATED",
+        title: "Metrado duplicado",
+        href: "/metrados-avanzados",
+      }),
+    ).toBe("METRADO_DUPLICATED");
+  });
+
+  it("maps template activities to the template dashboard type", () => {
+    const events = [
+      { type: "BUDGET_CREATED" as const, title: "Plantilla creada" },
+      { type: "BUDGET_UPDATED" as const, title: "Plantilla actualizada" },
+      { type: "BUDGET_UPDATED" as const, title: "Plantilla duplicada" },
+      { type: "BUDGET_UPDATED" as const, title: "Plantilla eliminada", href: "/templates" },
+    ];
+
+    for (const event of events) {
+      expect(
+        normalizeDashboardActivityEventType({
+          ...event,
+          href: "href" in event ? event.href : "/templates/budget/template-copy",
+        }),
+      ).toBe("TEMPLATE_CHANGED");
+    }
   });
 });

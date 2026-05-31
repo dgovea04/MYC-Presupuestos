@@ -108,6 +108,12 @@ type CustomMetradoFormulaUpdateInput = CustomMetradoFormulaCreateInput & {
   id: string;
 };
 
+type DuplicateMetradoSheetInput = {
+  sourceSheetId: string;
+  userId: string;
+  name?: string;
+};
+
 export function parseMetradoInputs(value: Prisma.JsonValue): MetradoFormulaInputs {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -457,6 +463,63 @@ export async function createMetradoSheet(input: {
 
 export function buildMetradoSheetUnit(templateDefaultUnit: MetradoUnit, requestedUnit?: MetradoUnit): MetradoUnit {
   return requestedUnit ?? templateDefaultUnit;
+}
+
+export function buildMetradoSheetDuplicateName(sourceName: string, requestedName?: string): string {
+  const trimmedName = requestedName?.trim();
+  if (trimmedName) {
+    return trimmedName;
+  }
+
+  return `${sourceName.trim() || "Metrado"} copia`;
+}
+
+export function buildMetradoRowsForDuplicate(
+  sourceRows: readonly MetradoRowRecord[],
+  sheetId: string,
+): MetradoRowRecord[] {
+  return sourceRows.map((row, index) => ({
+    ...row,
+    id: `duplicate-row-${index + 1}`,
+    sheetId,
+    inputs: { ...row.inputs },
+    sortOrder: index + 1,
+  }));
+}
+
+export async function duplicateMetradoSheet(input: DuplicateMetradoSheetInput): Promise<MetradoSheetRecord> {
+  const source = await getMetradoSheetById(input.sourceSheetId, input.userId);
+
+  if (!source) {
+    throw new Error("Metrado no encontrado.");
+  }
+
+  if (!source.partidaLink) {
+    throw new Error("El metrado de origen no tiene partida vinculada.");
+  }
+
+  const created = await createMetradoSheet({
+    userId: input.userId,
+    projectId: source.projectId,
+    budgetId: source.budgetId,
+    budgetItemId: source.partidaLink.budgetItemId,
+    templateType: source.templateType,
+    unit: source.unit,
+    name: buildMetradoSheetDuplicateName(source.name, input.name),
+  });
+
+  if (source.rows.length === 0) {
+    return created;
+  }
+
+  const duplicatedRows = buildMetradoRowsForDuplicate(source.rows, created.id);
+  const copied = await replaceMetradoRows(created.id, input.userId, duplicatedRows);
+
+  if (!copied) {
+    throw new Error("No se pudo cargar el metrado duplicado.");
+  }
+
+  return copied;
 }
 
 export async function getMetradoSheetById(

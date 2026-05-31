@@ -5,9 +5,12 @@ import type { MetradoRowRecord } from "@/types/metrado";
 import {
   addMetradoRow,
   buildDefaultMetradoSheetName,
+  buildMetradoSheetSelectPlaceholder,
+  buildMetradoTemplatePrefillMessage,
   buildNewMetradoSheetDraft,
   deleteMetradoRow,
   duplicateMetradoRow,
+  parseMetradoTemplateTypeParam,
   updateMetradoRowInput,
 } from "./metrado-view-model";
 
@@ -153,6 +156,28 @@ describe("metrado editor view model", () => {
       "Metrado - Concreto - 01.02.03",
     );
     expect(buildDefaultMetradoSheetName({ templateName: "Concreto" })).toBe("Metrado - Concreto");
+  });
+
+  it("builds a prefill message when opening a metrado template from the library", () => {
+    expect(buildMetradoTemplatePrefillMessage("Concreto")).toBe(
+      "Plantilla Concreto preseleccionada. Completa proyecto, presupuesto y partida para crear la hoja.",
+    );
+    expect(buildMetradoTemplatePrefillMessage("  ")).toBe("");
+  });
+
+  it("labels the sheet selector placeholder according to creation state", () => {
+    expect(buildMetradoSheetSelectPlaceholder({ hasSheets: true, isCreatingSheet: true })).toBe(
+      "Nueva hoja en configuracion",
+    );
+    expect(buildMetradoSheetSelectPlaceholder({ hasSheets: true, isCreatingSheet: false })).toBe("Seleccionar hoja");
+    expect(buildMetradoSheetSelectPlaceholder({ hasSheets: false, isCreatingSheet: true })).toBe("Sin hojas guardadas");
+  });
+
+  it("parses metrado template ids from library links", () => {
+    expect(parseMetradoTemplateTypeParam("metrado-concrete")).toBe("CONCRETE");
+    expect(parseMetradoTemplateTypeParam("metrado-roofing")).toBe("ROOFING");
+    expect(parseMetradoTemplateTypeParam("CUSTOM")).toBe("CUSTOM");
+    expect(parseMetradoTemplateTypeParam("bad-template")).toBeNull();
   });
 
   it("keeps the current project and budget but clears partida when starting a new sheet", () => {

@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Type, WandSparkles } from "lucide-react";
+import { Activity, BookOpenCheck, BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -23,7 +23,7 @@ import { buildAiBudgetReviewSummary } from "@/lib/ai/budget-review";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { cn } from "@/lib/utils";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
-import { ViewModeToggle } from "@/components/budget/view-mode-toggle";
+import { SaveBudgetTemplateButton } from "@/components/budget/save-budget-template-button";
 import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type { BudgetLevelRecord, BudgetLevelType, BudgetRecord, BudgetItemRecord, BudgetStatePatch, BudgetTotals } from "@/types/budget";
@@ -46,6 +46,7 @@ import { suggestPartidaMatches, type BudgetPasteSuggestedMatch } from "@/lib/bud
 import type { AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import type { NoteTaskRecord } from "@/types/notes";
+import type { BudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type DragState = { kind: "level" | "item"; id: string } | null;
@@ -172,7 +173,7 @@ const LEVEL_ADD_MENU_ESTIMATED_HEIGHT = 152;
 const LEVEL_MORE_MENU_ESTIMATED_HEIGHT = 336;
 const ITEM_ACTION_MENU_ESTIMATED_HEIGHT = 184;
 const HEADER_ADD_MENU_ESTIMATED_HEIGHT = 216;
-const HEADER_MORE_MENU_ESTIMATED_HEIGHT = 112;
+const HEADER_MORE_MENU_ESTIMATED_HEIGHT = 192;
 const EMPTY_CATALOG_SUGGESTIONS: CatalogPartidaRecord[] = [];
 
 type IndexedCatalogPartida = {
@@ -262,11 +263,13 @@ export function BudgetEditor({
   resourcesCatalog,
   partidasCatalog,
   projectName,
+  templateTraceability,
 }: {
   budget: BudgetRecord;
   resourcesCatalog: ResourceRecord[];
   partidasCatalog: CatalogPartidaRecord[];
   projectName?: string;
+  templateTraceability?: BudgetTemplateCreationTraceability | null;
 }) {
   const router = useRouter();
   const { currencyDecimals, excelRowHeight } = useFormattingSettings();
@@ -300,6 +303,7 @@ export function BudgetEditor({
   const [excelImportFileName, setExcelImportFileName] = useState("");
   const [excelImportLoading, setExcelImportLoading] = useState(false);
   const [clearSubBudgetDialogOpen, setClearSubBudgetDialogOpen] = useState(false);
+  const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
   const [apuSheetSession, setApuSheetSession] = useState<ApuSheetSession | null>(null);
   const deferredCatalogQuery = useDeferredValue(catalogQuery);
   const deferredCatalogInsertQuery = useDeferredValue(catalogInsertQuery);
@@ -1622,18 +1626,6 @@ export function BudgetEditor({
     setActiveColumn(column);
   }, []);
 
-  const updateGeneralExpensesRate = useCallback((value: number) => {
-    setState((current) => ({ ...current, generalExpensesRate: value }));
-  }, []);
-
-  const updateUtilityRate = useCallback((value: number) => {
-    setState((current) => ({ ...current, utilityRate: value }));
-  }, []);
-
-  const updateIgvRate = useCallback((value: number) => {
-    setState((current) => ({ ...current, igvRate: value }));
-  }, []);
-
   const toggleSummaryCollapsed = useCallback(() => {
     setSummaryCollapsed((current) => !current);
   }, []);
@@ -1750,20 +1742,19 @@ export function BudgetEditor({
             <div className="min-w-0">
               {projectName ? <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">{projectName}</p> : null}
               <CardTitle className="tracking-tight text-slate-950">{budget.name}</CardTitle>
+              {templateTraceability ? <TemplateTraceabilityBanner traceability={templateTraceability} /> : null}
               <p className="text-xs leading-5 text-slate-500">Edición jerárquica con autosave y guardado manual.</p>
             </div>
             <div className="flex flex-col gap-1.5 xl:min-w-0 xl:items-end">
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                <div className="group inline-flex self-end rounded-2xl border border-slate-200/90 bg-white/90 px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-slate-300 hover:bg-white focus-within:border-slate-300 focus-within:bg-white">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">Vista</p>
-                      <ViewModeToggle />
-                    </div>
-                    <div className="hidden w-0 overflow-hidden transition-all duration-200 ease-out group-hover:w-5 group-focus-within:w-5 sm:flex sm:items-center sm:justify-center">
-                      <div className="h-6 w-px bg-slate-200 opacity-0 transition duration-200 ease-out group-hover:opacity-100 group-focus-within:opacity-100" />
-                    </div>
-                    <div className="flex max-h-0 max-w-0 translate-x-2 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:max-h-16 group-hover:max-w-[220px] group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:max-h-16 group-focus-within:max-w-[220px] group-focus-within:translate-x-0 group-focus-within:opacity-100 sm:flex-row sm:items-center sm:gap-2">
+                <Link
+                  href={`/budgets/${budget.id}/risk-analysis`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 text-[11px] font-semibold tracking-[0.08em] text-sky-700 shadow-[0_12px_24px_-22px_rgba(37,99,235,0.32)] transition hover:border-sky-300 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  <Activity className="h-4 w-4" />
+                  Riesgos
+                </Link>
+                <div className="inline-flex flex-wrap items-center gap-2 self-end rounded-2xl border border-slate-200/90 bg-white/90 px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-slate-300 hover:bg-white focus-within:border-slate-300 focus-within:bg-white">
                       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">Densidad</p>
                       <div className="inline-flex rounded-xl border border-slate-200/90 bg-white p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
                         <button
@@ -1789,22 +1780,13 @@ export function BudgetEditor({
                           Cómodo
                         </button>
                       </div>
-                    </div>
                   </div>
                 </div>
-              </div>
 
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <div className="flex items-center">
                   <SaveBadge state={saveState} lastSavedAt={lastSavedAt} compact />
                 </div>
-                <Link
-                  href={`/budgets/${budget.id}/risk-analysis`}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 text-[11px] font-semibold tracking-[0.08em] text-sky-700 shadow-[0_12px_24px_-22px_rgba(37,99,235,0.32)] transition hover:border-sky-300 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                >
-                  <Activity className="h-4 w-4" />
-                  Riesgos
-                </Link>
                 <Button
                   variant="secondary"
                   onClick={() => void saveBudget()}
@@ -1923,9 +1905,6 @@ export function BudgetEditor({
         totals={summary.totals}
         qualitySummary={qualitySummary}
         onToggleCollapsed={toggleSummaryCollapsed}
-        onGeneralExpensesRateChange={updateGeneralExpensesRate}
-        onUtilityRateChange={updateUtilityRate}
-        onIgvRateChange={updateIgvRate}
       />
 
       {apuSheetSession ? (
@@ -2247,6 +2226,15 @@ export function BudgetEditor({
           {headerActionMenu.kind === "more" ? (
             <>
               <LevelActionMenuButton
+                label="Guardar como plantilla"
+                icon={<BookOpenCheck className="h-4 w-4" />}
+                onClick={() => {
+                  setSaveTemplateDialogOpen(true);
+                  closeHeaderActionMenu();
+                }}
+              />
+              <div className="my-1 border-t border-slate-100" />
+              <LevelActionMenuButton
                 label="Insertar desde catálogo"
                 onClick={() => {
                   openCatalogInsert(null);
@@ -2291,6 +2279,14 @@ export function BudgetEditor({
           onConfirm={clearSubBudget}
         />
       ) : null}
+
+      <SaveBudgetTemplateButton
+        budgetId={budget.id}
+        budgetName={budget.name}
+        open={saveTemplateDialogOpen}
+        onOpenChange={setSaveTemplateDialogOpen}
+        hideTrigger
+      />
 
       {catalogInsertTarget ? (
         <CatalogInsertSheet
@@ -2673,10 +2669,29 @@ function handleMenuArrowNavigation(event: KeyboardEvent, container: HTMLDivEleme
   return false;
 }
 
-function SummaryRow({ label, value, currency, compact = false }: { label: string; value: number; currency: string; compact?: boolean }) {
+function SummaryRow({
+  label,
+  value,
+  currency,
+  rate,
+  compact = false,
+}: {
+  label: string;
+  value: number;
+  currency: string;
+  rate?: number;
+  compact?: boolean;
+}) {
   return (
     <div className={cn("flex items-center justify-between bg-slate-50", compact ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
-      <p className={cn("text-slate-500", compact ? "text-xs" : "text-sm")}>{label}</p>
+      <div className="flex min-w-0 items-center gap-2">
+        <p className={cn("text-slate-500", compact ? "text-xs" : "text-sm")}>{label}</p>
+        {rate !== undefined ? (
+          <span className={cn("font-medium tabular-nums text-slate-700", compact ? "text-xs" : "text-sm")}>
+            {formatNumber(rate * 100, 2)}%
+          </span>
+        ) : null}
+      </div>
       <AnimatedCurrencyValue value={value} currency={currency} className="justify-end px-0 py-0 font-semibold text-slate-900" />
     </div>
   );
@@ -2696,31 +2711,6 @@ function shouldCancelRowDragStart(event: React.DragEvent<HTMLElement>, isEditing
 
 function isEditableActiveColumn(column: ActiveColumn) {
   return column === "code" || column === "description" || column === "unit" || column === "quantity";
-}
-
-function RateField({
-  label,
-  value,
-  onChange,
-  compact = false,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  compact?: boolean;
-}) {
-  return (
-    <div className={cn(compact ? "space-y-1.5" : "space-y-2")}>
-      <p className={cn("font-medium text-slate-700", compact ? "text-xs" : "text-sm")}>{label}</p>
-      <Input
-        type="number"
-        step="0.01"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className={compact ? "h-8 rounded-sm border-slate-300 px-2 text-xs shadow-none" : undefined}
-      />
-    </div>
-  );
 }
 
 function PastePreviewSheet({
@@ -4383,9 +4373,6 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
   totals,
   qualitySummary,
   onToggleCollapsed,
-  onGeneralExpensesRateChange,
-  onUtilityRateChange,
-  onIgvRateChange,
 }: {
   budgetId: string;
   currency: BudgetRecord["currency"];
@@ -4398,9 +4385,6 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
   totals: BudgetTotals;
   qualitySummary: BudgetQualitySummary;
   onToggleCollapsed: () => void;
-  onGeneralExpensesRateChange: (value: number) => void;
-  onUtilityRateChange: (value: number) => void;
-  onIgvRateChange: (value: number) => void;
 }) {
   return (
     <Card
@@ -4439,13 +4423,10 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
             <QualityStatCard label="Sin APU" value={qualitySummary.itemsWithoutApu} tone="neutral" />
             <QualityStatCard label="Resueltas por sugerencia" value={qualitySummary.itemsResolvedFromSuggestion} tone="info" />
           </div>
-          <RateField label="Gastos generales" value={generalExpensesRate} onChange={onGeneralExpensesRateChange} compact={isExcelMode} />
-          <RateField label="Utilidad" value={utilityRate} onChange={onUtilityRateChange} compact={isExcelMode} />
-          <RateField label="IGV" value={igvRate} onChange={onIgvRateChange} compact={isExcelMode} />
           <SummaryRow label="Costo directo" value={totals.totalDirectCost} currency={currency} compact={isExcelMode} />
-          <SummaryRow label="Gastos generales" value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
-          <SummaryRow label="Utilidad" value={totals.totalUtility} currency={currency} compact={isExcelMode} />
-          <SummaryRow label="IGV" value={totals.totalTax} currency={currency} compact={isExcelMode} />
+          <SummaryRow label="Gastos generales" rate={generalExpensesRate} value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
+          <SummaryRow label="Utilidad" rate={utilityRate} value={totals.totalUtility} currency={currency} compact={isExcelMode} />
+          <SummaryRow label="IGV" rate={igvRate} value={totals.totalTax} currency={currency} compact={isExcelMode} />
           <div className={cn("bg-slate-900 text-white shadow-[0_18px_36px_-26px_rgba(15,23,42,0.45)]", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
             <p className={cn("text-slate-300", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
             <AnimatedCurrencyValue
@@ -5092,6 +5073,20 @@ function resequenceItems(items: BudgetItemRecord[]) {
     ...item,
     sortOrder: index + 1,
   }));
+}
+
+function TemplateTraceabilityBanner({
+  traceability,
+}: {
+  traceability: BudgetTemplateCreationTraceability;
+}) {
+  return (
+    <div className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+      <Sparkles className="h-4 w-4 shrink-0" />
+      <span className="font-medium">{traceability.title}</span>
+      <span className="min-w-0 text-emerald-700">{traceability.detail}</span>
+    </div>
+  );
 }
 
 function buildAiItemContext(item: BudgetItemRecord, budgetName: string) {

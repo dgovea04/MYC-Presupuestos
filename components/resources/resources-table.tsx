@@ -431,6 +431,7 @@ export function ResourcesTable({
                 <option value="MATERIAL">Materiales</option>
                 <option value="LABOR">Mano de obra</option>
                 <option value="EQUIPMENT">Equipos</option>
+                <option value="TOOLS">Herramientas</option>
               </Select>
             </div>
             <div className={cn("flex flex-col gap-3 border bg-white/90 p-3 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200")}>
@@ -488,6 +489,13 @@ export function ResourcesTable({
             </THead>
             <TBody>
               <VirtualizedTableSpacerRow colSpan={RESOURCE_TABLE_COLUMN_COUNT} height={virtualRange.topSpacerHeight} />
+              {filtered.length === 0 ? (
+                <TR>
+                  <TD colSpan={RESOURCE_TABLE_COLUMN_COUNT} className="py-10 text-center text-sm text-slate-500">
+                    No encontramos insumos con los filtros actuales.
+                  </TD>
+                </TR>
+              ) : null}
               {virtualRange.visibleRows.map((resource) => (
                 <ResourceTableRow
                   key={resource.id}
@@ -594,6 +602,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           <option value="MATERIAL">Materiales</option>
           <option value="LABOR">Mano de obra</option>
           <option value="EQUIPMENT">Equipos</option>
+          <option value="TOOLS">Herramientas</option>
         </Select>
       </TD>
       <TD>
@@ -1108,6 +1117,7 @@ function isCategoryLike(value: string) {
 function getCategoryLabel(category: ResourceCategory | undefined) {
   if (category === "LABOR") return "Mano de obra";
   if (category === "EQUIPMENT") return "Equipos";
+  if (category === "TOOLS") return "Herramientas";
   return "Materiales";
 }
 

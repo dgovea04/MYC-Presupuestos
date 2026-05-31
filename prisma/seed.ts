@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import ExcelJS from "exceljs";
@@ -7,8 +6,16 @@ import { hashPassword } from "@/lib/auth/password";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { loadUnifiedIndexWorkbook } from "@/lib/polynomial-formula/index-source";
 import { buildUnifiedIndexSeedPayload } from "@/lib/polynomial-formula/unified-index-seed";
+import { findSeedPartidaApuMatch } from "@/lib/seed/catalog-partida-matching";
+import { priceSeedCatalogPartidaApuRows } from "@/lib/seed/catalog-partida-pricing";
+import { normalizeExcelCellText } from "@/lib/seed/excel-cell-text";
 
 const prisma = new PrismaClient();
+const DATA_FOR_SEED_DIR = path.resolve(process.cwd(), "data-for-seed");
+const SEED_PARTIDAS_WORKBOOK_PATHS = [
+  path.join(DATA_FOR_SEED_DIR, "catalogo-de-partidas.xlsx"),
+  path.join(DATA_FOR_SEED_DIR, "catalogo-de-partidas-adicionales.xlsx"),
+];
 const UNIFIED_INDEX_WORKBOOK_PATH = path.resolve(
   process.cwd(),
   "presupuesto-ejemplo",
@@ -469,7 +476,7 @@ async function seedMembershipPlans() {
 
 async function seedGeneralResourcesCatalog() {
   const workbook = new ExcelJS.Workbook();
-  const catalogPath = path.join(process.cwd(), "presupuesto-ejemplo", "Listado de Insumos General.xlsx");
+  const catalogPath = path.join(DATA_FOR_SEED_DIR, "catalogo-de-insumos.xlsx");
   await workbook.xlsx.readFile(catalogPath);
 
   const worksheet = workbook.worksheets[0];
@@ -501,11 +508,11 @@ async function seedGeneralResourcesCatalog() {
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
     const row = worksheet.getRow(rowNumber);
-    const description = normalizeCellText(row.getCell(2).value);
-    const unit = normalizeCellText(row.getCell(3).value);
-    const unitPrice = parseSpreadsheetNumber(normalizeCellText(row.getCell(4).value));
-    const category = normalizeCatalogCategory(normalizeCellText(row.getCell(5).value));
-    const iu = normalizeCellText(row.getCell(6).value);
+    const description = normalizeCellText(row.getCell(1).value);
+    const unit = normalizeCellText(row.getCell(2).value);
+    const unitPrice = parseSpreadsheetNumber(normalizeCellText(row.getCell(3).value));
+    const category = normalizeCatalogCategory(normalizeCellText(row.getCell(4).value));
+    const iu = normalizeCellText(row.getCell(5).value);
 
     if (!description || !unit) {
       continue;
@@ -582,7 +589,7 @@ type SeedPartidaApuRow = {
 
 type SeedPartidaApu = {
   description: string;
-  normalizedDescription: string;
+  matchKey: string;
   unit: string | null;
   unitPrice: number;
   performance: number;
@@ -591,13 +598,19 @@ type SeedPartidaApu = {
   apuRows: SeedPartidaApuRow[];
 };
 
-async function seedGeneralPartidasCatalog() {
-  const catalogWorkbook = new ExcelJS.Workbook();
-  const catalogPath = path.join(process.cwd(), "presupuesto-ejemplo", "Catalogo de partidas.xlsx");
-  await catalogWorkbook.xlsx.readFile(catalogPath);
+type SeedCatalogPartidaRow = {
+  description: string;
+  unit: string;
+  listedUnitPrice: number;
+};
 
-  const catalogWorksheet = catalogWorkbook.worksheets[0];
-  const apuByDescription = await buildPartidaApuCatalog();
+type SeedPartidaUnitCandidate = {
+  description: string;
+  unit: string;
+};
+
+async function seedGeneralPartidasCatalog() {
+  const { partidas, apuByDescription } = await loadSeedPartidasWorkbooks(SEED_PARTIDAS_WORKBOOK_PATHS);
   const resources = await prisma.resource.findMany({
     where: { companyId: null },
     select: {
@@ -605,12 +618,13 @@ async function seedGeneralPartidasCatalog() {
       code: true,
       description: true,
       unit: true,
+      unitPrice: true,
       category: true,
       iu: true,
     },
   });
   const resourceLookup = buildResourceLookupIndexes(resources);
-  const resourceSequences = buildCategorySequenceMap(resources);
+  const resourcesById = new Map(resources.map((resource) => [resource.id, resource]));
   const existingPartidas = await prisma.catalogPartida.findMany({
     include: {
       apuRows: {
@@ -619,44 +633,40 @@ async function seedGeneralPartidasCatalog() {
     },
   });
 
-  await seedMissingResourcesFromPartidasApu(apuByDescription, resourceLookup, resourceSequences);
-  const refreshedResources = await prisma.resource.findMany({
-    where: { companyId: null },
-    select: {
-      id: true,
-      description: true,
-      unit: true,
-      category: true,
-      iu: true,
-      code: true,
-    },
-  });
-  const refreshedLookup = buildResourceLookupIndexes(refreshedResources);
-
   const existingPartidasByKey = new Map(
-    existingPartidas.map((partida) => [buildPartidaKey(partida.description, partida.unit), partida]),
+    existingPartidas.map((partida) => [buildSeedPartidaMatchKey(partida.description, partida.unit), partida]),
   );
+  const unitCandidates = buildSeedPartidaUnitCandidates(partidas, apuByDescription);
+  const processedPartidaKeys = new Set<string>();
+  const fallbackMatchedPartidaKeys = new Set<string>();
+  const unresolvedCatalogInsumos = new Map<string, { description: string; unit: string }>();
 
-  for (let rowNumber = 2; rowNumber <= catalogWorksheet.rowCount; rowNumber++) {
-    const row = catalogWorksheet.getRow(rowNumber);
-    const description = normalizeCellText(row.getCell(1).value);
-    const unit = normalizeCellText(row.getCell(2).value);
-    const listedUnitPrice = parseSpreadsheetNumber(normalizeCellText(row.getCell(3).value));
-
-    if (!description || !unit) {
-      continue;
+  for (const { description, unit, listedUnitPrice } of partidas) {
+    const partidaKey = buildSeedPartidaMatchKey(description, unit);
+    processedPartidaKeys.add(partidaKey);
+    const partidaApuMatch = findSeedPartidaApuMatch({
+      description,
+      unit,
+      apuByKey: apuByDescription,
+      buildMatchKey: buildSeedPartidaMatchKey,
+      normalizeDescription: normalizeStrictCatalogText,
+    });
+    const partidaApu = partidaApuMatch?.apu;
+    if (partidaApuMatch) {
+      processedPartidaKeys.add(partidaApuMatch.key);
+      if (partidaApuMatch.matchedBy === "description") {
+        fallbackMatchedPartidaKeys.add(partidaApuMatch.key);
+      }
     }
-
-    const partidaApu = apuByDescription.get(normalizeCatalogText(description));
     const apuRows =
       partidaApu?.apuRows.map((apuRow, index) => ({
-        resourceId: findResourceIdForApuRow(apuRow.description, apuRow.unit, refreshedLookup),
+        resourceId: findResourceIdForApuRow(apuRow.description, apuRow.unit, resourceLookup),
         description: apuRow.description,
         unit: apuRow.unit,
         crew: apuRow.crew,
         quantity: apuRow.quantity,
-        unitPrice: apuRow.unitPrice,
-        subtotal: apuRow.subtotal,
+        unitPrice: 0,
+        subtotal: 0,
         resourceType: apuRow.resourceType,
         groupLabel: apuRow.groupLabel,
         sortOrder: index,
@@ -665,8 +675,12 @@ async function seedGeneralPartidasCatalog() {
     const performance = partidaApu?.performance ?? 1;
     const performanceUnit = partidaApu?.performanceUnit ?? unit;
     const performanceRate = partidaApu?.performanceRate ?? (performanceUnit ? `${performance.toFixed(4)} ${performanceUnit}/DIA` : null);
-    const unitPrice = apuRows.length ? apuRows.reduce((sum, apuRow) => sum + apuRow.subtotal, 0) : listedUnitPrice;
-    const existingPartida = existingPartidasByKey.get(buildPartidaKey(description, unit));
+    const pricedApu = priceSeedCatalogPartidaApuRows({ rows: apuRows, performance, resourcesById });
+    for (const unresolvedRow of pricedApu.unresolvedRows) {
+      unresolvedCatalogInsumos.set(buildCanonicalResourceLookupKey(unresolvedRow.description, unresolvedRow.unit), unresolvedRow);
+    }
+    const unitPrice = pricedApu.rows.length ? pricedApu.unitPrice : listedUnitPrice;
+    const existingPartida = existingPartidasByKey.get(partidaKey);
 
     if (existingPartida) {
       await prisma.catalogPartida.update({
@@ -682,7 +696,7 @@ async function seedGeneralPartidasCatalog() {
           performanceRate,
           apuRows: {
             deleteMany: {},
-            create: apuRows,
+            create: pricedApu.rows,
           },
         },
       });
@@ -701,86 +715,366 @@ async function seedGeneralPartidasCatalog() {
         performanceUnit,
         performanceRate,
         apuRows: {
-          create: apuRows,
+          create: pricedApu.rows,
         },
       },
     });
   }
-}
 
-async function seedMissingResourcesFromPartidasApu(
-  apuByDescription: Map<string, SeedPartidaApu>,
-  resourceLookup: ReturnType<typeof buildResourceLookupIndexes>,
-  resourceSequences: Map<ResourceCategory, number>,
-) {
-  const uniqueRows = new Map<
-    string,
-    { description: string; unit: string; unitPrice: number; resourceType: string | null; groupLabel: string | null }
-  >();
+  for (const partidaApu of apuByDescription.values()) {
+    const unit = partidaApu.unit?.trim() || inferSeedPartidaUnit(partidaApu.description, unitCandidates);
+    if (!unit) {
+      continue;
+    }
+    const partidaKey = buildSeedPartidaMatchKey(partidaApu.description, unit);
+    if (processedPartidaKeys.has(partidaKey)) {
+      continue;
+    }
 
-  for (const partida of apuByDescription.values()) {
-    for (const row of partida.apuRows) {
-      if (!row.description || !row.unit) continue;
-      if (findResourceIdForApuRow(row.description, row.unit, resourceLookup)) continue;
+    const apuRows = partidaApu.apuRows.map((apuRow, index) => ({
+      resourceId: findResourceIdForApuRow(apuRow.description, apuRow.unit, resourceLookup),
+      description: apuRow.description,
+      unit: apuRow.unit,
+      crew: apuRow.crew,
+      quantity: apuRow.quantity,
+      unitPrice: 0,
+      subtotal: 0,
+      resourceType: apuRow.resourceType,
+      groupLabel: apuRow.groupLabel,
+      sortOrder: index,
+    }));
+    const performanceUnit = partidaApu.performanceUnit ?? unit;
+    const performanceRate = partidaApu.performanceRate ?? `${partidaApu.performance.toFixed(4)} ${performanceUnit}/DIA`;
+    const pricedApu = priceSeedCatalogPartidaApuRows({ rows: apuRows, performance: partidaApu.performance, resourcesById });
+    for (const unresolvedRow of pricedApu.unresolvedRows) {
+      unresolvedCatalogInsumos.set(buildCanonicalResourceLookupKey(unresolvedRow.description, unresolvedRow.unit), unresolvedRow);
+    }
+    const unitPrice = pricedApu.rows.length ? pricedApu.unitPrice : partidaApu.unitPrice;
+    const existingPartida = existingPartidasByKey.get(partidaKey);
 
-      const key = buildCanonicalResourceLookupKey(row.description, row.unit);
-      if (!uniqueRows.has(key)) {
-        uniqueRows.set(key, {
-          description: row.description,
-          unit: row.unit,
-          unitPrice: row.unitPrice,
-          resourceType: row.resourceType,
-          groupLabel: row.groupLabel,
-        });
-      }
+    if (existingPartida) {
+      await prisma.catalogPartida.update({
+        where: { id: existingPartida.id },
+        data: {
+          description: partidaApu.description,
+          unit,
+          unitPrice,
+          currency: "PEN",
+          source: "Catalogo de partidas precargado",
+          performance: partidaApu.performance,
+          performanceUnit,
+          performanceRate,
+          apuRows: {
+            deleteMany: {},
+            create: pricedApu.rows,
+          },
+        },
+      });
+
+      continue;
+    }
+
+    await prisma.catalogPartida.create({
+      data: {
+        description: partidaApu.description,
+        unit,
+        unitPrice,
+        currency: "PEN",
+        source: "Catalogo de partidas precargado",
+        performance: partidaApu.performance,
+        performanceUnit,
+        performanceRate,
+        apuRows: {
+          create: pricedApu.rows,
+        },
+      },
+    });
+  }
+
+  if (unresolvedCatalogInsumos.size > 0) {
+    console.warn(
+      `Catalogo de partidas: ${unresolvedCatalogInsumos.size} insumos de APU no existen en catalogo-de-insumos.xlsx; se cargaron con PU 0.`,
+    );
+    for (const row of [...unresolvedCatalogInsumos.values()].slice(0, 20)) {
+      console.warn(`- ${row.description} (${row.unit})`);
     }
   }
 
-  for (const row of uniqueRows.values()) {
-    if (!shouldAutocreateResourceFromApuRow(row.description, row.unit)) continue;
+  const fallbackDuplicateIds = [...fallbackMatchedPartidaKeys]
+    .map((key) => existingPartidasByKey.get(key)?.id)
+    .filter((id): id is string => Boolean(id));
 
-    const category = inferResourceCategoryFromDescription(row.description, row.resourceType ?? row.groupLabel);
-    const nextSequence = (resourceSequences.get(category) ?? 0) + 1;
-    resourceSequences.set(category, nextSequence);
-
-    const created = await prisma.resource.create({
-      data: {
-        companyId: null,
-        code: `${resourceCodePrefixes[category]}-${String(nextSequence).padStart(3, "0")}`,
-        description: normalizeSeedResourceDescription(row.description),
-        category,
-        iu: null,
-        subcategory: null,
-        unit: normalizeSeedResourceUnit(row.unit),
-        unitPrice: row.unitPrice,
-        currency: "PEN",
-        source: "Autocreado desde APU del catalogo de partidas",
+  if (fallbackDuplicateIds.length > 0) {
+    await prisma.catalogPartida.deleteMany({
+      where: {
+        id: { in: fallbackDuplicateIds },
+        source: "Catalogo de partidas precargado",
       },
     });
+  }
 
-    registerResourceLookup(resourceLookup, created.id, created.description, created.unit);
+  await pruneDuplicateCatalogPartidasWithoutApu();
+}
+
+async function pruneDuplicateCatalogPartidasWithoutApu() {
+  await prisma.catalogPartida.deleteMany({
+    where: {
+      source: "Catalogo de partidas precargado",
+      OR: [
+        { description: { contains: "[object Object]", mode: "insensitive" } },
+        { unit: { contains: "[object Object]", mode: "insensitive" } },
+      ],
+    },
+  });
+
+  const catalogPartidas = await prisma.catalogPartida.findMany({
+    include: {
+      apuRows: {
+        select: { id: true },
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+  const partidasByStrictKey = new Map<string, typeof catalogPartidas>();
+  const partidasWithApu = catalogPartidas.filter((partida) => partida.apuRows.length > 0);
+
+  for (const partida of catalogPartidas) {
+    const key = buildStrictPartidaDuplicateKey(partida.description, partida.unit);
+    partidasByStrictKey.set(key, [...(partidasByStrictKey.get(key) ?? []), partida]);
+  }
+
+  const duplicateIdsWithoutApu = [...partidasByStrictKey.values()].flatMap((group) => {
+    if (group.length < 2) return [];
+    if (!group.some((partida) => partida.apuRows.length > 0)) return [];
+
+    return group.filter((partida) => partida.apuRows.length === 0).map((partida) => partida.id);
+  });
+  const typoIdsWithoutApu = catalogPartidas
+    .filter((partida) => partida.apuRows.length === 0)
+    .filter((partida) => partida.source === "Catalogo de partidas precargado")
+    .filter((partida) => !hasInequalityMarker(partida.description))
+    .filter((partida) =>
+      partidasWithApu.some((candidate) => {
+        if (candidate.unit.trim().toUpperCase() !== partida.unit.trim().toUpperCase()) return false;
+        if (hasInequalityMarker(candidate.description)) return false;
+
+        return isLikelyCorrectedPartidaTypo(partida.description, candidate.description);
+      }),
+    )
+    .map((partida) => partida.id);
+  const idsToDelete = [...new Set([...duplicateIdsWithoutApu, ...typoIdsWithoutApu])];
+
+  if (idsToDelete.length === 0) {
+    return;
+  }
+
+  await prisma.catalogPartida.deleteMany({
+    where: {
+      id: {
+        in: idsToDelete,
+      },
+    },
+  });
+}
+
+function isLikelyCorrectedPartidaTypo(left: string, right: string) {
+  if (normalizeStrictCatalogText(left) === normalizeStrictCatalogText(right)) return false;
+
+  const normalizedLeft = normalizeCorrectionCatalogText(left);
+  const normalizedRight = normalizeCorrectionCatalogText(right);
+
+  if (!hasSingleCorrectedToken(left, right)) return false;
+  if (normalizedLeft === normalizedRight) return true;
+
+  return calculateLevenshteinDistance(normalizedLeft, normalizedRight) <= 2;
+}
+
+function hasSingleCorrectedToken(left: string, right: string) {
+  const leftTokens = getCatalogTokens(left);
+  const rightTokens = getCatalogTokens(right);
+
+  if (leftTokens.length !== rightTokens.length) return false;
+
+  let correctedTokenCount = 0;
+  for (let index = 0; index < leftTokens.length; index++) {
+    if (leftTokens[index] === rightTokens[index]) continue;
+    if (!isLikelyCorrectedToken(leftTokens[index], rightTokens[index])) return false;
+    correctedTokenCount++;
+  }
+
+  return correctedTokenCount === 1;
+}
+
+function isLikelyCorrectedToken(left: string, right: string) {
+  if (expandCatalogCorrectionToken(left) === expandCatalogCorrectionToken(right)) return true;
+  return calculateLevenshteinDistance(left, right) <= 2;
+}
+
+function normalizeCorrectionCatalogText(value: string) {
+  return getCatalogTokens(value).map(expandCatalogCorrectionToken).join(" ");
+}
+
+function expandCatalogCorrectionToken(token: string) {
+  if (token === "PAND") return "PANDERETA";
+  return token;
+}
+
+function hasInequalityMarker(value: string) {
+  return /[<>≤≥]/.test(value);
+}
+
+function buildSeedPartidaUnitCandidates(
+  partidas: SeedCatalogPartidaRow[],
+  apuByDescription: Map<string, SeedPartidaApu>,
+) {
+  const candidatesByKey = new Map<string, SeedPartidaUnitCandidate>();
+
+  for (const partida of partidas) {
+    if (!partida.unit.trim()) continue;
+    candidatesByKey.set(buildSeedPartidaMatchKey(partida.description, partida.unit), {
+      description: partida.description,
+      unit: partida.unit,
+    });
+  }
+
+  for (const partidaApu of apuByDescription.values()) {
+    const unit = partidaApu.unit?.trim();
+    if (!unit) continue;
+    candidatesByKey.set(buildSeedPartidaMatchKey(partidaApu.description, unit), {
+      description: partidaApu.description,
+      unit,
+    });
+  }
+
+  return [...candidatesByKey.values()];
+}
+
+function inferSeedPartidaUnit(description: string, candidates: SeedPartidaUnitCandidate[]) {
+  const targetTokens = getCatalogTokens(description);
+  if (targetTokens.length === 0) return null;
+
+  const ranked = candidates
+    .map((candidate) => {
+      const candidateTokens = getCatalogTokens(candidate.description);
+      const overlap = targetTokens.filter((token) => candidateTokens.includes(token)).length;
+      const score = overlap / Math.max(targetTokens.length, candidateTokens.length);
+
+      return {
+        unit: candidate.unit,
+        score,
+      };
+    })
+    .filter((candidate) => candidate.score >= 0.7)
+    .sort((left, right) => right.score - left.score);
+
+  const best = ranked[0];
+  if (!best) return null;
+
+  const tiedBestUnits = new Set(ranked.filter((candidate) => candidate.score === best.score).map((candidate) => candidate.unit));
+  if (tiedBestUnits.size === 1) {
+    return best.unit;
+  }
+
+  return null;
+}
+
+async function loadSeedPartidasWorkbook(workbookPath: string) {
+  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(workbookPath, {
+    worksheets: "emit",
+    sharedStrings: "cache",
+    styles: "ignore",
+    hyperlinks: "ignore",
+    entries: "ignore",
+  });
+  const partidas: SeedCatalogPartidaRow[] = [];
+  const apuByDescription = new Map<string, SeedPartidaApu>();
+  let foundPartidasSheet = false;
+  let foundApuSheet = false;
+
+  for await (const worksheetReader of workbookReader) {
+    const worksheetName = getStreamingWorksheetName(worksheetReader);
+
+    if (worksheetName === "PARTIDAS") {
+      foundPartidasSheet = true;
+      await readSeedPartidasSheet(worksheetReader, partidas);
+      continue;
+    }
+
+    if (worksheetName === "APU") {
+      foundApuSheet = true;
+      await readSeedApuSheet(worksheetReader, apuByDescription);
+    }
+  }
+
+  if (!foundPartidasSheet) {
+    throw new Error(`No se encontro la pestana "PARTIDAS" en ${workbookPath}`);
+  }
+
+  if (!foundApuSheet) {
+    throw new Error(`No se encontro la pestana "APU" en ${workbookPath}`);
+  }
+
+  return { partidas, apuByDescription };
+}
+
+async function loadSeedPartidasWorkbooks(workbookPaths: string[]) {
+  const partidasByKey = new Map<string, SeedCatalogPartidaRow>();
+  const apuByDescription = new Map<string, SeedPartidaApu>();
+
+  for (const workbookPath of workbookPaths) {
+    const loaded = await loadSeedPartidasWorkbook(workbookPath);
+
+    for (const partida of loaded.partidas) {
+      partidasByKey.set(buildSeedPartidaMatchKey(partida.description, partida.unit), partida);
+    }
+
+    for (const [key, apu] of loaded.apuByDescription) {
+      apuByDescription.set(key, apu);
+    }
+  }
+
+  return {
+    partidas: [...partidasByKey.values()],
+    apuByDescription,
+  };
+}
+
+function getStreamingWorksheetName(worksheetReader: ExcelJS.stream.xlsx.WorksheetReader) {
+  const record = worksheetReader as unknown as { name?: unknown };
+  return typeof record.name === "string" ? record.name : "";
+}
+
+async function readSeedPartidasSheet(
+  worksheetReader: ExcelJS.stream.xlsx.WorksheetReader,
+  partidas: SeedCatalogPartidaRow[],
+) {
+  for await (const rowOrRows of worksheetReader) {
+    for (const row of normalizeStreamingRows(rowOrRows)) {
+      const description = normalizeCellText(row.getCell(1).value);
+      const unit = normalizeCellText(row.getCell(2).value);
+      const listedUnitPrice = parseSpreadsheetNumber(normalizeCellText(row.getCell(3).value));
+
+      if (!description || !unit || isSeedPartidasHeaderDescription(description)) {
+        continue;
+      }
+
+      partidas.push({ description, unit, listedUnitPrice });
+    }
   }
 }
 
-async function buildPartidaApuCatalog() {
-  const workbook = new ExcelJS.Workbook();
-  const exampleDir = path.join(process.cwd(), "presupuesto-ejemplo");
-  const preferredFileName = "analisis-de-costos-unitarios.xlsx";
-  const fileName =
-    fs.readdirSync(exampleDir).find((entry) => entry.toLowerCase() === preferredFileName) ??
-    fs.readdirSync(exampleDir).find((entry) => normalizeCatalogText(entry).includes("ANALISIS DE COSTOS UNITARIOS"));
+function isSeedPartidasHeaderDescription(description: string) {
+  const normalized = normalizeCatalogText(description);
+  return normalized === "PARTIDA" || normalized === "PARTIDAS ADICIONALES";
+}
 
-  if (!fileName) {
-    throw new Error("No se encontro el archivo de Analisis de Costos Unitarios dentro de presupuesto-ejemplo");
-  }
-
-  const apuPath = path.join(exampleDir, fileName);
-  await workbook.xlsx.readFile(apuPath);
-
-  const worksheet = workbook.worksheets[0];
-  const catalog = new Map<string, SeedPartidaApu>();
+async function readSeedApuSheet(
+  worksheetReader: ExcelJS.stream.xlsx.WorksheetReader,
+  catalog: Map<string, SeedPartidaApu>,
+) {
   let currentPartida: SeedPartidaApu | null = null;
   let groupBuffer: SeedPartidaApuRow[] = [];
+  let pendingTitle: string | null = null;
 
   function flushGroup(groupLabel: string | null) {
     if (!currentPartida || !groupBuffer.length) return;
@@ -798,79 +1092,91 @@ async function buildPartidaApuCatalog() {
   function commitCurrentPartida() {
     if (!currentPartida) return;
     flushGroup(null);
-    catalog.set(currentPartida.normalizedDescription, currentPartida);
+    catalog.set(currentPartida.matchKey, currentPartida);
   }
 
-  for (let rowNumber = 1; rowNumber <= worksheet.rowCount; rowNumber++) {
-    const row = worksheet.getRow(rowNumber);
-    const titleText = normalizeCellText(row.getCell(1).value);
-    const titleMatch = titleText.match(/^\d+(?:\.\d+)+\s+(.+)$/);
+  for await (const rowOrRows of worksheetReader) {
+    for (const row of normalizeStreamingRows(rowOrRows)) {
+      const firstCellText = normalizeCellText(row.getCell(1).value);
 
-    if (titleMatch) {
-      commitCurrentPartida();
+      if (pendingTitle && /^Rendimiento:\s*/i.test(firstCellText)) {
+        commitCurrentPartida();
 
-      const description = titleMatch[1].trim();
-      const performanceLine = worksheet.getRow(rowNumber + 1);
-      const performanceText = normalizeCellText(performanceLine.getCell(1).value);
-      const unitText = normalizeCellText(performanceLine.getCell(3).value);
-      const performanceMatch = performanceText.match(/^Rendimiento:\s*([\d.,]+)\s+(.+)$/i);
-      const performance = performanceMatch ? parseSpreadsheetNumber(performanceMatch[1]) : 1;
-      const performanceRate = performanceMatch ? `${performanceMatch[1]} ${performanceMatch[2].trim()}` : null;
-      const unit = unitText.replace(/^Unidad:\s*/i, "").trim() || null;
-      const unitPrice = parseSpreadsheetNumber(normalizeCellText(performanceLine.getCell(6).value));
+        const unitText = normalizeCellText(row.getCell(3).value);
+        const performanceMatch = firstCellText.match(/^Rendimiento:\s*([\d.,]+)\s+(.+)$/i);
+        const performance = performanceMatch ? parseSpreadsheetNumber(performanceMatch[1]) : 1;
+        const performanceRate = performanceMatch ? `${performanceMatch[1]} ${performanceMatch[2].trim()}` : null;
+        const unit = unitText.replace(/^Unidad:\s*/i, "").trim() || null;
+        const unitPrice = parseSpreadsheetNumber(normalizeCellText(row.getCell(6).value));
 
-      currentPartida = {
-        description,
-        normalizedDescription: normalizeCatalogText(description),
-        unit,
-        unitPrice,
-        performance,
-        performanceUnit: unit,
-        performanceRate,
-        apuRows: [],
-      };
-      groupBuffer = [];
-      continue;
+        currentPartida = {
+          description: pendingTitle,
+          matchKey: buildSeedPartidaMatchKey(pendingTitle, unit ?? ""),
+          unit,
+          unitPrice,
+          performance,
+          performanceUnit: unit,
+          performanceRate,
+          apuRows: [],
+        };
+        groupBuffer = [];
+        pendingTitle = null;
+        continue;
+      }
+
+      if (currentPartida) {
+        const summaryLabel = normalizeCellText(row.getCell(5).value);
+        if (summaryLabel.endsWith(":")) {
+          flushGroup(summaryLabel.replace(/:$/, ""));
+          pendingTitle = null;
+          continue;
+        }
+
+        const detailDescription = firstCellText.replace(/^\s+/, "");
+        const detailUnit = normalizeCellText(row.getCell(2).value);
+        const hasNumbers =
+          normalizeCellText(row.getCell(3).value) ||
+          normalizeCellText(row.getCell(4).value) ||
+          normalizeCellText(row.getCell(5).value) ||
+          normalizeCellText(row.getCell(6).value);
+
+        if (detailDescription && !/^Insumo$/i.test(detailDescription) && hasNumbers) {
+          groupBuffer.push({
+            description: detailDescription,
+            unit: detailUnit,
+            crew: parseOptionalSpreadsheetNumber(normalizeCellText(row.getCell(3).value)),
+            quantity: parseSpreadsheetNumber(normalizeCellText(row.getCell(4).value)),
+            unitPrice: parseSpreadsheetNumber(normalizeCellText(row.getCell(5).value)),
+            subtotal: parseSpreadsheetNumber(normalizeCellText(row.getCell(6).value)),
+            resourceType: null,
+            groupLabel: null,
+            resourceId: null,
+            sortOrder: 0,
+          });
+          pendingTitle = null;
+          continue;
+        }
+      }
+
+      const hasOnlyFirstCell =
+        Boolean(firstCellText) &&
+        !normalizeCellText(row.getCell(2).value) &&
+        !normalizeCellText(row.getCell(3).value) &&
+        !normalizeCellText(row.getCell(4).value) &&
+        !normalizeCellText(row.getCell(5).value) &&
+        !normalizeCellText(row.getCell(6).value);
+
+      if (hasOnlyFirstCell && normalizeCatalogText(firstCellText) !== "ANALISIS DE COSTOS UNITARIOS") {
+        pendingTitle = firstCellText;
+      }
     }
-
-    if (!currentPartida) {
-      continue;
-    }
-
-    const summaryLabel = normalizeCellText(row.getCell(5).value);
-    if (summaryLabel.endsWith(":")) {
-      flushGroup(summaryLabel.replace(/:$/, ""));
-      continue;
-    }
-
-    const detailDescription = normalizeCellText(row.getCell(1).value).replace(/^\s+/, "");
-    const detailUnit = normalizeCellText(row.getCell(2).value);
-    const hasNumbers =
-      normalizeCellText(row.getCell(3).value) ||
-      normalizeCellText(row.getCell(4).value) ||
-      normalizeCellText(row.getCell(5).value) ||
-      normalizeCellText(row.getCell(6).value);
-
-    if (!detailDescription || /^Insumo$/i.test(detailDescription) || !hasNumbers) {
-      continue;
-    }
-
-    groupBuffer.push({
-      description: detailDescription,
-      unit: detailUnit,
-      crew: parseOptionalSpreadsheetNumber(normalizeCellText(row.getCell(3).value)),
-      quantity: parseSpreadsheetNumber(normalizeCellText(row.getCell(4).value)),
-      unitPrice: parseSpreadsheetNumber(normalizeCellText(row.getCell(5).value)),
-      subtotal: parseSpreadsheetNumber(normalizeCellText(row.getCell(6).value)),
-      resourceType: null,
-      groupLabel: null,
-      resourceId: null,
-      sortOrder: 0,
-    });
   }
 
   commitCurrentPartida();
-  return catalog;
+}
+
+function normalizeStreamingRows(rowOrRows: ExcelJS.Row | ExcelJS.Row[]) {
+  return Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
 }
 
 function buildCategorySequenceMap(
@@ -901,12 +1207,7 @@ function normalizeCatalogCategory(value: string): ResourceCategory {
 }
 
 function normalizeCellText(value: ExcelJS.CellValue) {
-  if (value == null) return "";
-  if (typeof value === "object" && "text" in value && typeof value.text === "string") {
-    return value.text.trim();
-  }
-
-  return String(value).trim();
+  return normalizeExcelCellText(value);
 }
 
 function parseSpreadsheetNumber(value: string) {
@@ -947,8 +1248,12 @@ function buildCanonicalResourceLookupKey(description: string, unit: string) {
   return [normalizeResourceDescription(description), normalizeUnitAlias(unit)].join("|");
 }
 
-function buildPartidaKey(description: string, unit: string) {
-  return [normalizeCatalogText(description), normalizeCatalogText(unit)].join("|");
+function buildSeedPartidaMatchKey(description: string, unit: string) {
+  return [normalizeStrictCatalogText(description), normalizeStrictCatalogText(unit)].join("|");
+}
+
+function buildStrictPartidaDuplicateKey(description: string, unit: string) {
+  return [normalizeStrictCatalogText(description), normalizeStrictCatalogText(unit)].join("|");
 }
 
 function normalizeCatalogText(value: string) {
@@ -958,6 +1263,43 @@ function normalizeCatalogText(value: string) {
     .replace(/[^A-Za-z0-9]+/g, " ")
     .trim()
     .toUpperCase();
+}
+
+function normalizeStrictCatalogText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function getCatalogTokens(value: string) {
+  return normalizeCatalogText(value).split(" ").filter(Boolean);
+}
+
+function calculateLevenshteinDistance(left: string, right: string) {
+  if (left === right) return 0;
+  if (left.length === 0) return right.length;
+  if (right.length === 0) return left.length;
+
+  let previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex++) {
+    const currentRow = [leftIndex + 1];
+
+    for (let rightIndex = 0; rightIndex < right.length; rightIndex++) {
+      const insertionCost = currentRow[rightIndex] + 1;
+      const deletionCost = previousRow[rightIndex + 1] + 1;
+      const substitutionCost = previousRow[rightIndex] + (left[leftIndex] === right[rightIndex] ? 0 : 1);
+
+      currentRow.push(Math.min(insertionCost, deletionCost, substitutionCost));
+    }
+
+    previousRow = currentRow;
+  }
+
+  return previousRow[right.length];
 }
 
 function normalizeResourceDescription(value: string) {
@@ -1002,15 +1344,6 @@ function buildResourceLookupIndexes(
   }
 
   return { exact, canonical, byUnit, byDescription };
-}
-
-function registerResourceLookup(
-  lookup: ReturnType<typeof buildResourceLookupIndexes>,
-  id: string,
-  description: string,
-  unit: string,
-) {
-  registerResourceLookupInternal(lookup.exact, lookup.canonical, lookup.byUnit, lookup.byDescription, id, description, unit);
 }
 
 function registerResourceLookupInternal(
@@ -1119,15 +1452,7 @@ function resolveManualResourceAlias(description: string, unit: string) {
   return aliases[`${normalizeResourceDescription(description)}|${normalizeUnitAlias(unit)}`] ?? null;
 }
 
-function shouldAutocreateResourceFromApuRow(description: string, unit: string) {
-  const normalizedDescription = normalizeResourceDescription(description);
-  const normalizedUnit = normalizeUnitAlias(unit);
-
-  if (!normalizedDescription || normalizedDescription === "ANALISIS DE COSTOS UNITARIOS") return false;
-  if (!normalizedUnit) return false;
-  return true;
-}
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function normalizeSeedResourceDescription(description: string) {
   const aliases: Record<string, string> = {
     [normalizeResourceDescription("ACERO CORRUGADO F´Y = 4200 KG/CM2 GRADO 60")]: "ACERO CORRUGADO F'Y 4,200 KG/CM2",
@@ -1137,26 +1462,6 @@ function normalizeSeedResourceDescription(description: string) {
   };
 
   return aliases[normalizeResourceDescription(description)] ?? description.trim();
-}
-
-function normalizeSeedResourceUnit(unit: string) {
-  const normalized = normalizeUnitAlias(unit);
-  if (normalized === "UND") return "UND";
-  if (normalized === "BLS") return "BLS";
-  if (normalized === "ML") return "ML";
-  return unit.trim();
-}
-
-function inferResourceCategoryFromDescription(description: string, resourceType: string | null | undefined): ResourceCategory {
-  const normalizedType = normalizeCatalogText(resourceType ?? "");
-  if (normalizedType === "LABOR" || normalizedType === "MANO DE OBRA") return ResourceCategory.LABOR;
-  if (normalizedType === "EQUIPMENT" || normalizedType === "EQUIPO" || normalizedType === "SUBCONTRACT" || normalizedType === "SUBCONTRATOS") {
-    return ResourceCategory.EQUIPMENT;
-  }
-
-  const normalizedDescription = normalizeResourceDescription(description);
-  if (normalizedDescription.includes("HERRAMIENTAS")) return ResourceCategory.TOOLS;
-  return ResourceCategory.MATERIAL;
 }
 
 function mapPartidaGroupToResourceType(groupLabel: string | null) {

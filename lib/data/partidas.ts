@@ -8,6 +8,11 @@ import type { CatalogPartidaPatchResult, CatalogPartidaRecord, CatalogPartidaSta
 export const CATALOG_PARTIDAS_CACHE_TAG = "catalog-partidas";
 
 export async function getCatalogPartidas() {
+  const version = await getCatalogPartidasCacheVersion();
+  const getCachedCatalogPartidas = unstable_cache(getCatalogPartidasFromDatabase, ["catalog-partidas", version], {
+    tags: [CATALOG_PARTIDAS_CACHE_TAG],
+  });
+
   return getCachedCatalogPartidas();
 }
 
@@ -24,9 +29,25 @@ async function getCatalogPartidasFromDatabase() {
   return partidas.map((partida) => serializeCatalogPartida(partida));
 }
 
-const getCachedCatalogPartidas = unstable_cache(getCatalogPartidasFromDatabase, ["catalog-partidas"], {
-  tags: [CATALOG_PARTIDAS_CACHE_TAG],
-});
+async function getCatalogPartidasCacheVersion() {
+  const [partidaVersion, apuRowVersion] = await Promise.all([
+    prisma.catalogPartida.aggregate({
+      _max: {
+        updatedAt: true,
+      },
+    }),
+    prisma.partidaApuRow.aggregate({
+      _max: {
+        updatedAt: true,
+      },
+    }),
+  ]);
+
+  const latestPartidaUpdate = partidaVersion._max.updatedAt?.getTime() ?? 0;
+  const latestApuRowUpdate = apuRowVersion._max.updatedAt?.getTime() ?? 0;
+
+  return String(Math.max(latestPartidaUpdate, latestApuRowUpdate));
+}
 
 export async function saveCatalogPartidasPatch(patchInput: CatalogPartidaStatePatch): Promise<CatalogPartidaPatchResult> {
   const patch = catalogPartidaStatePatchSchema.parse(patchInput);

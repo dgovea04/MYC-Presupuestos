@@ -24,6 +24,11 @@ export default async function BudgetRiskAnalysisPage({ params }: { params: Promi
         <UpgradeCTA
           title="Analisis de riesgo disponible en Pro"
           description="Evalua variables, escenarios y simulaciones con controles trazables para revisar el presupuesto."
+          benefits={[
+            "Distribucion triangular por partida",
+            "Percentiles P10 a P95",
+            "Histograma y curva acumulada",
+          ]}
         />
       </AppShell>
     );

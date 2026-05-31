@@ -30,6 +30,11 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
         <UpgradeCTA
           title="Cronograma inteligente disponible en Pro"
           description="Activa programacion de obra, calendario valorizado, calendario de insumos y Curva S desde el presupuesto."
+          benefits={[
+            "Programacion por partidas",
+            "Calendario valorizado e insumos por periodo",
+            "Curva S y ruta critica",
+          ]}
         />
       )}
     </GeneralBudgetSectionShell>

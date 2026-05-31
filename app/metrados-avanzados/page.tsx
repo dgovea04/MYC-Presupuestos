@@ -3,6 +3,7 @@ import { Ruler } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { MetradosDashboard } from "@/components/metrados/MetradosDashboard";
+import { parseMetradoTemplateTypeParam } from "@/components/metrados/metrado-view-model";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
@@ -12,12 +13,22 @@ import {
   listMetradoSheetsByUser,
 } from "@/lib/data/metrados";
 
-export default async function MetradosAvanzadosPage() {
+export default async function MetradosAvanzadosPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ template?: string | string[] }>;
+}) {
   const session = await getAuthSession();
 
   if (!session) {
     redirect("/login");
   }
+
+  const resolvedSearchParams = await searchParams;
+  const templateParam = Array.isArray(resolvedSearchParams?.template)
+    ? resolvedSearchParams?.template[0]
+    : resolvedSearchParams?.template;
+  const initialTemplateType = parseMetradoTemplateTypeParam(templateParam);
 
   const [initialSheets, creationOptions, customFormulas] = await Promise.all([
     listMetradoSheetsByUser(session.user.id),
@@ -43,6 +54,7 @@ export default async function MetradosAvanzadosPage() {
             budgets={creationOptions.budgets}
             partidas={creationOptions.partidas}
             customFormulas={customFormulas}
+            initialTemplateType={initialTemplateType}
           />
         </CardContent>
       </Card>

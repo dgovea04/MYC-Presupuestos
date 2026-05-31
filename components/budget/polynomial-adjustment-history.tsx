@@ -26,7 +26,7 @@ export function PolynomialAdjustmentHistory({
         />
 
         {adjustments.length === 0 ? (
-          <EmptyStatePanel message="Todavia no existen reajustes registrados para esta formula." />
+          <EmptyStatePanel message="Registra una valorizacion reajustada para iniciar el historial mensual de coeficientes K." />
         ) : (
           <div className={getTableFrameClassName(isExcelMode)}>
             <Table>

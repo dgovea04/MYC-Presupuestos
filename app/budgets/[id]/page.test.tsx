@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   decimalToNumber: vi.fn((value: number) => value),
   getAuthSession: vi.fn(),
   getBudgetById: vi.fn(),
+  getBudgetTemplateCreationTraceability: vi.fn(),
   getCatalogPartidas: vi.fn(),
   getProjectById: vi.fn(),
   getProjectSubBudgetDetails: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/components/budget/budget-flow", () => ({
   BudgetFlow: (props: {
     budget: { id: string };
     projectName?: string;
+    templateTraceability?: { title: string; detail: string } | null;
     resourcesCatalog: Array<{ id: string; unitPrice: number }>;
     partidasCatalog: unknown[];
   }) => {
@@ -66,6 +68,10 @@ vi.mock("@/components/ui/card", () => ({
 
 vi.mock("@/lib/auth/session", () => ({
   getAuthSession: mocks.getAuthSession,
+}));
+
+vi.mock("@/lib/data/activity-events", () => ({
+  getBudgetTemplateCreationTraceability: mocks.getBudgetTemplateCreationTraceability,
 }));
 
 vi.mock("@/lib/data/budgets", () => ({
@@ -148,6 +154,7 @@ describe("BudgetDetailPage", () => {
     });
     mocks.getProjectSubBudgetSummaries.mockResolvedValue([]);
     mocks.getProjectSubBudgetDetails.mockResolvedValue([]);
+    mocks.getBudgetTemplateCreationTraceability.mockResolvedValue(null);
   });
 
   it("routes the sub-budget branch through BudgetFlow", async () => {
@@ -165,6 +172,7 @@ describe("BudgetDetailPage", () => {
       expect.objectContaining({
         budget: expect.objectContaining({ id: "budget-1" }),
         projectName: "Proyecto Demo",
+        templateTraceability: null,
         partidasCatalog: [],
         resourcesCatalog: [
           expect.objectContaining({
@@ -175,5 +183,29 @@ describe("BudgetDetailPage", () => {
       }),
     );
     expect(mocks.notFound).not.toHaveBeenCalled();
+  });
+
+  it("passes template traceability to the budget flow", async () => {
+    mocks.getBudgetTemplateCreationTraceability.mockResolvedValue({
+      title: "Presupuesto creado desde plantilla",
+      detail: "Arquitectura desde Base tecnica",
+      href: "/budgets/budget-1",
+      createdAt: new Date("2026-05-29T22:30:00.000Z"),
+    });
+
+    const tree = await BudgetDetailPage({
+      params: Promise.resolve({ id: "budget-1" }),
+    });
+
+    renderToStaticMarkup(tree);
+
+    expect(mocks.budgetFlowSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateTraceability: expect.objectContaining({
+          title: "Presupuesto creado desde plantilla",
+          detail: "Arquitectura desde Base tecnica",
+        }),
+      }),
+    );
   });
 });

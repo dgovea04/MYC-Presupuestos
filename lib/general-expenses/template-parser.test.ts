@@ -33,6 +33,18 @@ describe("parseGeneralExpensesTemplate", () => {
     });
   });
 
+  it("keeps personal participation as displayed percentage values", async () => {
+    const result = await parseGeneralExpensesTemplate("C:/MYC-Presupuestos/presupuesto-ejemplo/Gastos_Generales.xlsx");
+    const personalTitle = result.groups[1].titles.find((title) => title.code === "2.1");
+
+    expect(personalTitle?.items[0]).toMatchObject({
+      code: "2.1.1",
+      category: "PERSONAL",
+      participationPercentage: 100,
+      unitPrice: 6000,
+    });
+  });
+
   it("maps direct-cost-based rows from the financial title", async () => {
     const result = await parseGeneralExpensesTemplate("C:/MYC-Presupuestos/presupuesto-ejemplo/Gastos_Generales.xlsx");
     const financialTitle = result.groups[1].titles.find((title) => title.code === "2.3");

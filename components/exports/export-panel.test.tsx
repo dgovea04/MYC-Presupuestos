@@ -50,6 +50,12 @@ describe("ExportPanel", () => {
     clickByText("Exportar");
     expect(getText("Preparar exportacion")).toBeTruthy();
     expect(getText("Presupuesto detallado")).toBeTruthy();
+    expect(getText("Con subtotales")).toBeTruthy();
+    expect(getText("Con total general")).toBeTruthy();
+    expect(getText("Con logo y firma")).toBeTruthy();
+    expect(getText("2 decimales")).toBeTruthy();
+    expect(queryText("Gantt incluido")).toBeNull();
+    expect(queryText("Curva S incluida")).toBeNull();
 
     await act(async () => {
       clickByText("Descargar");
@@ -98,6 +104,26 @@ describe("ExportPanel", () => {
     expect(fetch).toHaveBeenCalledWith("/api/exports", expect.objectContaining({ method: "POST" }));
     expect(document.querySelector('iframe[title="Previsualizacion PDF"]')).toBeTruthy();
   });
+
+  it("shows schedule-only PDF options only when they apply", async () => {
+    await act(async () => {
+      root.render(
+        <ExportPanel
+          defaultPreset="cronograma_ejecutivo"
+          definition={getExportDefinition("work_schedule")}
+          targetId="budget-1"
+        />,
+      );
+    });
+
+    clickByText("Exportar");
+    expect(queryText("Gantt incluido")).toBeNull();
+    expect(queryText("Curva S incluida")).toBeNull();
+
+    clickByText("PDF");
+    expect(getText("Gantt incluido")).toBeTruthy();
+    expect(getText("Curva S incluida")).toBeTruthy();
+  });
 });
 
 declare global {
@@ -112,10 +138,19 @@ function clickByText(text: string) {
 }
 
 function getText(text: string) {
+  const element = queryText(text);
+  if (!element) {
+    throw new Error(`Unable to find text: ${text}`);
+  }
+
+  return element;
+}
+
+function queryText(text: string) {
   const matches = [...document.querySelectorAll("button, h2, span, p, label")].filter((element) => element.textContent?.includes(text));
   const element = matches[0];
   if (!element) {
-    throw new Error(`Unable to find text: ${text}`);
+    return null;
   }
 
   return element as HTMLElement;

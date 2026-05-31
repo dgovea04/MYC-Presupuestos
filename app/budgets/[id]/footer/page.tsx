@@ -1,36 +1,16 @@
 import { BudgetFooterDocumentSignatureCard } from "@/components/budget/budget-footer-document-signature-card";
-import { GeneralBudgetPlaceholderSection } from "@/components/budget/general-budget-placeholder-section";
 import { GeneralBudgetFooterTable } from "@/components/budget/general-budget-footer-table";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
 import { getBudgetFooterStructure } from "@/lib/data/budgets";
 import { getUserAccount } from "@/lib/data/account";
 import { getUserCompanies } from "@/lib/data/projects";
-import type { BudgetFooterDraft } from "@/types/budget-sections";
-
-const budgetFooterDraft: BudgetFooterDraft = {
-  title: "Siguientes ampliaciones",
-  sections: [
-    {
-      title: "Plantillas reutilizables",
-      detail: "Espacio reservado para guardar y reutilizar configuraciones de pie de presupuesto entre proyectos similares.",
-    },
-    {
-      title: "Firmas y aprobaciones",
-      detail: "Bloque previsto para futuras firmas, responsables, vigencia y metadatos de cierre documental.",
-    },
-    {
-      title: "Exportacion enriquecida",
-      detail: "Zona preparada para conectar reglas de formato, resaltados y salida final a Excel o PDF.",
-    },
-  ],
-};
 
 export default async function GeneralBudgetFooterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const [structure, account, companies] = await Promise.all([
-    getBudgetFooterStructure(id, session.user.id),
+    getBudgetFooterStructure(id, session.user.id, settings.currencyDecimals),
     getUserAccount(session.user.id),
     getUserCompanies(session.user.id),
   ]);
@@ -49,6 +29,11 @@ export default async function GeneralBudgetFooterPage({ params }: { params: Prom
     >
       <GeneralBudgetFooterTable
         budgetId={budget.id}
+        currency={budget.currency}
+        currencyDecimals={settings.currencyDecimals}
+        generalExpensesRate={budget.generalExpensesRate}
+        utilityRate={budget.utilityRate}
+        igvRate={budget.igvRate}
         initialStructure={structure}
       />
       <BudgetFooterDocumentSignatureCard
@@ -63,11 +48,6 @@ export default async function GeneralBudgetFooterPage({ params }: { params: Prom
           phone: account.phone,
           email: account.email,
         }}
-      />
-      <GeneralBudgetPlaceholderSection
-        title={budgetFooterDraft.title}
-        description="Estas tarjetas mantienen visible el roadmap cercano del modulo mientras el constructor principal ya queda operativo."
-        highlights={budgetFooterDraft.sections}
       />
     </GeneralBudgetSectionShell>
   );

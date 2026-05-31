@@ -1,47 +1,151 @@
 # MYC Presupuestos
 
-MVP inicial de una web app SaaS para presupuestos de obra basada en metodología de Análisis de Precios Unitarios (APU) para Perú.
+MYC Presupuestos es una plataforma SaaS moderna para costos, presupuestos y control tecnico de obras en Peru, basada en Analisis de Precios Unitarios (APU), presupuestos jerarquicos, formula polinomica, metrados, cronograma, riesgo y exportaciones profesionales.
+
+La aplicacion esta orientada a ingenieros, contratistas, oficinas tecnicas y empresas constructoras que necesitan preparar, revisar y controlar presupuestos de obra con precision financiera.
 
 ## Stack
 
-- Next.js 16
+- Next.js 16 App Router
 - React 19
-- TypeScript
+- TypeScript strict mode
 - Tailwind CSS
 - Prisma ORM
 - PostgreSQL
 - NextAuth
 - TanStack Table
 - Zustand
+- decimal.js
 - ExcelJS
 - PDFKit
+- Recharts
+- Stripe
+- Ollama para IA local
 
-## Qué incluye este MVP
+## Funcionalidades actuales
 
-- Registro e inicio de sesión
-- Perfil de empresa o profesional
-- Dashboard básico
-- CRUD de proyectos
-- CRUD base de presupuestos
-- Editor de presupuesto con partidas y resumen lateral
-- Editor APU por partida
-- Catálogo de insumos
-- Motor centralizado de cálculos
-- Exportación de presupuesto a Excel y PDF
-- Exportación de APU a Excel
-- Seed con datos demo
+### Plataforma y cuenta
+
+- Registro e inicio de sesion.
+- Perfil de usuario con avatar, telefono, cargo y bio profesional.
+- Perfil de empresa con RUC, logo y datos para reportes.
+- Configuracion de moneda, decimales, formato de fecha, tasas por defecto y subpresupuestos iniciales.
+- Planes Starter, Pro y Empresa con limites, entitlements y estado de facturacion.
+
+### Dashboard operativo
+
+- KPIs de proyectos activos, pendientes, reajustes del mes y valor total de presupuestos.
+- Bandeja de pendientes por prioridad.
+- Separacion entre acciones operativas y notas creadas por el usuario.
+- Actividad reciente por proyecto, presupuesto, formula y reajustes.
+- Accesos rapidos para crear proyectos, presupuestos y revisar configuracion.
+
+### Proyectos y presupuestos
+
+- CRUD de proyectos u obras.
+- Duplicacion de proyectos.
+- Presupuesto general consolidado.
+- Subpresupuestos por especialidad.
+- Editor de presupuesto con estructura jerarquica, partidas, metrados y resumen.
+- Modo de visualizacion moderno y modo tipo Excel.
+- Importacion por pegado desde Excel para estructura basica de partidas.
+- Motor centralizado de calculos para costo directo, gastos generales, utilidad, IGV y total.
+
+### APU y catalogos
+
+- Catalogo de insumos con busqueda, filtros, creacion, edicion y eliminacion via API/UI disponible.
+- Catalogo de partidas con rendimiento, unidad, precio y filas APU.
+- Editor APU por partida.
+- Aplicacion de partidas desde catalogo hacia presupuestos.
+- Generador de partidas por similitud con trazabilidad de fuentes, insumos sugeridos y revision manual.
+
+### Formula polinomica e indices
+
+- Generacion de formula desde presupuesto general o subpresupuestos.
+- Consolidacion de monomios y componentes desde APUs.
+- Coeficientes con precision de 3 decimales.
+- Validacion de suma de coeficientes, indices base y valores de reajuste.
+- Diccionario de indices unificados e indices por periodo.
+- Calculo preview de `K`.
+- Registro de valorizaciones reajustadas e historial de ajustes.
+
+### Gastos generales, pie y reportes
+
+- Estructura editable de gastos generales fijos y variables.
+- Items con cantidades, participacion, precios y categorias.
+- Pie de presupuesto con variables, formulas, valores manuales, IU y resaltados.
+- Firma/documento con datos de responsable y empresa.
+- Panel centralizado de exportacion con presets, PDF, Excel, CSV o ZIP segun modulo.
+
+### Metrados avanzados
+
+- Hojas persistentes de metrados.
+- Plantillas para concreto, acero, encofrado, albanileria, tarrajeo, pintura, excavacion, pisos, techos y personalizados.
+- Motor de formulas aislado de la UI.
+- Validaciones por fila y hoja.
+- Importacion/exportacion Excel.
+- Formulas personalizadas por usuario.
+- Envio de cantidades calculadas a partidas de presupuesto.
+
+### Cronograma y control temporal
+
+- Programacion de obra por partidas.
+- Fechas, duraciones, predecesores y cuadrillas.
+- Distribucion por periodos.
+- Calendario valorizado.
+- Calendario de insumos.
+- Curva S basica.
+- Ruta critica y validaciones de cronograma.
+
+### Riesgo Monte Carlo
+
+- Analisis probabilistico por presupuesto.
+- Variables de cantidad por partida.
+- Distribucion triangular: minimo, mas probable y maximo.
+- Simulacion en worker del navegador.
+- Percentiles P10, P50, P80, P90 y P95.
+- Histograma, curva acumulada y KPIs estadisticos.
+- Persistencia de variables y resumen de corridas.
+
+### IA local
+
+- Workspace de IA local protegido por plan Pro.
+- Chat tecnico.
+- Generacion asistida de APU.
+- Revision de presupuesto.
+- Autocompletado tecnico.
+- Health check de Ollama y modelos instalados.
+- Control de consumo de tokens por periodo y por accion.
+- Administracion de cupos extra desde panel admin.
+
+### Administracion y facturacion
+
+- Panel admin para usuarios, roles, estado, plan y cupos IA.
+- Estadisticas de membresias y uso de IA.
+- Stripe checkout, portal y webhook.
+- Solicitudes manuales por Yape.
+- Activacion manual de pagos desde admin.
+
+### Notas operativas
+
+- Drawer contextual de notas.
+- Notas asociadas a proyecto, presupuesto, partida o ruta.
+- Prioridades alta, media y baja.
+- Estado abierto/resuelto.
+- Visibilidad en dashboard como pendientes operativos.
 
 ## Requisitos
 
 - Node.js 22 o superior
 - npm 10 o superior
 - PostgreSQL 14 o superior
+- Ollama local opcional para funciones de IA
 
-## 1. Configurar variables de entorno
+## Configuracion local
 
-Crea un archivo `.env` en la raíz del proyecto tomando como base [.env.example](/C:/MYC-Presupuestos/.env.example).
+### 1. Variables de entorno
 
-Ejemplo:
+Crea un archivo `.env` en la raiz del proyecto tomando como base `.env.example`.
 
 ```env
 DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/myc_presupuestos?schema=public"
@@ -49,47 +153,34 @@ AUTH_SECRET="una-clave-segura-y-larga"
 NEXTAUTH_URL="http://localhost:3000"
 ```
 
-## 2. Crear la base de datos
-
-En PostgreSQL crea una base de datos llamada `myc_presupuestos`.
-
-Ejemplo en `psql`:
+### 2. Crear base de datos
 
 ```sql
 CREATE DATABASE myc_presupuestos;
 ```
 
-## 3. Instalar dependencias
-
-Si todavía no lo hiciste:
+### 3. Instalar dependencias
 
 ```powershell
 npm.cmd install
 ```
 
-## 4. Generar cliente Prisma y migrar
+### 4. Generar Prisma y migrar
 
 ```powershell
 npm.cmd run prisma:generate
 npm.cmd run prisma:migrate
 ```
 
-## 5. Cargar datos demo
+### 5. Cargar datos demo
 
 ```powershell
 npm.cmd run prisma:seed
 ```
 
-Esto crea:
+El seed crea usuario demo, empresa, proyecto, presupuesto, insumos, partidas, APUs base, indices y datos iniciales.
 
-- Un usuario demo
-- Una empresa demo
-- Un proyecto demo
-- Un presupuesto demo
-- Insumos base
-- Un APU de ejemplo
-
-## 6. Levantar el proyecto
+### 6. Levantar la app
 
 ```powershell
 npm.cmd run dev
@@ -103,131 +194,69 @@ http://localhost:3000
 
 ## Acceso demo
 
-Si ejecutaste el seed, puedes entrar con:
-
 ```text
 Email: demo@mycpresupuestos.pe
 Password: Demo12345
 ```
 
-También puedes crear tu propia cuenta desde `/register`.
+Tambien puedes crear una cuenta desde `/register`.
 
-## Flujo recomendado para probar el MVP
+## Rutas principales
 
-1. Inicia sesión.
-2. Entra a `Projects` y crea una obra.
-3. Entra a `Budgets` y crea un presupuesto.
-4. Abre el presupuesto.
-5. Agrega títulos, subtítulos y partidas.
-6. Edita metrados.
-7. Abre `Editar APU` para una partida.
-8. Ajusta insumos, cantidades y precios.
-9. Revisa cómo cambian:
-   - costo directo
-   - gastos generales
-   - utilidad
-   - IGV
-   - total
-10. Exporta:
-   - Excel de presupuesto
-   - Excel de APU
-   - PDF de presupuesto
+- `/dashboard`: resumen operativo.
+- `/projects`: gestion de proyectos.
+- `/budgets`: gestion de presupuestos.
+- `/budgets/[id]`: presupuesto general o subpresupuesto.
+- `/budgets/[id]/resources`: lista de insumos del presupuesto.
+- `/budgets/[id]/general-expenses`: gastos generales.
+- `/budgets/[id]/footer`: pie de presupuesto.
+- `/budgets/[id]/polynomial-formula`: formula polinomica.
+- `/budgets/[id]/work-schedule`: programacion de obra.
+- `/budgets/[id]/risk-analysis`: riesgo Monte Carlo.
+- `/metrados-avanzados`: metrados avanzados.
+- `/resources`: catalogo de insumos.
+- `/partidas`: catalogo de partidas.
+- `/partidas/generar`: generador de partidas por similitud.
+- `/unified-indices`: indices unificados.
+- `/unified-index-dictionary`: diccionario de IU.
+- `/ai`: workspace de IA local.
+- `/settings`: configuracion.
+- `/account`: cuenta y membresia.
+- `/admin`: administracion.
+
+## Flujo recomendado de prueba
+
+1. Inicia sesion.
+2. Revisa `/dashboard`.
+3. Crea o abre un proyecto en `/projects`.
+4. Abre el presupuesto general y sus subpresupuestos.
+5. Agrega o edita partidas.
+6. Abre el APU de una partida y ajusta insumos, cantidades y precios.
+7. Revisa costo directo, gastos generales, utilidad, IGV y total.
+8. Genera o revisa formula polinomica.
+9. Crea una hoja en metrados avanzados y envia cantidades a una partida.
+10. Programa partidas en cronograma y revisa curva S.
+11. Ejecuta una simulacion de riesgo Monte Carlo.
+12. Exporta presupuesto, APU, gastos generales, formula o cronograma.
 
 ## Scripts disponibles
 
-mero<!--  -->
-mero<!--  -->
 ```powershell
+npm.cmd run dev
+npm.cmd run dev
 npm.cmd run build
 npm.cmd run lint
 npm.cmd run test
 npm.cmd run prisma:generate
 npm.cmd run prisma:migrate
 npm.cmd run prisma:seed
+npm.cmd run prisma:normalize-resource-iu
+npm.cmd run prisma:repair-companies
 ```
 
-## Módulo de Fórmula Polinómica
+## Verificacion recomendada
 
-El proyecto ya incluye un módulo base para Fórmula Polinómica de obras de edificacion, orientado a normativa peruana y a reajuste de valorizaciones.
-
-Fuentes de referencia usadas en la implementacion:
-
-- `presupuesto-ejemplo/formula-polinomica-peru-webapp-spec.md`
-- `presupuesto-ejemplo/formula-polinomica/07_indices_unificados_de_precios_de_la_construccion_ene26.xlsx`
-
-Capacidades actuales:
-
-- generar una formula desde un presupuesto general con APU
-- consolidar grupos base `MO`, `MAT`, `EQ`, `V` y `GU`
-- validar suma de coeficientes al milésimo
-- asignar indices INEI base por monomio
-- calcular preview de `K`
-- aplicar reajuste a una valorizacion y guardar historial
-
-Rutas principales del módulo:
-
-- `GET/POST/PATCH /api/budgets/[id]/polynomial-formula`
-- `POST /api/polynomial-formulas/[id]/calculate`
-- `GET/POST /api/polynomial-formulas/[id]/adjustments`
-- `GET /api/unified-indices?month=1&year=2026`
-
-Notas importantes:
-
-- La base de la fórmula polinómica excluye IGV.
-- Los indices INEI se cargan desde el seed del proyecto.
-- Si cambias la fuente Excel de indices, vuelve a ejecutar:
-
-```powershell
-npm.cmd run prisma:seed
-```
-
-Verificacion recomendada para este módulo:
-
-```powershell
-npm.cmd test -- lib/calculations/polynomial-formula.test.ts lib/data/polynomial-formulas.test.ts
-npm.cmd run lint
-npm.cmd run build
-```
-
-## Estructura principal
-
-```text
-/app
-  /(auth)
-  /dashboard
-  /projects
-  /budgets
-  /resources
-  /settings
-  /api
-
-/components
-  /auth
-  /layout
-  /budget
-  /apu
-  /projects
-  /resources
-  /ui
-
-/lib
-  /auth
-  /calculations
-  /data
-  /db
-  /exports
-  /validations
-
-/prisma
-  schema.prisma
-  seed.ts
-
-/types
-```
-
-## Verificación rápida
-
-Estos comandos ya deberían funcionar sin errores:
+Para una validacion completa:
 
 ```powershell
 npm.cmd run lint
@@ -235,19 +264,86 @@ npm.cmd run test
 npm.cmd run build
 ```
 
-Nota:
-- `lint` puede mostrar una advertencia no bloqueante relacionada con TanStack Table y React Compiler.
+Para revisar calculos criticos:
 
-## Limitaciones actuales del MVP
+```powershell
+npm.cmd run test -- lib/calculations/budget.test.ts lib/calculations/apu.test.ts lib/calculations/polynomial-formula.test.ts lib/calculations/work-schedule.test.ts lib/calculations/metrados.test.ts
+```
 
-- El editor de presupuesto ya permite guardar estructura y partidas, pero aún no tiene drag-and-drop ni navegación completa tipo spreadsheet.
-- El catálogo de insumos ya permite ver, buscar, filtrar y crear insumos, pero todavía no tiene edición/eliminación completa desde UI.
-- No se ha implementado todavía OCR, IA, forecasting, BIM ni colaboración avanzada.
+## Reglas tecnicas importantes
 
-## Siguiente iteración sugerida
+- Usar TypeScript strict mode.
+- No usar `any`.
+- Mantener calculos financieros y tecnicos aislados de la UI.
+- Usar `decimal.js` para calculos monetarios y cantidades sensibles.
+- Mantener coeficientes de formula polinomica a 3 decimales.
+- Todas las formulas deben ser testeables.
+- Preferir servicios reutilizables y arquitectura limpia.
+- Usar Server Components por defecto y Client Components solo cuando haya interactividad real.
 
-- Mejorar persistencia detallada del editor de presupuesto
-- Agregar edición y eliminación de insumos
-- Mejorar jerarquía visual de títulos, subtítulos, partidas y subpartidas
-- Incorporar tablas más cercanas a experiencia Excel
-- Agregar reportes más detallados y formatos más cercanos a los Excel de referencia
+## Roadmap de mejora
+
+### Pulido de lo existente
+
+- Unificar textos visibles, acentos, nombres de modulos, estados vacios y mensajes de error.
+- Completar flujos CRUD donde exista API pero la UI todavia sea parcial.
+- Pulir editor de presupuesto: navegacion de teclado, pegado desde Excel, ordenamiento, guardado visible y validaciones inline.
+- Reforzar trazabilidad tecnica: origen de calculos, advertencias, versiones, exportaciones y cambios importantes.
+- Ampliar pruebas de regresion para casos peruanos: IGV, gastos generales, utilidad, subpresupuestos, redondeos, formula polinomica y exportaciones.
+- Optimizar tablas grandes, calculos pesados, workers y payloads de modulos avanzados.
+- Agregar onboarding guiado para crear empresa, proyecto, presupuesto, subpresupuestos base, insumos y primera exportacion.
+- Mejorar estados Pro con explicacion clara de valor y desbloqueo.
+
+### Fase 1: Consolidacion comercial
+
+- Dashboard ejecutivo por empresa.
+- Historial y auditoria por proyecto y presupuesto.
+- Plantillas reutilizables de presupuestos, APUs, gastos generales y metrados.
+- Importador robusto desde Excel de presupuesto completo.
+
+### Fase 2: Productividad tecnica
+
+- Editor tipo spreadsheet con copiar/pegar rangos, autollenado, formulas, undo/redo y validacion inline.
+- Biblioteca avanzada de APUs por especialidad, rendimiento, zona, fuente y fecha.
+- Comparador de presupuestos.
+- Reportes configurables por cliente, entidad, licitacion o control interno.
+
+### Fase 3: Inteligencia aplicada
+
+- Revision integral con IA de unidades, precios fuera de rango, APUs incompletos y metrados sospechosos.
+- Generacion asistida de presupuesto desde memoria descriptiva o lista de partidas.
+- RAG sobre catalogos propios, presupuestos anteriores y bases historicas.
+- Sugerencias de rendimientos y cuadrillas basadas en partidas similares.
+
+### Fase 4: Control de obra
+
+- Valorizaciones mensuales conectadas al cronograma y formula polinomica.
+- Control real vs planificado: avance fisico, avance financiero, curva S real, desviaciones y alertas.
+- Flujo de adicionales, deductivos, mayores metrados y ampliaciones de plazo.
+- Panel de costo proyectado al termino.
+
+### Fase 5: Colaboracion y empresa
+
+- Multiusuario por empresa, roles y permisos por proyecto.
+- Comentarios por partida y revision/aprobacion de presupuestos.
+- Estados de aprobacion y firmas.
+- Espacios de trabajo por cliente o contratista.
+- API publica o integraciones BIM/ERP cuando el modelo de datos este estable.
+
+## Limitaciones actuales
+
+- Algunas experiencias avanzadas ya tienen backend y rutas, pero requieren mas pulido visual y QA de casos reales.
+- La IA local depende de Ollama y de modelos instalados en la maquina del usuario.
+- Los modulos Pro existen por entitlements; en Starter se muestran bloqueos o llamados de upgrade.
+- El editor tipo spreadsheet todavia no cubre toda la experiencia de Excel profesional.
+- No hay colaboracion multiusuario avanzada ni permisos granulares por proyecto.
+- No hay integraciones BIM/ERP productivas todavia.
+
+## Documentacion relacionada
+
+- `AGENTS.md`: reglas del proyecto y guia para agentes.
+- `prd/prd_MYC_Presupuestos.md`: PRD principal.
+- `prd/PRD_MYC_MonteCarlo_Risk_Analysis.md`: PRD de riesgo.
+- `prd/prd_ai_local_myc_presupuestos_codex.md`: PRD de IA local.
+- `docs/superpowers/plans`: planes de implementacion historicos.
+- `presupuesto-ejemplo`: archivos Excel y referencias de formulas.

@@ -8,9 +8,11 @@ import { ContextBadge, ProjectStatusBadge } from "@/components/ui/context-badges
 import { InfoCard } from "@/components/ui/info-cards";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
+import { listProjectActivityEvents } from "@/lib/data/activity-events";
 import { getProjectOverviewById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { ProjectActivityHistory } from "@/components/projects/project-activity-history";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
 import { getProjectOtherSections } from "@/lib/projects/other-sections";
 import { formatDate } from "@/lib/utils";
@@ -31,6 +33,11 @@ const projectSections = [
     title: "Otras secciones",
     description: "APU, lista de insumos, gastos generales, pie de presupuesto y fórmula polinómica del proyecto.",
   },
+  {
+    id: "historial",
+    title: "Historial",
+    description: "Actividad reciente registrada para auditoria tecnica.",
+  },
 ] as const;
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -49,6 +56,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const generalBudgetsCount = generalBudget ? 1 : 0;
   const subBudgets = project.budgets.filter((budget) => budget.kind === "SUB_BUDGET");
   const otherSections = getProjectOtherSections(generalBudget?.id ?? null);
+  const activityEvents = await listProjectActivityEvents({
+    userId: session!.user.id,
+    projectId: project.id,
+    budgetIds: project.budgets.map((budget) => budget.id),
+  });
 
   return (
     <AppShell settings={settings}>
@@ -153,6 +165,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </CardContent>
           </Card>
         </section>
+
+        <ProjectActivityHistory events={activityEvents} dateFormat={settings.dateFormat} />
       </div>
     </AppShell>
   );

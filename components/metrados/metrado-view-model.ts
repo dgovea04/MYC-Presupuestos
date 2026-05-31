@@ -128,6 +128,29 @@ export const buildDefaultMetradoSheetName = ({
   return `Metrado - ${templateName}`;
 };
 
+export function buildMetradoTemplatePrefillMessage(templateName: string | null | undefined): string {
+  const trimmedName = templateName?.trim();
+  if (!trimmedName) {
+    return "";
+  }
+
+  return `Plantilla ${trimmedName} preseleccionada. Completa proyecto, presupuesto y partida para crear la hoja.`;
+}
+
+export function buildMetradoSheetSelectPlaceholder({
+  hasSheets,
+  isCreatingSheet,
+}: {
+  hasSheets: boolean;
+  isCreatingSheet: boolean;
+}): string {
+  if (isCreatingSheet) {
+    return hasSheets ? "Nueva hoja en configuracion" : "Sin hojas guardadas";
+  }
+
+  return hasSheets ? "Seleccionar hoja" : "Sin hojas guardadas";
+}
+
 export type MetradoBudgetDraftOption = {
   id: string;
   projectId: string;
@@ -141,6 +164,28 @@ export type NewMetradoSheetDraft = {
   sheetUnit: MetradoUnit;
   templateType: MetradoTemplateType;
 };
+
+const metradoTemplateTypes = [
+  "CONCRETE",
+  "REBAR",
+  "FORMWORK",
+  "MASONRY",
+  "PLASTER",
+  "PAINT",
+  "EXCAVATION",
+  "FLOORING",
+  "ROOFING",
+  "CUSTOM",
+] as const satisfies MetradoTemplateType[];
+
+export function parseMetradoTemplateTypeParam(value: string | null | undefined): MetradoTemplateType | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase().replace(/^METRADO-/, "").replace(/-/g, "_");
+  return isMetradoTemplateType(normalized) ? normalized : null;
+}
 
 export function buildNewMetradoSheetDraft({
   budgets,
@@ -175,4 +220,8 @@ export function buildNewMetradoSheetDraft({
     sheetUnit: templateDefaultUnit,
     templateType,
   };
+}
+
+function isMetradoTemplateType(value: string): value is MetradoTemplateType {
+  return metradoTemplateTypes.some((templateType) => templateType === value);
 }

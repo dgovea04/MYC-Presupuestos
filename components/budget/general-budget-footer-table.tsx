@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Save, Trash2 } from "lucide-react";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { Button } from "@/components/ui/button";
@@ -9,10 +10,12 @@ import { Input } from "@/components/ui/input";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { getExcelViewCssVariables } from "@/lib/budget/excel-view-css";
 import { getExportDefinition } from "@/lib/exports/definitions";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { BudgetFooterStructure, BudgetFooterRowInput } from "@/types/budget-sections";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
@@ -20,12 +23,23 @@ type DragState = { id: string } | null;
 
 export function GeneralBudgetFooterTable({
   budgetId,
+  currency,
+  currencyDecimals,
+  generalExpensesRate,
+  utilityRate,
+  igvRate,
   initialStructure,
 }: {
   budgetId: string;
+  currency: string;
+  currencyDecimals: number;
+  generalExpensesRate: number;
+  utilityRate: number;
+  igvRate: number;
   initialStructure: BudgetFooterStructure;
 }) {
   const { isExcelMode } = useAppViewMode();
+  const { excelRowHeight, excelShowFieldBorders } = useFormattingSettings();
   const [structure, setStructure] = useState(initialStructure);
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -41,6 +55,14 @@ export function GeneralBudgetFooterTable({
   const serializedDraft = useMemo(() => JSON.stringify(getSavePayload(structure.rows)), [structure.rows]);
   const calculatedRowsCount = useMemo(() => structure.rows.filter((row) => row.isCalculated).length, [structure.rows]);
   const highlightedRowsCount = useMemo(() => structure.rows.filter((row) => row.highlight).length, [structure.rows]);
+  const effectiveGeneralExpensesRate = useMemo(
+    () => getGeneralExpensesRateFromRows(structure.rows) ?? generalExpensesRate,
+    [generalExpensesRate, structure.rows],
+  );
+  const excelCssVariables = useMemo<CSSProperties>(
+    () => getExcelViewCssVariables(excelShowFieldBorders, excelRowHeight),
+    [excelRowHeight, excelShowFieldBorders],
+  );
 
   useEffect(() => {
     if (!isHydrated.current) {
@@ -243,8 +265,16 @@ export function GeneralBudgetFooterTable({
       </div>
 
       <div className="space-y-4">
-        <div className={getTableFrameClassName(isExcelMode, !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]" : undefined)}>
-          <Table className="table-fixed min-w-[1160px] w-full">
+        <div
+          data-view-mode={isExcelMode ? "excel" : "modern"}
+          data-density-mode={isExcelMode ? "compact" : "comfortable"}
+          style={excelCssVariables}
+          className={getTableFrameClassName(
+            isExcelMode,
+            cn("overflow-auto", !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]" : undefined),
+          )}
+        >
+          <Table className={cn("table-fixed min-w-[1160px] w-full", isExcelMode && "[&_td]:px-2 [&_th]:px-2")}>
             <colgroup>
               <col className="w-[150px]" />
               <col className="w-[360px]" />
@@ -255,7 +285,7 @@ export function GeneralBudgetFooterTable({
               <col className="w-[150px]" />
             </colgroup>
             <THead>
-              <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className={cn("bg-slate-50 hover:bg-slate-50", isExcelMode && "bg-slate-100/90 hover:bg-slate-100/90")}>
                 <TH>Variable</TH>
                 <TH>Descripción</TH>
                 <TH>Fórmula</TH>
@@ -291,7 +321,7 @@ export function GeneralBudgetFooterTable({
                       <Input
                         value={row.variable}
                         onChange={(event) => updateRow(row.id, { variable: event.target.value })}
-                        className={getInputDensityClass()}
+                        className={getInputDensityClass(isExcelMode)}
                       />
                     </div>
                   </TD>
@@ -299,32 +329,65 @@ export function GeneralBudgetFooterTable({
                     <Input
                       value={row.description}
                       onChange={(event) => updateRow(row.id, { description: event.target.value })}
-                      className={cn(getInputDensityClass(), row.highlight ? "font-semibold" : "font-normal")}
+                      className={cn(getInputDensityClass(isExcelMode), row.highlight ? "font-semibold" : "font-normal")}
                     />
                   </TD>
                   <TD className="align-top">
-                    <Input value={row.formula ?? ""} onChange={(event) => updateRow(row.id, { formula: event.target.value })} className={cn(getInputDensityClass(), row.error ? "border-rose-300 text-rose-700" : undefined)} />
-                    {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : <p className="mt-1 text-xs text-slate-400">Usa variables como `CD + PGG + UTI`</p>}
+                    {isSystemFormulaRow(row.variable) ? (
+                      <div
+                        className={cn(
+                          "flex items-center px-2 text-xs text-slate-400",
+                          isExcelMode ? "h-[var(--excel-control-height)]" : "h-8",
+                        )}
+                      >
+                        {getSystemFormulaText(row.variable, {
+                          generalExpensesRate: effectiveGeneralExpensesRate,
+                          utilityRate,
+                          igvRate,
+                        })}
+                      </div>
+                    ) : (
+                      <>
+                        <Input
+                          value={row.formula ?? ""}
+                          onChange={(event) => updateRow(row.id, { formula: event.target.value })}
+                          className={cn(getInputDensityClass(isExcelMode), row.error ? "border-rose-300 text-rose-700" : undefined)}
+                        />
+                        {row.error ? (
+                          <p className="mt-1 text-xs text-rose-600">{row.error}</p>
+                        ) : !isExcelMode ? (
+                          <p className="mt-1 text-xs text-slate-400">Usa variables como `CD + PGG + UTI`</p>
+                        ) : null}
+                      </>
+                    )}
+                  </TD>
+                  <TD className="align-top">
+                    <div
+                      className={cn(
+                        "flex items-center justify-end px-2 text-xs font-medium tabular-nums text-slate-800",
+                        isExcelMode ? "h-[var(--excel-control-height)] rounded-none" : "h-8 rounded-lg",
+                        row.highlight ? "font-semibold text-slate-950" : undefined,
+                      )}
+                    >
+                      {formatCurrency(row.value, currency, currencyDecimals)}
+                    </div>
                   </TD>
                   <TD className="align-top">
                     <Input
-                      type="number"
-                      step="0.0001"
-                      value={row.isCalculated ? row.value : row.manualValue}
-                      disabled={row.isCalculated}
-                      onChange={(event) => updateRow(row.id, { manualValue: Number(event.target.value) })}
-                      className={cn(getInputDensityClass(), "text-right tabular-nums")}
+                      value={row.iu ?? ""}
+                      onChange={(event) => updateRow(row.id, { iu: event.target.value })}
+                      className={cn(getInputDensityClass(isExcelMode), "text-center")}
                     />
-                  </TD>
-                  <TD className="align-top">
-                    <Input value={row.iu ?? ""} onChange={(event) => updateRow(row.id, { iu: event.target.value })} className={cn(getInputDensityClass(), "text-center")} />
                   </TD>
                   <TD className="align-top text-center">
                     <input
                       type="checkbox"
                       checked={row.highlight}
                       onChange={(event) => updateRow(row.id, { highlight: event.target.checked })}
-                      className="mt-2 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                      className={cn(
+                        "h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400",
+                        isExcelMode ? "mt-[calc((var(--excel-control-height)-1rem)/2)]" : "mt-2",
+                      )}
                     />
                   </TD>
                   <TD className="align-top">
@@ -384,8 +447,57 @@ function ToolbarIconButton({
   );
 }
 
-function getInputDensityClass() {
+function getInputDensityClass(isExcelMode = false) {
+  if (isExcelMode) return "h-8 rounded-sm border-slate-300 px-2 text-xs shadow-none";
   return "h-8 rounded-lg px-2 text-xs";
+}
+
+function getGeneralExpensesRateFromRows(rows: BudgetFooterStructure["rows"]) {
+  const directCost = rows.find((row) => row.variable.trim().toUpperCase() === "CD")?.value ?? 0;
+  const generalExpenses = rows.find((row) => row.variable.trim().toUpperCase() === "PGG")?.value ?? 0;
+
+  if (directCost <= 0) {
+    return null;
+  }
+
+  return generalExpenses / directCost;
+}
+
+function isSystemFormulaRow(variable: string) {
+  return ["CD", "PGG", "UTI", "IGV"].includes(variable.trim().toUpperCase());
+}
+
+function getSystemFormulaText(
+  variable: string,
+  rates: { generalExpensesRate: number; utilityRate: number; igvRate: number },
+) {
+  const normalizedVariable = variable.trim().toUpperCase();
+
+  if (normalizedVariable === "CD") {
+    return "Desde costo directo";
+  }
+
+  if (normalizedVariable === "PGG") {
+    return `Gastos generales ${formatRatePercentage(rates.generalExpensesRate)}`;
+  }
+
+  if (normalizedVariable === "UTI") {
+    return `CD*${formatRateDecimal(rates.utilityRate)}`;
+  }
+
+  if (normalizedVariable === "IGV") {
+    return `ST*${formatRateDecimal(rates.igvRate)}`;
+  }
+
+  return "";
+}
+
+function formatRatePercentage(value: number) {
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+function formatRateDecimal(value: number) {
+  return value.toFixed(2);
 }
 
 function getSavePayload(rows: BudgetFooterStructure["rows"]) {

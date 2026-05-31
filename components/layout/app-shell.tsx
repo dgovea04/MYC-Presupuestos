@@ -93,7 +93,7 @@ export async function AppShell({
                 <div className="flex flex-col gap-2">
                   <AppBackButton />
                   <div>
-                    <p className="text-sm text-slate-500">MVP inicial</p>
+                    <p className="text-sm text-slate-500">Plataforma tecnica de costos</p>
                     <h2 className="text-2xl font-semibold text-slate-900">Gestion de presupuestos de obra</h2>
                   </div>
                 </div>

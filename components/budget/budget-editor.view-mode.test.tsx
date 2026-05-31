@@ -85,6 +85,24 @@ describe("BudgetEditor view mode integration", () => {
     expect(countViewModeAnchors(host)).toBe(1);
   });
 
+  it("shows budget rates inline with summary amounts instead of editable fields", async () => {
+    const { getInputByValue, getSummaryPanel } = await renderEditor({
+      budget: {
+        ...createBudget(),
+        generalExpensesRate: 0.1234,
+        utilityRate: 0.08,
+        igvRate: 0.18,
+      },
+    });
+
+    expect(getSummaryPanel().textContent).toContain("12.34%");
+    expect(getSummaryPanel().textContent).toContain("8.00%");
+    expect(getSummaryPanel().textContent).toContain("18.00%");
+    expect(() => getInputByValue("0.1234")).toThrow();
+    expect(() => getInputByValue("0.08")).toThrow();
+    expect(() => getInputByValue("0.18")).toThrow();
+  });
+
   it("tightens the table in excel mode while keeping the Ctrl+Enter path available for APU editing", async () => {
     const { getButtonByText, getHeaderByText, getInputByValue, getTableSurface } = await renderEditor({
       budget: createBudgetWithItem(),

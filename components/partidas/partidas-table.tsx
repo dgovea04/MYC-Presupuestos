@@ -11,6 +11,7 @@ import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { Input } from "@/components/ui/input";
 import { OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
+import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { VirtualizedTableFrame, VirtualizedTableSpacerRow } from "@/components/ui/virtualized-table-frame";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
@@ -33,6 +34,7 @@ type PendingPaste = {
   rows: PartidaPasteRow[];
   previewRows: PartidaPasteRow[];
 };
+type ApuFilter = "ALL" | "WITH_APU" | "WITHOUT_APU";
 
 const PartidaApuSheet = dynamic(() =>
   import("@/components/partidas/partida-apu-sheet").then((module) => module.PartidaApuSheet),
@@ -54,6 +56,7 @@ export function PartidasTable({
   const [rows, setRows] = useState<EditableCatalogPartida[]>(() => partidas.map(toEditablePartida));
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [filter, setFilter] = useState("");
+  const [apuFilter, setApuFilter] = useState<ApuFilter>("ALL");
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -66,10 +69,17 @@ export function PartidasTable({
     () =>
       rows.filter((row) => {
         const text = `${row.description} ${row.unit} ${row.performanceRate ?? ""}`.toLowerCase();
-        return text.includes(deferredFilter.toLowerCase());
+        const matchesText = text.includes(deferredFilter.toLowerCase());
+        const matchesApu =
+          apuFilter === "ALL" ||
+          (apuFilter === "WITH_APU" && row.apuRows.length > 0) ||
+          (apuFilter === "WITHOUT_APU" && row.apuRows.length === 0);
+
+        return matchesText && matchesApu;
       }),
-    [deferredFilter, rows],
+    [apuFilter, deferredFilter, rows],
   );
+  const filteredRowsWithApu = useMemo(() => filteredRows.filter((row) => row.apuRows.length > 0).length, [filteredRows]);
 
   const dirtyRows = useMemo(() => rows.filter((row) => row.isDirty || row.isNew), [rows]);
   const selectedPartida = rows.find((row) => row.id === selectedId) ?? null;
@@ -78,7 +88,7 @@ export function PartidasTable({
     rowHeight: isExcelMode ? excelRowHeight : PARTIDA_ROW_HEIGHT,
     overscan: PARTIDA_ROW_OVERSCAN,
     fallbackVisibleRows: 10,
-    resetKey: deferredFilter,
+    resetKey: `${deferredFilter}:${apuFilter}`,
   });
 
   const patchRow = useCallback((id: string, changes: Partial<EditableCatalogPartida>) => {
@@ -319,23 +329,32 @@ export function PartidasTable({
             <OperationalMetricBadge>
               {rows.length} en catalogo
             </OperationalMetricBadge>
+            <OperationalMetricBadge>
+              {filteredRowsWithApu} {filteredRowsWithApu === 1 ? "APU con filas" : "APUs con filas"}
+            </OperationalMetricBadge>
           </div>
         }
         controls={
           <div className="flex flex-col gap-3">
-            <Input
-              placeholder="Buscar partida, unidad o rendimiento"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              className="md:max-w-xl"
-            />
+            <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+              <Input
+                placeholder="Buscar partida, unidad o rendimiento"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              />
+              <Select value={apuFilter} onChange={(event) => setApuFilter(event.target.value as ApuFilter)}>
+                <option value="ALL">Todos los APU</option>
+                <option value="WITH_APU">Con APU</option>
+                <option value="WITHOUT_APU">Sin APU</option>
+              </Select>
+            </div>
             <div className={cn("flex flex-col gap-3 border bg-white/90 p-3 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200")}>
               <div className="space-y-1">
                 <p className="text-sm font-medium text-slate-700">
-                  {filter.trim() ? `Mostrando ${filteredRows.length} coincidencias para "${filter}"` : "Vista general del catalogo de partidas"}
+                  {getPartidasFilterSummary(filter, apuFilter, filteredRows.length)}
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span>Rendimiento y APU disponibles</span>
+                  <span>{getApuFilterLabel(apuFilter)}</span>
                   <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
                   <span>{dirtyRows.length > 0 ? `${dirtyRows.length} cambios por guardar` : "Sin cambios pendientes"}</span>
                 </div>
@@ -397,6 +416,13 @@ export function PartidasTable({
             </THead>
             <TBody>
               <VirtualizedTableSpacerRow colSpan={PARTIDA_TABLE_COLUMN_COUNT} height={virtualRange.topSpacerHeight} />
+              {filteredRows.length === 0 ? (
+                <TR>
+                  <TD colSpan={PARTIDA_TABLE_COLUMN_COUNT} className="py-10 text-center text-sm text-slate-500">
+                    No encontramos partidas con el filtro actual.
+                  </TD>
+                </TR>
+              ) : null}
               {virtualRange.visibleRows.map((row) => (
                 <PartidaTableRow
                   key={row.id}
@@ -612,6 +638,31 @@ function sortEditablePartidas(rows: EditableCatalogPartida[]) {
 
     return left.unit.localeCompare(right.unit);
   });
+}
+
+function getPartidasFilterSummary(filter: string, apuFilter: ApuFilter, filteredCount: number) {
+  const trimmedFilter = filter.trim();
+  const apuLabel = getApuFilterLabel(apuFilter).toLowerCase();
+
+  if (trimmedFilter && apuFilter !== "ALL") {
+    return `Mostrando ${filteredCount} coincidencias ${apuLabel} para "${trimmedFilter}"`;
+  }
+
+  if (trimmedFilter) {
+    return `Mostrando ${filteredCount} coincidencias para "${trimmedFilter}"`;
+  }
+
+  if (apuFilter !== "ALL") {
+    return `Mostrando ${filteredCount} partidas ${apuLabel}`;
+  }
+
+  return "Vista general del catalogo de partidas";
+}
+
+function getApuFilterLabel(apuFilter: ApuFilter) {
+  if (apuFilter === "WITH_APU") return "Con APU";
+  if (apuFilter === "WITHOUT_APU") return "Sin APU";
+  return "Todos los APU";
 }
 
 function isPreloadedPartida(row: EditableCatalogPartida) {

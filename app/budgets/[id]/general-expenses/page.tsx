@@ -3,10 +3,18 @@ import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-se
 import { getBudgetGeneralExpenses } from "@/lib/data/budgets";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
 
-export default async function GeneralBudgetExpensesPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function GeneralBudgetExpensesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ template?: string }>;
+}) {
   const { id } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const expenses = await getBudgetGeneralExpenses(id, session.user.id);
+  const initialTemplateFocus = resolveGeneralExpenseTemplateFocus(resolvedSearchParams.template);
 
   return (
     <GeneralBudgetSectionShell
@@ -24,9 +32,15 @@ export default async function GeneralBudgetExpensesPage({ params }: { params: Pr
         budgetId={budget.id}
         currency={budget.currency}
         totalDirectCost={budget.totalDirectCost}
-        generalExpensesRate={budget.generalExpensesRate}
         initialStructure={expenses}
+        initialTemplateFocus={initialTemplateFocus}
       />
     </GeneralBudgetSectionShell>
   );
+}
+
+function resolveGeneralExpenseTemplateFocus(templateId: string | undefined) {
+  if (templateId === "general-expenses-fixed-workbook") return "FIXED";
+  if (templateId === "general-expenses-variable-workbook") return "VARIABLE";
+  return null;
 }

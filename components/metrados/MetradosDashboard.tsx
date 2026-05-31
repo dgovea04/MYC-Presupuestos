@@ -4,11 +4,13 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CellValue, Worksheet } from "exceljs";
-import { Calculator, ChevronRight, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
+import { Calculator, ChevronRight, Copy, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
 
 import {
   addMetradoRow,
   buildDefaultMetradoSheetName,
+  buildMetradoSheetSelectPlaceholder,
+  buildMetradoTemplatePrefillMessage,
   buildNewMetradoSheetDraft,
   deleteMetradoRow,
   duplicateMetradoRow,
@@ -68,6 +70,7 @@ type MetradosDashboardProps = {
   budgets: MetradoBudgetOption[];
   partidas: MetradoPartidaOption[];
   customFormulas: CustomMetradoFormulaRecord[];
+  initialTemplateType?: MetradoTemplateType | null;
 };
 
 type ImportPreviewResponse = {
@@ -91,10 +94,13 @@ export function MetradosDashboard({
   budgets,
   partidas,
   customFormulas: initialCustomFormulas,
+  initialTemplateType = null,
 }: MetradosDashboardProps) {
   const [sheets, setSheets] = useState<MetradoSheetRecord[]>(initialSheets);
   const [customFormulas, setCustomFormulas] = useState<CustomMetradoFormulaRecord[]>(initialCustomFormulas);
-  const [selectedSheetId, setSelectedSheetId] = useState(initialSheets[0]?.id ?? "");
+  const initialTemplate = metradoTemplates.find((entry) => entry.type === initialTemplateType) ?? null;
+  const shouldStartFromTemplate = Boolean(initialTemplate);
+  const [selectedSheetId, setSelectedSheetId] = useState(shouldStartFromTemplate ? "" : initialSheets[0]?.id ?? "");
   const selectedSheet = sheets.find((sheet) => sheet.id === selectedSheetId) ?? null;
   const initialProjectId = selectedSheet?.projectId ?? projects[0]?.id ?? "";
   const initialBudgetId =
@@ -107,10 +113,12 @@ export function MetradosDashboard({
   const [budgetId, setBudgetId] = useState(initialBudgetId);
   const [partidaId, setPartidaId] = useState(initialPartidaId);
   const [templateType, setTemplateType] = useState<MetradoTemplateType>(
-    selectedSheet?.templateType ?? "CONCRETE",
+    selectedSheet?.templateType ?? initialTemplate?.type ?? "CONCRETE",
   );
-  const [sheetName, setSheetName] = useState(selectedSheet?.name ?? "Nuevo metrado");
-  const [sheetUnit, setSheetUnit] = useState<MetradoUnit>(selectedSheet?.unit ?? "m3");
+  const [sheetName, setSheetName] = useState(
+    selectedSheet?.name ?? (initialTemplate ? buildDefaultMetradoSheetName({ templateName: initialTemplate.name }) : "Nuevo metrado"),
+  );
+  const [sheetUnit, setSheetUnit] = useState<MetradoUnit>(selectedSheet?.unit ?? initialTemplate?.defaultUnit ?? "m3");
   const [rows, setRows] = useState<MetradoRowRecord[]>(selectedSheet?.rows ?? []);
   const [preferredFormulaKey, setPreferredFormulaKey] = useState(selectedSheet?.rows[0]?.formulaKey ?? "manual");
   const [activeCell, setActiveCell] = useState<MetradoActiveCell | null>(null);
@@ -118,7 +126,7 @@ export function MetradosDashboard({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [saveClock, setSaveClock] = useState(() => Date.now());
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState(buildMetradoTemplatePrefillMessage(initialTemplate?.name));
   const [error, setError] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [customFormulaSheetOpen, setCustomFormulaSheetOpen] = useState(false);
@@ -352,6 +360,31 @@ export function MetradosDashboard({
 
       setFeedback("Hoja eliminada.");
     }, "No se pudo eliminar la hoja.");
+  }
+
+  async function duplicateSelectedSheet() {
+    if (!selectedSheet) {
+      setError("Selecciona una hoja para duplicar.");
+      return;
+    }
+
+    if (hasBlockingIssues) {
+      setError("Corrige los errores antes de duplicar la hoja.");
+      return;
+    }
+
+    await runAction(async () => {
+      await persistDraft(selectedSheet.id, calculated.rows);
+      const response = await fetch(`/api/metrados-avanzados/${selectedSheet.id}/duplicate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `${sheetName.trim() || selectedSheet.name} copia` }),
+      });
+      const payload = await readJson<SheetResponse>(response);
+      setSheets((current) => [payload.sheet, ...current.filter((sheet) => sheet.id !== payload.sheet.id)]);
+      loadSheetIntoEditor(payload.sheet);
+      setFeedback("Hoja duplicada como base reutilizable.");
+    }, "No se pudo duplicar la hoja.");
   }
 
   async function createSheet() {
@@ -616,7 +649,10 @@ export function MetradosDashboard({
                   onChange={(event) => selectSheet(event.currentTarget.value)}
                 >
                   <option value="" disabled>
-                    {sheets.length === 0 ? "Sin hojas guardadas" : "Seleccionar hoja"}
+                    {buildMetradoSheetSelectPlaceholder({
+                      hasSheets: sheets.length > 0,
+                      isCreatingSheet,
+                    })}
                   </option>
                   {sheets.map((sheet) => (
                     <option key={sheet.id} value={sheet.id}>
@@ -625,6 +661,18 @@ export function MetradosDashboard({
                   ))}
                 </Select>
               </Field>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 w-10 px-0"
+                disabled={!selectedSheet || actionState === "saving" || hasBlockingIssues}
+                aria-label="Duplicar hoja seleccionada"
+                title="Duplicar hoja seleccionada"
+                onClick={() => void duplicateSelectedSheet()}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
               <Button
                 type="button"
                 variant="outline"

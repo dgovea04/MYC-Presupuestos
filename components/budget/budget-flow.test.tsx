@@ -39,25 +39,30 @@ describe("BudgetFlow", () => {
   });
 
   it("applies the route-level budget flow provider contract to the editor", async () => {
-    const { host, getButtonByText, getByText, getEditorRoot } = await renderBudgetFlow();
+    const { host, getByText, getEditorRoot, queryByText } = await renderBudgetFlow();
 
     expect(host.dataset.viewMode).toBe("modern");
-    expect(getByText("Vista")).toBeTruthy();
+    expect(queryByText("Vista")).toBeNull();
     expect(getByText("Densidad")).toBeTruthy();
     expect(getEditorRoot().className).toContain("budget-modern-flow");
+  });
 
-    await act(async () => {
-      getButtonByText("Tipo Excel").click();
+  it("shows template origin traceability when the budget was created from a template", async () => {
+    const { getByText } = await renderBudgetFlow({
+      templateTraceability: {
+        title: "Presupuesto creado desde plantilla",
+        detail: "Arquitectura desde Base tecnica",
+        href: "/budgets/budget-1",
+        createdAt: new Date("2026-05-29T22:30:00.000Z"),
+      },
     });
 
-    expect(host.dataset.viewMode).toBe("excel");
-    expect(getByText("Vista")).toBeTruthy();
-    expect(getByText("Densidad")).toBeTruthy();
-    expect(getEditorRoot().className).toContain("budget-excel-flow");
+    expect(getByText("Presupuesto creado desde plantilla")).toBeTruthy();
+    expect(getByText("Arquitectura desde Base tecnica")).toBeTruthy();
   });
 });
 
-async function renderBudgetFlow() {
+async function renderBudgetFlow(props: Partial<React.ComponentProps<typeof BudgetFlow>> = {}) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -66,7 +71,15 @@ async function renderBudgetFlow() {
   (nextContainer as HTMLDivElement & { __root?: typeof root }).__root = root;
 
   await act(async () => {
-    root.render(<BudgetFlow budget={createBudget()} partidasCatalog={[]} projectName="Proyecto Demo" resourcesCatalog={[]} />);
+    root.render(
+      <BudgetFlow
+        budget={createBudget()}
+        partidasCatalog={[]}
+        projectName="Proyecto Demo"
+        resourcesCatalog={[]}
+        {...props}
+      />,
+    );
   });
 
   return {
@@ -90,6 +103,11 @@ async function renderBudgetFlow() {
       }
 
       return element;
+    },
+    queryByText: (text: string) => {
+      const matcher = new RegExp(text);
+      const element = [...nextContainer.querySelectorAll("*")].find((candidate) => matcher.test(candidate.textContent ?? ""));
+      return element instanceof HTMLElement ? element : null;
     },
     getEditorRoot: () => {
       const element = nextContainer.querySelector("[data-view-mode-scope='budget-flow']");

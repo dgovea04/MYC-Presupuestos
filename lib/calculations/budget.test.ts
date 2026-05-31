@@ -159,4 +159,111 @@ describe("calculateBudgetRecord", () => {
     expect(result.items[0].apu?.resources.map((resource) => resource.unitPrice)).toEqual([19.23, 16.5, 5.9]);
     expect(result.items[0].apu?.resources.map((resource) => resource.subtotal)).toEqual([0.62, 5.28, 0.3]);
   });
+
+  it("mantiene redondeo financiero estable para GG, utilidad e IGV sobre partidas manuales", () => {
+    const result = calculateBudgetRecord({
+      id: "budget-regression",
+      projectId: "project-test",
+      parentBudgetId: null,
+      kind: "SUB_BUDGET",
+      name: "Subpresupuesto de regresion",
+      currency: "PEN",
+      igvRate: 0.18,
+      generalExpensesRate: 0.125,
+      utilityRate: 0.075,
+      totalDirectCost: 0,
+      totalGeneralExpenses: 0,
+      totalUtility: 0,
+      totalTax: 0,
+      totalAmount: 0,
+      levels: [],
+      items: [
+        {
+          id: "item-1",
+          budgetId: "budget-regression",
+          code: "01.01",
+          description: "Trazo y replanteo",
+          unit: "m2",
+          quantity: 3.3333,
+          unitPrice: 12.3456,
+          partial: 0,
+          sortOrder: 1,
+        },
+        {
+          id: "item-2",
+          budgetId: "budget-regression",
+          code: "01.02",
+          description: "Concreto simple",
+          unit: "m3",
+          quantity: 7.7777,
+          unitPrice: 99.9999,
+          partial: 0,
+          sortOrder: 2,
+        },
+      ],
+    });
+
+    expect(result.items.map((item) => item.partial)).toEqual([41.1516, 777.7692]);
+    expect(result.totals).toEqual({
+      totalDirectCost: 818.9208,
+      totalGeneralExpenses: 102.3651,
+      totalUtility: 61.4191,
+      subtotal: 982.705,
+      totalTax: 176.8869,
+      totalAmount: 1159.5919,
+    });
+  });
+
+  it("usa aritmetica decimal segura para acumulados con decimales binarios", () => {
+    const result = calculateBudgetRecord({
+      id: "budget-decimal",
+      projectId: "project-test",
+      parentBudgetId: null,
+      kind: "SUB_BUDGET",
+      name: "Subpresupuesto decimal",
+      currency: "PEN",
+      igvRate: 0.18,
+      generalExpensesRate: 0.1,
+      utilityRate: 0.05,
+      totalDirectCost: 0,
+      totalGeneralExpenses: 0,
+      totalUtility: 0,
+      totalTax: 0,
+      totalAmount: 0,
+      levels: [],
+      items: [
+        {
+          id: "item-1",
+          budgetId: "budget-decimal",
+          code: "01.01",
+          description: "Partida decimal 1",
+          unit: "und",
+          quantity: 0.1,
+          unitPrice: 1,
+          partial: 0,
+          sortOrder: 1,
+        },
+        {
+          id: "item-2",
+          budgetId: "budget-decimal",
+          code: "01.02",
+          description: "Partida decimal 2",
+          unit: "und",
+          quantity: 0.2,
+          unitPrice: 1,
+          partial: 0,
+          sortOrder: 2,
+        },
+      ],
+    });
+
+    expect(result.totals).toEqual({
+      totalDirectCost: 0.3,
+      totalGeneralExpenses: 0.03,
+      totalUtility: 0.015,
+      subtotal: 0.345,
+      totalTax: 0.0621,
+      totalAmount: 0.4071,
+    });
+  });
 });

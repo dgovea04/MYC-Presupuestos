@@ -27,7 +27,19 @@ type BudgetRow = {
   projectName: string;
 };
 
-export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
+export type GeneralExpenseTemplateIntent = {
+  id: "general-expenses-fixed-workbook" | "general-expenses-variable-workbook";
+  label: string;
+  description: string;
+};
+
+export function BudgetsTable({
+  budgets,
+  templateIntent = null,
+}: {
+  budgets: BudgetRow[];
+  templateIntent?: GeneralExpenseTemplateIntent | null;
+}) {
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const [baseRows, setBaseRows] = useState(budgets);
   const [optimisticBudgets, setOptimisticBudgets] = useState<Record<string, Partial<BudgetRow>>>({});
@@ -115,7 +127,11 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
     <div className="space-y-4">
       <OperationalPanel
         title="Tabla operativa"
-        description="Busca por presupuesto o proyecto y entra rapido a revisar o depurar la cartera activa."
+        description={
+          templateIntent
+            ? "Selecciona un presupuesto general para abrir el desagregado correspondiente a la plantilla elegida."
+            : "Busca por presupuesto o proyecto y entra rapido a revisar o depurar la cartera activa."
+        }
         metrics={
           <div className="flex flex-wrap items-center gap-2">
             <OperationalMetricBadge tone="accent">
@@ -133,6 +149,21 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
           </div>
         }
       />
+
+      {templateIntent ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-semibold text-sky-900">{templateIntent.label}</p>
+            <p className="mt-1 text-sky-700">{templateIntent.description}</p>
+          </div>
+          <Link
+            href="/templates?module=GENERAL_EXPENSES&source=WORKBOOK"
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white px-3 py-2 font-medium text-sky-800 transition hover:border-sky-300 hover:bg-sky-100"
+          >
+            Ver plantillas
+          </Link>
+        </div>
+      ) : null}
 
       {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       <StaticTableFrame>
@@ -155,6 +186,7 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
                   currencyDecimals={currencyDecimals}
                   dateFormat={dateFormat}
                   isPending={pendingId === budget.id}
+                  templateIntent={templateIntent}
                   onRemoveBudget={removeBudget}
                 />
               ))
@@ -180,14 +212,20 @@ const BudgetTableRow = memo(function BudgetTableRow({
   currencyDecimals,
   dateFormat,
   isPending,
+  templateIntent,
   onRemoveBudget,
 }: {
   budget: BudgetRow;
   currencyDecimals: number;
   dateFormat: DateFormatOption;
   isPending: boolean;
+  templateIntent: GeneralExpenseTemplateIntent | null;
   onRemoveBudget: (id: string) => Promise<void>;
 }) {
+  const primaryHref = templateIntent
+    ? `/budgets/${budget.id}/general-expenses?template=${encodeURIComponent(templateIntent.id)}`
+    : `/budgets/${budget.id}`;
+
   return (
     <TR className="hover:bg-slate-50/80">
       <TD className="font-medium text-slate-900">{budget.name}</TD>
@@ -196,9 +234,14 @@ const BudgetTableRow = memo(function BudgetTableRow({
       <TD>{formatDate(budget.updatedAt, dateFormat)}</TD>
       <TD>
         <div className="flex justify-end gap-2">
-          <Link href={`/budgets/${budget.id}`}>
-            <ActionButton action="open" label="Abrir" size="sm" variant="outline" />
+          <Link href={primaryHref}>
+            <ActionButton action="open" label={templateIntent ? "Gastos generales" : "Abrir"} size="sm" variant="outline" />
           </Link>
+          {templateIntent ? (
+            <Link href={`/budgets/${budget.id}`}>
+              <ActionButton action="open" label="Presupuesto" size="sm" variant="ghost" />
+            </Link>
+          ) : null}
           <ActionButton
             action="delete"
             label="Eliminar"

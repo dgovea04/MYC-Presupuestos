@@ -187,6 +187,7 @@ model User {
   generatedPartidas   GeneratedPartida[]
   metradoSheets       MetradoSheet[]
   customMetradoFormulas CustomMetradoFormula[]
+  budgetTemplates     BudgetTemplate[]
 
   @@index([role])
   @@index([status])
@@ -346,6 +347,7 @@ model Project {
   polynomialFormulas PolynomialFormula[]
   noteTasks   NoteTask[]
   metradoSheets MetradoSheet[]
+  budgetTemplates BudgetTemplate[]
 
   @@index([companyId])
 }
@@ -383,10 +385,32 @@ model Budget {
   riskSimulationRuns    RiskSimulationRun[]
   noteTasks             NoteTask[]
   metradoSheets         MetradoSheet[]
+  budgetTemplates       BudgetTemplate[]
 
   @@index([projectId])
   @@index([parentBudgetId])
   @@unique([id, projectId])
+}
+
+model BudgetTemplate {
+  id              String   @id @default(cuid())
+  userId          String
+  sourceProjectId String?
+  sourceBudgetId  String?
+  module          String   @default("BUDGET")
+  name            String
+  description     String   @default("")
+  payload         Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceProject   Project? @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
+  sourceBudget    Budget?  @relation(fields: [sourceBudgetId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([sourceProjectId])
+  @@index([sourceBudgetId])
+  @@map("budget_templates")
 }
 
 model BudgetLevel {

@@ -25,7 +25,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: "MYC Presupuestos",
-  description: "MVP SaaS de presupuestos de obra con metodología APU para Perú",
+  description: "Plataforma moderna de costos y presupuestos de obra para Peru",
 };
 
 export default async function RootLayout({

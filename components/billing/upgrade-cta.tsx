@@ -1,14 +1,22 @@
 import Link from "next/link";
-import { Lock, Sparkles } from "lucide-react";
+import { CheckCircle2, Lock, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
+const DEFAULT_PRO_BENEFITS = [
+  "IA local y generacion asistida",
+  "Cronograma, riesgo y reajustes avanzados",
+  "Exportaciones y flujos tecnicos ampliados",
+] as const;
+
 export function UpgradeCTA({
+  benefits = DEFAULT_PRO_BENEFITS,
   className,
-  description = "Disponible en Pro. Conservas tu flujo actual y desbloqueas automatizacion, IA y reportes avanzados cuando actualices.",
-  title = "Funcionalidad Pro",
+  description = "Tu flujo actual se conserva. Pro desbloquea herramientas tecnicas para acelerar revision, programacion y control del presupuesto.",
+  title = "Modulo disponible en Pro",
 }: {
+  benefits?: readonly string[];
   className?: string;
   description?: string;
   title?: string;
@@ -23,6 +31,19 @@ export function UpgradeCTA({
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-950">{title}</p>
             <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+            {benefits.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {benefits.map((benefit) => (
+                  <span
+                    key={benefit}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-medium text-amber-800"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    {benefit}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
         <Link
@@ -38,17 +59,19 @@ export function UpgradeCTA({
 }
 
 export function ProLockedPreview({
+  benefits,
   children,
   description,
   title,
 }: {
+  benefits?: readonly string[];
   children?: ReactNode;
   description?: string;
   title?: string;
 }) {
   return (
     <div className="space-y-4">
-      <UpgradeCTA description={description} title={title} />
+      <UpgradeCTA benefits={benefits} description={description} title={title} />
       {children ? <div className="pointer-events-none select-none opacity-45 blur-[1px]">{children}</div> : null}
     </div>
   );

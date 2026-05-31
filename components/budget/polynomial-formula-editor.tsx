@@ -698,6 +698,11 @@ export function PolynomialFormulaEditor({
             <UpgradeCTA
               title="Calculo de K y valorizacion disponible en Pro"
               description="Starter incluye generar, editar y validar la formula polinomica. Pro desbloquea el calculo de K, valorizaciones reajustadas e historial operativo."
+              benefits={[
+                "Preview de coeficiente K",
+                "Valorizaciones reajustadas",
+                "Historial operativo de ajustes",
+              ]}
             />
           )}
         </>

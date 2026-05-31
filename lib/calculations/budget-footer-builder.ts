@@ -8,7 +8,13 @@ export function calculateBudgetFooterBuilder(input: {
   rows: BudgetFooterRowRecord[];
   totalDirectCost: number;
   totalGeneralExpenses: number;
+  totalUtility?: number;
+  subtotal?: number;
+  totalTax?: number;
+  totalAmount?: number;
+  currencyDecimals?: number;
 }): CalculatedBudgetFooterStructureRecord {
+  const decimals = normalizeCurrencyDecimals(input.currencyDecimals);
   const rowsByVariable = new Map(
     input.rows.map((row) => [row.variable.trim().toUpperCase(), row] as const).filter(([variable]) => variable.length > 0),
   );
@@ -42,6 +48,13 @@ export function calculateBudgetFooterBuilder(input: {
       return cache.get(row.id)!;
     }
 
+    const systemValue = getSystemVariableValue(key);
+    if (systemValue !== null) {
+      const result = { value: systemValue, error: null, isCalculated: true };
+      cache.set(row.id, result);
+      return result;
+    }
+
     if (row.formula?.trim()) {
       if (visiting.has(row.id)) {
         return { value: 0, error: "Dependencia circular detectada", isCalculated: true };
@@ -54,9 +67,8 @@ export function calculateBudgetFooterBuilder(input: {
       return cache.get(row.id)!;
     }
 
-    const systemValue = getSystemVariableValue(key);
     const result = {
-      value: systemValue ?? round(row.manualValue),
+      value: round(row.manualValue, decimals),
       error: null,
       isCalculated: false,
     };
@@ -104,7 +116,7 @@ export function calculateBudgetFooterBuilder(input: {
         return { value: 0, error: "Formula invalida" };
       }
 
-      return { value: round(value), error: null };
+      return { value: round(value, decimals), error: null };
     } catch {
       return { value: 0, error: "Formula invalida" };
     }
@@ -112,19 +124,36 @@ export function calculateBudgetFooterBuilder(input: {
 
   function getSystemVariableValue(variable: string) {
     if (variable === "CD") {
-      return round(input.totalDirectCost);
+      return round(input.totalDirectCost, decimals);
     }
 
     if (variable === "PGG") {
-      return round(input.totalGeneralExpenses);
+      return round(input.totalGeneralExpenses, decimals);
+    }
+
+    if (variable === "UTI" && input.totalUtility !== undefined) {
+      return round(input.totalUtility, decimals);
+    }
+
+    if (variable === "IGV" && input.totalTax !== undefined) {
+      return round(input.totalTax, decimals);
     }
 
     return null;
   }
 }
 
-function round(value: number) {
-  return Math.round((value + Number.EPSILON) * 10000) / 10000;
+function normalizeCurrencyDecimals(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return 2;
+  }
+
+  return Math.min(4, Math.max(0, Math.trunc(value)));
+}
+
+function round(value: number, decimals: number) {
+  const factor = 10 ** decimals;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
 function formatAmountInWords(amount: number) {

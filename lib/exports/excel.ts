@@ -3,7 +3,7 @@ import { buildDisplayRows, levelTypeLabel } from "@/lib/budget/structure";
 import type { BudgetRecord } from "@/types/budget";
 import type { ReportResponsibleMeta } from "@/types/report-meta";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
-import { buildDocumentSignatureSummary, type DocumentSignatureProjectMeta } from "@/lib/exports/document-signature";
+import { buildApprovalSecondaryLabel, buildDocumentSignatureSummary, type DocumentSignatureProjectMeta } from "@/lib/exports/document-signature";
 import { loadReportIdentityAssets } from "@/lib/exports/report-assets";
 
 const MAX_CURRENCY_DECIMALS = 4;
@@ -313,7 +313,7 @@ function writeBudgetDocumentSignatureBlock(
   writeSignatureLineCell(
     sheet.getCell(`D${signatureLineRow}`),
     summary.approverLabel,
-    "Espacio reservado para aprobacion del documento",
+    buildApprovalSecondaryLabel(project),
   );
   if (identityAssets?.avatar) {
     insertWorksheetImage(workbook, sheet, identityAssets.avatar, {
@@ -386,7 +386,7 @@ function writeApuDocumentSignatureBlock(
   writeSignatureLineCell(
     sheet.getCell(`E${signatureLineRow}`),
     summary.approverLabel,
-    "Espacio reservado para aprobacion del documento",
+    buildApprovalSecondaryLabel(project),
   );
   if (identityAssets?.avatar) {
     insertWorksheetImage(workbook, sheet, identityAssets.avatar, {

@@ -171,11 +171,7 @@ function normalizeNumber(value: ExcelJS.CellValue) {
 }
 
 function normalizePercentage(value: ExcelJS.CellValue) {
-  const numeric = normalizeNumber(value);
-  if (numeric > 1) {
-    return numeric / 100;
-  }
-  return numeric;
+  return normalizeNumber(value);
 }
 
 function stripAccents(value: string) {

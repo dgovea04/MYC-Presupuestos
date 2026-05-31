@@ -12,6 +12,7 @@ import { InfoCard } from "@/components/ui/info-cards";
 import { OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
+import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
 import { getBudgetById, getProjectSubBudgetDetails, getProjectSubBudgetSummaries } from "@/lib/data/budgets";
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getProjectById } from "@/lib/data/projects";
@@ -29,7 +30,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  const [budget, settings] = await Promise.all([getBudgetById(id, session.user.id), getUserSettings(session.user.id)]);
+  const [budget, settings, templateTraceability] = await Promise.all([
+    getBudgetById(id, session.user.id),
+    getUserSettings(session.user.id),
+    getBudgetTemplateCreationTraceability({ userId: session.user.id, budgetId: id }),
+  ]);
 
   if (!budget) {
     console.error("BudgetDetailPage budget not found", { budgetId: id, userId: session.user.id });
@@ -74,6 +79,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               />
             </CardHeader>
             <CardContent className="space-y-5 pt-6">
+              {templateTraceability ? <BudgetTemplateTraceabilityNotice detail={templateTraceability.detail} /> : null}
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <InfoCard label="Total Presupuesto" value={formatCurrency(budget.totalAmount, budget.currency, settings.currencyDecimals)} />
                 <InfoCard label="Sub Presupuestos" value={String(subBudgets.length)} />
@@ -152,7 +158,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                     <BudgetQuickActionLink
                       href={`/budgets/${budget.id}/footer`}
                       title="Pie de presupuesto"
-                      description="Reservado para observaciones finales, alcances y cierre del presupuesto."
+                      description="Edita variables, observaciones, firma y datos de cierre del presupuesto."
                       icon={<ReceiptText className="h-5 w-5" />}
                     />
                     <BudgetQuickActionLink
@@ -211,6 +217,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       <BudgetFlow
         budget={budget}
         projectName={project.name}
+        templateTraceability={templateTraceability}
         partidasCatalog={partidasCatalog}
         resourcesCatalog={resources.map((resource) => ({
           id: resource.id,
@@ -227,6 +234,15 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         }))}
       />
     </AppShell>
+  );
+}
+
+function BudgetTemplateTraceabilityNotice({ detail }: { detail: string }) {
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+      <span className="font-medium">Presupuesto creado desde plantilla.</span>{" "}
+      <span className="text-emerald-700">{detail}</span>
+    </div>
   );
 }
 

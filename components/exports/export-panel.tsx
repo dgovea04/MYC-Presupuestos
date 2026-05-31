@@ -5,7 +5,7 @@ import { Check, Download, Eye, FileArchive, FileSpreadsheet, FileText, Loader2, 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ExportDefinition, ExportFormat, ExportOptions, ExportPreset, ExportRequest } from "@/lib/exports/definitions";
+import type { ExportDefinition, ExportFormat, ExportOptions, ExportPreset, ExportRequest, ExportTarget } from "@/lib/exports/definitions";
 
 type ExportPanelProps = {
   definition: ExportDefinition;
@@ -75,6 +75,10 @@ export function ExportPanel({
     [contextOptions, currencyDecimals, definition.target, includeCriticalPath, includeCurveChart, includeGanttChart, includeSignature, includeSubtotals, includeTotals, preset.id, resolvedFormat, targetId],
   );
   const payloadKey = useMemo(() => JSON.stringify(payload), [payload]);
+  const optionSummary = useMemo(
+    () => buildExportOptionSummary(payload.options ?? {}, definition.target, preset.id, resolvedFormat),
+    [definition.target, payload.options, preset.id, resolvedFormat],
+  );
   const canPreviewPdf = resolvedFormat === "pdf";
   const visiblePreview = preview?.key === payloadKey ? preview : null;
 
@@ -239,7 +243,14 @@ export function ExportPanel({
               <section className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumen</p>
               <p className="mt-2 text-sm font-medium text-slate-900">{summary}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">La descarga se genera al momento y no se guarda en historial.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {optionSummary.map((option) => (
+                  <span key={option} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                    {option}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-500">La descarga se genera al momento y no se guarda en historial.</p>
               </section>
 
               {status === "error" ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
@@ -296,6 +307,32 @@ function ExportCheckbox({ checked, label, onChange }: { checked: boolean; label:
 
 function buildExportSummary(moduleLabel: string, presetLabel: string, format: ExportFormat) {
   return `${moduleLabel} - ${presetLabel} en formato ${FORMAT_LABELS[format]}.`;
+}
+
+function buildExportOptionSummary(options: Partial<ExportOptions>, target: ExportTarget, preset: ExportPreset, format: ExportFormat) {
+  const summary = [
+    options.includeSubtotals ? "Con subtotales" : "Sin subtotales",
+    options.includeTotals ? "Con total general" : "Sin total general",
+    options.includeSignature ? "Con logo y firma" : "Sin firma",
+    `${options.currencyDecimals ?? 2} decimales`,
+  ];
+  const isSchedulePdf = target === "work_schedule" && format === "pdf";
+  const canIncludeGantt = isSchedulePdf && (preset === "cronograma_ejecutivo" || preset === "cronograma_partidas");
+  const canIncludeCurve = isSchedulePdf && (preset === "cronograma_ejecutivo" || preset === "curva_s");
+
+  if (canIncludeGantt && options.includeGanttChart) {
+    summary.push("Gantt incluido");
+  }
+
+  if (canIncludeCurve && options.includeCurveChart) {
+    summary.push("Curva S incluida");
+  }
+
+  if (canIncludeGantt && options.includeGanttChart && options.includeCriticalPath) {
+    summary.push("Ruta critica incluida");
+  }
+
+  return summary;
 }
 
 function resolveDownloadFileName(response: Response, preset: ExportPreset, format: ExportFormat) {

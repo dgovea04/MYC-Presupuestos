@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDocumentSignatureSummary } from "@/lib/exports/document-signature";
+import { buildApprovalSecondaryLabel, buildDocumentSignatureSummary } from "@/lib/exports/document-signature";
 import {
   buildApuPdfTableRowLayout,
   buildBudgetPdfTableRowLayout,
@@ -54,6 +54,15 @@ describe("report pdf exports", () => {
       { label: "Telefono", value: "987654321" },
       { label: "Empresa", value: "Constructora Andina SAC" },
     ]);
+  });
+
+  it("builds a professional approval label from project client metadata", () => {
+    expect(buildApprovalSecondaryLabel({ clientName: "Municipalidad", location: "Lima", name: "Colegio Central" })).toBe(
+      "Visto bueno documentario de Municipalidad",
+    );
+    expect(buildApprovalSecondaryLabel({ clientName: "", location: "Lima", name: "Colegio Central" })).toBe(
+      "Pendiente de visto bueno del cliente o entidad",
+    );
   });
 
   it("still generates a pdf buffer when responsible metadata is provided", async () => {

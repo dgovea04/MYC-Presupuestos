@@ -120,7 +120,7 @@ export function ProjectBudgetSections({
                 </Link>
               </div>
             ) : (
-              <EmptyStatePanel message="Este proyecto todavia no tiene un presupuesto general configurado." />
+              <EmptyStatePanel message="Crea el presupuesto general para consolidar el total del proyecto y abrir sus secciones tecnicas." />
             )}
           </CardContent>
         </Card>
@@ -157,7 +157,7 @@ export function ProjectBudgetSections({
                   </div>
                 ))
               ) : (
-                <EmptyStatePanel message="Todavia no hay Sub Presupuestos configurados para este proyecto." className="lg:col-span-2" />
+                <EmptyStatePanel message="Configura Sub Presupuestos para separar estructuras, arquitectura e instalaciones por paquete de trabajo." className="lg:col-span-2" />
               )}
             </div>
           </CardContent>

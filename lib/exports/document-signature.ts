@@ -64,6 +64,15 @@ export function buildDocumentSignatureSummary(
   };
 }
 
+export function buildApprovalSecondaryLabel(project?: DocumentSignatureProjectMeta) {
+  const approver = project?.clientName?.trim();
+  if (!approver) {
+    return "Pendiente de visto bueno del cliente o entidad";
+  }
+
+  return `Visto bueno documentario de ${approver}`;
+}
+
 export function buildBudgetCoverSummary(
   budgetName: string,
   currency: string,

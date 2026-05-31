@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   valuationCreate: vi.fn(),
   adjustmentCreate: vi.fn(),
   getUserSettings: vi.fn(),
+  assertWithinPlanLimit: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -48,6 +49,10 @@ vi.mock("@/lib/data/settings", async () => {
     getUserSettings: mocks.getUserSettings,
   };
 });
+
+vi.mock("@/lib/billing/entitlements", () => ({
+  assertWithinPlanLimit: mocks.assertWithinPlanLimit,
+}));
 
 import { defaultUserSettings } from "@/lib/data/settings";
 import * as projectData from "@/lib/data/projects";
@@ -345,8 +350,10 @@ describe("project data", () => {
     mocks.budgetFindUnique.mockReset();
     mocks.budgetUpdate.mockReset();
     mocks.getUserSettings.mockReset();
+    mocks.assertWithinPlanLimit.mockReset();
 
     mocks.companyFindFirst.mockResolvedValue({ id: "company-1" });
+    mocks.assertWithinPlanLimit.mockResolvedValue(undefined);
     mocks.projectCreate.mockResolvedValue({ id: "project-1", name: "Proyecto 1" });
     mocks.budgetCreate.mockResolvedValue({ id: "budget-general-1" });
     mocks.budgetCreateMany.mockResolvedValue({ count: 4 });

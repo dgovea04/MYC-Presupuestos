@@ -168,6 +168,7 @@ describe("report excel exports", () => {
     expect(values).toContain("FIRMA DEL RESPONSABLE");
     expect(values).toContain("VO. BO. / APROBACION");
     expect(values).toContain("Municipalidad");
+    expect(values).toContain("Municipalidad\nVisto bueno documentario de Municipalidad");
   });
 
   it("writes a documentary signature block into the APU workbook footer area", async () => {
@@ -197,6 +198,7 @@ describe("report excel exports", () => {
     expect(values).toContain("FIRMA DEL RESPONSABLE");
     expect(values).toContain("VO. BO. / APROBACION");
     expect(values).toContain("Municipalidad");
+    expect(values).toContain("Municipalidad\nVisto bueno documentario de Municipalidad");
   });
 });
 

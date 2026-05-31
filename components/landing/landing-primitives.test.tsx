@@ -111,7 +111,7 @@ describe("landing primitives", () => {
 
     const featureSection = container.querySelector("#features");
     const heroInner = container.querySelector("section > .landing-shell");
-    const heroChip = [...container.querySelectorAll("span")].find((node) => node.textContent?.includes("Normativa peruana"));
+    const heroChip = [...container.querySelectorAll("span")].find((node) => node.textContent?.includes("IA local revisable"));
 
     expect(featureSection?.className).toContain("landing-section");
     expect(featureSection?.className).toContain("landing-shell");
@@ -135,7 +135,7 @@ describe("landing primitives", () => {
     expect(heroSurface).not.toBeNull();
     expect(previewSurface).not.toBeNull();
     expect(comparisonSurface).not.toBeNull();
-    expect(container.textContent).toContain("Presupuesto general");
+    expect(container.textContent).toContain("Vista global del dashboard");
     expect(container.textContent).toContain("Presupuesto de estructuras");
     expect(container.textContent).toContain("Comparativo de experiencia operativa");
   });
@@ -172,12 +172,12 @@ describe("landing primitives", () => {
     );
 
     const benefitsSection = [...container.querySelectorAll("section")].find((node) => node.textContent?.includes("Beneficios"));
-    const finalCtaSection = [...container.querySelectorAll("section")].find((node) => node.textContent?.includes("Crear cuenta"));
+    const finalCtaSection = [...container.querySelectorAll("section")].find((node) => node.textContent?.includes("Crear presupuesto gratis"));
 
     expect(benefitsSection?.querySelector(".landing-surface-contrast")).not.toBeNull();
     expect(finalCtaSection?.querySelector(".landing-surface-contrast")).not.toBeNull();
     expect(container.textContent).toContain("Beneficios");
-    expect(container.textContent).toContain("Crear cuenta");
+    expect(container.textContent).toContain("Crear presupuesto gratis");
   });
 
   it("keeps the navbar login action on the shared secondary CTA treatment", async () => {

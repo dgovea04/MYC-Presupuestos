@@ -250,7 +250,7 @@ export function AIWorkspace({
                       {model.installed ? "Instalado" : "Pendiente en Ollama"}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {model.actions.length ? model.actions.join(" · ") : "Reservado para futuras acciones"}
+                      {model.actions.length ? model.actions.join(" · ") : "Preparado para acciones avanzadas"}
                     </p>
                   </div>
                 ))}

@@ -1,7 +1,10 @@
+import Decimal from "decimal.js";
 import type { ApuRecord } from "@/types/apu";
 import type { BudgetItemRecord, BudgetRecord, BudgetTotals } from "@/types/budget";
 import { calculateApuRows, calculateApuTotalUnitCost } from "@/lib/calculations/apu";
 import { toNumber } from "@/lib/utils";
+
+const MONEY_DECIMALS = 4;
 
 export function calculateApuResourceSubtotal(resource: ApuRecord["resources"][number], performance: number) {
   return calculateApuRows([resource], performance)[0]?.subtotal ?? 0;
@@ -21,7 +24,7 @@ export function calculateBudgetItemApu(apu: ApuRecord): ApuRecord {
 export function calculateBudgetItem(item: BudgetItemRecord) {
   const calculatedApu = item.apu ? calculateBudgetItemApu(item.apu) : item.apu;
   const unitPrice = calculatedApu ? calculatedApu.totalUnitCost : toNumber(item.unitPrice);
-  const partial = round(toNumber(item.quantity) * unitPrice);
+  const partial = roundDecimal(new Decimal(toNumber(item.quantity)).times(unitPrice));
 
   return {
     ...item,
@@ -32,20 +35,23 @@ export function calculateBudgetItem(item: BudgetItemRecord) {
 }
 
 export function calculateBudgetTotals(input: Pick<BudgetRecord, "items" | "igvRate" | "generalExpensesRate" | "utilityRate">): BudgetTotals {
-  const totalDirectCost = round(input.items.reduce((sum, item) => sum + calculateBudgetItem(item).partial, 0));
-  const totalGeneralExpenses = round(totalDirectCost * toNumber(input.generalExpensesRate));
-  const totalUtility = round(totalDirectCost * toNumber(input.utilityRate));
-  const subtotal = round(totalDirectCost + totalGeneralExpenses + totalUtility);
-  const totalTax = round(subtotal * toNumber(input.igvRate));
-  const totalAmount = round(subtotal + totalTax);
+  const totalDirectCost = input.items.reduce(
+    (sum, item) => sum.plus(calculateBudgetItem(item).partial),
+    new Decimal(0),
+  );
+  const totalGeneralExpenses = totalDirectCost.times(toNumber(input.generalExpensesRate));
+  const totalUtility = totalDirectCost.times(toNumber(input.utilityRate));
+  const subtotal = totalDirectCost.plus(totalGeneralExpenses).plus(totalUtility);
+  const totalTax = subtotal.times(toNumber(input.igvRate));
+  const totalAmount = subtotal.plus(totalTax);
 
   return {
-    totalDirectCost,
-    totalGeneralExpenses,
-    totalUtility,
-    subtotal,
-    totalTax,
-    totalAmount,
+    totalDirectCost: roundDecimal(totalDirectCost),
+    totalGeneralExpenses: roundDecimal(totalGeneralExpenses),
+    totalUtility: roundDecimal(totalUtility),
+    subtotal: roundDecimal(subtotal),
+    totalTax: roundDecimal(totalTax),
+    totalAmount: roundDecimal(totalAmount),
   };
 }
 
@@ -70,6 +76,6 @@ export function calculateBudgetRecord(budget: BudgetRecord): BudgetRecord & { to
   };
 }
 
-function round(value: number) {
-  return Math.round((value + Number.EPSILON) * 10000) / 10000;
+function roundDecimal(value: Decimal.Value) {
+  return new Decimal(value).toDecimalPlaces(MONEY_DECIMALS, Decimal.ROUND_HALF_UP).toNumber();
 }

@@ -39,6 +39,20 @@ vi.mock("@/lib/data/settings", () => ({
   }),
 }));
 
+vi.mock("@/lib/billing/entitlements", () => ({
+  getEffectiveUserLicense: async () => ({
+    availableFeatures: ["exports.basic", "polynomial_formula", "ai.local"],
+    budgetLimit: null,
+    budgetUsage: 0,
+    isInGracePeriod: false,
+    planName: "Pro",
+    planSlug: "pro",
+    projectLimit: null,
+    projectUsage: 0,
+  }),
+  hasFeatureAccess: (license: { availableFeatures: string[] }, feature: string) => license.availableFeatures.includes(feature),
+}));
+
 describe("AIPage", () => {
   it("hydrates active context from copilot links that send selected item and APU data", async () => {
     aiWorkspaceSpy.mockClear();

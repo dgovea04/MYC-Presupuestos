@@ -55,6 +55,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
       { href: "/resources", label: "Catalogo de Insumos", icon: Wrench },
       { href: "/partidas", label: "Catalogo de Partidas", icon: Rows3 },
       { href: "/partidas/generar", label: "Generador de partidas", icon: Sparkles, requiredFeature: "partidas.similarity" },
+      { href: "/templates", label: "Plantillas", icon: BookOpen },
     ],
   },
   {

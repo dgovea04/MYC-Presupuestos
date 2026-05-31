@@ -3,7 +3,7 @@ import { buildDisplayRows, levelTypeLabel } from "@/lib/budget/structure";
 import type { BudgetRecord } from "@/types/budget";
 import type { ReportResponsibleMeta } from "@/types/report-meta";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
-import { buildBudgetCoverSummary, buildDocumentSignatureSummary, type DocumentSignatureProjectMeta } from "@/lib/exports/document-signature";
+import { buildApprovalSecondaryLabel, buildBudgetCoverSummary, buildDocumentSignatureSummary, type DocumentSignatureProjectMeta } from "@/lib/exports/document-signature";
 import { loadReportIdentityAssets, type ReportIdentityAssets } from "@/lib/exports/report-assets";
 
 const MAX_CURRENCY_DECIMALS = 4;
@@ -995,7 +995,7 @@ function drawDocumentSignatureBlock(
     sectionWidth - 24,
     "VO. BO. / APROBACION",
     summary.approverLabel,
-    "Espacio reservado para aprobacion del documento",
+    buildApprovalSecondaryLabel(project),
     null,
   );
 

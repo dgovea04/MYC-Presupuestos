@@ -3,6 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
   assertMetradoRowsArePersistable,
   buildBudgetItemQuantityPatch,
+  buildMetradoRowsForDuplicate,
+  buildMetradoSheetDuplicateName,
   buildMetradoSheetUnit,
   buildMetradoRowCreateData,
   buildMetradoPartidaLinkCreateInput,
@@ -64,6 +66,27 @@ describe("metrado data helpers", () => {
   test("uses the requested sheet unit when creating a custom formula sheet", () => {
     expect(buildMetradoSheetUnit("und", "m3")).toBe("m3");
     expect(buildMetradoSheetUnit("und")).toBe("und");
+  });
+
+  test("builds duplicate sheet names from requested or source names", () => {
+    expect(buildMetradoSheetDuplicateName("Metrado zapatas", "Nueva base")).toBe("Nueva base");
+    expect(buildMetradoSheetDuplicateName("Metrado zapatas")).toBe("Metrado zapatas copia");
+    expect(buildMetradoSheetDuplicateName("   ")).toBe("Metrado copia");
+  });
+
+  test("copies metrado rows for a duplicated sheet without sharing ids or inputs", () => {
+    const source = [
+      row({ id: "row-a", sheetId: "source-sheet", sortOrder: 12 }),
+      row({ id: "row-b", sheetId: "source-sheet", sortOrder: 18, inputs: { largo: 4 } }),
+    ];
+
+    const result = buildMetradoRowsForDuplicate(source, "copy-sheet");
+
+    expect(result.map((entry) => entry.id)).toEqual(["duplicate-row-1", "duplicate-row-2"]);
+    expect(result.map((entry) => entry.sheetId)).toEqual(["copy-sheet", "copy-sheet"]);
+    expect(result.map((entry) => entry.sortOrder)).toEqual([1, 2]);
+    expect(result[0]?.inputs).toEqual(source[0]?.inputs);
+    expect(result[0]?.inputs).not.toBe(source[0]?.inputs);
   });
 
   test("builds row create data without persisting caller-provided row ids", () => {

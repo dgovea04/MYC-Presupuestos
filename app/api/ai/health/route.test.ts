@@ -8,9 +8,14 @@ vi.mock("@/lib/ai/runtime", () => ({
   getAiHealth: vi.fn(),
 }));
 
+vi.mock("@/lib/billing/entitlements", () => ({
+  assertFeatureAccess: vi.fn(),
+}));
+
 import { GET } from "@/app/api/ai/health/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { getAiHealth } from "@/lib/ai/runtime";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 describe("GET /api/ai/health", () => {
   it("returns 401 when unauthenticated", async () => {
@@ -24,6 +29,7 @@ describe("GET /api/ai/health", () => {
 
   it("returns Ollama diagnostics with model availability", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(assertFeatureAccess).mockResolvedValue(undefined);
     vi.mocked(getAiHealth).mockResolvedValue({
       status: "degraded",
       ollamaReachable: true,

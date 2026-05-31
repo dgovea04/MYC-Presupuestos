@@ -124,7 +124,7 @@ export function LocalAiSettingsCard() {
         <div className="grid gap-3 md:grid-cols-3">
           <AiInfoCard label="Proveedor" value="Ollama local" detail="http://localhost:11434" />
           <AiInfoCard label="Conexion" value={health?.ollamaReachable ? "Conectado" : "Pendiente"} detail={health ? "Ultima verificacion completada" : "Ejecuta una verificacion"} />
-          <AiInfoCard label="Modelos detectados" value={String(health?.availableModels.length ?? 0)} detail={health?.availableModels.join(", ") || "Sin lectura todavia"} />
+          <AiInfoCard label="Modelos detectados" value={String(health?.availableModels.length ?? 0)} detail={health?.availableModels.join(", ") || "Ejecuta una verificacion"} />
         </div>
 
         <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
@@ -203,7 +203,7 @@ export function LocalAiSettingsCard() {
           </Panel>
         </section>
 
-        <Panel title="Proximas capacidades" description="Base preparada segun el PRD, sin activar dependencias externas todavia.">
+        <Panel title="Capacidades preparadas" description="Hoja de ruta tecnica para extender IA local sin enviar datos a servicios externos.">
           <div className="flex flex-wrap gap-2">
             {FUTURE_CAPABILITIES.map((capability) => (
               <span key={capability} className="rounded-full border border-sky-100 bg-white px-3 py-1 text-xs font-medium text-sky-700">
