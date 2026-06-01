@@ -164,6 +164,14 @@ type PersistedMonomialComponentDraft = {
   coefficientContribution?: string;
 };
 
+type MonomialComponentSnapshotFields = {
+  readonly unifiedIndexCode?: string | null;
+  readonly unifiedIndexName?: string | null;
+  readonly iuFamily?: string | null;
+  readonly participationPercentage?: { toFixed(decimalPlaces?: number): string } | null;
+  readonly coefficientContribution?: { toFixed(decimalPlaces?: number): string } | null;
+};
+
 type ComposedBudgetPolynomialFormulaInput = {
   directCostBreakdown: {
     labor: string;
@@ -941,17 +949,9 @@ export async function savePolynomialFormula(
             sortOrder: monomial.sortOrder,
             components: {
               create: sanitizePolynomialMonomialComponents(
-                preservedComponents.map((component) => ({
-                  budgetItemId: component.budgetItemId ?? undefined,
-                  apuResourceId: component.apuResourceId ?? undefined,
-                  resourceType: component.resourceType ?? undefined,
-                  amount: component.amount.toFixed(4),
-                  unifiedIndexCode: component.unifiedIndexCode ?? undefined,
-                  unifiedIndexName: component.unifiedIndexName ?? undefined,
-                  iuFamily: (component.iuFamily as PolynomialIuFamily | null) ?? undefined,
-                  participationPercentage: component.participationPercentage?.toFixed(6),
-                  coefficientContribution: component.coefficientContribution?.toFixed(6),
-                })),
+                preservedComponents.map((component) =>
+                  buildPreservedMonomialComponentDraft(component),
+                ),
               ).map(buildMonomialComponentCreateData),
             },
           };
@@ -968,6 +968,29 @@ export async function savePolynomialFormula(
   });
 
   return serializePolynomialFormula(formula);
+}
+
+function buildPreservedMonomialComponentDraft(
+  component: {
+    budgetItemId: string | null;
+    apuResourceId: string | null;
+    resourceType: string | null;
+    amount: { toFixed(decimalPlaces?: number): string };
+  },
+): MonomialComponentDraft {
+  const snapshot = component as typeof component & MonomialComponentSnapshotFields;
+
+  return {
+    budgetItemId: component.budgetItemId ?? undefined,
+    apuResourceId: component.apuResourceId ?? undefined,
+    resourceType: component.resourceType ?? undefined,
+    amount: component.amount.toFixed(4),
+    unifiedIndexCode: snapshot.unifiedIndexCode ?? undefined,
+    unifiedIndexName: snapshot.unifiedIndexName ?? undefined,
+    iuFamily: (snapshot.iuFamily as PolynomialIuFamily | null | undefined) ?? undefined,
+    participationPercentage: snapshot.participationPercentage?.toFixed(6),
+    coefficientContribution: snapshot.coefficientContribution?.toFixed(6),
+  };
 }
 
 export async function calculatePolynomialFormulaAdjustment(
