@@ -316,7 +316,11 @@ function chooseMergeTarget(
   source: DraftMonomial,
   drafts: readonly DraftMonomial[],
 ): DraftMonomial | undefined {
-  const candidates = drafts.filter((candidate) => candidate !== source && !candidate.locked);
+  const unlockedCandidates = drafts.filter((candidate) => candidate !== source && !candidate.locked);
+  const candidates =
+    unlockedCandidates.length > 0
+      ? unlockedCandidates
+      : drafts.filter((candidate) => candidate !== source);
   if (candidates.length === 0) return undefined;
 
   const compatibleCandidates = candidates.filter(

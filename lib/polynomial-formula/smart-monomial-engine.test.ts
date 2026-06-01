@@ -128,6 +128,23 @@ describe("createSmartPolynomialMonomialProposal", () => {
     expect(coefficientByKey(above.proposedMonomials).EQUIPMENT).toBe("0.060");
   });
 
+  it("falls back to a locked target when below-threshold equipment has no non-locked merge target", () => {
+    const result = createSmartPolynomialMonomialProposal([
+      item({ id: "labor-1", broadGroup: "LABOR", amount: "960", iuFamily: "LABOR" }),
+      item({ id: "eq-small", broadGroup: "EQUIPMENT", amount: "40", iuFamily: "EQUIPMENT" }),
+    ]);
+
+    expect(result.proposedMonomials.map((monomial) => monomial.key)).toEqual(["LABOR"]);
+    const labor = result.proposedMonomials[0];
+    expect(labor.locked).toBe(true);
+    expect(labor.sourceItemIds).toEqual(["labor-1", "eq-small"]);
+    expect(labor.compositionRows.flatMap((row) => row.sourceItemIds)).toEqual(["labor-1", "eq-small"]);
+    expect(labor.statuses).toEqual(expect.arrayContaining(["MERGED_PRELIMINARILY", "USER_MERGE_CANDIDATE"]));
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining(["BELOW_MINIMUM_COEFFICIENT", "MERGED_PRELIMINARILY"]),
+    );
+  });
+
   it("reduces more than ten candidate groups by merging the smallest non-locked groups", () => {
     const materialFamilies: PolynomialIuFamily[] = [
       "STEEL",
