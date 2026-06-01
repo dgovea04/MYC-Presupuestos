@@ -143,6 +143,33 @@ describe("polynomial formula engine", () => {
     ]);
   });
 
+  it("warns when a real monomial coefficient is 0.000", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.000",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Monomio sin participacion",
+      },
+    ]);
+    const validation = validatePolynomialFormula([
+      {
+        coefficient: "0.000",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Monomio sin participacion",
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "LOW_COEFFICIENT_REVIEW",
+        message: expect.stringContaining("0.000"),
+      }),
+    ]);
+    expect(validation.minimumCoefficientWarnings).toHaveLength(1);
+  });
+
   it("warns when a monomial composition groups multiple IU families or codes", () => {
     const diagnostics = buildPolynomialCompositionDiagnostics([
       {

@@ -197,10 +197,7 @@ export function buildPolynomialCompositionDiagnostics(
     const monomialName = getMonomialLabel(monomial);
     const coefficient = toDecimal(monomial.coefficient);
 
-    if (
-      coefficient.greaterThan(ZERO) &&
-      coefficient.lessThan(MINIMUM_COEFFICIENT_WARNING)
-    ) {
+    if (coefficient.lessThan(MINIMUM_COEFFICIENT_WARNING)) {
       diagnostics.push({
         code: "LOW_COEFFICIENT_REVIEW",
         severity: "WARNING",
