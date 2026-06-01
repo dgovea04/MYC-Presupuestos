@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -14,22 +15,22 @@ import {
 } from "@/lib/db/serializers";
 
 describe("composeBudgetPolynomialFormulaInput", () => {
-  it("builds budget-level direct cost groups from APU resources and adds GU", () => {
+  it("builds smart family monomials from APU resources and adds GU", () => {
     const result = composeBudgetPolynomialFormulaInput({
       id: "budget-1",
       projectId: "project-1",
-      totalGeneralExpenses: 12000,
-      totalUtility: 8000,
+      totalGeneralExpenses: 60,
+      totalUtility: 40,
       items: [
         {
           id: "item-1",
-          quantity: 100,
+          quantity: 1,
           apu: {
             resources: [
               {
                 id: "apu-resource-1",
                 resourceType: "MO",
-                subtotal: 25,
+                subtotal: 200,
                 resource: {
                   category: "LABOR",
                   iu: "47",
@@ -38,16 +39,34 @@ describe("composeBudgetPolynomialFormulaInput", () => {
               {
                 id: "apu-resource-2",
                 resourceType: "Material",
-                subtotal: 280,
+                subtotal: 300,
                 resource: {
                   category: "MATERIAL",
-                  iu: "30",
+                  iu: "3",
                 },
               },
               {
                 id: "apu-resource-3",
+                resourceType: "Material",
+                subtotal: 250,
+                resource: {
+                  category: "MATERIAL",
+                  iu: "21",
+                },
+              },
+              {
+                id: "apu-resource-4",
+                resourceType: "Material",
+                subtotal: 150,
+                resource: {
+                  category: "MATERIAL",
+                  iu: "17",
+                },
+              },
+              {
+                id: "apu-resource-5",
                 resourceType: "Equipo",
-                subtotal: 35,
+                subtotal: 20,
                 resource: {
                   category: "EQUIPMENT",
                   iu: "48",
@@ -58,22 +77,19 @@ describe("composeBudgetPolynomialFormulaInput", () => {
         },
         {
           id: "item-2",
-          quantity: 10,
+          quantity: 1,
           apu: {
             resources: [
               {
-                id: "apu-resource-4",
-                resourceType: "Herramientas",
-                subtotal: 2,
-                resource: {
-                  category: "TOOLS",
-                  iu: "49",
-                },
+                id: "apu-resource-6",
+                resourceType: "Subcontrato",
+                subtotal: 10,
+                resource: undefined,
               },
               {
-                id: "apu-resource-5",
-                resourceType: "Subcontrato",
-                subtotal: 7,
+                id: "apu-resource-7",
+                resourceType: "Miscelaneo",
+                subtotal: 0,
                 resource: undefined,
               },
             ],
@@ -83,36 +99,61 @@ describe("composeBudgetPolynomialFormulaInput", () => {
     });
 
     expect(result.directCostBreakdown).toEqual({
-      labor: "2500.0000",
-      materials: "28000.0000",
-      equipment: "3520.0000",
-      others: "70.0000",
+      labor: "200.0000",
+      materials: "700.0000",
+      equipment: "20.0000",
+      others: "10.0000",
     });
-    expect(result.totalBaseAmount).toBe("54090.0000");
+    expect(result.totalBaseAmount).toBe("1030.0000");
     expect(
-      Object.fromEntries(result.monomials.map((monomial) => [monomial.code, monomial.amount])),
+      Object.fromEntries(result.monomials.map((monomial) => [monomial.costGroupKey, monomial.amount])),
     ).toEqual({
-      MO: "2500.0000",
-      MAT: "28000.0000",
-      EQ: "3520.0000",
-      V: "70.0000",
-      GU: "20000.0000",
+      LABOR: "200.0000",
+      STEEL: "330.0000",
+      CEMENT: "250.0000",
+      MASONRY: "150.0000",
+      GENERAL_EXPENSES_PROFIT: "100.0000",
     });
-    expect(result.monomials.map((monomial) => monomial.coefficient)).toEqual([
-      "0.046",
-      "0.518",
-      "0.065",
-      "0.001",
-      "0.370",
-    ]);
+    expect(result.monomials.map((monomial) => monomial.coefficient)).toEqual(["0.194", "0.320", "0.243", "0.146", "0.097"]);
+    expect(result.monomials.map((monomial) => monomial.costGroupKey)).not.toEqual(
+      expect.arrayContaining(["EQUIPMENT", "OTHERS"]),
+    );
+    expect(
+      result.monomials
+        .reduce((total, monomial) => total.plus(monomial.coefficient), new Decimal(0))
+        .toFixed(3),
+    ).toBe("1.000");
+    expect(
+      result.monomials
+        .reduce((total, monomial) => total.plus(monomial.amount), new Decimal(0))
+        .toFixed(4),
+    ).toBe(result.totalBaseAmount);
     expect(result.componentsByGroup.get("LABOR")).toEqual([
       {
         apuResourceId: "apu-resource-1",
         resourceType: "MO",
-        amount: "2500.0000",
+        amount: "200.0000",
       },
     ]);
     expect(result.componentsByGroup.get("GENERAL_EXPENSES_PROFIT")).toEqual([]);
+    expect(result.componentsByMonomialKey.get("MATERIALS:STEEL")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        apuResourceId: "apu-resource-2",
+        amount: "300.0000",
+        unifiedIndexCode: "3",
+        iuFamily: "STEEL",
+      }),
+      expect.objectContaining({
+        apuResourceId: "apu-resource-5",
+        amount: "20.0000",
+        iuFamily: "EQUIPMENT",
+      }),
+      expect.objectContaining({
+        apuResourceId: "apu-resource-6",
+        amount: "10.0000",
+        iuFamily: "OTHERS",
+      }),
+    ]));
   });
 
   it("keeps monomial coefficients independent when composing separate sub budgets", () => {
@@ -155,7 +196,7 @@ describe("composeBudgetPolynomialFormulaInput", () => {
                 id: "mat-arquitectura",
                 resourceType: "Material",
                 subtotal: 30,
-                resource: { category: "MATERIAL", iu: "30" },
+                resource: { category: "MATERIAL", iu: "21" },
               },
             ],
           },
@@ -170,7 +211,7 @@ describe("composeBudgetPolynomialFormulaInput", () => {
     });
     expect(arquitectura.totalBaseAmount).toBe("200.0000");
     expect(Object.fromEntries(arquitectura.monomials.map((monomial) => [monomial.code, monomial.coefficient]))).toMatchObject({
-      MAT: "0.750",
+      CE: "0.750",
       GU: "0.250",
     });
   });

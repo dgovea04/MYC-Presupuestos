@@ -10,10 +10,19 @@ import {
   calculateAdjustmentAmounts,
   calculateBudgetCostGroups,
   calculateCoefficientK,
-  calculateMonomialCoefficients,
   validatePolynomialFormula,
 } from "@/lib/calculations/polynomial-formula";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
+import {
+  classifyUnifiedIndexForPolynomialFormula,
+  type PolynomialIuFamily,
+} from "@/lib/polynomial-formula/iu-family-classifier";
+import { createSmartPolynomialMonomialProposal } from "@/lib/polynomial-formula/smart-monomial-engine";
+import type {
+  SmartMonomialBroadGroup,
+  SmartMonomialInputItem,
+  SmartMonomialProposal,
+} from "@/lib/polynomial-formula/smart-monomial-types";
 import type { PolynomialFormulaSectionData, PolynomialFormulaSectionsData } from "@/types/budget-sections";
 import type {
   AdjustmentCalculationRecord,
@@ -109,6 +118,8 @@ type FormulaBudgetResourceInput = {
   resource?: {
     category?: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | null;
     iu?: string | null;
+    iuName?: string | null;
+    unifiedIndexName?: string | null;
   };
 };
 
@@ -134,6 +145,11 @@ type MonomialComponentDraft = {
   apuResourceId?: string;
   resourceType?: string;
   amount: string;
+  unifiedIndexCode?: string;
+  unifiedIndexName?: string;
+  iuFamily?: PolynomialIuFamily;
+  participationPercentage?: string;
+  coefficientContribution?: string;
 };
 
 type PersistedMonomialComponentDraft = {
@@ -141,6 +157,11 @@ type PersistedMonomialComponentDraft = {
   apuResourceId: string | null;
   resourceType: string | null;
   amount: string;
+  unifiedIndexCode?: string;
+  unifiedIndexName?: string;
+  iuFamily?: PolynomialIuFamily;
+  participationPercentage?: string;
+  coefficientContribution?: string;
 };
 
 type ComposedBudgetPolynomialFormulaInput = {
@@ -153,6 +174,7 @@ type ComposedBudgetPolynomialFormulaInput = {
   totalBaseAmount: string;
   monomials: PolynomialMonomialInput[];
   componentsByGroup: Map<GeneratedCostGroupKey, MonomialComponentDraft[]>;
+  componentsByMonomialKey: Map<string, MonomialComponentDraft[]>;
 };
 
 type SavePolynomialFormulaInput = {
@@ -243,8 +265,8 @@ function deriveCostGroupKey(
   return "OTHERS";
 }
 
-function createMonomialId(budgetId: string, groupKey: PolynomialCostGroupKey): string {
-  return `${budgetId}-${groupKey.toLowerCase()}`;
+function createMonomialId(budgetId: string, monomialKey: string): string {
+  return `${budgetId}-${monomialKey.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
 
 function buildMonomialPreview(formula: PolynomialFormulaRecord | null) {
@@ -278,6 +300,122 @@ function formatBaseAmount(value: Decimal.Value): string {
   return formatFixed(value, 4);
 }
 
+function resolveUnifiedIndexName(resource: FormulaBudgetResourceInput["resource"]): string | undefined {
+  return resource?.unifiedIndexName?.trim() || resource?.iuName?.trim() || undefined;
+}
+
+function classifySmartIuFamily(input: {
+  broadGroup: SmartMonomialBroadGroup;
+  unifiedIndexCode?: string;
+  unifiedIndexName?: string;
+}): PolynomialIuFamily {
+  if (input.broadGroup === "LABOR") {
+    return "LABOR";
+  }
+
+  if (input.broadGroup === "EQUIPMENT") {
+    return "EQUIPMENT";
+  }
+
+  if (input.broadGroup === "GENERAL_EXPENSES_PROFIT") {
+    return "GENERAL_EXPENSES";
+  }
+
+  if (input.broadGroup === "OTHERS") {
+    return "OTHERS";
+  }
+
+  return classifyUnifiedIndexForPolynomialFormula({
+    code: input.unifiedIndexCode ?? "",
+    name: input.unifiedIndexName ?? "",
+  });
+}
+
+function resolveMaterialFamilyCostGroupKey(family: PolynomialIuFamily): PolynomialCostGroupKey {
+  if (family === "STEEL") {
+    return "STEEL";
+  }
+
+  if (family === "CEMENT") {
+    return "CEMENT";
+  }
+
+  if (family === "MASONRY") {
+    return "MASONRY";
+  }
+
+  if (family === "SANITARY_INSTALLATIONS" || family === "ELECTRICAL_INSTALLATIONS") {
+    return "INSTALLATIONS";
+  }
+
+  return "MATERIALS";
+}
+
+function resolveSmartProposalCostGroupKey(proposal: SmartMonomialProposal): PolynomialCostGroupKey {
+  if (proposal.broadGroup !== "MATERIALS") {
+    return proposal.broadGroup;
+  }
+
+  const family = proposal.key.startsWith("MATERIALS:")
+    ? (proposal.key.slice("MATERIALS:".length) as PolynomialIuFamily)
+    : undefined;
+
+  return family ? resolveMaterialFamilyCostGroupKey(family) : "MATERIALS";
+}
+
+function resolveSmartProposalMetadata(
+  proposal: SmartMonomialProposal,
+): { code: string; name: string; baseIndexCode: string; baseIndexName: string } {
+  const costGroupKey = resolveSmartProposalCostGroupKey(proposal);
+  const baseMetadata = MONOMIAL_METADATA[costGroupKey];
+  const materialFamilyCodeMetadata: Partial<Record<PolynomialIuFamily, { code: string; name: string }>> = {
+    AGGREGATES: { code: "AG", name: "Agregados" },
+    WOOD: { code: "MAD", name: "Madera" },
+    FINISHES: { code: "ACA", name: "Acabados" },
+    SANITARY_INSTALLATIONS: { code: "IS", name: "Instalaciones sanitarias" },
+    ELECTRICAL_INSTALLATIONS: { code: "IE", name: "Instalaciones electricas" },
+  };
+  const family = proposal.key.startsWith("MATERIALS:")
+    ? (proposal.key.slice("MATERIALS:".length) as PolynomialIuFamily)
+    : undefined;
+  const familyMetadata = family ? materialFamilyCodeMetadata[family] : undefined;
+
+  return {
+    code: familyMetadata?.code ?? baseMetadata.code,
+    name: familyMetadata?.name ?? baseMetadata.name,
+    baseIndexCode: proposal.representativeUnifiedIndexCode ?? baseMetadata.baseIndexCode,
+    baseIndexName: proposal.representativeUnifiedIndexName ?? baseMetadata.baseIndexName,
+  };
+}
+
+function buildComponentsForProposal(input: {
+  proposal: SmartMonomialProposal;
+  componentBySmartItemId: Map<string, MonomialComponentDraft>;
+  totalBaseAmount: Decimal;
+}): MonomialComponentDraft[] {
+  return input.proposal.sourceItemIds.flatMap((sourceItemId) => {
+    const component = input.componentBySmartItemId.get(sourceItemId);
+
+    if (!component) {
+      return [];
+    }
+
+    const componentAmount = toDecimal(component.amount);
+
+    return [
+      {
+        ...component,
+        participationPercentage: input.proposal.amount.equals(ZERO)
+          ? formatFixed(ZERO, 6)
+          : formatFixed(componentAmount.dividedBy(input.proposal.amount), 6),
+        coefficientContribution: input.totalBaseAmount.equals(ZERO)
+          ? formatFixed(ZERO, 6)
+          : formatFixed(componentAmount.dividedBy(input.totalBaseAmount), 6),
+      },
+    ];
+  });
+}
+
 export function composeBudgetPolynomialFormulaInput(
   budget: ComposeBudgetPolynomialFormulaBudgetInput,
 ): ComposedBudgetPolynomialFormulaInput {
@@ -288,6 +426,8 @@ export function composeBudgetPolynomialFormulaInput(
     OTHERS: ZERO,
   };
   const componentsByGroup = new Map<GeneratedCostGroupKey, MonomialComponentDraft[]>();
+  const componentBySmartItemId = new Map<string, MonomialComponentDraft>();
+  const smartInputItems: SmartMonomialInputItem[] = [];
 
   for (const groupKey of GROUP_ORDER) {
     componentsByGroup.set(groupKey, []);
@@ -303,6 +443,13 @@ export function composeBudgetPolynomialFormulaInput(
     for (const resource of item.apu.resources) {
       const amount = itemQuantity.times(resource.subtotal);
       const groupKey = deriveCostGroupKey(resource.resourceType, resource.resource?.category);
+      const unifiedIndexCode = resource.resource?.iu?.trim() || undefined;
+      const unifiedIndexName = resolveUnifiedIndexName(resource.resource);
+      const iuFamily = classifySmartIuFamily({
+        broadGroup: groupKey,
+        unifiedIndexCode,
+        unifiedIndexName,
+      });
 
       if (groupKey === "GENERAL_EXPENSES_PROFIT") {
         continue;
@@ -313,6 +460,24 @@ export function composeBudgetPolynomialFormulaInput(
         apuResourceId: resource.id,
         resourceType: resource.resourceType ?? resource.resource?.category ?? undefined,
         amount: formatFixed(amount, 4),
+      });
+      componentBySmartItemId.set(resource.id, {
+        apuResourceId: resource.id,
+        resourceType: resource.resourceType ?? resource.resource?.category ?? undefined,
+        amount: formatFixed(amount, 4),
+        unifiedIndexCode,
+        unifiedIndexName,
+        iuFamily,
+      });
+      smartInputItems.push({
+        id: resource.id,
+        sourceId: resource.id,
+        broadGroup: groupKey,
+        amount,
+        baseAmount: amount,
+        iuFamily,
+        unifiedIndexCode,
+        unifiedIndexName,
       });
     }
   }
@@ -328,18 +493,42 @@ export function composeBudgetPolynomialFormulaInput(
     generalExpenses: formatFixed(budget.totalGeneralExpenses, 4),
     utility: formatFixed(budget.totalUtility, 4),
   });
+  const generalExpensesProfit = toDecimal(budget.totalGeneralExpenses).plus(budget.totalUtility);
 
-  const coefficients = calculateMonomialCoefficients(groupedAmounts.groups);
-  const monomials = coefficients.map((group, index) => {
-    const metadata = MONOMIAL_METADATA[group.key];
+  if (generalExpensesProfit.greaterThan(ZERO)) {
+    smartInputItems.push({
+      id: `${budget.id}-general-expenses-profit`,
+      sourceId: `${budget.id}-general-expenses-profit`,
+      broadGroup: "GENERAL_EXPENSES_PROFIT",
+      amount: generalExpensesProfit,
+      baseAmount: generalExpensesProfit,
+      iuFamily: "GENERAL_EXPENSES",
+    });
+  }
+
+  const smartProposal = createSmartPolynomialMonomialProposal(smartInputItems);
+  const totalBaseAmount = toDecimal(groupedAmounts.totalBaseAmount);
+  const componentsByMonomialKey = new Map<string, MonomialComponentDraft[]>();
+  const monomials = smartProposal.proposedMonomials.map((proposal, index) => {
+    const metadata = resolveSmartProposalMetadata(proposal);
+    const costGroupKey = resolveSmartProposalCostGroupKey(proposal);
+    const id = createMonomialId(budget.id, proposal.key);
+    const components = buildComponentsForProposal({
+      proposal,
+      componentBySmartItemId,
+      totalBaseAmount,
+    });
+
+    componentsByMonomialKey.set(proposal.key, components);
+    componentsByMonomialKey.set(id, components);
 
     return {
-      id: createMonomialId(budget.id, group.key),
+      id,
       code: metadata.code,
       name: metadata.name,
-      costGroupKey: group.key,
-      amount: group.amount,
-      coefficient: group.coefficient,
+      costGroupKey,
+      amount: formatFixed(proposal.amount, 4),
+      coefficient: formatFixed(proposal.coefficient, 3),
       baseIndexCode: metadata.baseIndexCode,
       baseIndexName: metadata.baseIndexName,
       baseIndexValue: "100",
@@ -352,6 +541,7 @@ export function composeBudgetPolynomialFormulaInput(
     totalBaseAmount: groupedAmounts.totalBaseAmount,
     monomials,
     componentsByGroup,
+    componentsByMonomialKey,
   };
 }
 
@@ -372,9 +562,47 @@ export function sanitizePolynomialMonomialComponents(
         apuResourceId,
         resourceType: component.resourceType ?? null,
         amount: component.amount,
+        ...(component.unifiedIndexCode ? { unifiedIndexCode: component.unifiedIndexCode } : {}),
+        ...(component.unifiedIndexName ? { unifiedIndexName: component.unifiedIndexName } : {}),
+        ...(component.iuFamily ? { iuFamily: component.iuFamily } : {}),
+        ...(component.participationPercentage
+          ? { participationPercentage: component.participationPercentage }
+          : {}),
+        ...(component.coefficientContribution
+          ? { coefficientContribution: component.coefficientContribution }
+          : {}),
       },
     ];
   });
+}
+
+function getComposedMonomialComponents(
+  composed: ComposedBudgetPolynomialFormulaInput,
+  monomial: PolynomialMonomialInput,
+): MonomialComponentDraft[] {
+  return (
+    composed.componentsByMonomialKey.get(monomial.id) ??
+    composed.componentsByGroup.get(monomial.costGroupKey as GeneratedCostGroupKey) ??
+    []
+  );
+}
+
+function buildMonomialComponentCreateData(component: PersistedMonomialComponentDraft) {
+  return {
+    budgetItemId: component.budgetItemId,
+    apuResourceId: component.apuResourceId,
+    resourceType: component.resourceType,
+    amount: formatBaseAmount(component.amount),
+    ...(component.unifiedIndexCode ? { unifiedIndexCode: component.unifiedIndexCode } : {}),
+    ...(component.unifiedIndexName ? { unifiedIndexName: component.unifiedIndexName } : {}),
+    ...(component.iuFamily ? { iuFamily: component.iuFamily } : {}),
+    ...(component.participationPercentage
+      ? { participationPercentage: component.participationPercentage }
+      : {}),
+    ...(component.coefficientContribution
+      ? { coefficientContribution: component.coefficientContribution }
+      : {}),
+  };
 }
 
 export async function getBudgetPolynomialFormulaSectionData(
@@ -567,13 +795,8 @@ export async function generatePolynomialFormulaFromBudget(
                 sortOrder: monomial.sortOrder,
                 components: {
                   create: sanitizePolynomialMonomialComponents(
-                    composed.componentsByGroup.get(monomial.costGroupKey as GeneratedCostGroupKey) ?? [],
-                  ).map((component) => ({
-                    budgetItemId: component.budgetItemId,
-                    apuResourceId: component.apuResourceId,
-                    resourceType: component.resourceType,
-                    amount: formatBaseAmount(component.amount),
-                  })),
+                    getComposedMonomialComponents(composed, monomial),
+                  ).map(buildMonomialComponentCreateData),
                 },
               })),
             },
@@ -608,13 +831,8 @@ export async function generatePolynomialFormulaFromBudget(
                 sortOrder: monomial.sortOrder,
                 components: {
                   create: sanitizePolynomialMonomialComponents(
-                    composed.componentsByGroup.get(monomial.costGroupKey as GeneratedCostGroupKey) ?? [],
-                  ).map((component) => ({
-                    budgetItemId: component.budgetItemId,
-                    apuResourceId: component.apuResourceId,
-                    resourceType: component.resourceType,
-                    amount: formatBaseAmount(component.amount),
-                  })),
+                    getComposedMonomialComponents(composed, monomial),
+                  ).map(buildMonomialComponentCreateData),
                 },
               })),
             },
@@ -728,13 +946,13 @@ export async function savePolynomialFormula(
                   apuResourceId: component.apuResourceId ?? undefined,
                   resourceType: component.resourceType ?? undefined,
                   amount: component.amount.toFixed(4),
+                  unifiedIndexCode: component.unifiedIndexCode ?? undefined,
+                  unifiedIndexName: component.unifiedIndexName ?? undefined,
+                  iuFamily: (component.iuFamily as PolynomialIuFamily | null) ?? undefined,
+                  participationPercentage: component.participationPercentage?.toFixed(6),
+                  coefficientContribution: component.coefficientContribution?.toFixed(6),
                 })),
-              ).map((component) => ({
-                budgetItemId: component.budgetItemId,
-                apuResourceId: component.apuResourceId,
-                resourceType: component.resourceType,
-                amount: component.amount,
-              })),
+              ).map(buildMonomialComponentCreateData),
             },
           };
         }),
