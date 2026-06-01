@@ -242,6 +242,23 @@ describe("polynomial serializers", () => {
           sortOrder: 0,
           createdAt: new Date("2026-01-15T00:00:00.000Z"),
           updatedAt: new Date("2026-01-16T00:00:00.000Z"),
+          components: [
+            {
+              id: "component-1",
+              monomialId: "monomial-1",
+              budgetItemId: null,
+              apuResourceId: "apu-resource-1",
+              resourceType: "MO",
+              amount: new Prisma.Decimal("2500.00"),
+              unifiedIndexCode: "47",
+              unifiedIndexName: "MANO DE OBRA",
+              iuFamily: "LABOR",
+              participationPercentage: new Prisma.Decimal("1.000000"),
+              coefficientContribution: new Prisma.Decimal("0.046000"),
+              createdAt: new Date("2026-01-15T00:00:00.000Z"),
+              updatedAt: new Date("2026-01-16T00:00:00.000Z"),
+            },
+          ],
         },
       ],
     });
@@ -302,6 +319,23 @@ describe("polynomial serializers", () => {
 
     expect(formula.totalBaseAmount).toBe("54090.0000");
     expect(formula.monomials[0]?.baseIndexValue).toBe("100");
+    expect(formula.monomials[0]?.composition).toEqual([
+      {
+        id: "component-1",
+        monomialId: "monomial-1",
+        budgetItemId: undefined,
+        apuResourceId: "apu-resource-1",
+        resourceType: "MO",
+        amount: "2500.00",
+        unifiedIndexCode: "47",
+        unifiedIndexName: "MANO DE OBRA",
+        iuFamily: "LABOR",
+        participationPercentage: "1",
+        coefficientContribution: "0.046",
+        createdAt: "2026-01-15T00:00:00.000Z",
+        updatedAt: "2026-01-16T00:00:00.000Z",
+      },
+    ]);
     expect(valuation.amount).toBe("100000.00");
     expect(index.value).toBe("108");
     expect(index.geographicArea).toBe("LIMA");

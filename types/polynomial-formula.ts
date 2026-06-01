@@ -17,6 +17,22 @@ export type BudgetCostGroupRecord = {
   label?: string;
 };
 
+export type PolynomialMonomialCompositionRecord = {
+  id: string;
+  monomialId?: string;
+  budgetItemId?: string;
+  apuResourceId?: string;
+  resourceType?: string;
+  amount: string;
+  unifiedIndexCode?: string;
+  unifiedIndexName?: string;
+  iuFamily?: string;
+  participationPercentage?: string;
+  coefficientContribution?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type PolynomialMonomialRecord = {
   id: string;
   formulaId?: string;
@@ -32,6 +48,7 @@ export type PolynomialMonomialRecord = {
   adjustmentIndexName?: string | null;
   adjustmentIndexValue?: string | null;
   sortOrder: number;
+  composition: PolynomialMonomialCompositionRecord[];
   createdAt?: string;
   updatedAt?: string;
 };

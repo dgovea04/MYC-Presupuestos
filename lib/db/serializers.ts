@@ -5,6 +5,7 @@ import type {
   AdjustmentCalculationRecord,
   AdjustmentCalculationTermRecord,
   PolynomialFormulaRecord,
+  PolynomialMonomialCompositionRecord,
   PolynomialMonomialRecord,
   UnifiedIndexRecord,
   ValuationRecord,
@@ -269,6 +270,44 @@ export function serializeCatalogPartida(partida: {
   };
 }
 
+export function serializePolynomialMonomialComposition(component: {
+  id: string;
+  monomialId: string;
+  budgetItemId: string | null;
+  apuResourceId: string | null;
+  resourceType: string | null;
+  amount: Prisma.Decimal;
+  unifiedIndexCode?: string | null;
+  unifiedIndexName?: string | null;
+  iuFamily?: string | null;
+  participationPercentage?: Prisma.Decimal | null;
+  coefficientContribution?: Prisma.Decimal | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}): PolynomialMonomialCompositionRecord {
+  return {
+    id: component.id,
+    monomialId: component.monomialId,
+    budgetItemId: component.budgetItemId ?? undefined,
+    apuResourceId: component.apuResourceId ?? undefined,
+    resourceType: component.resourceType ?? undefined,
+    amount: decimalToFixedString(component.amount, 2),
+    unifiedIndexCode: component.unifiedIndexCode ?? undefined,
+    unifiedIndexName: component.unifiedIndexName ?? undefined,
+    iuFamily: component.iuFamily ?? undefined,
+    participationPercentage:
+      component.participationPercentage == null
+        ? undefined
+        : decimalToString(component.participationPercentage),
+    coefficientContribution:
+      component.coefficientContribution == null
+        ? undefined
+        : decimalToString(component.coefficientContribution),
+    createdAt: component.createdAt?.toISOString(),
+    updatedAt: component.updatedAt?.toISOString(),
+  };
+}
+
 export function serializePolynomialMonomial(monomial: {
   id: string;
   formulaId: string;
@@ -295,6 +334,7 @@ export function serializePolynomialMonomial(monomial: {
   sortOrder: number;
   createdAt?: Date;
   updatedAt?: Date;
+  components?: Array<Parameters<typeof serializePolynomialMonomialComposition>[0]>;
 }): PolynomialMonomialRecord {
   return {
     id: monomial.id,
@@ -311,6 +351,7 @@ export function serializePolynomialMonomial(monomial: {
     adjustmentIndexName: monomial.adjustmentIndexName,
     adjustmentIndexValue: decimalToString(monomial.adjustmentIndexValue),
     sortOrder: monomial.sortOrder,
+    composition: monomial.components?.map(serializePolynomialMonomialComposition) ?? [],
     createdAt: monomial.createdAt?.toISOString(),
     updatedAt: monomial.updatedAt?.toISOString(),
   };
