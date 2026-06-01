@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildMonomialComponentCreateData,
   composeBudgetPolynomialFormulaInput,
   sanitizePolynomialMonomialComponents,
 } from "@/lib/data/polynomial-formulas";
@@ -43,6 +44,7 @@ describe("composeBudgetPolynomialFormulaInput", () => {
                 resource: {
                   category: "MATERIAL",
                   iu: "3",
+                  unifiedIndexName: "ACERO CORRUGADO",
                 },
               },
               {
@@ -141,17 +143,24 @@ describe("composeBudgetPolynomialFormulaInput", () => {
         apuResourceId: "apu-resource-2",
         amount: "300.0000",
         unifiedIndexCode: "3",
+        unifiedIndexName: "ACERO CORRUGADO",
         iuFamily: "STEEL",
+        participationPercentage: "0.909091",
+        coefficientContribution: "0.291262",
       }),
       expect.objectContaining({
         apuResourceId: "apu-resource-5",
         amount: "20.0000",
         iuFamily: "EQUIPMENT",
+        participationPercentage: "0.060606",
+        coefficientContribution: "0.019417",
       }),
       expect.objectContaining({
         apuResourceId: "apu-resource-6",
         amount: "10.0000",
         iuFamily: "OTHERS",
+        participationPercentage: "0.030303",
+        coefficientContribution: "0.009709",
       }),
     ]));
   });
@@ -218,7 +227,7 @@ describe("composeBudgetPolynomialFormulaInput", () => {
 });
 
 describe("sanitizePolynomialMonomialComponents", () => {
-  it("keeps one persisted source reference per component and skips summary-only rows", () => {
+  it("keeps one persisted source reference, preserves snapshot fields, and skips summary-only rows", () => {
     expect(
       sanitizePolynomialMonomialComponents([
         {
@@ -226,6 +235,11 @@ describe("sanitizePolynomialMonomialComponents", () => {
           apuResourceId: "apu-resource-1",
           resourceType: "MO",
           amount: "2500.0000",
+          unifiedIndexCode: "47",
+          unifiedIndexName: "MANO DE OBRA",
+          iuFamily: "LABOR",
+          participationPercentage: "1.000000",
+          coefficientContribution: "0.046000",
         },
         {
           budgetItemId: "item-2",
@@ -243,6 +257,11 @@ describe("sanitizePolynomialMonomialComponents", () => {
         budgetItemId: null,
         resourceType: "MO",
         amount: "2500.0000",
+        unifiedIndexCode: "47",
+        unifiedIndexName: "MANO DE OBRA",
+        iuFamily: "LABOR",
+        participationPercentage: "1.000000",
+        coefficientContribution: "0.046000",
       },
       {
         apuResourceId: null,
@@ -251,6 +270,32 @@ describe("sanitizePolynomialMonomialComponents", () => {
         amount: "15.0000",
       },
     ]);
+  });
+
+  it("builds component create data with persisted snapshot fields", () => {
+    expect(
+      buildMonomialComponentCreateData({
+        budgetItemId: null,
+        apuResourceId: "apu-resource-1",
+        resourceType: "MO",
+        amount: "2500.123456",
+        unifiedIndexCode: "47",
+        unifiedIndexName: "MANO DE OBRA",
+        iuFamily: "LABOR",
+        participationPercentage: "1.000000",
+        coefficientContribution: "0.046000",
+      }),
+    ).toEqual({
+      budgetItemId: null,
+      apuResourceId: "apu-resource-1",
+      resourceType: "MO",
+      amount: "2500.1235",
+      unifiedIndexCode: "47",
+      unifiedIndexName: "MANO DE OBRA",
+      iuFamily: "LABOR",
+      participationPercentage: "1.000000",
+      coefficientContribution: "0.046000",
+    });
   });
 });
 
@@ -370,8 +415,6 @@ describe("polynomial serializers", () => {
           ratio: new Prisma.Decimal("1.080000"),
           partial: new Prisma.Decimal("0.049680"),
           sortOrder: 0,
-          createdAt: new Date("2026-02-01T00:00:00.000Z"),
-          updatedAt: new Date("2026-02-01T00:00:00.000Z"),
         },
       ],
     });

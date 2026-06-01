@@ -595,7 +595,7 @@ function getComposedMonomialComponents(
   );
 }
 
-function buildMonomialComponentCreateData(component: PersistedMonomialComponentDraft) {
+export function buildMonomialComponentCreateData(component: PersistedMonomialComponentDraft) {
   return {
     budgetItemId: component.budgetItemId,
     apuResourceId: component.apuResourceId,
