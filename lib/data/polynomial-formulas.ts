@@ -659,6 +659,13 @@ export async function getBudgetPolynomialFormulaSectionData(
         orderBy: {
           sortOrder: "asc",
         },
+        include: {
+          components: {
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+        },
       },
     },
   });
@@ -814,6 +821,13 @@ export async function generatePolynomialFormulaFromBudget(
               orderBy: {
                 sortOrder: "asc",
               },
+              include: {
+                components: {
+                  orderBy: {
+                    createdAt: "asc",
+                  },
+                },
+              },
             },
           },
         })
@@ -849,6 +863,13 @@ export async function generatePolynomialFormulaFromBudget(
             monomials: {
               orderBy: {
                 sortOrder: "asc",
+              },
+              include: {
+                components: {
+                  orderBy: {
+                    createdAt: "asc",
+                  },
+                },
               },
             },
           },
@@ -962,6 +983,13 @@ export async function savePolynomialFormula(
       monomials: {
         orderBy: {
           sortOrder: "asc",
+        },
+        include: {
+          components: {
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
         },
       },
     },
@@ -1268,6 +1296,13 @@ async function getAccessibleBudgetFormula(formulaId: string, userId: string) {
       monomials: {
         orderBy: {
           sortOrder: "asc",
+        },
+        include: {
+          components: {
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
         },
       },
       budget: {

@@ -12,6 +12,7 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const license = await getEffectiveUserLicense({ userId: session.user.id });
   const canUsePolynomialAdjustments = hasFeatureAccess(license, "polynomial_formula.adjustments");
+  const showCompositionDetail = process.env.NODE_ENV !== "production";
 
   const sectionsData = await getBudgetPolynomialFormulaSectionsData(id, session.user.id);
   const sectionAdjustments = await Promise.all(
@@ -54,6 +55,7 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
             section={section}
             adjustments={adjustmentsByBudgetId.get(section.budgetId) ?? []}
             canUsePolynomialAdjustments={canUsePolynomialAdjustments}
+            showCompositionDetail={showCompositionDetail}
           />
         ))}
       </div>

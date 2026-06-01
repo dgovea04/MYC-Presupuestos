@@ -5,6 +5,7 @@ import { RefreshCw, Save } from "lucide-react";
 
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
+import { PolynomialCompositionDetail } from "@/components/budget/polynomial-composition-detail";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-math";
 import { PolynomialKCalculator } from "@/components/budget/polynomial-k-calculator";
@@ -133,10 +134,12 @@ export function PolynomialFormulaEditor({
   section,
   adjustments,
   canUsePolynomialAdjustments,
+  showCompositionDetail = false,
 }: {
   section: PolynomialFormulaSectionData;
   adjustments: AdjustmentCalculationRecord[];
   canUsePolynomialAdjustments: boolean;
+  showCompositionDetail?: boolean;
 }) {
   const { dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
@@ -675,6 +678,9 @@ export function PolynomialFormulaEditor({
             baseIndicesLoading={baseIndicesLoading}
             onChangeMonomial={updateMonomial}
           />
+          {showCompositionDetail ? (
+            <PolynomialCompositionDetail monomials={formula.monomials} />
+          ) : null}
           {canUsePolynomialAdjustments ? (
             <>
               <PolynomialKCalculator
