@@ -19,7 +19,11 @@ import { Input } from "@/components/ui/input";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
-import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
+import {
+  calculateAdjustmentAmounts,
+  mergePolynomialMonomials,
+  validatePolynomialFormula,
+} from "@/lib/calculations/polynomial-formula";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
@@ -65,7 +69,10 @@ function cloneFormula(formula: PolynomialFormulaRecord | null): PolynomialFormul
 
   return {
     ...formula,
-    monomials: formula.monomials.map((monomial) => ({ ...monomial })),
+    monomials: formula.monomials.map((monomial) => ({
+      ...monomial,
+      composition: monomial.composition.map((row) => ({ ...row })),
+    })),
   };
 }
 
@@ -105,6 +112,18 @@ function getFormulaSavePayload(formula: PolynomialFormulaRecord) {
       adjustmentIndexName: monomial.adjustmentIndexName ?? null,
       adjustmentIndexValue: monomial.adjustmentIndexValue ?? null,
       sortOrder: monomial.sortOrder,
+      composition: monomial.composition.map((row) => ({
+        id: row.id,
+        budgetItemId: row.budgetItemId ?? null,
+        apuResourceId: row.apuResourceId ?? null,
+        resourceType: row.resourceType ?? null,
+        amount: row.amount,
+        unifiedIndexCode: row.unifiedIndexCode ?? null,
+        unifiedIndexName: row.unifiedIndexName ?? null,
+        iuFamily: row.iuFamily ?? null,
+        participationPercentage: row.participationPercentage ?? null,
+        coefficientContribution: row.coefficientContribution ?? null,
+      })),
     })),
   };
 }
@@ -509,6 +528,27 @@ export function PolynomialFormulaEditor({
     });
   }
 
+  function mergeMonomials(targetMonomialId: string, sourceMonomialIds: string[]) {
+    setFormula((current) => {
+      if (!current) return current;
+
+      const next = {
+        ...current,
+        monomials: mergePolynomialMonomials({
+          monomials: current.monomials,
+          targetMonomialId,
+          sourceMonomialIds,
+        }),
+      };
+
+      setSummary(createFormulaSummary(next));
+      setKPreview(null);
+      setKPreviewError("");
+      setFeedback("Monomios juntados. Revisa el indice base del destino.");
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-5">
       {!formula ? (
@@ -686,6 +726,7 @@ export function PolynomialFormulaEditor({
             baseIndexOptions={baseIndexOptions}
             baseIndicesLoading={baseIndicesLoading}
             onChangeMonomial={updateMonomial}
+            onMergeMonomials={mergeMonomials}
           />
           {showCompositionDetail && DynamicPolynomialCompositionDetail ? (
             <DynamicPolynomialCompositionDetail monomials={formula.monomials} />

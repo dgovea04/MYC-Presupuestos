@@ -14,6 +14,7 @@ import { POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS } from "@/lib/polynomial-formu
 import type {
   PolynomialCompositionDiagnostic,
   PolynomialFormulaValidationResult,
+  PolynomialMonomialRecord,
 } from "@/types/polynomial-formula";
 
 const COEFFICIENT_DECIMALS = 3;
@@ -185,6 +186,94 @@ export function calculateMonomialCoefficients(
       unitsByOriginalIndex.get(index)?.dividedBy(COEFFICIENT_SCALE) ?? ZERO,
       COEFFICIENT_DECIMALS,
     ),
+  }));
+}
+
+export function mergePolynomialMonomials({
+  monomials,
+  targetMonomialId,
+  sourceMonomialIds,
+}: {
+  monomials: PolynomialMonomialRecord[];
+  targetMonomialId: string;
+  sourceMonomialIds: string[];
+}): PolynomialMonomialRecord[] {
+  const sourceIdSet = new Set(sourceMonomialIds);
+
+  if (sourceIdSet.size === 0) {
+    throw new Error("Selecciona al menos un monomio origen para juntar.");
+  }
+
+  if (sourceIdSet.has(targetMonomialId)) {
+    throw new Error("El monomio destino no puede juntarse consigo mismo.");
+  }
+
+  if (sourceIdSet.size !== sourceMonomialIds.length) {
+    throw new Error("La seleccion contiene monomios origen duplicados.");
+  }
+
+  const target = monomials.find((monomial) => monomial.id === targetMonomialId);
+
+  if (!target) {
+    throw new Error("Selecciona un monomio destino valido.");
+  }
+
+  const sources = sourceMonomialIds.map((sourceId) => {
+    const source = monomials.find((monomial) => monomial.id === sourceId);
+
+    if (!source) {
+      throw new Error("Selecciona monomios origen validos.");
+    }
+
+    return source;
+  });
+  const mergedAmount = [target, ...sources].reduce(
+    (total, monomial) => total.plus(monomial.amount),
+    ZERO,
+  );
+  const remainingBeforeCoefficientAllocation = monomials
+    .filter((monomial) => !sourceIdSet.has(monomial.id))
+    .map((monomial) =>
+      monomial.id === target.id
+        ? {
+            ...monomial,
+            amount: formatFixed(mergedAmount, GROUP_AMOUNT_DECIMALS),
+            composition: [monomial, ...sources].flatMap((mergedMonomial) =>
+              mergedMonomial.composition.map((row) => ({
+                ...row,
+                monomialId: target.id,
+                participationPercentage: mergedAmount.equals(ZERO)
+                  ? formatFixed(ZERO, 6)
+                  : formatFixed(toDecimal(row.amount).dividedBy(mergedAmount), 6),
+              })),
+            ),
+          }
+        : {
+            ...monomial,
+            composition: monomial.composition.map((row) => ({ ...row })),
+          },
+    );
+  const totalAmount = remainingBeforeCoefficientAllocation.reduce(
+    (total, monomial) => total.plus(monomial.amount),
+    ZERO,
+  );
+  const coefficientAllocations = calculateMonomialCoefficients(
+    remainingBeforeCoefficientAllocation.map((monomial) => ({
+      key: monomial.costGroupKey,
+      amount: monomial.amount,
+    })),
+  );
+
+  return remainingBeforeCoefficientAllocation.map((monomial, index) => ({
+    ...monomial,
+    coefficient: coefficientAllocations[index]?.coefficient ?? roundCoefficient("0"),
+    sortOrder: index,
+    composition: monomial.composition.map((row) => ({
+      ...row,
+      coefficientContribution: totalAmount.equals(ZERO)
+        ? formatFixed(ZERO, 6)
+        : formatFixed(toDecimal(row.amount).dividedBy(totalAmount), 6),
+    })),
   }));
 }
 

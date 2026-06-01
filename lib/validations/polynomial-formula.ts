@@ -37,6 +37,25 @@ function createDecimalStringSchema(options: {
 
 const positiveDecimalStringSchema = (fieldName: string) =>
   createDecimalStringSchema({ allowZero: false, fieldName });
+const nonNegativeDecimalStringSchema = (fieldName: string) =>
+  createDecimalStringSchema({ allowZero: true, fieldName });
+
+const polynomialMonomialCompositionInputSchema = z.object({
+  id: z.string().trim().optional(),
+  budgetItemId: z.string().trim().nullable().optional(),
+  apuResourceId: z.string().trim().nullable().optional(),
+  resourceType: z.string().trim().nullable().optional(),
+  amount: positiveDecimalStringSchema("El monto de composicion"),
+  unifiedIndexCode: z.string().trim().nullable().optional(),
+  unifiedIndexName: z.string().trim().nullable().optional(),
+  iuFamily: z.string().trim().nullable().optional(),
+  participationPercentage: nonNegativeDecimalStringSchema("La participacion")
+    .nullable()
+    .optional(),
+  coefficientContribution: nonNegativeDecimalStringSchema("El aporte al coeficiente")
+    .nullable()
+    .optional(),
+});
 
 export const polynomialMonomialInputSchema = z.object({
   id: nonEmptyStringSchema,
@@ -54,6 +73,7 @@ export const polynomialMonomialInputSchema = z.object({
     .nullable()
     .optional(),
   sortOrder: z.coerce.number().int().min(0),
+  composition: z.array(polynomialMonomialCompositionInputSchema).optional(),
 });
 
 export const polynomialFormulaSaveSchema = z.object({

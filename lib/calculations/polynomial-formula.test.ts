@@ -1,12 +1,17 @@
 import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
-import type { PolynomialMonomialInput } from "@/types/polynomial-formula";
+import type {
+  PolynomialCostGroupKey,
+  PolynomialMonomialInput,
+  PolynomialMonomialRecord,
+} from "@/types/polynomial-formula";
 import {
   buildPolynomialCompositionDiagnostics,
   calculateAdjustmentAmounts,
   calculateBudgetCostGroups,
   calculateCoefficientK,
   calculateMonomialCoefficients,
+  mergePolynomialMonomials,
   roundCoefficient,
   roundCurrency,
   roundKValue,
@@ -557,6 +562,191 @@ describe("polynomial formula engine", () => {
 
     expect(result.adjustedAmount).toBe("111700.00");
     expect(result.adjustmentAmount).toBe("11700.00");
+  });
+});
+
+function createMergeMonomial(
+  overrides: Partial<PolynomialMonomialRecord> & {
+    id: string;
+    costGroupKey: PolynomialCostGroupKey;
+    amount: string;
+  },
+): PolynomialMonomialRecord {
+  return {
+    id: overrides.id,
+    formulaId: "formula-1",
+    code: overrides.code ?? overrides.id.toUpperCase(),
+    name: overrides.name ?? `Monomio ${overrides.id}`,
+    costGroupKey: overrides.costGroupKey,
+    amount: overrides.amount,
+    coefficient: overrides.coefficient ?? "0.000",
+    baseIndexCode: overrides.baseIndexCode ?? overrides.id.toUpperCase(),
+    baseIndexName: overrides.baseIndexName ?? `Indice ${overrides.id}`,
+    baseIndexValue: overrides.baseIndexValue ?? "100",
+    adjustmentIndexCode: overrides.adjustmentIndexCode ?? null,
+    adjustmentIndexName: overrides.adjustmentIndexName ?? null,
+    adjustmentIndexValue: overrides.adjustmentIndexValue ?? null,
+    sortOrder: overrides.sortOrder ?? 0,
+    composition: overrides.composition ?? [
+      {
+        id: `${overrides.id}-component`,
+        monomialId: overrides.id,
+        apuResourceId: `${overrides.id}-resource`,
+        resourceType: "MATERIAL",
+        amount: overrides.amount,
+        unifiedIndexCode: overrides.baseIndexCode ?? overrides.id.toUpperCase(),
+        unifiedIndexName: overrides.baseIndexName ?? `Indice ${overrides.id}`,
+        iuFamily: overrides.costGroupKey,
+        participationPercentage: "1.000000",
+        coefficientContribution: overrides.coefficient ?? "0.000000",
+      },
+    ],
+  };
+}
+
+describe("manual polynomial monomial merge", () => {
+  it("merges two monomials, sums amount, and recalculates coefficients to 1.000", () => {
+    const result = mergePolynomialMonomials({
+      monomials: [
+        createMergeMonomial({
+          id: "labor",
+          code: "MO",
+          name: "Mano de obra",
+          costGroupKey: "LABOR",
+          amount: "200.0000",
+          coefficient: "0.200",
+          baseIndexCode: "MO",
+          sortOrder: 0,
+        }),
+        createMergeMonomial({
+          id: "steel",
+          code: "AC",
+          name: "Acero",
+          costGroupKey: "STEEL",
+          amount: "300.0000",
+          coefficient: "0.300",
+          sortOrder: 1,
+        }),
+        createMergeMonomial({
+          id: "equipment",
+          code: "EQ",
+          name: "Equipos",
+          costGroupKey: "EQUIPMENT",
+          amount: "500.0000",
+          coefficient: "0.500",
+          sortOrder: 2,
+        }),
+      ],
+      targetMonomialId: "labor",
+      sourceMonomialIds: ["steel"],
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result.map((monomial) => monomial.sortOrder)).toEqual([0, 1]);
+    expect(result.find((monomial) => monomial.id === "labor")).toMatchObject({
+      amount: "500.0000",
+      coefficient: "0.500",
+      baseIndexCode: "MO",
+    });
+
+    const coefficientSum = result.reduce(
+      (total, monomial) => total.plus(monomial.coefficient),
+      new Decimal(0),
+    );
+
+    expect(coefficientSum.toFixed(3)).toBe("1.000");
+  });
+
+  it("preserves source composition rows on the merged target", () => {
+    const result = mergePolynomialMonomials({
+      monomials: [
+        createMergeMonomial({
+          id: "cement",
+          costGroupKey: "CEMENT",
+          amount: "100.0000",
+          coefficient: "0.333",
+          composition: [
+            {
+              id: "cement-component",
+              monomialId: "cement",
+              apuResourceId: "cement-resource",
+              amount: "100.0000",
+              unifiedIndexCode: "21",
+              unifiedIndexName: "Cemento",
+              iuFamily: "CEMENT",
+            },
+          ],
+        }),
+        createMergeMonomial({
+          id: "masonry",
+          costGroupKey: "MASONRY",
+          amount: "200.0000",
+          coefficient: "0.667",
+          composition: [
+            {
+              id: "masonry-component",
+              monomialId: "masonry",
+              apuResourceId: "masonry-resource",
+              amount: "200.0000",
+              unifiedIndexCode: "17",
+              unifiedIndexName: "Ladrillo",
+              iuFamily: "MASONRY",
+            },
+          ],
+        }),
+      ],
+      targetMonomialId: "cement",
+      sourceMonomialIds: ["masonry"],
+    });
+
+    const merged = result[0];
+
+    expect(merged?.composition.map((row) => row.apuResourceId)).toEqual([
+      "cement-resource",
+      "masonry-resource",
+    ]);
+    expect(merged?.composition.map((row) => row.monomialId)).toEqual([
+      "cement",
+      "cement",
+    ]);
+    expect(merged?.composition.map((row) => row.participationPercentage)).toEqual([
+      "0.333333",
+      "0.666667",
+    ]);
+    expect(merged?.composition.map((row) => row.coefficientContribution)).toEqual([
+      "0.333333",
+      "0.666667",
+    ]);
+  });
+
+  it("rejects invalid manual merge selections", () => {
+    const monomials = [
+      createMergeMonomial({
+        id: "materials",
+        costGroupKey: "MATERIALS",
+        amount: "100.0000",
+      }),
+      createMergeMonomial({
+        id: "equipment",
+        costGroupKey: "EQUIPMENT",
+        amount: "200.0000",
+      }),
+    ];
+
+    expect(() =>
+      mergePolynomialMonomials({
+        monomials,
+        targetMonomialId: "materials",
+        sourceMonomialIds: [],
+      }),
+    ).toThrow("Selecciona al menos un monomio origen");
+    expect(() =>
+      mergePolynomialMonomials({
+        monomials,
+        targetMonomialId: "materials",
+        sourceMonomialIds: ["materials"],
+      }),
+    ).toThrow("no puede juntarse consigo mismo");
   });
 });
 

@@ -6,8 +6,8 @@ import { recordActivityEvent } from "@/lib/data/activity-events";
 import {
   generatePolynomialFormulaFromBudget,
   getBudgetPolynomialFormulaSectionData,
-  getPolynomialFormulaReadOptionsForEnvironment,
   savePolynomialFormula,
+  type PolynomialFormulaReadOptions,
 } from "@/lib/data/polynomial-formulas";
 import { polynomialFormulaSaveSchema } from "@/lib/validations/polynomial-formula";
 
@@ -21,7 +21,9 @@ const polynomialFormulaPatchSchema = polynomialFormulaSaveSchema.extend({
   formulaId: z.string().min(1),
 });
 
-const formulaReadOptions = getPolynomialFormulaReadOptionsForEnvironment();
+const formulaReadOptions = {
+  includeCompositionDetail: true,
+} satisfies PolynomialFormulaReadOptions;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
