@@ -988,6 +988,11 @@ model PolynomialMonomialComponent {
   apuResourceId String?
   resourceType String?
   amount       Decimal            @default(0) @db.Decimal(18, 2)
+  unifiedIndexCode            String?
+  unifiedIndexName            String?
+  iuFamily                    String?
+  participationPercentage     Decimal?           @db.Decimal(12, 6)
+  coefficientContribution     Decimal?           @db.Decimal(12, 6)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   monomial     PolynomialMonomial @relation(fields: [monomialId], references: [id], onDelete: Cascade)
@@ -997,6 +1002,7 @@ model PolynomialMonomialComponent {
   @@index([monomialId])
   @@index([budgetItemId])
   @@index([apuResourceId])
+  @@index([unifiedIndexCode])
 }
 
 model UnifiedIndex {
