@@ -161,63 +161,28 @@ describe("polynomial formula engine", () => {
     expect(result.isCoefficientSumValid).toBe(false);
   });
 
-  it("rejects formulas with more than eight monomials", () => {
-    const result = validatePolynomialFormula([
-      {
-        coefficient: "0.125",
+  it("allows ten monomials", () => {
+    const result = validatePolynomialFormula(
+      Array.from({ length: 10 }, (_, index) => ({
+        coefficient: "0.100",
         baseIndexValue: "100",
         adjustmentIndexValue: "100",
-        name: "M1",
-      },
-      {
-        coefficient: "0.125",
+        name: `M${index + 1}`,
+      })),
+    );
+
+    expect(result.hasMaximumTermsValid).toBe(true);
+  });
+
+  it("rejects formulas with more than ten monomials", () => {
+    const result = validatePolynomialFormula(
+      Array.from({ length: 11 }, (_, index) => ({
+        coefficient: index < 10 ? "0.100" : "0.000",
         baseIndexValue: "100",
         adjustmentIndexValue: "100",
-        name: "M2",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M3",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M4",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M5",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M6",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M7",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M8",
-      },
-      {
-        coefficient: "0.000",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M9",
-      },
-    ]);
+        name: `M${index + 1}`,
+      })),
+    );
 
     expect(result.hasMaximumTermsValid).toBe(false);
   });
@@ -504,6 +469,23 @@ describe("polynomial formula validation schemas", () => {
     ).toThrow();
   });
 
+  it("accepts ten monomials in save payloads", () => {
+    expect(
+      polynomialFormulaSaveSchema.parse({
+        name: "FP Vivienda",
+        baseMonth: 1,
+        baseYear: 2026,
+        monomials: Array.from({ length: 10 }, (_, index) => ({
+          ...monomial,
+          id: `m${index + 1}`,
+          code: `M${index + 1}`,
+          name: `Monomio ${index + 1}`,
+          sortOrder: index,
+        })),
+      }).monomials,
+    ).toHaveLength(10);
+  });
+
   it("rejects a base month outside the valid range", () => {
     expect(() =>
       polynomialFormulaSaveSchema.parse({
@@ -528,6 +510,19 @@ describe("polynomial formula validation schemas", () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it("accepts ten monomials in K calculation payloads", () => {
+    expect(
+      polynomialKCalculationSchema.parse({
+        monomials: Array.from({ length: 10 }, (_, index) => ({
+          coefficient: "0.100",
+          baseIndexValue: "100.000",
+          adjustmentIndexValue: "108.000",
+          name: `M${index + 1}`,
+        })),
+      }).monomials,
+    ).toHaveLength(10);
   });
 
   it("accepts a valuation amount with two-decimal money format", () => {

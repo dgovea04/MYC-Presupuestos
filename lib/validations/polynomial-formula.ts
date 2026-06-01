@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
 
+import { POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS } from "@/lib/polynomial-formula/smart-monomial-types";
+
 const polynomialCostGroupKeySchema = z.enum([
   "LABOR",
   "MATERIALS",
@@ -59,7 +61,10 @@ export const polynomialFormulaSaveSchema = z.object({
   baseMonth: monthSchema,
   baseYear: yearSchema,
   status: polynomialFormulaStatusSchema.optional(),
-  monomials: z.array(polynomialMonomialInputSchema).min(1).max(8),
+  monomials: z
+    .array(polynomialMonomialInputSchema)
+    .min(1)
+    .max(POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS),
 });
 
 const polynomialKCalculationMonomialSchema = z.object({
@@ -70,7 +75,10 @@ const polynomialKCalculationMonomialSchema = z.object({
 });
 
 export const polynomialKCalculationSchema = z.object({
-  monomials: z.array(polynomialKCalculationMonomialSchema).min(1).max(8),
+  monomials: z
+    .array(polynomialKCalculationMonomialSchema)
+    .min(1)
+    .max(POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS),
 });
 
 export const valuationInputSchema = z.object({

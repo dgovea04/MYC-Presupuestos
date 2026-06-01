@@ -10,6 +10,7 @@ import type {
   MonomialCoefficientCalculationInput,
   PolynomialValidationMonomialInput,
 } from "@/lib/polynomial-formula/types";
+import { POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS } from "@/lib/polynomial-formula/smart-monomial-types";
 import type { PolynomialFormulaValidationResult } from "@/types/polynomial-formula";
 
 const COEFFICIENT_DECIMALS = 3;
@@ -20,7 +21,6 @@ const K_RAW_DECIMALS = 4;
 const COEFFICIENT_SCALE = new Decimal(10).pow(COEFFICIENT_DECIMALS);
 const COEFFICIENT_SUM_TARGET = new Decimal(1);
 const COEFFICIENT_SUM_TOLERANCE = new Decimal("0.001");
-const MAXIMUM_MONOMIALS = 8;
 const MINIMUM_COEFFICIENT_WARNING = new Decimal("0.05");
 const ZERO = new Decimal(0);
 
@@ -175,7 +175,8 @@ export function validatePolynomialFormula(
     .minus(COEFFICIENT_SUM_TARGET)
     .abs()
     .lessThanOrEqualTo(COEFFICIENT_SUM_TOLERANCE);
-  const hasMaximumTermsValid = monomials.length <= MAXIMUM_MONOMIALS;
+  const hasMaximumTermsValid =
+    monomials.length <= POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS;
 
   const minimumCoefficientWarnings = monomials
     .filter((monomial) => toDecimal(monomial.coefficient).lessThan(MINIMUM_COEFFICIENT_WARNING))
