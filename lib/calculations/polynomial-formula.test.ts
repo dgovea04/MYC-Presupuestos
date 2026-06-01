@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 import type { PolynomialMonomialInput } from "@/types/polynomial-formula";
 import {
+  buildPolynomialCompositionDiagnostics,
   calculateAdjustmentAmounts,
   calculateBudgetCostGroups,
   calculateCoefficientK,
@@ -122,6 +123,109 @@ describe("polynomial formula engine", () => {
     expect(result.isCoefficientSumValid).toBe(true);
     expect(result.hasMaximumTermsValid).toBe(true);
     expect(result.minimumCoefficientWarnings).toHaveLength(1);
+  });
+
+  it("warns when an existing monomial coefficient is below 0.050", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.049",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Varios",
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "LOW_COEFFICIENT_REVIEW",
+        message: expect.stringContaining("0.049"),
+      }),
+    ]);
+  });
+
+  it("warns when a monomial composition groups multiple IU families or codes", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.120",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Materiales agrupados",
+        composition: [
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.070",
+          },
+          {
+            iuFamily: "CEMENT",
+            unifiedIndexCode: "21",
+            coefficientContribution: "0.050",
+          },
+        ],
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "MIXED_IU_GROUPING_REVIEW",
+        message: expect.stringContaining("agrupa"),
+      }),
+    ]);
+  });
+
+  it("does not warn for clean monomial composition", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.120",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Acero",
+        composition: [
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.080",
+          },
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.040",
+          },
+        ],
+      },
+    ]);
+
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("warns when composition contribution coverage differs from the monomial coefficient", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.120",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Acero",
+        composition: [
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.080",
+          },
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.035",
+          },
+        ],
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "COMPOSITION_COVERAGE_REVIEW",
+        message: expect.stringContaining("0.115 vs coeficiente 0.120"),
+      }),
+    ]);
   });
 
   it("rejects coefficient sums outside the 0.001 tolerance", () => {

@@ -123,6 +123,18 @@ export type AdjustmentCalculationRecord = {
   updatedAt?: string;
 };
 
+export type PolynomialCompositionDiagnosticCode =
+  | "LOW_COEFFICIENT_REVIEW"
+  | "MIXED_IU_GROUPING_REVIEW"
+  | "COMPOSITION_COVERAGE_REVIEW";
+
+export type PolynomialCompositionDiagnostic = {
+  code: PolynomialCompositionDiagnosticCode;
+  severity: "WARNING";
+  message: string;
+  monomialName: string;
+};
+
 export type PolynomialFormulaValidationResult = {
   isValid: boolean;
   coefficientSum: string;
@@ -131,4 +143,5 @@ export type PolynomialFormulaValidationResult = {
   minimumCoefficientWarnings: string[];
   missingBaseIndexWarnings: string[];
   missingAdjustmentIndexWarnings: string[];
+  compositionDiagnostics: PolynomialCompositionDiagnostic[];
 };

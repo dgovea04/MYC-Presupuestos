@@ -11,7 +11,10 @@ import type {
   PolynomialValidationMonomialInput,
 } from "@/lib/polynomial-formula/types";
 import { POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS } from "@/lib/polynomial-formula/smart-monomial-types";
-import type { PolynomialFormulaValidationResult } from "@/types/polynomial-formula";
+import type {
+  PolynomialCompositionDiagnostic,
+  PolynomialFormulaValidationResult,
+} from "@/types/polynomial-formula";
 
 const COEFFICIENT_DECIMALS = 3;
 const K_VALUE_DECIMALS = 3;
@@ -22,6 +25,7 @@ const COEFFICIENT_SCALE = new Decimal(10).pow(COEFFICIENT_DECIMALS);
 const COEFFICIENT_SUM_TARGET = new Decimal(1);
 const COEFFICIENT_SUM_TOLERANCE = new Decimal("0.001");
 const MINIMUM_COEFFICIENT_WARNING = new Decimal("0.05");
+const COMPOSITION_COVERAGE_TOLERANCE = new Decimal("0.001");
 const ZERO = new Decimal(0);
 
 function toDecimal(value: string): Decimal {
@@ -40,6 +44,26 @@ function assertPositiveIndex(value: string, label: string, monomialName: string)
 
 function isMissingOrNonPositive(value: string | null | undefined): boolean {
   return value === null || value === undefined || toDecimal(value).lessThanOrEqualTo(ZERO);
+}
+
+function getMonomialLabel(monomial: PolynomialValidationMonomialInput): string {
+  const name = monomial.name?.trim();
+  if (name) return name;
+
+  const code = monomial.code?.trim();
+  if (code) return code;
+
+  return "Monomio";
+}
+
+function uniqueNonEmptyValues(values: Array<string | null | undefined>): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
 }
 
 export function roundCoefficient(value: string): string {
@@ -164,6 +188,86 @@ export function calculateMonomialCoefficients(
   }));
 }
 
+export function buildPolynomialCompositionDiagnostics(
+  monomials: PolynomialValidationMonomialInput[],
+): PolynomialCompositionDiagnostic[] {
+  const diagnostics: PolynomialCompositionDiagnostic[] = [];
+
+  for (const monomial of monomials) {
+    const monomialName = getMonomialLabel(monomial);
+    const coefficient = toDecimal(monomial.coefficient);
+
+    if (
+      coefficient.greaterThan(ZERO) &&
+      coefficient.lessThan(MINIMUM_COEFFICIENT_WARNING)
+    ) {
+      diagnostics.push({
+        code: "LOW_COEFFICIENT_REVIEW",
+        severity: "WARNING",
+        monomialName,
+        message: `${monomialName}: coeficiente ${formatFixed(coefficient, COEFFICIENT_DECIMALS)} menor a 0.050; revisar fusion o agrupacion.`,
+      });
+    }
+
+    const composition = monomial.composition ?? [];
+    if (composition.length === 0) {
+      continue;
+    }
+
+    const iuFamilies = uniqueNonEmptyValues(
+      composition.map((row) => row.iuFamily),
+    );
+    const unifiedIndexCodes = uniqueNonEmptyValues(
+      composition.map((row) => row.unifiedIndexCode),
+    );
+
+    if (iuFamilies.length > 1 || unifiedIndexCodes.length > 1) {
+      const familyCountLabel =
+        iuFamilies.length === 1 ? "1 familia IU" : `${iuFamilies.length} familias IU`;
+      const codeCountLabel =
+        unifiedIndexCodes.length === 1
+          ? "1 codigo IU"
+          : `${unifiedIndexCodes.length} codigos IU`;
+
+      diagnostics.push({
+        code: "MIXED_IU_GROUPING_REVIEW",
+        severity: "WARNING",
+        monomialName,
+        message: `${monomialName}: agrupa ${familyCountLabel} y ${codeCountLabel}; revisar fusion preliminar o agrupacion manual.`,
+      });
+    }
+
+    const contributionRows = composition.filter(
+      (row) => row.coefficientContribution !== null && row.coefficientContribution !== undefined,
+    );
+
+    if (contributionRows.length === 0) {
+      continue;
+    }
+
+    const contributionTotal = contributionRows.reduce(
+      (total, row) => total.plus(row.coefficientContribution ?? ZERO),
+      ZERO,
+    );
+
+    if (
+      contributionTotal
+        .minus(coefficient)
+        .abs()
+        .greaterThan(COMPOSITION_COVERAGE_TOLERANCE)
+    ) {
+      diagnostics.push({
+        code: "COMPOSITION_COVERAGE_REVIEW",
+        severity: "WARNING",
+        monomialName,
+        message: `${monomialName}: aportes de composicion suman ${formatFixed(contributionTotal, COEFFICIENT_DECIMALS)} vs coeficiente ${formatFixed(coefficient, COEFFICIENT_DECIMALS)}; revisar cobertura.`,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
 export function validatePolynomialFormula(
   monomials: PolynomialValidationMonomialInput[],
 ): PolynomialFormulaValidationResult {
@@ -177,13 +281,11 @@ export function validatePolynomialFormula(
     .lessThanOrEqualTo(COEFFICIENT_SUM_TOLERANCE);
   const hasMaximumTermsValid =
     monomials.length <= POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS;
+  const compositionDiagnostics = buildPolynomialCompositionDiagnostics(monomials);
 
-  const minimumCoefficientWarnings = monomials
-    .filter((monomial) => toDecimal(monomial.coefficient).lessThan(MINIMUM_COEFFICIENT_WARNING))
-    .map(
-      (monomial) =>
-        `${monomial.name ?? "Monomial"} coefficient ${monomial.coefficient} is below 0.05`,
-    );
+  const minimumCoefficientWarnings = compositionDiagnostics
+    .filter((diagnostic) => diagnostic.code === "LOW_COEFFICIENT_REVIEW")
+    .map((diagnostic) => diagnostic.message);
 
   const missingBaseIndexWarnings = monomials
     .filter((monomial) => isMissingOrNonPositive(monomial.baseIndexValue))
@@ -208,6 +310,7 @@ export function validatePolynomialFormula(
     minimumCoefficientWarnings,
     missingBaseIndexWarnings,
     missingAdjustmentIndexWarnings,
+    compositionDiagnostics,
   };
 }
 
