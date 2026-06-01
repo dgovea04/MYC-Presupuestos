@@ -4,6 +4,7 @@ import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-conte
 import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import {
   getBudgetPolynomialFormulaSectionsData,
+  getPolynomialFormulaReadOptionsForEnvironment,
   listPolynomialFormulaAdjustments,
 } from "@/lib/data/polynomial-formulas";
 
@@ -12,9 +13,10 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const license = await getEffectiveUserLicense({ userId: session.user.id });
   const canUsePolynomialAdjustments = hasFeatureAccess(license, "polynomial_formula.adjustments");
-  const showCompositionDetail = process.env.NODE_ENV !== "production";
+  const formulaReadOptions = getPolynomialFormulaReadOptionsForEnvironment();
+  const showCompositionDetail = Boolean(formulaReadOptions.includeCompositionDetail);
 
-  const sectionsData = await getBudgetPolynomialFormulaSectionsData(id, session.user.id);
+  const sectionsData = await getBudgetPolynomialFormulaSectionsData(id, session.user.id, formulaReadOptions);
   const sectionAdjustments = await Promise.all(
     sectionsData.sections.map(async (section) => ({
       budgetId: section.budgetId,

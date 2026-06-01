@@ -2,10 +2,10 @@
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { RefreshCw, Save } from "lucide-react";
+import dynamic from "next/dynamic";
 
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
-import { PolynomialCompositionDetail } from "@/components/budget/polynomial-composition-detail";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-math";
 import { PolynomialKCalculator } from "@/components/budget/polynomial-k-calculator";
@@ -23,6 +23,7 @@ import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/cal
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
+import type { PolynomialCompositionDetailProps } from "@/components/budget/polynomial-composition-detail";
 import type {
   AdjustmentCalculationRecord,
   PolynomialFormulaRecord,
@@ -48,6 +49,14 @@ type KPreviewResult = {
 type FormulaStatus = PolynomialFormulaSectionData["summary"]["status"];
 
 const PLACEHOLDER_INDEX_NAME = "Pendiente de asignar";
+const DynamicPolynomialCompositionDetail =
+  process.env.NODE_ENV !== "production"
+    ? dynamic<PolynomialCompositionDetailProps>(() =>
+        import("@/components/budget/polynomial-composition-detail").then(
+          (module) => module.PolynomialCompositionDetail,
+        ),
+      )
+    : null;
 
 function cloneFormula(formula: PolynomialFormulaRecord | null): PolynomialFormulaRecord | null {
   if (!formula) {
@@ -678,8 +687,8 @@ export function PolynomialFormulaEditor({
             baseIndicesLoading={baseIndicesLoading}
             onChangeMonomial={updateMonomial}
           />
-          {showCompositionDetail ? (
-            <PolynomialCompositionDetail monomials={formula.monomials} />
+          {showCompositionDetail && DynamicPolynomialCompositionDetail ? (
+            <DynamicPolynomialCompositionDetail monomials={formula.monomials} />
           ) : null}
           {canUsePolynomialAdjustments ? (
             <>

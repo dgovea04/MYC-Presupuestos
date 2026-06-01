@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMonomialComponentCreateData,
   composeBudgetPolynomialFormulaInput,
+  getPolynomialFormulaReadOptionsForEnvironment,
   sanitizePolynomialMonomialComponents,
 } from "@/lib/data/polynomial-formulas";
 import {
@@ -295,6 +296,20 @@ describe("sanitizePolynomialMonomialComponents", () => {
       iuFamily: "LABOR",
       participationPercentage: "1.000000",
       coefficientContribution: "0.046000",
+    });
+  });
+});
+
+describe("getPolynomialFormulaReadOptionsForEnvironment", () => {
+  it("keeps composition detail disabled for production payloads", () => {
+    expect(getPolynomialFormulaReadOptionsForEnvironment("production")).toEqual({
+      includeCompositionDetail: false,
+    });
+  });
+
+  it("enables composition detail for development payloads", () => {
+    expect(getPolynomialFormulaReadOptionsForEnvironment("development")).toEqual({
+      includeCompositionDetail: true,
     });
   });
 });

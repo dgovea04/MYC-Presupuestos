@@ -11,6 +11,10 @@ import type {
   PolynomialMonomialRecord,
 } from "@/types/polynomial-formula";
 
+export type PolynomialCompositionDetailProps = {
+  monomials: PolynomialMonomialRecord[];
+};
+
 type CompositionDetailRow = {
   id: string;
   monomialCode: string;
@@ -59,42 +63,45 @@ function truncateSourceId(sourceId: string) {
 }
 
 function buildRows(monomials: PolynomialMonomialRecord[]): CompositionDetailRow[] {
-  return monomials.flatMap((monomial) => {
+  const rows: CompositionDetailRow[] = [];
+
+  for (const monomial of monomials) {
     if (monomial.composition.length === 0) {
-      return [
-        {
-          id: `${monomial.id}:empty`,
-          monomialCode: monomial.code,
-          monomialName: monomial.name,
-          monomialCoefficient: monomial.coefficient,
-          sourceIds: [],
-          hasComposition: false,
-        },
-      ];
+      rows.push({
+        id: `${monomial.id}:empty`,
+        monomialCode: monomial.code,
+        monomialName: monomial.name,
+        monomialCoefficient: monomial.coefficient,
+        sourceIds: [],
+        hasComposition: false,
+      });
+      continue;
     }
 
-    return monomial.composition.map((component) => ({
-      id: component.id,
-      monomialCode: monomial.code,
-      monomialName: monomial.name,
-      monomialCoefficient: monomial.coefficient,
-      unifiedIndexCode: component.unifiedIndexCode,
-      unifiedIndexName: component.unifiedIndexName,
-      iuFamily: component.iuFamily,
-      amount: component.amount,
-      participationPercentage: component.participationPercentage,
-      coefficientContribution: component.coefficientContribution,
-      sourceIds: getCompositionSourceIds(component),
-      hasComposition: true,
-    }));
-  });
+    for (const component of monomial.composition) {
+      rows.push({
+        id: component.id,
+        monomialCode: monomial.code,
+        monomialName: monomial.name,
+        monomialCoefficient: monomial.coefficient,
+        unifiedIndexCode: component.unifiedIndexCode,
+        unifiedIndexName: component.unifiedIndexName,
+        iuFamily: component.iuFamily,
+        amount: component.amount,
+        participationPercentage: component.participationPercentage,
+        coefficientContribution: component.coefficientContribution,
+        sourceIds: getCompositionSourceIds(component),
+        hasComposition: true,
+      });
+    }
+  }
+
+  return rows;
 }
 
 export function PolynomialCompositionDetail({
   monomials,
-}: {
-  monomials: PolynomialMonomialRecord[];
-}) {
+}: PolynomialCompositionDetailProps) {
   const { isExcelMode } = useAppViewMode();
   const rows = buildRows(monomials);
   const componentCount = monomials.reduce((total, monomial) => total + monomial.composition.length, 0);

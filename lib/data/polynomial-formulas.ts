@@ -200,6 +200,10 @@ type PolynomialAdjustmentInput = {
   valuationId?: string;
 };
 
+export type PolynomialFormulaReadOptions = {
+  includeCompositionDetail?: boolean;
+};
+
 type FormulaAccessRecord = Awaited<ReturnType<typeof getAccessibleBudgetFormula>>;
 
 function toDecimal(value: string | number | Decimal): Decimal {
@@ -293,6 +297,37 @@ function buildMonomialPreview(formula: PolynomialFormulaRecord | null) {
     label: monomial.name,
     detail: `${monomial.coefficient} sobre base ${monomial.amount}`,
   }));
+}
+
+export function getPolynomialFormulaReadOptionsForEnvironment(
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): PolynomialFormulaReadOptions {
+  return {
+    includeCompositionDetail: nodeEnv !== "production",
+  };
+}
+
+function buildFormulaMonomialsReadArgs(options?: PolynomialFormulaReadOptions) {
+  const baseArgs = {
+    orderBy: {
+      sortOrder: "asc" as const,
+    },
+  };
+
+  if (!options?.includeCompositionDetail) {
+    return baseArgs;
+  }
+
+  return {
+    ...baseArgs,
+    include: {
+      components: {
+        orderBy: {
+          createdAt: "asc" as const,
+        },
+      },
+    },
+  };
 }
 
 function buildSectionSummary(formula: PolynomialFormulaRecord | null) {
@@ -616,6 +651,7 @@ export function buildMonomialComponentCreateData(component: PersistedMonomialCom
 export async function getBudgetPolynomialFormulaSectionData(
   budgetId: string,
   userId: string,
+  options?: PolynomialFormulaReadOptions,
 ): Promise<PolynomialFormulaSectionData> {
   const budget = await prisma.budget.findFirst({
     where: {
@@ -655,18 +691,7 @@ export async function getBudgetPolynomialFormulaSectionData(
       updatedAt: "desc",
     },
     include: {
-      monomials: {
-        orderBy: {
-          sortOrder: "asc",
-        },
-        include: {
-          components: {
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
-        },
-      },
+      monomials: buildFormulaMonomialsReadArgs(options),
     },
   });
 
@@ -694,6 +719,7 @@ export async function getBudgetPolynomialFormulaSectionData(
 export async function getBudgetPolynomialFormulaSectionsData(
   budgetId: string,
   userId: string,
+  options?: PolynomialFormulaReadOptions,
 ): Promise<PolynomialFormulaSectionsData> {
   const budget = await prisma.budget.findFirst({
     where: {
@@ -727,7 +753,7 @@ export async function getBudgetPolynomialFormulaSectionsData(
   }
 
   if (budget.childBudgets.length === 0) {
-    const section = await getBudgetPolynomialFormulaSectionData(budget.id, userId);
+    const section = await getBudgetPolynomialFormulaSectionData(budget.id, userId, options);
     return {
       title: "Formula polinomica",
       notes: section.notes,
@@ -739,7 +765,7 @@ export async function getBudgetPolynomialFormulaSectionsData(
   const orderedChildBudgets = orderSubBudgetsBySpecialty(budget.childBudgets);
   const sections = await Promise.all(
     orderedChildBudgets.map((childBudget) =>
-      getBudgetPolynomialFormulaSectionData(childBudget.id, userId),
+      getBudgetPolynomialFormulaSectionData(childBudget.id, userId, options),
     ),
   );
 
@@ -762,6 +788,7 @@ export async function generatePolynomialFormulaFromBudget(
     baseMonth: number;
     baseYear: number;
   },
+  options?: PolynomialFormulaReadOptions,
 ): Promise<PolynomialFormulaRecord> {
   const budget = await loadBudgetForFormulaGeneration(budgetId, userId);
   const composed = composeBudgetPolynomialFormulaInput({
@@ -817,18 +844,7 @@ export async function generatePolynomialFormulaFromBudget(
             },
           },
           include: {
-            monomials: {
-              orderBy: {
-                sortOrder: "asc",
-              },
-              include: {
-                components: {
-                  orderBy: {
-                    createdAt: "asc",
-                  },
-                },
-              },
-            },
+            monomials: buildFormulaMonomialsReadArgs(options),
           },
         })
       : await tx.polynomialFormula.create({
@@ -860,18 +876,7 @@ export async function generatePolynomialFormulaFromBudget(
             },
           },
           include: {
-            monomials: {
-              orderBy: {
-                sortOrder: "asc",
-              },
-              include: {
-                components: {
-                  orderBy: {
-                    createdAt: "asc",
-                  },
-                },
-              },
-            },
+            monomials: buildFormulaMonomialsReadArgs(options),
           },
         });
 
@@ -885,6 +890,7 @@ export async function savePolynomialFormula(
   formulaId: string,
   userId: string,
   input: SavePolynomialFormulaInput,
+  options?: PolynomialFormulaReadOptions,
 ): Promise<PolynomialFormulaRecord> {
   const accessibleFormula = await getAccessibleBudgetFormula(formulaId, userId);
   const existingFormula = await prisma.polynomialFormula.findFirst({
@@ -980,18 +986,7 @@ export async function savePolynomialFormula(
       },
     },
     include: {
-      monomials: {
-        orderBy: {
-          sortOrder: "asc",
-        },
-        include: {
-          components: {
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
-        },
-      },
+      monomials: buildFormulaMonomialsReadArgs(options),
     },
   });
 
@@ -1296,13 +1291,6 @@ async function getAccessibleBudgetFormula(formulaId: string, userId: string) {
       monomials: {
         orderBy: {
           sortOrder: "asc",
-        },
-        include: {
-          components: {
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
         },
       },
       budget: {
