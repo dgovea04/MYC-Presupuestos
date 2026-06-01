@@ -25,6 +25,25 @@ describe("classifyUnifiedIndexForPolynomialFormula", () => {
     },
   );
 
+  it.each([
+    [{ code: "999", name: "mano de obra directa" }, "LABOR"],
+    [{ code: "999", name: "índice general de precios" }, "GENERAL_EXPENSES"],
+    [{ code: "999", name: "planchas de acero" }, "STEEL"],
+    [{ code: "999", name: "cemento adicionado" }, "CEMENT"],
+    [{ code: "999", name: "arena fina lavada" }, "AGGREGATES"],
+    [{ code: "999", name: "bloque de concreto" }, "MASONRY"],
+    [{ code: "999", name: "madera tornillo" }, "WOOD"],
+    [{ code: "999", name: "cerámica esmaltada" }, "FINISHES"],
+    [{ code: "999", name: "tubería de pvc para desague" }, "SANITARY_INSTALLATIONS"],
+    [{ code: "999", name: "conductores electricos" }, "ELECTRICAL_INSTALLATIONS"],
+    [{ code: "999", name: "máquina mezcladora" }, "EQUIPMENT"],
+  ] satisfies Array<[{ code: string; name: string }, PolynomialIuFamily]>)(
+    "classifies unmapped $0.name by normalized name fallback as $1",
+    (index, expected) => {
+      expect(classifyUnifiedIndexForPolynomialFormula(index)).toBe(expected);
+    },
+  );
+
   it("falls back to OTHERS without mutating the input", () => {
     const index = { code: "999", name: "INSUMO ESPECIAL" };
     expect(classifyUnifiedIndexForPolynomialFormula(index)).toBe("OTHERS");
