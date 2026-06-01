@@ -8,6 +8,7 @@ import {
 import {
   serializeAdjustmentCalculation,
   serializePolynomialFormula,
+  serializePolynomialMonomial,
   serializeUnifiedIndex,
   serializeValuation,
 } from "@/lib/db/serializers";
@@ -214,6 +215,23 @@ describe("sanitizePolynomialMonomialComponents", () => {
 
 describe("polynomial serializers", () => {
   it("serializes formula, valuation, unified index, and adjustment records", () => {
+    const monomialWithoutComponents = serializePolynomialMonomial({
+      id: "monomial-without-components",
+      formulaId: "formula-1",
+      code: "MAT",
+      name: "Materiales",
+      costGroupKey: "MATERIALS",
+      amount: new Prisma.Decimal("1000.00"),
+      coefficient: new Prisma.Decimal("0.123"),
+      baseIndexCode: "30",
+      baseIndexName: "Materiales",
+      baseIndexValue: new Prisma.Decimal("100.000"),
+      adjustmentIndexCode: null,
+      adjustmentIndexName: null,
+      adjustmentIndexValue: null,
+      sortOrder: 1,
+    });
+
     const formula = serializePolynomialFormula({
       id: "formula-1",
       budgetId: "budget-1",
@@ -319,6 +337,7 @@ describe("polynomial serializers", () => {
 
     expect(formula.totalBaseAmount).toBe("54090.0000");
     expect(formula.monomials[0]?.baseIndexValue).toBe("100");
+    expect(monomialWithoutComponents.composition).toEqual([]);
     expect(formula.monomials[0]?.composition).toEqual([
       {
         id: "component-1",

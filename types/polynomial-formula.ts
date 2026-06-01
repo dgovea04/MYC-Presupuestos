@@ -55,7 +55,7 @@ export type PolynomialMonomialRecord = {
 
 export type PolynomialMonomialInput = Omit<
   PolynomialMonomialRecord,
-  "formulaId" | "createdAt" | "updatedAt"
+  "formulaId" | "createdAt" | "updatedAt" | "composition"
 >;
 
 export type PolynomialFormulaRecord = {
