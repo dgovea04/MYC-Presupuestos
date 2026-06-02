@@ -807,6 +807,24 @@ describe("polynomial formula validation schemas", () => {
     ).toHaveLength(10);
   });
 
+  it("allows empty adjustment index values while saving the base formula", () => {
+    const parsed = polynomialFormulaSaveSchema.parse({
+      name: "FP Vivienda",
+      baseMonth: 1,
+      baseYear: 2026,
+      monomials: [
+        {
+          ...monomial,
+          adjustmentIndexCode: "",
+          adjustmentIndexName: "",
+          adjustmentIndexValue: "",
+        },
+      ],
+    });
+
+    expect(parsed.monomials[0].adjustmentIndexValue).toBeNull();
+  });
+
   it("rejects a base month outside the valid range", () => {
     expect(() =>
       polynomialFormulaSaveSchema.parse({

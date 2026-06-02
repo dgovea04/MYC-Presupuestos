@@ -30,7 +30,10 @@ export function ResourcesPageContent({
   const resourcesTableKey = useMemo(
     () =>
       localResources
-        .map((resource) => `${resource.id}:${resource.description}:${resource.category}:${resource.unit}:${resource.unitPrice}`)
+        .map(
+          (resource) =>
+            `${resource.id}:${resource.code}:${resource.description}:${resource.category}:${resource.unit}:${resource.iu ?? ""}:${resource.iuCurrent ?? ""}:${resource.iuCurrentReviewStatus ?? ""}:${resource.unitPrice}`,
+        )
         .join("|"),
     [localResources],
   );

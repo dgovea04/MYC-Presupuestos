@@ -38,7 +38,7 @@ function coefficientByKey(
 }
 
 describe("createSmartPolynomialMonomialProposal", () => {
-  it("keeps labor and general expenses locked while splitting materials by IU family", () => {
+  it("keeps labor and general expenses locked while splitting materials by IU code", () => {
     const result = createSmartPolynomialMonomialProposal([
       item({
         id: "labor-1",
@@ -57,6 +57,14 @@ describe("createSmartPolynomialMonomialProposal", () => {
         unifiedIndexName: "Cemento Portland",
       }),
       item({
+        id: "smooth-steel-1",
+        broadGroup: "MATERIALS",
+        amount: "60",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "2",
+        unifiedIndexName: "Acero liso",
+      }),
+      item({
         id: "steel-1",
         broadGroup: "MATERIALS",
         amount: "250",
@@ -67,7 +75,7 @@ describe("createSmartPolynomialMonomialProposal", () => {
       item({
         id: "gu-1",
         broadGroup: "GENERAL_EXPENSES_PROFIT",
-        amount: "250",
+        amount: "240",
         iuFamily: "GENERAL_EXPENSES",
         unifiedIndexCode: "39",
         unifiedIndexName: "Indice general",
@@ -76,22 +84,62 @@ describe("createSmartPolynomialMonomialProposal", () => {
 
     expect(result.proposedMonomials.map((monomial) => monomial.key)).toEqual([
       "LABOR",
-      "MATERIALS:CEMENT",
-      "MATERIALS:STEEL",
+      "MATERIALS:IU:21",
+      "MATERIALS:IU:2",
+      "MATERIALS:IU:3",
       "GENERAL_EXPENSES_PROFIT",
     ]);
     expect(result.proposedMonomials.filter((monomial) => monomial.locked).map((monomial) => monomial.key)).toEqual([
       "LABOR",
       "GENERAL_EXPENSES_PROFIT",
     ]);
-    expect(result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:CEMENT")?.statuses).toContain(
-      "SPLIT_BY_IU_FAMILY",
+    expect(result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:IU:21")?.statuses).toContain(
+      "SPLIT_BY_IU_CODE",
     );
     expect(coefficientByKey(result.proposedMonomials)).toEqual({
-      LABOR: "0.200",
-      "MATERIALS:CEMENT": "0.300",
-      "MATERIALS:STEEL": "0.250",
-      GENERAL_EXPENSES_PROFIT: "0.250",
+      LABOR: "0.190",
+      "MATERIALS:IU:21": "0.286",
+      "MATERIALS:IU:2": "0.057",
+      "MATERIALS:IU:3": "0.238",
+      GENERAL_EXPENSES_PROFIT: "0.229",
+    });
+  });
+
+  it("normalizes leading-zero IU codes before grouping materials", () => {
+    const result = createSmartPolynomialMonomialProposal([
+      item({
+        id: "steel-1",
+        broadGroup: "MATERIALS",
+        amount: "200",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "3",
+        unifiedIndexName: "Acero corrugado",
+      }),
+      item({
+        id: "steel-2",
+        broadGroup: "MATERIALS",
+        amount: "300",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "03",
+        unifiedIndexName: "Acero corrugado",
+      }),
+      item({
+        id: "smooth-steel-1",
+        broadGroup: "MATERIALS",
+        amount: "500",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "02",
+        unifiedIndexName: "Acero liso",
+      }),
+    ]);
+
+    expect(result.proposedMonomials.map((monomial) => monomial.key)).toEqual([
+      "MATERIALS:IU:3",
+      "MATERIALS:IU:2",
+    ]);
+    expect(coefficientByKey(result.proposedMonomials)).toEqual({
+      "MATERIALS:IU:3": "0.500",
+      "MATERIALS:IU:2": "0.500",
     });
   });
 
@@ -104,7 +152,7 @@ describe("createSmartPolynomialMonomialProposal", () => {
     ]);
 
     expect(result.proposedMonomials.map((monomial) => monomial.key)).not.toContain("OTHERS");
-    const material = result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:CEMENT");
+    const material = result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:FAMILY:CEMENT");
     expect(material?.sourceItemIds).toEqual(["mat-1", "other-small"]);
     expect(material?.statuses).toEqual(expect.arrayContaining(["MERGED_PRELIMINARILY", "USER_MERGE_CANDIDATE"]));
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
@@ -177,6 +225,104 @@ describe("createSmartPolynomialMonomialProposal", () => {
     );
   });
 
+  it("preserves at least eight preliminary monomials so the user can reduce manually to five", () => {
+    const result = createSmartPolynomialMonomialProposal([
+      item({
+        id: "labor-1",
+        broadGroup: "LABOR",
+        amount: "375",
+        iuFamily: "LABOR",
+        unifiedIndexCode: "47",
+        unifiedIndexName: "Mano de obra",
+      }),
+      item({
+        id: "steel-1",
+        broadGroup: "MATERIALS",
+        amount: "300",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "03",
+        unifiedIndexName: "Acero corrugado",
+      }),
+      item({
+        id: "cement-1",
+        broadGroup: "MATERIALS",
+        amount: "88",
+        iuFamily: "CEMENT",
+        unifiedIndexCode: "21",
+        unifiedIndexName: "Cemento Portland",
+      }),
+      item({
+        id: "tool-1",
+        broadGroup: "MATERIALS",
+        amount: "57",
+        iuFamily: "EQUIPMENT",
+        unifiedIndexCode: "37",
+        unifiedIndexName: "Herramienta manual",
+      }),
+      item({
+        id: "sand-1",
+        broadGroup: "MATERIALS",
+        amount: "24",
+        iuFamily: "AGGREGATES",
+        unifiedIndexCode: "04",
+        unifiedIndexName: "Agregado fino",
+      }),
+      item({
+        id: "gravel-1",
+        broadGroup: "MATERIALS",
+        amount: "20",
+        iuFamily: "AGGREGATES",
+        unifiedIndexCode: "05",
+        unifiedIndexName: "Agregado grueso",
+      }),
+      item({
+        id: "wood-1",
+        broadGroup: "MATERIALS",
+        amount: "18",
+        iuFamily: "WOOD",
+        unifiedIndexCode: "43",
+        unifiedIndexName: "Madera",
+      }),
+      item({
+        id: "equipment-1",
+        broadGroup: "EQUIPMENT",
+        amount: "17",
+        iuFamily: "EQUIPMENT",
+        unifiedIndexCode: "48",
+        unifiedIndexName: "Equipo",
+      }),
+      item({
+        id: "gu-1",
+        broadGroup: "GENERAL_EXPENSES_PROFIT",
+        amount: "180",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+        unifiedIndexName: "Indice general",
+      }),
+    ]);
+
+    expect(result.proposedMonomials).toHaveLength(9);
+    expect(result.proposedMonomials.map((monomial) => monomial.key)).toEqual([
+      "LABOR",
+      "MATERIALS:IU:3",
+      "MATERIALS:IU:21",
+      "MATERIALS:IU:37",
+      "MATERIALS:IU:4",
+      "MATERIALS:IU:5",
+      "MATERIALS:IU:43",
+      "EQUIPMENT",
+      "GENERAL_EXPENSES_PROFIT",
+    ]);
+    expect(
+      result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:IU:3")?.sourceItemIds,
+    ).toEqual(["steel-1"]);
+    expect(
+      result.proposedMonomials
+        .filter((monomial) => monomial.coefficient.lessThan(new Decimal("0.050")))
+        .every((monomial) => monomial.statuses.includes("USER_MERGE_CANDIDATE")),
+    ).toBe(true);
+  });
+
   it("returns three-decimal coefficients that sum exactly to 1.000 for nonzero totals", () => {
     const result = createSmartPolynomialMonomialProposal([
       item({ id: "a", broadGroup: "MATERIALS", amount: "1", iuFamily: "STEEL" }),
@@ -224,7 +370,7 @@ describe("createSmartPolynomialMonomialProposal", () => {
       }),
     ]);
 
-    const cementRows = result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:CEMENT")
+    const cementRows = result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:IU:21")
       ?.compositionRows;
 
     expect(cementRows).toEqual([

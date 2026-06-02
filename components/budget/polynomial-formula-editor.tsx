@@ -25,7 +25,7 @@ import {
   validatePolynomialFormula,
 } from "@/lib/calculations/polynomial-formula";
 import { getExportDefinition } from "@/lib/exports/definitions";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
 import type { PolynomialCompositionDetailProps } from "@/components/budget/polynomial-composition-detail";
 import type {
@@ -92,6 +92,19 @@ function createFormulaSummary(formula: PolynomialFormulaRecord | null) {
   } satisfies PolynomialFormulaSectionData["summary"];
 }
 
+function nullableTrimmedValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function nullablePositiveDecimalValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  const numericValue = Number(trimmed);
+  return Number.isFinite(numericValue) && numericValue > 0 ? trimmed : null;
+}
+
 function getFormulaSavePayload(formula: PolynomialFormulaRecord) {
   return {
     formulaId: formula.id,
@@ -108,15 +121,16 @@ function getFormulaSavePayload(formula: PolynomialFormulaRecord) {
       baseIndexCode: monomial.baseIndexCode,
       baseIndexName: monomial.baseIndexName,
       baseIndexValue: monomial.baseIndexValue,
-      adjustmentIndexCode: monomial.adjustmentIndexCode ?? null,
-      adjustmentIndexName: monomial.adjustmentIndexName ?? null,
-      adjustmentIndexValue: monomial.adjustmentIndexValue ?? null,
+      adjustmentIndexCode: nullableTrimmedValue(monomial.adjustmentIndexCode),
+      adjustmentIndexName: nullableTrimmedValue(monomial.adjustmentIndexName),
+      adjustmentIndexValue: nullablePositiveDecimalValue(monomial.adjustmentIndexValue),
       sortOrder: monomial.sortOrder,
       composition: monomial.composition.map((row) => ({
         id: row.id,
         budgetItemId: row.budgetItemId ?? null,
         apuResourceId: row.apuResourceId ?? null,
         resourceType: row.resourceType ?? null,
+        resourceName: row.resourceName ?? null,
         amount: row.amount,
         unifiedIndexCode: row.unifiedIndexCode ?? null,
         unifiedIndexName: row.unifiedIndexName ?? null,
@@ -169,7 +183,7 @@ export function PolynomialFormulaEditor({
   canUsePolynomialAdjustments: boolean;
   showCompositionDetail?: boolean;
 }) {
-  const { dateFormat } = useFormattingSettings();
+  const { currencyDecimals, dateFormat, defaultCurrency } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
   const [formula, setFormula] = useState(() => cloneFormula(section.formula));
   const [summary, setSummary] = useState(() => createFormulaSummary(section.formula));
@@ -661,7 +675,11 @@ export function PolynomialFormulaEditor({
 
               <div className="grid gap-3 md:grid-cols-3">
                 <InfoCard label="Monomios" value={String(summary.monomialCount)} tone="sky" />
-                <InfoCard label="Base acumulada" value={summary.totalBaseAmount} tone="slate" />
+                <InfoCard
+                  label="Base acumulada"
+                  value={formatCurrency(Number(summary.totalBaseAmount), defaultCurrency, currencyDecimals)}
+                  tone="slate"
+                />
                 <InfoCard
                   label="Índices pendientes"
                   value={String(formula.monomials.filter((monomial) => monomial.baseIndexName === PLACEHOLDER_INDEX_NAME).length)}
@@ -725,6 +743,7 @@ export function PolynomialFormulaEditor({
             monomials={formula.monomials}
             baseIndexOptions={baseIndexOptions}
             baseIndicesLoading={baseIndicesLoading}
+            currencyDecimals={currencyDecimals}
             onChangeMonomial={updateMonomial}
             onMergeMonomials={mergeMonomials}
           />

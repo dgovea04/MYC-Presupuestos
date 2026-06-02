@@ -698,6 +698,8 @@ model Resource {
   description  String
   category     ResourceCategory
   iu           String?
+  iuCurrent    String?
+  iuCurrentReviewStatus String?
   subcategory  String?
   unit         String
   unitPrice    Decimal          @default(0) @db.Decimal(18, 4)

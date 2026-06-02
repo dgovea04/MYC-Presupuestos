@@ -39,6 +39,11 @@ const positiveDecimalStringSchema = (fieldName: string) =>
   createDecimalStringSchema({ allowZero: false, fieldName });
 const nonNegativeDecimalStringSchema = (fieldName: string) =>
   createDecimalStringSchema({ allowZero: true, fieldName });
+const optionalPositiveDecimalStringSchema = (fieldName: string) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    positiveDecimalStringSchema(fieldName).nullable().optional(),
+  );
 
 const polynomialMonomialCompositionInputSchema = z.object({
   id: z.string().trim().optional(),
@@ -69,9 +74,7 @@ export const polynomialMonomialInputSchema = z.object({
   baseIndexValue: positiveDecimalStringSchema("El indice base"),
   adjustmentIndexCode: z.string().trim().nullable().optional(),
   adjustmentIndexName: z.string().trim().nullable().optional(),
-  adjustmentIndexValue: positiveDecimalStringSchema("El indice de reajuste")
-    .nullable()
-    .optional(),
+  adjustmentIndexValue: optionalPositiveDecimalStringSchema("El indice de reajuste"),
   sortOrder: z.coerce.number().int().min(0),
   composition: z.array(polynomialMonomialCompositionInputSchema).optional(),
 });

@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import type { PolynomialIuFamily } from "./iu-family-classifier";
 
 export const POLYNOMIAL_FORMULA_DEFAULT_MIN_COEFFICIENT = new Decimal("0.050");
+export const POLYNOMIAL_FORMULA_DEFAULT_MIN_PRELIMINARY_MONOMIALS = 8;
 export const POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS = 10;
 export const POLYNOMIAL_FORMULA_DEFAULT_COEFFICIENT_DECIMALS = 3;
 
@@ -19,6 +20,7 @@ export type SmartMonomialProposalStatus =
   | "BELOW_MINIMUM_COEFFICIENT"
   | "MERGED_PRELIMINARILY"
   | "USER_MERGE_CANDIDATE"
+  | "SPLIT_BY_IU_CODE"
   | "SPLIT_BY_IU_FAMILY"
   | "ZERO_COEFFICIENT";
 
@@ -28,6 +30,7 @@ export type SmartMonomialProposalReason =
   | "BELOW_MINIMUM_COEFFICIENT"
   | "MERGED_PRELIMINARILY"
   | "USER_MERGE_CANDIDATE"
+  | "SPLIT_BY_IU_CODE"
   | "SPLIT_BY_IU_FAMILY"
   | "ZERO_COEFFICIENT";
 
@@ -79,6 +82,7 @@ export type SmartMonomialProposal = {
 
 export type SmartMonomialEngineOptions = {
   readonly minCoefficientThreshold: Decimal;
+  readonly minPreliminaryMonomials: number;
   readonly maxMonomials: number;
   readonly coefficientDecimals: number;
 };

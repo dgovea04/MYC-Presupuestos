@@ -1,10 +1,14 @@
 import Decimal from "decimal.js";
 
-import type { PolynomialIuFamily } from "@/lib/polynomial-formula/iu-family-classifier";
+import {
+  normalizeUnifiedIndexCodeForPolynomialFormula,
+  type PolynomialIuFamily,
+} from "@/lib/polynomial-formula/iu-family-classifier";
 import {
   POLYNOMIAL_FORMULA_DEFAULT_COEFFICIENT_DECIMALS,
   POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS,
   POLYNOMIAL_FORMULA_DEFAULT_MIN_COEFFICIENT,
+  POLYNOMIAL_FORMULA_DEFAULT_MIN_PRELIMINARY_MONOMIALS,
   type SmartMonomialBroadGroup,
   type SmartMonomialBroadGroupSummary,
   type SmartMonomialCompositionRow,
@@ -73,6 +77,8 @@ function normalizeOptions(options?: Partial<SmartMonomialEngineOptions>): Normal
   return {
     minCoefficientThreshold:
       options?.minCoefficientThreshold ?? POLYNOMIAL_FORMULA_DEFAULT_MIN_COEFFICIENT,
+    minPreliminaryMonomials:
+      options?.minPreliminaryMonomials ?? POLYNOMIAL_FORMULA_DEFAULT_MIN_PRELIMINARY_MONOMIALS,
     maxMonomials: options?.maxMonomials ?? POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS,
     coefficientDecimals:
       options?.coefficientDecimals ?? POLYNOMIAL_FORMULA_DEFAULT_COEFFICIENT_DECIMALS,
@@ -127,7 +133,9 @@ function makeDraft(input: {
     key: input.key,
     label: input.label,
     broadGroup: input.broadGroup,
-    representativeUnifiedIndexCode: firstDefined(itemList.map((item) => item.unifiedIndexCode)),
+    representativeUnifiedIndexCode:
+      firstDefined(itemList.map((item) => normalizeUnifiedIndexCodeForPolynomialFormula(item.unifiedIndexCode))) ||
+      undefined,
     representativeUnifiedIndexName: firstDefined(itemList.map((item) => item.unifiedIndexName)),
     amount: amountOf(itemList),
     sourceItemIds: sourceIds(itemList),
@@ -152,21 +160,27 @@ function groupByBroadGroup(
   return grouped;
 }
 
-function groupByFamilyPreservingOrder(
+function groupByMaterialIuPreservingOrder(
   items: readonly SmartMonomialInputItem[],
-): Array<[PolynomialIuFamily, SmartMonomialInputItem[]]> {
-  const grouped = new Map<PolynomialIuFamily, SmartMonomialInputItem[]>();
+): Array<[{ key: string; label: string }, SmartMonomialInputItem[]]> {
+  const grouped = new Map<string, { label: string; items: SmartMonomialInputItem[] }>();
 
   for (const item of items) {
-    const existing = grouped.get(item.iuFamily);
+    const normalizedCode = normalizeUnifiedIndexCodeForPolynomialFormula(item.unifiedIndexCode);
+    const key = normalizedCode ? `IU:${normalizedCode}` : `FAMILY:${item.iuFamily}`;
+    const label = normalizedCode
+      ? `IU ${normalizedCode}${item.unifiedIndexName ? ` - ${item.unifiedIndexName}` : ""}`
+      : iuFamilyLabels[item.iuFamily];
+    const existing = grouped.get(key);
+
     if (existing) {
-      existing.push(item);
+      existing.items.push(item);
     } else {
-      grouped.set(item.iuFamily, [item]);
+      grouped.set(key, { label, items: [item] });
     }
   }
 
-  return [...grouped.entries()];
+  return [...grouped.entries()].map(([key, value]) => [{ key, label: value.label }, value.items]);
 }
 
 function buildInitialDrafts(items: readonly SmartMonomialInputItem[]): DraftMonomial[] {
@@ -188,18 +202,19 @@ function buildInitialDrafts(items: readonly SmartMonomialInputItem[]): DraftMono
     );
   }
 
-  for (const [iuFamily, familyItems] of groupByFamilyPreservingOrder(
+  for (const [materialGroup, familyItems] of groupByMaterialIuPreservingOrder(
     byBroadGroup.get("MATERIALS") ?? [],
   )) {
+    const isSplitByIuCode = materialGroup.key.startsWith("IU:");
     drafts.push(
       makeDraft({
-        key: `MATERIALS:${iuFamily}`,
-        label: `${broadGroupLabels.MATERIALS} - ${iuFamilyLabels[iuFamily]}`,
+        key: `MATERIALS:${materialGroup.key}`,
+        label: `${broadGroupLabels.MATERIALS} - ${materialGroup.label}`,
         broadGroup: "MATERIALS",
         items: familyItems,
         locked: false,
-        statuses: ["SPLIT_BY_IU_FAMILY", "ACCEPTED"],
-        reasons: ["SPLIT_BY_IU_FAMILY", "ACCEPTED"],
+        statuses: [isSplitByIuCode ? "SPLIT_BY_IU_CODE" : "SPLIT_BY_IU_FAMILY", "ACCEPTED"],
+        reasons: [isSplitByIuCode ? "SPLIT_BY_IU_CODE" : "SPLIT_BY_IU_FAMILY", "ACCEPTED"],
       }),
     );
   }
@@ -341,6 +356,8 @@ function mergeBelowMinimumDrafts(
   diagnostics: SmartMonomialDiagnostic[],
   totalAmount: Decimal,
   minCoefficientThreshold: Decimal,
+  minPreliminaryMonomials: number,
+  maxMonomials: number,
 ): DraftMonomial[] {
   const sortedDrafts = [...drafts].sort((left, right) => {
     const amountDifference = left.amount.comparedTo(right.amount);
@@ -350,6 +367,10 @@ function mergeBelowMinimumDrafts(
   });
 
   const remaining = [...drafts];
+  const shouldPreserveManualReductionRoom = drafts.length >= minPreliminaryMonomials;
+  const preservedManualReductionFloor = shouldPreserveManualReductionRoom
+    ? Math.min(drafts.length, maxMonomials)
+    : 0;
 
   for (const draft of sortedDrafts) {
     if (draft.locked || !remaining.includes(draft)) continue;
@@ -364,6 +385,12 @@ function mergeBelowMinimumDrafts(
     addUniqueStatus(draft, "BELOW_MINIMUM_COEFFICIENT");
     addUniqueReason(draft, "BELOW_MINIMUM_COEFFICIENT");
     addBelowMinimumDiagnostic(diagnostics, draft, coefficient, minCoefficientThreshold);
+
+    if (shouldPreserveManualReductionRoom && remaining.length <= preservedManualReductionFloor) {
+      addUniqueStatus(draft, "USER_MERGE_CANDIDATE");
+      addUniqueReason(draft, "USER_MERGE_CANDIDATE");
+      continue;
+    }
 
     const target = chooseMergeTarget(draft, remaining);
     if (!target) continue;
@@ -408,8 +435,9 @@ function buildCompositionRows(
   const grouped = new Map<string, SmartMonomialInputItem[]>();
 
   for (const item of items) {
+    const normalizedCode = normalizeUnifiedIndexCodeForPolynomialFormula(item.unifiedIndexCode);
     const rowKey = [
-      item.unifiedIndexCode ?? "",
+      normalizedCode,
       item.unifiedIndexName ?? "",
       item.iuFamily,
     ].join("|");
@@ -425,7 +453,9 @@ function buildCompositionRows(
     const amount = amountOf(rowItems);
 
     return {
-      unifiedIndexCode: firstDefined(rowItems.map((item) => item.unifiedIndexCode)),
+      unifiedIndexCode:
+        firstDefined(rowItems.map((item) => normalizeUnifiedIndexCodeForPolynomialFormula(item.unifiedIndexCode))) ||
+        undefined,
       unifiedIndexName: firstDefined(rowItems.map((item) => item.unifiedIndexName)),
       iuFamily: rowItems[0].iuFamily,
       amount,
@@ -570,6 +600,8 @@ export function createSmartPolynomialMonomialProposal(
     diagnostics,
     totalAmount,
     normalizedOptions.minCoefficientThreshold,
+    Math.min(normalizedOptions.minPreliminaryMonomials, normalizedOptions.maxMonomials),
+    normalizedOptions.maxMonomials,
   );
   const draftsAfterMaxMerge = mergeToMaxMonomials(
     draftsAfterMinimumMerge,

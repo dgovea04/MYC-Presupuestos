@@ -1,10 +1,15 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
+import Decimal from "decimal.js";
+import { ChevronRight } from "lucide-react";
+
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import {
+  formatPolynomialIuCodeForDisplay,
+  formatPolynomialIuNameForDisplay,
+} from "@/lib/polynomial-formula/monomial-metadata";
 import { cn, formatNumber } from "@/lib/utils";
 import type {
   PolynomialMonomialCompositionRecord,
@@ -17,18 +22,57 @@ export type PolynomialCompositionDetailProps = {
 
 type CompositionDetailRow = {
   id: string;
-  monomialCode: string;
-  monomialName: string;
-  monomialCoefficient: string;
   unifiedIndexCode?: string;
   unifiedIndexName?: string;
+  resourceName?: string;
   iuFamily?: string;
+  initialGroup: InitialMonomialGroupKey;
   amount?: string;
   participationPercentage?: string;
   coefficientContribution?: string;
   sourceIds: string[];
   hasComposition: boolean;
 };
+
+type CompositionDetailGroup = {
+  monomialId: string;
+  monomialCode: string;
+  monomialName: string;
+  monomialCoefficient: string;
+  rows: CompositionDetailRow[];
+  totalAmount: Decimal;
+  totalParticipation: Decimal;
+  totalCoefficientContribution: Decimal;
+};
+
+type InitialMonomialGroupKey =
+  | "LABOR"
+  | "MATERIALS"
+  | "EQUIPMENT"
+  | "OTHERS"
+  | "GENERAL_EXPENSES_PROFIT";
+
+type InitialMonomialSummaryRow = {
+  key: InitialMonomialGroupKey;
+  code: string;
+  name: string;
+  group: string;
+  amount: Decimal;
+  coefficient: Decimal;
+};
+
+const ZERO = new Decimal(0);
+const initialMonomialGroups: Array<{
+  key: InitialMonomialGroupKey;
+  code: string;
+  name: string;
+}> = [
+  { key: "LABOR", code: "MO", name: "Mano de obra" },
+  { key: "MATERIALS", code: "MAT", name: "Materiales" },
+  { key: "EQUIPMENT", code: "EQ", name: "Equipos" },
+  { key: "OTHERS", code: "V", name: "Otros" },
+  { key: "GENERAL_EXPENSES_PROFIT", code: "GU", name: "Gastos generales y utilidad" },
+];
 
 function formatDecimalString(value: string | undefined, decimalPlaces: number) {
   const trimmed = value?.trim();
@@ -50,8 +94,60 @@ function formatPercentage(value: string | undefined) {
   return Number.isFinite(numericValue) ? `${formatNumber(numericValue * 100, 2)}%` : trimmed;
 }
 
+function formatUnifiedIndexLabel(row: CompositionDetailRow) {
+  if (!row.unifiedIndexCode && !row.unifiedIndexName) {
+    return "Sin indice";
+  }
+
+  const displayCode = formatPolynomialIuCodeForDisplay(row.unifiedIndexCode) || row.unifiedIndexCode;
+  const displayName = formatPolynomialIuNameForDisplay(row.unifiedIndexName);
+
+  if (row.unifiedIndexCode && displayName) {
+    return `${displayCode} : ${displayName}`;
+  }
+
+  return displayCode ?? displayName ?? "Sin indice";
+}
+
+function formatMonomialGroupName(monomial: PolynomialMonomialRecord) {
+  const embeddedIuLabel = monomial.name.match(/^IU\s+(\d+)\s*:\s*(.+)$/i);
+  const displayCode = formatPolynomialIuCodeForDisplay(monomial.baseIndexCode || embeddedIuLabel?.[1]);
+  const displayName = formatPolynomialIuNameForDisplay(embeddedIuLabel?.[2] ?? monomial.baseIndexName);
+
+  if (displayCode && displayName) {
+    return `IU ${displayCode} : ${displayName}`;
+  }
+
+  return monomial.name;
+}
+
+function formatDecimal(value: Decimal, decimalPlaces: number) {
+  return formatNumber(value.toNumber(), decimalPlaces);
+}
+
 function getCompositionSourceIds(component: PolynomialMonomialCompositionRecord) {
   return [component.budgetItemId, component.apuResourceId].filter((value): value is string => Boolean(value));
+}
+
+function deriveInitialGroupFromResourceType(resourceType: string | undefined): InitialMonomialGroupKey {
+  const token = (resourceType ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+
+  if (["LABOR", "MO", "MANO DE OBRA"].includes(token)) return "LABOR";
+  if (["MATERIAL", "MATERIALS", "MAT", "MATERIALES"].includes(token)) return "MATERIALS";
+  if (["EQUIPMENT", "EQUIPO", "EQ", "TOOLS", "TOOL", "HERRAMIENTAS"].includes(token)) return "EQUIPMENT";
+  return "OTHERS";
+}
+
+function deriveInitialGroupFromCostGroup(costGroupKey: PolynomialMonomialRecord["costGroupKey"]): InitialMonomialGroupKey {
+  if (costGroupKey === "GENERAL_EXPENSES_PROFIT") return "GENERAL_EXPENSES_PROFIT";
+  if (costGroupKey === "LABOR") return "LABOR";
+  if (costGroupKey === "EQUIPMENT") return "EQUIPMENT";
+  if (costGroupKey === "OTHERS") return "OTHERS";
+  return "MATERIALS";
 }
 
 function formatSourceCount(count: number) {
@@ -62,132 +158,263 @@ function truncateSourceId(sourceId: string) {
   return sourceId.length <= 18 ? sourceId : `${sourceId.slice(0, 8)}...${sourceId.slice(-6)}`;
 }
 
-function buildRows(monomials: PolynomialMonomialRecord[]): CompositionDetailRow[] {
-  const rows: CompositionDetailRow[] = [];
+function formatSourceLabel(sourceIds: string[]) {
+  if (sourceIds.length === 0) {
+    return "0 fuentes";
+  }
+
+  return `${formatSourceCount(sourceIds.length)} : ${sourceIds.map(truncateSourceId).join(", ")}`;
+}
+
+function toOptionalDecimal(value: string | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return ZERO;
+
+  try {
+    return new Decimal(trimmed);
+  } catch {
+    return ZERO;
+  }
+}
+
+function buildCompositionGroups(monomials: PolynomialMonomialRecord[]): CompositionDetailGroup[] {
+  const groups: CompositionDetailGroup[] = [];
+
+  for (const monomial of monomials) {
+    const rows: CompositionDetailRow[] = [];
+
+    if (monomial.composition.length === 0) {
+      const initialGroup = deriveInitialGroupFromCostGroup(monomial.costGroupKey);
+      rows.push({
+        id: `${monomial.id}:empty`,
+        unifiedIndexCode: monomial.baseIndexCode,
+        unifiedIndexName: monomial.baseIndexName,
+        resourceName: monomial.name,
+        iuFamily: initialGroup === "GENERAL_EXPENSES_PROFIT" ? "GENERAL_EXPENSES" : undefined,
+        initialGroup,
+        amount: monomial.amount,
+        participationPercentage: "1",
+        coefficientContribution: monomial.coefficient,
+        sourceIds: [],
+        hasComposition: true,
+      });
+    } else {
+      for (const component of monomial.composition) {
+        rows.push({
+          id: component.id,
+          unifiedIndexCode: component.unifiedIndexCode,
+          unifiedIndexName: component.unifiedIndexName,
+          resourceName: component.resourceName,
+          iuFamily: component.iuFamily,
+          initialGroup: deriveInitialGroupFromResourceType(component.resourceType),
+          amount: component.amount,
+          participationPercentage: component.participationPercentage,
+          coefficientContribution: component.coefficientContribution,
+          sourceIds: getCompositionSourceIds(component),
+          hasComposition: true,
+        });
+      }
+    }
+
+    groups.push({
+      monomialId: monomial.id,
+      monomialCode: monomial.code,
+      monomialName: formatMonomialGroupName(monomial),
+      monomialCoefficient: monomial.coefficient,
+      rows,
+      totalAmount: rows.reduce((total, row) => total.plus(toOptionalDecimal(row.amount)), ZERO),
+      totalParticipation: rows.reduce((total, row) => total.plus(toOptionalDecimal(row.participationPercentage)), ZERO),
+      totalCoefficientContribution: rows.reduce((total, row) => total.plus(toOptionalDecimal(row.coefficientContribution)), ZERO),
+    });
+  }
+
+  return groups;
+}
+
+function buildInitialMonomialSummaryRows(monomials: PolynomialMonomialRecord[]): InitialMonomialSummaryRow[] {
+  const amounts = new Map<InitialMonomialGroupKey, Decimal>(
+    initialMonomialGroups.map((group) => [group.key, ZERO]),
+  );
 
   for (const monomial of monomials) {
     if (monomial.composition.length === 0) {
-      rows.push({
-        id: `${monomial.id}:empty`,
-        monomialCode: monomial.code,
-        monomialName: monomial.name,
-        monomialCoefficient: monomial.coefficient,
-        sourceIds: [],
-        hasComposition: false,
-      });
+      const groupKey = deriveInitialGroupFromCostGroup(monomial.costGroupKey);
+      amounts.set(groupKey, (amounts.get(groupKey) ?? ZERO).plus(monomial.amount));
       continue;
     }
 
     for (const component of monomial.composition) {
-      rows.push({
-        id: component.id,
-        monomialCode: monomial.code,
-        monomialName: monomial.name,
-        monomialCoefficient: monomial.coefficient,
-        unifiedIndexCode: component.unifiedIndexCode,
-        unifiedIndexName: component.unifiedIndexName,
-        iuFamily: component.iuFamily,
-        amount: component.amount,
-        participationPercentage: component.participationPercentage,
-        coefficientContribution: component.coefficientContribution,
-        sourceIds: getCompositionSourceIds(component),
-        hasComposition: true,
-      });
+      const groupKey = deriveInitialGroupFromResourceType(component.resourceType);
+      amounts.set(groupKey, (amounts.get(groupKey) ?? ZERO).plus(component.amount));
     }
   }
 
-  return rows;
+  const totalAmount = [...amounts.values()].reduce((total, amount) => total.plus(amount), ZERO);
+
+  return initialMonomialGroups.map((group) => {
+    const amount = amounts.get(group.key) ?? ZERO;
+
+    return {
+      ...group,
+      group: group.key,
+      amount,
+      coefficient: totalAmount.equals(ZERO) ? ZERO : amount.dividedBy(totalAmount).toDecimalPlaces(3),
+    };
+  });
 }
 
 export function PolynomialCompositionDetail({
   monomials,
 }: PolynomialCompositionDetailProps) {
   const { isExcelMode } = useAppViewMode();
-  const rows = buildRows(monomials);
+  const compositionGroups = buildCompositionGroups(monomials);
+  const initialRows = buildInitialMonomialSummaryRows(monomials);
+  const initialTotalAmount = initialRows.reduce((total, row) => total.plus(row.amount), ZERO);
+  const initialTotalCoefficient = initialTotalAmount.equals(ZERO) ? ZERO : new Decimal(1);
   const componentCount = monomials.reduce((total, monomial) => total + monomial.composition.length, 0);
 
   return (
-    <Card>
-      <CardContent className="space-y-4 p-6">
-        <OperationalPanel
-          title="Detalle de composicion"
-          description="Trazabilidad DEV de los insumos agrupados para formar cada monomio."
-          metrics={
-            <>
-              <span className={cn("border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700", isExcelMode ? "rounded-sm" : "rounded-full")}>
-                DEV
-              </span>
-              <span>{componentCount} componentes</span>
-            </>
-          }
-        />
+    <details className={cn("group overflow-hidden border border-slate-200 bg-white shadow-sm shadow-slate-100/60", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+      <summary className={cn("flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-slate-900">Detalle de composicion</span>
+            <span className={cn("border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700", isExcelMode ? "rounded-sm" : "rounded-full")}>
+              DEV
+            </span>
+          </div>
+          <p className="mt-1 truncate text-sm text-slate-500">
+            Trazabilidad DEV de los insumos agrupados para formar cada monomio.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 text-sm text-slate-500">
+          <span>{componentCount} componentes</span>
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition group-hover:bg-slate-100 group-open:rotate-90 group-open:bg-slate-100">
+            <ChevronRight className="h-4 w-4" />
+          </span>
+        </div>
+      </summary>
 
-        {rows.length === 0 ? (
+      <div className="space-y-4 border-t border-slate-100 p-6">
+        {compositionGroups.length === 0 ? (
           <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
             Sin monomios disponibles para inspeccionar.
           </div>
         ) : (
-          <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
-            <Table className="min-w-[1180px]">
-              <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
-                  <TH>Monomio</TH>
-                  <TH className="text-right">Coef.</TH>
-                  <TH>Indice unificado</TH>
-                  <TH>Familia IU</TH>
-                  <TH className="text-right">Monto (S/)</TH>
-                  <TH className="text-right">Participacion</TH>
-                  <TH className="text-right">Aporte coef.</TH>
-                  <TH>Fuente</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {rows.map((row) => (
-                  <TR key={row.id} className={row.hasComposition ? undefined : "bg-slate-50/60"}>
-                    <TD className="align-top">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{row.monomialCode}</p>
-                        <p className="max-w-[240px] text-sm font-medium text-slate-900">{row.monomialName}</p>
-                      </div>
-                    </TD>
-                    <TD className="text-right align-top font-medium tabular-nums text-slate-900">
-                      {formatDecimalString(row.monomialCoefficient, 3)}
-                    </TD>
-                    <TD className="align-top">
-                      {row.unifiedIndexCode || row.unifiedIndexName ? (
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                            {row.unifiedIndexCode ?? "Sin codigo"}
-                          </p>
-                          <p className="max-w-[280px] text-sm text-slate-700">{row.unifiedIndexName ?? "Sin nombre"}</p>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-slate-400">Sin indice</span>
-                      )}
-                    </TD>
-                    <TD className="align-top text-sm text-slate-700">{row.iuFamily ?? "Sin familia"}</TD>
-                    <TD className="text-right align-top tabular-nums">{formatDecimalString(row.amount, 2)}</TD>
-                    <TD className="text-right align-top tabular-nums">{formatPercentage(row.participationPercentage)}</TD>
-                    <TD className="text-right align-top font-medium tabular-nums text-slate-900">
-                      {formatDecimalString(row.coefficientContribution, 3)}
-                    </TD>
-                    <TD className="align-top">
-                      <div className="space-y-1">
-                        <p className="text-sm text-slate-700">{formatSourceCount(row.sourceIds.length)}</p>
-                        {row.sourceIds.length > 0 ? (
-                          <p className="max-w-[180px] text-xs text-slate-500">
-                            {row.sourceIds.map(truncateSourceId).join(", ")}
-                          </p>
-                        ) : null}
-                      </div>
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </div>
+          <>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-900">Monomios iniciales</p>
+              <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
+                <Table className="min-w-[820px] table-fixed text-xs">
+                  <THead>
+                    <TR className="bg-slate-50 hover:bg-slate-50">
+                      <TH className="w-[90px]">Codigo</TH>
+                      <TH className="w-[260px]">Nombre</TH>
+                      <TH className="w-[190px]">Grupo</TH>
+                      <TH className="w-[140px] text-right">Monto base (S/)</TH>
+                      <TH className="w-[140px] text-right">Coeficiente</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {initialRows.map((row) => (
+                      <TR key={row.key}>
+                        <TD className="font-semibold text-slate-900">{row.code}</TD>
+                        <TD className="truncate" title={row.name}>{row.name}</TD>
+                        <TD className="truncate text-xs text-slate-600" title={row.group}>{row.group}</TD>
+                        <TD className="text-right tabular-nums">{formatDecimal(row.amount, 2)}</TD>
+                        <TD className="text-right font-medium tabular-nums text-slate-900">
+                          {formatDecimal(row.coefficient, 3)}
+                        </TD>
+                      </TR>
+                    ))}
+                    <TR className="bg-slate-50 font-semibold hover:bg-slate-50">
+                      <TD colSpan={3}>Total</TD>
+                      <TD className="text-right tabular-nums">{formatDecimal(initialTotalAmount, 2)}</TD>
+                      <TD className="text-right tabular-nums">{formatDecimal(initialTotalCoefficient, 3)}</TD>
+                    </TR>
+                  </TBody>
+                </Table>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {compositionGroups.map((group) => (
+                <div key={group.monomialId} className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{group.monomialName}</p>
+                      <p className="text-xs text-slate-500">
+                        Codigo {group.monomialCode} · Coef. {formatDecimalString(group.monomialCoefficient, 3)}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">{group.rows.length} componentes</span>
+                  </div>
+
+                  <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
+                    <Table className="min-w-[1180px] table-fixed text-xs">
+                      <THead>
+                        <TR className="bg-slate-50 hover:bg-slate-50">
+                          <TH className="w-[260px]">Indice unificado</TH>
+                          <TH className="w-[240px]">Insumo</TH>
+                          <TH className="w-[130px]">Grupo inicial</TH>
+                          <TH className="w-[120px]">Familia IU</TH>
+                          <TH className="w-[110px] text-right">Monto (S/)</TH>
+                          <TH className="w-[120px] text-right">Participacion</TH>
+                          <TH className="w-[120px] text-right">Aporte coef.</TH>
+                          <TH className="w-[180px]">Fuente</TH>
+                        </TR>
+                      </THead>
+                      <TBody>
+                        {group.rows.map((row) => (
+                          <TR key={row.id} className={row.hasComposition ? undefined : "bg-slate-50/60"}>
+                            <TD className="align-middle">
+                              {row.unifiedIndexCode || row.unifiedIndexName ? (
+                                <p className="truncate text-xs text-slate-700" title={formatUnifiedIndexLabel(row)}>
+                                  {formatUnifiedIndexLabel(row)}
+                                </p>
+                                ) : (
+                                <span className="text-xs text-slate-400">Sin indice</span>
+                              )}
+                            </TD>
+                            <TD className="align-middle">
+                              <p className="truncate text-xs text-slate-700" title={row.resourceName ?? "Sin insumo"}>
+                                {row.resourceName ?? "Sin insumo"}
+                              </p>
+                            </TD>
+                            <TD className="align-middle text-xs text-slate-700">
+                              <span className="block truncate" title={row.initialGroup}>{row.initialGroup}</span>
+                            </TD>
+                            <TD className="align-middle text-xs text-slate-700">
+                              <span className="block truncate" title={row.iuFamily ?? "Sin familia"}>{row.iuFamily ?? "Sin familia"}</span>
+                            </TD>
+                            <TD className="text-right align-middle tabular-nums">{formatDecimalString(row.amount, 2)}</TD>
+                            <TD className="text-right align-middle tabular-nums">{formatPercentage(row.participationPercentage)}</TD>
+                            <TD className="text-right align-middle font-medium tabular-nums text-slate-900">
+                              {formatDecimalString(row.coefficientContribution, 3)}
+                            </TD>
+                            <TD className="align-middle">
+                              <p className="truncate text-xs text-slate-600" title={formatSourceLabel(row.sourceIds)}>
+                                {formatSourceLabel(row.sourceIds)}
+                              </p>
+                            </TD>
+                          </TR>
+                        ))}
+                        <TR className="bg-slate-50 font-semibold hover:bg-slate-50">
+                          <TD colSpan={4}>Total</TD>
+                          <TD className="text-right tabular-nums">{formatDecimal(group.totalAmount, 2)}</TD>
+                          <TD className="text-right tabular-nums">{formatPercentage(group.totalParticipation.toString())}</TD>
+                          <TD className="text-right tabular-nums">{formatDecimal(group.totalCoefficientContribution, 3)}</TD>
+                          <TD />
+                        </TR>
+                      </TBody>
+                    </Table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </details>
   );
 }

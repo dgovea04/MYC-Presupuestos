@@ -118,6 +118,20 @@ describe("composeBudgetPolynomialFormulaInput", () => {
       GENERAL_EXPENSES_PROFIT: "100.0000",
     });
     expect(result.monomials.map((monomial) => monomial.coefficient)).toEqual(["0.194", "0.320", "0.243", "0.146", "0.097"]);
+    expect(Object.fromEntries(result.monomials.map((monomial) => [monomial.baseIndexCode, monomial.code]))).toMatchObject({
+      "3": "AC",
+      "21": "CE",
+      "17": "BL",
+      "39": "GU",
+      "47": "MO",
+    });
+    expect(Object.fromEntries(result.monomials.map((monomial) => [monomial.baseIndexCode, monomial.name]))).toMatchObject({
+      "3": "IU 03 : ACERO DE CONSTRUCCION CORRUGADO",
+      "21": "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
+      "17": "IU 17 : BLOQUES Y LADRILLOS",
+      "39": "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+      "47": "IU 47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+    });
     expect(result.monomials.map((monomial) => monomial.costGroupKey)).not.toEqual(
       expect.arrayContaining(["EQUIPMENT", "OTHERS"]),
     );
@@ -139,7 +153,7 @@ describe("composeBudgetPolynomialFormulaInput", () => {
       },
     ]);
     expect(result.componentsByGroup.get("GENERAL_EXPENSES_PROFIT")).toEqual([]);
-    expect(result.componentsByMonomialKey.get("MATERIALS:STEEL")).toEqual(expect.arrayContaining([
+    expect(result.componentsByMonomialKey.get("MATERIALS:IU:3")).toEqual(expect.arrayContaining([
       expect.objectContaining({
         apuResourceId: "apu-resource-2",
         amount: "300.0000",
@@ -298,6 +312,42 @@ describe("sanitizePolynomialMonomialComponents", () => {
       coefficientContribution: "0.046000",
     });
   });
+
+  it("uses current resource IU before the legacy IU when composing monomials", () => {
+    const result = composeBudgetPolynomialFormulaInput({
+      id: "budget-current-iu",
+      projectId: "project-1",
+      totalGeneralExpenses: 0,
+      totalUtility: 0,
+      items: [
+        {
+          id: "item-current-iu",
+          quantity: 1,
+          apu: {
+            resources: [
+              {
+                id: "cement-resource",
+                resourceType: "Material",
+                subtotal: 100,
+                resource: {
+                  category: "MATERIAL",
+                  iu: "39",
+                  iuCurrent: "21",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.monomials).toHaveLength(1);
+    expect(result.monomials[0]).toMatchObject({
+      code: "CE",
+      baseIndexCode: "21",
+      name: "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
+    });
+  });
 });
 
 describe("getPolynomialFormulaReadOptionsForEnvironment", () => {
@@ -331,6 +381,39 @@ describe("polynomial serializers", () => {
       adjustmentIndexName: null,
       adjustmentIndexValue: null,
       sortOrder: 1,
+    });
+    const legacyMaterialMonomial = serializePolynomialMonomial({
+      id: "legacy-material",
+      formulaId: "formula-1",
+      code: "MAT",
+      name: "Materiales",
+      costGroupKey: "MATERIALS",
+      amount: new Prisma.Decimal("1000.00"),
+      coefficient: new Prisma.Decimal("0.123"),
+      baseIndexCode: "21 : CEMENTO PORTLAND E HIDRAULICO",
+      baseIndexName: "Pendiente de asignar",
+      baseIndexValue: new Prisma.Decimal("100.000"),
+      adjustmentIndexCode: null,
+      adjustmentIndexName: null,
+      adjustmentIndexValue: null,
+      sortOrder: 1,
+      components: [
+        {
+          id: "legacy-cement-component",
+          monomialId: "legacy-material",
+          budgetItemId: null,
+          apuResourceId: "apu-resource-cement",
+          resourceType: "MATERIAL",
+          amount: new Prisma.Decimal("1000.00"),
+          unifiedIndexCode: "21 : CEMENTO PORTLAND E HIDRAULICO",
+          unifiedIndexName: null,
+          iuFamily: "OTHERS",
+          participationPercentage: new Prisma.Decimal("1.000000"),
+          coefficientContribution: new Prisma.Decimal("0.123000"),
+          createdAt: new Date("2026-01-15T00:00:00.000Z"),
+          updatedAt: new Date("2026-01-16T00:00:00.000Z"),
+        },
+      ],
     });
 
     const formula = serializePolynomialFormula({
@@ -369,8 +452,8 @@ describe("polynomial serializers", () => {
               apuResourceId: "apu-resource-1",
               resourceType: "MO",
               amount: new Prisma.Decimal("2500.00"),
-              unifiedIndexCode: "47",
-              unifiedIndexName: "MANO DE OBRA",
+              unifiedIndexCode: "47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+              unifiedIndexName: null,
               iuFamily: "LABOR",
               participationPercentage: new Prisma.Decimal("1.000000"),
               coefficientContribution: new Prisma.Decimal("0.046000"),
@@ -436,6 +519,23 @@ describe("polynomial serializers", () => {
 
     expect(formula.totalBaseAmount).toBe("54090.0000");
     expect(formula.monomials[0]?.baseIndexValue).toBe("100");
+    expect(formula.monomials[0]).toMatchObject({
+      code: "MO",
+      name: "IU 47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+      baseIndexCode: "47",
+      baseIndexName: "MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+    });
+    expect(legacyMaterialMonomial).toMatchObject({
+      code: "CE",
+      name: "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
+      baseIndexCode: "21",
+      baseIndexName: "CEMENTO PORTLAND E HIDRAULICO",
+    });
+    expect(legacyMaterialMonomial.composition[0]).toMatchObject({
+      unifiedIndexCode: "21",
+      unifiedIndexName: "CEMENTO PORTLAND E HIDRAULICO",
+      iuFamily: "CEMENT",
+    });
     expect(monomialWithoutComponents.composition).toEqual([]);
     expect(formula.monomials[0]?.composition).toEqual([
       {
@@ -446,7 +546,7 @@ describe("polynomial serializers", () => {
         resourceType: "MO",
         amount: "2500.00",
         unifiedIndexCode: "47",
-        unifiedIndexName: "MANO DE OBRA",
+        unifiedIndexName: "MANO DE OBRA (INCLUYE LEYES SOCIALES)",
         iuFamily: "LABOR",
         participationPercentage: "1",
         coefficientContribution: "0.046",

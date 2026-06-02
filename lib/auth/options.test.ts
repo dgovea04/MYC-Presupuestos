@@ -19,6 +19,14 @@ describe("authOptions callbacks", () => {
     resetUserProfileColumnSupportCacheForTests();
   });
 
+  it("uses an explicit auth secret for stable JWT session encryption", () => {
+    expect(authOptions.secret).toBeTruthy();
+  });
+
+  it("uses an app-scoped session cookie to avoid stale default NextAuth JWTs", () => {
+    expect(authOptions.cookies?.sessionToken?.name).toContain("myc-presupuestos.session-token");
+  });
+
   it("hydrates session user fields from the latest database snapshot", async () => {
     queryRawMock
       .mockResolvedValueOnce([

@@ -262,7 +262,7 @@ async function createResourcesExport(request: NormalizedExportRequest, userId: s
     if (resource.category !== currentCategory) {
       currentCategory = resource.category;
       sectionRows.push(rows.length);
-      rows.push([formatResourceCategoryLabel(resource.category).toUpperCase(), "", "", "", "", ""]);
+      rows.push([formatResourceCategoryLabel(resource.category).toUpperCase(), "", "", "", "", "", ""]);
     }
 
     rows.push([
@@ -270,6 +270,7 @@ async function createResourcesExport(request: NormalizedExportRequest, userId: s
       resource.description,
       resource.unit,
       normalizeResourceIuCode(resource.iu) ?? "",
+      normalizeResourceIuCode(resource.iuCurrent) ?? "",
       resource.currency,
       decimalToNumber(resource.unitPrice).toFixed(decimals),
     ]);
@@ -278,8 +279,8 @@ async function createResourcesExport(request: NormalizedExportRequest, userId: s
   const table: ExportTable = {
     slug: "catalogo-insumos",
     title: "Catalogo de insumos",
-    headers: ["Codigo", "Descripcion", "Unidad", "IU", "Moneda", "Precio"],
-    columnWidths: [56, 254, 45, 45, 50, 73],
+    headers: ["Codigo", "Descripcion", "Unidad", "IU (Base Julio 1992=100)", "IU 2026", "Moneda", "Precio"],
+    columnWidths: [50, 230, 42, 82, 46, 45, 50],
     fontSize: 7,
     headerFontSize: 7.2,
     sectionRows,

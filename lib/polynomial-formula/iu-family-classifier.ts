@@ -20,8 +20,10 @@ type UnifiedIndexFamilyInput = {
 const familyByKnownCode: Record<string, PolynomialIuFamily> = {
   "47": "LABOR",
   "39": "GENERAL_EXPENSES",
+  "1": "OTHERS",
   "2": "STEEL",
   "3": "STEEL",
+  "4": "AGGREGATES",
   "21": "CEMENT",
   "5": "AGGREGATES",
   "17": "MASONRY",
@@ -35,6 +37,14 @@ const familyByKnownCode: Record<string, PolynomialIuFamily> = {
   "7": "ELECTRICAL_INSTALLATIONS",
 };
 
+export function normalizeUnifiedIndexCodeForPolynomialFormula(code: string | null | undefined): string {
+  const trimmed = (code ?? "").trim();
+  if (!trimmed) return "";
+
+  const withoutLeadingZeros = trimmed.replace(/^0+(?=\d)/, "");
+  return withoutLeadingZeros || "0";
+}
+
 function normalizeToken(value: string): string {
   return value
     .normalize("NFD")
@@ -47,7 +57,7 @@ function normalizeToken(value: string): string {
 export function classifyUnifiedIndexForPolynomialFormula(
   index: UnifiedIndexFamilyInput,
 ): PolynomialIuFamily {
-  const byCode = familyByKnownCode[index.code.trim()];
+  const byCode = familyByKnownCode[normalizeUnifiedIndexCodeForPolynomialFormula(index.code)];
   if (byCode) return byCode;
 
   const name = normalizeToken(index.name);

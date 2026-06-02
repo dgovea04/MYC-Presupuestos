@@ -77,7 +77,7 @@ export type BudgetTemplateApuResource = {
 
 export type BudgetTemplateResource = Pick<
   ResourceRecord,
-  "code" | "description" | "category" | "iu" | "subcategory" | "unit" | "unitPrice" | "currency" | "source"
+  "code" | "description" | "category" | "iu" | "iuCurrent" | "subcategory" | "unit" | "unitPrice" | "currency" | "source"
 >;
 
 export type BudgetTemplateSummary = {
@@ -273,6 +273,7 @@ function toTemplateResource(resource: ResourceRecord): BudgetTemplateResource {
     description: resource.description,
     category: resource.category,
     iu: resource.iu ?? null,
+    iuCurrent: resource.iuCurrent ?? null,
     subcategory: resource.subcategory ?? null,
     unit: resource.unit,
     unitPrice: resource.unitPrice,

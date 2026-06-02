@@ -7,6 +7,13 @@ import { verifyPassword } from "@/lib/auth/password";
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { loginSchema } from "@/lib/validations/auth";
 
+const authSecret =
+  process.env.NEXTAUTH_SECRET ??
+  process.env.AUTH_SECRET ??
+  (process.env.NODE_ENV === "production" ? undefined : "myc-presupuestos-dev-auth-secret");
+const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith("https://") ?? process.env.NODE_ENV === "production";
+const sessionCookieName = `${useSecureCookies ? "__Secure-" : ""}myc-presupuestos.session-token`;
+
 const authUserSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -87,8 +94,20 @@ function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "
 }
 
 export const authOptions: NextAuthOptions = {
+  secret: authSecret,
   session: {
     strategy: "jwt",
+  },
+  cookies: {
+    sessionToken: {
+      name: sessionCookieName,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: useSecureCookies,
+      },
+    },
   },
   pages: {
     signIn: "/login",

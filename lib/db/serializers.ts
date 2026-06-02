@@ -1,4 +1,9 @@
 import type { Prisma } from "@prisma/client";
+import {
+  resolvePolynomialMonomialDisplayMetadata,
+  resolvePolynomialIuFamilyDisplay,
+  resolvePolynomialUnifiedIndexDisplay,
+} from "@/lib/polynomial-formula/monomial-metadata";
 import type { BudgetRecord } from "@/types/budget";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type {
@@ -102,6 +107,8 @@ export function serializeBudget(budget: {
           description: string;
           category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS";
           iu: string | null;
+          iuCurrent: string | null;
+          iuCurrentReviewStatus?: string | null;
           subcategory: string | null;
           unit: string;
           unitPrice: Prisma.Decimal;
@@ -166,6 +173,8 @@ export function serializeBudget(budget: {
                 description: resource.resource.description,
                 category: resource.resource.category,
                 iu: resource.resource.iu ?? undefined,
+                iuCurrent: resource.resource.iuCurrent ?? undefined,
+                iuCurrentReviewStatus: resource.resource.iuCurrentReviewStatus ?? undefined,
                 subcategory: resource.resource.subcategory ?? undefined,
                 unit: resource.resource.unit,
                 unitPrice: decimalToNumber(resource.resource.unitPrice),
@@ -186,6 +195,8 @@ export function serializeResource(resource: {
   description: string;
   category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS";
   iu: string | null;
+  iuCurrent: string | null;
+  iuCurrentReviewStatus?: string | null;
   subcategory: string | null;
   unit: string;
   unitPrice: Prisma.Decimal;
@@ -201,6 +212,8 @@ export function serializeResource(resource: {
     description: resource.description,
     category: resource.category,
     iu: resource.iu ?? undefined,
+    iuCurrent: resource.iuCurrent ?? undefined,
+    iuCurrentReviewStatus: resource.iuCurrentReviewStatus ?? undefined,
     subcategory: resource.subcategory ?? undefined,
     unit: resource.unit,
     unitPrice: decimalToNumber(resource.unitPrice),
@@ -276,6 +289,7 @@ export function serializePolynomialMonomialComposition(component: {
   budgetItemId: string | null;
   apuResourceId: string | null;
   resourceType: string | null;
+  apuResource?: { resource: { description: string } } | null;
   amount: Prisma.Decimal;
   unifiedIndexCode?: string | null;
   unifiedIndexName?: string | null;
@@ -285,16 +299,25 @@ export function serializePolynomialMonomialComposition(component: {
   createdAt?: Date;
   updatedAt?: Date;
 }): PolynomialMonomialCompositionRecord {
+  const unifiedIndex = resolvePolynomialUnifiedIndexDisplay({
+    code: component.unifiedIndexCode,
+    name: component.unifiedIndexName,
+  });
+
   return {
     id: component.id,
     monomialId: component.monomialId,
     budgetItemId: component.budgetItemId ?? undefined,
     apuResourceId: component.apuResourceId ?? undefined,
     resourceType: component.resourceType ?? undefined,
+    resourceName: component.apuResource?.resource.description,
     amount: decimalToFixedString(component.amount, 2),
-    unifiedIndexCode: component.unifiedIndexCode ?? undefined,
-    unifiedIndexName: component.unifiedIndexName ?? undefined,
-    iuFamily: component.iuFamily ?? undefined,
+    unifiedIndexCode: unifiedIndex.code,
+    unifiedIndexName: unifiedIndex.name,
+    iuFamily: resolvePolynomialIuFamilyDisplay({
+      code: unifiedIndex.code,
+      family: component.iuFamily,
+    }),
     participationPercentage:
       component.participationPercentage == null
         ? undefined
@@ -336,20 +359,30 @@ export function serializePolynomialMonomial(monomial: {
   updatedAt?: Date;
   components?: Array<Parameters<typeof serializePolynomialMonomialComposition>[0]>;
 }): PolynomialMonomialRecord {
+  const displayMetadata = resolvePolynomialMonomialDisplayMetadata({
+    code: monomial.code,
+    name: monomial.name,
+    baseIndexCode: monomial.baseIndexCode,
+    baseIndexName: monomial.baseIndexName,
+  });
+
   return {
     id: monomial.id,
     formulaId: monomial.formulaId,
-    code: monomial.code,
-    name: monomial.name,
+    code: displayMetadata.code,
+    name: displayMetadata.name,
     costGroupKey: monomial.costGroupKey,
     amount: decimalToFixedString(monomial.amount, 4),
     coefficient: decimalToString(monomial.coefficient),
-    baseIndexCode: monomial.baseIndexCode,
-    baseIndexName: monomial.baseIndexName,
+    baseIndexCode: displayMetadata.baseIndexCode,
+    baseIndexName: displayMetadata.baseIndexName,
     baseIndexValue: decimalToString(monomial.baseIndexValue),
     adjustmentIndexCode: monomial.adjustmentIndexCode,
     adjustmentIndexName: monomial.adjustmentIndexName,
-    adjustmentIndexValue: decimalToString(monomial.adjustmentIndexValue),
+    adjustmentIndexValue:
+      monomial.adjustmentIndexValue == null
+        ? null
+        : decimalToString(monomial.adjustmentIndexValue),
     sortOrder: monomial.sortOrder,
     composition: monomial.components?.map(serializePolynomialMonomialComposition) ?? [],
     createdAt: monomial.createdAt?.toISOString(),

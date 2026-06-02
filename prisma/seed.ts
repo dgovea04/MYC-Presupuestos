@@ -6,6 +6,8 @@ import { hashPassword } from "@/lib/auth/password";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { loadUnifiedIndexWorkbook } from "@/lib/polynomial-formula/index-source";
 import { buildUnifiedIndexSeedPayload } from "@/lib/polynomial-formula/unified-index-seed";
+import { unifiedIndexDictionaryData } from "@/lib/polynomial-formula/unified-index-dictionary-data";
+import { resolveCurrentResourceIu } from "@/lib/resources/current-iu-assignment";
 import { findSeedPartidaApuMatch } from "@/lib/seed/catalog-partida-matching";
 import { priceSeedCatalogPartidaApuRows } from "@/lib/seed/catalog-partida-pricing";
 import { normalizeExcelCellText } from "@/lib/seed/excel-cell-text";
@@ -18,7 +20,7 @@ const SEED_PARTIDAS_WORKBOOK_PATHS = [
 ];
 const UNIFIED_INDEX_WORKBOOK_PATH = path.resolve(
   process.cwd(),
-  "presupuesto-ejemplo",
+  "data-for-seed",
   "formula-polinomica",
   "07_indices_unificados_de_precios_de_la_construccion_ene26.xlsx",
 );
@@ -134,9 +136,10 @@ async function main() {
       },
     }));
 
+  await seedUnifiedIndicesFromWorkbook();
   await seedGeneralResourcesCatalog();
   await seedGeneralPartidasCatalog();
-  await seedUnifiedIndicesFromWorkbook();
+  await seedAutocreatedPartidaResourceCurrentIus();
 
   const demoResources = await Promise.all([
     findCatalogResource("CEMENTO PORTLAND TIPO I (42.5KG)", ResourceCategory.MATERIAL, "BLS"),
@@ -491,6 +494,7 @@ async function seedGeneralResourcesCatalog() {
       category: true,
       unit: true,
       iu: true,
+      iuCurrent: true,
       subcategory: true,
       unitPrice: true,
       currency: true,
@@ -504,7 +508,20 @@ async function seedGeneralResourcesCatalog() {
       resource,
     ]),
   );
+  const existingResourcesByIdentityKey = new Map(
+    existingGlobalResources.map((resource) => [
+      buildResourceIdentityKey(resource.description, resource.category, resource.unit),
+      resource,
+    ]),
+  );
   const sequencesByCategory = buildCategorySequenceMap(existingGlobalResources);
+  const unifiedIndexRows = await prisma.unifiedIndex.findMany({
+    select: {
+      code: true,
+      name: true,
+    },
+    distinct: ["code", "name"],
+  });
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
     const row = worksheet.getRow(rowNumber);
@@ -512,19 +529,29 @@ async function seedGeneralResourcesCatalog() {
     const unit = normalizeCellText(row.getCell(2).value);
     const unitPrice = parseSpreadsheetNumber(normalizeCellText(row.getCell(3).value));
     const category = normalizeCatalogCategory(normalizeCellText(row.getCell(4).value));
-    const iu = normalizeCellText(row.getCell(5).value);
+    const iu = normalizeSeedResourceIu(normalizeCellText(row.getCell(5).value));
 
     if (!description || !unit) {
       continue;
     }
 
     const key = buildResourceKey(description, category, unit, iu);
-    const existingResource = existingResourcesByKey.get(key);
+    const fallbackKey = buildResourceIdentityKey(description, category, unit);
+    const existingResource = existingResourcesByKey.get(key) ?? existingResourcesByIdentityKey.get(fallbackKey);
     if (existingResource) {
+      const effectiveIu = iu || existingResource.iu || null;
+      const iuCurrent = resolveCurrentResourceIu({
+        description,
+        category,
+        legacyIu: effectiveIu,
+        unifiedIndices: unifiedIndexRows,
+        dictionaryRows: unifiedIndexDictionaryData,
+      });
       const nextData = {
         description,
         category,
-        iu: iu || null,
+        iu: effectiveIu,
+        iuCurrent,
         subcategory: null,
         unit,
         unitPrice,
@@ -536,6 +563,7 @@ async function seedGeneralResourcesCatalog() {
         existingResource.description !== nextData.description ||
         existingResource.category !== nextData.category ||
         existingResource.iu !== nextData.iu ||
+        existingResource.iuCurrent !== nextData.iuCurrent ||
         existingResource.subcategory !== nextData.subcategory ||
         existingResource.unit !== nextData.unit ||
         Number(existingResource.unitPrice) !== nextData.unitPrice ||
@@ -552,6 +580,13 @@ async function seedGeneralResourcesCatalog() {
       continue;
     }
 
+    const iuCurrent = resolveCurrentResourceIu({
+      description,
+      category,
+      legacyIu: iu,
+      unifiedIndices: unifiedIndexRows,
+      dictionaryRows: unifiedIndexDictionaryData,
+    });
     const nextSequence = (sequencesByCategory.get(category) ?? 0) + 1;
     sequencesByCategory.set(category, nextSequence);
 
@@ -562,6 +597,7 @@ async function seedGeneralResourcesCatalog() {
         description,
         category,
         iu: iu || null,
+        iuCurrent,
         subcategory: null,
         unit,
         unitPrice,
@@ -571,6 +607,7 @@ async function seedGeneralResourcesCatalog() {
     });
 
     existingResourcesByKey.set(key, createdResource);
+    existingResourcesByIdentityKey.set(fallbackKey, createdResource);
   }
 }
 
@@ -814,6 +851,61 @@ async function seedGeneralPartidasCatalog() {
   }
 
   await pruneDuplicateCatalogPartidasWithoutApu();
+}
+
+async function seedAutocreatedPartidaResourceCurrentIus() {
+  const source = "Autocreado desde APU del catalogo de partidas";
+  const [resources, unifiedIndexRows] = await Promise.all([
+    prisma.resource.findMany({
+      where: {
+        companyId: null,
+        source,
+        iuCurrent: null,
+      },
+      select: {
+        id: true,
+        description: true,
+        category: true,
+        iu: true,
+      },
+    }),
+    prisma.unifiedIndex.findMany({
+      select: {
+        code: true,
+        name: true,
+      },
+      distinct: ["code", "name"],
+    }),
+  ]);
+  let updated = 0;
+
+  for (const resource of resources) {
+    const iuCurrent = resolveCurrentResourceIu({
+      description: resource.description,
+      category: resource.category,
+      legacyIu: resource.iu,
+      unifiedIndices: unifiedIndexRows,
+      dictionaryRows: unifiedIndexDictionaryData,
+    });
+
+    if (!iuCurrent) {
+      continue;
+    }
+
+    await prisma.resource.update({
+      where: {
+        id: resource.id,
+      },
+      data: {
+        iuCurrent,
+      },
+    });
+    updated += 1;
+  }
+
+  if (updated > 0) {
+    console.info(`Seeded IU 2026 for ${updated} autocreated partida resources.`);
+  }
 }
 
 async function pruneDuplicateCatalogPartidasWithoutApu() {
@@ -1238,6 +1330,15 @@ function parseOptionalSpreadsheetNumber(value: string) {
 
 function buildResourceKey(description: string, category: ResourceCategory, unit: string, iu: string | null) {
   return [description.trim().toUpperCase(), category, unit.trim().toUpperCase(), (iu ?? "").trim().toUpperCase()].join("|");
+}
+
+function buildResourceIdentityKey(description: string, category: ResourceCategory, unit: string) {
+  return [description.trim().toUpperCase(), category, unit.trim().toUpperCase()].join("|");
+}
+
+function normalizeSeedResourceIu(value: string) {
+  const trimmed = value.trim();
+  return trimmed === ":" ? "" : trimmed;
 }
 
 function buildResourceLookupKey(description: string, unit: string) {

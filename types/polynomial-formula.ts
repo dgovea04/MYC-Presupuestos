@@ -23,6 +23,7 @@ export type PolynomialMonomialCompositionRecord = {
   budgetItemId?: string;
   apuResourceId?: string;
   resourceType?: string;
+  resourceName?: string;
   amount: string;
   unifiedIndexCode?: string;
   unifiedIndexName?: string;

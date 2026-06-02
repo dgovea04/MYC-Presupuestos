@@ -1,0 +1,18 @@
+
+> myc-presupuestos-app@0.1.0 dev
+> node ./node_modules/next/dist/bin/next dev
+
+⚠ Port 3000 is in use by process 88516, using available port 3001 instead.
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://172.18.160.1:3001
+✓ Ready in 790ms
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          88516
+- Dir:          C:\MYC-Presupuestos\.worktrees\smart-polynomial-monomials
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 88516 /F to stop it.
+[?25h

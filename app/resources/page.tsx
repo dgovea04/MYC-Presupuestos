@@ -32,6 +32,8 @@ export default async function ResourcesPage() {
               description: resource.description,
               category: resource.category,
               iu: resource.iu,
+              iuCurrent: resource.iuCurrent,
+              iuCurrentReviewStatus: resource.iuCurrentReviewStatus,
               subcategory: resource.subcategory,
               unit: resource.unit,
               unitPrice: decimalToNumber(resource.unitPrice),

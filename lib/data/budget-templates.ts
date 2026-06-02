@@ -148,6 +148,7 @@ type BudgetTemplateApplyTx = {
         description: string;
         category: ResourceCategory;
         iu: string | null;
+        iuCurrent: string | null;
         subcategory: string | null;
         unit: string;
         unitPrice: number;
@@ -539,6 +540,7 @@ async function getOrCreateTemplateResource(
       description: resource.description,
       category: resource.category,
       iu: resource.iu ?? null,
+      iuCurrent: resource.iuCurrent ?? null,
       subcategory: resource.subcategory ?? null,
       unit: resource.unit,
       unitPrice: resource.unitPrice,

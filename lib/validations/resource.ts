@@ -6,6 +6,7 @@ export const resourceSchema = z.object({
   description: z.string().min(3, "Ingresa la descripcion"),
   category: z.enum(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS"]),
   iu: z.string().trim().optional(),
+  iuCurrent: z.string().trim().optional(),
   subcategory: z.string().optional(),
   unit: z.string().min(1, "Ingresa la unidad"),
   unitPrice: z.coerce.number().nonnegative(),

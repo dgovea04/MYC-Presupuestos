@@ -94,7 +94,7 @@ export function searchCatalogResources({
 
   return resources
     .map((resource) => {
-      const text = [resource.code, resource.description, resource.category, resource.subcategory, resource.unit, resource.iu]
+      const text = [resource.code, resource.description, resource.category, resource.subcategory, resource.unit, resource.iu, resource.iuCurrent]
         .filter(Boolean)
         .join(" ");
       const baseScore = scoreTokens(queryTokens, tokenizeCatalogText(text));

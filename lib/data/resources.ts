@@ -18,12 +18,13 @@ const resourceCodePrefixes: Record<ResourceCategory, string> = {
   EQUIPMENT: "EQ",
   TOOLS: "HER",
 };
-export const GLOBAL_RESOURCES_CACHE_TAG = "global-resources";
+export const GLOBAL_RESOURCES_CACHE_TAG = "global-resources-v2";
+const GLOBAL_RESOURCE_REVIEW_EDITABLE_FIELDS = new Set<keyof ResourcePatchFields>(["iuCurrent"]);
 
 export async function getResourcesByUser(userId: string) {
   const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(userId)]);
 
-  return [...globalResources, ...userResources].sort(compareResourcesForCatalog);
+  return mergeVisibleResourcesForCatalog(globalResources, userResources).sort(compareResourcesForCatalog);
 }
 
 async function getGlobalResources() {
@@ -35,9 +36,12 @@ async function getGlobalResources() {
   });
 }
 
-const getCachedGlobalResources = unstable_cache(getGlobalResources, ["global-resources"], {
-  tags: [GLOBAL_RESOURCES_CACHE_TAG],
-});
+const getCachedGlobalResources =
+  process.env.NODE_ENV === "development"
+    ? getGlobalResources
+    : unstable_cache(getGlobalResources, ["global-resources-v2"], {
+        tags: [GLOBAL_RESOURCES_CACHE_TAG],
+      });
 
 async function getUserOwnedResources(userId: string) {
   return prisma.resource.findMany({
@@ -57,6 +61,52 @@ function compareResourcesForCatalog(left: { category: ResourceCategory; descript
   }
 
   return left.description.localeCompare(right.description);
+}
+
+export function mergeVisibleResourcesForCatalog<T extends {
+  companyId: string | null;
+  code: string;
+  description: string;
+  category: ResourceCategory;
+  unit: string;
+  iu: string | null;
+  iuCurrent?: string | null;
+  source: string | null;
+}>(globalResources: T[], userResources: T[]) {
+  const resourcesByCatalogKey = new Map<string, T>();
+
+  for (const resource of globalResources) {
+    resourcesByCatalogKey.set(buildVisibleResourceKey(resource), resource);
+  }
+
+  for (const resource of userResources) {
+    const key = buildVisibleResourceKey(resource);
+    if (resourcesByCatalogKey.has(key)) {
+      continue;
+    }
+
+    resourcesByCatalogKey.set(key, resource);
+  }
+
+  return [...resourcesByCatalogKey.values()];
+}
+
+function buildVisibleResourceKey(resource: {
+  code: string;
+  description: string;
+  category: ResourceCategory;
+  unit: string;
+  iu: string | null;
+  source: string | null;
+}) {
+  return [
+    resource.code.trim().toUpperCase(),
+    resource.description.trim().toUpperCase(),
+    resource.category,
+    resource.unit.trim().toUpperCase(),
+    (resource.iu ?? "").trim().toUpperCase(),
+    (resource.source ?? "").trim().toUpperCase(),
+  ].join("|");
 }
 
 export async function resourceMutationTouchesGlobalCatalog(resourceIds: string[]) {
@@ -248,9 +298,16 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
       const existing = await tx.resource.findFirst({
         where: {
           id: entry.id,
-          company: {
-            userId,
-          },
+          OR: [
+            {
+              company: {
+                userId,
+              },
+            },
+            {
+              companyId: null,
+            },
+          ],
         },
       });
 
@@ -259,6 +316,11 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
       }
 
       const normalizedChanges = normalizeResourcePatchChanges(entry.changes);
+
+      if (existing.companyId == null && !isAllowedGlobalResourceReviewPatch(normalizedChanges)) {
+        throw new Error("Solo puedes editar el IU 2026 de insumos globales en revision");
+      }
+
       const nextCompanyId =
         normalizedChanges.companyId !== undefined ? (normalizedChanges.companyId ?? null) : existing.companyId;
       const nextCategory = normalizedChanges.category ?? existing.category;
@@ -277,6 +339,7 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
         data: buildResourceUpdateData(
           normalizedChanges,
           shouldRegenerateCode ? await generateNextResourceCode(tx, nextCompanyId, nextCategory, existing.id) : undefined,
+          existing.companyId == null && normalizedChanges.iuCurrent !== undefined ? null : undefined,
         ),
       });
 
@@ -321,6 +384,14 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
   });
 }
 
+function isAllowedGlobalResourceReviewPatch(changes: Partial<ResourcePatchFields>) {
+  const changedFields = (Object.keys(changes) as Array<keyof ResourcePatchFields>).filter(
+    (key) => changes[key] !== undefined,
+  );
+
+  return changedFields.length > 0 && changedFields.every((key) => GLOBAL_RESOURCE_REVIEW_EDITABLE_FIELDS.has(key));
+}
+
 function normalizeResourceFields(input: ResourceInput | ResourcePatchFields) {
   return {
     companyId: normalizeOptionalString(input.companyId),
@@ -328,6 +399,7 @@ function normalizeResourceFields(input: ResourceInput | ResourcePatchFields) {
     description: input.description.trim(),
     category: input.category,
     iu: normalizeResourceIuCode(input.iu),
+    iuCurrent: normalizeResourceIuCode(input.iuCurrent),
     subcategory: normalizeOptionalString(input.subcategory),
     unit: input.unit.trim(),
     unitPrice: input.unitPrice,
@@ -343,6 +415,7 @@ function normalizeResourcePatchChanges(changes: Partial<ResourcePatchFields>) {
   if ("description" in changes && changes.description !== undefined) normalized.description = changes.description.trim();
   if ("category" in changes && changes.category !== undefined) normalized.category = changes.category;
   if ("iu" in changes) normalized.iu = normalizeResourceIuCode(changes.iu);
+  if ("iuCurrent" in changes) normalized.iuCurrent = normalizeResourceIuCode(changes.iuCurrent);
   if ("subcategory" in changes) normalized.subcategory = normalizeOptionalString(changes.subcategory);
   if ("unit" in changes && changes.unit !== undefined) normalized.unit = changes.unit.trim();
   if ("unitPrice" in changes && changes.unitPrice !== undefined) normalized.unitPrice = changes.unitPrice;
@@ -380,6 +453,7 @@ function buildResourceCreateData(
 function buildResourceUpdateData(
   normalized: Partial<ReturnType<typeof normalizeResourceFields>>,
   code?: string,
+  iuCurrentReviewStatus?: string | null,
 ): Prisma.ResourceUpdateInput {
   const { companyId, code: removedCode, ...rest } = normalized;
   void removedCode;
@@ -387,6 +461,7 @@ function buildResourceUpdateData(
   return {
     ...rest,
     ...(code !== undefined ? { code } : {}),
+    ...(iuCurrentReviewStatus !== undefined ? { iuCurrentReviewStatus } : {}),
     ...(companyId !== undefined
       ? companyId
         ? {
