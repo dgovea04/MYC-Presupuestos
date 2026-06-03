@@ -16,7 +16,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { getExcelViewCssVariables } from "@/lib/budget/excel-view-css";
-import { calculateApuRows, calculateApuSummary, getApuPresentationCategory, isCrewDrivenApuRow, isLaborApuRow, isPercentageBasedApuRow } from "@/lib/calculations/apu";
+import { calculateApuRows, calculateApuSummary, getApuPresentationCategory, isCrewDrivenApuRow, isEquipmentApuRow, isLaborApuRow, isPercentageBasedApuRow } from "@/lib/calculations/apu";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { CatalogPartidaRecord, PartidaApuRowRecord } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
@@ -549,7 +549,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
                 const categoryPresentation = getApuCategoryPresentation(presentationCategory);
                 const isCrewDriven = isCrewDrivenApuRow(calculatedRow);
                 const isPercentageBased = isPercentageBasedApuRow(calculatedRow);
-                const isLabor = isLaborApuRow(calculatedRow);
+                const canEditCrew = isLaborApuRow(calculatedRow) || isEquipmentApuRow(calculatedRow);
                 const readonlyInputClass = "border-transparent bg-transparent px-0 shadow-none";
                 const nestedRows = isSubpartidaResourceType(row.resourceType ?? row.groupLabel) ? row.catalogSubpartida?.apuRows ?? [] : [];
 
@@ -629,8 +629,9 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
                       />
                     </TD>
                     <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
-                      {isLabor ? (
+                      {canEditCrew ? (
                         <Input
+                          data-testid={`partida-apu-row-crew-${row.id}`}
                           type="number"
                           step="0.0001"
                           value={row.crew ?? ""}

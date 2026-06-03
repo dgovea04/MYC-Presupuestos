@@ -109,7 +109,12 @@ body {
   border: 1px solid var(--excel-border-soft);
   padding: 0 var(--excel-cell-padding-x);
   background: var(--excel-surface-background);
+  font-size: 0.75rem;
   transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+[data-view-mode="excel"] .ui-table-cell :is(span, p, div, a, button, input, textarea, select, label) {
+  font-size: 0.75rem !important;
 }
 
 [data-view-mode="excel"] .ui-table-row {

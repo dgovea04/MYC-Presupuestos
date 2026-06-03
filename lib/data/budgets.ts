@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import Decimal from "decimal.js";
-import { decimalToNumber, serializeBudget } from "@/lib/db/serializers";
+import { decimalToNumber, serializeBudget, serializeCatalogPartida } from "@/lib/db/serializers";
 import { budgetSchema, budgetStatePatchSchema, type BudgetInput } from "@/lib/validations/budget";
 import { aggregateGeneralBudgetResources } from "@/lib/calculations/general-budget-sections";
 import { calculateBudgetFooterBuilder } from "@/lib/calculations/budget-footer-builder";
@@ -104,6 +104,24 @@ export async function getProjectSubBudgetDetails(projectId: string, userId: stri
       },
       items: {
         orderBy: { sortOrder: "asc" },
+        include: {
+          apu: {
+            include: {
+              resources: {
+                include: {
+                  resource: true,
+                  catalogPartida: {
+                    include: {
+                      apuRows: {
+                        orderBy: { sortOrder: "asc" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     },
     orderBy: {
@@ -111,15 +129,7 @@ export async function getProjectSubBudgetDetails(projectId: string, userId: stri
     },
   });
 
-  return budgets.map((budget) =>
-    serializeBudget({
-      ...budget,
-      items: budget.items.map((item) => ({
-        ...item,
-        apu: null,
-      })),
-    }),
-  );
+  return Promise.all(budgets.map((budget) => enrichBudgetSubpartidaCatalogLinks(serializeBudget(budget))));
 }
 
 export async function getBudgetById(id: string, userId: string) {
@@ -164,7 +174,7 @@ export async function getBudgetById(id: string, userId: string) {
   if (!budget) return null;
 
   return {
-    ...serializeBudget(budget),
+    ...(await enrichBudgetSubpartidaCatalogLinks(serializeBudget(budget))),
     project: budget.project,
   };
 }
@@ -1357,6 +1367,109 @@ function buildNestedApuRowsJson(rows: PartidaApuRowRecord[] | undefined): Prisma
     groupLabel: row.groupLabel ?? null,
     sortOrder: row.sortOrder,
   }));
+}
+
+async function enrichBudgetSubpartidaCatalogLinks(budget: BudgetRecord): Promise<BudgetRecord> {
+  const hasUnlinkedSubpartidas = budget.items.some((item) =>
+    item.apu?.resources.some((resource) => isSubpartidaResourceType(resource.resourceType) && !resource.catalogPartida && !resource.description),
+  );
+
+  if (!hasUnlinkedSubpartidas) return budget;
+
+  const catalogPartidas = (await prisma.catalogPartida.findMany({
+    include: {
+      apuRows: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          catalogSubpartida: {
+            include: {
+              apuRows: {
+                orderBy: { sortOrder: "asc" },
+              },
+            },
+          },
+        },
+      },
+    },
+  })).map((partida) => serializeCatalogPartida(partida));
+
+  const catalogByDescriptionUnit = new Map(
+    catalogPartidas.map((partida) => [buildBudgetPartidaMatchKey(partida.description, partida.unit), partida] as const),
+  );
+
+  return {
+    ...budget,
+    items: budget.items.map((item) => {
+      if (!item.apu) return item;
+
+      const sourceCatalogPartida = catalogByDescriptionUnit.get(buildBudgetPartidaMatchKey(item.description, item.unit));
+      if (!sourceCatalogPartida) return item;
+
+      const subpartidaRows = sourceCatalogPartida.apuRows.filter((row) => isSubpartidaResourceType(row.resourceType ?? row.groupLabel));
+      const usedRowIds = new Set<string>();
+
+      return {
+        ...item,
+        apu: {
+          ...item.apu,
+          resources: item.apu.resources.map((resource) => {
+            if (!isSubpartidaResourceType(resource.resourceType) || resource.catalogPartida) return resource;
+
+            const matchingRow = subpartidaRows.find((row) => {
+              if (usedRowIds.has(row.id)) return false;
+              return Math.abs(row.unitPrice - resource.unitPrice) < 0.005;
+            });
+
+            if (!matchingRow) return resource;
+            usedRowIds.add(matchingRow.id);
+
+            const linkedPartida =
+              matchingRow.catalogSubpartida ??
+              catalogByDescriptionUnit.get(buildBudgetPartidaMatchKey(matchingRow.description, matchingRow.unit)) ??
+              null;
+
+            if (!linkedPartida) {
+              return {
+                ...resource,
+                description: matchingRow.description,
+                unit: matchingRow.unit,
+              };
+            }
+
+            return {
+              ...resource,
+              catalogPartidaId: linkedPartida.id,
+              catalogPartida: linkedPartida,
+              description: matchingRow.description,
+              unit: matchingRow.unit,
+              nestedApuRows: resource.nestedApuRows?.length ? resource.nestedApuRows : cloneBudgetNestedApuRows(linkedPartida.apuRows),
+            };
+          }),
+        },
+      };
+    }),
+  };
+}
+
+function cloneBudgetNestedApuRows(rows: PartidaApuRowRecord[]) {
+  return rows.map((row, index) => ({
+    ...row,
+    id: `${row.id}-budget-preview-${index}`,
+    sortOrder: index,
+  }));
+}
+
+function buildBudgetPartidaMatchKey(description: string, unit: string) {
+  return `${normalizeBudgetPartidaMatchText(description)}|${normalizeBudgetPartidaMatchText(unit)}`;
+}
+
+function normalizeBudgetPartidaMatchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
 }
 
 async function resolvePersistableApuResourceId(

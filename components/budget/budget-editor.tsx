@@ -959,6 +959,7 @@ export function BudgetEditor({
           ? applyCatalogPartidaToDraftItem({
               item,
               partida,
+              catalogPartidas: partidasCatalog,
               resourcesById,
               resourcesByDescriptionUnit,
             })
@@ -1007,6 +1008,7 @@ export function BudgetEditor({
         return applyCatalogPartidaToDraftItem({
           item: nextItem,
           partida,
+          catalogPartidas: partidasCatalog,
           resourcesById,
           resourcesByDescriptionUnit,
         });
@@ -1403,6 +1405,7 @@ export function BudgetEditor({
         return applyCatalogPartidaToDraftItem({
           item,
           partida: selectedPartida,
+          catalogPartidas: partidasCatalog,
           resourcesById,
           resourcesByDescriptionUnit,
         });

@@ -7,6 +7,8 @@ export type ApuResourceRecord = {
   resourceId?: string | null;
   catalogPartidaId?: string | null;
   resourceType: string;
+  description?: string | null;
+  unit?: string | null;
   crew?: number | null;
   quantity: number;
   unitPrice: number;

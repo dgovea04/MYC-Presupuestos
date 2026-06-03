@@ -19,6 +19,8 @@ const apuResourceSchema = z.object({
   resourceId: z.string().min(1).nullable().optional(),
   catalogPartidaId: z.string().min(1).nullable().optional(),
   resourceType: z.string().min(1),
+  description: z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
   crew: z.coerce.number().nullable().optional(),
   quantity: z.coerce.number(),
   unitPrice: z.coerce.number(),

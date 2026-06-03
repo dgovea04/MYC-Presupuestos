@@ -116,6 +116,10 @@ export function isLaborApuRow(row: Pick<ApuCalculationRow, "resourceType" | "res
   return resolveRowBucket(row) === "LABOR";
 }
 
+export function isEquipmentApuRow(row: Pick<ApuCalculationRow, "resourceType" | "resource">) {
+  return resolveRowBucket(row) === "EQUIPMENT";
+}
+
 export function getApuPresentationCategory(row: Pick<ApuCalculationRow, "resourceType" | "resource">): ApuPresentationCategory {
   const normalizedType = normalizeResourceType(row.resourceType ?? row.resource?.category ?? "");
 

@@ -66,6 +66,14 @@ describe("PartidaApuSheet", () => {
     expect(getLinkByText("Explicar partida").getAttribute("href")).toContain("/ai?action=chat");
   });
 
+  it("allows crew input for equipment rows", async () => {
+    const { getByTestId } = await renderSheet(createPartida());
+
+    expect(getByTestId("partida-apu-row-crew-row-labor")).toBeInstanceOf(HTMLInputElement);
+    expect(getByTestId("partida-apu-row-crew-row-equipment")).toBeInstanceOf(HTMLInputElement);
+    expect(document.querySelector("[data-testid='partida-apu-row-crew-row-material']")).toBeNull();
+  });
+
   it("generates an AI APU preview and applies it as a draft without saving", async () => {
     const onChange = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue({
@@ -273,7 +281,7 @@ function createPartidaRow(id: string, resourceType: string, quantity: number, un
     id,
     catalogPartidaId: "partida-1",
     description: id,
-    unit: "glb",
+    unit: resourceType === "EQUIPMENT" ? "HM" : "glb",
     crew: null,
     quantity,
     unitPrice,

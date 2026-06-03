@@ -22,6 +22,7 @@ import {
   calculateApuSummary,
   getApuPresentationCategory,
   isCrewDrivenApuRow,
+  isEquipmentApuRow,
   isLaborApuRow,
   isPercentageBasedApuRow,
 } from "@/lib/calculations/apu";
@@ -754,13 +755,13 @@ export function ApuEditorSheet({
                 const categoryPresentation = getApuCategoryPresentation(presentationCategory);
                 const isCrewDriven = isCrewDrivenApuRow(calculatedResource);
                 const isPercentageBased = isPercentageBasedApuRow(calculatedResource);
-                const isLabor = isLaborApuRow(calculatedResource);
+                const canEditCrew = isLaborApuRow(calculatedResource) || isEquipmentApuRow(calculatedResource);
                 const isEditingResource = editingResourceRowId === resource.id;
                 const readonlyInputClass = "border-transparent bg-transparent px-0 shadow-none";
                 const isSubpartida = isSubpartidaResourceType(resource.resourceType);
                 const nestedRows = isSubpartida ? resource.nestedApuRows ?? resource.catalogPartida?.apuRows ?? [] : [];
                 const resourceLabel = isSubpartida
-                  ? `SUBPARTIDA - ${resource.catalogPartida?.description ?? "Subpartida"}`
+                  ? `SUBPARTIDA - ${resource.catalogPartida?.description ?? resource.description ?? "Subpartida"}`
                   : resource.resource
                   ? `${resource.resource.code} - ${resource.resource.description}`
                   : "Selecciona un insumo";
@@ -882,9 +883,9 @@ export function ApuEditorSheet({
                             onClick={() =>
                               setSubpartidaApuPreview({
                                 resourceIndex: index,
-                                title: resource.catalogPartida?.description ?? resourceLabel,
+                                title: resource.catalogPartida?.description ?? resource.description ?? resourceLabel,
                                 performance: resource.catalogPartida?.performance ?? 1,
-                                unit: resource.catalogPartida?.unit ?? resource.resource?.unit ?? currentItemRecord.unit,
+                                unit: resource.catalogPartida?.unit ?? resource.unit ?? resource.resource?.unit ?? currentItemRecord.unit,
                               })
                             }
                           >
@@ -896,8 +897,9 @@ export function ApuEditorSheet({
                   </TD>
                   <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-center")}>{calculatedResource.resource?.unit ?? resource.catalogPartida?.unit ?? "-"}</TD>
                   <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
-                    {isLabor ? (
+                    {canEditCrew ? (
                       <BufferedInput
+                        data-testid={`apu-row-crew-${resource.id}`}
                         type="number"
                         step="0.0001"
                         value={resource.crew ?? ""}
@@ -1086,6 +1088,14 @@ function getHeaderCellClass(isExcelMode: boolean, className?: string) {
   );
 }
 
+function getSubpartidaPreviewHeaderCellClass(isExcelMode: boolean, className?: string) {
+  return cn(
+    "budget-sticky-header h-10 text-xs uppercase tracking-wide",
+    isExcelMode ? "border-b border-slate-300 bg-slate-100 text-[11px] font-semibold text-slate-700" : "bg-slate-50",
+    className,
+  );
+}
+
 function getInputDensityClass(mode: "compact" | "comfortable", isExcelMode = false) {
   if (isExcelMode) return "h-8 rounded-sm border-slate-300 px-2 text-xs shadow-none";
   return mode === "compact" ? "h-8 rounded-lg px-2 text-xs" : "h-9 rounded-xl px-3 text-sm";
@@ -1150,6 +1160,8 @@ function AddSubpartidaDialog({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0);
   const [selectedPartidaId, setSelectedPartidaId] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
   const indexedPartidas = useMemo(
@@ -1170,6 +1182,7 @@ function AddSubpartidaDialog({
       .map(({ partida }) => partida)
       .slice(0, 40);
   }, [deferredQuery, indexedPartidas]);
+  const showSuggestions = isSearchFocused && suggestions.length > 0;
   const selectedPartida =
     suggestions.find((partida) => partida.id === selectedPartidaId) ??
     catalogPartidas.find((partida) => partida.id === selectedPartidaId) ??
@@ -1185,14 +1198,24 @@ function AddSubpartidaDialog({
   );
   const closeDialog = () => {
     setQuery("");
+    setIsSearchFocused(false);
+    setHighlightedSuggestionIndex(0);
     setSelectedPartidaId(null);
     onClose();
   };
   const addSelectedPartida = () => {
     if (!selectedPartida) return;
     setQuery("");
+    setIsSearchFocused(false);
+    setHighlightedSuggestionIndex(0);
     setSelectedPartidaId(null);
     onAdd(selectedPartida);
+  };
+  const selectSuggestion = (partida: CatalogPartidaRecord) => {
+    setSelectedPartidaId(partida.id);
+    setQuery(partida.description);
+    setIsSearchFocused(false);
+    setHighlightedSuggestionIndex(0);
   };
 
   return (
@@ -1222,9 +1245,9 @@ function AddSubpartidaDialog({
               <Button variant="ghost" size="sm">Cerrar</Button>
             </Dialog.Close>
           </div>
-          <div className="grid max-h-[76vh] min-h-0 gap-4 overflow-hidden p-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <div className="min-h-0 rounded-xl border border-slate-200 bg-white">
-              <div className="border-b border-slate-200 p-3">
+          <div className="flex max-h-[76vh] min-h-0 flex-col gap-4 overflow-hidden p-4">
+            <div className="relative z-10 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1">
                 <Input
                   autoFocus
                   data-testid="apu-add-subpartida-search"
@@ -1234,33 +1257,73 @@ function AddSubpartidaDialog({
                   onChange={(event) => {
                     setQuery(event.target.value);
                     setSelectedPartidaId(null);
+                    setHighlightedSuggestionIndex(0);
+                  }}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setIsSearchFocused(false), 120);
+                  }}
+                  onKeyDown={(event) => {
+                    if (suggestions.length === 0) return;
+
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setIsSearchFocused(true);
+                      setHighlightedSuggestionIndex((current) => Math.min(current + 1, suggestions.length - 1));
+                      return;
+                    }
+
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setIsSearchFocused(true);
+                      setHighlightedSuggestionIndex((current) => Math.max(current - 1, 0));
+                      return;
+                    }
+
+                    if (event.key === "Enter" && isSearchFocused) {
+                      event.preventDefault();
+                      const suggestion = suggestions[highlightedSuggestionIndex] ?? suggestions[0];
+                      if (suggestion) selectSuggestion(suggestion);
+                      return;
+                    }
+
+                    if (event.key === "Escape") {
+                      setIsSearchFocused(false);
+                      setHighlightedSuggestionIndex(0);
+                    }
                   }}
                 />
-              </div>
-              <div className="max-h-[62vh] overflow-auto py-1">
-                {suggestions.length === 0 ? (
-                  <p className="px-3 py-4 text-sm text-slate-500">No se encontraron partidas.</p>
+                {showSuggestions ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] max-h-72 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-2xl">
+                    {suggestions.map((partida, index) => (
+                      <button
+                        key={partida.id}
+                        type="button"
+                        data-testid={`apu-add-subpartida-option-${partida.id}`}
+                        className={cn(
+                          "flex w-full items-start justify-between gap-3 px-3 py-2 text-left",
+                          index === highlightedSuggestionIndex ? "bg-sky-100" : "hover:bg-sky-50",
+                        )}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectSuggestion(partida);
+                        }}
+                        onMouseEnter={() => setHighlightedSuggestionIndex(index)}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-slate-900">{partida.description}</span>
+                          <span className="mt-0.5 block text-xs text-slate-500">
+                            Unidad: {partida.unit} - PU: {formatCurrency(partida.unitPrice, partida.currency, currencyDecimals)}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
-                {suggestions.map((partida) => (
-                  <button
-                    key={partida.id}
-                    type="button"
-                    data-testid={`apu-add-subpartida-option-${partida.id}`}
-                    className={cn(
-                      "flex w-full items-start justify-between gap-3 px-3 py-2 text-left",
-                      partida.id === selectedPartida?.id ? "bg-sky-100" : "hover:bg-sky-50",
-                    )}
-                    onClick={() => setSelectedPartidaId(partida.id)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-slate-900">{partida.description}</span>
-                      <span className="mt-0.5 block text-xs text-slate-500">
-                        Unidad: {partida.unit} - PU: {formatCurrency(partida.unitPrice, partida.currency, currencyDecimals)}
-                      </span>
-                    </span>
-                  </button>
-                ))}
               </div>
+              {isSearchFocused && suggestions.length === 0 ? (
+                <p className="text-sm text-slate-500 sm:px-2">No se encontraron partidas.</p>
+              ) : null}
             </div>
             <div className="min-h-0 overflow-auto">
               {selectedPartida ? (
@@ -1348,13 +1411,13 @@ function SubpartidaPreviewRowsTable({
         </colgroup>
         <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
           <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90 hover:bg-slate-100/90" : "bg-slate-50")}>
-            <TH className={getHeaderCellClass(isExcelMode, "w-[36px]")} />
-            <TH className={getHeaderCellClass(isExcelMode)}>Insumo</TH>
-            <TH className={getHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
-            <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Cuadrilla</TH>
-            <TH className={getHeaderCellClass(isExcelMode, "text-right")}>Cantidad</TH>
-            <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Precio unitario</TH>
-            <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Subtotal</TH>
+            <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "w-[36px]")} />
+            <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode)}>Insumo</TH>
+            <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
+            <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Cuadrilla</TH>
+            <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "text-right")}>Cantidad</TH>
+            <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Precio unitario</TH>
+            <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Subtotal</TH>
           </TR>
         </THead>
         <TBody>

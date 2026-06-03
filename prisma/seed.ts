@@ -954,9 +954,7 @@ async function linkSeedCatalogSubpartidaRows() {
     },
   });
   const partidasByKey = new Map(
-    partidas
-      .filter((partida) => partida.apuRows.length > 0)
-      .map((partida) => [buildSeedPartidaMatchKey(partida.description, partida.unit), partida.id]),
+    partidas.map((partida) => [buildSeedPartidaMatchKey(partida.description, partida.unit), partida.id]),
   );
   const subpartidaRows = await prisma.partidaApuRow.findMany({
     where: {

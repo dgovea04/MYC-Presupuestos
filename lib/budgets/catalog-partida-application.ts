@@ -7,6 +7,7 @@ import { clonePartidaApuRowsForBudget, isSubpartidaResourceType, SUBPARTIDA_RESO
 type ApplyCatalogPartidaToDraftItemOptions = {
   item: BudgetItemRecord;
   partida: CatalogPartidaRecord;
+  catalogPartidas?: CatalogPartidaRecord[];
   resourcesById: Map<string, ResourceRecord>;
   resourcesByDescriptionUnit: Map<string, ResourceRecord>;
 };
@@ -14,9 +15,12 @@ type ApplyCatalogPartidaToDraftItemOptions = {
 export function applyCatalogPartidaToDraftItem({
   item,
   partida,
+  catalogPartidas = [],
   resourcesById,
   resourcesByDescriptionUnit,
 }: ApplyCatalogPartidaToDraftItemOptions): BudgetItemRecord {
+  const catalogPartidasByDescriptionUnit = buildCatalogPartidasByDescriptionUnit(catalogPartidas);
+
   return {
     ...item,
     description: partida.description,
@@ -31,7 +35,12 @@ export function applyCatalogPartidaToDraftItem({
       totalUnitCost: partida.unitPrice,
       resources: partida.apuRows.flatMap<ApuResourceRecord>((row) => {
         if (isSubpartidaResourceType(row.resourceType ?? row.groupLabel)) {
-          const linkedPartida = row.catalogSubpartida ?? null;
+          const linkedPartida =
+            row.catalogSubpartida ??
+            (row.catalogSubpartidaId ? catalogPartidas.find((candidate) => candidate.id === row.catalogSubpartidaId) ?? null : null) ??
+            catalogPartidasByDescriptionUnit.get(buildPartidaDescriptionUnitKey(row.description, row.unit)) ??
+            null;
+
           return [
             {
               id: crypto.randomUUID(),
@@ -39,6 +48,8 @@ export function applyCatalogPartidaToDraftItem({
               resourceId: null,
               catalogPartidaId: row.catalogSubpartidaId ?? linkedPartida?.id ?? null,
               resourceType: SUBPARTIDA_RESOURCE_TYPE,
+              description: row.description,
+              unit: row.unit,
               crew: row.crew ?? null,
               quantity: row.quantity,
               unitPrice: row.unitPrice,
@@ -70,6 +81,16 @@ export function applyCatalogPartidaToDraftItem({
   };
 }
 
+function buildCatalogPartidasByDescriptionUnit(catalogPartidas: CatalogPartidaRecord[]) {
+  return new Map(
+    catalogPartidas.map((partida) => [buildPartidaDescriptionUnitKey(partida.description, partida.unit), partida] as const),
+  );
+}
+
+function buildPartidaDescriptionUnitKey(description: string, unit: string) {
+  return `${normalizeBudgetLookupText(description)}|${normalizeBudgetLookupText(unit)}`;
+}
+
 export function resolveCatalogResource(
   row: CatalogPartidaRecord["apuRows"][number],
   resourcesById: Map<string, ResourceRecord>,
@@ -84,7 +105,7 @@ export function resolveCatalogResource(
     if (byId) return byId;
   }
 
-  return resourcesByDescriptionUnit.get(`${normalizeBudgetLookupText(row.description)}|${normalizeBudgetLookupText(row.unit)}`) ?? null;
+  return resourcesByDescriptionUnit.get(buildPartidaDescriptionUnitKey(row.description, row.unit)) ?? null;
 }
 
 function normalizeBudgetLookupText(value: string) {

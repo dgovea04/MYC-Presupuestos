@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { buildDisplayRows } from "@/lib/budget/structure";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
@@ -16,6 +17,7 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
 import { buildGeneralBudgetTraceability } from "@/lib/budget/general-budget-traceability";
 import {
   getAppDataChangeEventName,
@@ -26,6 +28,7 @@ import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import type { BudgetRecord } from "@/types/budget";
+import type { CatalogPartidaRecord } from "@/types/partida";
 
 type SubBudgetOverview = {
   id: string;
@@ -46,6 +49,17 @@ type SubBudgetOverview = {
 const QUANTITY_DECIMALS = 2;
 const GENERAL_TAB_ID = "__general_budget__";
 
+type SubBudgetSubpartidaRow = {
+  key: string;
+  apuResourceId: string;
+  name: string;
+  unit: string;
+  unitPrice: number;
+  currency: string;
+  hasApu: boolean;
+  hasCatalogPartida: boolean;
+};
+
 export function GeneralBudgetOverview({
   projectId,
   generalBudgetId,
@@ -59,7 +73,12 @@ export function GeneralBudgetOverview({
 }) {
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
+  const router = useRouter();
   const [optimisticTotals, setOptimisticTotals] = useState<Record<string, { totalAmount: number; updatedAt: string }>>({});
+  const [activeSubBudgetDetailView, setActiveSubBudgetDetailView] = useState<"items" | "subpartidas">("items");
+  const [createdSubpartidasByResourceId, setCreatedSubpartidasByResourceId] = useState<Record<string, CatalogPartidaRecord>>({});
+  const [creatingSubpartidaKey, setCreatingSubpartidaKey] = useState<string | null>(null);
+  const [subpartidaCreationError, setSubpartidaCreationError] = useState("");
 
   useEffect(() => {
     function applyPayload(payload: AppDataChangePayload | null) {
@@ -188,6 +207,10 @@ export function GeneralBudgetOverview({
     () => (activeBudgetDetail ? buildDisplayRows(activeBudgetDetail) : []),
     [activeBudgetDetail],
   );
+  const activeBudgetSubpartidas = useMemo(
+    () => (activeBudgetDetail ? buildSubBudgetSubpartidaRows(activeBudgetDetail, createdSubpartidasByResourceId) : []),
+    [activeBudgetDetail, createdSubpartidasByResourceId],
+  );
   const latestUpdatedAt =
     orderedSubBudgets
       .map((budget) => new Date(budget.updatedAt))
@@ -202,6 +225,41 @@ export function GeneralBudgetOverview({
       }),
     [calculatedSubBudgetDetails.length, latestUpdatedAt, orderedSubBudgets.length],
   );
+
+  async function createCatalogPartidaForSubpartida(subpartida: SubBudgetSubpartidaRow) {
+    if (!activeBudget) return;
+
+    setCreatingSubpartidaKey(subpartida.key);
+    setSubpartidaCreationError("");
+
+    try {
+      const response = await fetch(`/api/budgets/${activeBudget.id}/subpartidas/catalog`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apuResourceId: subpartida.apuResourceId,
+          description: subpartida.name,
+          unit: subpartida.unit,
+          unitPrice: subpartida.unitPrice,
+        }),
+      });
+
+      const payload = (await response.json()) as { partida?: CatalogPartidaRecord; error?: string };
+      if (!response.ok || !payload.partida) {
+        throw new Error(payload.error ?? "No se pudo crear la partida/APU de la subpartida.");
+      }
+
+      setCreatedSubpartidasByResourceId((current) => ({
+        ...current,
+        [subpartida.apuResourceId]: payload.partida as CatalogPartidaRecord,
+      }));
+      router.refresh();
+    } catch (error) {
+      setSubpartidaCreationError(error instanceof Error ? error.message : "No se pudo crear la partida/APU de la subpartida.");
+    } finally {
+      setCreatingSubpartidaKey(null);
+    }
+  }
   return (
     <div className="space-y-5">
       <Card className="border-slate-200">
@@ -436,6 +494,32 @@ export function GeneralBudgetOverview({
                 </button>
               ))}
             </div>
+            {!isGeneralTabActive ? (
+              <div className={cn("flex flex-wrap items-center justify-between gap-3 border border-slate-200 bg-slate-50 px-3 py-2", isExcelMode ? "rounded-sm" : "rounded-xl")}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Vista</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={activeSubBudgetDetailView === "items" ? "default" : "outline"}
+                    onClick={() => setActiveSubBudgetDetailView("items")}
+                  >
+                    Partidas
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={activeSubBudgetDetailView === "subpartidas" ? "default" : "outline"}
+                    onClick={() => setActiveSubBudgetDetailView("subpartidas")}
+                  >
+                    Subpartidas
+                  </Button>
+                </div>
+                {activeSubBudgetDetailView === "subpartidas" ? (
+                  <span className="text-sm text-slate-500">{activeBudgetSubpartidas.length} subpartidas</span>
+                ) : null}
+              </div>
+            ) : null}
 
             {isGeneralTabActive ? (
               <>
@@ -601,7 +685,10 @@ export function GeneralBudgetOverview({
                   </div>
                 </div>
 
-                <div className={getTableFrameClassName(isExcelMode)} data-testid="active-sub-budget-table">
+                <div
+                  className={cn(getTableFrameClassName(isExcelMode), activeSubBudgetDetailView === "subpartidas" && "hidden")}
+                  data-testid="active-sub-budget-table"
+                >
                   <Table>
                     <THead>
                       <TR className="bg-slate-50 hover:bg-slate-50">
@@ -665,6 +752,78 @@ export function GeneralBudgetOverview({
                   </Table>
                 </div>
 
+                {activeSubBudgetDetailView === "subpartidas" ? (
+                  <div className={getTableFrameClassName(isExcelMode)} data-testid="active-sub-budget-subpartidas-table">
+                    <Table>
+                      <THead>
+                        <TR className="bg-slate-50 hover:bg-slate-50">
+                          <TH>Nombre</TH>
+                          <TH className="text-center">Unidad</TH>
+                          <TH className="text-right">P. unitario</TH>
+                          <TH className="text-center">APU</TH>
+                          <TH className="text-right">Acciones</TH>
+                        </TR>
+                      </THead>
+                      <TBody>
+                        {activeBudgetSubpartidas.length > 0 ? (
+                          activeBudgetSubpartidas.map((subpartida) => (
+                            <TR key={subpartida.key}>
+                              <TD className="font-medium text-slate-900">{subpartida.name}</TD>
+                              <TD className="text-center">{subpartida.unit}</TD>
+                              <TD className="text-right tabular-nums">
+                                {formatCurrencyCell(subpartida.unitPrice, subpartida.currency, currencyDecimals)}
+                              </TD>
+                              <TD className="text-center">
+                                <Badge
+                                  className={
+                                    subpartida.hasApu
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : subpartida.hasCatalogPartida
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-slate-100 text-slate-600"
+                                  }
+                                >
+                                  {subpartida.hasApu ? "Con APU" : subpartida.hasCatalogPartida ? "APU vacio" : "Sin partida"}
+                                </Badge>
+                              </TD>
+                              <TD>
+                                <div className="flex justify-end">
+                                  {!subpartida.hasCatalogPartida ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={creatingSubpartidaKey === subpartida.key}
+                                      onClick={() => void createCatalogPartidaForSubpartida(subpartida)}
+                                    >
+                                      {creatingSubpartidaKey === subpartida.key ? "Creando..." : "Crear partida/APU"}
+                                    </Button>
+                                  ) : (
+                                    <Link href={`/partidas?q=${encodeURIComponent(subpartida.name)}`}>
+                                      <Button type="button" size="sm" variant="ghost">
+                                        Abrir catalogo
+                                      </Button>
+                                    </Link>
+                                  )}
+                                </div>
+                              </TD>
+                            </TR>
+                          ))
+                        ) : (
+                          <TR>
+                            <TD colSpan={5} className="py-8 text-center text-sm text-slate-500">
+                              Este Sub Presupuesto no tiene subpartidas en sus APU.
+                            </TD>
+                          </TR>
+                        )}
+                      </TBody>
+                    </Table>
+                    {subpartidaCreationError ? (
+                      <p className="border-t border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">{subpartidaCreationError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="flex justify-end gap-2">
                   {(() => {
                     const activeIndex = budgetTabs.findIndex((budget) => budget.id === activeBudget.id);
@@ -711,6 +870,40 @@ export function GeneralBudgetOverview({
 
 function formatCurrencyCell(value: number, currency: string, currencyDecimals: number) {
   return formatCurrency(value, currency, currencyDecimals);
+}
+
+function buildSubBudgetSubpartidaRows(
+  budget: BudgetRecord,
+  createdSubpartidasByResourceId: Record<string, CatalogPartidaRecord>,
+): SubBudgetSubpartidaRow[] {
+  const rowsByKey = new Map<string, SubBudgetSubpartidaRow>();
+
+  for (const item of budget.items) {
+    for (const resource of item.apu?.resources ?? []) {
+      if (!isSubpartidaResourceType(resource.resourceType)) continue;
+
+      const createdPartida = createdSubpartidasByResourceId[resource.id];
+      const catalogPartida = createdPartida ?? resource.catalogPartida ?? null;
+      const key = resource.catalogPartidaId ?? catalogPartida?.id ?? resource.id;
+      if (rowsByKey.has(key)) continue;
+
+      const nestedRowsCount = resource.nestedApuRows?.length ?? 0;
+      const catalogRowsCount = catalogPartida?.apuRows.length ?? 0;
+
+      rowsByKey.set(key, {
+        key,
+        apuResourceId: resource.id,
+        name: catalogPartida?.description ?? resource.description ?? resource.resource?.description ?? `Subpartida en ${item.description}`,
+        unit: catalogPartida?.unit ?? resource.unit ?? resource.resource?.unit ?? "-",
+        unitPrice: resource.unitPrice,
+        currency: catalogPartida?.currency ?? budget.currency,
+        hasApu: nestedRowsCount > 0 || catalogRowsCount > 0,
+        hasCatalogPartida: Boolean(catalogPartida ?? resource.catalogPartidaId),
+      });
+    }
+  }
+
+  return [...rowsByKey.values()].sort((left, right) => left.name.localeCompare(right.name, "es"));
 }
 
 function buildBudgetReviewHref({

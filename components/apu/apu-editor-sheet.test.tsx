@@ -66,6 +66,14 @@ describe("ApuEditorSheet", () => {
     expect(copilotHref).toContain("apuUnit=m2");
   });
 
+  it("allows crew input for equipment rows", async () => {
+    const { getByTestId } = await renderSheet(createBudgetItem());
+
+    expect(getByTestId("apu-row-crew-resource-labor")).toBeInstanceOf(HTMLInputElement);
+    expect(getByTestId("apu-row-crew-resource-equipment")).toBeInstanceOf(HTMLInputElement);
+    expect(document.querySelector("[data-testid='apu-row-crew-resource-material']")).toBeNull();
+  });
+
   it("generates an AI APU preview and applies it to the budget APU draft", async () => {
     const onUpdate = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue({
@@ -321,7 +329,7 @@ function createResourceRow(
       code: id.toUpperCase(),
       description: id,
       category,
-      unit: "glb",
+      unit: resourceType === "EQUIPMENT" ? "HM" : "glb",
       unitPrice,
       currency: "PEN",
     },
