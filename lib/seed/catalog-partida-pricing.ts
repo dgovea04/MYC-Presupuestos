@@ -1,4 +1,5 @@
 import { calculateApuRows, calculateApuTotalUnitCost } from "@/lib/calculations/apu";
+import { isSubpartidaResourceType, SUBPARTIDA_RESOURCE_TYPE } from "@/lib/apu/subpartidas";
 
 export type SeedCatalogResourcePrice = {
   unitPrice: number | { toString(): string };
@@ -36,6 +37,20 @@ export function priceSeedCatalogPartidaApuRows({
 }): SeedCatalogPartidaApuPricingResult {
   const unresolvedRows: Array<{ description: string; unit: string }> = [];
   const rowsPricedFromCatalog = rows.map((row) => {
+    if (isSubpartidaResourceType(row.resourceType ?? row.groupLabel)) {
+      return {
+        ...row,
+        resourceId: null,
+        resourceType: SUBPARTIDA_RESOURCE_TYPE,
+        unitPrice: Number(row.unitPrice.toString()),
+        subtotal: 0,
+        resource: {
+          unit: row.unit,
+          category: SUBPARTIDA_RESOURCE_TYPE,
+        },
+      };
+    }
+
     const resource = row.resourceId ? resourcesById.get(row.resourceId) : null;
 
     if (!resource) {

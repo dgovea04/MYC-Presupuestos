@@ -294,6 +294,7 @@ function formatResourceCategoryLabel(category: ResourceCategory) {
   if (category === "LABOR") return "Mano de obra";
   if (category === "EQUIPMENT") return "Equipos";
   if (category === "TOOLS") return "Herramientas";
+  if (category === "SUBCONTRACT") return "Sub contratos";
   return "Materiales";
 }
 

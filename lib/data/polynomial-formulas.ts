@@ -121,13 +121,13 @@ type FormulaBudgetResourceInput = {
   resourceType?: string | null;
   subtotal: number | Decimal;
   resource?: {
-    category?: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | null;
+    category?: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT" | null;
     description?: string | null;
     iu?: string | null;
     iuCurrent?: string | null;
     iuName?: string | null;
     unifiedIndexName?: string | null;
-  };
+  } | null;
 };
 
 type FormulaBudgetItemInput = {
@@ -264,7 +264,7 @@ function hasAssignedBaseIndex(monomial: PolynomialMonomialInput): boolean {
 
 function deriveCostGroupKey(
   resourceType: string | null | undefined,
-  category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | null | undefined,
+  category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT" | null | undefined,
 ): GeneratedCostGroupKey {
   const typeToken = normalizeToken(resourceType);
   const categoryToken = normalizeToken(category);
@@ -1080,7 +1080,7 @@ function buildPreservedMonomialComponentDraft(
     apuResourceId: string | null;
     resourceType: string | null;
     amount: { toFixed(decimalPlaces?: number): string };
-    apuResource?: { resource: { description: string } } | null;
+    apuResource?: { resource: { description: string } | null } | null;
   },
 ): MonomialComponentDraft {
   const snapshot = component as typeof component & MonomialComponentSnapshotFields;
@@ -1090,7 +1090,7 @@ function buildPreservedMonomialComponentDraft(
     apuResourceId: component.apuResourceId ?? undefined,
     resourceType: component.resourceType ?? undefined,
     amount: component.amount.toFixed(4),
-    resourceName: component.apuResource?.resource.description,
+    resourceName: component.apuResource?.resource?.description,
     unifiedIndexCode: snapshot.unifiedIndexCode ?? undefined,
     unifiedIndexName: snapshot.unifiedIndexName ?? undefined,
     iuFamily: (snapshot.iuFamily as PolynomialIuFamily | null | undefined) ?? undefined,

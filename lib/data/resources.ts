@@ -17,9 +17,9 @@ const resourceCodePrefixes: Record<ResourceCategory, string> = {
   LABOR: "MO",
   EQUIPMENT: "EQ",
   TOOLS: "HER",
+  SUBCONTRACT: "SUB",
 };
 export const GLOBAL_RESOURCES_CACHE_TAG = "global-resources-v2";
-const GLOBAL_RESOURCE_REVIEW_EDITABLE_FIELDS = new Set<keyof ResourcePatchFields>(["iuCurrent"]);
 
 export async function getResourcesByUser(userId: string) {
   const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(userId)]);
@@ -316,30 +316,40 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
       }
 
       const normalizedChanges = normalizeResourcePatchChanges(entry.changes);
+      const updateChanges: Partial<ResourcePatchFields> | null =
+        existing.companyId == null
+          ? getGlobalResourceReviewUpdateChanges(normalizedChanges)
+          : normalizedChanges;
 
-      if (existing.companyId == null && !isAllowedGlobalResourceReviewPatch(normalizedChanges)) {
+      if (existing.companyId == null && !updateChanges) {
         throw new Error("Solo puedes editar el IU 2026 de insumos globales en revision");
       }
 
+      const allowedUpdateChanges = updateChanges ?? {};
       const nextCompanyId =
-        normalizedChanges.companyId !== undefined ? (normalizedChanges.companyId ?? null) : existing.companyId;
-      const nextCategory = normalizedChanges.category ?? existing.category;
+        allowedUpdateChanges.companyId !== undefined ? (allowedUpdateChanges.companyId ?? null) : existing.companyId;
+      const nextCategory = allowedUpdateChanges.category ?? existing.category;
 
       if (nextCompanyId) {
         await assertCompanyOwnership(tx, userId, nextCompanyId);
       }
 
       const shouldRegenerateCode =
-        normalizedChanges.category !== undefined ||
-        normalizedChanges.companyId !== undefined ||
+        allowedUpdateChanges.category !== undefined ||
+        allowedUpdateChanges.companyId !== undefined ||
         !existing.code;
 
       const resource = await tx.resource.update({
         where: { id: entry.id },
         data: buildResourceUpdateData(
-          normalizedChanges,
+          allowedUpdateChanges,
           shouldRegenerateCode ? await generateNextResourceCode(tx, nextCompanyId, nextCategory, existing.id) : undefined,
-          existing.companyId == null && normalizedChanges.iuCurrent !== undefined ? null : undefined,
+          existing.companyId == null && allowedUpdateChanges.iuCurrent !== undefined
+            ? getNextIuCurrentReviewStatus({
+                previousIuCurrent: existing.iuCurrent,
+                nextIuCurrent: allowedUpdateChanges.iuCurrent,
+              })
+            : undefined,
         ),
       });
 
@@ -384,12 +394,31 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
   });
 }
 
-function isAllowedGlobalResourceReviewPatch(changes: Partial<ResourcePatchFields>) {
-  const changedFields = (Object.keys(changes) as Array<keyof ResourcePatchFields>).filter(
-    (key) => changes[key] !== undefined,
-  );
+function getGlobalResourceReviewUpdateChanges(changes: Partial<ResourcePatchFields>) {
+  if (changes.iuCurrent === undefined) {
+    return null;
+  }
 
-  return changedFields.length > 0 && changedFields.every((key) => GLOBAL_RESOURCE_REVIEW_EDITABLE_FIELDS.has(key));
+  return {
+    iuCurrent: changes.iuCurrent,
+  } satisfies Partial<ResourcePatchFields>;
+}
+
+function getNextIuCurrentReviewStatus({
+  previousIuCurrent,
+  nextIuCurrent,
+}: {
+  previousIuCurrent: string | null;
+  nextIuCurrent: string | null | undefined;
+}) {
+  const previousCode = normalizeResourceIuCode(previousIuCurrent);
+  const nextCode = normalizeResourceIuCode(nextIuCurrent);
+
+  if (!previousCode && nextCode) {
+    return "MANUAL_ASSIGNED";
+  }
+
+  return null;
 }
 
 function normalizeResourceFields(input: ResourceInput | ResourcePatchFields) {

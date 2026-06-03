@@ -82,6 +82,7 @@ export function GeneralBudgetResourcesTable({
                 <option value="LABOR">Mano de obra</option>
                 <option value="EQUIPMENT">Equipos</option>
                 <option value="TOOLS">Herramientas</option>
+                <option value="SUBCONTRACT">Sub contratos</option>
               </Select>
               <Select value={budgetName} onChange={(event) => setBudgetName(event.target.value)}>
                 <option value="ALL">Todos los Sub Presupuestos</option>
@@ -162,5 +163,6 @@ function getCategoryLabel(category: string) {
   if (category === "LABOR") return "Mano de obra";
   if (category === "EQUIPMENT") return "Equipos";
   if (category === "TOOLS") return "Herramientas";
+  if (category === "SUBCONTRACT") return "Sub contratos";
   return "Materiales";
 }

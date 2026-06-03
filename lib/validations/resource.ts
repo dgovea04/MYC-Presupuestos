@@ -4,7 +4,7 @@ export const resourceSchema = z.object({
   companyId: z.string().optional(),
   code: z.string().trim().optional(),
   description: z.string().min(3, "Ingresa la descripcion"),
-  category: z.enum(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS"]),
+  category: z.enum(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS", "SUBCONTRACT"]),
   iu: z.string().trim().optional(),
   iuCurrent: z.string().trim().optional(),
   subcategory: z.string().optional(),

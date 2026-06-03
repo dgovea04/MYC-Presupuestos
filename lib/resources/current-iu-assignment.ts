@@ -17,7 +17,7 @@ type ResolveCurrentResourceIuInput = {
 const MIN_DICTIONARY_SCORE = 0.82;
 
 export function resolveCurrentResourceIu(input: ResolveCurrentResourceIuInput): string | null {
-  const availableCodes = new Set(input.unifiedIndices.map((index) => normalizeLookupCode(index.code)).filter(Boolean));
+  const availableCodes = new Set(input.unifiedIndices.map((index) => normalizeLookupCode(index.code)).filter((code): code is string => Boolean(code)));
   const description = normalizeCatalogText(input.description);
   const manualCode = resolveManualCurrentIuCode(description, input.category);
 

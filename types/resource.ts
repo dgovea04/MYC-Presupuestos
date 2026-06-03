@@ -1,4 +1,4 @@
-export type ResourceCategory = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS";
+export type ResourceCategory = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT";
 
 export type ResourceRecord = {
   id: string;

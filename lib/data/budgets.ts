@@ -24,9 +24,11 @@ import {
   type BudgetFooterStructureSaveInput,
 } from "@/lib/validations/budget-footer";
 import type { BudgetRecord, BudgetStatePatch } from "@/types/budget";
+import type { PartidaApuRowRecord } from "@/types/partida";
 import type { BudgetFooterStructure, GeneralBudgetResourceSummaryResult, GeneralExpenseStructure } from "@/types/budget-sections";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
-import type { Prisma } from "@prisma/client";
+import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
+import { Prisma } from "@prisma/client";
 import type { BudgetLiveUpdateSummary } from "@/lib/client/live-updates";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 
@@ -143,6 +145,13 @@ export async function getBudgetById(id: string, userId: string) {
               resources: {
                 include: {
                   resource: true,
+                  catalogPartida: {
+                    include: {
+                      apuRows: {
+                        orderBy: { sortOrder: "asc" },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -234,13 +243,19 @@ export async function getGeneralBudgetResourceSummary(budgetId: string, userId: 
       items: subBudget.items.map((item) => ({
         apu: item.apu
           ? {
-              resources: item.apu.resources.map((resource) => ({
-                resourceId: resource.resourceId,
-                quantity: decimalToNumber(resource.quantity),
-                subtotal: decimalToNumber(resource.subtotal),
-                unitPrice: decimalToNumber(resource.unitPrice),
-                resource: resource.resource,
-              })),
+              resources: item.apu.resources.flatMap((resource) =>
+                resource.resource
+                  ? [
+                      {
+                        resourceId: resource.resourceId ?? resource.resource.id,
+                        quantity: decimalToNumber(resource.quantity),
+                        subtotal: decimalToNumber(resource.subtotal),
+                        unitPrice: decimalToNumber(resource.unitPrice),
+                        resource: resource.resource,
+                      },
+                    ]
+                  : [],
+              ),
             }
           : null,
       })),
@@ -1047,15 +1062,18 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
         .filter((resourceId) => !desiredResourceIds.has(resourceId));
 
       for (const resource of item.apu.resources) {
-        const persistedResourceId = await resolvePersistableApuResourceId(tx, userId, resource);
+        const isSubpartida = isSubpartidaResourceType(resource.resourceType);
+        const persistedResourceId = isSubpartida ? null : await resolvePersistableApuResourceId(tx, userId, resource);
         const resourceData = {
           apuId: persistedApuId,
           resourceId: persistedResourceId,
+          catalogPartidaId: isSubpartida ? resource.catalogPartidaId ?? null : null,
           resourceType: resource.resourceType,
           crew: resource.crew ?? null,
           quantity: resource.quantity,
           unitPrice: resource.unitPrice,
           subtotal: resource.subtotal,
+          nestedApuRows: isSubpartida ? buildNestedApuRowsJson(resource.nestedApuRows) : Prisma.JsonNull,
         };
 
         if (existingResourceIds.has(resource.id)) {
@@ -1321,6 +1339,26 @@ function roundMoney(value: Decimal.Value) {
   return new Decimal(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
 }
 
+function buildNestedApuRowsJson(rows: PartidaApuRowRecord[] | undefined): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (!rows?.length) return Prisma.JsonNull;
+
+  return rows.map((row) => ({
+    id: row.id,
+    catalogPartidaId: row.catalogPartidaId,
+    resourceId: row.resourceId ?? null,
+    catalogSubpartidaId: row.catalogSubpartidaId ?? null,
+    description: row.description,
+    unit: row.unit,
+    crew: row.crew ?? null,
+    quantity: row.quantity,
+    unitPrice: row.unitPrice,
+    subtotal: row.subtotal,
+    resourceType: row.resourceType ?? null,
+    groupLabel: row.groupLabel ?? null,
+    sortOrder: row.sortOrder,
+  }));
+}
+
 async function resolvePersistableApuResourceId(
   tx: Prisma.TransactionClient,
   userId: string,
@@ -1383,7 +1421,7 @@ async function resolvePersistableApuResourceId(
 
   const resourceLabel =
     resource.resource?.description?.trim() ||
-    resource.resourceId.trim() ||
+    resource.resourceId?.trim() ||
     "seleccionado";
 
   throw new Error(

@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { serializeCatalogPartida } from "@/lib/db/serializers";
 import { calculateApuRows, calculateApuTotalUnitCost } from "@/lib/calculations/apu";
@@ -8,12 +7,7 @@ import type { CatalogPartidaPatchResult, CatalogPartidaRecord, CatalogPartidaSta
 export const CATALOG_PARTIDAS_CACHE_TAG = "catalog-partidas";
 
 export async function getCatalogPartidas() {
-  const version = await getCatalogPartidasCacheVersion();
-  const getCachedCatalogPartidas = unstable_cache(getCatalogPartidasFromDatabase, ["catalog-partidas", version], {
-    tags: [CATALOG_PARTIDAS_CACHE_TAG],
-  });
-
-  return getCachedCatalogPartidas();
+  return getCatalogPartidasFromDatabase();
 }
 
 async function getCatalogPartidasFromDatabase() {
@@ -21,32 +15,21 @@ async function getCatalogPartidasFromDatabase() {
     include: {
       apuRows: {
         orderBy: { sortOrder: "asc" },
+        include: {
+          catalogSubpartida: {
+            include: {
+              apuRows: {
+                orderBy: { sortOrder: "asc" },
+              },
+            },
+          },
+        },
       },
     },
     orderBy: [{ description: "asc" }],
   });
 
   return partidas.map((partida) => serializeCatalogPartida(partida));
-}
-
-async function getCatalogPartidasCacheVersion() {
-  const [partidaVersion, apuRowVersion] = await Promise.all([
-    prisma.catalogPartida.aggregate({
-      _max: {
-        updatedAt: true,
-      },
-    }),
-    prisma.partidaApuRow.aggregate({
-      _max: {
-        updatedAt: true,
-      },
-    }),
-  ]);
-
-  const latestPartidaUpdate = partidaVersion._max.updatedAt?.getTime() ?? 0;
-  const latestApuRowUpdate = apuRowVersion._max.updatedAt?.getTime() ?? 0;
-
-  return String(Math.max(latestPartidaUpdate, latestApuRowUpdate));
 }
 
 export async function saveCatalogPartidasPatch(patchInput: CatalogPartidaStatePatch): Promise<CatalogPartidaPatchResult> {
@@ -63,6 +46,15 @@ export async function saveCatalogPartidasPatch(patchInput: CatalogPartidaStatePa
         include: {
           apuRows: {
             orderBy: { sortOrder: "asc" },
+            include: {
+              catalogSubpartida: {
+                include: {
+                  apuRows: {
+                    orderBy: { sortOrder: "asc" },
+                  },
+                },
+              },
+            },
           },
         },
       });
@@ -79,6 +71,15 @@ export async function saveCatalogPartidasPatch(patchInput: CatalogPartidaStatePa
         include: {
           apuRows: {
             orderBy: { sortOrder: "asc" },
+            include: {
+              catalogSubpartida: {
+                include: {
+                  apuRows: {
+                    orderBy: { sortOrder: "asc" },
+                  },
+                },
+              },
+            },
           },
         },
       });
@@ -122,6 +123,15 @@ export async function saveCatalogPartidasPatch(patchInput: CatalogPartidaStatePa
         include: {
           apuRows: {
             orderBy: { sortOrder: "asc" },
+            include: {
+              catalogSubpartida: {
+                include: {
+                  apuRows: {
+                    orderBy: { sortOrder: "asc" },
+                  },
+                },
+              },
+            },
           },
         },
       });
@@ -176,6 +186,7 @@ function normalizeCatalogPartidaPatchChanges(input: Partial<CatalogPartidaInput>
 
 function normalizeCatalogPartidaApuRow(row: CatalogPartidaApuRowInput | {
   resourceId: string | null;
+  catalogSubpartidaId?: string | null;
   description: string;
   unit: string;
   crew: number | { toString(): string } | null;
@@ -188,6 +199,7 @@ function normalizeCatalogPartidaApuRow(row: CatalogPartidaApuRowInput | {
 }) {
   return {
     resourceId: normalizeOptionalString(row.resourceId),
+    catalogSubpartidaId: normalizeOptionalString(row.catalogSubpartidaId),
     description: row.description.trim(),
     unit: row.unit.trim(),
     crew: row.crew == null ? null : Number(row.crew.toString()),
@@ -219,6 +231,7 @@ function buildCatalogPartidaCreateData(input: ReturnType<typeof normalizeCatalog
 function createPartidaApuRowsData(rows: ReturnType<typeof normalizeCatalogPartidaApuRow>[]) {
   return rows.map((row, index) => ({
     resourceId: row.resourceId,
+    catalogSubpartidaId: row.catalogSubpartidaId,
     description: row.description,
     unit: row.unit,
     crew: row.crew,

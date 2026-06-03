@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BotMessageSquare, GitCompareArrows, GripVertical, Sparkles } from "lucide-react";
+import { BotMessageSquare, GitCompareArrows, GripVertical, Search, Sparkles } from "lucide-react";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { getApuCategoryPresentation } from "@/lib/apu/presentation";
+import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
 import { buildApuResourcesFromCatalogProposal, parseAiDecimal, parseAiPerformance, selectCatalogProposalBasePartida } from "@/lib/ai/apu-suggestion";
 import type { AiApuCatalogGenerationResult, AiApuStructuredData, AiEndpointResult } from "@/lib/ai/types";
 import { getExcelViewCssVariables } from "@/lib/budget/excel-view-css";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/calculations/apu";
 import type { BudgetItemRecord } from "@/types/budget";
 import type { ApuResourceRecord } from "@/types/apu";
+import type { CatalogPartidaRecord, PartidaApuRowRecord } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -35,6 +37,7 @@ type ApuEditorSheetProps = {
   onClose: () => void;
   onUpdate: (item: BudgetItemRecord) => void;
   resourcesCatalog: ResourceRecord[];
+  catalogPartidas: CatalogPartidaRecord[];
   restoreFocusElement?: HTMLElement | null;
   densityMode: "compact" | "comfortable";
 };
@@ -51,6 +54,7 @@ export function ApuEditorSheet({
   onClose,
   onUpdate,
   resourcesCatalog,
+  catalogPartidas,
   restoreFocusElement,
   densityMode,
 }: ApuEditorSheetProps) {
@@ -74,6 +78,13 @@ export function ApuEditorSheet({
   const [aiApuLoading, setAiApuLoading] = useState(false);
   const [resourceHighlightedIndex, setResourceHighlightedIndex] = useState(0);
   const [resourceMenu, setResourceMenu] = useState<ResourceMenuState | null>(null);
+  const [addSubpartidaOpen, setAddSubpartidaOpen] = useState(false);
+  const [subpartidaApuPreview, setSubpartidaApuPreview] = useState<{
+    resourceIndex: number;
+    title: string;
+    performance: number;
+    unit: string;
+  } | null>(null);
   const effectiveDensityMode = isExcelMode ? "compact" : densityMode;
   const deferredAddResourceQuery = useDeferredValue(addResourceQuery);
   const deferredEditingResourceQuery = useDeferredValue(editingResourceQuery);
@@ -294,6 +305,64 @@ export function ApuEditorSheet({
     setEditingResourceQuery("");
     setResourceMenu(null);
     setResourceHighlightedIndex(0);
+    onUpdate({
+      ...currentItemRecord,
+      apu: {
+        ...currentApuRecord,
+        resources,
+      },
+    });
+  }
+
+  function addCatalogSubpartida(partida: CatalogPartidaRecord) {
+    const nestedRows = cloneCatalogPartidaApuRows(partida.apuRows, partida.id);
+    const nestedSummary = calculateApuSummary(nestedRows, partida.performance);
+    const unitPrice = nestedRows.length > 0 ? nestedSummary.totalUnitCost : partida.unitPrice;
+
+    setAddSubpartidaOpen(false);
+    onUpdate({
+      ...currentItemRecord,
+      apu: {
+        ...currentApuRecord,
+        resources: [
+          ...currentApuRecord.resources,
+          {
+            id: crypto.randomUUID(),
+            apuId: currentApuRecord.id,
+            resourceId: null,
+            catalogPartidaId: partida.id,
+            resourceType: "SUBPARTIDA",
+            crew: null,
+            quantity: 1,
+            unitPrice,
+            subtotal: unitPrice,
+            catalogPartida: partida,
+            nestedApuRows: nestedRows,
+          },
+        ],
+      },
+    });
+  }
+
+  function patchNestedSubpartidaRow(
+    resourceIndex: number,
+    nestedIndex: number,
+    changes: Partial<PartidaApuRowRecord>,
+  ) {
+    const resource = currentApuRecord.resources[resourceIndex];
+    if (!resource || !isSubpartidaResourceType(resource.resourceType)) return;
+
+    const sourceRows = resource.nestedApuRows ?? resource.catalogPartida?.apuRows ?? [];
+    const nextRowsInput = sourceRows.map((row, rowIndex) => (rowIndex === nestedIndex ? { ...row, ...changes } : row));
+    const nestedPerformance = resource.catalogPartida?.performance ?? 1;
+    const nestedSummary = calculateApuSummary(nextRowsInput, nestedPerformance);
+    const resources = [...currentApuRecord.resources];
+    resources[resourceIndex] = {
+      ...resource,
+      nestedApuRows: nestedSummary.rows,
+      unitPrice: nestedSummary.totalUnitCost,
+    };
+
     onUpdate({
       ...currentItemRecord,
       apu: {
@@ -526,7 +595,7 @@ export function ApuEditorSheet({
               </div>
             </div>
 
-        <div className={cn("grid md:grid-cols-[1fr_180px]", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-3")}>
+        <div className={cn("grid md:grid-cols-[1fr_180px_190px]", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-3")}>
           <Input
             ref={addResourceSearchRef}
             value={addResourceQuery}
@@ -610,6 +679,15 @@ export function ApuEditorSheet({
           >
             Agregar fila manual
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn("gap-2", effectiveDensityMode === "compact" ? "h-8 text-xs" : "h-9 text-sm")}
+            onClick={() => setAddSubpartidaOpen(true)}
+          >
+            <Search className="h-4 w-4" />
+            Agregar subpartida
+          </Button>
         </div>
         {addResourceMenuOpen && addResourceSuggestions.length > 0 && addResourceMenuPosition ? (
           <div
@@ -679,7 +757,11 @@ export function ApuEditorSheet({
                 const isLabor = isLaborApuRow(calculatedResource);
                 const isEditingResource = editingResourceRowId === resource.id;
                 const readonlyInputClass = "border-transparent bg-transparent px-0 shadow-none";
-                const resourceLabel = resource.resource
+                const isSubpartida = isSubpartidaResourceType(resource.resourceType);
+                const nestedRows = isSubpartida ? resource.nestedApuRows ?? resource.catalogPartida?.apuRows ?? [] : [];
+                const resourceLabel = isSubpartida
+                  ? `SUBPARTIDA - ${resource.catalogPartida?.description ?? "Subpartida"}`
+                  : resource.resource
                   ? `${resource.resource.code} - ${resource.resource.description}`
                   : "Selecciona un insumo";
 
@@ -772,27 +854,47 @@ export function ApuEditorSheet({
                         />
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        draggable={false}
-                        data-excel-field-trigger="true"
-                        data-testid={`apu-resource-picker-${resource.id}`}
-                        className={cn(
-                          "flex w-full items-center rounded-sm border border-slate-300 bg-white px-2 text-left text-xs text-slate-900 shadow-none transition hover:border-sky-400 hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/20",
-                          effectiveDensityMode === "compact" ? "h-8" : "h-9 text-sm",
-                          !resource.resourceId && "text-slate-500",
-                        )}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          openResourceSearch(resource);
-                        }}
-                      >
-                        <span className="truncate">{resourceLabel}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          draggable={false}
+                          data-excel-field-trigger="true"
+                          data-testid={`apu-resource-picker-${resource.id}`}
+                          className={cn(
+                            "flex min-w-0 flex-1 items-center rounded-sm border border-slate-300 bg-white px-2 text-left text-xs text-slate-900 shadow-none transition hover:border-sky-400 hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/20",
+                            effectiveDensityMode === "compact" ? "h-8" : "h-9 text-sm",
+                            !resource.resourceId && "text-slate-500",
+                          )}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (!isSubpartida) openResourceSearch(resource);
+                          }}
+                        >
+                          <span className="truncate">{resourceLabel}</span>
+                        </button>
+                        {nestedRows.length > 0 ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className={cn("shrink-0", effectiveDensityMode === "compact" ? "h-8 px-2 text-[11px]" : "h-9 px-2 text-xs")}
+                            onClick={() =>
+                              setSubpartidaApuPreview({
+                                resourceIndex: index,
+                                title: resource.catalogPartida?.description ?? resourceLabel,
+                                performance: resource.catalogPartida?.performance ?? 1,
+                                unit: resource.catalogPartida?.unit ?? resource.resource?.unit ?? currentItemRecord.unit,
+                              })
+                            }
+                          >
+                            Ver APU
+                          </Button>
+                        ) : null}
+                      </div>
                     )}
                   </TD>
-                  <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-center")}>{calculatedResource.resource?.unit ?? "-"}</TD>
+                  <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-center")}>{calculatedResource.resource?.unit ?? resource.catalogPartida?.unit ?? "-"}</TD>
                   <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
                     {isLabor ? (
                       <BufferedInput
@@ -904,6 +1006,35 @@ export function ApuEditorSheet({
             </TBody>
           </Table>
         </div>
+        <EditableSubpartidaApuDialog
+          currencyDecimals={currencyDecimals}
+          densityMode={effectiveDensityMode}
+          excelCssVariables={excelCssVariables}
+          isExcelMode={isExcelMode}
+          preview={
+            subpartidaApuPreview
+              ? {
+                  ...subpartidaApuPreview,
+                  rows:
+                    currentApuRecord.resources[subpartidaApuPreview.resourceIndex]?.nestedApuRows ??
+                    currentApuRecord.resources[subpartidaApuPreview.resourceIndex]?.catalogPartida?.apuRows ??
+                    [],
+                }
+              : null
+          }
+          onClose={() => setSubpartidaApuPreview(null)}
+          onPatchRow={(resourceIndex, nestedIndex, changes) => patchNestedSubpartidaRow(resourceIndex, nestedIndex, changes)}
+        />
+        <AddSubpartidaDialog
+          catalogPartidas={catalogPartidas}
+          currencyDecimals={currencyDecimals}
+          densityMode={effectiveDensityMode}
+          excelCssVariables={excelCssVariables}
+          isExcelMode={isExcelMode}
+          open={addSubpartidaOpen}
+          onAdd={addCatalogSubpartida}
+          onClose={() => setAddSubpartidaOpen(false)}
+        />
         {editingResourceRowId && resourceSuggestions.length > 0 && resourceMenu?.rowId === editingResourceRowId ? (
           <div
             className="fixed z-[90] overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl"
@@ -984,6 +1115,431 @@ function normalizeResourceSearchText(value: string) {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+function buildCatalogPartidaSearchText(partida: CatalogPartidaRecord) {
+  return normalizeResourceSearchText([partida.description, partida.unit, partida.unitPrice.toString()].join(" "));
+}
+
+function cloneCatalogPartidaApuRows(rows: PartidaApuRowRecord[], catalogPartidaId: string) {
+  return rows.map((row, index) => ({
+    ...row,
+    id: crypto.randomUUID(),
+    catalogPartidaId,
+    sortOrder: index,
+  }));
+}
+
+function AddSubpartidaDialog({
+  open,
+  catalogPartidas,
+  currencyDecimals,
+  densityMode,
+  excelCssVariables,
+  isExcelMode,
+  onAdd,
+  onClose,
+}: {
+  open: boolean;
+  catalogPartidas: CatalogPartidaRecord[];
+  currencyDecimals: number;
+  densityMode: "compact" | "comfortable";
+  excelCssVariables: CSSProperties;
+  isExcelMode: boolean;
+  onAdd: (partida: CatalogPartidaRecord) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [selectedPartidaId, setSelectedPartidaId] = useState<string | null>(null);
+  const deferredQuery = useDeferredValue(query);
+  const indexedPartidas = useMemo(
+    () =>
+      catalogPartidas.map((partida) => ({
+        partida,
+        searchText: buildCatalogPartidaSearchText(partida),
+      })),
+    [catalogPartidas],
+  );
+  const suggestions = useMemo(() => {
+    const normalizedQuery = normalizeResourceSearchText(deferredQuery);
+    return indexedPartidas
+      .filter(({ searchText }) => {
+        if (!normalizedQuery) return true;
+        return searchText.includes(normalizedQuery);
+      })
+      .map(({ partida }) => partida)
+      .slice(0, 40);
+  }, [deferredQuery, indexedPartidas]);
+  const selectedPartida =
+    suggestions.find((partida) => partida.id === selectedPartidaId) ??
+    catalogPartidas.find((partida) => partida.id === selectedPartidaId) ??
+    suggestions[0] ??
+    null;
+  const previewRows = selectedPartida?.apuRows ?? [];
+  const previewSummary = selectedPartida ? calculateApuSummary(previewRows, selectedPartida.performance) : null;
+  const previewUnitPrice = previewRows.length > 0 ? previewSummary?.totalUnitCost ?? 0 : selectedPartida?.unitPrice ?? 0;
+  const readonlyInputClassName = cn(
+    getInputDensityClass(densityMode, isExcelMode),
+    "bg-transparent shadow-none",
+    !isExcelMode && "border-transparent px-0",
+  );
+  const closeDialog = () => {
+    setQuery("");
+    setSelectedPartidaId(null);
+    onClose();
+  };
+  const addSelectedPartida = () => {
+    if (!selectedPartida) return;
+    setQuery("");
+    setSelectedPartidaId(null);
+    onAdd(selectedPartida);
+  };
+
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) closeDialog();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[120] bg-slate-950/35 backdrop-blur-[2px]" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-[130] max-h-[88vh] w-[min(1180px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          data-excel-field-border-scope="apu-editor"
+          data-view-mode={isExcelMode ? "excel" : "modern"}
+          data-density-mode={densityMode}
+          style={excelCssVariables}
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+            <div>
+              <Dialog.Title className="text-base font-semibold text-slate-950">Agregar subpartida</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-slate-500">
+                Busca una partida del catalogo global y revisa su APU antes de insertarla.
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <Button variant="ghost" size="sm">Cerrar</Button>
+            </Dialog.Close>
+          </div>
+          <div className="grid max-h-[76vh] min-h-0 gap-4 overflow-hidden p-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="min-h-0 rounded-xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 p-3">
+                <Input
+                  autoFocus
+                  data-testid="apu-add-subpartida-search"
+                  value={query}
+                  className={getInputDensityClass(densityMode, isExcelMode)}
+                  placeholder="Buscar partida por descripcion o unidad"
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setSelectedPartidaId(null);
+                  }}
+                />
+              </div>
+              <div className="max-h-[62vh] overflow-auto py-1">
+                {suggestions.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-slate-500">No se encontraron partidas.</p>
+                ) : null}
+                {suggestions.map((partida) => (
+                  <button
+                    key={partida.id}
+                    type="button"
+                    data-testid={`apu-add-subpartida-option-${partida.id}`}
+                    className={cn(
+                      "flex w-full items-start justify-between gap-3 px-3 py-2 text-left",
+                      partida.id === selectedPartida?.id ? "bg-sky-100" : "hover:bg-sky-50",
+                    )}
+                    onClick={() => setSelectedPartidaId(partida.id)}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-slate-900">{partida.description}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        Unidad: {partida.unit} - PU: {formatCurrency(partida.unitPrice, partida.currency, currencyDecimals)}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="min-h-0 overflow-auto">
+              {selectedPartida ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">{selectedPartida.description}</p>
+                      <p className="mt-1 text-sm text-slate-500">Unidad: {selectedPartida.unit}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      className={cn(densityMode === "compact" ? "h-8 text-xs" : "h-9 text-sm")}
+                      onClick={addSelectedPartida}
+                    >
+                      Agregar al APU
+                    </Button>
+                  </div>
+                  <div className={cn("grid md:grid-cols-2", isExcelMode ? "gap-2" : "gap-4")}>
+                    <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
+                      <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({selectedPartida.unit}/Dia)</p>
+                      <Input value={selectedPartida.performance.toFixed(4)} readOnly className={cn(readonlyInputClassName, "tabular-nums")} />
+                    </div>
+                    <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
+                      <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
+                      <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
+                        {formatCurrency(previewUnitPrice, selectedPartida.currency, currencyDecimals)}
+                      </p>
+                    </div>
+                  </div>
+                  {previewRows.length > 0 ? (
+                    <SubpartidaPreviewRowsTable
+                      rows={previewRows}
+                      currency={selectedPartida.currency}
+                      currencyDecimals={currencyDecimals}
+                      densityMode={densityMode}
+                      isExcelMode={isExcelMode}
+                    />
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+                      Esta subpartida no tiene APU detallado en el catalogo global. Se agregara como subpartida sin filas internas.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Selecciona una partida para previsualizarla.</div>
+              )}
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function SubpartidaPreviewRowsTable({
+  rows,
+  currency,
+  currencyDecimals,
+  densityMode,
+  isExcelMode,
+}: {
+  rows: PartidaApuRowRecord[];
+  currency: string;
+  currencyDecimals: number;
+  densityMode: "compact" | "comfortable";
+  isExcelMode: boolean;
+}) {
+  const readonlyInputClassName = cn(
+    getInputDensityClass(densityMode, isExcelMode),
+    "bg-transparent shadow-none",
+    !isExcelMode && "border-transparent px-0",
+  );
+
+  return (
+    <div className={getTableFrameClassName(isExcelMode)} data-density-mode={densityMode}>
+      <Table className="table-auto">
+        <colgroup>
+          <col className="w-[36px]" />
+          <col className="w-[440px]" />
+          <col className="w-[84px]" />
+          <col className="w-[76px]" />
+          <col className="w-[112px]" />
+          <col className="w-[128px]" />
+          <col className="w-[104px]" />
+        </colgroup>
+        <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
+          <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90 hover:bg-slate-100/90" : "bg-slate-50")}>
+            <TH className={getHeaderCellClass(isExcelMode, "w-[36px]")} />
+            <TH className={getHeaderCellClass(isExcelMode)}>Insumo</TH>
+            <TH className={getHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
+            <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Cuadrilla</TH>
+            <TH className={getHeaderCellClass(isExcelMode, "text-right")}>Cantidad</TH>
+            <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Precio unitario</TH>
+            <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Subtotal</TH>
+          </TR>
+        </THead>
+        <TBody>
+          {rows.map((row) => (
+            <TR key={row.id} className={getApuCategoryPresentation(getApuPresentationCategory(row)).rowClassName}>
+              <TD className={cn(getCellPadding(densityMode, isExcelMode), "pr-0")}>
+                <span
+                  data-apu-category={getApuPresentationCategory(row)}
+                  className={cn("inline-flex cursor-default", getApuCategoryPresentation(getApuPresentationCategory(row)).gripClassName)}
+                >
+                  <GripVertical className="h-4 w-4 opacity-40" />
+                </span>
+              </TD>
+              <TD className={getCellPadding(densityMode, isExcelMode)}>
+                <Input value={row.description} readOnly className={readonlyInputClassName} />
+              </TD>
+              <TD className={cn(getCellPadding(densityMode, isExcelMode), "text-center")}>
+                <Input value={row.unit} readOnly className={cn(readonlyInputClassName, "text-center")} />
+              </TD>
+              <TD className={getCellPadding(densityMode, isExcelMode)}>
+                <span className={cn("block text-right tabular-nums text-slate-400", densityMode === "compact" ? "py-1.5 text-xs" : "py-2 text-sm")}>-</span>
+              </TD>
+              <TD className={getCellPadding(densityMode, isExcelMode)}>
+                <Input value={row.quantity} readOnly className={cn(readonlyInputClassName, "text-right tabular-nums")} />
+              </TD>
+              <TD className={getCellPadding(densityMode, isExcelMode)}>
+                <Input value={row.unitPrice} readOnly className={cn(readonlyInputClassName, "text-right tabular-nums")} />
+              </TD>
+              <TD className={cn(getCellPadding(densityMode, isExcelMode), "text-right text-xs font-semibold tabular-nums text-slate-900")}>
+                {formatCurrency(row.subtotal, currency, currencyDecimals)}
+              </TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+    </div>
+  );
+}
+
+function EditableSubpartidaApuDialog({
+  preview,
+  currencyDecimals,
+  densityMode,
+  excelCssVariables,
+  isExcelMode,
+  onClose,
+  onPatchRow,
+}: {
+  preview: { resourceIndex: number; title: string; performance: number; unit: string; rows: PartidaApuRowRecord[] } | null;
+  currencyDecimals: number;
+  densityMode: "compact" | "comfortable";
+  excelCssVariables: CSSProperties;
+  isExcelMode: boolean;
+  onClose: () => void;
+  onPatchRow: (resourceIndex: number, nestedIndex: number, changes: Partial<PartidaApuRowRecord>) => void;
+}) {
+  const summary = preview ? calculateApuSummary(preview.rows, preview.performance) : null;
+  const readonlyInputClassName = cn(
+    getInputDensityClass(densityMode, isExcelMode),
+    "bg-transparent shadow-none",
+    !isExcelMode && "border-transparent px-0",
+  );
+  const editableInputClassName = cn(
+    getInputDensityClass(densityMode, isExcelMode),
+    "text-right tabular-nums",
+    !isExcelMode && "border-transparent bg-transparent px-0 shadow-none",
+  );
+
+  return (
+    <Dialog.Root open={preview !== null} onOpenChange={(nextOpen) => {
+      if (!nextOpen) onClose();
+    }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[120] bg-slate-950/35 backdrop-blur-[2px]" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-[130] max-h-[82vh] w-[min(940px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          data-excel-field-border-scope="apu-editor"
+          data-view-mode={isExcelMode ? "excel" : "modern"}
+          data-density-mode={densityMode}
+          style={excelCssVariables}
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+            <div>
+              <Dialog.Title className="text-base font-semibold text-slate-950">APU de subpartida</Dialog.Title>
+              <p className="mt-1 text-sm text-slate-500">{preview?.title}</p>
+              <p className="mt-1 text-sm text-slate-500">Unidad: {preview?.unit ?? ""}</p>
+            </div>
+            <Dialog.Close asChild>
+              <Button variant="ghost" size="sm">Cerrar</Button>
+            </Dialog.Close>
+          </div>
+          <div className="max-h-[64vh] overflow-auto p-4">
+            <div className={cn("grid md:grid-cols-2", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-4")}>
+              <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
+                <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({preview?.unit ?? ""}/Día)</p>
+                <Input
+                  value={preview?.performance.toFixed(4) ?? ""}
+                  readOnly
+                  className={cn(readonlyInputClassName, "tabular-nums")}
+                />
+              </div>
+              <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
+                <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
+                <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
+                  {formatCurrency(summary?.totalUnitCost ?? 0, "PEN", currencyDecimals)}
+                </p>
+              </div>
+            </div>
+            <div className={getTableFrameClassName(isExcelMode)} data-density-mode={densityMode}>
+              <Table className="table-auto">
+                <colgroup>
+                  <col className="w-[36px]" />
+                  <col className="w-[440px]" />
+                  <col className="w-[84px]" />
+                  <col className="w-[76px]" />
+                  <col className="w-[112px]" />
+                  <col className="w-[128px]" />
+                  <col className="w-[104px]" />
+                </colgroup>
+                <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
+                  <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90 hover:bg-slate-100/90" : "bg-slate-50")}>
+                    <TH className={getHeaderCellClass(isExcelMode, "w-[36px]")} />
+                    <TH className={getHeaderCellClass(isExcelMode)}>Insumo</TH>
+                    <TH className={getHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
+                    <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Cuadrilla</TH>
+                    <TH className={getHeaderCellClass(isExcelMode, "text-right")}>Cantidad</TH>
+                    <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Precio unitario</TH>
+                    <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Subtotal</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                {preview?.rows.map((row, nestedIndex) => (
+                  <TR key={row.id} className={getApuCategoryPresentation(getApuPresentationCategory(row)).rowClassName}>
+                    <TD className={cn(getCellPadding(densityMode, isExcelMode), "pr-0")}>
+                      <span
+                        data-apu-category={getApuPresentationCategory(row)}
+                        className={cn("inline-flex cursor-default", getApuCategoryPresentation(getApuPresentationCategory(row)).gripClassName)}
+                      >
+                        <GripVertical className="h-4 w-4 opacity-40" />
+                      </span>
+                    </TD>
+                    <TD className={getCellPadding(densityMode, isExcelMode)}>
+                      <Input value={row.description} readOnly className={readonlyInputClassName} />
+                    </TD>
+                    <TD className={cn(getCellPadding(densityMode, isExcelMode), "text-center")}>
+                      <Input value={row.unit} readOnly className={cn(readonlyInputClassName, "text-center")} />
+                    </TD>
+                    <TD className={getCellPadding(densityMode, isExcelMode)}>
+                      <span className={cn("block text-right tabular-nums text-slate-400", densityMode === "compact" ? "py-1.5 text-xs" : "py-2 text-sm")}>-</span>
+                    </TD>
+                    <TD className={getCellPadding(densityMode, isExcelMode)}>
+                      <BufferedInput
+                        type="number"
+                        step="0.0001"
+                        value={row.quantity}
+                        className={editableInputClassName}
+                        onCommit={(value) => {
+                          if (preview) onPatchRow(preview.resourceIndex, nestedIndex, { quantity: Number(value) });
+                        }}
+                      />
+                    </TD>
+                    <TD className={getCellPadding(densityMode, isExcelMode)}>
+                      <BufferedInput
+                        type="number"
+                        step="0.0001"
+                        value={row.unitPrice}
+                        className={editableInputClassName}
+                        onCommit={(value) => {
+                          if (preview) onPatchRow(preview.resourceIndex, nestedIndex, { unitPrice: Number(value) });
+                        }}
+                      />
+                    </TD>
+                    <TD className={cn(getCellPadding(densityMode, isExcelMode), "text-right text-xs font-semibold tabular-nums text-slate-900")}>
+                      {formatCurrency(row.subtotal, "PEN", currencyDecimals)}
+                    </TD>
+                  </TR>
+                ))}
+                </TBody>
+              </Table>
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
 }
 
 type AiApuPreviewResult = AiEndpointResult | AiApuCatalogGenerationResult;

@@ -65,6 +65,7 @@ export function ResourceForm({
               <option value="LABOR">Mano de obra</option>
               <option value="EQUIPMENT">Equipos</option>
               <option value="TOOLS">Herramientas</option>
+              <option value="SUBCONTRACT">Sub contratos</option>
             </Select>
           </div>
           <div className="space-y-2">

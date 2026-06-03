@@ -175,6 +175,7 @@ Ghost:
 - Soft borders
 - Sticky headers when needed
 - High readability
+- Los popups que muestran el detalle APU de una subpartida deben heredar el lenguaje visual y estilos de la partida/APU padre: mismas columnas, densidad, altura de fila, bordes configurados, decimales configurados y encabezado con rendimiento, costo unitario y unidad.
 
 ---
 

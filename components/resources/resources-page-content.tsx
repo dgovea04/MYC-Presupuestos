@@ -6,13 +6,18 @@ import { ResourceCreateSheet } from "@/components/resources/resource-create-shee
 import { ResourcesTable } from "@/components/resources/resources-table";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import type { ResourceCategory, ResourceRecord } from "@/types/resource";
+import type { UnifiedIndexDictionaryRow, UnifiedIndexRelationRow } from "@/types/unified-index";
 
 export function ResourcesPageContent({
   companyId,
   resources,
+  unifiedIndexDictionaryRows,
+  unifiedIndexRows,
 }: {
   companyId?: string;
   resources: ResourceRecord[];
+  unifiedIndexDictionaryRows: UnifiedIndexDictionaryRow[];
+  unifiedIndexRows: UnifiedIndexRelationRow[];
 }) {
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [createdResources, setCreatedResources] = useState<ResourceRecord[]>([]);
@@ -68,6 +73,8 @@ export function ResourcesPageContent({
         key={resourcesTableKey}
         companyId={companyId}
         resources={localResources}
+        unifiedIndexDictionaryRows={unifiedIndexDictionaryRows}
+        unifiedIndexRows={unifiedIndexRows}
         onRequestCreate={() => setIsCreateFormOpen(true)}
       />
     </div>

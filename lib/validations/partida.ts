@@ -3,6 +3,7 @@ import { z } from "zod";
 const partidaApuRowSchema = z.object({
   id: z.string().optional(),
   resourceId: z.string().optional(),
+  catalogSubpartidaId: z.string().optional(),
   description: z.string().min(1, "Ingresa el insumo"),
   unit: z.string().min(1, "Ingresa la unidad"),
   crew: z.coerce.number().nullable().optional(),

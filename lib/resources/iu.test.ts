@@ -13,6 +13,8 @@ describe("normalizeResourceIuCode", () => {
   it("returns null for empty or invalid IU values", () => {
     expect(normalizeResourceIuCode("")).toBeNull();
     expect(normalizeResourceIuCode(" : ")).toBeNull();
+    expect(normalizeResourceIuCode("0")).toBeNull();
+    expect(normalizeResourceIuCode("00")).toBeNull();
     expect(normalizeResourceIuCode(null)).toBeNull();
   });
 });

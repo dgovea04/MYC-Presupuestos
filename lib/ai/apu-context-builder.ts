@@ -78,7 +78,7 @@ export function buildApuCatalogContext({
             properties: {
               resource_id: { type: "string", enumFrom: "matchingResources[].id" },
               name: { type: "string", enumFrom: "matchingResources[].name" },
-              type: { type: "string", enum: ["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS"] },
+              type: { type: "string", enum: ["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS", "SUBCONTRACT"] },
               unit: { type: "string", enumFrom: "matchingResources[].unit" },
               quantity: { type: "number", minimum: 0 },
               source: { type: "string", const: "catalog" },

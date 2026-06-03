@@ -2,6 +2,8 @@ export type PartidaApuRowRecord = {
   id: string;
   catalogPartidaId: string;
   resourceId?: string | null;
+  catalogSubpartidaId?: string | null;
+  catalogSubpartida?: CatalogPartidaRecord | null;
   description: string;
   unit: string;
   crew?: number | null;

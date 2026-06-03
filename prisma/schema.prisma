@@ -31,6 +31,7 @@ enum ResourceCategory {
   LABOR
   EQUIPMENT
   TOOLS
+  SUBCONTRACT
 }
 
 enum GeneralExpenseType {
@@ -728,6 +729,8 @@ model CatalogPartida {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   apuRows         PartidaApuRow[]
+  usedAsSubpartidaRows PartidaApuRow[] @relation("CatalogSubpartidaRows")
+  budgetApuSubpartidaRows ApuResource[] @relation("BudgetApuCatalogSubpartida")
   generatedAsResult GeneratedPartida[] @relation("GeneratedCatalogPartida")
   generatedSources  GeneratedPartidaSource[] @relation("GeneratedPartidaSourceCatalog")
 
@@ -794,6 +797,7 @@ model PartidaApuRow {
   id               String         @id @default(cuid())
   catalogPartidaId String
   resourceId       String?
+  catalogSubpartidaId String?
   description      String
   unit             String
   crew             Decimal?       @db.Decimal(18, 4)
@@ -806,10 +810,12 @@ model PartidaApuRow {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   catalogPartida   CatalogPartida @relation(fields: [catalogPartidaId], references: [id], onDelete: Cascade)
+  catalogSubpartida CatalogPartida? @relation("CatalogSubpartidaRows", fields: [catalogSubpartidaId], references: [id], onDelete: SetNull)
   resource         Resource?      @relation(fields: [resourceId], references: [id], onDelete: SetNull)
 
   @@index([catalogPartidaId])
   @@index([resourceId])
+  @@index([catalogSubpartidaId])
 }
 
 model Apu {
@@ -828,20 +834,24 @@ model Apu {
 model ApuResource {
   id           String    @id @default(cuid())
   apuId        String
-  resourceId   String
+  resourceId   String?
+  catalogPartidaId String?
   resourceType String
   crew         Decimal?  @db.Decimal(18, 4)
   quantity     Decimal   @default(0) @db.Decimal(18, 4)
   unitPrice    Decimal   @default(0) @db.Decimal(18, 4)
   subtotal     Decimal   @default(0) @db.Decimal(18, 4)
+  nestedApuRows Json?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   apu          Apu       @relation(fields: [apuId], references: [id], onDelete: Cascade)
-  resource     Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  resource     Resource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  catalogPartida CatalogPartida? @relation("BudgetApuCatalogSubpartida", fields: [catalogPartidaId], references: [id], onDelete: SetNull)
   polynomialMonomialComponents PolynomialMonomialComponent[]
 
   @@index([apuId])
   @@index([resourceId])
+  @@index([catalogPartidaId])
 }
 
 model GeneralExpense {

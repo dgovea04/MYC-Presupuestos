@@ -7,6 +7,7 @@ import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import { BudgetViewModeProvider } from "@/components/budget/view-mode-provider";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import type { BudgetItemRecord } from "@/types/budget";
+import type { CatalogPartidaRecord } from "@/types/partida";
 import type { UserSettingsRecord } from "@/types/settings";
 
 let activeContainer: HTMLDivElement | null = null;
@@ -124,9 +125,67 @@ describe("ApuEditorSheet", () => {
       }),
     );
   });
+
+  it("adds a catalog partida as a subpartida with editable nested APU rows", async () => {
+    const onUpdate = vi.fn();
+    const catalogPartida = createCatalogPartida();
+    const { getButtonByText, getByTestId, getTextByExactMatch } = await renderSheet(createBudgetItem(), {
+      onUpdate,
+      catalogPartidas: [catalogPartida],
+    });
+
+    await act(async () => {
+      getButtonByText("Agregar subpartida").click();
+    });
+
+    const searchInput = getByTestId("apu-add-subpartida-search") as HTMLInputElement;
+    await act(async () => {
+      searchInput.value = "excavacion";
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      getByTestId("apu-add-subpartida-option-catalog-subpartida-1").click();
+    });
+
+    expect(getTextByExactMatch("EXCAVACION MANUAL")).toBeTruthy();
+    expect(getTextByExactMatch("Unidad: M3")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Agregar al APU").click();
+    });
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        apu: expect.objectContaining({
+          resources: expect.arrayContaining([
+            expect.objectContaining({
+              catalogPartidaId: "catalog-subpartida-1",
+              resourceId: null,
+              resourceType: "SUBPARTIDA",
+              quantity: 1,
+              unitPrice: 16.48,
+              nestedApuRows: expect.arrayContaining([
+                expect.objectContaining({ description: "PEON", catalogPartidaId: "catalog-subpartida-1" }),
+                expect.objectContaining({ description: "HERRAMIENTAS MANUALES", catalogPartidaId: "catalog-subpartida-1" }),
+              ]),
+              catalogPartida,
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
 });
 
-async function renderSheet(item: BudgetItemRecord, overrides?: { onUpdate?: (item: BudgetItemRecord) => void }) {
+async function renderSheet(
+  item: BudgetItemRecord,
+  overrides?: {
+    onUpdate?: (item: BudgetItemRecord) => void;
+    catalogPartidas?: CatalogPartidaRecord[];
+  },
+) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -144,6 +203,7 @@ async function renderSheet(item: BudgetItemRecord, overrides?: { onUpdate?: (ite
             onClose={() => undefined}
             onUpdate={overrides?.onUpdate ?? (() => undefined)}
             resourcesCatalog={[]}
+            catalogPartidas={overrides?.catalogPartidas ?? []}
             densityMode="comfortable"
           />
         </BudgetViewModeProvider>
@@ -265,5 +325,47 @@ function createResourceRow(
       unitPrice,
       currency: "PEN",
     },
+  };
+}
+
+function createCatalogPartida(): CatalogPartidaRecord {
+  return {
+    id: "catalog-subpartida-1",
+    description: "EXCAVACION MANUAL",
+    unit: "M3",
+    unitPrice: 42.5,
+    currency: "PEN",
+    source: "Catalogo de partidas precargado",
+    performance: 10,
+    performanceUnit: "M3",
+    performanceRate: "10.0000 M3/DIA",
+    apuRows: [
+      {
+        id: "catalog-row-1",
+        catalogPartidaId: "catalog-subpartida-1",
+        description: "PEON",
+        unit: "HH",
+        crew: null,
+        quantity: 0.8,
+        unitPrice: 20,
+        subtotal: 16,
+        resourceType: "LABOR",
+        groupLabel: "Mano de obra",
+        sortOrder: 0,
+      },
+      {
+        id: "catalog-row-2",
+        catalogPartidaId: "catalog-subpartida-1",
+        description: "HERRAMIENTAS MANUALES",
+        unit: "%MO",
+        crew: null,
+        quantity: 3,
+        unitPrice: 16,
+        subtotal: 0.48,
+        resourceType: "TOOLS",
+        groupLabel: "Equipo",
+        sortOrder: 1,
+      },
+    ],
   };
 }
