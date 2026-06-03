@@ -44,9 +44,11 @@ const PARTIDA_ROW_OVERSCAN = 8;
 const PARTIDA_TABLE_COLUMN_COUNT = 6;
 
 export function PartidasTable({
+  initialFilter = "",
   partidas,
   resourcesCatalog,
 }: {
+  initialFilter?: string;
   partidas: CatalogPartidaRecord[];
   resourcesCatalog: ResourceRecord[];
 }) {
@@ -55,7 +57,7 @@ export function PartidasTable({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<EditableCatalogPartida[]>(() => partidas.map(toEditablePartida));
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState(initialFilter);
   const [apuFilter, setApuFilter] = useState<ApuFilter>("ALL");
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -486,36 +488,38 @@ const PartidaTableRow = memo(function PartidaTableRow({
 }) {
   const isLockedPreloaded = isPreloadedPartida(row) && !row.isNew;
   const isReadonly = !row.isEditing;
+  const textSizeClass = isExcelMode ? "text-xs" : "text-sm";
 
   return (
     <TR className={row.isNew ? "bg-emerald-50/60" : row.isDirty ? "bg-amber-50/50" : ""} style={{ height: isExcelMode ? excelRowHeight : PARTIDA_ROW_HEIGHT }}>
-      <TD className="align-top">
+      <TD className="align-middle">
         <Input
           value={row.description}
           readOnly={isReadonly}
           onChange={(event) => onPatchRow(row.id, { description: event.target.value })}
-          className={isReadonly ? "border-transparent bg-transparent px-0 shadow-none focus:border-transparent" : undefined}
+          className={cn(textSizeClass, isReadonly ? "border-transparent bg-transparent px-0 shadow-none focus:border-transparent" : undefined)}
         />
       </TD>
-      <TD className="align-top">
+      <TD className="align-middle">
         <Input
           value={row.unit}
           readOnly={isReadonly}
           onChange={(event) => onPatchRow(row.id, { unit: event.target.value })}
-          className={isReadonly ? "border-transparent bg-transparent px-0 shadow-none text-center focus:border-transparent" : "text-center"}
+          className={cn(textSizeClass, "text-center", isReadonly ? "border-transparent bg-transparent px-0 shadow-none focus:border-transparent" : undefined)}
         />
       </TD>
-      <TD className="align-top text-right font-medium tabular-nums text-slate-900">
+      <TD className={cn("align-middle text-right font-medium tabular-nums text-slate-900", textSizeClass)}>
         {formatCurrency(row.unitPrice, row.currency, currencyDecimals)}
       </TD>
-      <TD className="align-top">
+      <TD className="align-middle">
         {isReadonly ? (
-          <span className="text-sm text-slate-600">{row.performanceRate ?? buildPerformanceRate(row.performance, row.performanceUnit ?? row.unit)}</span>
+          <span className={cn("text-slate-600", textSizeClass)}>{row.performanceRate ?? buildPerformanceRate(row.performance, row.performanceUnit ?? row.unit)}</span>
         ) : (
           <Input
             type="number"
             step="0.0001"
             value={row.performance}
+            className={textSizeClass}
             onChange={(event) =>
               onPatchRow(row.id, {
                 performance: Number(event.target.value),
@@ -525,8 +529,8 @@ const PartidaTableRow = memo(function PartidaTableRow({
           />
         )}
       </TD>
-      <TD className="align-top text-sm text-slate-500">{row.apuRows.length} filas</TD>
-      <TD className="align-top">
+      <TD className={cn("align-middle text-slate-500", textSizeClass)}>{row.apuRows.length} filas</TD>
+      <TD className="align-middle">
         <div className="flex justify-end gap-2">
           <ActionButton action="open" label="Ver APU" size="sm" variant="outline" onClick={() => onSelect(row.id)} />
           {row.isEditing ? (

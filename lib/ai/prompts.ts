@@ -41,7 +41,7 @@ export function buildCatalogApuSystemPrompt() {
     "6. Devuelve solamente JSON valido, sin markdown ni texto libre.",
     "7. Marca cualquier dato incierto con requires_review=true.",
     "8. El backend validara tu salida antes de mostrarla al usuario.",
-    "9. En items, type solo puede ser MATERIAL, LABOR, EQUIPMENT o TOOLS.",
+    "9. En items, type solo puede ser MATERIAL, LABOR, EQUIPMENT, TOOLS o SUBCONTRACT.",
     "10. En items, source debe ser exactamente catalog.",
     "11. En items, name y unit deben ser strings copiados desde matchingResources; nunca objetos.",
     "12. En items, quantity debe ser number; nunca texto con unidades.",
@@ -113,12 +113,16 @@ function readFirstMatchingResource(context: unknown) {
   }
 
   const resource = context.matchingResources.find(
-    (candidate): candidate is { id: string; name: string; category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS"; unit: string } =>
+    (candidate): candidate is { id: string; name: string; category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT"; unit: string } =>
       isRecord(candidate) &&
       typeof candidate.id === "string" &&
       typeof candidate.name === "string" &&
       typeof candidate.unit === "string" &&
-      (candidate.category === "MATERIAL" || candidate.category === "LABOR" || candidate.category === "EQUIPMENT" || candidate.category === "TOOLS"),
+      (candidate.category === "MATERIAL" ||
+        candidate.category === "LABOR" ||
+        candidate.category === "EQUIPMENT" ||
+        candidate.category === "TOOLS" ||
+        candidate.category === "SUBCONTRACT"),
   );
 
   return resource ?? null;

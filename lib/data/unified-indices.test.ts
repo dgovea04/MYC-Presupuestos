@@ -34,16 +34,16 @@ describe("getUnifiedIndexRelationRows", () => {
       { code: "92", name: "Flete fluvial" },
     ]);
     mocks.prisma.resource.findMany.mockResolvedValue([
-      { iu: "47" },
-      { iu: "47" },
-      { iu: "03" },
-      { iu: "03 " },
-      { iu: "3 : Acero de construccion corrugado" },
-      { iu: "47 : Mano de obra (incluye leyes sociales)" },
-      { iu: "01 : Aceite y lubricante" },
-      { iu: " " },
-      { iu: ":" },
-      { iu: null },
+      { iu: "47", iuCurrent: null },
+      { iu: "47", iuCurrent: null },
+      { iu: "03", iuCurrent: null },
+      { iu: "03 ", iuCurrent: null },
+      { iu: "3 : Acero de construccion corrugado", iuCurrent: null },
+      { iu: "47 : Mano de obra (incluye leyes sociales)", iuCurrent: null },
+      { iu: "01 : Aceite y lubricante", iuCurrent: "47" },
+      { iu: " ", iuCurrent: null },
+      { iu: ":", iuCurrent: null },
+      { iu: null, iuCurrent: null },
     ]);
 
     await expect(getUnifiedIndexRelationRows("user-1")).resolves.toEqual([
@@ -55,7 +55,7 @@ describe("getUnifiedIndexRelationRows", () => {
       {
         code: "47",
         name: "Mano de obra (incluye leyes sociales)",
-        resourceCount: 3,
+        resourceCount: 4,
       },
       {
         code: "92",
@@ -66,6 +66,7 @@ describe("getUnifiedIndexRelationRows", () => {
     expect(mocks.prisma.resource.findMany).toHaveBeenCalledWith({
       select: {
         iu: true,
+        iuCurrent: true,
       },
       where: {
         OR: [

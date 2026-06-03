@@ -1,34 +1,38 @@
 import { Prisma } from "@prisma/client";
+import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildMonomialComponentCreateData,
   composeBudgetPolynomialFormulaInput,
+  getPolynomialFormulaReadOptionsForEnvironment,
   sanitizePolynomialMonomialComponents,
 } from "@/lib/data/polynomial-formulas";
 import {
   serializeAdjustmentCalculation,
   serializePolynomialFormula,
+  serializePolynomialMonomial,
   serializeUnifiedIndex,
   serializeValuation,
 } from "@/lib/db/serializers";
 
 describe("composeBudgetPolynomialFormulaInput", () => {
-  it("builds budget-level direct cost groups from APU resources and adds GU", () => {
+  it("builds smart family monomials from APU resources and adds GU", () => {
     const result = composeBudgetPolynomialFormulaInput({
       id: "budget-1",
       projectId: "project-1",
-      totalGeneralExpenses: 12000,
-      totalUtility: 8000,
+      totalGeneralExpenses: 60,
+      totalUtility: 40,
       items: [
         {
           id: "item-1",
-          quantity: 100,
+          quantity: 1,
           apu: {
             resources: [
               {
                 id: "apu-resource-1",
                 resourceType: "MO",
-                subtotal: 25,
+                subtotal: 200,
                 resource: {
                   category: "LABOR",
                   iu: "47",
@@ -37,16 +41,35 @@ describe("composeBudgetPolynomialFormulaInput", () => {
               {
                 id: "apu-resource-2",
                 resourceType: "Material",
-                subtotal: 280,
+                subtotal: 300,
                 resource: {
                   category: "MATERIAL",
-                  iu: "30",
+                  iu: "3",
+                  unifiedIndexName: "ACERO CORRUGADO",
                 },
               },
               {
                 id: "apu-resource-3",
+                resourceType: "Material",
+                subtotal: 250,
+                resource: {
+                  category: "MATERIAL",
+                  iu: "21",
+                },
+              },
+              {
+                id: "apu-resource-4",
+                resourceType: "Material",
+                subtotal: 150,
+                resource: {
+                  category: "MATERIAL",
+                  iu: "17",
+                },
+              },
+              {
+                id: "apu-resource-5",
                 resourceType: "Equipo",
-                subtotal: 35,
+                subtotal: 20,
                 resource: {
                   category: "EQUIPMENT",
                   iu: "48",
@@ -57,22 +80,19 @@ describe("composeBudgetPolynomialFormulaInput", () => {
         },
         {
           id: "item-2",
-          quantity: 10,
+          quantity: 1,
           apu: {
             resources: [
               {
-                id: "apu-resource-4",
-                resourceType: "Herramientas",
-                subtotal: 2,
-                resource: {
-                  category: "TOOLS",
-                  iu: "49",
-                },
+                id: "apu-resource-6",
+                resourceType: "Subcontrato",
+                subtotal: 10,
+                resource: undefined,
               },
               {
-                id: "apu-resource-5",
-                resourceType: "Subcontrato",
-                subtotal: 7,
+                id: "apu-resource-7",
+                resourceType: "Miscelaneo",
+                subtotal: 0,
                 resource: undefined,
               },
             ],
@@ -82,36 +102,82 @@ describe("composeBudgetPolynomialFormulaInput", () => {
     });
 
     expect(result.directCostBreakdown).toEqual({
-      labor: "2500.0000",
-      materials: "28000.0000",
-      equipment: "3520.0000",
-      others: "70.0000",
+      labor: "200.0000",
+      materials: "700.0000",
+      equipment: "20.0000",
+      others: "10.0000",
     });
-    expect(result.totalBaseAmount).toBe("54090.0000");
+    expect(result.totalBaseAmount).toBe("1030.0000");
     expect(
-      Object.fromEntries(result.monomials.map((monomial) => [monomial.code, monomial.amount])),
+      Object.fromEntries(result.monomials.map((monomial) => [monomial.costGroupKey, monomial.amount])),
     ).toEqual({
-      MO: "2500.0000",
-      MAT: "28000.0000",
-      EQ: "3520.0000",
-      V: "70.0000",
-      GU: "20000.0000",
+      LABOR: "200.0000",
+      STEEL: "330.0000",
+      CEMENT: "250.0000",
+      MASONRY: "150.0000",
+      GENERAL_EXPENSES_PROFIT: "100.0000",
     });
-    expect(result.monomials.map((monomial) => monomial.coefficient)).toEqual([
-      "0.046",
-      "0.518",
-      "0.065",
-      "0.001",
-      "0.370",
-    ]);
+    expect(result.monomials.map((monomial) => monomial.coefficient)).toEqual(["0.194", "0.320", "0.243", "0.146", "0.097"]);
+    expect(Object.fromEntries(result.monomials.map((monomial) => [monomial.baseIndexCode, monomial.code]))).toMatchObject({
+      "3": "AC",
+      "21": "CE",
+      "17": "BL",
+      "39": "GU",
+      "47": "MO",
+    });
+    expect(Object.fromEntries(result.monomials.map((monomial) => [monomial.baseIndexCode, monomial.name]))).toMatchObject({
+      "3": "IU 03 : ACERO DE CONSTRUCCION CORRUGADO",
+      "21": "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
+      "17": "IU 17 : BLOQUES Y LADRILLOS",
+      "39": "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+      "47": "IU 47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+    });
+    expect(result.monomials.map((monomial) => monomial.costGroupKey)).not.toEqual(
+      expect.arrayContaining(["EQUIPMENT", "OTHERS"]),
+    );
+    expect(
+      result.monomials
+        .reduce((total, monomial) => total.plus(monomial.coefficient), new Decimal(0))
+        .toFixed(3),
+    ).toBe("1.000");
+    expect(
+      result.monomials
+        .reduce((total, monomial) => total.plus(monomial.amount), new Decimal(0))
+        .toFixed(4),
+    ).toBe(result.totalBaseAmount);
     expect(result.componentsByGroup.get("LABOR")).toEqual([
       {
         apuResourceId: "apu-resource-1",
         resourceType: "MO",
-        amount: "2500.0000",
+        amount: "200.0000",
       },
     ]);
     expect(result.componentsByGroup.get("GENERAL_EXPENSES_PROFIT")).toEqual([]);
+    expect(result.componentsByMonomialKey.get("MATERIALS:IU:3")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        apuResourceId: "apu-resource-2",
+        amount: "300.0000",
+        unifiedIndexCode: "3",
+        unifiedIndexName: "ACERO CORRUGADO",
+        iuFamily: "STEEL",
+        participationPercentage: "0.909091",
+        coefficientContribution: "0.291262",
+      }),
+      expect.objectContaining({
+        apuResourceId: "apu-resource-5",
+        amount: "20.0000",
+        iuFamily: "EQUIPMENT",
+        participationPercentage: "0.060606",
+        coefficientContribution: "0.019417",
+      }),
+      expect.objectContaining({
+        apuResourceId: "apu-resource-6",
+        amount: "10.0000",
+        iuFamily: "OTHERS",
+        participationPercentage: "0.030303",
+        coefficientContribution: "0.009709",
+      }),
+    ]));
   });
 
   it("keeps monomial coefficients independent when composing separate sub budgets", () => {
@@ -154,7 +220,7 @@ describe("composeBudgetPolynomialFormulaInput", () => {
                 id: "mat-arquitectura",
                 resourceType: "Material",
                 subtotal: 30,
-                resource: { category: "MATERIAL", iu: "30" },
+                resource: { category: "MATERIAL", iu: "21" },
               },
             ],
           },
@@ -169,14 +235,14 @@ describe("composeBudgetPolynomialFormulaInput", () => {
     });
     expect(arquitectura.totalBaseAmount).toBe("200.0000");
     expect(Object.fromEntries(arquitectura.monomials.map((monomial) => [monomial.code, monomial.coefficient]))).toMatchObject({
-      MAT: "0.750",
+      CE: "0.750",
       GU: "0.250",
     });
   });
 });
 
 describe("sanitizePolynomialMonomialComponents", () => {
-  it("keeps one persisted source reference per component and skips summary-only rows", () => {
+  it("keeps one persisted source reference, preserves snapshot fields, and skips summary-only rows", () => {
     expect(
       sanitizePolynomialMonomialComponents([
         {
@@ -184,6 +250,11 @@ describe("sanitizePolynomialMonomialComponents", () => {
           apuResourceId: "apu-resource-1",
           resourceType: "MO",
           amount: "2500.0000",
+          unifiedIndexCode: "47",
+          unifiedIndexName: "MANO DE OBRA",
+          iuFamily: "LABOR",
+          participationPercentage: "1.000000",
+          coefficientContribution: "0.046000",
         },
         {
           budgetItemId: "item-2",
@@ -201,6 +272,11 @@ describe("sanitizePolynomialMonomialComponents", () => {
         budgetItemId: null,
         resourceType: "MO",
         amount: "2500.0000",
+        unifiedIndexCode: "47",
+        unifiedIndexName: "MANO DE OBRA",
+        iuFamily: "LABOR",
+        participationPercentage: "1.000000",
+        coefficientContribution: "0.046000",
       },
       {
         apuResourceId: null,
@@ -210,10 +286,136 @@ describe("sanitizePolynomialMonomialComponents", () => {
       },
     ]);
   });
+
+  it("builds component create data with persisted snapshot fields", () => {
+    expect(
+      buildMonomialComponentCreateData({
+        budgetItemId: null,
+        apuResourceId: "apu-resource-1",
+        resourceType: "MO",
+        amount: "2500.123456",
+        unifiedIndexCode: "47",
+        unifiedIndexName: "MANO DE OBRA",
+        iuFamily: "LABOR",
+        participationPercentage: "1.000000",
+        coefficientContribution: "0.046000",
+      }),
+    ).toEqual({
+      budgetItemId: null,
+      apuResourceId: "apu-resource-1",
+      resourceType: "MO",
+      amount: "2500.1235",
+      unifiedIndexCode: "47",
+      unifiedIndexName: "MANO DE OBRA",
+      iuFamily: "LABOR",
+      participationPercentage: "1.000000",
+      coefficientContribution: "0.046000",
+    });
+  });
+
+  it("uses current resource IU before the legacy IU when composing monomials", () => {
+    const result = composeBudgetPolynomialFormulaInput({
+      id: "budget-current-iu",
+      projectId: "project-1",
+      totalGeneralExpenses: 0,
+      totalUtility: 0,
+      items: [
+        {
+          id: "item-current-iu",
+          quantity: 1,
+          apu: {
+            resources: [
+              {
+                id: "cement-resource",
+                resourceType: "Material",
+                subtotal: 100,
+                resource: {
+                  category: "MATERIAL",
+                  iu: "39",
+                  iuCurrent: "21",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.monomials).toHaveLength(1);
+    expect(result.monomials[0]).toMatchObject({
+      code: "CE",
+      baseIndexCode: "21",
+      name: "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
+    });
+  });
+});
+
+describe("getPolynomialFormulaReadOptionsForEnvironment", () => {
+  it("keeps composition detail disabled for production payloads", () => {
+    expect(getPolynomialFormulaReadOptionsForEnvironment("production")).toEqual({
+      includeCompositionDetail: false,
+    });
+  });
+
+  it("enables composition detail for development payloads", () => {
+    expect(getPolynomialFormulaReadOptionsForEnvironment("development")).toEqual({
+      includeCompositionDetail: true,
+    });
+  });
 });
 
 describe("polynomial serializers", () => {
   it("serializes formula, valuation, unified index, and adjustment records", () => {
+    const monomialWithoutComponents = serializePolynomialMonomial({
+      id: "monomial-without-components",
+      formulaId: "formula-1",
+      code: "MAT",
+      name: "Materiales",
+      costGroupKey: "MATERIALS",
+      amount: new Prisma.Decimal("1000.00"),
+      coefficient: new Prisma.Decimal("0.123"),
+      baseIndexCode: "30",
+      baseIndexName: "Materiales",
+      baseIndexValue: new Prisma.Decimal("100.000"),
+      adjustmentIndexCode: null,
+      adjustmentIndexName: null,
+      adjustmentIndexValue: null,
+      sortOrder: 1,
+    });
+    const legacyMaterialMonomial = serializePolynomialMonomial({
+      id: "legacy-material",
+      formulaId: "formula-1",
+      code: "MAT",
+      name: "Materiales",
+      costGroupKey: "MATERIALS",
+      amount: new Prisma.Decimal("1000.00"),
+      coefficient: new Prisma.Decimal("0.123"),
+      baseIndexCode: "21 : CEMENTO PORTLAND E HIDRAULICO",
+      baseIndexName: "Pendiente de asignar",
+      baseIndexValue: new Prisma.Decimal("100.000"),
+      adjustmentIndexCode: null,
+      adjustmentIndexName: null,
+      adjustmentIndexValue: null,
+      sortOrder: 1,
+      components: [
+        {
+          id: "legacy-cement-component",
+          monomialId: "legacy-material",
+          budgetItemId: null,
+          apuResourceId: "apu-resource-cement",
+          resourceType: "MATERIAL",
+          amount: new Prisma.Decimal("1000.00"),
+          unifiedIndexCode: "21 : CEMENTO PORTLAND E HIDRAULICO",
+          unifiedIndexName: null,
+          iuFamily: "OTHERS",
+          participationPercentage: new Prisma.Decimal("1.000000"),
+          coefficientContribution: new Prisma.Decimal("0.123000"),
+          createdAt: new Date("2026-01-15T00:00:00.000Z"),
+          updatedAt: new Date("2026-01-16T00:00:00.000Z"),
+        },
+      ],
+    });
+
     const formula = serializePolynomialFormula({
       id: "formula-1",
       budgetId: "budget-1",
@@ -242,6 +444,23 @@ describe("polynomial serializers", () => {
           sortOrder: 0,
           createdAt: new Date("2026-01-15T00:00:00.000Z"),
           updatedAt: new Date("2026-01-16T00:00:00.000Z"),
+          components: [
+            {
+              id: "component-1",
+              monomialId: "monomial-1",
+              budgetItemId: null,
+              apuResourceId: "apu-resource-1",
+              resourceType: "MO",
+              amount: new Prisma.Decimal("2500.00"),
+              unifiedIndexCode: "47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+              unifiedIndexName: null,
+              iuFamily: "LABOR",
+              participationPercentage: new Prisma.Decimal("1.000000"),
+              coefficientContribution: new Prisma.Decimal("0.046000"),
+              createdAt: new Date("2026-01-15T00:00:00.000Z"),
+              updatedAt: new Date("2026-01-16T00:00:00.000Z"),
+            },
+          ],
         },
       ],
     });
@@ -294,14 +513,47 @@ describe("polynomial serializers", () => {
           ratio: new Prisma.Decimal("1.080000"),
           partial: new Prisma.Decimal("0.049680"),
           sortOrder: 0,
-          createdAt: new Date("2026-02-01T00:00:00.000Z"),
-          updatedAt: new Date("2026-02-01T00:00:00.000Z"),
         },
       ],
     });
 
     expect(formula.totalBaseAmount).toBe("54090.0000");
     expect(formula.monomials[0]?.baseIndexValue).toBe("100");
+    expect(formula.monomials[0]).toMatchObject({
+      code: "MO",
+      name: "IU 47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+      baseIndexCode: "47",
+      baseIndexName: "MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+    });
+    expect(legacyMaterialMonomial).toMatchObject({
+      code: "CE",
+      name: "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
+      baseIndexCode: "21",
+      baseIndexName: "CEMENTO PORTLAND E HIDRAULICO",
+    });
+    expect(legacyMaterialMonomial.composition[0]).toMatchObject({
+      unifiedIndexCode: "21",
+      unifiedIndexName: "CEMENTO PORTLAND E HIDRAULICO",
+      iuFamily: "CEMENT",
+    });
+    expect(monomialWithoutComponents.composition).toEqual([]);
+    expect(formula.monomials[0]?.composition).toEqual([
+      {
+        id: "component-1",
+        monomialId: "monomial-1",
+        budgetItemId: undefined,
+        apuResourceId: "apu-resource-1",
+        resourceType: "MO",
+        amount: "2500.00",
+        unifiedIndexCode: "47",
+        unifiedIndexName: "MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+        iuFamily: "LABOR",
+        participationPercentage: "1",
+        coefficientContribution: "0.046",
+        createdAt: "2026-01-15T00:00:00.000Z",
+        updatedAt: "2026-01-16T00:00:00.000Z",
+      },
+    ]);
     expect(valuation.amount).toBe("100000.00");
     expect(index.value).toBe("108");
     expect(index.geographicArea).toBe("LIMA");

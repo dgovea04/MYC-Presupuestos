@@ -4,6 +4,7 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn } from "@/lib/utils";
 import { validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
+import { POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS } from "@/lib/polynomial-formula/smart-monomial-types";
 import type { PolynomialMonomialRecord } from "@/types/polynomial-formula";
 
 const PLACEHOLDER_INDEX_NAME = "Pendiente de asignar";
@@ -20,6 +21,8 @@ export function PolynomialValidationSummary({
       baseIndexValue: monomial.baseIndexValue,
       adjustmentIndexValue: "1",
       name: monomial.name,
+      code: monomial.code,
+      composition: monomial.composition,
     })),
   );
   const pendingBaseAssignments = monomials.filter(
@@ -39,16 +42,22 @@ export function PolynomialValidationSummary({
             Suma coeficientes: {validation.coefficientSum}
           </Badge>
           <Badge className={validation.hasMaximumTermsValid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
-            Monomios: {monomials.length}/8
+            Monomios: {monomials.length}/{POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS}
           </Badge>
           <Badge className={pendingBaseAssignments.length === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
             Indices base pendientes: {pendingBaseAssignments.length}
           </Badge>
         </div>
 
-        {validation.minimumCoefficientWarnings.length > 0 ? (
+        {validation.compositionDiagnostics.length > 0 ? (
           <div className={cn("border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900", isExcelMode ? "rounded-md" : "rounded-2xl")}>
-            {validation.minimumCoefficientWarnings.join(" ")}
+            <ul className="space-y-1">
+              {validation.compositionDiagnostics.map((diagnostic) => (
+                <li key={`${diagnostic.code}:${diagnostic.monomialName}:${diagnostic.message}`}>
+                  {diagnostic.message}
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
 

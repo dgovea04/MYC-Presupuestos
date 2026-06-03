@@ -2,9 +2,9 @@ import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn } from "@/lib/utils";
 import type { PolynomialMonomialRecord } from "@/types/polynomial-formula";
 
-function formatThreeDecimals(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toFixed(3) : value;
+function formatCoefficient(value: string) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue.toFixed(3) : value;
 }
 
 export function PolynomialFormulaMath({
@@ -26,7 +26,7 @@ export function PolynomialFormulaMath({
         {monomials
           .map(
             (monomial) =>
-              `${formatThreeDecimals(monomial.coefficient)}(${monomial.code}r/${monomial.code}o)`,
+              `${formatCoefficient(monomial.coefficient)}(${monomial.code}r/${monomial.code}o)`,
           )
           .join(" + ")}
       </p>

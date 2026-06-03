@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Combine } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Input } from "@/components/ui/input";
+import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { formatPolynomialIuCodeForDisplay } from "@/lib/polynomial-formula/monomial-metadata";
 import { cn, formatNumber } from "@/lib/utils";
 import type { PolynomialMonomialRecord, UnifiedIndexRecord } from "@/types/polynomial-formula";
 
@@ -30,106 +33,103 @@ function toBaseIndexOptions(indices: UnifiedIndexRecord[]): BaseIndexOption[] {
   }));
 }
 
-function formatThreeDecimals(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toFixed(3) : value;
+function formatReadonlyDecimal(value: string, decimalPlaces: number) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? formatNumber(numericValue, decimalPlaces) : value;
 }
 
-function parseFormattedNumber(value: string) {
-  const parsed = Number(value.replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
+function getCoefficientStatus(value: string) {
+  const coefficient = Number(value);
+
+  if (!Number.isFinite(coefficient) || coefficient <= 0) {
+    return {
+      label: "Sin aporte",
+      className: "border-slate-200 bg-slate-50 text-slate-500",
+    };
+  }
+
+  if (coefficient < 0.05) {
+    return {
+      label: "< 0.050",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
+  return {
+    label: "Cumple",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
 }
 
-function formatAmountDisplay(value: string, decimalPlaces: number) {
-  const parsed = parseFormattedNumber(value);
-  return parsed === null ? value : formatNumber(parsed, decimalPlaces);
-}
-
-function MonomialAmountInput({
-  value,
-  decimalPlaces,
-  onChange,
-}: {
-  value: string;
-  decimalPlaces: number;
-  onChange: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  const [isFocused, setIsFocused] = useState(false);
-
-  return (
-    <Input
-      type="text"
-      inputMode="decimal"
-      value={isFocused ? draft : formatAmountDisplay(value, decimalPlaces)}
-      onFocus={() => {
-        setIsFocused(true);
-        setDraft(value);
-      }}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        setIsFocused(false);
-        const parsed = parseFormattedNumber(draft);
-        if (parsed === null) {
-          setDraft(formatAmountDisplay(value, decimalPlaces));
-          return;
-        }
-
-        const nextValue = parsed.toFixed(decimalPlaces);
-        onChange(nextValue);
-        setDraft(formatNumber(parsed, decimalPlaces));
-      }}
-      className="h-8 rounded-lg px-2 text-right text-xs tabular-nums"
-    />
-  );
-}
-
-function MonomialCoefficientInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  const [isFocused, setIsFocused] = useState(false);
-
-  return (
-    <Input
-      type="text"
-      inputMode="decimal"
-      value={isFocused ? draft : formatThreeDecimals(value)}
-      onFocus={() => {
-        setIsFocused(true);
-        setDraft(value);
-      }}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        setIsFocused(false);
-        const nextValue = formatThreeDecimals(draft);
-        onChange(nextValue);
-        setDraft(nextValue);
-      }}
-      className="h-8 rounded-lg px-2 text-right text-xs tabular-nums"
-    />
-  );
+function formatBaseIndexOptionLabel(option: BaseIndexOption) {
+  const displayCode = formatPolynomialIuCodeForDisplay(option.code) || option.code;
+  return `${displayCode} - ${option.name}${option.geographicArea ? ` (${option.geographicArea})` : ""}`;
 }
 
 export function PolynomialMonomialsTable({
   monomials,
   baseIndexOptions,
   baseIndicesLoading,
-  onChangeMonomial,
   currencyDecimals,
+  onChangeMonomial,
+  onMergeMonomials,
 }: {
   monomials: PolynomialMonomialRecord[];
   baseIndexOptions: UnifiedIndexRecord[];
   baseIndicesLoading: boolean;
-  onChangeMonomial: (monomial: PolynomialMonomialRecord) => void;
   currencyDecimals: number;
+  onChangeMonomial: (monomial: PolynomialMonomialRecord) => void;
+  onMergeMonomials?: (targetMonomialId: string, sourceMonomialIds: string[]) => void;
 }) {
   const { isExcelMode } = useAppViewMode();
+  const [targetMonomialId, setTargetMonomialId] = useState("");
+  const [sourceMonomialIds, setSourceMonomialIds] = useState<string[]>([]);
   const options = toBaseIndexOptions(baseIndexOptions);
+  const selectedTarget = useMemo(
+    () => monomials.find((monomial) => monomial.id === targetMonomialId) ?? null,
+    [monomials, targetMonomialId],
+  );
+  const validMonomialIds = useMemo(
+    () => new Set(monomials.map((monomial) => monomial.id)),
+    [monomials],
+  );
+  const activeSourceMonomialIds = useMemo(
+    () =>
+      sourceMonomialIds.filter(
+        (sourceId) => validMonomialIds.has(sourceId) && sourceId !== targetMonomialId,
+      ),
+    [sourceMonomialIds, targetMonomialId, validMonomialIds],
+  );
+  const selectedSourceCount = activeSourceMonomialIds.length;
+  const canMerge = Boolean(onMergeMonomials && selectedTarget && selectedSourceCount > 0);
+
+  function selectTarget(monomialId: string) {
+    setTargetMonomialId(monomialId);
+    setSourceMonomialIds((current) => current.filter((sourceId) => sourceId !== monomialId));
+  }
+
+  function toggleSource(monomialId: string, checked: boolean) {
+    if (monomialId === targetMonomialId) {
+      return;
+    }
+
+    setSourceMonomialIds((current) => {
+      if (checked) {
+        return current.includes(monomialId) ? current : [...current, monomialId];
+      }
+
+      return current.filter((sourceId) => sourceId !== monomialId);
+    });
+  }
+
+  function mergeSelectedMonomials() {
+    if (!onMergeMonomials || !canMerge) {
+      return;
+    }
+
+    onMergeMonomials(targetMonomialId, activeSourceMonomialIds);
+    setSourceMonomialIds([]);
+  }
 
   return (
     <Card>
@@ -140,28 +140,78 @@ export function PolynomialMonomialsTable({
           metrics={<span>{monomials.length} monomios</span>}
         />
 
+        {onMergeMonomials ? (
+          <div className={cn("flex flex-wrap items-center justify-between gap-3 border border-slate-200 bg-slate-50 px-4 py-3", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-slate-900">Juntar monomios</p>
+              <p className="text-xs text-slate-500">
+                Destino: {selectedTarget?.code ?? "sin seleccionar"} - Origenes: {selectedSourceCount}
+              </p>
+            </div>
+            <Button type="button" size="sm" onClick={mergeSelectedMonomials} disabled={!canMerge}>
+              <Combine className="mr-2 h-4 w-4" />
+              Juntar monomios
+            </Button>
+          </div>
+        ) : null}
+
         {baseIndicesLoading ? (
           <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
             Cargando indices INEI del mes base...
           </div>
         ) : null}
 
-        <div className={getTableFrameClassName(isExcelMode)}>
-          <Table className="min-w-[1120px]">
+        <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
+          <Table className="min-w-[1180px] table-fixed">
             <THead>
               <TR className="bg-slate-50 hover:bg-slate-50">
-                <TH>Codigo</TH>
-                <TH>Nombre</TH>
-                <TH>Grupo</TH>
-                <TH className="text-right">Monto base (en Soles)</TH>
-                <TH className="text-right">Coeficiente</TH>
-                <TH>Indice base</TH>
-                <TH className="text-right">Valor base</TH>
+                {onMergeMonomials ? (
+                  <>
+                    <TH className="w-[72px] text-center">Destino</TH>
+                    <TH className="w-[72px] text-center">Origen</TH>
+                  </>
+                ) : null}
+                <TH className="w-[86px]">Codigo</TH>
+                <TH className="w-[330px]">Nombre</TH>
+                <TH className="w-[138px]">Grupo</TH>
+                <TH className="w-[118px] text-right">Monto base (S/)</TH>
+                <TH className="w-[132px] text-right">Coef.</TH>
+                <TH className="w-[220px]">Indice base</TH>
+                <TH className="w-[92px] text-right">Valor</TH>
               </TR>
             </THead>
             <TBody>
-              {monomials.map((monomial) => (
+              {monomials.map((monomial) => {
+                const coefficientStatus = getCoefficientStatus(monomial.coefficient);
+
+                return (
                 <TR key={monomial.id}>
+                  {onMergeMonomials ? (
+                    <>
+                      <TD className="text-center align-top">
+                        <input
+                          type="radio"
+                          name="polynomial-merge-target"
+                          checked={targetMonomialId === monomial.id}
+                          onChange={() => selectTarget(monomial.id)}
+                          aria-label={`Usar ${monomial.code} como destino`}
+                          title="Monomio destino"
+                          className="mt-2 h-4 w-4 accent-sky-600"
+                        />
+                      </TD>
+                      <TD className="text-center align-top">
+                        <input
+                          type="checkbox"
+                          checked={activeSourceMonomialIds.includes(monomial.id)}
+                          disabled={targetMonomialId === monomial.id}
+                          onChange={(event) => toggleSource(monomial.id, event.target.checked)}
+                          aria-label={`Juntar ${monomial.code} en destino`}
+                          title="Monomio origen"
+                          className="mt-2 h-4 w-4 rounded border-slate-300 accent-sky-600"
+                        />
+                      </TD>
+                    </>
+                  ) : null}
                   <TD className="align-top">
                     <Input
                       value={monomial.code}
@@ -171,11 +221,11 @@ export function PolynomialMonomialsTable({
                           code: event.target.value,
                         })
                       }
-                      className="h-8 rounded-lg px-2 text-xs"
+                      className="h-8 rounded-lg px-2 text-xs font-semibold uppercase tracking-wide"
                     />
                   </TD>
                   <TD className="align-top">
-                    <Input
+                    <input
                       value={monomial.name}
                       onChange={(event) =>
                         onChangeMonomial({
@@ -183,32 +233,29 @@ export function PolynomialMonomialsTable({
                           name: event.target.value,
                         })
                       }
-                      className="h-8 rounded-lg px-2 text-xs"
+                      title={monomial.name}
+                      className="h-8 w-full border-0 bg-transparent px-0 text-xs text-slate-900 outline-none ring-0 transition-colors placeholder:text-slate-400 focus:text-sky-700"
                     />
                   </TD>
-                  <TD className="text-sm text-slate-700">{monomial.costGroupKey}</TD>
-                  <TD className="align-top">
-                    <MonomialAmountInput
-                      value={monomial.amount}
-                      decimalPlaces={currencyDecimals}
-                      onChange={(value) =>
-                        onChangeMonomial({
-                          ...monomial,
-                          amount: value,
-                        })
-                      }
-                    />
+                  <TD className="align-top text-xs text-slate-600">
+                    <span className="block truncate pt-2" title={monomial.costGroupKey}>
+                      {monomial.costGroupKey}
+                    </span>
                   </TD>
-                  <TD className="align-top">
-                    <MonomialCoefficientInput
-                      value={monomial.coefficient}
-                      onChange={(value) =>
-                        onChangeMonomial({
-                          ...monomial,
-                          coefficient: value,
-                        })
-                      }
-                    />
+                  <TD className="align-top text-right">
+                    <span className="block pt-2 text-xs tabular-nums text-slate-900">
+                      {formatReadonlyDecimal(monomial.amount, currencyDecimals)}
+                    </span>
+                  </TD>
+                  <TD className="align-top text-right">
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <span className="text-xs font-medium tabular-nums text-slate-900">
+                        {formatReadonlyDecimal(monomial.coefficient, 3)}
+                      </span>
+                      <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none", coefficientStatus.className)}>
+                        {coefficientStatus.label}
+                      </span>
+                    </div>
                   </TD>
                   <TD className="align-top">
                     <Select
@@ -225,13 +272,12 @@ export function PolynomialMonomialsTable({
                           baseIndexValue: nextOption?.value ?? monomial.baseIndexValue,
                         });
                       }}
-                      className="h-8 min-w-[260px] rounded-lg px-2 text-xs"
+                      className="h-8 w-full rounded-lg px-2 text-xs"
                     >
                       <option value="">Selecciona un indice base</option>
                       {options.map((option) => (
                         <option key={option.key} value={option.code}>
-                          {option.code} - {option.name}
-                          {option.geographicArea ? ` (${option.geographicArea})` : ""}
+                          {formatBaseIndexOptionLabel(option)}
                         </option>
                       ))}
                     </Select>
@@ -247,11 +293,12 @@ export function PolynomialMonomialsTable({
                           baseIndexValue: event.target.value,
                         })
                       }
-                      className="h-8 rounded-lg px-2 text-right text-xs tabular-nums"
+                      className="h-8 w-full rounded-lg px-2 text-right text-xs tabular-nums"
                     />
                   </TD>
                 </TR>
-              ))}
+                );
+              })}
             </TBody>
           </Table>
         </div>

@@ -29,10 +29,19 @@ export type MonomialCoefficientCalculationInput = {
 };
 
 export type PolynomialValidationMonomialInput = {
+  code?: string;
   coefficient: DecimalString;
   baseIndexValue: DecimalString | null;
   adjustmentIndexValue?: DecimalString | null;
   name?: string;
+  composition?: readonly PolynomialValidationCompositionRowInput[];
+};
+
+export type PolynomialValidationCompositionRowInput = {
+  unifiedIndexCode?: string | null;
+  unifiedIndexName?: string | null;
+  iuFamily?: string | null;
+  coefficientContribution?: DecimalString | null;
 };
 
 export type CoefficientKCalculationInput = {

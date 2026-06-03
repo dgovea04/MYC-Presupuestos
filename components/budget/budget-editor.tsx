@@ -16,6 +16,7 @@ import {
   type GuidedBudgetPasteWithSuggestions,
 } from "@/lib/budgets/paste-import";
 import { applyCatalogPartidaToDraftItem, resolveCatalogResource } from "@/lib/budgets/catalog-partida-application";
+import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
 import { calculateBudgetQualitySummary, type BudgetItemQualityState, type BudgetQualitySummary } from "@/lib/budgets/budget-quality";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
@@ -947,7 +948,9 @@ export function BudgetEditor({
   }
 
   function applyCatalogPartidaToItem(itemId: string, partida: CatalogPartidaRecord) {
-    const unresolvedRows = partida.apuRows.filter((row) => !resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit));
+    const unresolvedRows = partida.apuRows.filter(
+      (row) => !isSubpartidaResourceType(row.resourceType ?? row.groupLabel) && !resolveCatalogResource(row, resourcesById, resourcesByDescriptionUnit),
+    );
 
     setState((current) => ({
       ...current,
@@ -956,6 +959,7 @@ export function BudgetEditor({
           ? applyCatalogPartidaToDraftItem({
               item,
               partida,
+              catalogPartidas: partidasCatalog,
               resourcesById,
               resourcesByDescriptionUnit,
             })
@@ -1004,6 +1008,7 @@ export function BudgetEditor({
         return applyCatalogPartidaToDraftItem({
           item: nextItem,
           partida,
+          catalogPartidas: partidasCatalog,
           resourcesById,
           resourcesByDescriptionUnit,
         });
@@ -1400,6 +1405,7 @@ export function BudgetEditor({
         return applyCatalogPartidaToDraftItem({
           item,
           partida: selectedPartida,
+          catalogPartidas: partidasCatalog,
           resourcesById,
           resourcesByDescriptionUnit,
         });
@@ -1912,6 +1918,7 @@ export function BudgetEditor({
           key={apuSheetSession.item.id}
           initialItem={apuSheetSession.item}
           initialRestoreFocusElement={apuSheetSession.restoreFocusElement}
+          partidasCatalog={partidasCatalog}
           resourcesCatalog={resourcesCatalog}
           densityMode={effectiveDensityMode}
           onClose={() => {
@@ -2421,6 +2428,7 @@ function ApuSheetController({
   densityMode,
   onClose,
   onUpdate,
+  partidasCatalog,
   resourcesCatalog,
 }: {
   initialItem: BudgetItemRecord;
@@ -2428,6 +2436,7 @@ function ApuSheetController({
   densityMode: DensityMode;
   onClose: () => void;
   onUpdate: (item: BudgetItemRecord) => void;
+  partidasCatalog: CatalogPartidaRecord[];
   resourcesCatalog: ResourceRecord[];
 }) {
   const [draftItem, setDraftItem] = useState<BudgetItemRecord | null>(initialItem);
@@ -2450,6 +2459,7 @@ function ApuSheetController({
       open={draftItem !== null}
       onClose={closeSheet}
       onUpdate={setDraftItem}
+      catalogPartidas={partidasCatalog}
       resourcesCatalog={resourcesCatalog}
       restoreFocusElement={restoreFocusElement}
       densityMode={densityMode}
@@ -3306,7 +3316,11 @@ function buildBudgetStatePatch(
 
 function findIncompleteApuResourceRow(budget: BudgetRecord & { totals: BudgetTotals }) {
   return budget.items.find((item) =>
-    item.apu?.resources.some((resource) => resource.resourceId.trim().length === 0),
+    item.apu?.resources.some(
+      (resource) =>
+        !isSubpartidaResourceType(resource.resourceType) &&
+        (!resource.resourceId || resource.resourceId.trim().length === 0),
+    ),
   );
 }
 

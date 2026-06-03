@@ -10,7 +10,7 @@ import { buildUnifiedIndexSeedPayload } from "@/lib/polynomial-formula/unified-i
 
 const WORKBOOK_PATH = path.resolve(
   process.cwd(),
-  "presupuesto-ejemplo",
+  "data-for-seed",
   "formula-polinomica",
   "07_indices_unificados_de_precios_de_la_construccion_ene26.xlsx",
 );

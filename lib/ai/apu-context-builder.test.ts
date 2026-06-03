@@ -49,7 +49,7 @@ describe("apu-context-builder", () => {
     expect(context.matchingResources).toHaveLength(15);
     expect(context.rules).toContain("Usa unicamente resource_id existentes en matchingResources.");
     expect(context.outputSchema.properties.items.items.properties.resource_id.enumFrom).toBe("matchingResources[].id");
-    expect(context.outputSchema.properties.items.items.properties.type.enum).toEqual(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS"]);
+    expect(context.outputSchema.properties.items.items.properties.type.enum).toEqual(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS", "SUBCONTRACT"]);
     expect(context.outputSchema.properties.items.items.properties.source.const).toBe("catalog");
   });
 

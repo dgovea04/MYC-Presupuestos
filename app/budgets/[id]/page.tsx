@@ -226,6 +226,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           description: resource.description,
           category: resource.category,
           iu: resource.iu ?? undefined,
+          iuCurrent: resource.iuCurrent ?? undefined,
           subcategory: resource.subcategory ?? undefined,
           unit: resource.unit,
           unitPrice: decimalToNumber(resource.unitPrice),

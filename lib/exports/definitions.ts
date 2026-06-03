@@ -121,7 +121,7 @@ export const EXPORT_DEFINITIONS: Record<ExportTarget, ExportDefinition> = {
         description: "Lista de insumos con categoria, unidad, IU, moneda y precio.",
         formats: ["xlsx", "pdf", "csv"],
         defaultFormat: "xlsx",
-        defaultOptions: { sections: ["resources"], columns: ["code", "description", "category", "unit", "iu", "currency", "unitPrice"] },
+        defaultOptions: { sections: ["resources"], columns: ["code", "description", "category", "unit", "iu", "iuCurrent", "currency", "unitPrice"] },
       },
     ],
   },

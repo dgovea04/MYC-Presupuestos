@@ -99,16 +99,21 @@ export async function getWorkScheduleSection(budgetId: string, userId: string): 
             })) ?? [],
           resources:
             item.apu?.resources
-              .filter((resource) => resource.resourceId && resource.resource)
-              .map((resource) => ({
-                resourceId: resource.resourceId,
-                code: resource.resource.code,
-                description: resource.resource.description,
-                unit: resource.resource.unit,
-                unitPrice: decimalToNumber(resource.unitPrice),
-                totalQuantity: decimalToNumber(resource.quantity) * quantityMultiplier,
-                totalCost: decimalToNumber(resource.subtotal) * quantityMultiplier,
-              })) ?? [],
+              .flatMap((resource) =>
+                resource.resourceId && resource.resource
+                  ? [
+                      {
+                        resourceId: resource.resourceId,
+                        code: resource.resource.code,
+                        description: resource.resource.description,
+                        unit: resource.resource.unit,
+                        unitPrice: decimalToNumber(resource.unitPrice),
+                        totalQuantity: decimalToNumber(resource.quantity) * quantityMultiplier,
+                        totalCost: decimalToNumber(resource.subtotal) * quantityMultiplier,
+                      },
+                    ]
+                  : [],
+              ) ?? [],
         };
       }),
   );
@@ -423,16 +428,21 @@ async function getWorkScheduleLinesForBudget(
             })) ?? [],
           resources:
             item.apu?.resources
-              .filter((resource) => resource.resourceId && resource.resource)
-              .map((resource) => ({
-                resourceId: resource.resourceId,
-                code: resource.resource.code,
-                description: resource.resource.description,
-                unit: resource.resource.unit,
-                unitPrice: decimalToNumber(resource.unitPrice),
-                totalQuantity: decimalToNumber(resource.quantity) * quantityMultiplier,
-                totalCost: decimalToNumber(resource.subtotal) * quantityMultiplier,
-              })) ?? [],
+              .flatMap((resource) =>
+                resource.resourceId && resource.resource
+                  ? [
+                      {
+                        resourceId: resource.resourceId,
+                        code: resource.resource.code,
+                        description: resource.resource.description,
+                        unit: resource.resource.unit,
+                        unitPrice: decimalToNumber(resource.unitPrice),
+                        totalQuantity: decimalToNumber(resource.quantity) * quantityMultiplier,
+                        totalCost: decimalToNumber(resource.subtotal) * quantityMultiplier,
+                      },
+                    ]
+                  : [],
+              ) ?? [],
         };
       }),
   );

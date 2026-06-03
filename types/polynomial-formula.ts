@@ -17,6 +17,23 @@ export type BudgetCostGroupRecord = {
   label?: string;
 };
 
+export type PolynomialMonomialCompositionRecord = {
+  id: string;
+  monomialId?: string;
+  budgetItemId?: string;
+  apuResourceId?: string;
+  resourceType?: string;
+  resourceName?: string;
+  amount: string;
+  unifiedIndexCode?: string;
+  unifiedIndexName?: string;
+  iuFamily?: string;
+  participationPercentage?: string;
+  coefficientContribution?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type PolynomialMonomialRecord = {
   id: string;
   formulaId?: string;
@@ -32,13 +49,14 @@ export type PolynomialMonomialRecord = {
   adjustmentIndexName?: string | null;
   adjustmentIndexValue?: string | null;
   sortOrder: number;
+  composition: PolynomialMonomialCompositionRecord[];
   createdAt?: string;
   updatedAt?: string;
 };
 
 export type PolynomialMonomialInput = Omit<
   PolynomialMonomialRecord,
-  "formulaId" | "createdAt" | "updatedAt"
+  "formulaId" | "createdAt" | "updatedAt" | "composition"
 >;
 
 export type PolynomialFormulaRecord = {
@@ -106,6 +124,18 @@ export type AdjustmentCalculationRecord = {
   updatedAt?: string;
 };
 
+export type PolynomialCompositionDiagnosticCode =
+  | "LOW_COEFFICIENT_REVIEW"
+  | "MIXED_IU_GROUPING_REVIEW"
+  | "COMPOSITION_COVERAGE_REVIEW";
+
+export type PolynomialCompositionDiagnostic = {
+  code: PolynomialCompositionDiagnosticCode;
+  severity: "WARNING";
+  message: string;
+  monomialName: string;
+};
+
 export type PolynomialFormulaValidationResult = {
   isValid: boolean;
   coefficientSum: string;
@@ -114,4 +144,5 @@ export type PolynomialFormulaValidationResult = {
   minimumCoefficientWarnings: string[];
   missingBaseIndexWarnings: string[];
   missingAdjustmentIndexWarnings: string[];
+  compositionDiagnostics: PolynomialCompositionDiagnostic[];
 };

@@ -6,11 +6,17 @@ import { getResourcesByUser } from "@/lib/data/resources";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ResourcesPageContent } from "@/components/resources/resources-page-content";
 import { getUserCompanies } from "@/lib/data/projects";
+import { getUnifiedIndexDictionaryRows, getUnifiedIndexRelationRows } from "@/lib/data/unified-indices";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 
 export default async function ResourcesPage() {
   const session = await getAuthSession();
-  const [resources, companies] = await Promise.all([getResourcesByUser(session!.user.id), getUserCompanies(session!.user.id)]);
+  const [resources, companies, unifiedIndexDictionaryRows, unifiedIndexRows] = await Promise.all([
+    getResourcesByUser(session!.user.id),
+    getUserCompanies(session!.user.id),
+    getUnifiedIndexDictionaryRows(),
+    getUnifiedIndexRelationRows(session!.user.id),
+  ]);
 
   return (
     <AppShell currentUser={session!.user}>
@@ -25,6 +31,8 @@ export default async function ResourcesPage() {
         <CardContent className="space-y-6 pt-6">
           <ResourcesPageContent
             companyId={companies[0]?.id}
+            unifiedIndexDictionaryRows={unifiedIndexDictionaryRows}
+            unifiedIndexRows={unifiedIndexRows}
             resources={resources.map((resource) => ({
               id: resource.id,
               companyId: resource.companyId,
@@ -32,6 +40,8 @@ export default async function ResourcesPage() {
               description: resource.description,
               category: resource.category,
               iu: resource.iu,
+              iuCurrent: resource.iuCurrent,
+              iuCurrentReviewStatus: resource.iuCurrentReviewStatus,
               subcategory: resource.subcategory,
               unit: resource.unit,
               unitPrice: decimalToNumber(resource.unitPrice),

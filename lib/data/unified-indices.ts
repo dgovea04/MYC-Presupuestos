@@ -10,7 +10,7 @@ export async function getUnifiedIndexRelationRows(userId: string): Promise<Unifi
   const resourceCountByCode = new Map<string, number>();
 
   for (const resource of resources) {
-    const normalizedCode = normalizeUnifiedIndexCode(resource.iu);
+    const normalizedCode = normalizeUnifiedIndexCode(resource.iuCurrent ?? resource.iu);
     if (!normalizedCode) {
       continue;
     }
@@ -56,6 +56,7 @@ async function getVisibleResourceIUsByUser(userId: string) {
   return prisma.resource.findMany({
     select: {
       iu: true,
+      iuCurrent: true,
     },
     where: {
       OR: [
@@ -78,7 +79,7 @@ const getCachedOfficialUnifiedIndexRelations = isTestEnvironment
 
 const getCachedVisibleResourceIUsByUser = isTestEnvironment
   ? getVisibleResourceIUsByUser
-  : unstable_cache(getVisibleResourceIUsByUser, ["visible-resource-iu-by-user"]);
+  : unstable_cache(getVisibleResourceIUsByUser, ["visible-resource-iu-by-user-v2"]);
 
 function normalizeUnifiedIndexCode(code: string | null | undefined) {
   const normalized = code?.trim();

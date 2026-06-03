@@ -16,19 +16,41 @@ export type BudgetInput = z.infer<typeof budgetSchema>;
 const apuResourceSchema = z.object({
   id: z.string().min(1),
   apuId: z.string().min(1),
-  resourceId: z.string().min(1),
+  resourceId: z.string().min(1).nullable().optional(),
+  catalogPartidaId: z.string().min(1).nullable().optional(),
   resourceType: z.string().min(1),
+  description: z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
   crew: z.coerce.number().nullable().optional(),
   quantity: z.coerce.number(),
   unitPrice: z.coerce.number(),
   subtotal: z.coerce.number(),
+  nestedApuRows: z
+    .array(
+      z.object({
+        id: z.string(),
+        catalogPartidaId: z.string(),
+        resourceId: z.string().nullable().optional(),
+        catalogSubpartidaId: z.string().nullable().optional(),
+        description: z.string(),
+        unit: z.string(),
+        crew: z.coerce.number().nullable().optional(),
+        quantity: z.coerce.number(),
+        unitPrice: z.coerce.number(),
+        subtotal: z.coerce.number(),
+        resourceType: z.string().nullable().optional(),
+        groupLabel: z.string().nullable().optional(),
+        sortOrder: z.coerce.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
   resource: z
     .object({
       id: z.string().min(1),
       companyId: z.string().nullish(),
       code: z.string(),
       description: z.string(),
-      category: z.enum(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS"]),
+      category: z.enum(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS", "SUBCONTRACT"]),
       iu: z.string().nullish(),
       subcategory: z.string().nullish(),
       unit: z.string(),

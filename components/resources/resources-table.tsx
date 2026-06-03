@@ -9,6 +9,7 @@ import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { Input } from "@/components/ui/input";
 import { OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
 import { normalizeResourceIuCode } from "@/lib/resources/iu";
+import { suggestResourceIuCodes } from "@/lib/resources/iu-suggestions";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -17,9 +18,11 @@ import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { cn } from "@/lib/utils";
+import type { UnifiedIndexDictionaryRow, UnifiedIndexRelationRow } from "@/types/unified-index";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
-type EditableColumn = "code" | "description" | "unit" | "unitPrice" | "category" | "iu" | "source";
+type EditableColumn = "code" | "description" | "unit" | "unitPrice" | "category" | "iu" | "iuCurrent" | "source";
+type IuCurrentFilter = "ALL" | "WITH_IU" | "WITHOUT_IU" | "AUTO_ASSIGNED" | "MANUAL_ASSIGNED";
 type EditableResource = ResourceRecord & {
   isEditing?: boolean;
   isNew?: boolean;
@@ -34,24 +37,46 @@ type PendingPaste = {
 };
 type ResourcePasteRow = Partial<Pick<ResourceRecord, EditableColumn | "source">>;
 
-const editableColumnOrder: EditableColumn[] = ["code", "description", "unit", "unitPrice", "category", "iu", "source"];
+const editableColumnOrder: EditableColumn[] = ["code", "description", "unit", "unitPrice", "category", "iu", "iuCurrent", "source"];
 const resourceCodePrefixes: Record<ResourceCategory, string> = {
   MATERIAL: "MAT",
   LABOR: "MO",
   EQUIPMENT: "EQ",
   TOOLS: "HER",
+  SUBCONTRACT: "SUB",
 };
 const RESOURCE_ROW_HEIGHT = 74;
 const RESOURCE_ROW_OVERSCAN = 8;
-const RESOURCE_TABLE_COLUMN_COUNT = 8;
+const RESOURCE_TABLE_COLUMN_COUNT = 9;
+const AUTOCREATED_APU_SOURCE = "Autocreado desde APU del catalogo de partidas";
+
+function isAutocreatedApuResource(resource: Pick<ResourceRecord, "source">) {
+  return resource.source?.trim() === AUTOCREATED_APU_SOURCE;
+}
+
+function needsManualIuReview(resource: Pick<ResourceRecord, "source" | "iuCurrent">) {
+  return isAutocreatedApuResource(resource) && !resource.iuCurrent?.trim();
+}
+
+function needsAutomaticIuReview(resource: Pick<ResourceRecord, "source" | "iuCurrent" | "iuCurrentReviewStatus">) {
+  return isAutocreatedApuResource(resource) && Boolean(resource.iuCurrent?.trim()) && resource.iuCurrentReviewStatus === "AUTO_ASSIGNED";
+}
+
+function isManuallyAssignedIu(resource: Pick<ResourceRecord, "source" | "iuCurrent" | "iuCurrentReviewStatus">) {
+  return isAutocreatedApuResource(resource) && Boolean(resource.iuCurrent?.trim()) && resource.iuCurrentReviewStatus === "MANUAL_ASSIGNED";
+}
 
 export function ResourcesTable({
   resources,
   companyId,
+  unifiedIndexDictionaryRows,
+  unifiedIndexRows,
   onRequestCreate,
 }: {
   resources: ResourceRecord[];
   companyId?: string;
+  unifiedIndexDictionaryRows: UnifiedIndexDictionaryRow[];
+  unifiedIndexRows: UnifiedIndexRelationRow[];
   onRequestCreate?: () => void;
 }) {
   const { isExcelMode } = useAppViewMode();
@@ -60,6 +85,8 @@ export function ResourcesTable({
   const [rows, setRows] = useState<EditableResource[]>(() => resources.map((resource) => toEditableResource(resource)));
   const [filter, setFilter] = useState("");
   const [category, setCategory] = useState<"ALL" | ResourceCategory>("ALL");
+  const [sourceFilter, setSourceFilter] = useState("ALL");
+  const [iuCurrentFilter, setIuCurrentFilter] = useState<IuCurrentFilter>("ALL");
   const [error, setError] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [saveClock, setSaveClock] = useState(() => Date.now());
@@ -67,6 +94,7 @@ export function ResourcesTable({
   const [pendingPaste, setPendingPaste] = useState<PendingPaste | null>(null);
   const [feedback, setFeedback] = useState("");
   const baseRowsRef = useRef(new Map(resources.map((resource) => [resource.id, resource])));
+  const [persistedRowsById, setPersistedRowsById] = useState(() => new Map(resources.map((resource) => [resource.id, resource])));
   const deferredFilter = useDeferredValue(filter);
 
   const filtered = useMemo(
@@ -74,8 +102,30 @@ export function ResourcesTable({
       rows
         .filter((resource) => {
           const matchesCategory = category === "ALL" || resource.category === category;
-          const text = `${resource.code} ${resource.description} ${resource.iu ?? ""}`.toLowerCase();
-          return matchesCategory && text.includes(deferredFilter.toLowerCase());
+          const matchesSource = sourceFilter === "ALL" || (resource.source ?? "") === sourceFilter;
+          const persistedResource = persistedRowsById.get(resource.id);
+          const filterIuCurrent = resource.isEditing && persistedResource ? persistedResource.iuCurrent : resource.iuCurrent;
+          const filterReviewStatus =
+            resource.isEditing && persistedResource ? persistedResource.iuCurrentReviewStatus : resource.iuCurrentReviewStatus;
+          const hasIuCurrent = Boolean(filterIuCurrent?.trim());
+          const matchesIuCurrent =
+            iuCurrentFilter === "ALL" ||
+            (iuCurrentFilter === "WITH_IU" && hasIuCurrent) ||
+            (iuCurrentFilter === "WITHOUT_IU" && !hasIuCurrent) ||
+            (iuCurrentFilter === "AUTO_ASSIGNED" &&
+              needsAutomaticIuReview({
+                source: resource.source,
+                iuCurrent: filterIuCurrent,
+                iuCurrentReviewStatus: filterReviewStatus,
+              })) ||
+            (iuCurrentFilter === "MANUAL_ASSIGNED" &&
+              isManuallyAssignedIu({
+                source: resource.source,
+                iuCurrent: filterIuCurrent,
+                iuCurrentReviewStatus: filterReviewStatus,
+              }));
+          const text = `${resource.code} ${resource.description} ${resource.iu ?? ""} ${resource.iuCurrent ?? ""}`.toLowerCase();
+          return matchesCategory && matchesSource && matchesIuCurrent && text.includes(deferredFilter.toLowerCase());
         })
         .sort((left, right) => {
           const descriptionComparison = left.description.localeCompare(right.description);
@@ -85,7 +135,13 @@ export function ResourcesTable({
 
           return left.code.localeCompare(right.code);
         }),
-    [category, deferredFilter, rows],
+    [category, deferredFilter, iuCurrentFilter, persistedRowsById, rows, sourceFilter],
+  );
+  const sourceOptions = useMemo(
+    () =>
+      [...new Set(rows.map((resource) => resource.source?.trim()).filter((source): source is string => Boolean(source)))]
+        .sort((left, right) => left.localeCompare(right)),
+    [rows],
   );
   const dirtyCount = useMemo(() => rows.filter((row) => row.isDirty || row.isNew).length, [rows]);
   const derivedSaveState = useMemo<SaveState>(() => {
@@ -154,6 +210,21 @@ export function ResourcesTable({
     for (const id of result.deleted) {
       baseRowsRef.current.delete(id);
     }
+
+    setPersistedRowsById((current) => {
+      const next = new Map(current);
+      for (const entry of result.created) {
+        next.set(entry.resource.id, entry.resource);
+        next.delete(entry.clientId);
+      }
+      for (const resource of result.updated) {
+        next.set(resource.id, resource);
+      }
+      for (const id of result.deleted) {
+        next.delete(id);
+      }
+      return next;
+    });
 
     setRows((current) => {
       let nextRows = current.filter((row) => !result.deleted.includes(row.id));
@@ -253,6 +324,7 @@ export function ResourcesTable({
           description: `${resource.description} (copia)`,
           category: resource.category,
           iu: resource.iu ?? "",
+          iuCurrent: resource.iuCurrent ?? "",
           unit: resource.unit,
           unitPrice: resource.unitPrice,
           currency: resource.currency,
@@ -424,7 +496,7 @@ export function ResourcesTable({
         }
         controls={
             <div className="flex flex-col gap-3">
-              <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+              <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_180px_220px_160px]">
                 <Input placeholder="Buscar por codigo, insumo o IU" value={filter} onChange={(event) => setFilter(event.target.value)} />
                 <Select value={category} onChange={(event) => setCategory(event.target.value as "ALL" | ResourceCategory)}>
                 <option value="ALL">Todas las categorias</option>
@@ -432,6 +504,22 @@ export function ResourcesTable({
                 <option value="LABOR">Mano de obra</option>
                 <option value="EQUIPMENT">Equipos</option>
                 <option value="TOOLS">Herramientas</option>
+                <option value="SUBCONTRACT">Sub contratos</option>
+              </Select>
+              <Select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+                <option value="ALL">Todas las fuentes</option>
+                {sourceOptions.map((source) => (
+                  <option key={source} value={source}>
+                    {source}
+                  </option>
+                ))}
+              </Select>
+              <Select value={iuCurrentFilter} onChange={(event) => setIuCurrentFilter(event.target.value as IuCurrentFilter)}>
+                <option value="ALL">IU 2026: todos</option>
+                <option value="WITH_IU">Con IU 2026</option>
+                <option value="WITHOUT_IU">Sin IU 2026</option>
+                <option value="AUTO_ASSIGNED">IU autoasignado</option>
+                <option value="MANUAL_ASSIGNED">Adjudicados manualmente</option>
               </Select>
             </div>
             <div className={cn("flex flex-col gap-3 border bg-white/90 p-3 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200")}>
@@ -441,6 +529,10 @@ export function ResourcesTable({
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                   <span>{category === "ALL" ? "Todas las categorias" : getCategoryLabel(category)}</span>
+                  <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                  <span>{sourceFilter === "ALL" ? "Todas las fuentes" : sourceFilter}</span>
+                  <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                  <span>{getIuCurrentFilterLabel(iuCurrentFilter)}</span>
                   <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
                   <span>{dirtyCount > 0 ? `${dirtyCount} cambios por guardar` : "Sin cambios pendientes"}</span>
                 </div>
@@ -482,7 +574,8 @@ export function ResourcesTable({
                 <TH>UNIDAD</TH>
                 <TH>PRECIO</TH>
                 <TH>CATEGORIA</TH>
-                <TH>IU</TH>
+                <TH>IU (Base Julio 1992=100)</TH>
+                <TH>IU 2026</TH>
                 <TH>FUENTE</TH>
                 <TH className="text-right">ACCIONES</TH>
               </TR>
@@ -503,6 +596,8 @@ export function ResourcesTable({
                   isExcelMode={isExcelMode}
                   excelRowHeight={excelRowHeight}
                   isPending={pendingIds.includes(resource.id)}
+                  unifiedIndexDictionaryRows={unifiedIndexDictionaryRows}
+                  unifiedIndexRows={unifiedIndexRows}
                   onPaste={handlePaste}
                   onUpdateDraft={updateDraft}
                   onStartEditing={startEditing}
@@ -534,11 +629,15 @@ const ResourceTableRow = memo(function ResourceTableRow({
   onCancelRow,
   onDuplicateRow,
   onRemoveRow,
+  unifiedIndexDictionaryRows,
+  unifiedIndexRows,
 }: {
   resource: EditableResource;
   isExcelMode: boolean;
   excelRowHeight: number;
   isPending: boolean;
+  unifiedIndexDictionaryRows: UnifiedIndexDictionaryRow[];
+  unifiedIndexRows: UnifiedIndexRelationRow[];
   onPaste: (event: React.ClipboardEvent<HTMLElement>, targetId: string, startColumn: EditableColumn) => void;
   onUpdateDraft: (id: string, patch: Partial<EditableResource>) => void;
   onStartEditing: (id: string) => void;
@@ -548,10 +647,31 @@ const ResourceTableRow = memo(function ResourceTableRow({
   onRemoveRow: (id: string) => Promise<void>;
 }) {
   const isOwned = !!resource.companyId || resource.isNew;
+  const canEditIuCurrent = isOwned || isAutocreatedApuResource(resource);
+  const canEditCatalogFields = isOwned;
+  const shouldReviewIu = needsManualIuReview(resource);
+  const shouldReviewAutomaticIu = needsAutomaticIuReview(resource);
+  const shouldShowManualAssignedIu = isManuallyAssignedIu(resource);
+  const iuSuggestions = useMemo(
+    () =>
+      resource.isEditing && canEditIuCurrent && !resource.iuCurrent?.trim()
+        ? suggestResourceIuCodes({
+            description: resource.description,
+            dictionaryRows: unifiedIndexDictionaryRows,
+            unifiedIndexRows,
+          })
+        : [],
+    [canEditIuCurrent, resource.description, resource.isEditing, resource.iuCurrent, unifiedIndexDictionaryRows, unifiedIndexRows],
+  );
 
   return (
     <TR
-      className={resource.isNew ? "bg-emerald-50/60" : resource.isDirty ? "bg-amber-50/50" : ""}
+      className={cn(
+        resource.isNew && "bg-emerald-50/60",
+        resource.isDirty && "bg-amber-50/50",
+        shouldReviewAutomaticIu && !resource.isDirty && "bg-amber-50/70",
+        shouldReviewIu && !resource.isDirty && "bg-rose-50/70",
+      )}
       style={{ height: isExcelMode ? excelRowHeight : RESOURCE_ROW_HEIGHT }}
     >
       <TD>
@@ -565,7 +685,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
       <TD>
         <Input
           value={resource.description}
-          disabled={!resource.isEditing}
+          disabled={!resource.isEditing || !canEditCatalogFields}
           onPaste={(event) => onPaste(event, resource.id, "description")}
           onChange={(event) => onUpdateDraft(resource.id, { description: event.target.value })}
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
@@ -574,7 +694,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
       <TD>
         <Input
           value={resource.unit}
-          disabled={!resource.isEditing}
+          disabled={!resource.isEditing || !canEditCatalogFields}
           onPaste={(event) => onPaste(event, resource.id, "unit")}
           onChange={(event) => onUpdateDraft(resource.id, { unit: event.target.value })}
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
@@ -585,7 +705,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           type="number"
           step="0.01"
           value={resource.unitPrice}
-          disabled={!resource.isEditing}
+          disabled={!resource.isEditing || !canEditCatalogFields}
           onPaste={(event) => onPaste(event, resource.id, "unitPrice")}
           onChange={(event) => onUpdateDraft(resource.id, { unitPrice: Number(event.target.value) })}
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
@@ -594,7 +714,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
       <TD>
         <Select
           value={resource.category}
-          disabled={!resource.isEditing}
+          disabled={!resource.isEditing || !canEditCatalogFields}
           onPaste={(event) => onPaste(event, resource.id, "category")}
           onChange={(event) => onUpdateDraft(resource.id, { category: event.target.value as ResourceCategory })}
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
@@ -603,38 +723,87 @@ const ResourceTableRow = memo(function ResourceTableRow({
           <option value="LABOR">Mano de obra</option>
           <option value="EQUIPMENT">Equipos</option>
           <option value="TOOLS">Herramientas</option>
+          <option value="SUBCONTRACT">Sub contratos</option>
         </Select>
       </TD>
       <TD>
         <Input
           value={resource.iu ?? ""}
-          disabled={!resource.isEditing}
+          disabled={!resource.isEditing || !canEditCatalogFields}
           onPaste={(event) => onPaste(event, resource.id, "iu")}
           onChange={(event) => onUpdateDraft(resource.id, { iu: normalizeResourceIuCode(event.target.value) ?? "" })}
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
         />
       </TD>
       <TD>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Input
+              value={resource.iuCurrent ?? ""}
+              disabled={!resource.isEditing || !canEditIuCurrent}
+              onPaste={(event) => onPaste(event, resource.id, "iuCurrent")}
+              onChange={(event) => onUpdateDraft(resource.id, { iuCurrent: normalizeResourceIuCode(event.target.value) ?? "" })}
+              className={cn(
+                "min-w-0 flex-1",
+                !resource.isEditing && "border-transparent bg-transparent px-0 shadow-none",
+                shouldReviewAutomaticIu && "border-amber-300 bg-amber-50 text-amber-800 placeholder:text-amber-300",
+                shouldShowManualAssignedIu && "border-emerald-300 bg-emerald-50 text-emerald-800 placeholder:text-emerald-300",
+                shouldReviewIu && "border-rose-300 bg-rose-50 text-rose-700 placeholder:text-rose-300",
+              )}
+            />
+            {shouldReviewIu ? (
+              <span className="ml-auto inline-flex shrink-0 rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                Revisar IU
+              </span>
+            ) : shouldReviewAutomaticIu ? (
+              <span className="ml-auto inline-flex shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                IU autoasignado
+              </span>
+            ) : shouldShowManualAssignedIu ? (
+              <span className="ml-auto inline-flex shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+                IU adjudicado
+              </span>
+            ) : null}
+          </div>
+          {iuSuggestions.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {iuSuggestions.map((suggestion) => (
+                <button
+                  key={`${resource.id}-${suggestion.code}`}
+                  type="button"
+                  className="inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+                  title={`${suggestion.code} : ${suggestion.label}`}
+                  onClick={() => onUpdateDraft(resource.id, { iuCurrent: suggestion.code })}
+                >
+                  <span className="tabular-nums">{suggestion.code}</span>
+                  <span className="ml-1 max-w-[120px] truncate">{suggestion.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </TD>
+      <TD>
         <Input
           value={resource.source ?? ""}
-          disabled={!resource.isEditing}
+          disabled={!resource.isEditing || !canEditCatalogFields}
           onPaste={(event) => onPaste(event, resource.id, "source")}
           onChange={(event) => onUpdateDraft(resource.id, { source: event.target.value })}
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
         />
       </TD>
       <TD>
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-nowrap justify-end gap-1">
           {resource.isEditing ? (
             <>
-              <ActionButton action="save" label="Guardar" size="sm" variant="secondary" disabled={isPending} onClick={() => void onSaveRow(resource)} />
-              <ActionButton action="cancel" label="Cancelar" size="sm" variant="ghost" disabled={isPending} onClick={() => onCancelRow(resource.id)} />
+              <ActionButton action="save" label="Guardar" size="sm" variant="secondary" iconOnly disabled={isPending} className={resourceActionButtonClassName} onClick={() => void onSaveRow(resource)} />
+              <ActionButton action="cancel" label="Cancelar" size="sm" variant="ghost" iconOnly disabled={isPending} className={resourceActionButtonClassName} onClick={() => onCancelRow(resource.id)} />
             </>
           ) : (
             <>
-              <ActionButton action="edit" label="Editar" size="sm" variant="ghost" disabled={!isOwned || isPending} onClick={() => onStartEditing(resource.id)} />
-              <ActionButton action="duplicate" label="Duplicar" size="sm" variant="ghost" disabled={isPending} onClick={() => void onDuplicateRow(resource)} />
-              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" disabled={!isOwned || isPending} onClick={() => void onRemoveRow(resource.id)} />
+              <ActionButton action="edit" label="Editar" size="sm" variant="ghost" iconOnly disabled={(!isOwned && !canEditIuCurrent) || isPending} className={resourceActionButtonClassName} onClick={() => onStartEditing(resource.id)} />
+              <ActionButton action="duplicate" label="Duplicar" size="sm" variant="ghost" iconOnly disabled={isPending} className={resourceActionButtonClassName} onClick={() => void onDuplicateRow(resource)} />
+              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" iconOnly disabled={!isOwned || isPending} className={resourceActionButtonClassName} onClick={() => void onRemoveRow(resource.id)} />
             </>
           )}
         </div>
@@ -685,7 +854,8 @@ function PastePreviewSheet({
                   <TH>UNIDAD</TH>
                   <TH className="text-right">PRECIO</TH>
                   <TH>CATEGORIA</TH>
-                  <TH>IU</TH>
+                  <TH>IU (Base Julio 1992=100)</TH>
+                  <TH>IU 2026</TH>
                   <TH>FUENTE</TH>
                 </TR>
               </THead>
@@ -698,6 +868,7 @@ function PastePreviewSheet({
                     <TD className="text-right tabular-nums">{row.unitPrice ?? "-"}</TD>
                     <TD>{getCategoryLabel(row.category)}</TD>
                     <TD>{row.iu ?? "-"}</TD>
+                    <TD>{row.iuCurrent ?? "-"}</TD>
                     <TD>{row.source ?? "-"}</TD>
                   </TR>
                 ))}
@@ -728,17 +899,21 @@ function ResourceTableColGroup({ includeActions = true }: { includeActions?: boo
       <col style={{ width: "96px" }} />
       <col style={{ width: "120px" }} />
       <col style={{ width: "170px" }} />
-      <col style={{ width: "96px" }} />
+      <col style={{ width: "112px" }} />
+      <col style={{ width: "240px" }} />
       <col style={{ width: "160px" }} />
-      {includeActions ? <col style={{ width: "280px" }} /> : null}
+      {includeActions ? <col style={{ width: "124px" }} /> : null}
     </colgroup>
   );
 }
+
+const resourceActionButtonClassName = "h-7 w-7 rounded-md p-0 [&_svg]:h-3.5 [&_svg]:w-3.5";
 
 function toEditableResource(resource: ResourceRecord): EditableResource {
   return {
     ...resource,
     iu: normalizeResourceIuCode(resource.iu) ?? "",
+    iuCurrent: normalizeResourceIuCode(resource.iuCurrent) ?? "",
     isEditing: false,
     isNew: false,
     isDirty: false,
@@ -754,6 +929,7 @@ function createEditableDraft(companyId: string | undefined, row: ResourcePasteRo
     description: row.description ?? "",
     category: row.category ?? "MATERIAL",
     iu: normalizeResourceIuCode(row.iu) ?? "",
+    iuCurrent: normalizeResourceIuCode(row.iuCurrent) ?? "",
     subcategory: "",
     unit: row.unit ?? "",
     unitPrice: row.unitPrice ?? 0,
@@ -786,6 +962,25 @@ function buildResourcePatch(
     };
   }
 
+  if (previous.companyId == null && isAutocreatedApuResource(previous)) {
+    const previousIuCurrent = normalizeResourceIuCode(previous.iuCurrent) ?? "";
+    const currentIuCurrent = normalizeResourceIuCode(current.iuCurrent) ?? "";
+    if (previousIuCurrent === currentIuCurrent) return null;
+
+    return {
+      create: [],
+      update: [
+        {
+          id: current.id,
+          changes: {
+            iuCurrent: currentIuCurrent,
+          },
+        },
+      ],
+      delete: [],
+    };
+  }
+
   const changes = getResourceFieldChanges(getResourcePatchFields(previous, fallbackCompanyId), normalizedCurrent);
   if (Object.keys(changes).length === 0) return null;
 
@@ -808,6 +1003,7 @@ function getResourcePatchFields(resource: ResourceRecord, fallbackCompanyId?: st
     description: resource.description,
     category: resource.category,
     iu: normalizeResourceIuCode(resource.iu) ?? "",
+    iuCurrent: normalizeResourceIuCode(resource.iuCurrent) ?? "",
     subcategory: resource.subcategory ?? "",
     unit: resource.unit,
     unitPrice: resource.unitPrice,
@@ -837,6 +1033,7 @@ function applyPastedValuesToResource(resource: EditableResource, row: ResourcePa
     description: row.description ?? resource.description,
     category: nextCategory,
     iu: normalizeResourceIuCode(row.iu) ?? resource.iu,
+    iuCurrent: normalizeResourceIuCode(row.iuCurrent) ?? resource.iuCurrent,
     subcategory: resource.subcategory,
     unit: row.unit ?? resource.unit,
     unitPrice: row.unitPrice ?? resource.unitPrice,
@@ -904,6 +1101,7 @@ function simulatePastedPreviewRows(
     unitPrice: row.unitPrice,
     category: row.category,
     iu: row.iu,
+    iuCurrent: row.iuCurrent,
     source: row.source,
   }));
 }
@@ -939,7 +1137,7 @@ function parsePastedResourceRows(rawText: string, startColumn: EditableColumn): 
           return;
         }
 
-        draft[column] = column === "iu" ? (normalizeResourceIuCode(cell) ?? "") : cell.trim();
+        draft[column] = column === "iu" || column === "iuCurrent" ? (normalizeResourceIuCode(cell) ?? "") : cell.trim();
       });
 
       return draft;
@@ -1004,7 +1202,10 @@ function buildHeaderMap(row: string[]) {
     if (["unidad", "unit", "und"].includes(normalized)) headerMap.unit = index;
     if (["precio", "punitario", "pu", "unitprice"].includes(normalized)) headerMap.unitPrice = index;
     if (["categoria", "category"].includes(normalized)) headerMap.category = index;
-    if (["iu", "indiceunificado"].includes(normalized)) headerMap.iu = index;
+    if (["iu", "indiceunificado", "iubasejulio1992100", "iubase"].includes(normalized)) headerMap.iu = index;
+    if (["iuvigente", "iu2026", "iunuevo", "iucurrent", "indiceunificadovigente"].includes(normalized)) {
+      headerMap.iuCurrent = index;
+    }
     if (["fuente", "source", "origen"].includes(normalized)) headerMap.source = index;
   });
 
@@ -1050,6 +1251,7 @@ function parseWorkbookDataRow(
       unitPrice,
       category: categoryRaw ? normalizeResourceCategory(categoryRaw) : "MATERIAL",
       iu: normalizeResourceIuCode(getWorkbookCell(row, headerMap.iu)) ?? "",
+      iuCurrent: normalizeResourceIuCode(getWorkbookCell(row, headerMap.iuCurrent)) ?? "",
       source: getWorkbookCell(row, headerMap.source),
     };
   }
@@ -1060,11 +1262,14 @@ function parseWorkbookDataRow(
   const fourthValue = row[3]?.trim() ?? "";
   const fifthValue = row[4]?.trim() ?? "";
   const sixthValue = row[5]?.trim() ?? "";
+  const seventhValue = row[6]?.trim() ?? "";
+  const eighthValue = row[7]?.trim() ?? "";
 
   const category = isCategoryLike(fifthValue) ? normalizeResourceCategory(fifthValue) : "MATERIAL";
   const unit = thirdValue;
   const unitPrice = parseSpreadsheetNumber(fourthValue);
   const iu = normalizeResourceIuCode(sixthValue) ?? "";
+  const iuCurrent = normalizeResourceIuCode(seventhValue) ?? "";
 
   if (!code && !description) return null;
 
@@ -1075,6 +1280,8 @@ function parseWorkbookDataRow(
     unit,
     unitPrice,
     iu,
+    iuCurrent,
+    source: eighthValue,
   };
 }
 
@@ -1090,6 +1297,7 @@ function normalizeResourceCategory(value: string): ResourceCategory {
   if (["labor", "mano de obra", "mo"].includes(normalized)) return "LABOR";
   if (["equipment", "equipo", "equipos", "eq"].includes(normalized)) return "EQUIPMENT";
   if (["tools", "herramienta", "herramientas", "her"].includes(normalized)) return "TOOLS";
+  if (["subcontract", "sub contrato", "sub contratos", "subcontrato", "subcontratos", "sub"].includes(normalized)) return "SUBCONTRACT";
 
   return "MATERIAL";
 }
@@ -1111,6 +1319,12 @@ function isCategoryLike(value: string) {
     "herramienta",
     "herramientas",
     "her",
+    "subcontract",
+    "sub contrato",
+    "sub contratos",
+    "subcontrato",
+    "subcontratos",
+    "sub",
   ].includes(normalized);
 }
 
@@ -1118,7 +1332,16 @@ function getCategoryLabel(category: ResourceCategory | undefined) {
   if (category === "LABOR") return "Mano de obra";
   if (category === "EQUIPMENT") return "Equipos";
   if (category === "TOOLS") return "Herramientas";
+  if (category === "SUBCONTRACT") return "Sub contratos";
   return "Materiales";
+}
+
+function getIuCurrentFilterLabel(filter: IuCurrentFilter) {
+  if (filter === "WITH_IU") return "Con IU 2026";
+  if (filter === "WITHOUT_IU") return "Sin IU 2026";
+  if (filter === "AUTO_ASSIGNED") return "IU autoasignado";
+  if (filter === "MANUAL_ASSIGNED") return "Adjudicados manualmente";
+  return "IU 2026: todos";
 }
 
 function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { RefreshCw, Save } from "lucide-react";
+import dynamic from "next/dynamic";
 
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
@@ -18,10 +19,15 @@ import { Input } from "@/components/ui/input";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
-import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
+import {
+  calculateAdjustmentAmounts,
+  mergePolynomialMonomials,
+  validatePolynomialFormula,
+} from "@/lib/calculations/polynomial-formula";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
+import type { PolynomialCompositionDetailProps } from "@/components/budget/polynomial-composition-detail";
 import type {
   AdjustmentCalculationRecord,
   PolynomialFormulaRecord,
@@ -47,6 +53,14 @@ type KPreviewResult = {
 type FormulaStatus = PolynomialFormulaSectionData["summary"]["status"];
 
 const PLACEHOLDER_INDEX_NAME = "Pendiente de asignar";
+const DynamicPolynomialCompositionDetail =
+  process.env.NODE_ENV !== "production"
+    ? dynamic<PolynomialCompositionDetailProps>(() =>
+        import("@/components/budget/polynomial-composition-detail").then(
+          (module) => module.PolynomialCompositionDetail,
+        ),
+      )
+    : null;
 
 function cloneFormula(formula: PolynomialFormulaRecord | null): PolynomialFormulaRecord | null {
   if (!formula) {
@@ -55,7 +69,10 @@ function cloneFormula(formula: PolynomialFormulaRecord | null): PolynomialFormul
 
   return {
     ...formula,
-    monomials: formula.monomials.map((monomial) => ({ ...monomial })),
+    monomials: formula.monomials.map((monomial) => ({
+      ...monomial,
+      composition: monomial.composition.map((row) => ({ ...row })),
+    })),
   };
 }
 
@@ -80,6 +97,19 @@ function formatDisplayCurrency(value: string, currency: string, decimalPlaces: n
   return Number.isFinite(parsed) ? formatCurrency(parsed, currency, decimalPlaces) : "-";
 }
 
+function nullableTrimmedValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function nullablePositiveDecimalValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  const numericValue = Number(trimmed);
+  return Number.isFinite(numericValue) && numericValue > 0 ? trimmed : null;
+}
+
 function getFormulaSavePayload(formula: PolynomialFormulaRecord) {
   return {
     formulaId: formula.id,
@@ -96,10 +126,23 @@ function getFormulaSavePayload(formula: PolynomialFormulaRecord) {
       baseIndexCode: monomial.baseIndexCode,
       baseIndexName: monomial.baseIndexName,
       baseIndexValue: monomial.baseIndexValue,
-      adjustmentIndexCode: monomial.adjustmentIndexCode ?? null,
-      adjustmentIndexName: monomial.adjustmentIndexName ?? null,
-      adjustmentIndexValue: monomial.adjustmentIndexValue ?? null,
+      adjustmentIndexCode: nullableTrimmedValue(monomial.adjustmentIndexCode),
+      adjustmentIndexName: nullableTrimmedValue(monomial.adjustmentIndexName),
+      adjustmentIndexValue: nullablePositiveDecimalValue(monomial.adjustmentIndexValue),
       sortOrder: monomial.sortOrder,
+      composition: monomial.composition.map((row) => ({
+        id: row.id,
+        budgetItemId: row.budgetItemId ?? null,
+        apuResourceId: row.apuResourceId ?? null,
+        resourceType: row.resourceType ?? null,
+        resourceName: row.resourceName ?? null,
+        amount: row.amount,
+        unifiedIndexCode: row.unifiedIndexCode ?? null,
+        unifiedIndexName: row.unifiedIndexName ?? null,
+        iuFamily: row.iuFamily ?? null,
+        participationPercentage: row.participationPercentage ?? null,
+        coefficientContribution: row.coefficientContribution ?? null,
+      })),
     })),
   };
 }
@@ -138,10 +181,12 @@ export function PolynomialFormulaEditor({
   section,
   adjustments,
   canUsePolynomialAdjustments,
+  showCompositionDetail = false,
 }: {
   section: PolynomialFormulaSectionData;
   adjustments: AdjustmentCalculationRecord[];
   canUsePolynomialAdjustments: boolean;
+  showCompositionDetail?: boolean;
 }) {
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
@@ -502,6 +547,27 @@ export function PolynomialFormulaEditor({
     });
   }
 
+  function mergeMonomials(targetMonomialId: string, sourceMonomialIds: string[]) {
+    setFormula((current) => {
+      if (!current) return current;
+
+      const next = {
+        ...current,
+        monomials: mergePolynomialMonomials({
+          monomials: current.monomials,
+          targetMonomialId,
+          sourceMonomialIds,
+        }),
+      };
+
+      setSummary(createFormulaSummary(next));
+      setKPreview(null);
+      setKPreviewError("");
+      setFeedback("Monomios juntados. Revisa el indice base del destino.");
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-5">
       {!formula ? (
@@ -682,9 +748,13 @@ export function PolynomialFormulaEditor({
             monomials={formula.monomials}
             baseIndexOptions={baseIndexOptions}
             baseIndicesLoading={baseIndicesLoading}
-            onChangeMonomial={updateMonomial}
             currencyDecimals={currencyDecimals}
+            onChangeMonomial={updateMonomial}
+            onMergeMonomials={mergeMonomials}
           />
+          {showCompositionDetail && DynamicPolynomialCompositionDetail ? (
+            <DynamicPolynomialCompositionDetail monomials={formula.monomials} />
+          ) : null}
           {canUsePolynomialAdjustments ? (
             <>
               <PolynomialKCalculator

@@ -7,6 +7,7 @@ import {
   generatePolynomialFormulaFromBudget,
   getBudgetPolynomialFormulaSectionData,
   savePolynomialFormula,
+  type PolynomialFormulaReadOptions,
 } from "@/lib/data/polynomial-formulas";
 import { polynomialFormulaSaveSchema } from "@/lib/validations/polynomial-formula";
 
@@ -20,6 +21,10 @@ const polynomialFormulaPatchSchema = polynomialFormulaSaveSchema.extend({
   formulaId: z.string().min(1),
 });
 
+const formulaReadOptions = {
+  includeCompositionDetail: true,
+} satisfies PolynomialFormulaReadOptions;
+
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
   if (!session) {
@@ -28,7 +33,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
   try {
     const { id } = await params;
-    const section = await getBudgetPolynomialFormulaSectionData(id, session.user.id);
+    const section = await getBudgetPolynomialFormulaSectionData(id, session.user.id, formulaReadOptions);
     return NextResponse.json(section);
   } catch (error) {
     return NextResponse.json(
@@ -53,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const body = await request.json();
     const payload = polynomialFormulaGenerateSchema.parse(body);
-    const formula = await generatePolynomialFormulaFromBudget(id, session.user.id, payload);
+    const formula = await generatePolynomialFormulaFromBudget(id, session.user.id, payload, formulaReadOptions);
     await recordActivityEvent({
       userId: session.user.id,
       type: "POLYNOMIAL_FORMULA_GENERATED",
@@ -85,7 +90,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await request.json();
     const payload = polynomialFormulaPatchSchema.parse(body);
-    const formula = await savePolynomialFormula(payload.formulaId, session.user.id, payload);
+    const formula = await savePolynomialFormula(payload.formulaId, session.user.id, payload, formulaReadOptions);
     await recordActivityEvent({
       userId: session.user.id,
       type: "POLYNOMIAL_FORMULA_UPDATED",

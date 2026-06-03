@@ -1,15 +1,53 @@
 import type { Prisma } from "@prisma/client";
+import {
+  resolvePolynomialMonomialDisplayMetadata,
+  resolvePolynomialIuFamilyDisplay,
+  resolvePolynomialUnifiedIndexDisplay,
+} from "@/lib/polynomial-formula/monomial-metadata";
 import type { BudgetRecord } from "@/types/budget";
-import type { CatalogPartidaRecord } from "@/types/partida";
+import type { CatalogPartidaRecord, PartidaApuRowRecord } from "@/types/partida";
 import type {
   AdjustmentCalculationRecord,
   AdjustmentCalculationTermRecord,
   PolynomialFormulaRecord,
+  PolynomialMonomialCompositionRecord,
   PolynomialMonomialRecord,
   UnifiedIndexRecord,
   ValuationRecord,
 } from "@/types/polynomial-formula";
 import type { ResourceRecord } from "@/types/resource";
+
+type SerializableCatalogPartida = {
+  id: string;
+  description: string;
+  unit: string;
+  unitPrice: Prisma.Decimal;
+  currency: string;
+  source: string | null;
+  performance: Prisma.Decimal;
+  performanceUnit: string | null;
+  performanceRate: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+  apuRows: SerializablePartidaApuRow[];
+};
+
+type SerializablePartidaApuRow = {
+  id: string;
+  catalogPartidaId: string;
+  resourceId: string | null;
+  catalogSubpartidaId?: string | null;
+  description: string;
+  unit: string;
+  crew: Prisma.Decimal | null;
+  quantity: Prisma.Decimal;
+  unitPrice: Prisma.Decimal;
+  subtotal: Prisma.Decimal;
+  resourceType: string | null;
+  groupLabel: string | null;
+  sortOrder: number;
+  catalogSubpartida?: SerializableCatalogPartida | null;
+};
 
 export function decimalToNumber(value: Prisma.Decimal | number | null | undefined) {
   if (value == null) return 0;
@@ -41,6 +79,58 @@ export function decimalToFixedString(
 function serializeDate(value: Date | string | null | undefined) {
   if (value == null) return undefined;
   return typeof value === "string" ? value : value.toISOString();
+}
+
+function readNestedApuRows(value: Prisma.JsonValue | null | undefined): PartidaApuRowRecord[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  return value.flatMap((entry) => {
+    if (!isJsonObject(entry)) return [];
+
+    const id = readJsonString(entry.id);
+    const catalogPartidaId = readJsonString(entry.catalogPartidaId);
+    const description = readJsonString(entry.description);
+    const unit = readJsonString(entry.unit);
+    if (!id || !catalogPartidaId || !description || !unit) return [];
+
+    return [
+      {
+        id,
+        catalogPartidaId,
+        resourceId: readJsonNullableString(entry.resourceId),
+        catalogSubpartidaId: readJsonNullableString(entry.catalogSubpartidaId),
+        description,
+        unit,
+        crew: readJsonNullableNumber(entry.crew),
+        quantity: readJsonNumber(entry.quantity),
+        unitPrice: readJsonNumber(entry.unitPrice),
+        subtotal: readJsonNumber(entry.subtotal),
+        resourceType: readJsonNullableString(entry.resourceType),
+        groupLabel: readJsonNullableString(entry.groupLabel),
+        sortOrder: Math.max(0, Math.trunc(readJsonNumber(entry.sortOrder))),
+      },
+    ];
+  });
+}
+
+function isJsonObject(value: Prisma.JsonValue): value is Prisma.JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readJsonString(value: Prisma.JsonValue | undefined) {
+  return typeof value === "string" ? value : "";
+}
+
+function readJsonNullableString(value: Prisma.JsonValue | undefined) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function readJsonNumber(value: Prisma.JsonValue | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function readJsonNullableNumber(value: Prisma.JsonValue | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 export function serializeBudget(budget: {
@@ -88,25 +178,30 @@ export function serializeBudget(budget: {
       resources: Array<{
         id: string;
         apuId: string;
-        resourceId: string;
+        resourceId: string | null;
+        catalogPartidaId?: string | null;
         resourceType: string;
         crew?: Prisma.Decimal | null;
         quantity: Prisma.Decimal;
         unitPrice: Prisma.Decimal;
         subtotal: Prisma.Decimal;
-        resource: {
+        nestedApuRows?: Prisma.JsonValue | null;
+        resource: null | {
           id: string;
           companyId: string | null;
           code: string;
           description: string;
-          category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS";
+          category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT";
           iu: string | null;
+          iuCurrent: string | null;
+          iuCurrentReviewStatus?: string | null;
           subcategory: string | null;
           unit: string;
           unitPrice: Prisma.Decimal;
           currency: string;
           source: string | null;
         };
+        catalogPartida?: SerializableCatalogPartida | null;
       }>;
     };
   }>;
@@ -152,25 +247,16 @@ export function serializeBudget(budget: {
             resources: item.apu.resources.map((resource) => ({
               id: resource.id,
               apuId: resource.apuId,
-              resourceId: resource.resourceId,
+              resourceId: resource.resourceId ?? undefined,
+              catalogPartidaId: resource.catalogPartidaId ?? undefined,
               resourceType: resource.resourceType,
               crew: resource.crew == null ? undefined : decimalToNumber(resource.crew),
               quantity: decimalToNumber(resource.quantity),
               unitPrice: decimalToNumber(resource.unitPrice),
               subtotal: decimalToNumber(resource.subtotal),
-              resource: {
-                id: resource.resource.id,
-                companyId: resource.resource.companyId ?? undefined,
-                code: resource.resource.code,
-                description: resource.resource.description,
-                category: resource.resource.category,
-                iu: resource.resource.iu ?? undefined,
-                subcategory: resource.resource.subcategory ?? undefined,
-                unit: resource.resource.unit,
-                unitPrice: decimalToNumber(resource.resource.unitPrice),
-                currency: resource.resource.currency,
-                source: resource.resource.source ?? undefined,
-              },
+              nestedApuRows: readNestedApuRows(resource.nestedApuRows),
+              resource: resource.resource ? serializeResource(resource.resource) : undefined,
+              catalogPartida: resource.catalogPartida ? serializeCatalogPartida(resource.catalogPartida) : undefined,
             })),
           }
         : null,
@@ -183,8 +269,10 @@ export function serializeResource(resource: {
   companyId: string | null;
   code: string;
   description: string;
-  category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS";
+  category: "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT";
   iu: string | null;
+  iuCurrent: string | null;
+  iuCurrentReviewStatus?: string | null;
   subcategory: string | null;
   unit: string;
   unitPrice: Prisma.Decimal;
@@ -200,6 +288,8 @@ export function serializeResource(resource: {
     description: resource.description,
     category: resource.category,
     iu: resource.iu ?? undefined,
+    iuCurrent: resource.iuCurrent ?? undefined,
+    iuCurrentReviewStatus: resource.iuCurrentReviewStatus ?? undefined,
     subcategory: resource.subcategory ?? undefined,
     unit: resource.unit,
     unitPrice: decimalToNumber(resource.unitPrice),
@@ -210,33 +300,7 @@ export function serializeResource(resource: {
   };
 }
 
-export function serializeCatalogPartida(partida: {
-  id: string;
-  description: string;
-  unit: string;
-  unitPrice: Prisma.Decimal;
-  currency: string;
-  source: string | null;
-  performance: Prisma.Decimal;
-  performanceUnit: string | null;
-  performanceRate: string | null;
-  createdAt?: Date;
-  updatedAt?: Date;
-  apuRows: Array<{
-    id: string;
-    catalogPartidaId: string;
-    resourceId: string | null;
-    description: string;
-    unit: string;
-    crew: Prisma.Decimal | null;
-    quantity: Prisma.Decimal;
-    unitPrice: Prisma.Decimal;
-    subtotal: Prisma.Decimal;
-    resourceType: string | null;
-    groupLabel: string | null;
-    sortOrder: number;
-  }>;
-}): CatalogPartidaRecord {
+export function serializeCatalogPartida(partida: SerializableCatalogPartida, depth = 0): CatalogPartidaRecord {
   return {
     id: partida.id,
     description: partida.description,
@@ -254,6 +318,7 @@ export function serializeCatalogPartida(partida: {
         id: row.id,
         catalogPartidaId: row.catalogPartidaId,
         resourceId: row.resourceId ?? undefined,
+        catalogSubpartidaId: row.catalogSubpartidaId ?? undefined,
         description: row.description,
         unit: row.unit,
         crew: row.crew == null ? undefined : decimalToNumber(row.crew),
@@ -263,9 +328,58 @@ export function serializeCatalogPartida(partida: {
         resourceType: row.resourceType ?? undefined,
         groupLabel: row.groupLabel ?? undefined,
         sortOrder: row.sortOrder,
+        catalogSubpartida: row.catalogSubpartida && depth < 1 ? serializeCatalogPartida(row.catalogSubpartida, depth + 1) : undefined,
       })),
     createdAt: partida.createdAt?.toISOString(),
     updatedAt: partida.updatedAt?.toISOString(),
+  };
+}
+
+export function serializePolynomialMonomialComposition(component: {
+  id: string;
+  monomialId: string;
+  budgetItemId: string | null;
+  apuResourceId: string | null;
+  resourceType: string | null;
+  apuResource?: { resource: { description: string } | null } | null;
+  amount: Prisma.Decimal;
+  unifiedIndexCode?: string | null;
+  unifiedIndexName?: string | null;
+  iuFamily?: string | null;
+  participationPercentage?: Prisma.Decimal | null;
+  coefficientContribution?: Prisma.Decimal | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}): PolynomialMonomialCompositionRecord {
+  const unifiedIndex = resolvePolynomialUnifiedIndexDisplay({
+    code: component.unifiedIndexCode,
+    name: component.unifiedIndexName,
+  });
+
+  return {
+    id: component.id,
+    monomialId: component.monomialId,
+    budgetItemId: component.budgetItemId ?? undefined,
+    apuResourceId: component.apuResourceId ?? undefined,
+    resourceType: component.resourceType ?? undefined,
+    resourceName: component.apuResource?.resource?.description,
+    amount: decimalToFixedString(component.amount, 2),
+    unifiedIndexCode: unifiedIndex.code,
+    unifiedIndexName: unifiedIndex.name,
+    iuFamily: resolvePolynomialIuFamilyDisplay({
+      code: unifiedIndex.code,
+      family: component.iuFamily,
+    }),
+    participationPercentage:
+      component.participationPercentage == null
+        ? undefined
+        : decimalToString(component.participationPercentage),
+    coefficientContribution:
+      component.coefficientContribution == null
+        ? undefined
+        : decimalToString(component.coefficientContribution),
+    createdAt: component.createdAt?.toISOString(),
+    updatedAt: component.updatedAt?.toISOString(),
   };
 }
 
@@ -295,22 +409,34 @@ export function serializePolynomialMonomial(monomial: {
   sortOrder: number;
   createdAt?: Date;
   updatedAt?: Date;
+  components?: Array<Parameters<typeof serializePolynomialMonomialComposition>[0]>;
 }): PolynomialMonomialRecord {
+  const displayMetadata = resolvePolynomialMonomialDisplayMetadata({
+    code: monomial.code,
+    name: monomial.name,
+    baseIndexCode: monomial.baseIndexCode,
+    baseIndexName: monomial.baseIndexName,
+  });
+
   return {
     id: monomial.id,
     formulaId: monomial.formulaId,
-    code: monomial.code,
-    name: monomial.name,
+    code: displayMetadata.code,
+    name: displayMetadata.name,
     costGroupKey: monomial.costGroupKey,
     amount: decimalToFixedString(monomial.amount, 4),
     coefficient: decimalToString(monomial.coefficient),
-    baseIndexCode: monomial.baseIndexCode,
-    baseIndexName: monomial.baseIndexName,
+    baseIndexCode: displayMetadata.baseIndexCode,
+    baseIndexName: displayMetadata.baseIndexName,
     baseIndexValue: decimalToString(monomial.baseIndexValue),
     adjustmentIndexCode: monomial.adjustmentIndexCode,
     adjustmentIndexName: monomial.adjustmentIndexName,
-    adjustmentIndexValue: decimalToString(monomial.adjustmentIndexValue),
+    adjustmentIndexValue:
+      monomial.adjustmentIndexValue == null
+        ? null
+        : decimalToString(monomial.adjustmentIndexValue),
     sortOrder: monomial.sortOrder,
+    composition: monomial.components?.map(serializePolynomialMonomialComposition) ?? [],
     createdAt: monomial.createdAt?.toISOString(),
     updatedAt: monomial.updatedAt?.toISOString(),
   };

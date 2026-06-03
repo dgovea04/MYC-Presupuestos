@@ -1,11 +1,17 @@
 import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
-import type { PolynomialMonomialInput } from "@/types/polynomial-formula";
+import type {
+  PolynomialCostGroupKey,
+  PolynomialMonomialInput,
+  PolynomialMonomialRecord,
+} from "@/types/polynomial-formula";
 import {
+  buildPolynomialCompositionDiagnostics,
   calculateAdjustmentAmounts,
   calculateBudgetCostGroups,
   calculateCoefficientK,
   calculateMonomialCoefficients,
+  mergePolynomialMonomials,
   roundCoefficient,
   roundCurrency,
   roundKValue,
@@ -124,6 +130,136 @@ describe("polynomial formula engine", () => {
     expect(result.minimumCoefficientWarnings).toHaveLength(1);
   });
 
+  it("warns when an existing monomial coefficient is below 0.050", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.049",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Varios",
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "LOW_COEFFICIENT_REVIEW",
+        message: expect.stringContaining("0.049"),
+      }),
+    ]);
+  });
+
+  it("warns when a real monomial coefficient is 0.000", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.000",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Monomio sin participacion",
+      },
+    ]);
+    const validation = validatePolynomialFormula([
+      {
+        coefficient: "0.000",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Monomio sin participacion",
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "LOW_COEFFICIENT_REVIEW",
+        message: expect.stringContaining("0.000"),
+      }),
+    ]);
+    expect(validation.minimumCoefficientWarnings).toHaveLength(1);
+  });
+
+  it("warns when a monomial composition groups multiple IU families or codes", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.120",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Materiales agrupados",
+        composition: [
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.070",
+          },
+          {
+            iuFamily: "CEMENT",
+            unifiedIndexCode: "21",
+            coefficientContribution: "0.050",
+          },
+        ],
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "MIXED_IU_GROUPING_REVIEW",
+        message: expect.stringContaining("agrupa"),
+      }),
+    ]);
+  });
+
+  it("does not warn for clean monomial composition", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.120",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Acero",
+        composition: [
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.080",
+          },
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.040",
+          },
+        ],
+      },
+    ]);
+
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("warns when composition contribution coverage differs from the monomial coefficient", () => {
+    const diagnostics = buildPolynomialCompositionDiagnostics([
+      {
+        coefficient: "0.120",
+        baseIndexValue: "100",
+        adjustmentIndexValue: "100",
+        name: "Acero",
+        composition: [
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.080",
+          },
+          {
+            iuFamily: "STEEL",
+            unifiedIndexCode: "03",
+            coefficientContribution: "0.035",
+          },
+        ],
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "COMPOSITION_COVERAGE_REVIEW",
+        message: expect.stringContaining("0.115 vs coeficiente 0.120"),
+      }),
+    ]);
+  });
+
   it("rejects coefficient sums outside the 0.001 tolerance", () => {
     const result = validatePolynomialFormula([
       {
@@ -161,63 +297,28 @@ describe("polynomial formula engine", () => {
     expect(result.isCoefficientSumValid).toBe(false);
   });
 
-  it("rejects formulas with more than eight monomials", () => {
-    const result = validatePolynomialFormula([
-      {
-        coefficient: "0.125",
+  it("allows ten monomials", () => {
+    const result = validatePolynomialFormula(
+      Array.from({ length: 10 }, (_, index) => ({
+        coefficient: "0.100",
         baseIndexValue: "100",
         adjustmentIndexValue: "100",
-        name: "M1",
-      },
-      {
-        coefficient: "0.125",
+        name: `M${index + 1}`,
+      })),
+    );
+
+    expect(result.hasMaximumTermsValid).toBe(true);
+  });
+
+  it("rejects formulas with more than ten monomials", () => {
+    const result = validatePolynomialFormula(
+      Array.from({ length: 11 }, (_, index) => ({
+        coefficient: index < 10 ? "0.100" : "0.000",
         baseIndexValue: "100",
         adjustmentIndexValue: "100",
-        name: "M2",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M3",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M4",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M5",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M6",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M7",
-      },
-      {
-        coefficient: "0.125",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M8",
-      },
-      {
-        coefficient: "0.000",
-        baseIndexValue: "100",
-        adjustmentIndexValue: "100",
-        name: "M9",
-      },
-    ]);
+        name: `M${index + 1}`,
+      })),
+    );
 
     expect(result.hasMaximumTermsValid).toBe(false);
   });
@@ -464,6 +565,191 @@ describe("polynomial formula engine", () => {
   });
 });
 
+function createMergeMonomial(
+  overrides: Partial<PolynomialMonomialRecord> & {
+    id: string;
+    costGroupKey: PolynomialCostGroupKey;
+    amount: string;
+  },
+): PolynomialMonomialRecord {
+  return {
+    id: overrides.id,
+    formulaId: "formula-1",
+    code: overrides.code ?? overrides.id.toUpperCase(),
+    name: overrides.name ?? `Monomio ${overrides.id}`,
+    costGroupKey: overrides.costGroupKey,
+    amount: overrides.amount,
+    coefficient: overrides.coefficient ?? "0.000",
+    baseIndexCode: overrides.baseIndexCode ?? overrides.id.toUpperCase(),
+    baseIndexName: overrides.baseIndexName ?? `Indice ${overrides.id}`,
+    baseIndexValue: overrides.baseIndexValue ?? "100",
+    adjustmentIndexCode: overrides.adjustmentIndexCode ?? null,
+    adjustmentIndexName: overrides.adjustmentIndexName ?? null,
+    adjustmentIndexValue: overrides.adjustmentIndexValue ?? null,
+    sortOrder: overrides.sortOrder ?? 0,
+    composition: overrides.composition ?? [
+      {
+        id: `${overrides.id}-component`,
+        monomialId: overrides.id,
+        apuResourceId: `${overrides.id}-resource`,
+        resourceType: "MATERIAL",
+        amount: overrides.amount,
+        unifiedIndexCode: overrides.baseIndexCode ?? overrides.id.toUpperCase(),
+        unifiedIndexName: overrides.baseIndexName ?? `Indice ${overrides.id}`,
+        iuFamily: overrides.costGroupKey,
+        participationPercentage: "1.000000",
+        coefficientContribution: overrides.coefficient ?? "0.000000",
+      },
+    ],
+  };
+}
+
+describe("manual polynomial monomial merge", () => {
+  it("merges two monomials, sums amount, and recalculates coefficients to 1.000", () => {
+    const result = mergePolynomialMonomials({
+      monomials: [
+        createMergeMonomial({
+          id: "labor",
+          code: "MO",
+          name: "Mano de obra",
+          costGroupKey: "LABOR",
+          amount: "200.0000",
+          coefficient: "0.200",
+          baseIndexCode: "MO",
+          sortOrder: 0,
+        }),
+        createMergeMonomial({
+          id: "steel",
+          code: "AC",
+          name: "Acero",
+          costGroupKey: "STEEL",
+          amount: "300.0000",
+          coefficient: "0.300",
+          sortOrder: 1,
+        }),
+        createMergeMonomial({
+          id: "equipment",
+          code: "EQ",
+          name: "Equipos",
+          costGroupKey: "EQUIPMENT",
+          amount: "500.0000",
+          coefficient: "0.500",
+          sortOrder: 2,
+        }),
+      ],
+      targetMonomialId: "labor",
+      sourceMonomialIds: ["steel"],
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result.map((monomial) => monomial.sortOrder)).toEqual([0, 1]);
+    expect(result.find((monomial) => monomial.id === "labor")).toMatchObject({
+      amount: "500.0000",
+      coefficient: "0.500",
+      baseIndexCode: "MO",
+    });
+
+    const coefficientSum = result.reduce(
+      (total, monomial) => total.plus(monomial.coefficient),
+      new Decimal(0),
+    );
+
+    expect(coefficientSum.toFixed(3)).toBe("1.000");
+  });
+
+  it("preserves source composition rows on the merged target", () => {
+    const result = mergePolynomialMonomials({
+      monomials: [
+        createMergeMonomial({
+          id: "cement",
+          costGroupKey: "CEMENT",
+          amount: "100.0000",
+          coefficient: "0.333",
+          composition: [
+            {
+              id: "cement-component",
+              monomialId: "cement",
+              apuResourceId: "cement-resource",
+              amount: "100.0000",
+              unifiedIndexCode: "21",
+              unifiedIndexName: "Cemento",
+              iuFamily: "CEMENT",
+            },
+          ],
+        }),
+        createMergeMonomial({
+          id: "masonry",
+          costGroupKey: "MASONRY",
+          amount: "200.0000",
+          coefficient: "0.667",
+          composition: [
+            {
+              id: "masonry-component",
+              monomialId: "masonry",
+              apuResourceId: "masonry-resource",
+              amount: "200.0000",
+              unifiedIndexCode: "17",
+              unifiedIndexName: "Ladrillo",
+              iuFamily: "MASONRY",
+            },
+          ],
+        }),
+      ],
+      targetMonomialId: "cement",
+      sourceMonomialIds: ["masonry"],
+    });
+
+    const merged = result[0];
+
+    expect(merged?.composition.map((row) => row.apuResourceId)).toEqual([
+      "cement-resource",
+      "masonry-resource",
+    ]);
+    expect(merged?.composition.map((row) => row.monomialId)).toEqual([
+      "cement",
+      "cement",
+    ]);
+    expect(merged?.composition.map((row) => row.participationPercentage)).toEqual([
+      "0.333333",
+      "0.666667",
+    ]);
+    expect(merged?.composition.map((row) => row.coefficientContribution)).toEqual([
+      "0.333333",
+      "0.666667",
+    ]);
+  });
+
+  it("rejects invalid manual merge selections", () => {
+    const monomials = [
+      createMergeMonomial({
+        id: "materials",
+        costGroupKey: "MATERIALS",
+        amount: "100.0000",
+      }),
+      createMergeMonomial({
+        id: "equipment",
+        costGroupKey: "EQUIPMENT",
+        amount: "200.0000",
+      }),
+    ];
+
+    expect(() =>
+      mergePolynomialMonomials({
+        monomials,
+        targetMonomialId: "materials",
+        sourceMonomialIds: [],
+      }),
+    ).toThrow("Selecciona al menos un monomio origen");
+    expect(() =>
+      mergePolynomialMonomials({
+        monomials,
+        targetMonomialId: "materials",
+        sourceMonomialIds: ["materials"],
+      }),
+    ).toThrow("no puede juntarse consigo mismo");
+  });
+});
+
 describe("polynomial formula validation schemas", () => {
   const monomial = {
     id: "m1",
@@ -504,6 +790,41 @@ describe("polynomial formula validation schemas", () => {
     ).toThrow();
   });
 
+  it("accepts ten monomials in save payloads", () => {
+    expect(
+      polynomialFormulaSaveSchema.parse({
+        name: "FP Vivienda",
+        baseMonth: 1,
+        baseYear: 2026,
+        monomials: Array.from({ length: 10 }, (_, index) => ({
+          ...monomial,
+          id: `m${index + 1}`,
+          code: `M${index + 1}`,
+          name: `Monomio ${index + 1}`,
+          sortOrder: index,
+        })),
+      }).monomials,
+    ).toHaveLength(10);
+  });
+
+  it("allows empty adjustment index values while saving the base formula", () => {
+    const parsed = polynomialFormulaSaveSchema.parse({
+      name: "FP Vivienda",
+      baseMonth: 1,
+      baseYear: 2026,
+      monomials: [
+        {
+          ...monomial,
+          adjustmentIndexCode: "",
+          adjustmentIndexName: "",
+          adjustmentIndexValue: "",
+        },
+      ],
+    });
+
+    expect(parsed.monomials[0].adjustmentIndexValue).toBeNull();
+  });
+
   it("rejects a base month outside the valid range", () => {
     expect(() =>
       polynomialFormulaSaveSchema.parse({
@@ -528,6 +849,19 @@ describe("polynomial formula validation schemas", () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it("accepts ten monomials in K calculation payloads", () => {
+    expect(
+      polynomialKCalculationSchema.parse({
+        monomials: Array.from({ length: 10 }, (_, index) => ({
+          coefficient: "0.100",
+          baseIndexValue: "100.000",
+          adjustmentIndexValue: "108.000",
+          name: `M${index + 1}`,
+        })),
+      }).monomials,
+    ).toHaveLength(10);
   });
 
   it("accepts a valuation amount with two-decimal money format", () => {

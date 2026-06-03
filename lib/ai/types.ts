@@ -40,7 +40,7 @@ export type AiStructuredLineItem = {
   notes?: string;
 };
 
-export type AiApuCatalogResourceType = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS";
+export type AiApuCatalogResourceType = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT";
 
 export type AiApuCatalogProposalItem = {
   resource_id: string;

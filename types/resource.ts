@@ -1,4 +1,4 @@
-export type ResourceCategory = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS";
+export type ResourceCategory = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT";
 
 export type ResourceRecord = {
   id: string;
@@ -7,6 +7,8 @@ export type ResourceRecord = {
   description: string;
   category: ResourceCategory;
   iu?: string | null;
+  iuCurrent?: string | null;
+  iuCurrentReviewStatus?: string | null;
   subcategory?: string | null;
   unit: string;
   unitPrice: number;
@@ -18,7 +20,17 @@ export type ResourceRecord = {
 
 export type ResourcePatchFields = Pick<
   ResourceRecord,
-  "companyId" | "code" | "description" | "category" | "iu" | "subcategory" | "unit" | "unitPrice" | "currency" | "source"
+  | "companyId"
+  | "code"
+  | "description"
+  | "category"
+  | "iu"
+  | "iuCurrent"
+  | "subcategory"
+  | "unit"
+  | "unitPrice"
+  | "currency"
+  | "source"
 >;
 
 export type ResourceCreatePatch = {

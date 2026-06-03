@@ -13,6 +13,14 @@ vi.mock("next/link", () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
+const refreshMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: refreshMock,
+  }),
+}));
+
 let activeContainer: HTMLDivElement | null = null;
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,10 +42,27 @@ describe("GeneralBudgetOverview", () => {
 
     document.body.innerHTML = "";
     window.localStorage.clear();
+    refreshMock.mockReset();
     vi.restoreAllMocks();
   });
 
   it("shows the consolidated general budget tab by default and lets the user switch back to a sub budget detail", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        partida: {
+          id: "catalog-created-agua",
+          description: "AGUA PARA LA OBRA",
+          unit: "M3",
+          unitPrice: 15.09,
+          currency: "PEN",
+          performance: 1,
+          apuRows: [],
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     const { clickButton, getByText, queryByText, getByTestId, getLinkByText } = await renderOverview();
 
     expect(getByText("Presupuesto general")).toBeTruthy();
@@ -66,6 +91,37 @@ describe("GeneralBudgetOverview", () => {
     const activeTableText = getByTestId("active-sub-budget-table").textContent ?? "";
     expect(activeTableText).not.toContain("Acciones");
     expect(activeTableText).not.toContain("Abrir Sub Presupuesto");
+
+    await act(async () => {
+      clickButton("Subpartidas");
+    });
+
+    const subpartidasTableText = getByTestId("active-sub-budget-subpartidas-table").textContent ?? "";
+    expect(subpartidasTableText).toContain("Tarrajeo en interiores");
+    expect(subpartidasTableText).toContain("m2");
+    expect(subpartidasTableText).toContain("S/ 45.00");
+    expect(subpartidasTableText).toContain("Con APU");
+    expect(subpartidasTableText).toContain("Agua para la obra");
+    expect(subpartidasTableText).toContain("APU vacio");
+    expect(subpartidasTableText).toContain("S/ 15.09");
+    expect(subpartidasTableText).toContain("AGUA PARA LA OBRA");
+    expect(subpartidasTableText).toContain("Sin partida");
+    expect(subpartidasTableText).toContain("Crear partida/APU");
+    expect(subpartidasTableText).not.toContain("Subpartida sin nombre");
+    expect(getLinkByText("Abrir catalogo").getAttribute("href")).toBe("/partidas?q=Agua%20para%20la%20obra");
+
+    await act(async () => {
+      clickButton("Crear partida/APU");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/sub-2/subpartidas/catalog",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"description":"AGUA PARA LA OBRA"'),
+      }),
+    );
+    expect(refreshMock).toHaveBeenCalled();
 
     await act(async () => {
       clickButton("Presupuesto general");
@@ -239,6 +295,88 @@ function createSubBudgetDetails(): BudgetRecord[] {
           unitPrice: 25,
           partial: 0,
           sortOrder: 1,
+          apu: {
+            id: "apu-item-2",
+            budgetItemId: "item-2",
+            name: "APU Acero",
+            unit: "kg",
+            performance: 10,
+            totalUnitCost: 25,
+            resources: [
+              {
+                id: "apu-resource-sub-1",
+                apuId: "apu-item-2",
+                resourceId: null,
+                catalogPartidaId: "catalog-partida-1",
+                resourceType: "SUBPARTIDA",
+                crew: null,
+                quantity: 1,
+                unitPrice: 45,
+                subtotal: 45,
+                nestedApuRows: [
+                  {
+                    id: "nested-row-1",
+                    catalogPartidaId: "catalog-partida-1",
+                    description: "PEON",
+                    unit: "hh",
+                    crew: null,
+                    quantity: 1,
+                    unitPrice: 20,
+                    subtotal: 20,
+                    resourceType: "LABOR",
+                    sortOrder: 0,
+                  },
+                ],
+                catalogPartida: {
+                  id: "catalog-partida-1",
+                  description: "Tarrajeo en interiores",
+                  unit: "m2",
+                  unitPrice: 45,
+                  currency: "PEN",
+                  performance: 12,
+                  apuRows: [],
+                },
+              },
+              {
+                id: "apu-resource-sub-2",
+                apuId: "apu-item-2",
+                resourceId: null,
+                catalogPartidaId: null,
+                resourceType: "SUBPARTIDA",
+                description: "AGUA PARA LA OBRA",
+                unit: "M3",
+                crew: null,
+                quantity: 1,
+                unitPrice: 8,
+                subtotal: 8,
+                nestedApuRows: [],
+                catalogPartida: {
+                  id: "catalog-partida-2",
+                  description: "Agua para la obra",
+                  unit: "glb",
+                  unitPrice: 8,
+                  currency: "PEN",
+                  performance: 1,
+                  apuRows: [],
+                },
+              },
+              {
+                id: "apu-resource-sub-3",
+                apuId: "apu-item-2",
+                resourceId: null,
+                catalogPartidaId: null,
+                resourceType: "SUBPARTIDA",
+                description: "AGUA PARA LA OBRA",
+                unit: "M3",
+                crew: null,
+                quantity: 1,
+                unitPrice: 15.09,
+                subtotal: 15.09,
+                nestedApuRows: [],
+                catalogPartida: null,
+              },
+            ],
+          },
         },
       ],
     },

@@ -199,4 +199,34 @@ describe("calculateApuSummary", () => {
     expect(summary.totalUnitCost).toBe(431);
     expect(summary.rows).toEqual(calculateApuRows(rows, 8));
   });
+
+  it("calculates equipment quantity from crew and performance for machine-hour units", () => {
+    const [row] = calculateApuRows(
+      [
+        {
+          id: "equipment-1",
+          apuId: "apu-1",
+          resourceId: "resource-1",
+          resourceType: "EQUIPMENT",
+          crew: 2,
+          quantity: 0,
+          unitPrice: 80,
+          subtotal: 0,
+          resource: {
+            id: "resource-1",
+            code: "EQ-01",
+            description: "Rodillo vibratorio",
+            category: "EQUIPMENT" as const,
+            unit: "HM",
+            unitPrice: 80,
+            currency: "PEN",
+          },
+        },
+      ],
+      8,
+    );
+
+    expect(row?.quantity).toBe(2);
+    expect(row?.subtotal).toBe(160);
+  });
 });

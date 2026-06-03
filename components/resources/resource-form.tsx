@@ -65,6 +65,7 @@ export function ResourceForm({
               <option value="LABOR">Mano de obra</option>
               <option value="EQUIPMENT">Equipos</option>
               <option value="TOOLS">Herramientas</option>
+              <option value="SUBCONTRACT">Sub contratos</option>
             </Select>
           </div>
           <div className="space-y-2">
@@ -76,10 +77,14 @@ export function ResourceForm({
             <Input id="unitPrice" name="unitPrice" type="number" step="0.01" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="iu">IU</Label>
+            <Label htmlFor="iu">IU (Base Julio 1992=100)</Label>
             <Input id="iu" name="iu" />
           </div>
-          <div className="space-y-2 md:col-span-2 xl:col-span-3">
+          <div className="space-y-2">
+            <Label htmlFor="iuCurrent">IU 2026</Label>
+            <Input id="iuCurrent" name="iuCurrent" />
+          </div>
+          <div className="space-y-2 md:col-span-2">
             <Label htmlFor="source">Fuente</Label>
             <Input id="source" name="source" />
           </div>

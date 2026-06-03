@@ -6,9 +6,12 @@ import { hashPassword } from "@/lib/auth/password";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { loadUnifiedIndexWorkbook } from "@/lib/polynomial-formula/index-source";
 import { buildUnifiedIndexSeedPayload } from "@/lib/polynomial-formula/unified-index-seed";
+import { unifiedIndexDictionaryData } from "@/lib/polynomial-formula/unified-index-dictionary-data";
+import { resolveCurrentResourceIu } from "@/lib/resources/current-iu-assignment";
 import { findSeedPartidaApuMatch } from "@/lib/seed/catalog-partida-matching";
 import { priceSeedCatalogPartidaApuRows } from "@/lib/seed/catalog-partida-pricing";
 import { normalizeExcelCellText } from "@/lib/seed/excel-cell-text";
+import { isSubpartidaResourceType, SUBPARTIDA_RESOURCE_TYPE } from "@/lib/apu/subpartidas";
 
 const prisma = new PrismaClient();
 const DATA_FOR_SEED_DIR = path.resolve(process.cwd(), "data-for-seed");
@@ -18,7 +21,7 @@ const SEED_PARTIDAS_WORKBOOK_PATHS = [
 ];
 const UNIFIED_INDEX_WORKBOOK_PATH = path.resolve(
   process.cwd(),
-  "presupuesto-ejemplo",
+  "data-for-seed",
   "formula-polinomica",
   "07_indices_unificados_de_precios_de_la_construccion_ene26.xlsx",
 );
@@ -28,6 +31,7 @@ const resourceCodePrefixes: Record<ResourceCategory, string> = {
   LABOR: "MO",
   EQUIPMENT: "EQ",
   TOOLS: "HER",
+  SUBCONTRACT: "SUB",
 };
 
 async function seedUnifiedIndicesFromWorkbook() {
@@ -134,9 +138,10 @@ async function main() {
       },
     }));
 
+  await seedUnifiedIndicesFromWorkbook();
   await seedGeneralResourcesCatalog();
   await seedGeneralPartidasCatalog();
-  await seedUnifiedIndicesFromWorkbook();
+  await seedAutocreatedPartidaResourceCurrentIus();
 
   const demoResources = await Promise.all([
     findCatalogResource("CEMENTO PORTLAND TIPO I (42.5KG)", ResourceCategory.MATERIAL, "BLS"),
@@ -491,6 +496,7 @@ async function seedGeneralResourcesCatalog() {
       category: true,
       unit: true,
       iu: true,
+      iuCurrent: true,
       subcategory: true,
       unitPrice: true,
       currency: true,
@@ -504,7 +510,26 @@ async function seedGeneralResourcesCatalog() {
       resource,
     ]),
   );
+  const existingResourcesByIdentityKey = new Map(
+    existingGlobalResources.map((resource) => [
+      buildResourceIdentityKey(resource.description, resource.category, resource.unit),
+      resource,
+    ]),
+  );
+  const existingResourcesByDescriptionUnitKey = new Map(
+    existingGlobalResources.map((resource) => [
+      buildResourceDescriptionUnitKey(resource.description, resource.unit),
+      resource,
+    ]),
+  );
   const sequencesByCategory = buildCategorySequenceMap(existingGlobalResources);
+  const unifiedIndexRows = await prisma.unifiedIndex.findMany({
+    select: {
+      code: true,
+      name: true,
+    },
+    distinct: ["code", "name"],
+  });
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
     const row = worksheet.getRow(rowNumber);
@@ -512,19 +537,39 @@ async function seedGeneralResourcesCatalog() {
     const unit = normalizeCellText(row.getCell(2).value);
     const unitPrice = parseSpreadsheetNumber(normalizeCellText(row.getCell(3).value));
     const category = normalizeCatalogCategory(normalizeCellText(row.getCell(4).value));
-    const iu = normalizeCellText(row.getCell(5).value);
+    const iu = normalizeSeedResourceIu(normalizeCellText(row.getCell(5).value));
 
     if (!description || !unit) {
       continue;
     }
 
     const key = buildResourceKey(description, category, unit, iu);
-    const existingResource = existingResourcesByKey.get(key);
+    const fallbackKey = buildResourceIdentityKey(description, category, unit);
+    const descriptionUnitKey = buildResourceDescriptionUnitKey(description, unit);
+    const existingResource =
+      existingResourcesByKey.get(key) ??
+      existingResourcesByIdentityKey.get(fallbackKey) ??
+      existingResourcesByDescriptionUnitKey.get(descriptionUnitKey);
     if (existingResource) {
-      const nextData = {
+      const effectiveIu = iu || existingResource.iu || null;
+      const iuCurrent = resolveCurrentResourceIu({
         description,
         category,
-        iu: iu || null,
+        legacyIu: effectiveIu,
+        unifiedIndices: unifiedIndexRows,
+        dictionaryRows: unifiedIndexDictionaryData,
+      });
+      const categoryChanged = existingResource.category !== category;
+      const code =
+        categoryChanged || !existingResource.code
+          ? buildNextSeedResourceCode(sequencesByCategory, category)
+          : existingResource.code;
+      const nextData = {
+        code,
+        description,
+        category,
+        iu: effectiveIu,
+        iuCurrent,
         subcategory: null,
         unit,
         unitPrice,
@@ -533,9 +578,11 @@ async function seedGeneralResourcesCatalog() {
       };
 
       const shouldUpdate =
+        existingResource.code !== nextData.code ||
         existingResource.description !== nextData.description ||
         existingResource.category !== nextData.category ||
         existingResource.iu !== nextData.iu ||
+        existingResource.iuCurrent !== nextData.iuCurrent ||
         existingResource.subcategory !== nextData.subcategory ||
         existingResource.unit !== nextData.unit ||
         Number(existingResource.unitPrice) !== nextData.unitPrice ||
@@ -552,16 +599,22 @@ async function seedGeneralResourcesCatalog() {
       continue;
     }
 
-    const nextSequence = (sequencesByCategory.get(category) ?? 0) + 1;
-    sequencesByCategory.set(category, nextSequence);
+    const iuCurrent = resolveCurrentResourceIu({
+      description,
+      category,
+      legacyIu: iu,
+      unifiedIndices: unifiedIndexRows,
+      dictionaryRows: unifiedIndexDictionaryData,
+    });
 
     const createdResource = await prisma.resource.create({
       data: {
         companyId: null,
-        code: `${resourceCodePrefixes[category]}-${String(nextSequence).padStart(3, "0")}`,
+        code: buildNextSeedResourceCode(sequencesByCategory, category),
         description,
         category,
         iu: iu || null,
+        iuCurrent,
         subcategory: null,
         unit,
         unitPrice,
@@ -571,7 +624,15 @@ async function seedGeneralResourcesCatalog() {
     });
 
     existingResourcesByKey.set(key, createdResource);
+    existingResourcesByIdentityKey.set(fallbackKey, createdResource);
+    existingResourcesByDescriptionUnitKey.set(descriptionUnitKey, createdResource);
   }
+}
+
+function buildNextSeedResourceCode(sequencesByCategory: Map<ResourceCategory, number>, category: ResourceCategory) {
+  const nextSequence = (sequencesByCategory.get(category) ?? 0) + 1;
+  sequencesByCategory.set(category, nextSequence);
+  return `${resourceCodePrefixes[category]}-${String(nextSequence).padStart(3, "0")}`;
 }
 
 type SeedPartidaApuRow = {
@@ -660,14 +721,16 @@ async function seedGeneralPartidasCatalog() {
     }
     const apuRows =
       partidaApu?.apuRows.map((apuRow, index) => ({
-        resourceId: findResourceIdForApuRow(apuRow.description, apuRow.unit, resourceLookup),
+        resourceId: isSubpartidaResourceType(apuRow.resourceType ?? apuRow.groupLabel)
+          ? null
+          : findResourceIdForApuRow(apuRow.description, apuRow.unit, resourceLookup),
         description: apuRow.description,
         unit: apuRow.unit,
         crew: apuRow.crew,
         quantity: apuRow.quantity,
-        unitPrice: 0,
+        unitPrice: isSubpartidaResourceType(apuRow.resourceType ?? apuRow.groupLabel) ? apuRow.unitPrice : 0,
         subtotal: 0,
-        resourceType: apuRow.resourceType,
+        resourceType: isSubpartidaResourceType(apuRow.resourceType ?? apuRow.groupLabel) ? SUBPARTIDA_RESOURCE_TYPE : apuRow.resourceType,
         groupLabel: apuRow.groupLabel,
         sortOrder: index,
       })) ?? [];
@@ -732,14 +795,16 @@ async function seedGeneralPartidasCatalog() {
     }
 
     const apuRows = partidaApu.apuRows.map((apuRow, index) => ({
-      resourceId: findResourceIdForApuRow(apuRow.description, apuRow.unit, resourceLookup),
+      resourceId: isSubpartidaResourceType(apuRow.resourceType ?? apuRow.groupLabel)
+        ? null
+        : findResourceIdForApuRow(apuRow.description, apuRow.unit, resourceLookup),
       description: apuRow.description,
       unit: apuRow.unit,
       crew: apuRow.crew,
       quantity: apuRow.quantity,
-      unitPrice: 0,
+      unitPrice: isSubpartidaResourceType(apuRow.resourceType ?? apuRow.groupLabel) ? apuRow.unitPrice : 0,
       subtotal: 0,
-      resourceType: apuRow.resourceType,
+      resourceType: isSubpartidaResourceType(apuRow.resourceType ?? apuRow.groupLabel) ? SUBPARTIDA_RESOURCE_TYPE : apuRow.resourceType,
       groupLabel: apuRow.groupLabel,
       sortOrder: index,
     }));
@@ -791,6 +856,8 @@ async function seedGeneralPartidasCatalog() {
     });
   }
 
+  const linkedSubpartidaRows = await linkSeedCatalogSubpartidaRows();
+
   if (unresolvedCatalogInsumos.size > 0) {
     console.warn(
       `Catalogo de partidas: ${unresolvedCatalogInsumos.size} insumos de APU no existen en catalogo-de-insumos.xlsx; se cargaron con PU 0.`,
@@ -813,7 +880,198 @@ async function seedGeneralPartidasCatalog() {
     });
   }
 
+  if (linkedSubpartidaRows > 0) {
+    console.log(`Catalogo de partidas: ${linkedSubpartidaRows} filas de subpartidas enlazadas a su APU.`);
+  }
+
   await pruneDuplicateCatalogPartidasWithoutApu();
+}
+
+async function seedAutocreatedPartidaResourceCurrentIus() {
+  const source = "Autocreado desde APU del catalogo de partidas";
+  const [resources, unifiedIndexRows] = await Promise.all([
+    prisma.resource.findMany({
+      where: {
+        companyId: null,
+        source,
+        iuCurrent: null,
+      },
+      select: {
+        id: true,
+        description: true,
+        category: true,
+        iu: true,
+      },
+    }),
+    prisma.unifiedIndex.findMany({
+      select: {
+        code: true,
+        name: true,
+      },
+      distinct: ["code", "name"],
+    }),
+  ]);
+  let updated = 0;
+
+  for (const resource of resources) {
+    const iuCurrent = resolveCurrentResourceIu({
+      description: resource.description,
+      category: resource.category,
+      legacyIu: resource.iu,
+      unifiedIndices: unifiedIndexRows,
+      dictionaryRows: unifiedIndexDictionaryData,
+    });
+
+    if (!iuCurrent) {
+      continue;
+    }
+
+    await prisma.resource.update({
+      where: {
+        id: resource.id,
+      },
+      data: {
+        iuCurrent,
+      },
+    });
+    updated += 1;
+  }
+
+  if (updated > 0) {
+    console.info(`Seeded IU 2026 for ${updated} autocreated partida resources.`);
+  }
+}
+
+async function linkSeedCatalogSubpartidaRows() {
+  const partidas = await prisma.catalogPartida.findMany({
+    include: {
+      apuRows: {
+        select: {
+          id: true,
+        },
+        take: 1,
+      },
+    },
+  });
+  const partidasByKey = new Map(
+    partidas.map((partida) => [buildSeedPartidaMatchKey(partida.description, partida.unit), partida.id]),
+  );
+  const subpartidaRows = await prisma.partidaApuRow.findMany({
+    where: {
+      OR: [
+        { resourceType: SUBPARTIDA_RESOURCE_TYPE },
+        { resourceType: "SUB PARTIDAS" },
+        { groupLabel: "Sub Partidas" },
+        { groupLabel: "SUB PARTIDAS" },
+      ],
+    },
+    select: {
+      id: true,
+      catalogPartidaId: true,
+      description: true,
+      unit: true,
+    },
+  });
+  let linkedRows = 0;
+
+  for (const row of subpartidaRows) {
+    const alias = resolveManualCatalogSubpartidaAlias(row.description, row.unit);
+    const linkedPartidaId = partidasByKey.get(
+      alias ? buildSeedPartidaMatchKey(alias.description, alias.unit) : buildSeedPartidaMatchKey(row.description, row.unit),
+    );
+    if (!linkedPartidaId || linkedPartidaId === row.catalogPartidaId) continue;
+
+    await prisma.partidaApuRow.update({
+      where: { id: row.id },
+      data: {
+        catalogSubpartidaId: linkedPartidaId,
+        resourceId: null,
+        resourceType: SUBPARTIDA_RESOURCE_TYPE,
+      },
+    });
+    linkedRows += 1;
+  }
+
+  return linkedRows;
+}
+
+function resolveManualCatalogSubpartidaAlias(description: string, unit: string) {
+  const aliases: Record<string, { description: string; unit: string }> = {
+    [buildSeedPartidaMatchKey("ACERO REFUERZO Fy=4200 kg/cm2", "kg")]: {
+      description: "ACERO DE REFUERZO F´Y = 4200 KG/CM2",
+      unit: "KG",
+    },
+    [buildSeedPartidaMatchKey("PRODUCCION CONCRETO CLASE C (F'C=280 KG/CM2)", "M3")]: {
+      description: "CONCRETO CLASE C (F'C=280 KG/CM2)",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("PRODUCCION CONCRETO CLASE D (F'C=210 KG/CM2)", "M3")]: {
+      description: "CONCRETO CLASE D (F'C=210 KG/CM2)",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("PRODUCCION CONCRETO CLASE E (F'C=175 KG/CM2)", "M3")]: {
+      description: "CONCRETO CLASE E (F'C=175 KG/CM2)",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("PRODUCCION CONCRETO CLASE H (F'C=100 KG/CM2)", "M3")]: {
+      description: "CONCRETO CLASE H (F'C=100 KG/CM2)",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("CONCRETO F'C=100 KG/CM2 (A)", "M3")]: {
+      description: "CONCRETO F'C=100 KG/CM2",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("CONCRETO FLUIDO F'C=280 KG/CM2 PARA INYECCIÓN", "M3")]: {
+      description: "INYECCIÓN DE CONCRETO FLUIDO (F'C=280 KG/CM2)",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("CONCRETO HIDRAULICO MR=45 KG/CM2 (MANUAL)", "M3")]: {
+      description: "PAVIMENTO DE CONCRETO HIDRAULICO S'C=45 KG/CM2 (MANUAL)",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("CONCRETO HIDRAULICO MR=45 KG/CM2 (PARA PAVIMENTADORA)", "M3")]: {
+      description: "PAVIMENTO DE CONCRETO HIDRAULICO S'C=45 KG/CM2 (PAVIMENTADORA)",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("EXCAVACION Y DESQUINCHE EN ROCA FIJA", "M3")]: {
+      description: "EXCAVACION EN EXPLANACIONES EN ROCA FIJA",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("EXCAVACION Y DESQUINCHE EN ROCA SUELTA", "M3")]: {
+      description: "EXCAVACION EN EXPLANACIONES EN ROCA SUELTA",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("MATERIAL DE PRESTAMO", "M3")]: {
+      description: "MATERIAL DE PRESTAMO PARA RELLENOS",
+      unit: "M3",
+    },
+    [buildSeedPartidaMatchKey("TRATAMIENTO SUPERFICIAL BICAPA (1RA CAPA)", "M2")]: {
+      description: "TRATAMIENTO SUPERFICIAL BICAPA",
+      unit: "M2",
+    },
+    [buildSeedPartidaMatchKey("TRATAMIENTO SUPERFICIAL BICAPA (2DA CAPA)", "M2")]: {
+      description: "TRATAMIENTO SUPERFICIAL BICAPA",
+      unit: "M2",
+    },
+    [buildSeedPartidaMatchKey("ENCOFRADO Y DESENCOFRADO PARA CUNETAS", "M2")]: {
+      description: "ENCOFRADO Y DESENCOFRADO PARA OBRAS DE ARTE",
+      unit: "M2",
+    },
+    [buildSeedPartidaMatchKey("PERFILADO Y COMPACTADO DE CUNETA", "M2")]: {
+      description: "PERFILADO Y COMPACTADO EN ZONAS DE CORTE",
+      unit: "M2",
+    },
+    [buildSeedPartidaMatchKey("JUNTA DE CONSTRUCCION (0.01x0.01 m)", "ML")]: {
+      description: "JUNTA DE CONSTRUCCION",
+      unit: "ML",
+    },
+    [buildSeedPartidaMatchKey("JUNTA DE DILATACION (0.02x0.01 m)", "ML")]: {
+      description: "JUNTAS DE DILATACION METALICA 2\"",
+      unit: "ML",
+    },
+  };
+
+  return aliases[buildSeedPartidaMatchKey(description, unit)] ?? null;
 }
 
 async function pruneDuplicateCatalogPartidasWithoutApu() {
@@ -1203,6 +1461,9 @@ function normalizeCatalogCategory(value: string): ResourceCategory {
 
   if (normalized === "mano de obra") return ResourceCategory.LABOR;
   if (normalized === "equipo") return ResourceCategory.EQUIPMENT;
+  if (normalized === "sub contrato" || normalized === "subcontrato" || normalized === "sub contratos" || normalized === "subcontratos") {
+    return ResourceCategory.SUBCONTRACT;
+  }
   return ResourceCategory.MATERIAL;
 }
 
@@ -1238,6 +1499,19 @@ function parseOptionalSpreadsheetNumber(value: string) {
 
 function buildResourceKey(description: string, category: ResourceCategory, unit: string, iu: string | null) {
   return [description.trim().toUpperCase(), category, unit.trim().toUpperCase(), (iu ?? "").trim().toUpperCase()].join("|");
+}
+
+function buildResourceIdentityKey(description: string, category: ResourceCategory, unit: string) {
+  return [description.trim().toUpperCase(), category, unit.trim().toUpperCase()].join("|");
+}
+
+function buildResourceDescriptionUnitKey(description: string, unit: string) {
+  return [description.trim().toUpperCase(), unit.trim().toUpperCase()].join("|");
+}
+
+function normalizeSeedResourceIu(value: string) {
+  const trimmed = value.trim();
+  return trimmed === ":" ? "" : trimmed;
 }
 
 function buildResourceLookupKey(description: string, unit: string) {
@@ -1472,6 +1746,7 @@ function mapPartidaGroupToResourceType(groupLabel: string | null) {
   if (normalized === "MATERIALES") return "MATERIAL";
   if (normalized === "EQUIPO") return "EQUIPMENT";
   if (normalized === "SUBCONTRATOS") return "SUBCONTRACT";
+  if (isSubpartidaResourceType(normalized)) return SUBPARTIDA_RESOURCE_TYPE;
   return normalized;
 }
 

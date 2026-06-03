@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
 
+import { POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS } from "@/lib/polynomial-formula/smart-monomial-types";
+
 const polynomialCostGroupKeySchema = z.enum([
   "LABOR",
   "MATERIALS",
@@ -35,6 +37,30 @@ function createDecimalStringSchema(options: {
 
 const positiveDecimalStringSchema = (fieldName: string) =>
   createDecimalStringSchema({ allowZero: false, fieldName });
+const nonNegativeDecimalStringSchema = (fieldName: string) =>
+  createDecimalStringSchema({ allowZero: true, fieldName });
+const optionalPositiveDecimalStringSchema = (fieldName: string) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    positiveDecimalStringSchema(fieldName).nullable().optional(),
+  );
+
+const polynomialMonomialCompositionInputSchema = z.object({
+  id: z.string().trim().optional(),
+  budgetItemId: z.string().trim().nullable().optional(),
+  apuResourceId: z.string().trim().nullable().optional(),
+  resourceType: z.string().trim().nullable().optional(),
+  amount: positiveDecimalStringSchema("El monto de composicion"),
+  unifiedIndexCode: z.string().trim().nullable().optional(),
+  unifiedIndexName: z.string().trim().nullable().optional(),
+  iuFamily: z.string().trim().nullable().optional(),
+  participationPercentage: nonNegativeDecimalStringSchema("La participacion")
+    .nullable()
+    .optional(),
+  coefficientContribution: nonNegativeDecimalStringSchema("El aporte al coeficiente")
+    .nullable()
+    .optional(),
+});
 
 export const polynomialMonomialInputSchema = z.object({
   id: nonEmptyStringSchema,
@@ -48,10 +74,9 @@ export const polynomialMonomialInputSchema = z.object({
   baseIndexValue: positiveDecimalStringSchema("El indice base"),
   adjustmentIndexCode: z.string().trim().nullable().optional(),
   adjustmentIndexName: z.string().trim().nullable().optional(),
-  adjustmentIndexValue: positiveDecimalStringSchema("El indice de reajuste")
-    .nullable()
-    .optional(),
+  adjustmentIndexValue: optionalPositiveDecimalStringSchema("El indice de reajuste"),
   sortOrder: z.coerce.number().int().min(0),
+  composition: z.array(polynomialMonomialCompositionInputSchema).optional(),
 });
 
 export const polynomialFormulaSaveSchema = z.object({
@@ -59,7 +84,10 @@ export const polynomialFormulaSaveSchema = z.object({
   baseMonth: monthSchema,
   baseYear: yearSchema,
   status: polynomialFormulaStatusSchema.optional(),
-  monomials: z.array(polynomialMonomialInputSchema).min(1).max(8),
+  monomials: z
+    .array(polynomialMonomialInputSchema)
+    .min(1)
+    .max(POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS),
 });
 
 const polynomialKCalculationMonomialSchema = z.object({
@@ -70,7 +98,10 @@ const polynomialKCalculationMonomialSchema = z.object({
 });
 
 export const polynomialKCalculationSchema = z.object({
-  monomials: z.array(polynomialKCalculationMonomialSchema).min(1).max(8),
+  monomials: z
+    .array(polynomialKCalculationMonomialSchema)
+    .min(1)
+    .max(POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS),
 });
 
 export const valuationInputSchema = z.object({

@@ -8,8 +8,14 @@ import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { decimalToNumber } from "@/lib/db/serializers";
 
-export default async function PartidasPage() {
+export default async function PartidasPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await getAuthSession();
+  const resolvedSearchParams = await searchParams;
+  const initialFilter = readSearchParam(resolvedSearchParams.q);
   const [partidas, resources] = await Promise.all([getCatalogPartidas(), getResourcesByUser(session!.user.id)]);
 
   return (
@@ -25,6 +31,7 @@ export default async function PartidasPage() {
         <CardContent className="pt-6">
           <PartidasTable
             partidas={partidas}
+            initialFilter={initialFilter}
             resourcesCatalog={resources.map((resource) => ({
               id: resource.id,
               companyId: resource.companyId,
@@ -32,6 +39,7 @@ export default async function PartidasPage() {
               description: resource.description,
               category: resource.category,
               iu: resource.iu,
+              iuCurrent: resource.iuCurrent,
               subcategory: resource.subcategory,
               unit: resource.unit,
               unitPrice: decimalToNumber(resource.unitPrice),
@@ -43,4 +51,9 @@ export default async function PartidasPage() {
       </Card>
     </AppShell>
   );
+}
+
+function readSearchParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
 }

@@ -25,7 +25,7 @@ export function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Credenciales inválidas");
+      setError(process.env.NODE_ENV === "development" ? `Error de autenticacion: ${result.error}` : "Credenciales invalidas");
       return;
     }
 

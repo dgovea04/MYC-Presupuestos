@@ -76,6 +76,7 @@ export default async function GeneratePartidaPage({
               description: resource.description,
               category: resource.category,
               iu: resource.iu,
+              iuCurrent: resource.iuCurrent,
               subcategory: resource.subcategory,
               unit: resource.unit,
               unitPrice: decimalToNumber(resource.unitPrice),

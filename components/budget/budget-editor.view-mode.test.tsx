@@ -257,13 +257,13 @@ describe("BudgetEditor view mode integration", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ctrlKey: true, key: "Enter" }));
     });
 
-    const addManualRowButton = getButtonByText("Agregar fila manual");
+    const addSubpartidaButton = getButtonByText("Agregar subpartida");
 
     await act(async () => {
-      addManualRowButton.focus();
+      addSubpartidaButton.focus();
     });
 
-    expect(document.activeElement).toBe(addManualRowButton);
+    expect(document.activeElement).toBe(addSubpartidaButton);
 
     await act(async () => {
       dispatchKey(document.activeElement, "Tab");
@@ -275,7 +275,7 @@ describe("BudgetEditor view mode integration", () => {
       dispatchKey(document.activeElement, "Tab", { shiftKey: true });
     });
 
-    expect(document.activeElement).toBe(addManualRowButton);
+    expect(document.activeElement).toBe(addSubpartidaButton);
   });
 
   it("keeps focus on the active APU field after an in-sheet update rerenders the editor", async () => {
