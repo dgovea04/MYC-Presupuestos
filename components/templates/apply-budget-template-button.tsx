@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BookOpenCheck, Loader2, X } from "lucide-react";
@@ -87,6 +88,10 @@ export function ApplyBudgetTemplateButton({
           </div>
 
           <form className="mt-5 space-y-4" onSubmit={(event) => void handleSubmit(event)}>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Plantilla origen</p>
+              <p className="mt-1 font-medium text-slate-900">{defaultBudgetName}</p>
+            </div>
             <label className="block space-y-1.5">
               <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Proyecto destino</span>
               <select
@@ -103,6 +108,17 @@ export function ApplyBudgetTemplateButton({
                 ))}
               </select>
             </label>
+            {projects.length === 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+                <p>Crea un proyecto antes de aplicar esta plantilla.</p>
+                <Link
+                  href="/projects/new"
+                  className="mt-2 inline-flex text-sm font-semibold text-amber-950 underline decoration-amber-400 underline-offset-4 transition hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                >
+                  Crear proyecto
+                </Link>
+              </div>
+            ) : null}
             <label className="block space-y-1.5">
               <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Nombre</span>
               <Input

@@ -11,6 +11,7 @@ import {
   calculateBudgetCostGroups,
   calculateCoefficientK,
   calculateMonomialCoefficients,
+  roundCoefficient,
   validatePolynomialFormula,
 } from "@/lib/calculations/polynomial-formula";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
@@ -261,7 +262,7 @@ function buildMonomialPreview(formula: PolynomialFormulaRecord | null) {
   return formula.monomials.map((monomial) => ({
     symbol: monomial.code,
     label: monomial.name,
-    detail: `${monomial.coefficient} sobre base ${monomial.amount}`,
+    detail: `${roundCoefficient(monomial.coefficient)} sobre base ${monomial.amount}`,
   }));
 }
 
@@ -397,6 +398,7 @@ export async function getBudgetPolynomialFormulaSectionData(
       id: true,
       name: true,
       kind: true,
+      currency: true,
     },
   });
 
@@ -443,6 +445,7 @@ export async function getBudgetPolynomialFormulaSectionData(
             "El IGV no participa en la base de la formula polinomica.",
           ],
     budgetId: budget.id,
+    currency: budget.currency,
     formula,
     summary: buildSectionSummary(formula),
   };

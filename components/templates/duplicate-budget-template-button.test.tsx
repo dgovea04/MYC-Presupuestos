@@ -50,22 +50,56 @@ describe("DuplicateBudgetTemplateButton", () => {
   });
 
   it("duplicates a template and navigates to the copy", async () => {
-    const { getButton } = await renderButton();
+    const { getButton, getInput, getTextarea } = await renderButton();
 
     await act(async () => {
       getButton("Duplicar").click();
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Original");
+    expect(document.body.textContent).toContain("Arquitectura reusable");
+
+    await act(async () => {
+      setInputValue(getInput("Nombre de la copia"), "Arquitectura reutilizable - oficina");
+      setTextareaValue(getTextarea("Descripcion de la copia"), "Base inicial ajustada");
+      getButton("Crear copia").click();
     });
 
     expect(fetch).toHaveBeenCalledWith("/api/templates/budget/template-1/duplicate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Arquitectura reusable copia",
-        description: "Base inicial",
+        name: "Arquitectura reutilizable - oficina",
+        description: "Base inicial ajustada",
       }),
     });
     expect(mocks.push).toHaveBeenCalledWith("/templates/budget/template-copy");
     expect(mocks.refresh).toHaveBeenCalled();
+  });
+
+  it("shows the API error without closing the dialog", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        json: async () => ({ error: "Nombre duplicado" }),
+      })),
+    );
+    const { getButton } = await renderButton();
+
+    await act(async () => {
+      getButton("Duplicar").click();
+    });
+
+    await act(async () => {
+      getButton("Crear copia").click();
+    });
+
+    expect(document.body.textContent).toContain("Nombre duplicado");
+    expect(document.body.textContent).toContain("Duplicar plantilla");
+    expect(getButton("Crear copia").disabled).toBe(false);
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 });
 
@@ -95,5 +129,31 @@ async function renderButton() {
       }
       return button;
     },
+    getInput: (label: string) => {
+      const input = document.body.querySelector(`input[aria-label="${label}"]`);
+      if (!(input instanceof HTMLInputElement)) {
+        throw new Error(`Missing input: ${label}`);
+      }
+      return input;
+    },
+    getTextarea: (label: string) => {
+      const textarea = document.body.querySelector(`textarea[aria-label="${label}"]`);
+      if (!(textarea instanceof HTMLTextAreaElement)) {
+        throw new Error(`Missing textarea: ${label}`);
+      }
+      return textarea;
+    },
   };
+}
+
+function setInputValue(element: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  valueSetter?.call(element, value);
+  element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+}
+
+function setTextareaValue(element: HTMLTextAreaElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  valueSetter?.call(element, value);
+  element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
 }

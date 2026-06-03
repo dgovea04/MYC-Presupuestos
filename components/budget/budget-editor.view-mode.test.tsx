@@ -4,7 +4,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BudgetEditor } from "@/components/budget/budget-editor";
-import { BudgetViewModeProvider } from "@/components/budget/view-mode-provider";
+import { BudgetViewModeProvider, useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import type { BudgetRecord } from "@/types/budget";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
@@ -66,10 +66,10 @@ describe("BudgetEditor view mode integration", () => {
   });
 
   it("renders the editor inside the provider path and updates mode-aware editor UI", async () => {
-    const { host, getButtonByText, getByText, getEditorRoot } = await renderEditor();
+    const { host, getButtonByText, getByText, getEditorRoot, queryByText } = await renderEditor();
 
     expect(host.dataset.viewMode).toBe("modern");
-    expect(getByText("Vista")).toBeTruthy();
+    expect(queryByText("Vista")).toBeNull();
     expect(getByText("Densidad")).toBeTruthy();
     expect(getEditorRoot().className).toContain("budget-modern-flow");
     expect(countViewModeAnchors(host)).toBe(1);
@@ -79,7 +79,7 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     expect(host.dataset.viewMode).toBe("excel");
-    expect(getByText("Vista")).toBeTruthy();
+    expect(queryByText("Vista")).toBeNull();
     expect(getByText("Densidad")).toBeTruthy();
     expect(getEditorRoot().className).toContain("budget-excel-flow");
     expect(countViewModeAnchors(host)).toBe(1);
@@ -1361,6 +1361,7 @@ async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?:
           projectName="Proyecto Demo"
           resourcesCatalog={options?.resourcesCatalog ?? []}
         />
+        <TestViewModeControls />
       </BudgetViewModeProvider>,
     );
   });
@@ -1546,6 +1547,21 @@ async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?:
       return element;
     },
   };
+}
+
+function TestViewModeControls() {
+  const { setViewMode } = useBudgetViewMode();
+
+  return (
+    <div>
+      <button type="button" onClick={() => setViewMode("modern")}>
+        Moderna
+      </button>
+      <button type="button" onClick={() => setViewMode("excel")}>
+        Tipo Excel
+      </button>
+    </div>
+  );
 }
 
 function createBudget(): BudgetRecord {

@@ -100,6 +100,7 @@ export type PolynomialFormulaSectionData = {
   coefficients: PolynomialFormulaSectionPreview[];
   notes: string[];
   budgetId?: string;
+  currency: string;
   formula: PolynomialFormulaRecord | null;
   summary: PolynomialFormulaSectionSummary;
 };

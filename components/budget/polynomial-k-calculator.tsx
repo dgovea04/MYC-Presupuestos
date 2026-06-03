@@ -11,6 +11,7 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { formatCurrency } from "@/lib/utils";
 
 type KPreviewResult = {
   kRaw: string;
@@ -24,6 +25,16 @@ type KPreviewResult = {
     partial: string;
   }>;
 };
+
+function formatDisplayCurrency(value: string, currency: string, decimalPlaces: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? formatCurrency(parsed, currency, decimalPlaces) : "-";
+}
+
+function formatThreeDecimals(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(3) : value;
+}
 
 export function PolynomialKCalculator({
   previewMonth,
@@ -39,6 +50,8 @@ export function PolynomialKCalculator({
   canApply,
   onApplyAdjustment,
   isApplyingAdjustment,
+  currency,
+  currencyDecimals,
 }: {
   previewMonth: number;
   previewYear: number;
@@ -57,6 +70,8 @@ export function PolynomialKCalculator({
   canApply: boolean;
   onApplyAdjustment: () => void;
   isApplyingAdjustment: boolean;
+  currency: string;
+  currencyDecimals: number;
 }) {
   const { isExcelMode } = useAppViewMode();
 
@@ -115,21 +130,29 @@ export function PolynomialKCalculator({
         {result ? (
           <>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <InfoCard label="K raw" value={result.kRaw} tone="slate" />
-              <InfoCard label="K redondeado" value={result.kRounded} tone="sky" />
+              <InfoCard label="K raw" value={formatThreeDecimals(result.kRaw)} tone="slate" />
+              <InfoCard label="K redondeado" value={formatThreeDecimals(result.kRounded)} tone="sky" />
               <InfoCard
                 label="Monto original"
-                value={adjustedAmounts?.originalAmount ?? originalAmount}
+                value={formatDisplayCurrency(adjustedAmounts?.originalAmount ?? originalAmount, currency, currencyDecimals)}
                 tone="slate"
               />
               <InfoCard
                 label="Monto reajustado"
-                value={adjustedAmounts?.adjustedAmount ?? "-"}
+                value={
+                  adjustedAmounts
+                    ? formatDisplayCurrency(adjustedAmounts.adjustedAmount, currency, currencyDecimals)
+                    : "-"
+                }
                 tone="sky"
               />
               <InfoCard
                 label="Reajuste"
-                value={adjustedAmounts?.adjustmentAmount ?? "-"}
+                value={
+                  adjustedAmounts
+                    ? formatDisplayCurrency(adjustedAmounts.adjustmentAmount, currency, currencyDecimals)
+                    : "-"
+                }
                 tone="amber"
               />
             </div>
@@ -150,7 +173,7 @@ export function PolynomialKCalculator({
                   {result.terms.map((term) => (
                     <TR key={term.name}>
                       <TD>{term.name}</TD>
-                      <TD className="text-right tabular-nums">{term.coefficient}</TD>
+                      <TD className="text-right tabular-nums">{formatThreeDecimals(term.coefficient)}</TD>
                       <TD className="text-right tabular-nums">{term.baseIndexValue}</TD>
                       <TD className="text-right tabular-nums">{term.adjustmentIndexValue}</TD>
                       <TD className="text-right tabular-nums">{term.ratio}</TD>

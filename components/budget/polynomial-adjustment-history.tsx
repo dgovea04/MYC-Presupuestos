@@ -5,13 +5,22 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import type { AdjustmentCalculationRecord } from "@/types/polynomial-formula";
+
+function formatThreeDecimals(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(3) : value;
+}
 
 export function PolynomialAdjustmentHistory({
   adjustments,
+  currency,
+  currencyDecimals,
 }: {
   adjustments: AdjustmentCalculationRecord[];
+  currency: string;
+  currencyDecimals: number;
 }) {
   const { dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
@@ -43,10 +52,16 @@ export function PolynomialAdjustmentHistory({
                 {adjustments.map((adjustment) => (
                   <TR key={adjustment.id}>
                     <TD>{formatDate(new Date(adjustment.year, adjustment.month - 1, 1), dateFormat)}</TD>
-                    <TD className="text-right tabular-nums">{adjustment.originalAmount}</TD>
-                    <TD className="text-right tabular-nums">{adjustment.kRounded}</TD>
-                    <TD className="text-right tabular-nums">{adjustment.adjustedAmount}</TD>
-                    <TD className="text-right tabular-nums">{adjustment.adjustmentAmount}</TD>
+                    <TD className="text-right tabular-nums">
+                      {formatCurrency(Number(adjustment.originalAmount), currency, currencyDecimals)}
+                    </TD>
+                    <TD className="text-right tabular-nums">{formatThreeDecimals(adjustment.kRounded)}</TD>
+                    <TD className="text-right tabular-nums">
+                      {formatCurrency(Number(adjustment.adjustedAmount), currency, currencyDecimals)}
+                    </TD>
+                    <TD className="text-right tabular-nums">
+                      {formatCurrency(Number(adjustment.adjustmentAmount), currency, currencyDecimals)}
+                    </TD>
                   </TR>
                 ))}
               </TBody>

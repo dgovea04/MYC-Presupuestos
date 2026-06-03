@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Input } from "@/components/ui/input";
@@ -7,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import type { PolynomialMonomialRecord, UnifiedIndexRecord } from "@/types/polynomial-formula";
 
 type BaseIndexOption = {
@@ -28,16 +30,103 @@ function toBaseIndexOptions(indices: UnifiedIndexRecord[]): BaseIndexOption[] {
   }));
 }
 
+function formatThreeDecimals(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(3) : value;
+}
+
+function parseFormattedNumber(value: string) {
+  const parsed = Number(value.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatAmountDisplay(value: string, decimalPlaces: number) {
+  const parsed = parseFormattedNumber(value);
+  return parsed === null ? value : formatNumber(parsed, decimalPlaces);
+}
+
+function MonomialAmountInput({
+  value,
+  decimalPlaces,
+  onChange,
+}: {
+  value: string;
+  decimalPlaces: number;
+  onChange: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      value={isFocused ? draft : formatAmountDisplay(value, decimalPlaces)}
+      onFocus={() => {
+        setIsFocused(true);
+        setDraft(value);
+      }}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        setIsFocused(false);
+        const parsed = parseFormattedNumber(draft);
+        if (parsed === null) {
+          setDraft(formatAmountDisplay(value, decimalPlaces));
+          return;
+        }
+
+        const nextValue = parsed.toFixed(decimalPlaces);
+        onChange(nextValue);
+        setDraft(formatNumber(parsed, decimalPlaces));
+      }}
+      className="h-8 rounded-lg px-2 text-right text-xs tabular-nums"
+    />
+  );
+}
+
+function MonomialCoefficientInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      value={isFocused ? draft : formatThreeDecimals(value)}
+      onFocus={() => {
+        setIsFocused(true);
+        setDraft(value);
+      }}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        setIsFocused(false);
+        const nextValue = formatThreeDecimals(draft);
+        onChange(nextValue);
+        setDraft(nextValue);
+      }}
+      className="h-8 rounded-lg px-2 text-right text-xs tabular-nums"
+    />
+  );
+}
+
 export function PolynomialMonomialsTable({
   monomials,
   baseIndexOptions,
   baseIndicesLoading,
   onChangeMonomial,
+  currencyDecimals,
 }: {
   monomials: PolynomialMonomialRecord[];
   baseIndexOptions: UnifiedIndexRecord[];
   baseIndicesLoading: boolean;
   onChangeMonomial: (monomial: PolynomialMonomialRecord) => void;
+  currencyDecimals: number;
 }) {
   const { isExcelMode } = useAppViewMode();
   const options = toBaseIndexOptions(baseIndexOptions);
@@ -64,7 +153,7 @@ export function PolynomialMonomialsTable({
                 <TH>Codigo</TH>
                 <TH>Nombre</TH>
                 <TH>Grupo</TH>
-                <TH className="text-right">Monto base</TH>
+                <TH className="text-right">Monto base (en Soles)</TH>
                 <TH className="text-right">Coeficiente</TH>
                 <TH>Indice base</TH>
                 <TH className="text-right">Valor base</TH>
@@ -99,31 +188,26 @@ export function PolynomialMonomialsTable({
                   </TD>
                   <TD className="text-sm text-slate-700">{monomial.costGroupKey}</TD>
                   <TD className="align-top">
-                    <Input
-                      type="number"
-                      step="0.0001"
+                    <MonomialAmountInput
                       value={monomial.amount}
-                      onChange={(event) =>
+                      decimalPlaces={currencyDecimals}
+                      onChange={(value) =>
                         onChangeMonomial({
                           ...monomial,
-                          amount: event.target.value,
+                          amount: value,
                         })
                       }
-                      className="h-8 rounded-lg px-2 text-right text-xs tabular-nums"
                     />
                   </TD>
                   <TD className="align-top">
-                    <Input
-                      type="number"
-                      step="0.001"
+                    <MonomialCoefficientInput
                       value={monomial.coefficient}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         onChangeMonomial({
                           ...monomial,
-                          coefficient: event.target.value,
+                          coefficient: value,
                         })
                       }
-                      className="h-8 rounded-lg px-2 text-right text-xs tabular-nums"
                     />
                   </TD>
                   <TD className="align-top">

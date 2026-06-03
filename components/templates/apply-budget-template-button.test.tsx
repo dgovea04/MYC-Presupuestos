@@ -53,6 +53,9 @@ describe("ApplyBudgetTemplateButton", () => {
     await act(async () => {
       getButton("Aplicar plantilla").click();
     });
+    expect(document.body.textContent).toContain("Plantilla origen");
+    expect(document.body.textContent).toContain("Arquitectura reusable");
+
     await act(async () => {
       setInputValue(getInput("Nombre del nuevo presupuesto"), "Arquitectura aplicada");
       setSelectValue(getSelect("Proyecto destino"), "project-2");
@@ -69,9 +72,53 @@ describe("ApplyBudgetTemplateButton", () => {
     });
     expect(mocks.push).toHaveBeenCalledWith("/budgets/budget-created");
   });
+
+  it("explains that a destination project is required", async () => {
+    const { getButton, getLink, getSelect } = await renderButton({ projects: [] });
+
+    await act(async () => {
+      getButton("Aplicar plantilla").click();
+    });
+
+    expect(getSelect("Proyecto destino").disabled).toBe(true);
+    expect(getButton("Crear presupuesto").disabled).toBe(true);
+    expect(document.body.textContent).toContain("Crea un proyecto antes de aplicar esta plantilla.");
+    expect(getLink("Crear proyecto").getAttribute("href")).toBe("/projects/new");
+  });
+
+  it("shows the API error without navigating away", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        json: async () => ({ error: "No se pudo crear el presupuesto" }),
+      })),
+    );
+    const { getButton } = await renderButton();
+
+    await act(async () => {
+      getButton("Aplicar plantilla").click();
+    });
+
+    await act(async () => {
+      getButton("Crear presupuesto").click();
+    });
+
+    expect(document.body.textContent).toContain("No se pudo crear el presupuesto");
+    expect(document.body.textContent).toContain("Aplicar plantilla");
+    expect(getButton("Crear presupuesto").disabled).toBe(false);
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
 });
 
-async function renderButton() {
+async function renderButton({
+  projects = [
+    { id: "project-1", name: "Proyecto 1" },
+    { id: "project-2", name: "Proyecto 2" },
+  ],
+}: {
+  projects?: Array<{ id: string; name: string }>;
+} = {}) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -84,10 +131,7 @@ async function renderButton() {
       <ApplyBudgetTemplateButton
         templateId="template-1"
         defaultBudgetName="Arquitectura reusable"
-        projects={[
-          { id: "project-1", name: "Proyecto 1" },
-          { id: "project-2", name: "Proyecto 2" },
-        ]}
+        projects={projects}
       />,
     );
   });
@@ -106,6 +150,13 @@ async function renderButton() {
         throw new Error(`Missing input: ${label}`);
       }
       return input;
+    },
+    getLink: (label: string) => {
+      const link = [...document.body.querySelectorAll("a")].find((candidate) => candidate.textContent?.includes(label));
+      if (!(link instanceof HTMLAnchorElement)) {
+        throw new Error(`Missing link: ${label}`);
+      }
+      return link;
     },
     getSelect: (label: string) => {
       const select = document.body.querySelector(`select[aria-label="${label}"]`);

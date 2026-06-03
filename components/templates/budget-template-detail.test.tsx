@@ -6,14 +6,36 @@ import type { UserBudgetTemplateRecord } from "@/lib/data/budget-templates";
 
 describe("BudgetTemplateDetail", () => {
   it("renders snapshot metrics, origin, items, and rates", () => {
-    const markup = renderToStaticMarkup(<BudgetTemplateDetail template={createTemplate()} currencyDecimals={2} />);
+    const markup = renderToStaticMarkup(
+      <BudgetTemplateDetail template={createTemplate()} currencyDecimals={2} sourceProjectName="Proyecto Colegio Sur" />,
+    );
 
     expect(markup).toContain("Partidas");
     expect(markup).toContain("Muro de ladrillo");
     expect(markup).toContain("Arquitectura fuente");
+    expect(markup).toContain("Proyecto fuente");
+    expect(markup).toContain("Proyecto Colegio Sur");
+    expect(markup).toContain('href="/projects/project-1"');
+    expect(markup).toContain('href="/budgets/budget-1"');
     expect(markup).toContain("18%");
     expect(markup).toContain("10%");
     expect(markup).toContain("8%");
+    expect(markup).toContain("Preparacion");
+    expect(markup).toContain("Lista para aplicar");
+    expect(markup).toContain("Cobertura APU");
+    expect(markup).toContain("0 de 1 partidas");
+    expect(markup).toContain("Actualizada");
+  });
+
+  it("summarizes truncated item and level previews", () => {
+    const markup = renderToStaticMarkup(<BudgetTemplateDetail template={createLargeTemplate()} currencyDecimals={2} />);
+
+    expect(markup).toContain("Mostrando 8 de 10 partidas");
+    expect(markup).toContain("+2 partidas adicionales");
+    expect(markup).toContain("Mostrando 9 de 11 niveles");
+    expect(markup).toContain("+2 niveles adicionales");
+    expect(markup).not.toContain("Partida 10");
+    expect(markup).not.toContain("Nivel 11");
   });
 });
 
@@ -92,6 +114,44 @@ function createTemplate(): UserBudgetTemplateRecord {
         currency: "PEN",
         totalDirectCost: 950,
         totalAmount: 1322.78,
+      },
+    },
+  };
+}
+
+function createLargeTemplate(): UserBudgetTemplateRecord {
+  const template = createTemplate();
+
+  return {
+    ...template,
+    snapshot: {
+      ...template.snapshot,
+      levels: Array.from({ length: 11 }, (_, index) => ({
+        templateKey: `level-${index + 1}`,
+        sourceLevelId: `source-level-${index + 1}`,
+        parentKey: null,
+        type: "TITLE" as const,
+        code: String(index + 1).padStart(2, "0"),
+        name: `Nivel ${index + 1}`,
+        sortOrder: index + 1,
+      })),
+      items: Array.from({ length: 10 }, (_, index) => ({
+        templateKey: `item-${index + 1}`,
+        sourceItemId: `source-item-${index + 1}`,
+        levelKey: "level-1",
+        code: `01.${String(index + 1).padStart(2, "0")}`,
+        description: `Partida ${index + 1}`,
+        unit: "m2",
+        quantity: 1,
+        unitPrice: 100,
+        partial: 100,
+        sortOrder: index + 1,
+        apu: null,
+      })),
+      summary: {
+        ...template.snapshot.summary,
+        levelCount: 11,
+        itemCount: 10,
       },
     },
   };

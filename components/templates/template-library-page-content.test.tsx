@@ -30,8 +30,18 @@ beforeAll(() => {
 });
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) => (
-    <a href={href} className={className}>
+  default: ({
+    children,
+    href,
+    className,
+    "aria-label": ariaLabel,
+  }: {
+    children: React.ReactNode;
+    href: string;
+    className?: string;
+    "aria-label"?: string;
+  }) => (
+    <a href={href} className={className} aria-label={ariaLabel}>
       {children}
     </a>
   ),
@@ -89,6 +99,7 @@ describe("TemplateLibraryPageContent", () => {
     expect(markup).toContain("10 plantillas");
     expect(markup).toContain('href="/projects/new?template=budget-edificacion-base"');
     expect(markup).toContain('href="/metrados-avanzados?template=metrado-concrete"');
+    expect(markup).toContain('aria-label="Usar al crear proyecto: Presupuesto de edificacion base"');
   });
 
   it("renders recent template activity links", () => {
@@ -119,6 +130,10 @@ describe("TemplateLibraryPageContent", () => {
     );
 
     expect(markup).toContain("2 recientes");
+    expect(markup).toContain("1 aplicacion");
+    expect(markup).toContain("1 mantenimiento");
+    expect(markup).toContain("Ultima actividad");
+    expect(markup).toContain("30 may");
     expect(markup).toContain("Plantilla actualizada");
     expect(markup).toContain("Arquitectura costa");
     expect(markup).toContain('href="/templates/budget/template-1"');
@@ -438,6 +453,61 @@ describe("TemplateLibraryPageContent", () => {
     expect(container.textContent).not.toContain("1 activo");
     expect(container.textContent).toContain("Arquitectura reusable");
     expect(container.textContent).toContain("Presupuesto de edificacion base");
+  });
+
+  it("filters by suggested template tags", async () => {
+    const items = listTemplateLibraryItems([
+      {
+        id: "budget-snapshot-budget-1",
+        module: "BUDGET",
+        name: "Arquitectura costa",
+        description: "Plantilla capturada desde Arquitectura.",
+        tags: ["Costa", "Arquitectura", "PEN"],
+        status: "AVAILABLE",
+        source: "USER",
+        actionLabel: "Aplicar plantilla",
+      },
+      {
+        id: "budget-snapshot-budget-2",
+        module: "BUDGET",
+        name: "Estructuras costa",
+        description: "Plantilla capturada desde Estructuras.",
+        tags: ["Costa", "Estructuras", "PEN"],
+        status: "AVAILABLE",
+        source: "USER",
+        actionLabel: "Aplicar plantilla",
+      },
+    ]);
+    const container = await renderNode(
+      <TemplateLibraryPageContent items={items} summary={getTemplateLibrarySummary(items)} />,
+    );
+
+    const tagButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Costa (2)",
+    );
+    if (!(tagButton instanceof HTMLButtonElement)) {
+      throw new Error("Suggested tag button was not rendered");
+    }
+
+    await act(async () => {
+      tagButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(navigationMocks.replace).toHaveBeenLastCalledWith("/templates?q=Costa", { scroll: false });
+    expect(tagButton.getAttribute("aria-pressed")).toBe("true");
+    expect(container.textContent).toContain("2 de 17 visibles");
+    expect(container.textContent).toContain("Arquitectura costa");
+    expect(container.textContent).toContain("Estructuras costa");
+    expect(container.textContent).not.toContain("Gastos generales fijos");
+
+    await act(async () => {
+      tagButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(navigationMocks.replace).toHaveBeenLastCalledWith("/templates", { scroll: false });
+    expect(container.textContent).toContain("17 de 17 visibles");
   });
 
   it("scopes source shortcut counts to the active module filter", async () => {

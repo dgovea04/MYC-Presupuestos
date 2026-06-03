@@ -20,7 +20,7 @@ import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { calculateAdjustmentAmounts, validatePolynomialFormula } from "@/lib/calculations/polynomial-formula";
 import { getExportDefinition } from "@/lib/exports/definitions";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
 import type {
   AdjustmentCalculationRecord,
@@ -73,6 +73,11 @@ function createFormulaSummary(formula: PolynomialFormulaRecord | null) {
     totalBaseAmount: formula?.totalBaseAmount ?? "0.0000",
     status: formula?.status ?? "NOT_CREATED",
   } satisfies PolynomialFormulaSectionData["summary"];
+}
+
+function formatDisplayCurrency(value: string, currency: string, decimalPlaces: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? formatCurrency(parsed, currency, decimalPlaces) : "-";
 }
 
 function getFormulaSavePayload(formula: PolynomialFormulaRecord) {
@@ -138,7 +143,7 @@ export function PolynomialFormulaEditor({
   adjustments: AdjustmentCalculationRecord[];
   canUsePolynomialAdjustments: boolean;
 }) {
-  const { dateFormat } = useFormattingSettings();
+  const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
   const [formula, setFormula] = useState(() => cloneFormula(section.formula));
   const [summary, setSummary] = useState(() => createFormulaSummary(section.formula));
@@ -609,7 +614,11 @@ export function PolynomialFormulaEditor({
 
               <div className="grid gap-3 md:grid-cols-3">
                 <InfoCard label="Monomios" value={String(summary.monomialCount)} tone="sky" />
-                <InfoCard label="Base acumulada" value={summary.totalBaseAmount} tone="slate" />
+                <InfoCard
+                  label="Base acumulada"
+                  value={formatDisplayCurrency(summary.totalBaseAmount, section.currency, currencyDecimals)}
+                  tone="slate"
+                />
                 <InfoCard
                   label="Índices pendientes"
                   value={String(formula.monomials.filter((monomial) => monomial.baseIndexName === PLACEHOLDER_INDEX_NAME).length)}
@@ -674,6 +683,7 @@ export function PolynomialFormulaEditor({
             baseIndexOptions={baseIndexOptions}
             baseIndicesLoading={baseIndicesLoading}
             onChangeMonomial={updateMonomial}
+            currencyDecimals={currencyDecimals}
           />
           {canUsePolynomialAdjustments ? (
             <>
@@ -691,8 +701,14 @@ export function PolynomialFormulaEditor({
                 canApply={Boolean(kPreview && previewAdjustedAmounts && !kPreviewError)}
                 onApplyAdjustment={() => void applyAdjustment()}
                 isApplyingAdjustment={isApplyingAdjustment}
+                currency={section.currency}
+                currencyDecimals={currencyDecimals}
               />
-              <PolynomialAdjustmentHistory adjustments={history} />
+              <PolynomialAdjustmentHistory
+                adjustments={history}
+                currency={section.currency}
+                currencyDecimals={currencyDecimals}
+              />
             </>
           ) : (
             <UpgradeCTA

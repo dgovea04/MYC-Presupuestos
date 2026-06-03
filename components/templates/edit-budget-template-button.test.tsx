@@ -69,6 +69,30 @@ describe("EditBudgetTemplateButton", () => {
     });
     expect(mocks.refresh).toHaveBeenCalled();
   });
+
+  it("shows the API error without closing the dialog", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        json: async () => ({ error: "Ya existe una plantilla con ese nombre" }),
+      })),
+    );
+    const { getButton, getInput } = await renderButton();
+
+    await act(async () => {
+      getButton("Editar").click();
+    });
+    await act(async () => {
+      setInputValue(getInput("Nombre de plantilla"), "Arquitectura costa");
+      getButton("Guardar cambios").click();
+    });
+
+    expect(document.body.textContent).toContain("Ya existe una plantilla con ese nombre");
+    expect(document.body.textContent).toContain("Editar plantilla");
+    expect(getButton("Guardar cambios").disabled).toBe(false);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
 });
 
 async function renderButton() {

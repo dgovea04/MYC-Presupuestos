@@ -86,6 +86,10 @@ type TemplateFilterState = {
   sourceFilter: SourceFilter;
   sortOption: SortOption;
 };
+type TagSuggestion = {
+  tag: string;
+  count: number;
+};
 
 const sortOptionLabels: Record<SortOption, string> = {
   DEFAULT: "Orden base",
@@ -146,6 +150,15 @@ export function TemplateLibraryPageContent({
       }),
     [deferredQuery, items, moduleFilter],
   );
+  const tagSuggestionItems = useMemo(
+    () =>
+      filterTemplateLibraryItemsByCriteria(items, {
+        module: moduleFilter,
+        source: sourceFilter,
+      }),
+    [items, moduleFilter, sourceFilter],
+  );
+  const tagSuggestions = useMemo(() => getSuggestedTemplateTags(tagSuggestionItems), [tagSuggestionItems]);
   const visibleItems = useMemo(() => sortTemplateLibraryItems(filteredItems, sortOption), [filteredItems, sortOption]);
   const groupedItems = groupTemplatesByModule(visibleItems);
   const hasActiveFilters = query.trim() !== "" || moduleFilter !== "ALL" || sourceFilter !== "ALL" || sortOption !== "DEFAULT";
@@ -227,6 +240,28 @@ export function TemplateLibraryPageContent({
               );
             })}
           </div>
+          {tagSuggestions.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2" aria-label="Etiquetas sugeridas">
+              <span className="text-xs font-medium text-slate-500">Etiquetas</span>
+              {tagSuggestions.map((suggestion) => {
+                const isSelectedTag = query.trim().toLocaleLowerCase("es-PE") === suggestion.tag.toLocaleLowerCase("es-PE");
+
+                return (
+                  <Button
+                    key={suggestion.tag}
+                    aria-pressed={isSelectedTag}
+                    className="h-8 rounded-lg px-3 text-xs"
+                    variant={isSelectedTag ? "default" : "outline"}
+                    onClick={() => {
+                      applyFilters({ query: isSelectedTag ? "" : suggestion.tag });
+                    }}
+                  >
+                    {suggestion.tag} ({suggestion.count})
+                  </Button>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_200px_190px_auto]">
             <label className="relative block">
               <span className="sr-only">Buscar plantillas</span>
@@ -538,6 +573,8 @@ function setTemplateLibraryQueryParam(params: URLSearchParams, key: string, valu
 }
 
 function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEvent[] }) {
+  const summary = getTemplateActivitySummary(events);
+
   return (
     <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
       <CardContent className="space-y-4 p-5">
@@ -549,6 +586,17 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
             </p>
           </div>
           <Badge className="bg-slate-100 text-slate-700">{events.length} recientes</Badge>
+        </div>
+        <div className="grid gap-2 md:grid-cols-3">
+          <TemplateActivityMetric
+            label="Aplicaciones"
+            value={formatActivityCount(summary.applications, "aplicacion", "aplicaciones")}
+          />
+          <TemplateActivityMetric
+            label="Mantenimiento"
+            value={formatActivityCount(summary.maintenance, "mantenimiento", "mantenimientos")}
+          />
+          <TemplateActivityMetric label="Ultima actividad" value={summary.latestDateLabel ?? "Sin actividad"} />
         </div>
         {events.length > 0 ? (
           <div className="grid gap-2 lg:grid-cols-2">
@@ -576,6 +624,15 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function TemplateActivityMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <p className="text-xs font-medium uppercase text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    </div>
   );
 }
 
@@ -621,7 +678,11 @@ function TemplateCard({ item }: { item: TemplateLibraryItem }) {
       </div>
       <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
         <span className="text-slate-500">{item.status === "AVAILABLE" ? "Disponible" : "Base operativa"}</span>
-        <Link href={buildTemplateActionHref(item)} className="inline-flex items-center gap-2 font-medium text-sky-700">
+        <Link
+          href={buildTemplateActionHref(item)}
+          aria-label={`${item.actionLabel}: ${item.name}`}
+          className="inline-flex items-center gap-2 font-medium text-sky-700"
+        >
           <BookOpen className="h-4 w-4" />
           {item.actionLabel}
         </Link>
@@ -635,6 +696,29 @@ function formatActivityDate(value: Date) {
     day: "2-digit",
     month: "short",
   }).format(value);
+}
+
+function formatActivityMetricDate(value: Date) {
+  return formatActivityDate(value).replace(/[.-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function getTemplateActivitySummary(events: TemplateLibraryActivityEvent[]) {
+  const applications = events.filter(isTemplateApplicationEvent).length;
+  const latestEvent = events[0];
+
+  return {
+    applications,
+    maintenance: events.length - applications,
+    latestDateLabel: latestEvent ? formatActivityMetricDate(latestEvent.createdAt) : null,
+  };
+}
+
+function isTemplateApplicationEvent(event: TemplateLibraryActivityEvent) {
+  return event.type === "BUDGET_CREATED" && event.title === "Presupuesto creado desde plantilla";
+}
+
+function formatActivityCount(count: number, singularLabel: string, pluralLabel: string) {
+  return `${count} ${count === 1 ? singularLabel : pluralLabel}`;
 }
 
 function formatTemplateUpdatedDate(value: string | undefined) {
@@ -710,6 +794,31 @@ function countTemplateSources(items: TemplateLibraryItem[]) {
       USER: 0,
     } satisfies Record<TemplateLibrarySource, number>,
   );
+}
+
+function getSuggestedTemplateTags(items: TemplateLibraryItem[]): TagSuggestion[] {
+  const tagCounts = items.reduce((counts, item) => {
+    item.tags.forEach((tag) => {
+      const trimmedTag = tag.trim();
+      if (!trimmedTag) return;
+
+      counts.set(trimmedTag, (counts.get(trimmedTag) ?? 0) + 1);
+    });
+
+    return counts;
+  }, new Map<string, number>());
+
+  return Array.from(tagCounts.entries())
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((left, right) => {
+      const countComparison = right.count - left.count;
+      if (countComparison !== 0) {
+        return countComparison;
+      }
+
+      return left.tag.localeCompare(right.tag, "es-PE");
+    })
+    .slice(0, 6);
 }
 
 function sortTemplateLibraryItems(items: TemplateLibraryItem[], sortOption: SortOption) {

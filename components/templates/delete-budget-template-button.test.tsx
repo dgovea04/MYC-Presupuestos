@@ -65,6 +65,30 @@ describe("DeleteBudgetTemplateButton", () => {
     expect(mocks.push).toHaveBeenCalledWith("/templates");
     expect(mocks.refresh).toHaveBeenCalled();
   });
+
+  it("shows the API error without closing the dialog", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        json: async () => ({ error: "No se puede eliminar una plantilla en uso" }),
+      })),
+    );
+    const { getButton } = await renderButton();
+
+    await act(async () => {
+      getButton("Eliminar").click();
+    });
+    await act(async () => {
+      getButton("Eliminar plantilla").click();
+    });
+
+    expect(document.body.textContent).toContain("No se puede eliminar una plantilla en uso");
+    expect(document.body.textContent).toContain("Eliminar plantilla");
+    expect(getButton("Eliminar plantilla").disabled).toBe(false);
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
 });
 
 async function renderButton() {
