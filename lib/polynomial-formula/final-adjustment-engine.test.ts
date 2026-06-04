@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 
 import { createPolynomialFinalAdjustmentProposal } from "@/lib/polynomial-formula/final-adjustment-engine";
@@ -46,12 +47,12 @@ function monomial(input: {
 
 function coefficientSum(result: ReturnType<typeof createPolynomialFinalAdjustmentProposal>): string {
   return result.finalMonomials
-    .reduce((sum, item) => sum + Number(item.coefficient), 0)
+    .reduce((sum, item) => sum.plus(item.coefficient), new Decimal(0))
     .toFixed(3);
 }
 
 describe("createPolynomialFinalAdjustmentProposal", () => {
-  it("reduces an architecture-like preliminary set to 5 final monomials without mutating input", () => {
+  it("keeps a valid architecture-like preliminary set at 6 monomials without mutating input", () => {
     const input = [
       monomial({
         id: "mo",
@@ -155,13 +156,13 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
       }),
     ];
 
-    const before = JSON.parse(JSON.stringify(input)) as PolynomialMonomialRecord[];
+    const before = structuredClone(input) as PolynomialMonomialRecord[];
 
     const result = createPolynomialFinalAdjustmentProposal(input);
 
     expect(result.canApply).toBe(true);
-    expect(result.finalMonomials).toHaveLength(5);
-    expect(result.finalMonomials.map((item) => item.code)).toEqual(["MO", "CE", "LA", "BA", "GG"]);
+    expect(result.finalMonomials).toHaveLength(6);
+    expect(result.finalMonomials.map((item) => item.code)).toEqual(["MO", "CE", "LA", "BA", "MA", "GG"]);
     expect(result.finalMonomials.every((item) => Number(item.coefficient) >= 0.05)).toBe(true);
     expect(coefficientSum(result)).toBe("1.000");
     expect(result.mergePlan.length).toBeGreaterThan(0);
@@ -262,5 +263,117 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
     expect(result.finalMonomials.find((item) => item.id === "material-low")?.coefficient).toBe("0.025");
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === "LOW_COEFFICIENT_UNRESOLVED")).toBe(true);
     expect(result.canApply).toBe(false);
+  });
+
+  it("keeps a valid 6-monomial proposal unchanged when all coefficients already satisfy the minimum", () => {
+    const input = [
+      monomial({
+        id: "mo",
+        code: "MO",
+        name: "Mano de obra",
+        costGroupKey: "LABOR",
+        amount: "280",
+        coefficient: "0.280",
+        iuFamily: "LABOR",
+        unifiedIndexCode: "47",
+      }),
+      monomial({
+        id: "cement",
+        code: "CE",
+        name: "Cemento",
+        costGroupKey: "MATERIALS",
+        amount: "140",
+        coefficient: "0.140",
+        iuFamily: "CEMENT",
+        unifiedIndexCode: "21",
+      }),
+      monomial({
+        id: "steel",
+        code: "AC",
+        name: "Acero",
+        costGroupKey: "MATERIALS",
+        amount: "130",
+        coefficient: "0.130",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "3",
+      }),
+      monomial({
+        id: "wood",
+        code: "MA",
+        name: "Madera",
+        costGroupKey: "MATERIALS",
+        amount: "120",
+        coefficient: "0.120",
+        iuFamily: "WOOD",
+        unifiedIndexCode: "43",
+      }),
+      monomial({
+        id: "finish",
+        code: "PI",
+        name: "Pintura",
+        costGroupKey: "MATERIALS",
+        amount: "90",
+        coefficient: "0.090",
+        iuFamily: "FINISHES",
+        unifiedIndexCode: "54",
+      }),
+      monomial({
+        id: "gg",
+        code: "GG",
+        name: "Gastos generales",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "240",
+        coefficient: "0.240",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+    ];
+
+    const result = createPolynomialFinalAdjustmentProposal(input);
+
+    expect(result.canApply).toBe(true);
+    expect(result.finalMonomials).toHaveLength(6);
+    expect(result.finalMonomials.map((item) => item.id)).toEqual(input.map((item) => item.id));
+    expect(result.mergePlan).toEqual([]);
+    expect(result.finalMonomials.every((item) => Number(item.coefficient) >= 0.05)).toBe(true);
+    expect(coefficientSum(result)).toBe("1.000");
+  });
+
+  it("does not classify missing IU families as compatible-family matches", () => {
+    const result = createPolynomialFinalAdjustmentProposal([
+      monomial({
+        id: "unknown-low",
+        code: "U1",
+        name: "Insumo especial",
+        costGroupKey: "MATERIALS",
+        amount: "20",
+        coefficient: "0.020",
+      }),
+      monomial({
+        id: "unknown-high",
+        code: "U2",
+        name: "Otro insumo especial",
+        costGroupKey: "MATERIALS",
+        amount: "480",
+        coefficient: "0.480",
+      }),
+      monomial({
+        id: "known-target",
+        code: "CE",
+        name: "Cemento",
+        costGroupKey: "MATERIALS",
+        amount: "500",
+        coefficient: "0.500",
+        iuFamily: "CEMENT",
+        unifiedIndexCode: "21",
+      }),
+    ]);
+
+    expect(result.mergePlan).toHaveLength(1);
+    expect(result.mergePlan[0]).toMatchObject({
+      sourceMonomialIds: ["unknown-low"],
+      reason: "SAME_BROAD_GROUP",
+    });
+    expect(result.mergePlan[0]?.targetMonomialId).not.toBe("unknown-low");
   });
 });

@@ -72,17 +72,18 @@ function isLocked(monomial: PolynomialMonomialRecord): boolean {
   return monomial.costGroupKey === "LABOR" || monomial.costGroupKey === "GENERAL_EXPENSES_PROFIT";
 }
 
-function clusterIndex(family: string | undefined): number {
-  if (!family) return Number.MAX_SAFE_INTEGER;
+function compatibleFamilyCluster(
+  family: string | undefined,
+): readonly string[] | undefined {
+  if (!family) return undefined;
 
-  const index = compatibleFamilyClusters.findIndex((cluster) => cluster.includes(family));
-  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  return compatibleFamilyClusters.find((cluster) => cluster.includes(family));
 }
 
 function familyOrderWithinSourceCluster(sourceFamily: string | undefined, targetFamily: string | undefined): number {
   if (!sourceFamily || !targetFamily) return Number.MAX_SAFE_INTEGER;
 
-  const cluster = compatibleFamilyClusters.find((candidateCluster) => candidateCluster.includes(sourceFamily));
+  const cluster = compatibleFamilyCluster(sourceFamily);
   if (!cluster) return Number.MAX_SAFE_INTEGER;
 
   const index = cluster.indexOf(targetFamily);
@@ -126,11 +127,13 @@ function affinityScore(
   const sourceFamily = primaryIuFamily(source);
   const targetFamily = primaryIuFamily(target);
   const learnedScore = experienceScore(source, target, hints);
+  const sourceCluster = compatibleFamilyCluster(sourceFamily);
+  const targetCluster = compatibleFamilyCluster(targetFamily);
 
   if (learnedScore > 0) return { score: 1000 + learnedScore, reason: "EXPERIENCE_HINT" };
   if (sourceCode && sourceCode === targetCode) return { score: 900, reason: "SAME_IU_CODE" };
   if (sourceFamily && sourceFamily === targetFamily) return { score: 800, reason: "SAME_IU_FAMILY" };
-  if (clusterIndex(sourceFamily) === clusterIndex(targetFamily)) return { score: 700, reason: "COMPATIBLE_FAMILY" };
+  if (sourceCluster && sourceCluster === targetCluster) return { score: 700, reason: "COMPATIBLE_FAMILY" };
   if (source.costGroupKey === target.costGroupKey) return { score: 600, reason: "SAME_BROAD_GROUP" };
 
   return { score: 100, reason: "HIGHEST_INCIDENCE_FALLBACK" };
@@ -258,14 +261,24 @@ function normalizeCoefficients(
       }),
     );
 
-    const { amountDecimal: _amountDecimal, ...cleanMonomial } = monomial;
-
     return {
-      ...cleanMonomial,
+      id: monomial.id,
+      formulaId: monomial.formulaId,
+      code: monomial.code,
+      name: monomial.name,
+      costGroupKey: monomial.costGroupKey,
       amount,
       coefficient,
+      baseIndexCode: monomial.baseIndexCode,
+      baseIndexName: monomial.baseIndexName,
+      baseIndexValue: monomial.baseIndexValue,
+      adjustmentIndexCode: monomial.adjustmentIndexCode,
+      adjustmentIndexName: monomial.adjustmentIndexName,
+      adjustmentIndexValue: monomial.adjustmentIndexValue,
       sortOrder: index,
       composition,
+      createdAt: monomial.createdAt,
+      updatedAt: monomial.updatedAt,
     };
   });
 }
@@ -358,33 +371,6 @@ export function createPolynomialFinalAdjustmentProposal(
     const source = [...working]
       .filter((monomial) => !isLocked(monomial))
       .sort((left, right) => left.amountDecimal.comparedTo(right.amountDecimal))[0];
-
-    if (!source) break;
-
-    const selection = chooseTarget(
-      source,
-      working.filter((candidate) => candidate.id !== source.id),
-      resolvedOptions.experienceHints ?? [],
-    );
-    if (!selection) break;
-    const { target, reason } = selection;
-
-    mergeIntoTarget(target, source, reason, mergePlan);
-    working.splice(
-      working.findIndex((item) => item.id === source.id),
-      1,
-    );
-  }
-
-  while (working.length > resolvedOptions.minMonomials) {
-    const source = [...working]
-      .filter((monomial) => !isLocked(monomial))
-      .sort((left, right) => {
-        const amountComparison = left.amountDecimal.comparedTo(right.amountDecimal);
-        if (amountComparison !== 0) return amountComparison;
-
-        return left.sortOrder - right.sortOrder;
-      })[0];
 
     if (!source) break;
 
