@@ -376,4 +376,140 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
     });
     expect(result.mergePlan[0]?.targetMonomialId).not.toBe("unknown-low");
   });
+
+  it("uses experience hints as a scoring boost for compatible manual merge patterns", () => {
+    const result = createPolynomialFinalAdjustmentProposal(
+      [
+        monomial({
+          id: "wood-low",
+          code: "MD",
+          name: "Madera menor",
+          costGroupKey: "MATERIALS",
+          amount: "20",
+          coefficient: "0.020",
+          iuFamily: "WOOD",
+          unifiedIndexCode: "43",
+        }),
+        monomial({
+          id: "wood-target",
+          code: "MA",
+          name: "Madera",
+          costGroupKey: "MATERIALS",
+          amount: "180",
+          coefficient: "0.180",
+          iuFamily: "WOOD",
+          unifiedIndexCode: "41",
+        }),
+        monomial({
+          id: "finishes-target",
+          code: "AC",
+          name: "Acabados",
+          costGroupKey: "MATERIALS",
+          amount: "200",
+          coefficient: "0.200",
+          iuFamily: "FINISHES",
+          unifiedIndexCode: "16",
+        }),
+        monomial({
+          id: "mo",
+          code: "MO",
+          name: "Mano de obra",
+          costGroupKey: "LABOR",
+          amount: "300",
+          coefficient: "0.300",
+          iuFamily: "LABOR",
+          unifiedIndexCode: "47",
+        }),
+        monomial({
+          id: "gg",
+          code: "GG",
+          name: "Gastos generales",
+          costGroupKey: "GENERAL_EXPENSES_PROFIT",
+          amount: "300",
+          coefficient: "0.300",
+          iuFamily: "GENERAL_EXPENSES",
+          unifiedIndexCode: "39",
+        }),
+      ],
+      {
+        experienceHints: [
+          {
+            sourceIuFamily: "WOOD",
+            targetIuFamily: "FINISHES",
+            targetCode: "AC",
+            costGroupKey: "MATERIALS",
+            weight: 50,
+            evidenceLabel: "manual-finish-merge",
+          },
+        ],
+      },
+    );
+
+    expect(result.mergePlan).toHaveLength(1);
+    expect(result.mergePlan[0]).toMatchObject({
+      targetMonomialId: "finishes-target",
+      sourceMonomialIds: ["wood-low"],
+      reason: "EXPERIENCE_HINT",
+    });
+    expect(result.finalMonomials.find((item) => item.id === "finishes-target")?.composition.map((row) => row.id)).toContain(
+      "wood-low-component",
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("EXPERIENCE_HINT_USED");
+  });
+
+  it("does not let experience hints merge locked labor or general expenses as source", () => {
+    const result = createPolynomialFinalAdjustmentProposal(
+      [
+        monomial({
+          id: "mo",
+          code: "MO",
+          name: "Mano de obra",
+          costGroupKey: "LABOR",
+          amount: "20",
+          coefficient: "0.020",
+          iuFamily: "LABOR",
+          unifiedIndexCode: "47",
+        }),
+        monomial({
+          id: "materials",
+          code: "MA",
+          name: "Materiales",
+          costGroupKey: "MATERIALS",
+          amount: "530",
+          coefficient: "0.530",
+          iuFamily: "WOOD",
+          unifiedIndexCode: "43",
+        }),
+        monomial({
+          id: "gg",
+          code: "GG",
+          name: "Gastos generales",
+          costGroupKey: "GENERAL_EXPENSES_PROFIT",
+          amount: "450",
+          coefficient: "0.450",
+          iuFamily: "GENERAL_EXPENSES",
+          unifiedIndexCode: "39",
+        }),
+      ],
+      {
+        experienceHints: [
+          {
+            sourceIuFamily: "LABOR",
+            sourceUnifiedIndexCode: "47",
+            targetIuFamily: "WOOD",
+            targetUnifiedIndexCode: "43",
+            targetCode: "MA",
+            costGroupKey: "MATERIALS",
+            weight: 1_000,
+            evidenceLabel: "invalid-locked-merge",
+          },
+        ],
+      },
+    );
+
+    expect(result.finalMonomials.find((item) => item.id === "mo")?.composition).toHaveLength(1);
+    expect(result.finalMonomials.map((item) => item.id)).toContain("mo");
+    expect(result.mergePlan).toEqual([]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("EXPERIENCE_HINT_USED");
+  });
 });
