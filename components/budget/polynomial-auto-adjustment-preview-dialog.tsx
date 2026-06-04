@@ -1,9 +1,11 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import Decimal from "decimal.js";
 
 import { Button } from "@/components/ui/button";
 import type { FinalAdjustmentResult } from "@/lib/polynomial-formula/final-adjustment-types";
+import type { PolynomialMonomialRecord } from "@/types/polynomial-formula";
 
 type PolynomialAutoAdjustmentPreviewDialogProps = {
   open: boolean;
@@ -18,6 +20,8 @@ export function PolynomialAutoAdjustmentPreviewDialog({
   onApply,
   onClose,
 }: PolynomialAutoAdjustmentPreviewDialogProps) {
+  const groupingRows = preview ? buildGroupingRows(preview) : [];
+
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
@@ -68,6 +72,49 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                             <td className="px-4 py-3 font-medium text-slate-900">{monomial.code}</td>
                             <td className="px-4 py-3 text-slate-600">{monomial.name}</td>
                             <td className="px-4 py-3 text-right tabular-nums text-slate-900">{monomial.coefficient}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h2 className="text-sm font-semibold text-slate-950">Agrupamiento propuesto</h2>
+                  <div className="overflow-hidden rounded-2xl border border-slate-200">
+                    <table className="w-full border-collapse text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-medium">Monomio final</th>
+                          <th className="px-4 py-3 text-right font-medium">Coef. final</th>
+                          <th className="px-4 py-3 text-left font-medium">Monomios agrupados</th>
+                          <th className="px-4 py-3 text-right font-medium">Suma origen</th>
+                          <th className="px-4 py-3 text-left font-medium">Motivo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupingRows.map((row) => (
+                          <tr key={row.finalMonomial.id} className="border-t border-slate-200 align-top">
+                            <td className="px-4 py-3 font-medium text-slate-900">
+                              {row.finalMonomial.code} - {row.finalMonomial.name}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-900">
+                              {row.finalMonomial.coefficient}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col gap-1.5">
+                                {row.groupedMonomials.map((monomial) => (
+                                  <span
+                                    key={monomial.id}
+                                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+                                  >
+                                    {monomial.code} - {monomial.name} - Coef. {monomial.coefficient}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-900">{row.originalSum}</td>
+                            <td className="px-4 py-3 text-slate-600">{row.reason}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -134,4 +181,39 @@ export function PolynomialAutoAdjustmentPreviewDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+type GroupingRow = {
+  finalMonomial: PolynomialMonomialRecord;
+  groupedMonomials: PolynomialMonomialRecord[];
+  originalSum: string;
+  reason: string;
+};
+
+function buildGroupingRows(preview: FinalAdjustmentResult): GroupingRow[] {
+  const originalById = new Map(preview.originalMonomials.map((monomial) => [monomial.id, monomial]));
+
+  return preview.finalMonomials.map((finalMonomial) => {
+    const sourceIds = preview.mergePlan
+      .filter((entry) => entry.targetMonomialId === finalMonomial.id)
+      .flatMap((entry) => entry.sourceMonomialIds);
+    const groupedIds = [finalMonomial.id, ...sourceIds];
+    const groupedMonomials = groupedIds
+      .map((monomialId) => originalById.get(monomialId))
+      .filter((monomial): monomial is PolynomialMonomialRecord => Boolean(monomial));
+    const originalSum = groupedMonomials
+      .reduce((sum, monomial) => sum.plus(monomial.coefficient), new Decimal(0))
+      .toDecimalPlaces(3)
+      .toFixed(3);
+    const reasons = preview.mergePlan
+      .filter((entry) => entry.targetMonomialId === finalMonomial.id)
+      .map((entry) => entry.reason);
+
+    return {
+      finalMonomial,
+      groupedMonomials,
+      originalSum,
+      reason: reasons.length > 0 ? [...new Set(reasons)].join(", ") : "Se mantiene",
+    };
+  });
 }

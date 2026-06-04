@@ -39,11 +39,16 @@ describe("PolynomialAutoAdjustmentPreviewDialog", () => {
     });
 
     expect(getText("Ajuste automatico de formula")).toBeTruthy();
-    expect(getText("4 actuales")).toBeTruthy();
+    expect(getText("5 actuales")).toBeTruthy();
     expect(getText("3 propuestos")).toBeTruthy();
     expect(getText("Pintura se agrupa en Acabados por familia compatible.")).toBeTruthy();
     expect(getText("BA")).toBeTruthy();
     expect(getText("Acabados")).toBeTruthy();
+    expect(getText("0.120")).toBeTruthy();
+    expect(getText("Agrupamiento propuesto")).toBeTruthy();
+    expect(getText("BA - Acabados")).toBeTruthy();
+    expect(getText("BA - Baldosa - Coef. 0.090")).toBeTruthy();
+    expect(getText("PI - Pintura - Coef. 0.030")).toBeTruthy();
     expect(getText("0.120")).toBeTruthy();
 
     await act(async () => {
@@ -143,6 +148,7 @@ function createPreview(
     originalMonomials: [
       createMonomial({ id: "mo", code: "MO", name: "Mano de obra", coefficient: "0.390" }),
       createMonomial({ id: "ce", code: "CE", name: "Cemento", coefficient: "0.240" }),
+      createMonomial({ id: "ba", code: "BA", name: "Baldosa", coefficient: "0.090" }),
       createMonomial({ id: "pi", code: "PI", name: "Pintura", coefficient: "0.030" }),
       createMonomial({ id: "gg", code: "GG", name: "Gastos generales", coefficient: "0.340" }),
     ],
