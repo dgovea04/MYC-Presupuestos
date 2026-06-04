@@ -348,6 +348,10 @@ export function createPolynomialFinalAdjustmentProposal(
       continue;
     }
 
+    if (working.length <= resolvedOptions.minMonomials) {
+      break;
+    }
+
     const selection = chooseTarget(
       low,
       working.filter((candidate) => candidate.id !== low.id),

@@ -203,12 +203,32 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
         unifiedIndexCode: "2",
       }),
       monomial({
+        id: "cement",
+        code: "CE",
+        name: "Cemento",
+        costGroupKey: "MATERIALS",
+        amount: "80",
+        coefficient: "0.080",
+        iuFamily: "CEMENT",
+        unifiedIndexCode: "21",
+      }),
+      monomial({
+        id: "finish",
+        code: "ACB",
+        name: "Acabados",
+        costGroupKey: "MATERIALS",
+        amount: "70",
+        coefficient: "0.070",
+        iuFamily: "FINISHES",
+        unifiedIndexCode: "16",
+      }),
+      monomial({
         id: "gg",
         code: "GG",
         name: "Gastos generales",
         costGroupKey: "GENERAL_EXPENSES_PROFIT",
-        amount: "435",
-        coefficient: "0.435",
+        amount: "285",
+        coefficient: "0.285",
         iuFamily: "GENERAL_EXPENSES",
         unifiedIndexCode: "39",
       }),
@@ -265,7 +285,79 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
     expect(result.canApply).toBe(false);
   });
 
-  it("blocks applying proposals below the minimum final monomial count", () => {
+  it("stops merging at the minimum final monomial count when the proposal becomes valid", () => {
+    const result = createPolynomialFinalAdjustmentProposal([
+      monomial({
+        id: "mo",
+        code: "MO",
+        name: "Mano de obra",
+        costGroupKey: "LABOR",
+        amount: "250",
+        coefficient: "0.250",
+        iuFamily: "LABOR",
+        unifiedIndexCode: "47",
+      }),
+      monomial({
+        id: "pipe-small",
+        code: "TU",
+        name: "Tuberia menor",
+        costGroupKey: "MATERIALS",
+        amount: "20",
+        coefficient: "0.020",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "72",
+      }),
+      monomial({
+        id: "pipe",
+        code: "TP",
+        name: "Tuberia PVC",
+        costGroupKey: "MATERIALS",
+        amount: "80",
+        coefficient: "0.080",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "73",
+      }),
+      monomial({
+        id: "valves",
+        code: "VA",
+        name: "Valvulas",
+        costGroupKey: "MATERIALS",
+        amount: "150",
+        coefficient: "0.150",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "74",
+      }),
+      monomial({
+        id: "equipment",
+        code: "EQ",
+        name: "Equipos sanitarios",
+        costGroupKey: "EQUIPMENT",
+        amount: "250",
+        coefficient: "0.250",
+        iuFamily: "EQUIPMENT",
+        unifiedIndexCode: "49",
+      }),
+      monomial({
+        id: "gg",
+        code: "GG",
+        name: "Gastos generales",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "250",
+        coefficient: "0.250",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+    ]);
+
+    expect(result.canApply).toBe(true);
+    expect(result.finalMonomials).toHaveLength(5);
+    expect(result.finalMonomials.every((item) => Number(item.coefficient) >= 0.05)).toBe(true);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
+      "FINAL_MONOMIAL_COUNT_BELOW_MINIMUM",
+    );
+  });
+
+  it("does not merge below the minimum final monomial count", () => {
     const result = createPolynomialFinalAdjustmentProposal([
       monomial({
         id: "mo",
@@ -319,10 +411,13 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
       }),
     ]);
 
-    expect(result.finalMonomials).toHaveLength(4);
+    expect(result.finalMonomials).toHaveLength(5);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
+      "FINAL_MONOMIAL_COUNT_BELOW_MINIMUM",
+    );
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
-        code: "FINAL_MONOMIAL_COUNT_BELOW_MINIMUM",
+        code: "LOW_COEFFICIENT_UNRESOLVED",
         severity: "ERROR",
       }),
     );
@@ -431,6 +526,36 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
         iuFamily: "CEMENT",
         unifiedIndexCode: "21",
       }),
+      monomial({
+        id: "steel",
+        code: "AC",
+        name: "Acero",
+        costGroupKey: "MATERIALS",
+        amount: "200",
+        coefficient: "0.200",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "3",
+      }),
+      monomial({
+        id: "finish",
+        code: "ACB",
+        name: "Acabados",
+        costGroupKey: "MATERIALS",
+        amount: "180",
+        coefficient: "0.180",
+        iuFamily: "FINISHES",
+        unifiedIndexCode: "16",
+      }),
+      monomial({
+        id: "gg",
+        code: "GG",
+        name: "Gastos generales",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "220",
+        coefficient: "0.220",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
     ]);
 
     expect(result.mergePlan).toHaveLength(1);
@@ -493,6 +618,16 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
           coefficient: "0.300",
           iuFamily: "GENERAL_EXPENSES",
           unifiedIndexCode: "39",
+        }),
+        monomial({
+          id: "cement",
+          code: "CE",
+          name: "Cemento",
+          costGroupKey: "MATERIALS",
+          amount: "100",
+          coefficient: "0.100",
+          iuFamily: "CEMENT",
+          unifiedIndexCode: "21",
         }),
       ],
       {
