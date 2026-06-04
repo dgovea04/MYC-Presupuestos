@@ -140,12 +140,9 @@ function chooseTarget(
   source: MutableMonomial,
   candidates: readonly MutableMonomial[],
   hints: readonly FinalAdjustmentExperienceHint[],
-): { target: MutableMonomial; reason: FinalAdjustmentMergeReason } {
-  const unlockedCandidates = candidates.filter((candidate) => !isLocked(candidate));
-  const candidatePool = unlockedCandidates.length > 0 ? unlockedCandidates : candidates;
-
-  const ranked = candidatePool
-    .filter((candidate) => candidate.id !== source.id)
+) : { target: MutableMonomial; reason: FinalAdjustmentMergeReason } | null {
+  const ranked = candidates
+    .filter((candidate) => candidate.id !== source.id && !isLocked(candidate))
     .map((candidate) => {
       const affinity = affinityScore(source, candidate, hints);
 
@@ -178,7 +175,7 @@ function chooseTarget(
 
   const selected = ranked[0];
   if (!selected) {
-    throw new Error("No hay monomios disponibles para agrupar.");
+    return null;
   }
 
   return { target: selected.candidate, reason: selected.reason };
@@ -338,11 +335,15 @@ export function createPolynomialFinalAdjustmentProposal(
       continue;
     }
 
-    const { target, reason } = chooseTarget(
+    const selection = chooseTarget(
       low,
       working.filter((candidate) => candidate.id !== low.id),
       resolvedOptions.experienceHints ?? [],
     );
+    if (!selection) {
+      break;
+    }
+    const { target, reason } = selection;
 
     mergeIntoTarget(target, low, reason, mergePlan);
     addMergeDiagnostics(diagnostics, low, target, reason, resolvedOptions.minCoefficient);
@@ -360,11 +361,13 @@ export function createPolynomialFinalAdjustmentProposal(
 
     if (!source) break;
 
-    const { target, reason } = chooseTarget(
+    const selection = chooseTarget(
       source,
       working.filter((candidate) => candidate.id !== source.id),
       resolvedOptions.experienceHints ?? [],
     );
+    if (!selection) break;
+    const { target, reason } = selection;
 
     mergeIntoTarget(target, source, reason, mergePlan);
     working.splice(
@@ -385,11 +388,13 @@ export function createPolynomialFinalAdjustmentProposal(
 
     if (!source) break;
 
-    const { target, reason } = chooseTarget(
+    const selection = chooseTarget(
       source,
       working.filter((candidate) => candidate.id !== source.id),
       resolvedOptions.experienceHints ?? [],
     );
+    if (!selection) break;
+    const { target, reason } = selection;
 
     mergeIntoTarget(target, source, reason, mergePlan);
     working.splice(

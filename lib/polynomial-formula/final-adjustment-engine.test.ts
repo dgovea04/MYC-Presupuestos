@@ -222,4 +222,45 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
       "2",
     ]);
   });
+
+  it("leaves a low non-locked monomial unresolved when only locked monomials remain as alternatives", () => {
+    const result = createPolynomialFinalAdjustmentProposal([
+      monomial({
+        id: "mo",
+        code: "MO",
+        name: "Mano de obra",
+        costGroupKey: "LABOR",
+        amount: "475",
+        coefficient: "0.475",
+        iuFamily: "LABOR",
+        unifiedIndexCode: "47",
+      }),
+      monomial({
+        id: "gg",
+        code: "GG",
+        name: "Gastos generales",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "500",
+        coefficient: "0.500",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+      monomial({
+        id: "material-low",
+        code: "MT",
+        name: "Material menor",
+        costGroupKey: "MATERIALS",
+        amount: "25",
+        coefficient: "0.025",
+        iuFamily: "OTHERS",
+        unifiedIndexCode: "90",
+      }),
+    ]);
+
+    expect(result.finalMonomials.find((item) => item.id === "mo")?.composition).toHaveLength(1);
+    expect(result.finalMonomials.find((item) => item.id === "gg")?.composition).toHaveLength(1);
+    expect(result.finalMonomials.find((item) => item.id === "material-low")?.coefficient).toBe("0.025");
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === "LOW_COEFFICIENT_UNRESOLVED")).toBe(true);
+    expect(result.canApply).toBe(false);
+  });
 });
