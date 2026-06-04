@@ -265,6 +265,70 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
     expect(result.canApply).toBe(false);
   });
 
+  it("blocks applying proposals below the minimum final monomial count", () => {
+    const result = createPolynomialFinalAdjustmentProposal([
+      monomial({
+        id: "mo",
+        code: "MO",
+        name: "Mano de obra",
+        costGroupKey: "LABOR",
+        amount: "250",
+        coefficient: "0.250",
+        iuFamily: "LABOR",
+        unifiedIndexCode: "47",
+      }),
+      monomial({
+        id: "pipe-small",
+        code: "TU",
+        name: "Tuberia menor",
+        costGroupKey: "MATERIALS",
+        amount: "20",
+        coefficient: "0.020",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "72",
+      }),
+      monomial({
+        id: "pipe",
+        code: "TP",
+        name: "Tuberia PVC",
+        costGroupKey: "MATERIALS",
+        amount: "330",
+        coefficient: "0.330",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "73",
+      }),
+      monomial({
+        id: "valves",
+        code: "VA",
+        name: "Valvulas",
+        costGroupKey: "MATERIALS",
+        amount: "150",
+        coefficient: "0.150",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "74",
+      }),
+      monomial({
+        id: "gg",
+        code: "GG",
+        name: "Gastos generales",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "250",
+        coefficient: "0.250",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+    ]);
+
+    expect(result.finalMonomials).toHaveLength(4);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "FINAL_MONOMIAL_COUNT_BELOW_MINIMUM",
+        severity: "ERROR",
+      }),
+    );
+    expect(result.canApply).toBe(false);
+  });
+
   it("keeps a valid 6-monomial proposal unchanged when all coefficients already satisfy the minimum", () => {
     const input = [
       monomial({

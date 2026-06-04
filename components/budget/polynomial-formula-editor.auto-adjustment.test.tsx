@@ -56,8 +56,8 @@ describe("PolynomialFormulaEditor automatic adjustment", () => {
     });
 
     expect(document.body.textContent).toContain("Ajuste automatico de formula");
-    expect(document.body.textContent).toContain("4 actuales");
-    expect(document.body.textContent).toContain("3 propuestos");
+    expect(document.body.textContent).toContain("6 actuales");
+    expect(document.body.textContent).toContain("5 propuestos");
     expect(container.textContent).toContain("PI");
 
     await act(async () => {
@@ -76,7 +76,7 @@ describe("PolynomialFormulaEditor automatic adjustment", () => {
 
     expect(document.body.textContent).not.toContain("Ajuste automatico de formula");
     expect(container.textContent).not.toContain("PI");
-    expect(container.textContent).toContain("3 monomios");
+    expect(container.textContent).toContain("5 monomios");
     expect(container.textContent).toContain("Ajuste automatico aplicado");
   });
 });
@@ -121,7 +121,7 @@ function section(): PolynomialFormulaSectionData {
     coefficients: [],
     summary: {
       hasFormula: true,
-      monomialCount: 4,
+      monomialCount: 6,
       totalBaseAmount: "1000.0000",
       status: "DRAFT",
     },
@@ -142,8 +142,8 @@ function section(): PolynomialFormulaSectionData {
           code: "MO",
           name: "Mano de obra",
           costGroupKey: "LABOR",
-          amount: "390.0000",
-          coefficient: "0.390",
+          amount: "250.0000",
+          coefficient: "0.250",
           baseIndexCode: "47",
           baseIndexName: "Mano de obra",
           baseIndexValue: "100",
@@ -182,6 +182,62 @@ function section(): PolynomialFormulaSectionData {
           ],
         },
         {
+          id: "cement",
+          formulaId: "formula-1",
+          code: "CE",
+          name: "Cemento",
+          costGroupKey: "MATERIALS",
+          amount: "140.0000",
+          coefficient: "0.140",
+          baseIndexCode: "21",
+          baseIndexName: "Cemento",
+          baseIndexValue: "100",
+          adjustmentIndexCode: null,
+          adjustmentIndexName: null,
+          adjustmentIndexValue: null,
+          sortOrder: 2,
+          composition: [
+            {
+              id: "cement-component",
+              monomialId: "cement",
+              amount: "140.0000",
+              unifiedIndexCode: "21",
+              unifiedIndexName: "Cemento",
+              iuFamily: "CEMENT",
+              participationPercentage: "1",
+              coefficientContribution: "0.140",
+            },
+          ],
+        },
+        {
+          id: "steel",
+          formulaId: "formula-1",
+          code: "AC",
+          name: "Acero",
+          costGroupKey: "MATERIALS",
+          amount: "110.0000",
+          coefficient: "0.110",
+          baseIndexCode: "3",
+          baseIndexName: "Acero",
+          baseIndexValue: "100",
+          adjustmentIndexCode: null,
+          adjustmentIndexName: null,
+          adjustmentIndexValue: null,
+          sortOrder: 3,
+          composition: [
+            {
+              id: "steel-component",
+              monomialId: "steel",
+              amount: "110.0000",
+              unifiedIndexCode: "3",
+              unifiedIndexName: "Acero",
+              iuFamily: "STEEL",
+              participationPercentage: "1",
+              coefficientContribution: "0.110",
+            },
+          ],
+        },
+        {
           id: "finish",
           formulaId: "formula-1",
           code: "AC",
@@ -195,7 +251,7 @@ function section(): PolynomialFormulaSectionData {
           adjustmentIndexCode: null,
           adjustmentIndexName: null,
           adjustmentIndexValue: null,
-          sortOrder: 2,
+          sortOrder: 4,
           composition: [
             {
               id: "finish-component",
@@ -215,15 +271,15 @@ function section(): PolynomialFormulaSectionData {
           code: "GG",
           name: "Gastos generales",
           costGroupKey: "GENERAL_EXPENSES_PROFIT",
-          amount: "260.0000",
-          coefficient: "0.260",
+          amount: "150.0000",
+          coefficient: "0.150",
           baseIndexCode: "39",
           baseIndexName: "Indice general",
           baseIndexValue: "100",
           adjustmentIndexCode: null,
           adjustmentIndexName: null,
           adjustmentIndexValue: null,
-          sortOrder: 3,
+          sortOrder: 5,
           composition: [],
         },
       ],

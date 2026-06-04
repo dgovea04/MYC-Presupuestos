@@ -395,8 +395,8 @@ export function createPolynomialFinalAdjustmentProposal(
   if (finalMonomials.length < resolvedOptions.minMonomials) {
     diagnostics.push({
       code: "FINAL_MONOMIAL_COUNT_BELOW_MINIMUM",
-      severity: "WARNING",
-      message: `La composicion real solo permite ${finalMonomials.length} monomios economicos sin inventar terminos.`,
+      severity: "ERROR",
+      message: `La propuesta conserva ${finalMonomials.length} monomios y no cumple el minimo de ${resolvedOptions.minMonomials}.`,
     });
   }
 
