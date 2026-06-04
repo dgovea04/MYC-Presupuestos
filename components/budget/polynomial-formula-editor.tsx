@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
+import { PolynomialAutoAdjustmentPreviewDialog } from "@/components/budget/polynomial-auto-adjustment-preview-dialog";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-math";
 import { PolynomialKCalculator } from "@/components/budget/polynomial-k-calculator";
@@ -25,9 +26,11 @@ import {
   validatePolynomialFormula,
 } from "@/lib/calculations/polynomial-formula";
 import { getExportDefinition } from "@/lib/exports/definitions";
+import { createPolynomialFinalAdjustmentProposal } from "@/lib/polynomial-formula/final-adjustment-engine";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { PolynomialFormulaSectionData } from "@/types/budget-sections";
 import type { PolynomialCompositionDetailProps } from "@/components/budget/polynomial-composition-detail";
+import type { FinalAdjustmentResult } from "@/lib/polynomial-formula/final-adjustment-types";
 import type {
   AdjustmentCalculationRecord,
   PolynomialFormulaRecord,
@@ -206,6 +209,7 @@ export function PolynomialFormulaEditor({
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [autoAdjustmentPreview, setAutoAdjustmentPreview] = useState<FinalAdjustmentResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApplyingAdjustment, setIsApplyingAdjustment] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -568,6 +572,37 @@ export function PolynomialFormulaEditor({
     });
   }
 
+  function openAutoAdjustmentPreview() {
+    if (!formula) return;
+
+    setError("");
+    setAutoAdjustmentPreview(createPolynomialFinalAdjustmentProposal(formula.monomials));
+  }
+
+  function applyAutoAdjustmentPreview() {
+    if (!autoAdjustmentPreview?.canApply) return;
+
+    setFormula((current) => {
+      if (!current) return current;
+
+      const next = {
+        ...current,
+        monomials: autoAdjustmentPreview.finalMonomials.map((monomial, index) => ({
+          ...monomial,
+          sortOrder: index,
+          composition: monomial.composition.map((row) => ({ ...row })),
+        })),
+      };
+
+      setSummary(createFormulaSummary(next));
+      setKPreview(null);
+      setKPreviewError("");
+      setFeedback("Ajuste automatico aplicado. Revisa indices base antes de guardar.");
+      return next;
+    });
+    setAutoAdjustmentPreview(null);
+  }
+
   return (
     <div className="space-y-5">
       {!formula ? (
@@ -751,6 +786,13 @@ export function PolynomialFormulaEditor({
             currencyDecimals={currencyDecimals}
             onChangeMonomial={updateMonomial}
             onMergeMonomials={mergeMonomials}
+            onAutoAdjustMonomials={openAutoAdjustmentPreview}
+          />
+          <PolynomialAutoAdjustmentPreviewDialog
+            open={autoAdjustmentPreview !== null}
+            preview={autoAdjustmentPreview}
+            onApply={applyAutoAdjustmentPreview}
+            onClose={() => setAutoAdjustmentPreview(null)}
           />
           {showCompositionDetail && DynamicPolynomialCompositionDetail ? (
             <DynamicPolynomialCompositionDetail monomials={formula.monomials} />
