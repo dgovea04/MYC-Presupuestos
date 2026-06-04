@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Combine } from "lucide-react";
+import { Combine, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -73,6 +73,7 @@ export function PolynomialMonomialsTable({
   currencyDecimals,
   onChangeMonomial,
   onMergeMonomials,
+  onAutoAdjustMonomials,
 }: {
   monomials: PolynomialMonomialRecord[];
   baseIndexOptions: UnifiedIndexRecord[];
@@ -80,6 +81,7 @@ export function PolynomialMonomialsTable({
   currencyDecimals: number;
   onChangeMonomial: (monomial: PolynomialMonomialRecord) => void;
   onMergeMonomials?: (targetMonomialId: string, sourceMonomialIds: string[]) => void;
+  onAutoAdjustMonomials?: () => void;
 }) {
   const { isExcelMode } = useAppViewMode();
   const [targetMonomialId, setTargetMonomialId] = useState("");
@@ -148,10 +150,18 @@ export function PolynomialMonomialsTable({
                 Destino: {selectedTarget?.code ?? "sin seleccionar"} - Origenes: {selectedSourceCount}
               </p>
             </div>
-            <Button type="button" size="sm" onClick={mergeSelectedMonomials} disabled={!canMerge}>
-              <Combine className="mr-2 h-4 w-4" />
-              Juntar monomios
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" onClick={mergeSelectedMonomials} disabled={!canMerge}>
+                <Combine className="mr-2 h-4 w-4" />
+                Juntar monomios
+              </Button>
+              {onAutoAdjustMonomials ? (
+                <Button type="button" size="sm" variant="outline" onClick={onAutoAdjustMonomials}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Aplicar ajuste automatico
+                </Button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
