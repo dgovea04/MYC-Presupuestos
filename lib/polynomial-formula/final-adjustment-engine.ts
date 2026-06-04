@@ -30,6 +30,29 @@ const compatibleFamilyClusters: readonly (readonly string[])[] = [
   ["EQUIPMENT"],
   ["OTHERS"],
 ];
+const technicalStopWords = new Set([
+  "DE",
+  "DEL",
+  "LA",
+  "LAS",
+  "EL",
+  "LOS",
+  "PARA",
+  "Y",
+  "A",
+  "EN",
+  "POR",
+  "RED",
+  "REDES",
+]);
+const materialTokenGroups: readonly (readonly string[])[] = [
+  ["PVC", "PVCU", "PVC-O", "PVC-U"],
+  ["CPVC"],
+  ["POLIETILENO", "HDPE", "PE"],
+  ["ACERO"],
+  ["COBRE"],
+  ["CONCRETO"],
+];
 
 type MutableMonomial = PolynomialMonomialRecord & {
   amountDecimal: Decimal;
@@ -117,6 +140,60 @@ function experienceScore(
   }, 0);
 }
 
+function normalizeTechnicalText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
+function technicalTokens(monomial: PolynomialMonomialRecord): Set<string> {
+  const normalized = normalizeTechnicalText(`${monomial.code} ${monomial.name} ${monomial.baseIndexName}`);
+  const tokens = normalized.match(/[A-Z0-9]+/g) ?? [];
+
+  return new Set(tokens.filter((token) => token.length > 1 && !technicalStopWords.has(token)));
+}
+
+function materialGroups(tokens: ReadonlySet<string>): Set<number> {
+  const groups = new Set<number>();
+
+  materialTokenGroups.forEach((group, index) => {
+    if (group.some((token) => tokens.has(token))) {
+      groups.add(index);
+    }
+  });
+
+  return groups;
+}
+
+function hasSharedValue(left: ReadonlySet<number>, right: ReadonlySet<number>): boolean {
+  for (const value of left) {
+    if (right.has(value)) return true;
+  }
+
+  return false;
+}
+
+function technicalNameScore(source: PolynomialMonomialRecord, target: PolynomialMonomialRecord): number {
+  const sourceTokens = technicalTokens(source);
+  const targetTokens = technicalTokens(target);
+  const sourceMaterials = materialGroups(sourceTokens);
+  const targetMaterials = materialGroups(targetTokens);
+  let score = 0;
+
+  for (const token of sourceTokens) {
+    if (targetTokens.has(token)) {
+      score += token.length >= 4 ? 12 : 6;
+    }
+  }
+
+  if (sourceMaterials.size > 0 && targetMaterials.size > 0) {
+    score += hasSharedValue(sourceMaterials, targetMaterials) ? 120 : -80;
+  }
+
+  return score;
+}
+
 function affinityScore(
   source: PolynomialMonomialRecord,
   target: PolynomialMonomialRecord,
@@ -129,14 +206,15 @@ function affinityScore(
   const learnedScore = experienceScore(source, target, hints);
   const sourceCluster = compatibleFamilyCluster(sourceFamily);
   const targetCluster = compatibleFamilyCluster(targetFamily);
+  const nameScore = technicalNameScore(source, target);
 
   if (learnedScore > 0) return { score: 1000 + learnedScore, reason: "EXPERIENCE_HINT" };
-  if (sourceCode && sourceCode === targetCode) return { score: 900, reason: "SAME_IU_CODE" };
-  if (sourceFamily && sourceFamily === targetFamily) return { score: 800, reason: "SAME_IU_FAMILY" };
-  if (sourceCluster && sourceCluster === targetCluster) return { score: 700, reason: "COMPATIBLE_FAMILY" };
-  if (source.costGroupKey === target.costGroupKey) return { score: 600, reason: "SAME_BROAD_GROUP" };
+  if (sourceCode && sourceCode === targetCode) return { score: 900 + nameScore, reason: "SAME_IU_CODE" };
+  if (sourceFamily && sourceFamily === targetFamily) return { score: 800 + nameScore, reason: "SAME_IU_FAMILY" };
+  if (sourceCluster && sourceCluster === targetCluster) return { score: 700 + nameScore, reason: "COMPATIBLE_FAMILY" };
+  if (source.costGroupKey === target.costGroupKey) return { score: 600 + nameScore, reason: "SAME_BROAD_GROUP" };
 
-  return { score: 100, reason: "HIGHEST_INCIDENCE_FALLBACK" };
+  return { score: 100 + nameScore, reason: "HIGHEST_INCIDENCE_FALLBACK" };
 }
 
 function chooseTarget(

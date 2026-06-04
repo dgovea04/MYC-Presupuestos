@@ -357,6 +357,82 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
     );
   });
 
+  it("uses technical name affinity to group sanitary PVC pipes before broader same-family targets", () => {
+    const result = createPolynomialFinalAdjustmentProposal([
+      monomial({
+        id: "mo",
+        code: "MO",
+        name: "Mano de obra",
+        costGroupKey: "LABOR",
+        amount: "250",
+        coefficient: "0.250",
+        iuFamily: "LABOR",
+        unifiedIndexCode: "47",
+      }),
+      monomial({
+        id: "iu-66",
+        code: "IS - IU 66",
+        name: "TUBERIA DE PVC PARA LA RED DE AGUA POTABLE Y ALCANTARILLADO",
+        costGroupKey: "MATERIALS",
+        amount: "33",
+        coefficient: "0.033",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "66",
+      }),
+      monomial({
+        id: "iu-72",
+        code: "IS - IU 72",
+        name: "TUBERIA DE PVC PARA REDES INTERIORES",
+        costGroupKey: "MATERIALS",
+        amount: "28",
+        coefficient: "0.028",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "72",
+      }),
+      monomial({
+        id: "iu-90",
+        code: "IS - IU 90",
+        name: "TUBERIA DE POLIETILENO",
+        costGroupKey: "MATERIALS",
+        amount: "180",
+        coefficient: "0.180",
+        iuFamily: "SANITARY_INSTALLATIONS",
+        unifiedIndexCode: "90",
+      }),
+      monomial({
+        id: "equipment",
+        code: "EQ",
+        name: "Equipos sanitarios",
+        costGroupKey: "EQUIPMENT",
+        amount: "242",
+        coefficient: "0.242",
+        iuFamily: "EQUIPMENT",
+        unifiedIndexCode: "49",
+      }),
+      monomial({
+        id: "gg",
+        code: "GG",
+        name: "Gastos generales",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "267",
+        coefficient: "0.267",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+    ]);
+
+    expect(result.canApply).toBe(true);
+    expect(result.finalMonomials).toHaveLength(5);
+    expect(result.mergePlan).toContainEqual(
+      expect.objectContaining({
+        targetMonomialId: "iu-66",
+        sourceMonomialIds: ["iu-72"],
+      }),
+    );
+    expect(result.finalMonomials.find((item) => item.id === "iu-66")?.coefficient).toBe("0.061");
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("LOW_COEFFICIENT_UNRESOLVED");
+  });
+
   it("does not merge below the minimum final monomial count", () => {
     const result = createPolynomialFinalAdjustmentProposal([
       monomial({
