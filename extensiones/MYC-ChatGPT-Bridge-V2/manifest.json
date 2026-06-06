@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "MYC ChatGPT Bridge V2",
+  "version": "0.2.3",
+  "description": "Bridge local de desarrollo entre tu webapp localhost y ChatGPT, con popup, modo manual/auto, cola, validación JSON y retorno a localhost.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "scripting",
+    "clipboardRead"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://chatgpt.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "MYC ChatGPT Bridge",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "localhost-content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "chatgpt-content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

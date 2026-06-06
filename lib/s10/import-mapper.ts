@@ -1,0 +1,796 @@
+import Decimal from "decimal.js";
+import type { ApuRecord, ApuResourceRecord } from "@/types/apu";
+import type { BudgetItemRecord, BudgetLevelRecord, BudgetRecord } from "@/types/budget";
+import type { ResourceCategory, ResourceRecord } from "@/types/resource";
+import { calculateBudgetItemApu, calculateBudgetRecord } from "@/lib/calculations/budget";
+
+export type S10PresupuestoRow = {
+  CodPresupuesto: string;
+  Descripcion: string;
+  Moneda?: string | null;
+  CostoOferta1?: number | null;
+};
+
+export type S10SubpresupuestoRow = {
+  CodPresupuesto: string;
+  CodSubpresupuesto: string;
+  Descripcion: string;
+};
+
+export type S10PartidaRow = {
+  CodPresupuesto: string;
+  CodSubpresupuesto: string;
+  CodPartida: string;
+  Descripcion: string;
+  CodUnidad?: string | null;
+  Precio1?: number | null;
+  RendimientoMO?: number | null;
+  RendimientoEQ?: number | null;
+};
+
+export type S10SubpresupuestoDetalleRow = {
+  CodPresupuesto: string;
+  CodSubpresupuesto: string;
+  Tipo?: number | null;
+  Item?: string | null;
+  Orden?: string | null;
+  Secuencial?: number | null;
+  Descripcion: string;
+  Unidad?: string | null;
+  Metrado?: number | null;
+  MetradoBase?: number | null;
+  Precio1?: number | null;
+  Parcial1?: number | null;
+  Nivel?: number | null;
+  CodPartida?: string | null;
+  CodPresupuestoPartida?: string | null;
+  PropioPartida?: string | null;
+};
+
+export type S10ApuDetalleRow = {
+  CodPresupuesto: string;
+  CodSubpresupuesto: string;
+  CodPartida: string;
+  CodPresupuestoPartida?: string | null;
+  PropioPartida?: string | null;
+  CodInsumo: string;
+  Descripcion: string;
+  CodUnidad?: string | null;
+  CodIndiceUnificado?: string | null;
+  Cantidad?: number | null;
+  Precio1?: number | null;
+  Parcial1?: number | null;
+  Tipo?: string | null;
+};
+
+export type S10ExportSnapshot = {
+  presupuestos: S10PresupuestoRow[];
+  subpresupuestos: S10SubpresupuestoRow[];
+  partidas: S10PartidaRow[];
+  apuDetalles: S10ApuDetalleRow[];
+  subpresupuestoDetalles?: S10SubpresupuestoDetalleRow[];
+};
+
+export type S10ImportMapperOptions = {
+  budgetCode?: string;
+  companyId?: string;
+  projectId?: string;
+};
+
+export type MycS10ImportDraft = {
+  source: "S10";
+  sourceBudgetCode: string;
+  project: {
+    id: string;
+    name: string;
+    sourceCode: string;
+  };
+  resources: ResourceRecord[];
+  budgets: BudgetRecord[];
+  itemMetadata: S10ItemImportMetadata[];
+  warnings: string[];
+};
+
+export type S10ApuImportStatus = "OK" | "MISSING" | "PRICE_MISMATCH";
+
+export type S10ItemImportMetadata = {
+  budgetItemId: string;
+  apuStatus: S10ApuImportStatus;
+  s10UnitPrice: number;
+  calculatedApuUnitPrice?: number;
+  unitPriceDifference?: number;
+};
+
+const solCurrency = "PEN";
+const moneyDecimals = 4;
+
+const knownS10Units = new Map<string, string>([
+  ["101", "u"],
+  ["103", "ciento"],
+  ["201", "m"],
+  ["202", "km"],
+  ["301", "kg"],
+  ["404", "dia"],
+  ["405", "mes"],
+  ["501", "m2"],
+  ["503", "ha"],
+  ["507", "pie2"],
+  ["601", "m3"],
+  ["604", "l"],
+  ["605", "gal"],
+  ["701", "%"],
+  ["705", "%EQ"],
+  ["707", "%MO"],
+  ["901", "bolsa"],
+  ["903", "plancha"],
+  ["904", "punto"],
+  ["906", "hh"],
+  ["907", "hm"],
+  ["909", "m3-km"],
+  ["917", "est"],
+  ["919", "glb"],
+  ["920", "h-eq"],
+  ["931", "pza"],
+  ["937", "tubo"],
+  ["939", "viaje"],
+]);
+
+export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options: S10ImportMapperOptions = {}): MycS10ImportDraft {
+  const warnings = new Set<string>();
+  const itemMetadata: S10ItemImportMetadata[] = [];
+  const presupuesto = selectPresupuesto(snapshot.presupuestos, options.budgetCode);
+  const sourceBudgetCode = presupuesto.CodPresupuesto;
+  const projectId = options.projectId ?? createId("s10-project", sourceBudgetCode);
+  const currency = normalizeCurrency(presupuesto.Moneda);
+  const subpresupuestos = snapshot.subpresupuestos
+    .filter((subpresupuesto) => subpresupuesto.CodPresupuesto === sourceBudgetCode)
+    .filter((subpresupuesto) => subpresupuesto.CodSubpresupuesto !== "999")
+    .sort((left, right) => left.CodSubpresupuesto.localeCompare(right.CodSubpresupuesto));
+  const partidas = snapshot.partidas.filter((partida) => partida.CodPresupuesto === sourceBudgetCode);
+  const apuDetalles = snapshot.apuDetalles.filter((detalle) => detalle.CodPresupuesto === sourceBudgetCode);
+  const subpresupuestoDetalles = (snapshot.subpresupuestoDetalles ?? []).filter(
+    (detalle) => detalle.CodPresupuesto === sourceBudgetCode && isImportableSubpresupuestoDetalle(detalle),
+  );
+  const resources = createResources(apuDetalles, {
+    companyId: options.companyId,
+    currency,
+    warnings,
+  });
+  const budgets = createBudgets({
+    presupuesto,
+    projectId,
+    currency,
+    subpresupuestos,
+    partidas,
+    subpresupuestoDetalles,
+    apuDetalles,
+    itemMetadata,
+    warnings,
+  });
+
+  if (partidas.length > 0 && subpresupuestoDetalles.length === 0) {
+    warnings.add("No se encontraron metrados directos de partida en el snapshot S10; se uso cantidad 1 en cada item importado.");
+  }
+
+  return {
+    source: "S10",
+    sourceBudgetCode,
+    project: {
+      id: projectId,
+      name: cleanText(presupuesto.Descripcion),
+      sourceCode: sourceBudgetCode,
+    },
+    resources,
+    budgets,
+    itemMetadata,
+    warnings: Array.from(warnings),
+  };
+}
+
+export function normalizeS10Unit(value: string | number | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (raw.length === 0) {
+    return "";
+  }
+
+  return knownS10Units.get(raw) ?? raw;
+}
+
+function selectPresupuesto(presupuestos: S10PresupuestoRow[], budgetCode?: string) {
+  if (budgetCode) {
+    const selected = presupuestos.find((presupuesto) => presupuesto.CodPresupuesto === budgetCode);
+    if (!selected) {
+      throw new Error(`No se encontro el presupuesto S10 ${budgetCode}.`);
+    }
+    return selected;
+  }
+
+  const [selected] = [...presupuestos].sort((left, right) => {
+    const rightCost = toDecimal(right.CostoOferta1).toNumber();
+    const leftCost = toDecimal(left.CostoOferta1).toNumber();
+    return rightCost - leftCost;
+  });
+
+  if (!selected) {
+    throw new Error("El snapshot S10 no contiene presupuestos.");
+  }
+
+  return selected;
+}
+
+function createResources(
+  apuDetalles: S10ApuDetalleRow[],
+  options: { companyId?: string; currency: string; warnings: Set<string> },
+) {
+  const resourcesByCode = new Map<string, ResourceRecord>();
+
+  for (const detalle of apuDetalles) {
+    const code = cleanText(detalle.CodInsumo);
+    if (resourcesByCode.has(code)) {
+      continue;
+    }
+
+    const unit = normalizeKnownUnit(detalle.CodUnidad, options.warnings);
+    const category = inferResourceCategory(detalle, unit);
+    resourcesByCode.set(code, {
+      id: createId("s10-resource", code),
+      companyId: options.companyId ?? null,
+      code,
+      description: cleanText(detalle.Descripcion),
+      category,
+      iu: cleanOptionalText(detalle.CodIndiceUnificado),
+      unit,
+      unitPrice: roundMoney(detalle.Precio1),
+      currency: options.currency,
+      source: "S10",
+    });
+  }
+
+  return Array.from(resourcesByCode.values()).sort((left, right) => left.code.localeCompare(right.code));
+}
+
+function createBudgets(input: {
+  presupuesto: S10PresupuestoRow;
+  projectId: string;
+  currency: string;
+  subpresupuestos: S10SubpresupuestoRow[];
+  partidas: S10PartidaRow[];
+  subpresupuestoDetalles: S10SubpresupuestoDetalleRow[];
+  apuDetalles: S10ApuDetalleRow[];
+  itemMetadata: S10ItemImportMetadata[];
+  warnings: Set<string>;
+}) {
+  const subBudgets = input.subpresupuestos.map((subpresupuesto, index) =>
+    createSubBudgetRecord({
+      presupuesto: input.presupuesto,
+      subpresupuesto,
+      projectId: input.projectId,
+      currency: input.currency,
+      partidas: input.partidas.filter((partida) => partida.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto),
+      subpresupuestoDetalles: input.subpresupuestoDetalles.filter(
+        (detalle) => detalle.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto,
+      ),
+      apuDetalles: input.apuDetalles.filter((detalle) => detalle.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto),
+      itemMetadata: input.itemMetadata,
+      sortOrderOffset: index * 100000,
+      warnings: input.warnings,
+    }),
+  );
+
+  const generalBudget = calculateBudgetRecord({
+    id: createId("s10-budget", input.presupuesto.CodPresupuesto),
+    projectId: input.projectId,
+    parentBudgetId: null,
+    kind: "GENERAL",
+    name: cleanText(input.presupuesto.Descripcion),
+    currency: input.currency,
+    igvRate: 0.18,
+    generalExpensesRate: 0,
+    utilityRate: 0,
+    totalDirectCost: 0,
+    totalGeneralExpenses: 0,
+    totalUtility: 0,
+    totalTax: 0,
+    totalAmount: 0,
+    levels: input.subpresupuestos.map((subpresupuesto, index) => ({
+      id: createId("s10-level", input.presupuesto.CodPresupuesto, subpresupuesto.CodSubpresupuesto),
+      budgetId: createId("s10-budget", input.presupuesto.CodPresupuesto),
+      parentId: null,
+      type: "TITLE",
+      code: subpresupuesto.CodSubpresupuesto,
+      name: cleanText(subpresupuesto.Descripcion),
+      sortOrder: index + 1,
+    })),
+    items: subBudgets.flatMap((budget, index) =>
+      budget.items.map((item, itemIndex) => ({
+        ...item,
+        id: createId("s10-general-item", input.presupuesto.CodPresupuesto, item.code, String(index), String(itemIndex)),
+        budgetId: createId("s10-budget", input.presupuesto.CodPresupuesto),
+        levelId: createId("s10-level", input.presupuesto.CodPresupuesto, input.subpresupuestos[index]?.CodSubpresupuesto ?? "0"),
+        apu: null,
+        sortOrder: index * 100000 + itemIndex + 1,
+      })),
+    ),
+  });
+
+  return [generalBudget, ...subBudgets];
+}
+
+function createSubBudgetRecord(input: {
+  presupuesto: S10PresupuestoRow;
+  subpresupuesto: S10SubpresupuestoRow;
+  projectId: string;
+  currency: string;
+  partidas: S10PartidaRow[];
+  subpresupuestoDetalles: S10SubpresupuestoDetalleRow[];
+  apuDetalles: S10ApuDetalleRow[];
+  itemMetadata: S10ItemImportMetadata[];
+  sortOrderOffset: number;
+  warnings: Set<string>;
+}) {
+  const budgetId = createId("s10-subbudget", input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto);
+  const levels: BudgetLevelRecord[] = [
+    {
+      id: createId("s10-subbudget-level", input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto),
+      budgetId,
+      parentId: null,
+      type: "TITLE",
+      code: input.subpresupuesto.CodSubpresupuesto,
+      name: cleanText(input.subpresupuesto.Descripcion),
+      sortOrder: 1,
+    },
+  ];
+  const items =
+    input.subpresupuestoDetalles.length > 0
+      ? input.subpresupuestoDetalles
+          .slice()
+          .sort(compareSubpresupuestoDetalleRows)
+          .map((detalle, index) =>
+            createBudgetItemFromSubpresupuestoDetalle({
+              detalle,
+              partida: findPartidaForDetalle(input.partidas, detalle),
+              budgetId,
+              levelId: levels[0]?.id ?? null,
+              apuDetalles: input.apuDetalles.filter((apuDetalle) => matchesApuDetalleForSubpresupuestoDetalle(apuDetalle, detalle)),
+              itemMetadata: input.itemMetadata,
+              sortOrder: input.sortOrderOffset + index + 1,
+              currency: input.currency,
+              warnings: input.warnings,
+            }),
+          )
+      : input.partidas.map((partida, index) =>
+          createBudgetItem({
+            partida,
+            budgetId,
+            levelId: levels[0]?.id ?? null,
+            apuDetalles: input.apuDetalles.filter((detalle) => detalle.CodPartida === partida.CodPartida),
+            itemMetadata: input.itemMetadata,
+            sortOrder: input.sortOrderOffset + index + 1,
+            currency: input.currency,
+            warnings: input.warnings,
+          }),
+        );
+
+  return calculateBudgetRecord({
+    id: budgetId,
+    projectId: input.projectId,
+    parentBudgetId: createId("s10-budget", input.presupuesto.CodPresupuesto),
+    kind: "SUB_BUDGET",
+    name: cleanText(input.subpresupuesto.Descripcion),
+    currency: input.currency,
+    igvRate: 0.18,
+    generalExpensesRate: 0,
+    utilityRate: 0,
+    totalDirectCost: 0,
+    totalGeneralExpenses: 0,
+    totalUtility: 0,
+    totalTax: 0,
+    totalAmount: 0,
+    levels,
+    items,
+  });
+}
+
+function createBudgetItemFromSubpresupuestoDetalle(input: {
+  detalle: S10SubpresupuestoDetalleRow;
+  partida?: S10PartidaRow;
+  budgetId: string;
+  levelId: string | null;
+  apuDetalles: S10ApuDetalleRow[];
+  itemMetadata: S10ItemImportMetadata[];
+  sortOrder: number;
+  currency: string;
+  warnings: Set<string>;
+}): BudgetItemRecord {
+  const codPartida = cleanText(input.detalle.CodPartida ?? "");
+  const description = cleanOptionalText(input.detalle.Descripcion) ?? cleanOptionalText(input.partida?.Descripcion) ?? codPartida;
+  const unit = cleanOptionalText(input.detalle.Unidad) ?? input.partida?.CodUnidad;
+  const partida = {
+    CodPresupuesto: input.detalle.CodPresupuesto,
+    CodSubpresupuesto: input.detalle.CodSubpresupuesto,
+    CodPartida: codPartida,
+    Descripcion: description,
+    CodUnidad: unit,
+    Precio1: input.detalle.Precio1 ?? input.partida?.Precio1,
+    RendimientoMO: input.partida?.RendimientoMO,
+    RendimientoEQ: input.partida?.RendimientoEQ,
+  };
+  const item = createBudgetItem({
+    partida,
+    budgetId: input.budgetId,
+    levelId: input.levelId,
+    apuDetalles: input.apuDetalles,
+    sortOrder: input.sortOrder,
+    currency: input.currency,
+    warnings: input.warnings,
+    quantity: roundRate(input.detalle.Metrado),
+  });
+  const partial = roundMoney(input.detalle.Parcial1 ?? new Decimal(item.quantity).times(item.unitPrice));
+  const apuResolution = resolveApuImportStatus(item.apu, item.unitPrice, input.warnings);
+  input.itemMetadata.push({
+    budgetItemId: item.id,
+    apuStatus: apuResolution.status,
+    s10UnitPrice: item.unitPrice,
+    calculatedApuUnitPrice: apuResolution.calculatedApuUnitPrice,
+    unitPriceDifference: apuResolution.unitPriceDifference,
+  });
+
+  return {
+    ...item,
+    code: cleanText(input.detalle.Item ?? codPartida),
+    description,
+    apu: apuResolution.apu,
+    unitPrice: roundMoney(input.detalle.Precio1 ?? item.unitPrice),
+    partial,
+  };
+}
+
+function createBudgetItem(input: {
+  partida: S10PartidaRow;
+  budgetId: string;
+  levelId: string | null;
+  apuDetalles: S10ApuDetalleRow[];
+  itemMetadata?: S10ItemImportMetadata[];
+  sortOrder: number;
+  currency: string;
+  warnings: Set<string>;
+  quantity?: number;
+}): BudgetItemRecord {
+  const itemId = createId(
+    "s10-item",
+    input.partida.CodPresupuesto,
+    input.partida.CodSubpresupuesto,
+    input.partida.CodPartida,
+    String(input.sortOrder),
+  );
+  const unit = normalizeKnownUnit(input.partida.CodUnidad, input.warnings);
+  const quantity = input.quantity ?? 1;
+  const unitPrice = roundMoney(input.partida.Precio1);
+  const apu = createApu({
+    itemId,
+    partida: input.partida,
+    unit,
+    detalles: input.apuDetalles,
+    currency: input.currency,
+    warnings: input.warnings,
+  });
+  input.itemMetadata?.push({
+    budgetItemId: itemId,
+    apuStatus: apu.resources.length > 0 ? "OK" : "MISSING",
+    s10UnitPrice: unitPrice,
+    calculatedApuUnitPrice: apu.resources.length > 0 ? apu.totalUnitCost : undefined,
+    unitPriceDifference: apu.resources.length > 0 ? 0 : undefined,
+  });
+
+  return {
+    id: itemId,
+    budgetId: input.budgetId,
+    levelId: input.levelId,
+    code: cleanText(input.partida.CodPartida),
+    description: cleanText(input.partida.Descripcion),
+    unit,
+    quantity,
+    unitPrice,
+    partial: roundMoney(new Decimal(quantity).times(unitPrice)),
+    sortOrder: input.sortOrder,
+    apu,
+  };
+}
+
+function findPartidaForDetalle(partidas: S10PartidaRow[], detalle: S10SubpresupuestoDetalleRow) {
+  const codPartida = cleanText(detalle.CodPartida ?? "");
+  const codPresupuestoPartida = cleanOptionalText(detalle.CodPresupuestoPartida);
+  const exact = partidas.find(
+    (partida) =>
+      partida.CodPartida === codPartida &&
+      (codPresupuestoPartida == null || partida.CodPresupuesto === codPresupuestoPartida),
+  );
+
+  return exact ?? partidas.find((partida) => partida.CodPartida === codPartida);
+}
+
+function matchesApuDetalleForSubpresupuestoDetalle(apuDetalle: S10ApuDetalleRow, detalle: S10SubpresupuestoDetalleRow) {
+  if (apuDetalle.CodPartida !== detalle.CodPartida) {
+    return false;
+  }
+
+  const detalleCodPresupuestoPartida = cleanOptionalText(detalle.CodPresupuestoPartida);
+  const apuCodPresupuestoPartida = cleanOptionalText(apuDetalle.CodPresupuestoPartida);
+  if (detalleCodPresupuestoPartida != null && apuCodPresupuestoPartida != null && apuCodPresupuestoPartida !== detalleCodPresupuestoPartida) {
+    return false;
+  }
+
+  const detallePropioPartida = cleanOptionalText(detalle.PropioPartida);
+  const apuPropioPartida = cleanOptionalText(apuDetalle.PropioPartida);
+  if (detallePropioPartida != null && apuPropioPartida != null) {
+    return apuPropioPartida === detallePropioPartida;
+  }
+
+  return true;
+}
+
+function resolveApuImportStatus(
+  apu: ApuRecord | null | undefined,
+  s10UnitPrice: number,
+  warnings: Set<string>,
+): {
+  status: S10ApuImportStatus;
+  apu: ApuRecord | null;
+  calculatedApuUnitPrice?: number;
+  unitPriceDifference?: number;
+} {
+  if (!apu) {
+    return { status: "MISSING", apu: null };
+  }
+
+  const calculatedApu = calculateBudgetItemApu(apu);
+  const difference = roundMoney(new Decimal(calculatedApu.totalUnitCost).minus(s10UnitPrice).abs());
+  if (new Decimal(difference).lessThanOrEqualTo(0.01)) {
+    return {
+      status: "OK",
+      apu: calculatedApu,
+      calculatedApuUnitPrice: calculatedApu.totalUnitCost,
+      unitPriceDifference: difference,
+    };
+  }
+
+  warnings.add("Algunos APUs S10 no cuadran con el precio unitario del presupuesto; se preservo el PU/metrado/parcial S10 y se omitio el APU en esas partidas.");
+  return {
+    status: "PRICE_MISMATCH",
+    apu: null,
+    calculatedApuUnitPrice: calculatedApu.totalUnitCost,
+    unitPriceDifference: difference,
+  };
+}
+
+function isImportableSubpresupuestoDetalle(detalle: S10SubpresupuestoDetalleRow) {
+  const codPartida = cleanOptionalText(detalle.CodPartida);
+  if (codPartida == null || codPartida === "999999999999") {
+    return false;
+  }
+
+  if (detalle.Tipo === 0) {
+    return false;
+  }
+
+  return true;
+}
+
+function compareSubpresupuestoDetalleRows(left: S10SubpresupuestoDetalleRow, right: S10SubpresupuestoDetalleRow) {
+  const orderComparison = cleanText(left.Orden ?? "").localeCompare(cleanText(right.Orden ?? ""));
+  if (orderComparison !== 0) {
+    return orderComparison;
+  }
+
+  const itemComparison = cleanText(left.Item ?? "").localeCompare(cleanText(right.Item ?? ""));
+  if (itemComparison !== 0) {
+    return itemComparison;
+  }
+
+  return toDecimal(left.Secuencial).comparedTo(toDecimal(right.Secuencial));
+}
+
+function createApu(input: {
+  itemId: string;
+  partida: S10PartidaRow;
+  unit: string;
+  detalles: S10ApuDetalleRow[];
+  currency: string;
+  warnings: Set<string>;
+}): ApuRecord {
+  const apuId = createId("s10-apu", input.partida.CodPresupuesto, input.partida.CodSubpresupuesto, input.partida.CodPartida);
+  const performance = resolvePerformance(input.partida);
+  const resources = deduplicateApuDetalles(input.detalles).map((detalle, index) =>
+    createApuResource({
+      apuId,
+      detalle,
+      sortOrder: index,
+      currency: input.currency,
+      warnings: input.warnings,
+    }),
+  );
+
+  return {
+    id: apuId,
+    budgetItemId: input.itemId,
+    name: cleanText(input.partida.Descripcion),
+    unit: input.unit,
+    performance,
+    totalUnitCost: roundMoney(input.partida.Precio1),
+    resources,
+  };
+}
+
+function deduplicateApuDetalles(detalles: S10ApuDetalleRow[]) {
+  const byKey = new Map<string, S10ApuDetalleRow>();
+
+  for (const detalle of detalles) {
+    const key = [
+      cleanText(detalle.CodPresupuesto),
+      cleanText(detalle.CodSubpresupuesto),
+      cleanText(detalle.CodPartida),
+      cleanText(detalle.CodPresupuestoPartida ?? ""),
+      cleanText(detalle.PropioPartida ?? ""),
+      cleanText(detalle.CodInsumo),
+      toDecimal(detalle.Cantidad).toFixed(),
+      toDecimal(detalle.Precio1).toFixed(),
+    ].join("|");
+
+    if (!byKey.has(key)) {
+      byKey.set(key, detalle);
+    }
+  }
+
+  return Array.from(byKey.values());
+}
+
+function createApuResource(input: {
+  apuId: string;
+  detalle: S10ApuDetalleRow;
+  sortOrder: number;
+  currency: string;
+  warnings: Set<string>;
+}): ApuResourceRecord {
+  const code = cleanText(input.detalle.CodInsumo);
+  const unit = normalizeKnownUnit(input.detalle.CodUnidad, input.warnings);
+  const category = inferResourceCategory(input.detalle, unit);
+  const resource: ResourceRecord = {
+    id: createId("s10-resource", code),
+    companyId: null,
+    code,
+    description: cleanText(input.detalle.Descripcion),
+    category,
+    iu: cleanOptionalText(input.detalle.CodIndiceUnificado),
+    unit,
+    unitPrice: roundMoney(input.detalle.Precio1),
+    currency: input.currency,
+    source: "S10",
+  };
+
+  return {
+    id: createId("s10-apu-row", input.apuId, code, String(input.sortOrder)),
+    apuId: input.apuId,
+    resourceId: resource.id,
+    resourceType: category,
+    description: resource.description,
+    unit,
+    crew: null,
+    quantity: normalizeS10ApuQuantity(input.detalle.Cantidad, unit),
+    unitPrice: roundRate(input.detalle.Precio1),
+    subtotal: roundMoney(input.detalle.Parcial1 ?? new Decimal(input.detalle.Cantidad ?? 0).times(input.detalle.Precio1 ?? 0)),
+    resource,
+  };
+}
+
+function normalizeS10ApuQuantity(quantity: Decimal.Value | null | undefined, unit: string) {
+  const value = toDecimal(quantity);
+  if (unit.startsWith("%") && value.greaterThan(0) && value.lessThanOrEqualTo(1)) {
+    return roundRate(value.times(100));
+  }
+
+  return roundRate(value);
+}
+
+function inferResourceCategory(detalle: Pick<S10ApuDetalleRow, "CodInsumo" | "Descripcion" | "Tipo">, unit: string): ResourceCategory {
+  const type = normalizeText(detalle.Tipo ?? "");
+  const description = normalizeText(detalle.Descripcion);
+
+  if (type === "MO" || unit.toUpperCase() === "HH" || detalle.CodInsumo.startsWith("0147")) {
+    return "LABOR";
+  }
+
+  if (type === "EQ" || unit.toUpperCase() === "HM") {
+    return "EQUIPMENT";
+  }
+
+  if (type === "HE" || unit.toUpperCase().startsWith("%") || description.includes("HERRAMIENTA")) {
+    return "TOOLS";
+  }
+
+  if (type === "SC" || description.includes("SUBCONTRATO")) {
+    return "SUBCONTRACT";
+  }
+
+  return "MATERIAL";
+}
+
+function normalizeKnownUnit(value: string | number | null | undefined, warnings: Set<string>) {
+  const raw = String(value ?? "").trim();
+  const unit = normalizeS10Unit(raw);
+  if (raw.length > 0 && unit === raw && /^\d+$/.test(raw)) {
+    warnings.add(`Unidad S10 desconocida: ${raw}.`);
+  }
+
+  return unit;
+}
+
+function resolvePerformance(partida: S10PartidaRow) {
+  const laborPerformance = toDecimal(partida.RendimientoMO);
+  if (laborPerformance.greaterThan(0)) {
+    return laborPerformance.toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
+  }
+
+  const equipmentPerformance = toDecimal(partida.RendimientoEQ);
+  if (equipmentPerformance.greaterThan(0)) {
+    return equipmentPerformance.toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
+  }
+
+  return 1;
+}
+
+function normalizeCurrency(value: string | null | undefined) {
+  const normalized = normalizeText(value ?? "");
+  if (normalized.includes("S") || normalized.includes("SOL")) {
+    return solCurrency;
+  }
+
+  if (normalized.includes("US") || normalized.includes("DOLAR")) {
+    return "USD";
+  }
+
+  return solCurrency;
+}
+
+function createId(...parts: string[]) {
+  return parts.map((part) => sanitizeIdPart(part)).filter(Boolean).join("-");
+}
+
+function sanitizeIdPart(value: string) {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+function cleanText(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function cleanOptionalText(value: string | null | undefined) {
+  const cleaned = cleanText(value ?? "");
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function toDecimal(value: Decimal.Value | null | undefined) {
+  return new Decimal(value ?? 0);
+}
+
+function roundMoney(value: Decimal.Value | null | undefined) {
+  return toDecimal(value).toDecimalPlaces(moneyDecimals, Decimal.ROUND_HALF_UP).toNumber();
+}
+
+function roundRate(value: Decimal.Value | null | undefined) {
+  return toDecimal(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
+}

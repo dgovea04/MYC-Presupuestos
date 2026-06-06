@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BotMessageSquare,
@@ -18,10 +18,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  onMYCBridgeResponse,
+  onMYCBridgeState,
+  sendToMYCChatGPTBridge,
+  type MYCBridgeResponse,
+  type MYCBridgeState,
+} from "@/lib/ai/myc-bridge-client";
 import type { AiApuStructuredData, AiContext, AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
 
 type AiAction = "chat" | "apu" | "review" | "autocomplete";
+type AiProvider = "ollama" | "chatgpt-bridge";
 
 type AiResult = AiEndpointResult;
 
@@ -131,7 +139,13 @@ export function AIWorkspace({
   const [loading, setLoading] = useState(false);
   const [lastRequest, setLastRequest] = useState<RequestState | null>(null);
   const [health, setHealth] = useState<AiHealth | null>(null);
+  const [provider, setProvider] = useState<AiProvider>("ollama");
+  const [bridgeState, setBridgeState] = useState<MYCBridgeState | null>(null);
   const [history, setHistory] = useState<AiHistoryEntry[]>(() => readStoredHistory());
+  const pendingBridgeRequestId = useRef<string | null>(null);
+  const pendingBridgeTimeoutId = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const latestBridgeRequest = useRef<RequestState | null>(null);
+  const latestContext = useRef(context);
 
   useEffect(() => {
     void loadHealth();
@@ -140,6 +154,55 @@ export function AIWorkspace({
   useEffect(() => {
     window.localStorage.setItem(AI_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 8)));
   }, [history]);
+
+  useEffect(() => {
+    latestContext.current = context;
+  }, [context]);
+
+  useEffect(() => {
+    const unsubscribeResponse = onMYCBridgeResponse((response) => {
+      if (response.requestId && pendingBridgeRequestId.current && response.requestId !== pendingBridgeRequestId.current) {
+        return;
+      }
+
+      clearPendingBridgeTimeout();
+      pendingBridgeRequestId.current = null;
+      setLoading(false);
+
+      if (response.error) {
+        setError(response.error);
+        latestBridgeRequest.current = null;
+        return;
+      }
+
+      const nextResult = readBridgeAiResult(response);
+      setResult(nextResult);
+
+      const request = latestBridgeRequest.current;
+      latestBridgeRequest.current = null;
+
+      if (request) {
+        setHistory((current) => [
+          {
+            id: `${Date.now()}-${request.action}-chatgpt-bridge`,
+            action: request.action,
+            summary: summarizeRequest(request),
+            context: latestContext.current,
+            result: nextResult,
+            timestamp: new Date().toISOString(),
+          },
+          ...current,
+        ]);
+      }
+    });
+    const unsubscribeState = onMYCBridgeState(setBridgeState);
+
+    return () => {
+      unsubscribeResponse();
+      unsubscribeState();
+      clearPendingBridgeTimeout();
+    };
+  }, []);
 
   const activeConfig = ACTIONS.find((action) => action.id === activeAction) ?? ACTIONS[0];
   const ActiveIcon = activeConfig.icon;
@@ -150,6 +213,12 @@ export function AIWorkspace({
     setError("");
     setResult(null);
     setLastRequest(request);
+    latestBridgeRequest.current = request;
+
+    if (provider === "chatgpt-bridge") {
+      submitBridgeRequest(request);
+      return;
+    }
 
     try {
       const response = await fetch(`/api/ai/${request.action}`, {
@@ -213,8 +282,8 @@ export function AIWorkspace({
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm text-slate-600 shadow-sm">
-                <p className="font-semibold text-slate-900">Modelos esperados</p>
-                <p className="mt-1">llama3.1 · mistral · qwen2.5-coder:7b · deepseek-coder</p>
+                <p className="font-semibold text-slate-900">Proveedor activo</p>
+                <p className="mt-1">{provider === "ollama" ? "Ollama local" : "ChatGPT Bridge"}</p>
               </div>
             </div>
           </CardContent>
@@ -258,22 +327,77 @@ export function AIWorkspace({
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-900">Proveedor de IA</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                    provider === "ollama" ? "border-sky-300 bg-sky-50 text-sky-800" : "border-slate-200 bg-white text-slate-600",
+                  )}
+                  type="button"
+                  onClick={() => {
+                    setProvider("ollama");
+                    pendingBridgeRequestId.current = null;
+                    latestBridgeRequest.current = null;
+                    clearPendingBridgeTimeout();
+                    setLoading(false);
+                    setError("");
+                    setResult(null);
+                  }}
+                >
+                  Ollama local
+                </button>
+                <button
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                    provider === "chatgpt-bridge"
+                      ? "border-sky-300 bg-sky-50 text-sky-800"
+                      : "border-slate-200 bg-white text-slate-600",
+                  )}
+                  type="button"
+                  onClick={() => {
+                    setProvider("chatgpt-bridge");
+                    setError("");
+                    setResult(null);
+                  }}
+                >
+                  ChatGPT Bridge
+                </button>
+              </div>
+              {provider === "chatgpt-bridge" ? (
+                <p className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-800">
+                  Estado: {readBridgeStateLabel(bridgeState)}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-sm font-semibold text-slate-900">Accion activa</p>
               <p className="mt-1 text-sm text-slate-500">
                 Modelo solicitado:{" "}
-                <span className="font-medium text-slate-700">{activeHealth?.requestedModel ?? "Sin datos"}</span>
+                <span className="font-medium text-slate-700">
+                  {provider === "ollama" ? activeHealth?.requestedModel ?? "Sin datos" : "ChatGPT web"}
+                </span>
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Modelo resuelto: <span className="font-medium text-slate-700">{activeHealth?.model ?? "Sin datos"}</span>
+                Modelo resuelto:{" "}
+                <span className="font-medium text-slate-700">
+                  {provider === "ollama" ? activeHealth?.model ?? "Sin datos" : "Pestana ChatGPT"}
+                </span>
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Fallback: <span className="font-medium text-slate-700">{activeHealth?.fallbackUsed ? "Si" : "No"}</span>
+                Fallback:{" "}
+                <span className="font-medium text-slate-700">
+                  {provider === "ollama" ? activeHealth?.fallbackUsed ? "Si" : "No" : "No aplica"}
+                </span>
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 Ultima latencia:{" "}
-                <span className="font-medium text-slate-700">{formatLatency(health?.metrics[activeAction]?.latencyMs)}</span>
+                <span className="font-medium text-slate-700">
+                  {provider === "ollama" ? formatLatency(health?.metrics[activeAction]?.latencyMs) : "Depende de ChatGPT"}
+                </span>
               </p>
-              {health?.metrics[activeAction]?.lastError ? (
+              {provider === "ollama" && health?.metrics[activeAction]?.lastError ? (
                 <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                   {health.metrics[activeAction].lastError}
                 </p>
@@ -370,7 +494,7 @@ export function AIWorkspace({
               <div className="flex flex-wrap items-center gap-3">
                 <Button className="gap-2" disabled={loading} type="submit">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {loading ? "Consultando IA local" : "Enviar a Ollama"}
+                  {readSubmitLabel(provider, loading)}
                 </Button>
                 {lastRequest && error ? (
                   <Button
@@ -385,6 +509,7 @@ export function AIWorkspace({
                 ) : null}
               </div>
             </form>
+
           </CardContent>
         </Card>
 
@@ -423,6 +548,20 @@ export function AIWorkspace({
                     <p className="mt-2 text-xs text-slate-500">
                       Modelo: {entry.result.model} {entry.result.fallbackUsed ? "· fallback activo" : ""}
                     </p>
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setActiveAction(entry.action);
+                        setContext(entry.context);
+                        setResult(entry.result);
+                        setError("");
+                      }}
+                    >
+                      Ver detalle
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -490,6 +629,43 @@ export function AIWorkspace({
       setHealth(null);
     }
   }
+
+  function submitBridgeRequest(request: RequestState) {
+    try {
+      const requestId = sendToMYCChatGPTBridge(buildBridgePrompt(request), {
+        source: "myc-presupuestos",
+        provider: "chatgpt-bridge",
+        action: request.action,
+      });
+
+      pendingBridgeRequestId.current = requestId;
+      clearPendingBridgeTimeout();
+      pendingBridgeTimeoutId.current = window.setTimeout(() => {
+        if (pendingBridgeRequestId.current !== requestId) {
+          return;
+        }
+
+        pendingBridgeRequestId.current = null;
+        latestBridgeRequest.current = null;
+        setLoading(false);
+        setError(
+          "ChatGPT Bridge no devolvio respuesta. Verifica que la extension este cargada, que ChatGPT este abierto y que hayas usado el boton de copiar respuesta en ChatGPT.",
+        );
+      }, 600000);
+    } catch (caughtError) {
+      latestBridgeRequest.current = null;
+      setLoading(false);
+      setError(caughtError instanceof Error ? caughtError.message : "No se pudo enviar la solicitud a ChatGPT Bridge.");
+    }
+  }
+
+  function clearPendingBridgeTimeout() {
+    if (pendingBridgeTimeoutId.current) {
+      window.clearTimeout(pendingBridgeTimeoutId.current);
+      pendingBridgeTimeoutId.current = null;
+    }
+  }
+
 }
 
 function readAiResult(payload: unknown): AiResult {
@@ -513,6 +689,111 @@ function readAiResult(payload: unknown): AiResult {
     latencyMs: typeof payload.latencyMs === "number" ? payload.latencyMs : undefined,
     structuredData: payload.structuredData,
   };
+}
+
+function readBridgeAiResult(response: MYCBridgeResponse): AiResult {
+  const structuredData = response.jsonValid ? response.json : undefined;
+  const answerFromJson = readAnswerFromBridgeJson(structuredData);
+  const answer = answerFromJson ?? response.raw ?? "ChatGPT Bridge devolvio una respuesta sin contenido legible.";
+  const warnings = response.jsonValid === false ? ["La respuesta de ChatGPT Bridge no parece JSON valido."] : [];
+
+  return {
+    answer,
+    model: "ChatGPT Bridge",
+    requestedModel: "ChatGPT web",
+    fallbackUsed: false,
+    warnings,
+    structuredData,
+  };
+}
+
+function readAnswerFromBridgeJson(value: unknown) {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return typeof value.answer === "string" ? value.answer : null;
+}
+
+function buildBridgePrompt(request: RequestState) {
+  return {
+    accion: request.action,
+    instrucciones: [
+      "Eres un asistente experto en presupuestos de construccion, APU, metrados, costos y formula polinomica en Peru.",
+      "Responde de forma tecnica, clara y profesional.",
+      "No modifiques presupuestos automaticamente; entrega propuestas para revision humana.",
+      "Cuando la accion requiera estructura, devuelve solo JSON valido sin markdown.",
+    ],
+    payload: request.payload,
+    formatoSalida: readBridgeOutputFormat(request.action),
+  };
+}
+
+function readBridgeOutputFormat(action: AiAction) {
+  if (action === "apu") {
+    return {
+      answer: "resumen corto",
+      unit: "unidad tecnica",
+      performance: "rendimiento",
+      crew: "cuadrilla",
+      materials: [{ description: "recurso", unit: "unidad", quantity: "cantidad", notes: "supuesto" }],
+      labor: [{ description: "recurso", unit: "unidad", quantity: "cantidad" }],
+      equipment: [{ description: "recurso", unit: "unidad", quantity: "cantidad" }],
+      observations: ["observacion tecnica"],
+      assumptions: ["supuesto para validar"],
+    };
+  }
+
+  if (action === "review") {
+    return {
+      answer: "resumen corto",
+      findings: [
+        {
+          severity: "low|medium|high",
+          type: "duplicate|unit|cost|quantity|consistency|other",
+          description: "hallazgo",
+          impact: "impacto",
+          recommendedAction: "accion recomendada",
+        },
+      ],
+      assumptions: ["supuesto para validar"],
+    };
+  }
+
+  if (action === "autocomplete") {
+    return "Texto completado sin explicaciones adicionales.";
+  }
+
+  return "Respuesta tecnica clara; si incluyes datos estructurados, usa JSON valido.";
+}
+
+function readSubmitLabel(provider: AiProvider, loading: boolean) {
+  if (provider === "chatgpt-bridge") {
+    return loading ? "Consultando ChatGPT" : "Enviar a ChatGPT";
+  }
+
+  return loading ? "Consultando IA local" : "Enviar a Ollama";
+}
+
+function readBridgeStateLabel(state: MYCBridgeState | null) {
+  if (!state) {
+    return "esperando extension";
+  }
+
+  if (state.lastError) {
+    return state.lastError;
+  }
+
+  if (state.status === "waiting_manual_copy") {
+    return "prompt insertado; esperando que copies la respuesta en ChatGPT";
+  }
+
+  const mode = state.mode ? `modo ${state.mode}` : "modo no reportado";
+  const tab = state.hasChatGPTTab === false ? "sin pestana ChatGPT detectada" : "pestana ChatGPT lista";
+  const queueLength = typeof state.queueLength === "number" ? state.queueLength : state.queue?.length;
+  const queue = typeof queueLength === "number" ? `cola ${queueLength}` : "cola sin datos";
+
+  return `${mode}, ${tab}, ${queue}`;
 }
 
 function readAiHealth(payload: unknown): AiHealth {
@@ -640,7 +921,91 @@ function renderStructuredResult(result: AiResult) {
     );
   }
 
-  return null;
+  return <GenericStructuredResult data={structuredData} />;
+}
+
+function GenericStructuredResult({ data }: { data: Record<string, unknown> }) {
+  const entries = Object.entries(data).filter(([key]) => key !== "answer");
+
+  if (!entries.length) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-6">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-950">Detalles de la respuesta</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Informacion estructurada devuelta por ChatGPT Bridge para revisar el criterio tecnico completo.
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {entries.map(([key, value]) => (
+            <GenericStructuredField key={key} label={formatStructuredLabel(key)} value={value} />
+          ))}
+        </div>
+        <details className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-900">Ver respuesta completa</summary>
+          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-5 text-slate-700">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        </details>
+      </CardContent>
+    </Card>
+  );
+}
+
+function GenericStructuredField({ label, value }: { label: string; value: unknown }) {
+  if (Array.isArray(value)) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-semibold text-slate-900">{label}</p>
+        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+          {value.map((item, index) => (
+            <li key={`${label}-${index}`} className="rounded-xl bg-slate-50/80 px-3 py-2">
+              {renderGenericValue(item)}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (isRecord(value)) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 lg:col-span-2">
+        <p className="text-sm font-semibold text-slate-900">{label}</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {Object.entries(value).map(([nestedKey, nestedValue]) => (
+            <GenericStructuredField key={nestedKey} label={formatStructuredLabel(nestedKey)} value={nestedValue} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-900">{label}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{renderGenericValue(value)}</p>
+    </div>
+  );
+}
+
+function renderGenericValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value === null || value === undefined) return "Sin datos";
+  return JSON.stringify(value, null, 2);
+}
+
+function formatStructuredLabel(key: string) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function StructuredMetric({ label, value }: { label: string; value: string }) {

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>MYC Bridge</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <p class="eyebrow">MYC Presupuestos</p>
+        <h1>ChatGPT Bridge</h1>
+      </div>
+      <span id="statusBadge" class="badge">Idle</span>
+    </header>
+
+    <section class="card">
+      <label class="toggle">
+        <input id="autoSend" type="checkbox" />
+        <span>
+          <strong>Auto enviar</strong>
+          <small>Si está apagado, solo pega el prompt para revisión manual.</small>
+        </span>
+      </label>
+
+      <label class="toggle">
+        <input id="requireJson" type="checkbox" />
+        <span>
+          <strong>Exigir JSON</strong>
+          <small>Agrega reglas estrictas para recibir JSON válido.</small>
+        </span>
+      </label>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <span>Prompts en cola</span>
+        <strong id="queueCount">0</strong>
+      </div>
+      <button id="clearQueue">Limpiar cola</button>
+    </section>
+
+    <section class="card">
+      <p class="label">Último resultado</p>
+      <pre id="lastResponse">Sin respuesta todavía.</pre>
+    </section>
+
+    <section class="card error" id="errorBox" hidden>
+      <p class="label">Error</p>
+      <pre id="lastError"></pre>
+    </section>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

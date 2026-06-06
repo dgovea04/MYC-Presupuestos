@@ -192,6 +192,44 @@ Luego abre:
 http://localhost:3000
 ```
 
+## Importacion desde S10 local
+
+Si el usuario ya tiene S10 y SQL Server Express instalados, no es necesario restaurar un `.S2K` manualmente. Puedes leer una base S10 existente, listar sus presupuestos y exportar un snapshot JSON compatible con el importador MYC.
+
+### 1. Detectar bases S10 candidatas
+
+```powershell
+npm.cmd run s10:sqlserver -- --list-databases
+```
+
+Por defecto usa `.\SQLEXPRESS` con seguridad integrada de Windows y `Trust server certificate`. Si tu instancia tiene otro nombre:
+
+```powershell
+npm.cmd run s10:sqlserver -- --list-databases --server localhost\SQLEXPRESS
+```
+
+### 2. Ver presupuestos dentro de una base
+
+```powershell
+npm.cmd run s10:sqlserver -- --list-budgets --database S10_OBRA_MYC
+```
+
+Esto muestra codigos como `0302044` junto con la descripcion del presupuesto.
+
+### 3. Exportar el snapshot JSON
+
+```powershell
+npm.cmd run s10:sqlserver -- --export --database S10_OBRA_MYC --budget 0302044 --out data-for-seed\s10-export-0302044.json
+```
+
+Ese JSON se puede usar en `/imports/s10` para generar el draft y luego importar el proyecto, subpresupuestos, partidas, APUs e insumos a MYC.
+
+Si SQL Server no usa seguridad integrada:
+
+```powershell
+npm.cmd run s10:sqlserver -- --list-databases --user sa --password TU_CLAVE
+```
+
 ## Acceso demo
 
 ```text
@@ -252,6 +290,10 @@ npm.cmd run prisma:migrate
 npm.cmd run prisma:seed
 npm.cmd run prisma:normalize-resource-iu
 npm.cmd run prisma:repair-companies
+npm.cmd run s10:analyze
+npm.cmd run s10:inspect
+npm.cmd run s10:sqlserver
+npm.cmd run s10:draft
 ```
 
 ## Verificacion recomendada

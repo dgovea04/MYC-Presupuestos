@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildTemplateDashboardSummary,
   mapNoteTasksToPendingItems,
+  normalizePolynomialFormulaActivityHref,
   normalizeDashboardActivityEventType,
 } from "@/lib/data/dashboard";
 import type { NoteTaskRecord } from "@/types/notes";
@@ -81,6 +82,31 @@ describe("dashboard template summary", () => {
 });
 
 describe("dashboard activity normalization", () => {
+  it("normalizes polynomial formula activity links from sub-budgets to their general budget route", () => {
+    const routeBudgetIdByBudgetId = new Map([
+      ["general-budget-1", "general-budget-1"],
+      ["sub-budget-1", "general-budget-1"],
+    ]);
+
+    expect(
+      normalizePolynomialFormulaActivityHref(
+        "/budgets/sub-budget-1/polynomial-formula",
+        routeBudgetIdByBudgetId,
+      ),
+    ).toBe("/budgets/general-budget-1/polynomial-formula");
+  });
+
+  it("keeps polynomial formula activity link suffixes when normalizing", () => {
+    const routeBudgetIdByBudgetId = new Map([["sub-budget-1", "general-budget-1"]]);
+
+    expect(
+      normalizePolynomialFormulaActivityHref(
+        "/budgets/sub-budget-1/polynomial-formula?focus=adjustment",
+        routeBudgetIdByBudgetId,
+      ),
+    ).toBe("/budgets/general-budget-1/polynomial-formula?focus=adjustment");
+  });
+
   it("maps metrado duplication activity to the metrado dashboard type", () => {
     expect(
       normalizeDashboardActivityEventType({

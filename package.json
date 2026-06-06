@@ -12,6 +12,10 @@
     "prisma:seed": "node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts",
     "prisma:normalize-resource-iu": "node ./node_modules/tsx/dist/cli.mjs prisma/normalize-resource-iu-codes.ts",
     "prisma:repair-companies": "node ./node_modules/tsx/dist/cli.mjs prisma/repair-company-duplicates.ts",
+    "s10:analyze": "node ./node_modules/tsx/dist/cli.mjs scripts/analyze-s2k.ts",
+    "s10:inspect": "node ./node_modules/tsx/dist/cli.mjs scripts/inspect-s10-sqlserver.ts",
+    "s10:sqlserver": "node ./node_modules/tsx/dist/cli.mjs scripts/s10-sqlserver.ts",
+    "s10:draft": "node ./node_modules/tsx/dist/cli.mjs scripts/create-s10-import-draft.ts",
     "test": "node ./node_modules/vitest/vitest.mjs run"
   },
   "dependencies": {

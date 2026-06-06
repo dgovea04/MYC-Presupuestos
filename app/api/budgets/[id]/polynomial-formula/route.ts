@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
+import { prisma } from "@/lib/db/prisma";
 import {
   generatePolynomialFormulaFromBudget,
   getBudgetPolynomialFormulaSectionData,
@@ -59,12 +60,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = await request.json();
     const payload = polynomialFormulaGenerateSchema.parse(body);
     const formula = await generatePolynomialFormulaFromBudget(id, session.user.id, payload, formulaReadOptions);
+    const activityHref = await getPolynomialFormulaActivityHref(formula.budgetId, session.user.id);
     await recordActivityEvent({
       userId: session.user.id,
       type: "POLYNOMIAL_FORMULA_GENERATED",
       title: "Formula polinomica generada",
       detail: formula.name,
-      href: `/budgets/${id}/polynomial-formula`,
+      href: activityHref,
     });
     return NextResponse.json(formula, { status: 201 });
   } catch (error) {
@@ -80,23 +82,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: Request) {
   const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const { id } = await params;
     const body = await request.json();
     const payload = polynomialFormulaPatchSchema.parse(body);
     const formula = await savePolynomialFormula(payload.formulaId, session.user.id, payload, formulaReadOptions);
+    const activityHref = await getPolynomialFormulaActivityHref(formula.budgetId, session.user.id);
     await recordActivityEvent({
       userId: session.user.id,
       type: "POLYNOMIAL_FORMULA_UPDATED",
       title: "Formula polinomica actualizada",
       detail: formula.name,
-      href: `/budgets/${id}/polynomial-formula`,
+      href: activityHref,
     });
     return NextResponse.json(formula);
   } catch (error) {
@@ -110,4 +112,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 },
     );
   }
+}
+
+async function getPolynomialFormulaActivityHref(budgetId: string, userId: string) {
+  const budget = await prisma.budget.findFirst({
+    where: {
+      id: budgetId,
+      project: {
+        company: {
+          userId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      kind: true,
+      parentBudgetId: true,
+    },
+  });
+
+  const routeBudgetId = budget?.kind === "SUB_BUDGET" && budget.parentBudgetId ? budget.parentBudgetId : budgetId;
+  return `/budgets/${routeBudgetId}/polynomial-formula`;
 }

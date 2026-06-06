@@ -101,6 +101,7 @@ export async function getDashboardStats(userId: string) {
             id: true,
             name: true,
             kind: true,
+            parentBudgetId: true,
             totalAmount: true,
             currency: true,
             updatedAt: true,
@@ -193,6 +194,9 @@ export async function getDashboardStats(userId: string) {
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
   const generalBudgetByProjectId = new Map(generalBudgets.map((budget) => [budget.projectId, budget]));
   const projectNameByProjectId = new Map(projectsWithCompany.map((project) => [project.id, project.name]));
+  const polynomialFormulaRouteBudgetIdByBudgetId = buildPolynomialFormulaRouteBudgetIdByBudgetId(
+    projectsWithCompany.flatMap((project) => project.budgets),
+  );
   const projectNameByBudgetId = new Map(
     projectsWithCompany.flatMap((project) => project.budgets.map((budget) => [budget.id, project.name] as const)),
   );
@@ -251,8 +255,12 @@ export async function getDashboardStats(userId: string) {
       templateMaintenanceEventCount,
     ),
     recentActivity: (activityEvents.length > 0
-      ? activityEvents.map((event) => mapActivityEvent(event, { projectNameByBudgetId, projectNameByProjectId }))
-      : getRecentActivity(projectsWithCompany, generalBudgets, formulas, adjustments)
+      ? activityEvents.map((event) => mapActivityEvent(event, {
+          polynomialFormulaRouteBudgetIdByBudgetId,
+          projectNameByBudgetId,
+          projectNameByProjectId,
+        }))
+      : getRecentActivity(projectsWithCompany, generalBudgets, formulas, adjustments, polynomialFormulaRouteBudgetIdByBudgetId)
     ).slice(0, 25),
   };
 }
@@ -497,6 +505,7 @@ function getRecentActivity(
   generalBudgets: Array<{ id: string; projectId: string; projectName: string; updatedAt: Date }>,
   formulas: Array<{ id: string; projectId: string; projectName: string; updatedAt: Date; budgetId: string }>,
   adjustments: Array<{ id: string; projectId: string; projectName: string; createdAt: Date }>,
+  polynomialFormulaRouteBudgetIdByBudgetId: Map<string, string>,
 ): DashboardActivityItem[] {
   const items: DashboardActivityItem[] = [
     ...projects.map((project) => ({
@@ -523,7 +532,7 @@ function getRecentActivity(
       title: "Formula polinomica actualizada",
       detail: formula.projectName,
       projectName: formula.projectName,
-      href: `/budgets/${formula.budgetId}/polynomial-formula`,
+      href: buildPolynomialFormulaActivityHref(formula.budgetId, polynomialFormulaRouteBudgetIdByBudgetId),
       createdAt: formula.updatedAt,
     })),
     ...adjustments.map((adjustment) => ({
@@ -548,6 +557,7 @@ function mapActivityEvent(event: {
   href: string;
   createdAt: Date;
 }, lookups: {
+  polynomialFormulaRouteBudgetIdByBudgetId: Map<string, string>;
   projectNameByBudgetId: Map<string, string>;
   projectNameByProjectId: Map<string, string>;
 }): DashboardActivityItem {
@@ -557,9 +567,55 @@ function mapActivityEvent(event: {
     title: event.title,
     detail: event.detail,
     projectName: resolveActivityProjectName(event.href, lookups),
-    href: event.href,
+    href: normalizePolynomialFormulaActivityHref(event.href, lookups.polynomialFormulaRouteBudgetIdByBudgetId),
     createdAt: event.createdAt,
   };
+}
+
+export function normalizePolynomialFormulaActivityHref(
+  href: string,
+  polynomialFormulaRouteBudgetIdByBudgetId: Map<string, string>,
+) {
+  const match = href.match(/^\/budgets\/([^/?#]+)\/polynomial-formula(?<suffix>[?#].*)?$/);
+  if (!match) return href;
+
+  const budgetId = match[1];
+  if (!budgetId) return href;
+
+  const routeBudgetId = polynomialFormulaRouteBudgetIdByBudgetId.get(budgetId);
+  if (!routeBudgetId || routeBudgetId === budgetId) return href;
+
+  return `/budgets/${routeBudgetId}/polynomial-formula${match.groups?.suffix ?? ""}`;
+}
+
+function buildPolynomialFormulaActivityHref(
+  budgetId: string,
+  polynomialFormulaRouteBudgetIdByBudgetId: Map<string, string>,
+) {
+  return normalizePolynomialFormulaActivityHref(
+    `/budgets/${budgetId}/polynomial-formula`,
+    polynomialFormulaRouteBudgetIdByBudgetId,
+  );
+}
+
+function buildPolynomialFormulaRouteBudgetIdByBudgetId(
+  budgets: Array<{ id: string; kind: string; parentBudgetId: string | null }>,
+) {
+  const routeBudgetIdByBudgetId = new Map<string, string>();
+  const generalBudgetIds = new Set(budgets.filter((budget) => budget.kind === "GENERAL").map((budget) => budget.id));
+
+  for (const budget of budgets) {
+    if (budget.kind === "GENERAL") {
+      routeBudgetIdByBudgetId.set(budget.id, budget.id);
+      continue;
+    }
+
+    if (budget.parentBudgetId && generalBudgetIds.has(budget.parentBudgetId)) {
+      routeBudgetIdByBudgetId.set(budget.id, budget.parentBudgetId);
+    }
+  }
+
+  return routeBudgetIdByBudgetId;
 }
 
 function resolveActivityProjectName(

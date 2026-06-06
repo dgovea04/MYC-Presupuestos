@@ -7,6 +7,7 @@ import {
   BotMessageSquare,
   FileSpreadsheet,
   FolderKanban,
+  Import,
   Sparkles,
   LayoutDashboard,
   Library,
@@ -45,6 +46,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
   { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
+  { href: "/imports/s10", label: "Importar S10", icon: Import },
   { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
   { href: "/ai", label: "IA Local", icon: BotMessageSquare, requiredFeature: "ai.local" },
   {
