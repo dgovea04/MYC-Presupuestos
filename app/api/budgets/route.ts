@@ -26,6 +26,9 @@ export async function POST(request: Request) {
     revalidatePath("/projects");
     revalidatePath(`/projects/${budget.projectId}`);
     revalidatePath(`/budgets/${budget.id}`);
+    if (budget.parentBudgetId) {
+      revalidatePath(`/budgets/${budget.parentBudgetId}`);
+    }
     return NextResponse.json(budget, { status: 201 });
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);

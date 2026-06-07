@@ -98,6 +98,13 @@ export type S10ImportMapperOptions = {
   budgetCode?: string;
   companyId?: string;
   projectId?: string;
+  defaultRates?: S10ImportDefaultRates;
+};
+
+export type S10ImportDefaultRates = {
+  igvRate: number;
+  generalExpensesRate: number;
+  utilityRate: number;
 };
 
 export type MycS10ImportDraft = {
@@ -208,6 +215,7 @@ export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options
     apuDetalles,
     pieSubpresupuestos,
     resultadoPieSubpresupuestos,
+    defaultRates: options.defaultRates,
     itemMetadata,
     warnings,
   });
@@ -304,6 +312,7 @@ function createBudgets(input: {
   apuDetalles: S10ApuDetalleRow[];
   pieSubpresupuestos: S10PieSubpresupuestoRow[];
   resultadoPieSubpresupuestos: S10ResultadoPieSubpresupuestoRow[];
+  defaultRates?: S10ImportDefaultRates;
   itemMetadata: S10ItemImportMetadata[];
   warnings: Set<string>;
 }) {
@@ -325,6 +334,7 @@ function createBudgets(input: {
       ),
       itemMetadata: input.itemMetadata,
       sortOrderOffset: index * 100000,
+      defaultRates: input.defaultRates,
       warnings: input.warnings,
     }),
   );
@@ -335,7 +345,7 @@ function createBudgets(input: {
     pieSubpresupuestos: input.pieSubpresupuestos,
     resultadoPieSubpresupuestos: input.resultadoPieSubpresupuestos,
   });
-  const generalRates = inferRatesFromResultadoPie(generalPieRows.resultadoRows);
+  const generalRates = inferRatesFromResultadoPie(generalPieRows.resultadoRows, input.defaultRates);
   const generalBudget = calculateBudgetRecord({
     id: createId("s10-budget", input.presupuesto.CodPresupuesto),
     projectId: input.projectId,
@@ -399,6 +409,7 @@ function createSubBudgetRecord(input: {
   resultadoPieSubpresupuestos: S10ResultadoPieSubpresupuestoRow[];
   itemMetadata: S10ItemImportMetadata[];
   sortOrderOffset: number;
+  defaultRates?: S10ImportDefaultRates;
   warnings: Set<string>;
 }): S10SubBudgetRecordWithPie {
   const budgetId = createId("s10-subbudget", input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto);
@@ -444,7 +455,7 @@ function createSubBudgetRecord(input: {
           }),
         );
 
-  const rates = inferRatesFromResultadoPie(input.resultadoPieSubpresupuestos);
+  const rates = inferRatesFromResultadoPie(input.resultadoPieSubpresupuestos, input.defaultRates);
   return {
     ...calculateBudgetRecord({
     id: budgetId,
@@ -667,17 +678,18 @@ function selectGeneralPieRows(input: {
   return { pieRows: comodinPieRows, resultadoRows: comodinResultadoRows };
 }
 
-function inferRatesFromResultadoPie(rows: S10ResultadoPieSubpresupuestoRow[]) {
+function inferRatesFromResultadoPie(rows: S10ResultadoPieSubpresupuestoRow[], defaultRates?: S10ImportDefaultRates) {
   const directCost = findPieValueByKind(rows, "direct");
   const subtotal = findPieValueByKind(rows, "subtotal");
-  const generalExpenses = findPieValueByKind(rows, "generalExpenses");
-  const utility = findPieValueByKind(rows, "utility");
-  const igv = findPieValueByKind(rows, "igv");
+  const generalExpenses = findOptionalPieValueByKind(rows, "generalExpenses");
+  const utility = findOptionalPieValueByKind(rows, "utility");
+  const igv = findOptionalPieValueByKind(rows, "igv");
 
   return {
-    generalExpensesRate: divideRate(generalExpenses, directCost),
-    utilityRate: divideRate(utility, directCost),
-    igvRate: divideRate(igv, subtotal) || 0.18,
+    generalExpensesRate:
+      generalExpenses == null ? defaultRates?.generalExpensesRate ?? 0 : divideRate(generalExpenses, directCost),
+    utilityRate: utility == null ? defaultRates?.utilityRate ?? 0 : divideRate(utility, directCost),
+    igvRate: igv == null ? defaultRates?.igvRate ?? 0.18 : divideRate(igv, subtotal) || (defaultRates?.igvRate ?? 0.18),
   };
 }
 
@@ -726,8 +738,15 @@ function createResultadoRowsFromPie(rows: S10PieSubpresupuestoRow[]): S10Resulta
 }
 
 function findPieValueByKind(rows: S10ResultadoPieSubpresupuestoRow[], kind: "direct" | "generalExpenses" | "utility" | "subtotal" | "igv" | "total") {
+  return findOptionalPieValueByKind(rows, kind) ?? 0;
+}
+
+function findOptionalPieValueByKind(
+  rows: S10ResultadoPieSubpresupuestoRow[],
+  kind: "direct" | "generalExpenses" | "utility" | "subtotal" | "igv" | "total",
+) {
   const row = rows.find((entry) => classifyFooterRow(entry.Descripcion, entry.Formula) === kind);
-  return roundMoney(row?.Valor1);
+  return row ? roundMoney(row.Valor1) : null;
 }
 
 function classifyFooterRow(description: string | null | undefined, formula: string | null | undefined) {

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { BudgetFlow } from "@/components/budget/budget-flow";
 import { AppShell } from "@/components/layout/app-shell";
 import { GeneralBudgetOverview } from "@/components/budget/general-budget-overview";
+import { SubBudgetCreateSheet } from "@/components/budget/sub-budget-create-sheet";
 import { SubBudgetDeleteButton } from "@/components/budget/sub-budget-delete-button";
 import { ActionButton } from "@/components/ui/action-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,10 +109,23 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           <section id="subpresupuestos" className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
             <Card className="border-slate-200">
               <CardHeader>
-                <CardTitle>Sub Presupuestos</CardTitle>
-                <CardDescription>
-                  Abre cada Sub Presupuesto para editar partidas, APUs y costos. El total de este presupuesto se consolida automáticamente.
-                </CardDescription>
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle>Sub Presupuestos</CardTitle>
+                    <CardDescription>
+                      Abre cada Sub Presupuesto para editar partidas, APUs y costos. El total de este presupuesto se consolida automáticamente.
+                    </CardDescription>
+                  </div>
+                  <SubBudgetCreateSheet
+                    projectId={project.id}
+                    parentBudgetId={budget.id}
+                    parentBudgetName={budget.name}
+                    currency={budget.currency}
+                    igvRate={budget.igvRate}
+                    generalExpensesRate={budget.generalExpensesRate}
+                    utilityRate={budget.utilityRate}
+                  />
+                </div>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-2">
                 {subBudgets.map((subBudget) => (

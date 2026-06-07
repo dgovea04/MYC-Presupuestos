@@ -12,6 +12,7 @@ import {
 import type { ApuRecord, ApuResourceRecord } from "@/types/apu";
 import type { BudgetRecord } from "@/types/budget";
 import type { ResourceRecord } from "@/types/resource";
+import { getUserSettings } from "@/lib/data/settings";
 
 export type S10ImportPersistenceOptions = S10ImportMapperOptions & {
   companyId: string;
@@ -47,9 +48,15 @@ export async function importS10SnapshotToMyc(
   await assertWithinPlanLimit({ userId, resource: "projects" });
   await assertWithinPlanLimit({ userId, resource: "budgets" });
 
+  const settings = await getUserSettings(userId);
   const draft = createMycImportDraftFromS10(snapshot, {
     budgetCode: options.budgetCode,
     companyId: options.companyId,
+    defaultRates: {
+      igvRate: settings.defaultIgvRate,
+      generalExpensesRate: settings.defaultGeneralExpensesRate,
+      utilityRate: settings.defaultUtilityRate,
+    },
   });
   assertDraftReadyForPersistence(draft);
 

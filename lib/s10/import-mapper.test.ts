@@ -276,6 +276,66 @@ describe("createMycImportDraftFromS10", () => {
     );
   });
 
+  it("falls back to configured rates when S10 footer results omit a percentage", () => {
+    const draft = createMycImportDraftFromS10(
+      {
+        ...fixture,
+        pieSubpresupuestos: [
+          {
+            CodPresupuesto: "0201003",
+            CodSubpresupuesto: "001",
+            Linea: "01",
+            Descripcion: "COSTO DIRECTO",
+            Variable: "NDIRECTO",
+            Formula: "NDIRECTO",
+          },
+          {
+            CodPresupuesto: "0201003",
+            CodSubpresupuesto: "001",
+            Linea: "02",
+            Descripcion: "GASTOS GENERALES",
+            Variable: "GG",
+            Formula: "nDirecto*0.125",
+          },
+        ],
+        resultadoPieSubpresupuestos: [
+          {
+            CodPresupuesto: "0201003",
+            CodSubpresupuesto: "001",
+            Linea: "01",
+            Descripcion: "COSTO DIRECTO",
+            Valor1: 600,
+          },
+          {
+            CodPresupuesto: "0201003",
+            CodSubpresupuesto: "001",
+            Linea: "02",
+            Descripcion: "GASTOS GENERALES",
+            Valor1: 75,
+          },
+        ],
+      },
+      {
+        defaultRates: {
+          generalExpensesRate: 0.1,
+          utilityRate: 0.08,
+          igvRate: 0.18,
+        },
+      },
+    );
+
+    expect(draft.budgets[0]).toMatchObject({
+      generalExpensesRate: 0.125,
+      utilityRate: 0.08,
+      igvRate: 0.18,
+    });
+    expect(draft.budgets[1]).toMatchObject({
+      generalExpensesRate: 0.125,
+      utilityRate: 0.08,
+      igvRate: 0.18,
+    });
+  });
+
   it("can select a specific S10 budget code", () => {
     const draft = createMycImportDraftFromS10(
       {

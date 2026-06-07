@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   apuCreate: vi.fn(),
   apuResourceCreateMany: vi.fn(),
   transaction: vi.fn(),
+  getUserSettings: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -26,6 +27,10 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/lib/billing/entitlements", () => ({
   assertWithinPlanLimit: mocks.assertWithinPlanLimit,
+}));
+
+vi.mock("@/lib/data/settings", () => ({
+  getUserSettings: mocks.getUserSettings,
 }));
 
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
@@ -132,6 +137,11 @@ describe("importS10SnapshotToMyc", () => {
     vi.clearAllMocks();
     mocks.companyFindFirst.mockResolvedValue({ id: "company-1" });
     mocks.assertWithinPlanLimit.mockResolvedValue(undefined);
+    mocks.getUserSettings.mockResolvedValue({
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+    });
     mocks.projectCreate.mockResolvedValue({ id: "project-created", name: "I.E. MARIANO MELGAR - CONSOLIDADO" });
     mocks.resourceFindMany.mockResolvedValue([]);
     mocks.resourceCreate.mockResolvedValue({
@@ -201,6 +211,7 @@ describe("importS10SnapshotToMyc", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           generalExpensesRate: expect.closeTo(0.125, 4),
+          utilityRate: 0.08,
         }),
       }),
     );

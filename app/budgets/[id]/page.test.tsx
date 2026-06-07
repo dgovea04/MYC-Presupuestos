@@ -55,6 +55,10 @@ vi.mock("@/components/budget/sub-budget-delete-button", () => ({
   SubBudgetDeleteButton: ({ subBudgetName }: { subBudgetName: string }) => <button type="button">Eliminar {subBudgetName}</button>,
 }));
 
+vi.mock("@/components/budget/sub-budget-create-sheet", () => ({
+  SubBudgetCreateSheet: ({ parentBudgetName }: { parentBudgetName: string }) => <button type="button">Nuevo Sub Presupuesto {parentBudgetName}</button>,
+}));
+
 vi.mock("@/components/ui/action-button", () => ({
   ActionButton: ({ label }: { label: string }) => <button type="button">{label}</button>,
 }));
