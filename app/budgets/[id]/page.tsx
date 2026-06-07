@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { BudgetFlow } from "@/components/budget/budget-flow";
 import { AppShell } from "@/components/layout/app-shell";
 import { GeneralBudgetOverview } from "@/components/budget/general-budget-overview";
+import { SubBudgetDeleteButton } from "@/components/budget/sub-budget-delete-button";
 import { ActionButton } from "@/components/ui/action-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContextBadge } from "@/components/ui/context-badges";
@@ -15,7 +16,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
 import { getBudgetById, getProjectSubBudgetDetails, getProjectSubBudgetSummaries } from "@/lib/data/budgets";
 import { getCatalogPartidas } from "@/lib/data/partidas";
-import { getProjectById } from "@/lib/data/projects";
+import { getProjectOverviewById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { getUserSettings } from "@/lib/data/settings";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
@@ -41,7 +42,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  const project = await getProjectById(budget.projectId, session.user.id);
+  const project = await getProjectOverviewById(budget.projectId, session.user.id);
 
   if (!project) {
     console.error("BudgetDetailPage project not found", { budgetId: budget.id, projectId: budget.projectId, userId: session.user.id });
@@ -124,10 +125,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                       </div>
                       <ContextBadge label="Sub Presupuesto" tone="slate" />
                     </div>
-                    <div className="mt-4">
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
                       <Link href={`/budgets/${subBudget.id}`}>
                         <ActionButton action="open" label="Abrir Sub Presupuesto" />
                       </Link>
+                      <SubBudgetDeleteButton subBudgetId={subBudget.id} subBudgetName={subBudget.name} />
                     </div>
                   </div>
                 ))}

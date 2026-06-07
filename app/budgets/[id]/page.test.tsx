@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getBudgetTemplateCreationTraceability: vi.fn(),
   getCatalogPartidas: vi.fn(),
   getProjectById: vi.fn(),
+  getProjectOverviewById: vi.fn(),
   getProjectSubBudgetDetails: vi.fn(),
   getProjectSubBudgetSummaries: vi.fn(),
   getResourcesByUser: vi.fn(),
@@ -50,6 +51,10 @@ vi.mock("@/components/budget/general-budget-overview", () => ({
   GeneralBudgetOverview: () => <div data-testid="general-budget-overview" />,
 }));
 
+vi.mock("@/components/budget/sub-budget-delete-button", () => ({
+  SubBudgetDeleteButton: ({ subBudgetName }: { subBudgetName: string }) => <button type="button">Eliminar {subBudgetName}</button>,
+}));
+
 vi.mock("@/components/ui/action-button", () => ({
   ActionButton: ({ label }: { label: string }) => <button type="button">{label}</button>,
 }));
@@ -86,6 +91,7 @@ vi.mock("@/lib/data/partidas", () => ({
 
 vi.mock("@/lib/data/projects", () => ({
   getProjectById: mocks.getProjectById,
+  getProjectOverviewById: mocks.getProjectOverviewById,
 }));
 
 vi.mock("@/lib/data/resources", () => ({
@@ -152,6 +158,13 @@ describe("BudgetDetailPage", () => {
       name: "Proyecto Demo",
       budgets: [],
     });
+    mocks.getProjectOverviewById.mockResolvedValue({
+      id: "project-1",
+      name: "Proyecto Demo",
+      clientName: "Cliente Demo",
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+      budgets: [],
+    });
     mocks.getProjectSubBudgetSummaries.mockResolvedValue([]);
     mocks.getProjectSubBudgetDetails.mockResolvedValue([]);
     mocks.getBudgetTemplateCreationTraceability.mockResolvedValue(null);
@@ -183,6 +196,15 @@ describe("BudgetDetailPage", () => {
       }),
     );
     expect(mocks.notFound).not.toHaveBeenCalled();
+  });
+
+  it("loads the project overview without recreating missing default sub budgets", async () => {
+    await BudgetDetailPage({
+      params: Promise.resolve({ id: "budget-1" }),
+    });
+
+    expect(mocks.getProjectOverviewById).toHaveBeenCalledWith("project-1", "user-1");
+    expect(mocks.getProjectById).not.toHaveBeenCalled();
   });
 
   it("passes template traceability to the budget flow", async () => {

@@ -156,6 +156,126 @@ describe("createMycImportDraftFromS10", () => {
     ]);
   });
 
+  it("imports S10 footer rows and derives rates from ResultadoPieSubpresupuesto", () => {
+    const draft = createMycImportDraftFromS10({
+      ...fixture,
+      presupuestos: [{ ...fixture.presupuestos[0], CostoOferta1: 856.8 }],
+      pieSubpresupuestos: [
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "01",
+          Descripcion: "COSTO DIRECTO",
+          Variable: "NDIRECTO",
+          Formula: "NDIRECTO",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "02",
+          Descripcion: "GASTOS GENERALES (12.5%)",
+          Variable: "GG",
+          Formula: "nDirecto*0.125",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "03",
+          Descripcion: "UTILIDAD (7.5%)",
+          Variable: "UTI",
+          Formula: "nDirecto*0.075",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "05",
+          Descripcion: "SUBTOTAL",
+          Variable: "ST",
+          Formula: "nDirecto+GG+UTI",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "06",
+          Descripcion: "IGV (19%)",
+          Variable: "IGV",
+          Formula: "ST*0.19",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "08",
+          Descripcion: "TOTAL PRESUPUESTO",
+          Variable: "P_T",
+          Formula: "ST+IGV",
+        },
+      ],
+      resultadoPieSubpresupuestos: [
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "01",
+          Descripcion: "COSTO DIRECTO",
+          Valor1: 600,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "02",
+          Descripcion: "GASTOS GENERALES (12.5%)",
+          Valor1: 75,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "03",
+          Descripcion: "UTILIDAD (7.5%)",
+          Valor1: 45,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "05",
+          Descripcion: "SUBTOTAL",
+          Valor1: 720,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "06",
+          Descripcion: "IGV (19%)",
+          Valor1: 136.8,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "08",
+          Descripcion: "TOTAL PRESUPUESTO",
+          Valor1: 856.8,
+        },
+      ],
+    });
+
+    expect(draft.budgets[0]).toMatchObject({
+      generalExpensesRate: 0.125,
+      utilityRate: 0.075,
+      igvRate: 0.19,
+    });
+    expect(draft.budgets[1]).toMatchObject({
+      generalExpensesRate: 0.125,
+      utilityRate: 0.075,
+      igvRate: 0.19,
+    });
+    expect(draft.budgetFooterRows.find((entry) => entry.budgetId === draft.budgets[1]?.id)?.rows).toContainEqual(
+      expect.objectContaining({
+        variable: "GG",
+        description: "GASTOS GENERALES (12.5%)",
+        formula: null,
+        manualValue: 75,
+      }),
+    );
+  });
+
   it("can select a specific S10 budget code", () => {
     const draft = createMycImportDraftFromS10(
       {

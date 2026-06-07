@@ -45,6 +45,9 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
     await deleteBudget(id, session.user.id);
     revalidateBudgetPaths(budget.projectId, id);
+    if (budget.parentBudgetId) {
+      revalidatePath(`/budgets/${budget.parentBudgetId}`);
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo eliminar el presupuesto" }, { status: 400 });

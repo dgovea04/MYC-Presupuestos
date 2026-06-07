@@ -48,6 +48,18 @@ export function calculateBudgetFooterBuilder(input: {
       return cache.get(row.id)!;
     }
 
+    const formula = row.formula?.trim();
+
+    if (!formula && row.manualValue !== 0) {
+      const result = {
+        value: round(row.manualValue, decimals),
+        error: null,
+        isCalculated: false,
+      };
+      cache.set(row.id, result);
+      return result;
+    }
+
     const systemValue = getSystemVariableValue(key);
     if (systemValue !== null) {
       const result = { value: systemValue, error: null, isCalculated: true };
@@ -55,16 +67,26 @@ export function calculateBudgetFooterBuilder(input: {
       return result;
     }
 
-    if (row.formula?.trim()) {
+    if (formula) {
       if (visiting.has(row.id)) {
         return { value: 0, error: "Dependencia circular detectada", isCalculated: true };
       }
 
       visiting.add(row.id);
-      const resolved = evaluateFormula(row.formula.trim());
+      const resolved = evaluateFormula(formula);
       visiting.delete(row.id);
       cache.set(row.id, { ...resolved, isCalculated: true });
       return cache.get(row.id)!;
+    }
+
+    if (row.manualValue !== 0) {
+      const result = {
+        value: round(row.manualValue, decimals),
+        error: null,
+        isCalculated: false,
+      };
+      cache.set(row.id, result);
+      return result;
     }
 
     const result = {
@@ -82,23 +104,24 @@ export function calculateBudgetFooterBuilder(input: {
 
     for (const rawVariable of referencedVariables) {
       const variable = rawVariable.toUpperCase();
+      const referencedRow = rowsByVariable.get(variable);
+      if (referencedRow) {
+        const referencedResult = evaluateRow(referencedRow);
+        if (referencedResult.error) {
+          return { value: 0, error: referencedResult.error };
+        }
+
+        variableValues.set(variable, referencedResult.value);
+        continue;
+      }
+
       const systemValue = getSystemVariableValue(variable);
       if (systemValue !== null) {
         variableValues.set(variable, systemValue);
         continue;
       }
 
-      const referencedRow = rowsByVariable.get(variable);
-      if (!referencedRow) {
-        return { value: 0, error: `Variable no encontrada: ${variable}` };
-      }
-
-      const referencedResult = evaluateRow(referencedRow);
-      if (referencedResult.error) {
-        return { value: 0, error: referencedResult.error };
-      }
-
-      variableValues.set(variable, referencedResult.value);
+      return { value: 0, error: `Variable no encontrada: ${variable}` };
     }
 
     const sanitizedExpression = formula.replace(/[A-Za-z_][A-Za-z0-9_]*/g, (match) => {

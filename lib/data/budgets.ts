@@ -31,6 +31,7 @@ import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
 import { Prisma } from "@prisma/client";
 import type { BudgetLiveUpdateSummary } from "@/lib/client/live-updates";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
+import { getUserSettings } from "@/lib/data/settings";
 
 export async function getBudgetsByUser(userId: string) {
   return prisma.budget.findMany({
@@ -192,6 +193,7 @@ export async function getBudgetHeaderById(id: string, userId: string) {
     select: {
       id: true,
       projectId: true,
+      parentBudgetId: true,
       kind: true,
       name: true,
       currency: true,
@@ -276,19 +278,17 @@ export async function getGeneralBudgetResourceSummary(budgetId: string, userId: 
 export async function getBudgetGeneralExpenses(budgetId: string, userId: string): Promise<GeneralExpenseStructure> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
 
-  await prisma.$transaction(async (tx) => {
-    await ensureBudgetGeneralExpensesTemplate(tx, budgetId);
-  });
-
   const groups = await loadBudgetGeneralExpenseGroups(budgetId);
   const expenses = calculateGeneralExpenseStructure({
     totalDirectCost: decimalToNumber(budget.totalDirectCost),
     groups,
   });
 
-  await prisma.$transaction(async (tx) => {
-    await syncGeneralExpensesRateFromStructure(tx, budget.id, expenses.total);
-  });
+  if (groups.length > 0) {
+    await prisma.$transaction(async (tx) => {
+      await syncGeneralExpensesRateFromStructure(tx, budget.id, expenses.total);
+    });
+  }
 
   return expenses;
 }
@@ -310,12 +310,14 @@ export async function getBudgetFooterStructure(
 ): Promise<BudgetFooterStructure> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
   const expenses = await getBudgetGeneralExpenses(budgetId, userId);
+  const footerGeneralExpensesTotal =
+    expenses.groups.length > 0 ? expenses.total : decimalToNumber(budget.totalGeneralExpenses);
 
   await prisma.$transaction(async (tx) => {
     await cleanupBudgetFooterHeaderArtifacts(tx, budgetId);
     await ensureBudgetFooterTemplate(tx, budgetId, {
       totalDirectCost: decimalToNumber(budget.totalDirectCost),
-      totalGeneralExpenses: expenses.total,
+      totalGeneralExpenses: footerGeneralExpensesTotal,
     });
   });
 
@@ -323,9 +325,9 @@ export async function getBudgetFooterStructure(
   return calculateBudgetFooterBuilder({
     rows,
     totalDirectCost: decimalToNumber(budget.totalDirectCost),
-    totalGeneralExpenses: expenses.total,
+    totalGeneralExpenses: footerGeneralExpensesTotal,
     totalUtility: decimalToNumber(budget.totalUtility),
-    subtotal: decimalToNumber(budget.totalDirectCost) + expenses.total + decimalToNumber(budget.totalUtility),
+    subtotal: decimalToNumber(budget.totalDirectCost) + footerGeneralExpensesTotal + decimalToNumber(budget.totalUtility),
     totalTax: decimalToNumber(budget.totalTax),
     totalAmount: decimalToNumber(budget.totalAmount),
     currencyDecimals,
@@ -843,7 +845,7 @@ export async function createBudget(userIdOrInput: string | BudgetInput, input?: 
     throw new Error("No se recibieron datos para crear el presupuesto");
   }
 
-  const data = budgetSchema.parse(rawInput);
+  const data = budgetSchema.parse(await applyBudgetSettingsDefaults(rawInput, userId));
 
   if (userId) {
     await assertWithinPlanLimit({ userId, resource: "budgets" });
@@ -900,16 +902,49 @@ export async function deleteBudget(id: string, userId: string) {
         },
       },
     },
-    select: { id: true },
+    select: { id: true, parentBudgetId: true },
   });
 
   if (!budget) {
     throw new Error("No tienes permisos para eliminar este presupuesto");
   }
 
-  await prisma.budget.delete({
-    where: { id },
+  await prisma.$transaction(async (tx) => {
+    await tx.budget.delete({
+      where: { id },
+    });
+
+    if (budget.parentBudgetId) {
+      await refreshGeneralBudgetTotals(tx, budget.parentBudgetId);
+    }
   });
+}
+
+async function applyBudgetSettingsDefaults(input: BudgetInput, userId: string | null) {
+  if (!userId) {
+    return input;
+  }
+
+  const inputRecord = input as Record<string, unknown>;
+  const needsRateDefaults =
+    inputRecord.igvRate === undefined ||
+    inputRecord.generalExpensesRate === undefined ||
+    inputRecord.utilityRate === undefined;
+  const needsCurrencyDefault = inputRecord.currency === undefined;
+
+  if (!needsRateDefaults && !needsCurrencyDefault) {
+    return input;
+  }
+
+  const settings = await getUserSettings(userId);
+
+  return {
+    ...inputRecord,
+    currency: inputRecord.currency ?? settings.defaultCurrency,
+    igvRate: inputRecord.igvRate ?? settings.defaultIgvRate,
+    generalExpensesRate: inputRecord.generalExpensesRate ?? settings.defaultGeneralExpensesRate,
+    utilityRate: inputRecord.utilityRate ?? settings.defaultUtilityRate,
+  };
 }
 
 export async function saveBudgetState(id: string, userId: string, budget: BudgetRecord) {
@@ -1239,18 +1274,18 @@ async function refreshGeneralBudgetTotals(
 
   const consolidated = generalBudget.childBudgets.reduce(
     (totals, childBudget) => ({
-      totalDirectCost: totals.totalDirectCost + Number(childBudget.totalDirectCost),
-      totalGeneralExpenses: totals.totalGeneralExpenses + Number(childBudget.totalGeneralExpenses),
-      totalUtility: totals.totalUtility + Number(childBudget.totalUtility),
-      totalTax: totals.totalTax + Number(childBudget.totalTax),
-      totalAmount: totals.totalAmount + Number(childBudget.totalAmount),
+      totalDirectCost: totals.totalDirectCost.plus(childBudget.totalDirectCost),
+      totalGeneralExpenses: totals.totalGeneralExpenses.plus(childBudget.totalGeneralExpenses),
+      totalUtility: totals.totalUtility.plus(childBudget.totalUtility),
+      totalTax: totals.totalTax.plus(childBudget.totalTax),
+      totalAmount: totals.totalAmount.plus(childBudget.totalAmount),
     }),
     {
-      totalDirectCost: 0,
-      totalGeneralExpenses: 0,
-      totalUtility: 0,
-      totalTax: 0,
-      totalAmount: 0,
+      totalDirectCost: new Prisma.Decimal(0),
+      totalGeneralExpenses: new Prisma.Decimal(0),
+      totalUtility: new Prisma.Decimal(0),
+      totalTax: new Prisma.Decimal(0),
+      totalAmount: new Prisma.Decimal(0),
     },
   );
 
@@ -1559,6 +1594,7 @@ async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
       name: true,
       currency: true,
       totalDirectCost: true,
+      totalGeneralExpenses: true,
       totalUtility: true,
       totalTax: true,
       totalAmount: true,

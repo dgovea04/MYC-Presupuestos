@@ -95,6 +95,7 @@ export function GeneralExpensesManager({
 
   const serializedDraft = useMemo(() => JSON.stringify(getStructureSavePayload(structure)), [structure]);
   const lastSavedPayload = useRef(serializedDraft);
+  const hasGeneratedTemplate = structure.groups.length > 0;
 
   useEffect(() => {
     if (!isHydrated.current) {
@@ -225,6 +226,22 @@ export function GeneralExpensesManager({
     }
 
     return saveStructure();
+  }
+
+  async function generateTemplateTables() {
+    const result = await persist(
+      `/api/budgets/${budgetId}/general-expenses`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initialize: true }),
+      },
+      "template",
+    );
+
+    if (result) {
+      setFeedback("Tablas generadas desde la plantilla del sistema.");
+    }
   }
 
   function updateItem(itemId: string, changes: Partial<GeneralExpenseItemInput>) {
@@ -383,6 +400,18 @@ export function GeneralExpensesManager({
                 definition={getExportDefinition("general_expenses")}
                 targetId={budgetId}
               />
+              {!hasGeneratedTemplate ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void generateTemplateTables()}
+                  disabled={pendingKeys.includes("template")}
+                  className="h-8 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Generar tablas
+                </Button>
+              ) : null}
               <ToolbarIconButton
                 label={saving ? "Guardando" : "Guardar ahora"}
                 onClick={() => void saveStructure()}
@@ -422,6 +451,29 @@ export function GeneralExpensesManager({
       </div>
 
       <div className="space-y-5">
+        {!hasGeneratedTemplate ? (
+          <section className={cn("border bg-white p-6", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="max-w-2xl">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Plantilla opcional</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-900">No hay tablas de gastos generales generadas</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  El presupuesto puede conservar el gasto general importado en el pie sin crear el desagregado de gastos fijos y variables. Genera las tablas solo cuando necesites trabajar el detalle.
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => void generateTemplateTables()}
+                disabled={pendingKeys.includes("template")}
+                className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Generar tablas desde plantilla
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
         {preview.groups.map((group) => (
           <section
             key={group.id}

@@ -10,6 +10,9 @@ SELECT
       Descripcion,
       Fecha,
       CostoOferta1,
+      CostoDirectoOferta1,
+      CostoIndirectoOferta1,
+      CostoOfertaTotal1,
       CodMoneda1,
       DecimalesMetrado,
       DecimalesPrecioUnitario
@@ -187,5 +190,34 @@ SELECT
     ) detalle
     ORDER BY detalle.CodSubpresupuesto, detalle.CodPartida, detalle.CodInsumo
     FOR JSON PATH
-  )) AS apuDetalles
+  )) AS apuDetalles,
+  JSON_QUERY((
+    SELECT
+      CodPresupuesto,
+      CodSubpresupuesto,
+      Linea,
+      Descripcion,
+      Variable,
+      Formula,
+      Omitido
+    FROM dbo.PieSubpresupuesto
+    WHERE CodPresupuesto = @CodPresupuesto
+    ORDER BY CodSubpresupuesto, Linea
+    FOR JSON PATH
+  )) AS pieSubpresupuestos,
+  JSON_QUERY((
+    SELECT
+      CodPresupuesto,
+      CodSubpresupuesto,
+      Linea,
+      Descripcion,
+      Formula,
+      Valor1,
+      Valor2,
+      ValorConFactor
+    FROM dbo.ResultadoPieSubpresupuesto
+    WHERE CodPresupuesto = @CodPresupuesto
+    ORDER BY CodSubpresupuesto, Linea
+    FOR JSON PATH
+  )) AS resultadoPieSubpresupuestos
 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   budgetCreate: vi.fn(),
   budgetLevelCreateMany: vi.fn(),
   budgetItemCreateMany: vi.fn(),
+  budgetFooterRowCreateMany: vi.fn(),
   apuCreate: vi.fn(),
   apuResourceCreateMany: vi.fn(),
   transaction: vi.fn(),
@@ -90,6 +91,40 @@ const snapshot: S10ExportSnapshot = {
       Tipo: "MO",
     },
   ],
+  pieSubpresupuestos: [
+    {
+      CodPresupuesto: "0302044",
+      CodSubpresupuesto: "001",
+      Linea: "01",
+      Descripcion: "COSTO DIRECTO",
+      Variable: "NDIRECTO",
+      Formula: "NDIRECTO",
+    },
+    {
+      CodPresupuesto: "0302044",
+      CodSubpresupuesto: "001",
+      Linea: "02",
+      Descripcion: "GASTOS GENERALES (12.5%)",
+      Variable: "GG",
+      Formula: "nDirecto*0.125",
+    },
+  ],
+  resultadoPieSubpresupuestos: [
+    {
+      CodPresupuesto: "0302044",
+      CodSubpresupuesto: "001",
+      Linea: "01",
+      Descripcion: "COSTO DIRECTO",
+      Valor1: 68.25,
+    },
+    {
+      CodPresupuesto: "0302044",
+      CodSubpresupuesto: "001",
+      Linea: "02",
+      Descripcion: "GASTOS GENERALES (12.5%)",
+      Valor1: 8.53,
+    },
+  ],
 };
 
 describe("importS10SnapshotToMyc", () => {
@@ -114,6 +149,7 @@ describe("importS10SnapshotToMyc", () => {
       .mockResolvedValueOnce({ id: "budget-sub", kind: "SUB_BUDGET" });
     mocks.budgetLevelCreateMany.mockResolvedValue({ count: 1 });
     mocks.budgetItemCreateMany.mockResolvedValue({ count: 1 });
+    mocks.budgetFooterRowCreateMany.mockResolvedValue({ count: 2 });
     mocks.apuCreate.mockResolvedValue({ id: "apu-created" });
     mocks.apuResourceCreateMany.mockResolvedValue({ count: 1 });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
@@ -123,6 +159,7 @@ describe("importS10SnapshotToMyc", () => {
         budget: { create: mocks.budgetCreate },
         budgetLevel: { createMany: mocks.budgetLevelCreateMany },
         budgetItem: { createMany: mocks.budgetItemCreateMany },
+        budgetFooterRow: { createMany: mocks.budgetFooterRowCreateMany },
         apu: { create: mocks.apuCreate },
         apuResource: { createMany: mocks.apuResourceCreateMany },
       }),
@@ -159,6 +196,25 @@ describe("importS10SnapshotToMyc", () => {
       }),
     });
     expect(mocks.budgetCreate).toHaveBeenCalledTimes(2);
+    expect(mocks.budgetCreate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          generalExpensesRate: expect.closeTo(0.125, 4),
+        }),
+      }),
+    );
+    expect(mocks.budgetFooterRowCreateMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          budgetId: "budget-sub",
+          variable: "GG",
+          description: "GASTOS GENERALES (12.5%)",
+          formula: null,
+          manualValue: 8.53,
+        }),
+      ]),
+    });
     expect(mocks.budgetItemCreateMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({

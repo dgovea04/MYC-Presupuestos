@@ -77,6 +77,7 @@ export async function importS10SnapshotToMyc(
       data: createBudgetCreateData(generalDraftBudget, project.id, null),
     });
     budgetIdsByDraftId.set(generalDraftBudget.id, generalBudget.id);
+    await persistBudgetFooterRows(tx, draft, generalDraftBudget.id, generalBudget.id);
 
     const subBudgetIds: string[] = [];
     for (const budget of draft.budgets.filter((entry) => entry.kind === "SUB_BUDGET")) {
@@ -87,6 +88,7 @@ export async function importS10SnapshotToMyc(
       subBudgetIds.push(persistedBudget.id);
 
       await persistBudgetStructure(tx, budget, persistedBudget.id, resourceIdsByDraftId, levelIdsByDraftId, itemIdsByDraftId);
+      await persistBudgetFooterRows(tx, draft, budget.id, persistedBudget.id);
     }
 
     const itemCount = draft.budgets
@@ -114,6 +116,32 @@ function assertDraftReadyForPersistence(draft: MycS10ImportDraft) {
   if (nonOkApuCount > 0) {
     throw new Error(`El draft S10 tiene ${nonOkApuCount} partidas con APU pendiente o inconsistente.`);
   }
+}
+
+async function persistBudgetFooterRows(
+  tx: Prisma.TransactionClient,
+  draft: MycS10ImportDraft,
+  draftBudgetId: string,
+  persistedBudgetId: string,
+) {
+  const footerRows = draft.budgetFooterRows.find((entry) => entry.budgetId === draftBudgetId)?.rows ?? [];
+  if (footerRows.length === 0) {
+    return;
+  }
+
+  await tx.budgetFooterRow.createMany({
+    data: footerRows.map((row) => ({
+      id: randomUUID(),
+      budgetId: persistedBudgetId,
+      variable: row.variable,
+      description: row.description,
+      formula: row.formula ?? null,
+      manualValue: row.manualValue,
+      iu: null,
+      highlight: row.highlight,
+      sortOrder: row.sortOrder,
+    })),
+  });
 }
 
 async function persistResources(

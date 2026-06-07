@@ -65,4 +65,45 @@ describe("calculateBudgetFooterBuilder", () => {
       40334.69,
     ]);
   });
+
+  it("prefers imported manual values over system variables and formulas", () => {
+    const result = calculateBudgetFooterBuilder({
+      totalDirectCost: 1000,
+      totalGeneralExpenses: 100,
+      totalUtility: 50,
+      totalTax: 207,
+      currencyDecimals: 2,
+      rows: [
+        { id: "1", variable: "CD", description: "Costo directo", formula: null, manualValue: 1000, iu: null, highlight: true, sortOrder: 0 },
+        { id: "2", variable: "PGG", description: "Gastos generales importados", formula: null, manualValue: 125, iu: null, highlight: false, sortOrder: 1 },
+        { id: "3", variable: "UTI", description: "Utilidad importada", formula: null, manualValue: 75, iu: null, highlight: false, sortOrder: 2 },
+        { id: "4", variable: "ST", description: "Subtotal", formula: "CD+PGG+UTI", manualValue: 0, iu: null, highlight: true, sortOrder: 3 },
+        { id: "5", variable: "IGV", description: "IGV importado", formula: null, manualValue: 228, iu: null, highlight: false, sortOrder: 4 },
+        { id: "6", variable: "TOTAL", description: "Total", formula: "ST+IGV", manualValue: 0, iu: null, highlight: true, sortOrder: 5 },
+      ],
+    });
+
+    expect(result.rows.map((row) => row.value)).toEqual([1000, 125, 75, 1200, 228, 1428]);
+    expect(result.rows.find((row) => row.variable === "PGG")?.isCalculated).toBe(false);
+  });
+
+  it("ignores stale template manual values when a row has a formula", () => {
+    const result = calculateBudgetFooterBuilder({
+      totalDirectCost: 0,
+      totalGeneralExpenses: 0,
+      totalUtility: 0,
+      totalTax: 0,
+      currencyDecimals: 2,
+      rows: [
+        { id: "1", variable: "CD", description: "Costo directo", formula: null, manualValue: 0, iu: null, highlight: true, sortOrder: 0 },
+        { id: "2", variable: "PGG", description: "Gastos generales", formula: null, manualValue: 0, iu: null, highlight: false, sortOrder: 1 },
+        { id: "3", variable: "UTI", description: "Utilidad", formula: "CD*0.08", manualValue: 4700.066, iu: null, highlight: false, sortOrder: 2 },
+        { id: "4", variable: "ST", description: "Subtotal", formula: "CD+PGG+UTI", manualValue: 73806.7344, iu: null, highlight: true, sortOrder: 3 },
+        { id: "5", variable: "IGV", description: "IGV", formula: "ST*0.18", manualValue: 13285.2122, iu: null, highlight: false, sortOrder: 4 },
+        { id: "6", variable: "TOTAL", description: "Total", formula: "ST+IGV", manualValue: 87091.9466, iu: null, highlight: true, sortOrder: 5 },
+      ],
+    });
+
+    expect(result.rows.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0]);
+  });
 });

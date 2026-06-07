@@ -63,12 +63,35 @@ export type S10ApuDetalleRow = {
   Tipo?: string | null;
 };
 
+export type S10PieSubpresupuestoRow = {
+  CodPresupuesto: string;
+  CodSubpresupuesto: string;
+  Linea: string;
+  Descripcion?: string | null;
+  Variable?: string | null;
+  Formula?: string | null;
+  Omitido?: boolean | number | null;
+};
+
+export type S10ResultadoPieSubpresupuestoRow = {
+  CodPresupuesto: string;
+  CodSubpresupuesto: string;
+  Linea: string;
+  Descripcion?: string | null;
+  Formula?: string | null;
+  Valor1?: number | null;
+  Valor2?: number | null;
+  ValorConFactor?: number | null;
+};
+
 export type S10ExportSnapshot = {
   presupuestos: S10PresupuestoRow[];
   subpresupuestos: S10SubpresupuestoRow[];
   partidas: S10PartidaRow[];
   apuDetalles: S10ApuDetalleRow[];
   subpresupuestoDetalles?: S10SubpresupuestoDetalleRow[];
+  pieSubpresupuestos?: S10PieSubpresupuestoRow[];
+  resultadoPieSubpresupuestos?: S10ResultadoPieSubpresupuestoRow[];
 };
 
 export type S10ImportMapperOptions = {
@@ -87,8 +110,23 @@ export type MycS10ImportDraft = {
   };
   resources: ResourceRecord[];
   budgets: BudgetRecord[];
+  budgetFooterRows: S10BudgetFooterRowsDraft[];
   itemMetadata: S10ItemImportMetadata[];
   warnings: string[];
+};
+
+export type S10BudgetFooterRowsDraft = {
+  budgetId: string;
+  rows: S10BudgetFooterRowDraft[];
+};
+
+export type S10BudgetFooterRowDraft = {
+  variable: string;
+  description: string;
+  formula?: string | null;
+  manualValue: number;
+  highlight: boolean;
+  sortOrder: number;
 };
 
 export type S10ApuImportStatus = "OK" | "MISSING" | "PRICE_MISMATCH";
@@ -151,12 +189,16 @@ export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options
   const subpresupuestoDetalles = (snapshot.subpresupuestoDetalles ?? []).filter(
     (detalle) => detalle.CodPresupuesto === sourceBudgetCode && isImportableSubpresupuestoDetalle(detalle),
   );
+  const pieSubpresupuestos = (snapshot.pieSubpresupuestos ?? []).filter((row) => row.CodPresupuesto === sourceBudgetCode);
+  const resultadoPieSubpresupuestos = (snapshot.resultadoPieSubpresupuestos ?? []).filter(
+    (row) => row.CodPresupuesto === sourceBudgetCode,
+  );
   const resources = createResources(apuDetalles, {
     companyId: options.companyId,
     currency,
     warnings,
   });
-  const budgets = createBudgets({
+  const { budgets, budgetFooterRows } = createBudgets({
     presupuesto,
     projectId,
     currency,
@@ -164,6 +206,8 @@ export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options
     partidas,
     subpresupuestoDetalles,
     apuDetalles,
+    pieSubpresupuestos,
+    resultadoPieSubpresupuestos,
     itemMetadata,
     warnings,
   });
@@ -182,6 +226,7 @@ export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options
     },
     resources,
     budgets,
+    budgetFooterRows,
     itemMetadata,
     warnings: Array.from(warnings),
   };
@@ -257,9 +302,12 @@ function createBudgets(input: {
   partidas: S10PartidaRow[];
   subpresupuestoDetalles: S10SubpresupuestoDetalleRow[];
   apuDetalles: S10ApuDetalleRow[];
+  pieSubpresupuestos: S10PieSubpresupuestoRow[];
+  resultadoPieSubpresupuestos: S10ResultadoPieSubpresupuestoRow[];
   itemMetadata: S10ItemImportMetadata[];
   warnings: Set<string>;
 }) {
+  const budgetFooterRows: S10BudgetFooterRowsDraft[] = [];
   const subBudgets = input.subpresupuestos.map((subpresupuesto, index) =>
     createSubBudgetRecord({
       presupuesto: input.presupuesto,
@@ -271,12 +319,23 @@ function createBudgets(input: {
         (detalle) => detalle.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto,
       ),
       apuDetalles: input.apuDetalles.filter((detalle) => detalle.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto),
+      pieSubpresupuestos: input.pieSubpresupuestos.filter((row) => row.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto),
+      resultadoPieSubpresupuestos: input.resultadoPieSubpresupuestos.filter(
+        (row) => row.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto,
+      ),
       itemMetadata: input.itemMetadata,
       sortOrderOffset: index * 100000,
       warnings: input.warnings,
     }),
   );
 
+  const generalPieRows = selectGeneralPieRows({
+    presupuesto: input.presupuesto,
+    subBudgets,
+    pieSubpresupuestos: input.pieSubpresupuestos,
+    resultadoPieSubpresupuestos: input.resultadoPieSubpresupuestos,
+  });
+  const generalRates = inferRatesFromResultadoPie(generalPieRows.resultadoRows);
   const generalBudget = calculateBudgetRecord({
     id: createId("s10-budget", input.presupuesto.CodPresupuesto),
     projectId: input.projectId,
@@ -284,9 +343,9 @@ function createBudgets(input: {
     kind: "GENERAL",
     name: cleanText(input.presupuesto.Descripcion),
     currency: input.currency,
-    igvRate: 0.18,
-    generalExpensesRate: 0,
-    utilityRate: 0,
+    igvRate: generalRates.igvRate,
+    generalExpensesRate: generalRates.generalExpensesRate,
+    utilityRate: generalRates.utilityRate,
     totalDirectCost: 0,
     totalGeneralExpenses: 0,
     totalUtility: 0,
@@ -313,8 +372,20 @@ function createBudgets(input: {
     ),
   });
 
-  return [generalBudget, ...subBudgets];
+  budgetFooterRows.push(createFooterRowsDraft(generalBudget.id, generalPieRows.pieRows, generalPieRows.resultadoRows));
+  for (const budget of subBudgets) {
+    budgetFooterRows.push(createFooterRowsDraft(budget.id, budget.__s10PieRows ?? [], budget.__s10ResultadoPieRows ?? []));
+    delete budget.__s10PieRows;
+    delete budget.__s10ResultadoPieRows;
+  }
+
+  return { budgets: [generalBudget, ...subBudgets], budgetFooterRows };
 }
+
+type S10SubBudgetRecordWithPie = BudgetRecord & {
+  __s10PieRows?: S10PieSubpresupuestoRow[];
+  __s10ResultadoPieRows?: S10ResultadoPieSubpresupuestoRow[];
+};
 
 function createSubBudgetRecord(input: {
   presupuesto: S10PresupuestoRow;
@@ -324,10 +395,12 @@ function createSubBudgetRecord(input: {
   partidas: S10PartidaRow[];
   subpresupuestoDetalles: S10SubpresupuestoDetalleRow[];
   apuDetalles: S10ApuDetalleRow[];
+  pieSubpresupuestos: S10PieSubpresupuestoRow[];
+  resultadoPieSubpresupuestos: S10ResultadoPieSubpresupuestoRow[];
   itemMetadata: S10ItemImportMetadata[];
   sortOrderOffset: number;
   warnings: Set<string>;
-}) {
+}): S10SubBudgetRecordWithPie {
   const budgetId = createId("s10-subbudget", input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto);
   const levels: BudgetLevelRecord[] = [
     {
@@ -371,16 +444,18 @@ function createSubBudgetRecord(input: {
           }),
         );
 
-  return calculateBudgetRecord({
+  const rates = inferRatesFromResultadoPie(input.resultadoPieSubpresupuestos);
+  return {
+    ...calculateBudgetRecord({
     id: budgetId,
     projectId: input.projectId,
     parentBudgetId: createId("s10-budget", input.presupuesto.CodPresupuesto),
     kind: "SUB_BUDGET",
     name: cleanText(input.subpresupuesto.Descripcion),
     currency: input.currency,
-    igvRate: 0.18,
-    generalExpensesRate: 0,
-    utilityRate: 0,
+    igvRate: rates.igvRate,
+    generalExpensesRate: rates.generalExpensesRate,
+    utilityRate: rates.utilityRate,
     totalDirectCost: 0,
     totalGeneralExpenses: 0,
     totalUtility: 0,
@@ -388,7 +463,10 @@ function createSubBudgetRecord(input: {
     totalAmount: 0,
     levels,
     items,
-  });
+    }),
+    __s10PieRows: input.pieSubpresupuestos,
+    __s10ResultadoPieRows: input.resultadoPieSubpresupuestos,
+  };
 }
 
 function createBudgetItemFromSubpresupuestoDetalle(input: {
@@ -561,6 +639,130 @@ function resolveApuImportStatus(
     calculatedApuUnitPrice: calculatedApu.totalUnitCost,
     unitPriceDifference: difference,
   };
+}
+
+function selectGeneralPieRows(input: {
+  presupuesto: S10PresupuestoRow;
+  subBudgets: BudgetRecord[];
+  pieSubpresupuestos: S10PieSubpresupuestoRow[];
+  resultadoPieSubpresupuestos: S10ResultadoPieSubpresupuestoRow[];
+}) {
+  const comodinResultadoRows = input.resultadoPieSubpresupuestos.filter((row) => row.CodSubpresupuesto === "999");
+  const comodinPieRows = input.pieSubpresupuestos.filter((row) => row.CodSubpresupuesto === "999");
+  const comodinTotal = findPieValueByKind(comodinResultadoRows, "total");
+  const presupuestoTotal = roundMoney(input.presupuesto.CostoOferta1);
+
+  if (comodinResultadoRows.length > 0 && Math.abs(roundMoney(comodinTotal) - presupuestoTotal) <= 0.1) {
+    return { pieRows: comodinPieRows, resultadoRows: comodinResultadoRows };
+  }
+
+  if (input.subBudgets.length === 1) {
+    const sourceSubBudgetCode = input.subBudgets[0]?.levels[0]?.code ?? "";
+    return {
+      pieRows: input.pieSubpresupuestos.filter((row) => row.CodSubpresupuesto === sourceSubBudgetCode),
+      resultadoRows: input.resultadoPieSubpresupuestos.filter((row) => row.CodSubpresupuesto === sourceSubBudgetCode),
+    };
+  }
+
+  return { pieRows: comodinPieRows, resultadoRows: comodinResultadoRows };
+}
+
+function inferRatesFromResultadoPie(rows: S10ResultadoPieSubpresupuestoRow[]) {
+  const directCost = findPieValueByKind(rows, "direct");
+  const subtotal = findPieValueByKind(rows, "subtotal");
+  const generalExpenses = findPieValueByKind(rows, "generalExpenses");
+  const utility = findPieValueByKind(rows, "utility");
+  const igv = findPieValueByKind(rows, "igv");
+
+  return {
+    generalExpensesRate: divideRate(generalExpenses, directCost),
+    utilityRate: divideRate(utility, directCost),
+    igvRate: divideRate(igv, subtotal) || 0.18,
+  };
+}
+
+function createFooterRowsDraft(
+  budgetId: string,
+  pieRows: S10PieSubpresupuestoRow[],
+  resultadoRows: S10ResultadoPieSubpresupuestoRow[],
+): S10BudgetFooterRowsDraft {
+  const pieRowsByLine = new Map(pieRows.map((row) => [cleanText(row.Linea), row]));
+  const hasOfficialResults = resultadoRows.length > 0;
+  const sourceRows = hasOfficialResults ? resultadoRows : createResultadoRowsFromPie(pieRows);
+
+  return {
+    budgetId,
+    rows: sourceRows
+      .slice()
+      .sort((left, right) => cleanText(left.Linea).localeCompare(cleanText(right.Linea), "es", { numeric: true }))
+      .map((row, index) => {
+        const pieRow = pieRowsByLine.get(cleanText(row.Linea));
+        const description = cleanOptionalText(row.Descripcion) ?? cleanOptionalText(pieRow?.Descripcion) ?? "";
+        const sourceFormula = cleanOptionalText(pieRow?.Formula) ?? cleanOptionalText(row.Formula);
+        const formula = hasOfficialResults ? null : sourceFormula;
+        const variable = cleanOptionalText(pieRow?.Variable) ?? inferFooterVariable(description, formula, row.Linea);
+
+        return {
+          variable,
+          description,
+          formula,
+          manualValue: roundMoney(row.Valor1),
+          highlight: shouldHighlightFooterRow(description, variable, formula),
+          sortOrder: index,
+        };
+      }),
+  };
+}
+
+function createResultadoRowsFromPie(rows: S10PieSubpresupuestoRow[]): S10ResultadoPieSubpresupuestoRow[] {
+  return rows.map((row) => ({
+    CodPresupuesto: row.CodPresupuesto,
+    CodSubpresupuesto: row.CodSubpresupuesto,
+    Linea: row.Linea,
+    Descripcion: row.Descripcion,
+    Formula: row.Formula,
+    Valor1: 0,
+  }));
+}
+
+function findPieValueByKind(rows: S10ResultadoPieSubpresupuestoRow[], kind: "direct" | "generalExpenses" | "utility" | "subtotal" | "igv" | "total") {
+  const row = rows.find((entry) => classifyFooterRow(entry.Descripcion, entry.Formula) === kind);
+  return roundMoney(row?.Valor1);
+}
+
+function classifyFooterRow(description: string | null | undefined, formula: string | null | undefined) {
+  const text = normalizeText(`${description ?? ""} ${formula ?? ""}`);
+  if (text.includes("GASTO") || /\bGG\b/.test(text)) return "generalExpenses";
+  if (text.includes("UTILIDAD") || /\bUTI?\b/.test(text)) return "utility";
+  if (text.includes("IGV") || text.includes("IMPUESTO")) return "igv";
+  if (text.includes("SUBTOTAL") || /\bST\b/.test(text)) return "subtotal";
+  if (text.includes("TOTAL") || text.includes("PRESUPUESTO") || text.includes("P_T")) return "total";
+  if (text.includes("DIRECTO") || text.includes("NDIRECTO")) return "direct";
+  return "unknown";
+}
+
+function inferFooterVariable(description: string, formula: string | null | undefined, line: string) {
+  const kind = classifyFooterRow(description, formula);
+  if (kind === "direct") return "CD";
+  if (kind === "generalExpenses") return "PGG";
+  if (kind === "utility") return "UTI";
+  if (kind === "subtotal") return "ST";
+  if (kind === "igv") return "IGV";
+  if (kind === "total") return "P_T";
+  return cleanText(line);
+}
+
+function shouldHighlightFooterRow(description: string, variable: string, formula: string | null | undefined) {
+  const text = normalizeText(`${description} ${variable} ${formula ?? ""}`);
+  return text.includes("TOTAL") || text.includes("SUBTOTAL") || text.includes("PRESUPUESTO") || /^[=\-]+$/.test(cleanText(formula));
+}
+
+function divideRate(numerator: number, denominator: number) {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+    return 0;
+  }
+
+  return roundRate(new Decimal(numerator).dividedBy(denominator));
 }
 
 function isImportableSubpresupuestoDetalle(detalle: S10SubpresupuestoDetalleRow) {

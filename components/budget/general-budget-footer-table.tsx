@@ -327,7 +327,12 @@ export function GeneralBudgetFooterTable({
                   </TD>
                   <TD className="align-top">
                     <Input
-                      value={row.description}
+                      value={getDisplayDescription(row, {
+                        generalExpensesRate: effectiveGeneralExpensesRate,
+                        utilityRate,
+                        igvRate,
+                        percentageDecimals: currencyDecimals,
+                      })}
                       onChange={(event) => updateRow(row.id, { description: event.target.value })}
                       className={cn(getInputDensityClass(isExcelMode), row.highlight ? "font-semibold" : "font-normal")}
                     />
@@ -453,14 +458,53 @@ function getInputDensityClass(isExcelMode = false) {
 }
 
 function getGeneralExpensesRateFromRows(rows: BudgetFooterStructure["rows"]) {
-  const directCost = rows.find((row) => row.variable.trim().toUpperCase() === "CD")?.value ?? 0;
-  const generalExpenses = rows.find((row) => row.variable.trim().toUpperCase() === "PGG")?.value ?? 0;
+  const directCost =
+    rows.find((row) => ["CD", "NDIRECTO"].includes(row.variable.trim().toUpperCase()))?.value ?? 0;
+  const generalExpenses =
+    rows.find((row) => ["PGG", "GG"].includes(row.variable.trim().toUpperCase()))?.value ?? 0;
 
   if (directCost <= 0) {
     return null;
   }
 
   return generalExpenses / directCost;
+}
+
+export function getDisplayDescription(
+  row: Pick<BudgetFooterStructure["rows"][number], "variable" | "description">,
+  rates: { generalExpensesRate: number; utilityRate: number; igvRate: number; percentageDecimals: number },
+) {
+  if (isGeneralExpensesRow(row)) {
+    return `GASTOS GENERALES ${formatDisplayRatePercentage(rates.generalExpensesRate, rates.percentageDecimals)}`;
+  }
+
+  if (isUtilityRow(row)) {
+    return `UTILIDAD ${formatDisplayRatePercentage(rates.utilityRate, rates.percentageDecimals)}`;
+  }
+
+  if (isIgvRow(row)) {
+    return `IGV ${formatDisplayRatePercentage(rates.igvRate, rates.percentageDecimals)}`;
+  }
+
+  return row.description;
+}
+
+function isGeneralExpensesRow(row: Pick<BudgetFooterStructure["rows"][number], "variable" | "description">) {
+  const variable = row.variable.trim().toUpperCase();
+  const description = normalizeFooterText(row.description);
+  return variable === "PGG" || variable === "GG" || description.includes("GASTOS GENERALES");
+}
+
+function isUtilityRow(row: Pick<BudgetFooterStructure["rows"][number], "variable" | "description">) {
+  const variable = row.variable.trim().toUpperCase();
+  const description = normalizeFooterText(row.description);
+  return variable === "UTI" || variable === "U" || description.includes("UTILIDAD");
+}
+
+function isIgvRow(row: Pick<BudgetFooterStructure["rows"][number], "variable" | "description">) {
+  const variable = row.variable.trim().toUpperCase();
+  const description = normalizeFooterText(row.description);
+  return variable === "IGV" || description.includes("IGV");
 }
 
 function isSystemFormulaRow(variable: string) {
@@ -493,11 +537,33 @@ function getSystemFormulaText(
 }
 
 function formatRatePercentage(value: number) {
-  return `${(value * 100).toFixed(2)}%`;
+  return formatRatePercentageWithDecimals(value, 2);
+}
+
+function formatRatePercentageWithDecimals(value: number, decimals: number) {
+  return `${(value * 100).toFixed(decimals)}%`;
+}
+
+function formatDisplayRatePercentage(value: number, decimals: number) {
+  const normalizedDecimals = Math.min(4, Math.max(0, Math.trunc(decimals)));
+  const percentage = value * 100;
+
+  if (Number.isInteger(Number(percentage.toFixed(normalizedDecimals)))) {
+    return `${percentage.toFixed(0)}%`;
+  }
+
+  return formatRatePercentageWithDecimals(value, normalizedDecimals);
 }
 
 function formatRateDecimal(value: number) {
   return value.toFixed(2);
+}
+
+function normalizeFooterText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
 }
 
 function getSavePayload(rows: BudgetFooterStructure["rows"]) {
