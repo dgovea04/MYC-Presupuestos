@@ -261,6 +261,56 @@ describe("calculateApuSummary", () => {
     expect(row?.subtotal).toBe(46.55);
   });
 
+  it("uses material subtotal as base for S10 %MT resources", () => {
+    const rows = calculateApuRows(
+      [
+        {
+          id: "material-1",
+          apuId: "apu-1",
+          resourceId: "resource-1",
+          resourceType: "MATERIAL",
+          crew: null,
+          quantity: 1.05,
+          unitPrice: 82.87,
+          subtotal: 0,
+          resource: {
+            id: "resource-1",
+            code: "MAT-01",
+            description: "Tuberia PVC",
+            category: "MATERIAL" as const,
+            unit: "m",
+            unitPrice: 82.87,
+            currency: "PEN",
+          },
+        },
+        {
+          id: "material-percent",
+          apuId: "apu-1",
+          resourceId: "resource-2",
+          resourceType: "TOOLS",
+          crew: null,
+          quantity: 10,
+          unitPrice: 0,
+          subtotal: 0,
+          resource: {
+            id: "resource-2",
+            code: "MAT-PCT",
+            description: "Accesorios y pegamento",
+            category: "TOOLS" as const,
+            unit: "%MT",
+            unitPrice: 0,
+            currency: "PEN",
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(rows[1]?.unitPrice).toBe(87.01);
+    expect(rows[1]?.subtotal).toBe(8.7);
+    expect(calculateApuTotalUnitCost(rows, 1)).toBe(95.71);
+  });
+
   it("lets generic percentage labor feed later %MO resources", () => {
     const rows = calculateApuRows(
       [

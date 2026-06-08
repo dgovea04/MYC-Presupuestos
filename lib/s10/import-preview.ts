@@ -13,12 +13,25 @@ export type S10ImportDraftPreviewBudget = {
   id: string;
   kind: BudgetRecord["kind"];
   name: string;
+  igvRate: number;
+  generalExpensesRate: number;
+  utilityRate: number;
   totalDirectCost: number;
   totalAmount: number;
   itemCount: number;
   apuCount: number;
+  footerRows: S10ImportDraftPreviewFooterRow[];
   rows: S10ImportDraftPreviewRow[];
   items: S10ImportDraftPreviewItem[];
+};
+
+export type S10ImportDraftPreviewFooterRow = {
+  variable: string;
+  description: string;
+  formula?: string | null;
+  manualValue: number;
+  highlight: boolean;
+  sortOrder: number;
 };
 
 export type S10ImportDraftPreviewLevel = {
@@ -81,6 +94,7 @@ export function summarizeS10ImportDraft(draft: MycS10ImportDraft, sampleItemLimi
     resourcesByCategory[resource.category] += 1;
   }
   const itemMetadataById = new Map(draft.itemMetadata.map((metadata) => [metadata.budgetItemId, metadata]));
+  const footerRowsByBudgetId = new Map(draft.budgetFooterRows.map((entry) => [entry.budgetId, entry.rows]));
 
   return {
     source: draft.source,
@@ -92,10 +106,24 @@ export function summarizeS10ImportDraft(draft: MycS10ImportDraft, sampleItemLimi
       id: budget.id,
       kind: budget.kind,
       name: budget.name,
+      igvRate: budget.igvRate,
+      generalExpensesRate: budget.generalExpensesRate,
+      utilityRate: budget.utilityRate,
       totalDirectCost: budget.totalDirectCost,
       totalAmount: budget.totalAmount,
       itemCount: budget.items.length,
       apuCount: budget.items.filter((item) => item.apu != null).length,
+      footerRows: (footerRowsByBudgetId.get(budget.id) ?? [])
+        .slice()
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+        .map((row) => ({
+          variable: row.variable,
+          description: row.description,
+          formula: row.formula,
+          manualValue: row.manualValue,
+          highlight: row.highlight,
+          sortOrder: row.sortOrder,
+        })),
       rows: createPreviewRowsForBudget(budget, itemMetadataById),
       items: createPreviewItemsForBudget(budget, itemMetadataById),
     })),

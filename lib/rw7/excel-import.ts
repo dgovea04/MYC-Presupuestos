@@ -71,6 +71,12 @@ type Rw7ParsedLevel = {
   depth: number;
 };
 
+type Rw7FooterSourceRow = {
+  description: string;
+  variable: string;
+  value: number;
+};
+
 const presupuestoCode = "RW7";
 const subpresupuestoCode = "001";
 const moneyDecimals = 4;
@@ -86,7 +92,7 @@ export async function parseRw7WorkbookToS10Snapshot(input: Rw7WorkbookInput): Pr
   const dataSheet = workbook.getWorksheet("Datos");
   const projectName = readProjectName(budgetSheet, dataSheet, input.fileName);
   const currency = readCurrency(dataSheet);
-  const budgetStructure = readBudgetStructure(budgetSheet);
+  const budgetStructure = readBudgetStructure(budgetSheet, projectName);
   const budgetRows = budgetStructure.items;
   const resourcesByCode = readResourceRows(resourceSheet);
   const apuHeadersByCode = readApuHeaders(apuSheet);
@@ -135,7 +141,7 @@ export async function parseRw7WorkbookToS10Snapshot(input: Rw7WorkbookInput): Pr
     Orden: row.code,
     SortOrder: row.sortOrder,
   }));
-  const footer = readFooterRows(budgetSheet);
+  const footer = readFooterRows(budgetSheet, budgetStructure);
   const total = footer.resultadoRows.find((row) => normalizeText(row.Descripcion).includes("TOTAL"))?.Valor1;
   const directCost = footer.resultadoRows.find((row) => classifyFooterVariable(row.Descripcion) === "CD")?.Valor1;
 
@@ -173,7 +179,7 @@ function getRequiredWorksheet(workbook: ExcelJS.Workbook, name: string) {
   return worksheet;
 }
 
-function readBudgetStructure(worksheet: ExcelJS.Worksheet): Rw7BudgetStructure {
+function readBudgetStructure(worksheet: ExcelJS.Worksheet, fallbackSubbudgetDescription: string): Rw7BudgetStructure {
   const headerRowNumber = findRow(
     worksheet,
     (rowNumber) => normalizeText(readString(worksheet, rowNumber, 9)) === "CODIGO" && normalizeText(readString(worksheet, rowNumber, 10)) === "ITEM",
@@ -210,10 +216,16 @@ function readBudgetStructure(worksheet: ExcelJS.Worksheet): Rw7BudgetStructure {
     }
 
     const titleLevel = parseBudgetLevelRow(marker, item, titleDescription);
-    if (titleLevel && currentSubbudget) {
+    if (titleLevel) {
+      const levelSubbudget = currentSubbudget ?? createFallbackSubbudget(fallbackSubbudgetDescription, subpresupuestos);
+      if (!currentSubbudget) {
+        currentSubbudget = levelSubbudget;
+        subpresupuestos.push(currentSubbudget);
+      }
+
       const parentLevel = findParentLevel(currentLevelByDepth, titleLevel.depth);
       const level: Rw7BudgetLevel = {
-        subpresupuestoCode: currentSubbudget.code,
+        subpresupuestoCode: levelSubbudget.code,
         ...titleLevel,
         parentCode: parentLevel?.code ?? null,
         sortOrder: levels.length + 1,
@@ -241,7 +253,7 @@ function readBudgetStructure(worksheet: ExcelJS.Worksheet): Rw7BudgetStructure {
       continue;
     }
 
-    const itemSubbudget = currentSubbudget ?? createFallbackSubbudget(projectNameFallback(worksheet), subpresupuestos);
+    const itemSubbudget = currentSubbudget ?? createFallbackSubbudget(fallbackSubbudgetDescription, subpresupuestos);
     if (!currentSubbudget) {
       currentSubbudget = itemSubbudget;
       subpresupuestos.push(currentSubbudget);
@@ -269,7 +281,7 @@ function readBudgetStructure(worksheet: ExcelJS.Worksheet): Rw7BudgetStructure {
 
 function parseSubbudgetRow(marker: string, item: string, description: string): Omit<Rw7Subbudget, "sortOrder"> | null {
   const normalizedMarker = normalizeText(marker);
-  if (normalizedMarker !== "T") {
+  if (normalizedMarker !== "SP" && normalizedMarker !== "SUBPRESUPUESTO") {
     return null;
   }
 
@@ -285,18 +297,27 @@ function parseSubbudgetRow(marker: string, item: string, description: string): O
 
 function parseBudgetLevelRow(marker: string, item: string, description: string): Rw7ParsedLevel | null {
   const normalizedMarker = normalizeText(marker);
-  if (normalizedMarker !== "ST1" && normalizedMarker !== "ST2") {
+  if (!item || !description) {
     return null;
   }
 
-  if (!item || !description) {
+  if (normalizedMarker === "T") {
+    return {
+      code: item,
+      description,
+      depth: 1,
+    };
+  }
+
+  const subtitleMatch = /^ST(\d+)$/.exec(normalizedMarker);
+  if (!subtitleMatch) {
     return null;
   }
 
   return {
     code: item,
     description,
-    depth: normalizedMarker === "ST1" ? 1 : 2,
+    depth: Number(subtitleMatch[1]) + 1,
   };
 }
 
@@ -306,10 +327,6 @@ function createFallbackSubbudget(description: string, subpresupuestos: Rw7Subbud
     description,
     sortOrder: subpresupuestos.length + 1,
   };
-}
-
-function projectNameFallback(worksheet: ExcelJS.Worksheet) {
-  return readString(worksheet, 3, 3) || "Presupuesto RW7";
 }
 
 function expandApuDetailsBySubbudget(apuDetalles: S10ApuDetalleRow[], budgetRows: Rw7BudgetItem[]) {
@@ -429,7 +446,8 @@ function readApuDetails(worksheet: ExcelJS.Worksheet, resourcesByCode: Map<strin
       const rawQuantity = readNumber(worksheet, rowNumber + 1, columnNumber);
       const sourceUnitPrice = readNumber(worksheet, rowNumber + 2, columnNumber);
       const partial = readNumber(worksheet, rowNumber + 3, columnNumber);
-      const unit = normalizeRw7Unit(resource?.unit ?? "");
+      const sourceUnit = normalizeRw7Unit(resource?.unit ?? "");
+      const unit = resolveApuUnit(sourceUnit, rawQuantity, sourceUnitPrice, partial);
       const quantity = resolveApuQuantity(rawQuantity, sourceUnitPrice, partial, unit);
 
       details.push({
@@ -466,6 +484,24 @@ function resolveApuQuantity(rawQuantity: number, unitPrice: number, partial: num
   return roundRate(new Decimal(partial).dividedBy(unitPrice));
 }
 
+function resolveApuUnit(unit: string, rawQuantity: number, unitPrice: number, partial: number) {
+  if (!normalizeText(unit).startsWith("%")) {
+    return unit;
+  }
+
+  const percentageSubtotal = new Decimal(rawQuantity).dividedBy(100).times(unitPrice);
+  if (percentageSubtotal.minus(partial).abs().lessThanOrEqualTo(0.01)) {
+    return unit;
+  }
+
+  const directSubtotal = new Decimal(rawQuantity).times(unitPrice);
+  if (directSubtotal.minus(partial).abs().lessThanOrEqualTo(0.01)) {
+    return "u";
+  }
+
+  return unit;
+}
+
 function resolveApuUnitPrice(quantity: number, sourceUnitPrice: number, partial: number, unit: string) {
   if (normalizeText(unit).startsWith("%") || quantity === 0) {
     return roundMoney(sourceUnitPrice);
@@ -479,7 +515,7 @@ function resolveApuUnitPrice(quantity: number, sourceUnitPrice: number, partial:
   return roundRate(new Decimal(partial).dividedBy(quantity));
 }
 
-function readFooterRows(worksheet: ExcelJS.Worksheet): {
+function readFooterRows(worksheet: ExcelJS.Worksheet, budgetStructure: Rw7BudgetStructure): {
   pieRows: S10PieSubpresupuestoRow[];
   resultadoRows: S10ResultadoPieSubpresupuestoRow[];
 } {
@@ -490,34 +526,44 @@ function readFooterRows(worksheet: ExcelJS.Worksheet): {
 
   const pieRows: S10PieSubpresupuestoRow[] = [];
   const resultadoRows: S10ResultadoPieSubpresupuestoRow[] = [];
+  const sourceRows = readFooterSourceRows(worksheet, directCostRow);
+  const generalRows = createFooterRowsForSubbudget("999", sourceRows);
+  pieRows.push(...generalRows.pieRows);
+  resultadoRows.push(...generalRows.resultadoRows);
 
-  for (let rowNumber = directCostRow; rowNumber <= worksheet.rowCount; rowNumber += 1) {
-    const description = readString(worksheet, rowNumber, 3);
-    const value = readNumber(worksheet, rowNumber, 7);
-    if (!description || value === 0 && !normalizeText(description).includes("COSTO DIRECTO")) {
+  const directCostsBySubbudget = sumDirectCostsBySubbudget(budgetStructure.items);
+  const rates = inferRw7FooterRates(sourceRows);
+  for (const subpresupuesto of budgetStructure.subpresupuestos) {
+    const directCost = directCostsBySubbudget.get(subpresupuesto.code);
+    if (directCost == null) {
       continue;
     }
 
-    const line = String(pieRows.length + 1).padStart(2, "0");
-    const variable = classifyFooterVariable(description);
-    pieRows.push({
-      CodPresupuesto: presupuestoCode,
-      CodSubpresupuesto: subpresupuestoCode,
-      Linea: line,
-      Descripcion: description,
-      Variable: variable,
-      Formula: variable,
-      Omitido: false,
-    });
-    resultadoRows.push({
-      CodPresupuesto: presupuestoCode,
-      CodSubpresupuesto: subpresupuestoCode,
-      Linea: line,
-      Descripcion: description,
-      Formula: variable,
-      Valor1: roundMoney(value),
-      Valor2: roundMoney(value),
-      ValorConFactor: roundMoney(value),
+    const subbudgetSourceRows =
+      budgetStructure.subpresupuestos.length === 1
+        ? sourceRows
+        : calculateSubbudgetFooterSourceRows(sourceRows, directCost, rates);
+    const subbudgetRows = createFooterRowsForSubbudget(subpresupuesto.code, subbudgetSourceRows);
+    pieRows.push(...subbudgetRows.pieRows);
+    resultadoRows.push(...subbudgetRows.resultadoRows);
+  }
+
+  return { pieRows, resultadoRows };
+}
+
+function readFooterSourceRows(worksheet: ExcelJS.Worksheet, directCostRow: number) {
+  const rows: Rw7FooterSourceRow[] = [];
+  for (let rowNumber = directCostRow; rowNumber <= worksheet.rowCount; rowNumber += 1) {
+    const description = readString(worksheet, rowNumber, 3);
+    const value = readNumber(worksheet, rowNumber, 7);
+    if (!description || (value === 0 && !normalizeText(description).includes("COSTO DIRECTO"))) {
+      continue;
+    }
+
+    rows.push({
+      description,
+      variable: classifyFooterVariable(description),
+      value: roundMoney(value),
     });
 
     if (normalizeText(description) === "TOTAL") {
@@ -525,7 +571,99 @@ function readFooterRows(worksheet: ExcelJS.Worksheet): {
     }
   }
 
+  return rows;
+}
+
+function createFooterRowsForSubbudget(code: string, sourceRows: Rw7FooterSourceRow[]) {
+  const pieRows: S10PieSubpresupuestoRow[] = [];
+  const resultadoRows: S10ResultadoPieSubpresupuestoRow[] = [];
+
+  for (const [index, sourceRow] of sourceRows.entries()) {
+    const line = String(index + 1).padStart(2, "0");
+    pieRows.push({
+      CodPresupuesto: presupuestoCode,
+      CodSubpresupuesto: code,
+      Linea: line,
+      Descripcion: sourceRow.description,
+      Variable: sourceRow.variable,
+      Formula: sourceRow.variable,
+      Omitido: false,
+    });
+    resultadoRows.push({
+      CodPresupuesto: presupuestoCode,
+      CodSubpresupuesto: code,
+      Linea: line,
+      Descripcion: sourceRow.description,
+      Formula: sourceRow.variable,
+      Valor1: sourceRow.value,
+      Valor2: sourceRow.value,
+      ValorConFactor: sourceRow.value,
+    });
+  }
+
   return { pieRows, resultadoRows };
+}
+
+function sumDirectCostsBySubbudget(items: Rw7BudgetItem[]) {
+  const totals = new Map<string, Decimal>();
+  for (const item of items) {
+    totals.set(item.subpresupuestoCode, (totals.get(item.subpresupuestoCode) ?? new Decimal(0)).plus(item.partial));
+  }
+
+  return new Map(Array.from(totals.entries()).map(([code, total]) => [code, roundMoney(total)]));
+}
+
+function inferRw7FooterRates(sourceRows: Rw7FooterSourceRow[]) {
+  const directCost = findFooterSourceValue(sourceRows, "CD");
+  const subtotal = findFooterSourceValue(sourceRows, "ST");
+  const referentialValue = findFooterSourceValue(sourceRows, "VR");
+
+  return {
+    generalExpensesRate: divideRw7Rate(findFooterSourceValue(sourceRows, "PGG"), directCost),
+    utilityRate: divideRw7Rate(findFooterSourceValue(sourceRows, "UTI"), directCost),
+    igvRate: divideRw7Rate(findFooterSourceValue(sourceRows, "IGV"), subtotal),
+    supervisionRate: divideRw7Rate(findFooterSourceValue(sourceRows, "SU"), referentialValue),
+  };
+}
+
+function calculateSubbudgetFooterSourceRows(
+  sourceRows: Rw7FooterSourceRow[],
+  directCost: number,
+  rates: ReturnType<typeof inferRw7FooterRates>,
+) {
+  const calculated = new Map<string, number>();
+
+  calculated.set("CD", roundMoney(directCost));
+  calculated.set("PGG", roundMoney(new Decimal(directCost).times(rates.generalExpensesRate)));
+  calculated.set("UTI", roundMoney(new Decimal(directCost).times(rates.utilityRate)));
+  calculated.set(
+    "ST",
+    roundMoney(new Decimal(calculated.get("CD") ?? 0).plus(calculated.get("PGG") ?? 0).plus(calculated.get("UTI") ?? 0)),
+  );
+  calculated.set("IGV", roundMoney(new Decimal(calculated.get("ST") ?? 0).times(rates.igvRate)));
+  calculated.set("VR", roundMoney(new Decimal(calculated.get("ST") ?? 0).plus(calculated.get("IGV") ?? 0)));
+  calculated.set("SU", roundMoney(new Decimal(calculated.get("VR") ?? 0).times(rates.supervisionRate)));
+  calculated.set("P_T", roundMoney(new Decimal(calculated.get("VR") ?? 0).plus(calculated.get("SU") ?? 0)));
+
+  const generalDirectCost = findFooterSourceValue(sourceRows, "CD");
+  const scale = generalDirectCost === 0 ? new Decimal(0) : new Decimal(directCost).dividedBy(generalDirectCost);
+
+  return sourceRows.map((row) => ({
+    ...row,
+    value: calculated.get(row.variable) ?? roundMoney(new Decimal(row.value).times(scale)),
+  }));
+}
+
+function findFooterSourceValue(sourceRows: Rw7FooterSourceRow[], variable: string) {
+  return sourceRows.find((row) => row.variable === variable)?.value ?? 0;
+}
+
+function divideRw7Rate(numerator: number, denominator: number) {
+  if (denominator === 0) {
+    return 0;
+  }
+
+  return roundRate(new Decimal(numerator).dividedBy(denominator));
 }
 
 function readProjectName(budgetSheet: ExcelJS.Worksheet, dataSheet: ExcelJS.Worksheet | undefined, fileName: string | undefined) {
@@ -644,13 +782,13 @@ function normalizeRw7Unit(value: string) {
 function classifyFooterVariable(description: string | null | undefined) {
   const text = normalizeText(description);
   if (text.includes("COSTO DIRECTO")) return "CD";
-  if (text.includes("GASTOS GENERALES")) return "GG";
-  if (text.includes("UTILIDAD")) return "UT";
+  if (text.includes("GASTOS GENERALES")) return "PGG";
+  if (text.includes("UTILIDAD")) return "UTI";
   if (text.includes("SUBTOTAL")) return "ST";
-  if (text.includes("IMPUESTO") || text.includes("IGV")) return "IM";
+  if (text.includes("IMPUESTO") || text.includes("IGV")) return "IGV";
   if (text.includes("VALOR REFERENCIAL")) return "VR";
   if (text.includes("SUPERVISION")) return "SU";
-  if (text.includes("TOTAL")) return "P_T";
+  if (text === "TOTAL" || text.includes("TOTAL PRESUPUESTO")) return "P_T";
   return text.slice(0, 12) || "RW7";
 }
 

@@ -174,11 +174,11 @@ function runSqlcmd(args: string[]) {
 function resolveSqlcmdExecutable() {
   const classicPath = "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\SQLCMD.EXE";
   const installedPath = "C:\\Program Files\\SqlCmd\\sqlcmd.exe";
-  if (fs.existsSync(classicPath)) {
-    return classicPath;
+  if (fs.existsSync(installedPath)) {
+    return installedPath;
   }
 
-  return fs.existsSync(installedPath) ? installedPath : "sqlcmd";
+  return fs.existsSync(classicPath) ? classicPath : "sqlcmd";
 }
 
 function parseCliOptions(args: string[]): CliOptions {

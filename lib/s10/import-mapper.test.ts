@@ -276,6 +276,214 @@ describe("createMycImportDraftFromS10", () => {
     );
   });
 
+  it("infers missing percentage APU quantities from calculated S10 amount rows", () => {
+    const draft = createMycImportDraftFromS10({
+      presupuestos: [{ CodPresupuesto: "0201003", Descripcion: "OBRA S10" }],
+      subpresupuestos: [{ CodPresupuesto: "0201003", CodSubpresupuesto: "001", Descripcion: "ESTRUCTURAS" }],
+      partidas: [
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          Descripcion: "TOPOGRAFÍA Y GEOREFERENCIACIÓN",
+          CodUnidad: "919",
+          Precio1: 38600.47,
+          RendimientoMO: 1,
+          RendimientoEQ: 1,
+        },
+      ],
+      subpresupuestoDetalles: [
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Item: "01.02",
+          Orden: "01.02",
+          Secuencial: 1,
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          Descripcion: "TOPOGRAFÍA Y GEOREFERENCIACIÓN",
+          Unidad: "glb",
+          Metrado: 1,
+          Precio1: 38600.47,
+          Parcial1: 38600.47,
+        },
+      ],
+      apuDetalles: [
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0147000032",
+          Descripcion: "TOPOGRAFO",
+          CodUnidad: "906",
+          Cantidad: 624,
+          Precio1: 11.88,
+          Parcial1: 7413.12,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0147010004",
+          Descripcion: "PEON",
+          CodUnidad: "906",
+          Cantidad: 1248,
+          Precio1: 9.6,
+          Parcial1: 11980.8,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0337010001",
+          Descripcion: "HERRAMIENTAS MANUALES",
+          CodUnidad: "707",
+          Precio1: 969.7,
+          Parcial1: 0,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0266060008",
+          Descripcion: "LUBRICANTES, GRASAS Y FILTROS",
+          CodUnidad: "705",
+          Precio1: 30.33,
+          Parcial1: 0,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0349880020",
+          Descripcion: "ESTACION TOTAL",
+          CodUnidad: "907",
+          Cantidad: 624,
+          Precio1: 16.2,
+          Parcial1: 10108.8,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0349190006",
+          Descripcion: "NIVEL TOPOGRAFICO",
+          CodUnidad: "907",
+          Cantidad: 624,
+          Precio1: 9.32,
+          Parcial1: 5815.68,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0337020045",
+          Descripcion: "JALONES",
+          CodUnidad: "920",
+          Cantidad: 1248,
+          Precio1: 0.35,
+          Parcial1: 436.8,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0337020046",
+          Descripcion: "MIRA TOPOGRAFICA",
+          CodUnidad: "920",
+          Cantidad: 1248,
+          Precio1: 0.7,
+          Parcial1: 873.6,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0202010022",
+          Descripcion: "CLAVOS DIFERENTES MEDIDAS",
+          CodUnidad: "301",
+          Cantidad: 56.25,
+          Precio1: 3.88,
+          Parcial1: 218.25,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0229060002",
+          Descripcion: "YESO EN BOLSAS DE 25 kg",
+          CodUnidad: "901",
+          Cantidad: 50,
+          Precio1: 8.5,
+          Parcial1: 425,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0243040000",
+          Descripcion: "MADERA TORNILLO",
+          CodUnidad: "507",
+          Cantidad: 40,
+          Precio1: 3.4,
+          Parcial1: 136,
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          CodPartida: "910301010201",
+          CodPresupuestoPartida: "0201003",
+          PropioPartida: "01",
+          CodInsumo: "0254240002",
+          Descripcion: "PINTURA ESMALTE",
+          CodUnidad: "605",
+          Cantidad: 6.25,
+          Precio1: 30.78,
+          Parcial1: 192.375,
+        },
+      ],
+    });
+
+    const item = draft.budgets[1]?.items[0];
+    const tools = item?.apu?.resources.find((resource) => resource.unit === "%MO");
+
+    expect(tools).toMatchObject({
+      quantity: 5,
+      unitPrice: 19393.92,
+      subtotal: 969.7,
+    });
+    expect(item?.apu?.resources.find((resource) => resource.unit === "%EQ")).toMatchObject({
+      quantity: 0.1905,
+      unitPrice: 15924.48,
+      subtotal: 30.34,
+    });
+    expect(item?.apu?.totalUnitCost).toBe(38600.47);
+    expect(draft.itemMetadata[0]).toMatchObject({ apuStatus: "OK", unitPriceDifference: 0 });
+  });
+
   it("falls back to configured rates when S10 footer results omit a percentage", () => {
     const draft = createMycImportDraftFromS10(
       {
@@ -894,5 +1102,10 @@ describe("normalizeS10Unit", () => {
     expect(normalizeS10Unit("906")).toBe("hh");
     expect(normalizeS10Unit("907")).toBe("hm");
     expect(normalizeS10Unit("707")).toBe("%MO");
+    expect(normalizeS10Unit("708")).toBe("%MT");
+    expect(normalizeS10Unit("302")).toBe("t");
+    expect(normalizeS10Unit("603")).toBe("cm3");
+    expect(normalizeS10Unit("922")).toBe("hja");
+    expect(normalizeS10Unit("923")).toBe("jgo");
   });
 });

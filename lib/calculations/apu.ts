@@ -188,7 +188,7 @@ function getPercentageBaseSubtotal(
   const baseToken = normalizedUnit.replace("%", "");
 
   if (baseToken === "MO" || baseToken === "LABOR") return totals.labor;
-  if (baseToken === "MAT" || baseToken === "MATERIAL") return totals.material;
+  if (baseToken === "MT" || baseToken === "MAT" || baseToken === "MATERIAL") return totals.material;
   if (baseToken === "EQ" || baseToken === "EQUIPO" || baseToken === "EQUIPMENT") return totals.equipment;
   if (baseToken === "TOOLS" || baseToken === "HERRAMIENTAS") return totals.tools;
   if (baseToken === "SUB" || baseToken === "SUBCONTRATO" || baseToken === "SUBCONTRACT") return totals.subcontract;

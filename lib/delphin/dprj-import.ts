@@ -9,7 +9,9 @@ import type {
   S10BudgetLevelRow,
   S10ExportSnapshot,
   S10PartidaRow,
+  S10PieSubpresupuestoRow,
   S10PresupuestoRow,
+  S10ResultadoPieSubpresupuestoRow,
   S10SubpresupuestoDetalleRow,
   S10SubpresupuestoRow,
 } from "@/lib/s10/import-mapper";
@@ -42,6 +44,10 @@ type DelphinBudget = {
   generalExpensesRate?: number | null;
   utilityRate?: number | null;
   taxRate?: number | null;
+  generalExpensesAmount?: number | null;
+  utilityAmount?: number | null;
+  taxAmount?: number | null;
+  subtotal?: number | null;
   costs: DelphinCost[];
 };
 
@@ -114,6 +120,7 @@ export function parseDelphinDprjToS10Snapshot(input: DelphinWorkbookInput): S10E
   );
   const total = decoded.budgets.reduce((sum, budget) => sum.plus(budget.total ?? budget.directCost ?? 0), new Decimal(0));
   const directCost = decoded.budgets.reduce((sum, budget) => sum.plus(budget.directCost ?? 0), new Decimal(0));
+  const footerRows = createDelphinFooterRows(decoded.budgets, accumulators);
 
   if (accumulators.length === 0) {
     throw new Error("El archivo Delphin no contiene presupuestos importables.");
@@ -133,8 +140,8 @@ export function parseDelphinDprjToS10Snapshot(input: DelphinWorkbookInput): S10E
     budgetLevels: accumulators.flatMap((entry) => entry.levels),
     subpresupuestoDetalles: accumulators.flatMap((entry) => entry.detalles),
     apuDetalles: accumulators.flatMap((entry) => entry.apuDetalles),
-    pieSubpresupuestos: [],
-    resultadoPieSubpresupuestos: [],
+    pieSubpresupuestos: footerRows.pieRows,
+    resultadoPieSubpresupuestos: footerRows.resultadoRows,
   };
 }
 
@@ -182,6 +189,164 @@ function createBudgetAccumulators(input: {
 
     return accumulator;
   });
+}
+
+function createDelphinFooterRows(budgets: DelphinBudget[], accumulators: DelphinBudgetAccumulator[]) {
+  const pieRows: S10PieSubpresupuestoRow[] = [];
+  const resultadoRows: S10ResultadoPieSubpresupuestoRow[] = [];
+
+  for (let index = 0; index < budgets.length; index += 1) {
+    const budget = budgets[index];
+    const accumulator = accumulators[index];
+    if (!budget || !accumulator || !hasDelphinFooterData(budget)) {
+      continue;
+    }
+
+    const rows = createFooterRowsForSubbudget(accumulator.subpresupuesto.CodSubpresupuesto, budget);
+    pieRows.push(...rows.pieRows);
+    resultadoRows.push(...rows.resultadoRows);
+  }
+
+  if (resultadoRows.length > 0) {
+    const generalRows = createGeneralFooterRows(resultadoRows);
+    pieRows.push(...generalRows.pieRows);
+    resultadoRows.push(...generalRows.resultadoRows);
+  }
+
+  return { pieRows, resultadoRows };
+}
+
+function createFooterRowsForSubbudget(subpresupuestoCode: string, budget: DelphinBudget) {
+  const directCost = roundMoney(budget.directCost ?? 0);
+  const generalExpenses = roundMoney(budget.generalExpensesAmount ?? new Decimal(directCost).times(ratePercentToDecimal(budget.generalExpensesRate)).toNumber());
+  const utility = roundMoney(budget.utilityAmount ?? new Decimal(directCost).times(ratePercentToDecimal(budget.utilityRate)).toNumber());
+  const subtotal = roundMoney(budget.subtotal ?? new Decimal(directCost).plus(generalExpenses).plus(utility).toNumber());
+  const tax = roundMoney(budget.taxAmount ?? new Decimal(subtotal).times(ratePercentToDecimal(budget.taxRate)).toNumber());
+  const total = roundMoney(budget.total ?? new Decimal(subtotal).plus(tax).toNumber());
+  const generalExpensesRate = roundRate(ratePercentToDecimal(budget.generalExpensesRate));
+  const utilityRate = roundRate(ratePercentToDecimal(budget.utilityRate));
+  const taxRate = roundRate(ratePercentToDecimal(budget.taxRate));
+
+  return createStandardFooterRows(subpresupuestoCode, [
+    { line: "01", description: "COSTO DIRECTO", variable: "CD", formula: "CD", value: directCost },
+    {
+      line: "02",
+      description: `GASTOS GENERALES (${formatRatePercent(generalExpensesRate)}%)`,
+      variable: "PGG",
+      formula: `CD*${generalExpensesRate}`,
+      value: generalExpenses,
+    },
+    {
+      line: "03",
+      description: `UTILIDAD (${formatRatePercent(utilityRate)}%)`,
+      variable: "UTI",
+      formula: `CD*${utilityRate}`,
+      value: utility,
+    },
+    { line: "04", description: "SUBTOTAL", variable: "ST", formula: "CD+PGG+UTI", value: subtotal },
+    {
+      line: "05",
+      description: `IGV (${formatRatePercent(taxRate)}%)`,
+      variable: "IGV",
+      formula: `ST*${taxRate}`,
+      value: tax,
+    },
+    { line: "06", description: "TOTAL PRESUPUESTO", variable: "P_T", formula: "ST+IGV", value: total },
+  ]);
+}
+
+function createGeneralFooterRows(rows: S10ResultadoPieSubpresupuestoRow[]) {
+  const directCost = sumFooterValue(rows, "01");
+  const generalExpenses = sumFooterValue(rows, "02");
+  const utility = sumFooterValue(rows, "03");
+  const subtotal = sumFooterValue(rows, "04");
+  const tax = sumFooterValue(rows, "05");
+  const total = sumFooterValue(rows, "06");
+  const generalExpensesRate = roundRate(new Decimal(generalExpenses).dividedBy(directCost || 1));
+  const utilityRate = roundRate(new Decimal(utility).dividedBy(directCost || 1));
+  const taxRate = roundRate(new Decimal(tax).dividedBy(subtotal || 1));
+
+  return createStandardFooterRows("999", [
+    { line: "01", description: "COSTO DIRECTO", variable: "CD", formula: "CD", value: directCost },
+    {
+      line: "02",
+      description: `GASTOS GENERALES (${formatRatePercent(generalExpensesRate)}%)`,
+      variable: "PGG",
+      formula: `CD*${generalExpensesRate}`,
+      value: generalExpenses,
+    },
+    {
+      line: "03",
+      description: `UTILIDAD (${formatRatePercent(utilityRate)}%)`,
+      variable: "UTI",
+      formula: `CD*${utilityRate}`,
+      value: utility,
+    },
+    { line: "04", description: "SUBTOTAL", variable: "ST", formula: "CD+PGG+UTI", value: subtotal },
+    {
+      line: "05",
+      description: `IGV (${formatRatePercent(taxRate)}%)`,
+      variable: "IGV",
+      formula: `ST*${taxRate}`,
+      value: tax,
+    },
+    { line: "06", description: "TOTAL PRESUPUESTO", variable: "P_T", formula: "ST+IGV", value: total },
+  ]);
+}
+
+function createStandardFooterRows(
+  subpresupuestoCode: string,
+  rows: Array<{ line: string; description: string; variable: string; formula: string; value: number }>,
+) {
+  return {
+    pieRows: rows.map((row): S10PieSubpresupuestoRow => ({
+      CodPresupuesto: sourceBudgetCode,
+      CodSubpresupuesto: subpresupuestoCode,
+      Linea: row.line,
+      Descripcion: row.description,
+      Variable: row.variable,
+      Formula: row.formula,
+      Omitido: false,
+    })),
+    resultadoRows: rows.map((row): S10ResultadoPieSubpresupuestoRow => ({
+      CodPresupuesto: sourceBudgetCode,
+      CodSubpresupuesto: subpresupuestoCode,
+      Linea: row.line,
+      Descripcion: row.description,
+      Formula: row.formula,
+      Valor1: roundMoney(row.value),
+    })),
+  };
+}
+
+function hasDelphinFooterData(budget: DelphinBudget) {
+  return (
+    budget.directCost != null ||
+    budget.total != null ||
+    budget.generalExpensesRate != null ||
+    budget.utilityRate != null ||
+    budget.taxRate != null ||
+    budget.generalExpensesAmount != null ||
+    budget.utilityAmount != null ||
+    budget.taxAmount != null ||
+    budget.subtotal != null
+  );
+}
+
+function sumFooterValue(rows: S10ResultadoPieSubpresupuestoRow[], line: string) {
+  return roundMoney(
+    rows
+      .filter((row) => row.Linea === line && row.CodSubpresupuesto !== "999")
+      .reduce((sum, row) => sum.plus(row.Valor1 ?? 0), new Decimal(0)),
+  );
+}
+
+function ratePercentToDecimal(value: number | null | undefined) {
+  return new Decimal(value ?? 0).dividedBy(100).toNumber();
+}
+
+function formatRatePercent(rate: number) {
+  return new Decimal(rate).times(100).toDecimalPlaces(4).toString();
 }
 
 function createSubbudgetRoots(budget: DelphinBudget, budgetIndex: number, projectName: string): DelphinSubbudgetRoot[] {
@@ -623,6 +788,10 @@ public static class ${probeClassName} {
     PNum(sb, "generalExpensesRate", V(budget, "porcentaje_gasto"), true);
     PNum(sb, "utilityRate", V(budget, "porcentaje_utilidad"), true);
     PNum(sb, "taxRate", V(budget, "porcentaje_igv"), true);
+    PNum(sb, "generalExpensesAmount", V(budget, "monto_gasto"), true);
+    PNum(sb, "utilityAmount", V(budget, "monto_utilidad"), true);
+    PNum(sb, "taxAmount", V(budget, "monto_igv"), true);
+    PNum(sb, "subtotal", V(budget, "parcial_presupuesto"), true);
     PArr(sb, "costs", Items(V(budget, "Costos")), AppendCost, true);
     sb.Append("}");
   }
@@ -876,6 +1045,10 @@ function Convert-Budget($budget) {
     generalExpensesRate = Scalar (Value $budget "porcentaje_gasto")
     utilityRate = Scalar (Value $budget "porcentaje_utilidad")
     taxRate = Scalar (Value $budget "porcentaje_igv")
+    generalExpensesAmount = Scalar (Value $budget "monto_gasto")
+    utilityAmount = Scalar (Value $budget "monto_utilidad")
+    taxAmount = Scalar (Value $budget "monto_igv")
+    subtotal = Scalar (Value $budget "parcial_presupuesto")
     costs = $costs
   }
 }

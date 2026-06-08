@@ -91,6 +91,35 @@ diferencia <= 0.01 => APU OK
 diferencia > 0.01  => PRICE_MISMATCH
 ```
 
+## Gastos, utilidad, IGV y pie
+
+Delphin guarda tasas y montos por cada `Presupuesto`:
+
+```text
+costo_directo
+porcentaje_gasto
+monto_gasto
+porcentaje_utilidad
+monto_utilidad
+parcial_presupuesto
+porcentaje_igv
+monto_igv
+total_presupuesto
+```
+
+Cuando esos datos existen, el importador genera un pie estandar para cada sub presupuesto:
+
+```text
+01 COSTO DIRECTO
+02 GASTOS GENERALES
+03 UTILIDAD
+04 SUBTOTAL
+05 IGV
+06 TOTAL PRESUPUESTO
+```
+
+Tambien genera un pie general `999` sumando los sub presupuestos. El mapper MYC usa esas filas para tomar las tasas reales del archivo Delphin y para persistir los montos oficiales del pie como valores manuales.
+
 ## Reglas para porcentajes Delphin
 
 Delphin usa varias unidades porcentuales dentro de APUs. Estas reglas son criticas para evitar warnings falsos.

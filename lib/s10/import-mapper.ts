@@ -172,17 +172,20 @@ const knownS10Units = new Map<string, string>([
   ["201", "m"],
   ["202", "km"],
   ["301", "kg"],
+  ["302", "t"],
   ["404", "dia"],
   ["405", "mes"],
   ["501", "m2"],
   ["503", "ha"],
   ["507", "pie2"],
   ["601", "m3"],
+  ["603", "cm3"],
   ["604", "l"],
   ["605", "gal"],
   ["701", "%"],
   ["705", "%EQ"],
   ["707", "%MO"],
+  ["708", "%MT"],
   ["901", "bolsa"],
   ["903", "plancha"],
   ["904", "punto"],
@@ -192,6 +195,8 @@ const knownS10Units = new Map<string, string>([
   ["917", "est"],
   ["919", "glb"],
   ["920", "h-eq"],
+  ["922", "hja"],
+  ["923", "jgo"],
   ["931", "pza"],
   ["937", "tubo"],
   ["939", "viaje"],
@@ -795,7 +800,7 @@ function selectGeneralPieRows(input: {
   }
 
   if (input.subBudgets.length === 1) {
-    const sourceSubBudgetCode = input.subBudgets[0]?.levels[0]?.code ?? "";
+    const sourceSubBudgetCode = selectSingleFooterSubbudgetCode(input.resultadoPieSubpresupuestos, input.pieSubpresupuestos);
     return {
       pieRows: input.pieSubpresupuestos.filter((row) => row.CodSubpresupuesto === sourceSubBudgetCode),
       resultadoRows: input.resultadoPieSubpresupuestos.filter((row) => row.CodSubpresupuesto === sourceSubBudgetCode),
@@ -803,6 +808,15 @@ function selectGeneralPieRows(input: {
   }
 
   return { pieRows: comodinPieRows, resultadoRows: comodinResultadoRows };
+}
+
+function selectSingleFooterSubbudgetCode(resultadoRows: S10ResultadoPieSubpresupuestoRow[], pieRows: S10PieSubpresupuestoRow[]) {
+  const codes = [...resultadoRows, ...pieRows]
+    .map((row) => cleanText(row.CodSubpresupuesto))
+    .filter((code) => code.length > 0 && code !== "999");
+  const uniqueCodes = [...new Set(codes)];
+
+  return uniqueCodes[0] ?? "";
 }
 
 function inferRatesFromResultadoPie(rows: S10ResultadoPieSubpresupuestoRow[], defaultRates?: S10ImportDefaultRates) {
@@ -950,7 +964,12 @@ function createApu(input: {
 }): ApuRecord {
   const apuId = createId(`${input.sourcePrefix}-apu`, input.partida.CodPresupuesto, input.partida.CodSubpresupuesto, input.partida.CodPartida);
   const performance = resolvePerformance(input.partida);
-  const resources = deduplicateApuDetalles(input.detalles).map((detalle, index) =>
+  const normalizedDetalles = resolveCalculatedPercentageApuRows(
+    deduplicateApuDetalles(input.detalles),
+    input.sourceSystem,
+    input.warnings,
+  );
+  const resources = normalizedDetalles.map((detalle, index) =>
     createApuResource({
       apuId,
       detalle,
@@ -996,6 +1015,83 @@ function deduplicateApuDetalles(detalles: S10ApuDetalleRow[]) {
   return Array.from(byKey.values());
 }
 
+function resolveCalculatedPercentageApuRows(
+  detalles: S10ApuDetalleRow[],
+  sourceSystem: ImportSourceSystem,
+  warnings: Set<string>,
+): S10ApuDetalleRow[] {
+  const totals = {
+    labor: new Decimal(0),
+    material: new Decimal(0),
+    equipment: new Decimal(0),
+    tools: new Decimal(0),
+    subcontract: new Decimal(0),
+  };
+
+  for (const detalle of detalles) {
+    const unit = normalizeKnownUnit(detalle.CodUnidad, warnings);
+    if (unit.startsWith("%")) {
+      continue;
+    }
+
+    const subtotal = toDecimal(detalle.Parcial1 ?? new Decimal(detalle.Cantidad ?? 0).times(detalle.Precio1 ?? 0));
+    const category = inferResourceCategory(detalle, unit);
+    if (category === "LABOR") {
+      totals.labor = totals.labor.plus(subtotal);
+    } else if (category === "MATERIAL") {
+      totals.material = totals.material.plus(subtotal);
+    } else if (category === "EQUIPMENT") {
+      totals.equipment = totals.equipment.plus(subtotal);
+    } else if (category === "TOOLS") {
+      totals.tools = totals.tools.plus(subtotal);
+    } else if (category === "SUBCONTRACT") {
+      totals.subcontract = totals.subcontract.plus(subtotal);
+    }
+  }
+
+  return detalles.map((detalle) => {
+    const unit = normalizeKnownUnit(detalle.CodUnidad, warnings);
+    const quantity = toDecimal(detalle.Cantidad);
+    const calculatedAmount = toDecimal(detalle.Precio1);
+    if (sourceSystem === "DELPHIN" || !unit.startsWith("%") || quantity.greaterThan(0) || calculatedAmount.lessThanOrEqualTo(0)) {
+      return detalle;
+    }
+
+    const base = getPercentageBaseTotal(unit, totals);
+    if (base.lessThanOrEqualTo(0)) {
+      return detalle;
+    }
+
+    return {
+      ...detalle,
+      Cantidad: normalizeInferredS10PercentageQuantity(calculatedAmount.dividedBy(base).times(100)),
+    };
+  });
+}
+
+function normalizeInferredS10PercentageQuantity(percent: Decimal) {
+  if (percent.greaterThan(0) && percent.lessThanOrEqualTo(1)) {
+    return percent.dividedBy(100).toDecimalPlaces(8, Decimal.ROUND_HALF_UP).toNumber();
+  }
+
+  return roundRate(percent);
+}
+
+function getPercentageBaseTotal(
+  unit: string,
+  totals: { labor: Decimal; material: Decimal; equipment: Decimal; tools: Decimal; subcontract: Decimal },
+) {
+  const baseToken = normalizeText(unit.replace("%", ""));
+
+  if (baseToken === "MO" || baseToken === "LABOR") return totals.labor;
+  if (baseToken === "MT" || baseToken === "MAT" || baseToken === "MATERIAL") return totals.material;
+  if (baseToken === "EQ" || baseToken === "EQUIPO" || baseToken === "EQUIPMENT") return totals.equipment;
+  if (baseToken === "TOOLS" || baseToken === "HERRAMIENTAS") return totals.tools;
+  if (baseToken === "SUB" || baseToken === "SUBCONTRATO" || baseToken === "SUBCONTRACT") return totals.subcontract;
+
+  return new Decimal(0);
+}
+
 function createApuResource(input: {
   apuId: string;
   detalle: S10ApuDetalleRow;
@@ -1038,7 +1134,7 @@ function createApuResource(input: {
 
 function normalizeApuQuantity(quantity: Decimal.Value | null | undefined, unit: string, sourceSystem: ImportSourceSystem) {
   const value = toDecimal(quantity);
-  if (sourceSystem !== "DELPHIN" && unit.startsWith("%") && value.greaterThan(0) && value.lessThanOrEqualTo(1)) {
+  if (sourceSystem === "S10" && unit.startsWith("%") && value.greaterThan(0) && value.lessThanOrEqualTo(1)) {
     return roundRate(value.times(100));
   }
 

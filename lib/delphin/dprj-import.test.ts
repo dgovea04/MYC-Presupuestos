@@ -19,10 +19,29 @@ describe("parseDelphinDprjToS10Snapshot", () => {
     });
     expect(snapshot.partidas.length).toBeGreaterThanOrEqual(3);
     expect(snapshot.apuDetalles.length).toBeGreaterThan(0);
+    expect(snapshot.resultadoPieSubpresupuestos).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ CodSubpresupuesto: "1.1", Linea: "02", Descripcion: "GASTOS GENERALES (12%)", Valor1: 508.42 }),
+        expect.objectContaining({ CodSubpresupuesto: "1.1", Linea: "03", Descripcion: "UTILIDAD (10%)", Valor1: 423.68 }),
+        expect.objectContaining({ CodSubpresupuesto: "1.1", Linea: "05", Descripcion: "IGV (18%)", Valor1: 930.4 }),
+        expect.objectContaining({ CodSubpresupuesto: "999", Linea: "06", Descripcion: "TOTAL PRESUPUESTO", Valor1: 6099.3 }),
+      ]),
+    );
     expect(draft.source).toBe("DELPHIN");
     expect(draft.budgets.length).toBeGreaterThanOrEqual(2);
 
     const estructuras = draft.budgets.find((budget) => budget.kind === "SUB_BUDGET" && budget.name === "ESTRUCTURAS.");
+    const general = draft.budgets.find((budget) => budget.kind === "GENERAL");
+    expect(general).toMatchObject({
+      generalExpensesRate: 0.12,
+      utilityRate: 0.1,
+      igvRate: 0.18,
+    });
+    expect(estructuras).toMatchObject({
+      generalExpensesRate: 0.12,
+      utilityRate: 0.1,
+      igvRate: 0.18,
+    });
     expect(estructuras?.levels).toEqual([
       expect.objectContaining({ code: "OE.2.1", name: "MOVIMIENTO DE TIERRAS", type: "TITLE" }),
       expect.objectContaining({ code: "OE.2.1.1", name: "NIVELACIÓN DE TERRENO", type: "SUBTITLE" }),
@@ -55,6 +74,14 @@ describe("parseDelphinDprjToS10Snapshot", () => {
     ]);
     expect(draft.resources.some((resource) => resource.description === "Peón")).toBe(true);
     expect(draft.itemMetadata.filter((metadata) => metadata.apuStatus !== "OK")).toHaveLength(0);
+    expect(draft.budgetFooterRows.find((rows) => rows.budgetId === general?.id)?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ variable: "PGG", manualValue: 508.42 }),
+        expect.objectContaining({ variable: "UTI", manualValue: 423.68 }),
+        expect.objectContaining({ variable: "IGV", manualValue: 930.4 }),
+        expect.objectContaining({ variable: "P_T", manualValue: 6099.3 }),
+      ]),
+    );
   }, 30000);
   it("keeps Delphin budgets as sub budgets when they contain their own title tree", () => {
     const buffer = readFileSync(resolve("presupuesto-ejemplo/de/Hospital.dprj"));
@@ -103,8 +130,17 @@ describe("parseDelphinDprjToS10Snapshot", () => {
         }),
       ]),
     );
+    expect(snapshot.resultadoPieSubpresupuestos).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ CodSubpresupuesto: "1", Linea: "02", Descripcion: "GASTOS GENERALES (0%)", Valor1: 0 }),
+        expect.objectContaining({ CodSubpresupuesto: "1", Linea: "03", Descripcion: "UTILIDAD (30%)", Valor1: 5607788.2 }),
+        expect.objectContaining({ CodSubpresupuesto: "1", Linea: "05", Descripcion: "IGV (18%)", Valor1: 4374074.79 }),
+        expect.objectContaining({ CodSubpresupuesto: "999", Linea: "06", Descripcion: "TOTAL PRESUPUESTO", Valor1: 87258458.95 }),
+      ]),
+    );
 
     const draft = createMycImportDraftFromS10(snapshot, { sourceSystem: "DELPHIN" });
+    const general = draft.budgets.find((budget) => budget.kind === "GENERAL");
     const arquitectura = draft.budgets.find((budget) => budget.kind === "SUB_BUDGET" && budget.name === "ARQUITECTURA");
     const porcelanato = arquitectura?.items.find((item) => item.description === "PISO DE PORCELANATO 40x40 CM");
     const porcelanatoMetadata = draft.itemMetadata.find((metadata) => metadata.budgetItemId === porcelanato?.id);
@@ -113,6 +149,31 @@ describe("parseDelphinDprjToS10Snapshot", () => {
     const electromecanicas = draft.budgets.find((budget) => budget.kind === "SUB_BUDGET" && budget.name === "INSTALACIONES ELECTROMECANICAS");
     const drenajes = electromecanicas?.items.filter((item) => item.description === "INSTALACION DE DRENAJE") ?? [];
 
+    expect(general).toMatchObject({
+      generalExpensesRate: 0,
+      utilityRate: 0.3,
+      igvRate: 0.18,
+    });
+    expect(arquitectura).toMatchObject({
+      generalExpensesRate: 0,
+      utilityRate: 0.3,
+      igvRate: 0.18,
+    });
+    expect(draft.budgetFooterRows.find((rows) => rows.budgetId === general?.id)?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ variable: "PGG", manualValue: 0 }),
+        expect.objectContaining({ variable: "UTI", manualValue: 17064887.68 }),
+        expect.objectContaining({ variable: "IGV", manualValue: 13310612.37 }),
+        expect.objectContaining({ variable: "P_T", manualValue: 87258458.95 }),
+      ]),
+    );
+    expect(draft.budgetFooterRows.find((rows) => rows.budgetId === arquitectura?.id)?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ variable: "UTI", manualValue: 5607788.2 }),
+        expect.objectContaining({ variable: "IGV", manualValue: 4374074.79 }),
+        expect.objectContaining({ variable: "P_T", manualValue: 28674490.31 }),
+      ]),
+    );
     expect(porcelanato?.apu?.resources).toHaveLength(8);
     expect(porcelanatoMetadata).toMatchObject({
       apuStatus: "OK",

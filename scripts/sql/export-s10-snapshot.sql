@@ -155,8 +155,8 @@ SELECT
         pd.PropioPartida,
         pd.CodInsumo,
         pd.Cantidad,
-        pi.Precio1,
-        CONVERT(numeric(18, 4), ISNULL(pd.Cantidad, 0) * ISNULL(pi.Precio1, 0)) AS Parcial1,
+        COALESCE(ppi.Precio1, pi.Precio1) AS Precio1,
+        CONVERT(numeric(18, 4), ISNULL(pd.Cantidad, 0) * ISNULL(COALESCE(ppi.Precio1, pi.Precio1), 0)) AS Parcial1,
         i.Descripcion,
         i.CodUnidad,
         i.CodIndiceUnificado
@@ -179,6 +179,10 @@ SELECT
        AND pd.PropioPartida = spd.PropioPartida
       LEFT JOIN dbo.Insumo i
         ON i.CodInsumo = pd.CodInsumo
+      LEFT JOIN dbo.PrecioParticularInsumo ppi
+        ON ppi.CodPresupuesto = spd.CodPresupuesto
+       AND ppi.CodSubpresupuesto = spd.CodSubpresupuesto
+       AND ppi.CodInsumo = pd.CodInsumo
       LEFT JOIN dbo.PresupuestoInsumo pi
         ON pi.CodPresupuesto = spd.CodPresupuesto
        AND pi.CodInsumo = pd.CodInsumo

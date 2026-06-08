@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { AlertCircle, CheckCircle2, Database, ExternalLink, FileSpreadsheet, Loader2, Search, Upload } from "lucide-react";
+import { CheckCircle2, Database, ExternalLink, FileSpreadsheet, Loader2, Search, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ImportBudgetFooterPreview } from "@/components/imports/import-budget-footer-preview";
 import { ImportProgressPanel, type ImportProgressPanelStep } from "@/components/imports/import-progress-panel";
+import { ImportWarningSummary, ImportWarningsBadge } from "@/components/imports/import-warning-summary";
 import type { S10ImportDraftPreview } from "@/lib/s10/import-preview";
 
 type RequestState = "idle" | "loading" | "success" | "error";
@@ -92,8 +94,9 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
   const [selectedBudgetId, setSelectedBudgetId] = useState("");
   const [itemSearch, setItemSearch] = useState("");
   const [progressState, setProgressState] = useState<ImportProgressState | null>(null);
+  const warningCount = draftPreview?.warnings.length ?? 0;
   const totalItems = useMemo(
-    () => draftPreview?.budgets.reduce((sum, budget) => sum + budget.itemCount, 0) ?? 0,
+    () => draftPreview?.budgets.filter((budget) => budget.kind === "SUB_BUDGET").reduce((sum, budget) => sum + budget.itemCount, 0) ?? 0,
     [draftPreview],
   );
   const subBudgetOptions = useMemo(
@@ -299,7 +302,7 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
             <div className="flex flex-wrap gap-2">
               <Badge>{draftPreview.resourceCount} insumos</Badge>
               <Badge>{totalItems} partidas</Badge>
-              <Badge>{draftPreview.warnings.length} advertencias</Badge>
+              <ImportWarningsBadge count={warningCount} />
             </div>
           </div>
 
@@ -313,6 +316,8 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
               Importar a MYC
             </Button>
           </div>
+
+          <ImportWarningSummary warnings={draftPreview.warnings} />
 
           {importError ? <InlineMessage tone="error" message={importError} /> : null}
           {progressState && progressState.action === "import" ? (
@@ -333,7 +338,8 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
                 <div>
                   <p className="text-sm font-semibold text-emerald-900">{importResult.projectName}</p>
                   <p className="text-sm text-emerald-700">
-                    {importResult.budgetCount} presupuestos, {importResult.itemCount} partidas, {importResult.apuCount} APUs
+                    1 presupuesto general, {formatCount(importResult.subBudgetIds.length, "subpresupuesto", "subpresupuestos")},{" "}
+                    {formatCount(importResult.itemCount, "partida", "partidas")}, {importResult.apuCount} APUs
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -363,6 +369,8 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
             <Metric label="Herramientas" value={draftPreview.resourcesByCategory.TOOLS.toString()} />
             <Metric label="Subcontratos" value={draftPreview.resourcesByCategory.SUBCONTRACT.toString()} />
           </div>
+
+          <ImportBudgetFooterPreview preview={draftPreview} selectedBudgetId={selectedBudget?.id} />
 
           <div className="mt-6 overflow-hidden rounded-xl border border-slate-200">
             <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -443,20 +451,6 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
               </table>
             </div>
           </div>
-
-          {draftPreview.warnings.length > 0 ? (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-                <AlertCircle className="h-4 w-4" />
-                Advertencias de conversion
-              </div>
-              <ul className="mt-3 space-y-1 text-sm text-amber-900">
-                {draftPreview.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </section>
       ) : null}
     </div>
@@ -525,6 +519,10 @@ function formatMoney(value: number) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   });
+}
+
+function formatCount(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function normalizeSearchText(value: string) {
