@@ -5,6 +5,7 @@ import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/db/prisma";
 import {
   createMycImportDraftFromS10,
+  type ImportSourceSystem,
   type MycS10ImportDraft,
   type S10ExportSnapshot,
   type S10ImportMapperOptions,
@@ -16,6 +17,7 @@ import { getUserSettings } from "@/lib/data/settings";
 
 export type S10ImportPersistenceOptions = S10ImportMapperOptions & {
   companyId: string;
+  sourceSystem?: ImportSourceSystem;
 };
 
 export type S10ImportPersistenceResult = {
@@ -31,18 +33,24 @@ export type S10ImportPersistenceResult = {
 
 type PersistedResourceLookup = Map<string, string>;
 
+const importTransactionOptions = {
+  maxWait: 10_000,
+  timeout: 120_000,
+};
+
 export async function importS10SnapshotToMyc(
   userId: string,
   snapshot: S10ExportSnapshot,
   options: S10ImportPersistenceOptions,
 ): Promise<S10ImportPersistenceResult> {
+  const sourceSystem = options.sourceSystem ?? "S10";
   const company = await prisma.company.findFirst({
     where: { id: options.companyId, userId },
     select: { id: true },
   });
 
   if (!company) {
-    throw new Error("No puedes importar S10 en una empresa que no te pertenece");
+    throw new Error(`No puedes importar ${sourceSystem} en una empresa que no te pertenece`);
   }
 
   await assertWithinPlanLimit({ userId, resource: "projects" });
@@ -57,6 +65,7 @@ export async function importS10SnapshotToMyc(
       generalExpensesRate: settings.defaultGeneralExpensesRate,
       utilityRate: settings.defaultUtilityRate,
     },
+    sourceSystem,
   });
   assertDraftReadyForPersistence(draft);
 
@@ -65,19 +74,19 @@ export async function importS10SnapshotToMyc(
       data: {
         companyId: options.companyId,
         name: draft.project.name,
-        projectType: "Importado S10",
+        projectType: `Importado ${sourceSystem}`,
         status: "PLANNING",
       },
     });
 
-    const resourceIdsByDraftId = await persistResources(tx, options.companyId, draft.resources);
+    const resourceIdsByDraftId = await persistResources(tx, options.companyId, draft.resources, draft.source);
     const budgetIdsByDraftId = new Map<string, string>();
     const levelIdsByDraftId = new Map<string, string>();
     const itemIdsByDraftId = new Map<string, string>();
 
     const generalDraftBudget = draft.budgets.find((budget) => budget.kind === "GENERAL");
     if (!generalDraftBudget) {
-      throw new Error("El draft S10 no contiene presupuesto general.");
+      throw new Error(`El draft ${sourceSystem} no contiene presupuesto general.`);
     }
 
     const generalBudget = await tx.budget.create({
@@ -115,13 +124,13 @@ export async function importS10SnapshotToMyc(
       itemCount,
       apuCount,
     };
-  });
+  }, importTransactionOptions);
 }
 
 function assertDraftReadyForPersistence(draft: MycS10ImportDraft) {
   const nonOkApuCount = draft.itemMetadata.filter((metadata) => metadata.apuStatus !== "OK").length;
   if (nonOkApuCount > 0) {
-    throw new Error(`El draft S10 tiene ${nonOkApuCount} partidas con APU pendiente o inconsistente.`);
+    throw new Error(`El draft ${draft.source} tiene ${nonOkApuCount} partidas con APU pendiente o inconsistente.`);
   }
 }
 
@@ -155,11 +164,12 @@ async function persistResources(
   tx: Prisma.TransactionClient,
   companyId: string,
   resources: ResourceRecord[],
+  sourceSystem: ImportSourceSystem,
 ): Promise<PersistedResourceLookup> {
   const existingResources = await tx.resource.findMany({
     where: {
       companyId,
-      source: "S10",
+      source: sourceSystem,
     },
     select: {
       id: true,
@@ -193,7 +203,7 @@ async function persistResources(
         unit: resource.unit,
         unitPrice: resource.unitPrice,
         currency: resource.currency,
-        source: "S10",
+        source: resource.source,
       },
     });
     existingIdsByKey.set(key, created.id);

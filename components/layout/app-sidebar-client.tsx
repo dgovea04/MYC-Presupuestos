@@ -46,7 +46,16 @@ const NAV_ITEMS: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
   { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
-  { href: "/imports/s10", label: "Importar S10", icon: Import },
+  {
+    id: "importaciones",
+    label: "Importaciones",
+    icon: Import,
+    children: [
+      { href: "/imports/s10", label: "S10", icon: Import },
+      { href: "/imports/rw7", label: "RW7", icon: FileSpreadsheet },
+      { href: "/imports/delphin", label: "Delphin Express", icon: FileSpreadsheet },
+    ],
+  },
   { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
   { href: "/ai", label: "IA Local", icon: BotMessageSquare, requiredFeature: "ai.local" },
   {

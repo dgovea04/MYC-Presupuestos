@@ -76,16 +76,20 @@ export function calculateApuRows<T extends ApuCalculationRow>(rows: T[], perform
     }
 
     const quantity = round(toNumber(row.quantity));
-    const baseSubtotal = getPercentageBaseSubtotal(normalizedUnit, nonPercentageTotals);
+    const baseSubtotal = getPercentageBaseSubtotal(normalizedUnit, nonPercentageTotals, toNumber(row.unitPrice));
     const unitPrice = roundMoney(baseSubtotal);
     const subtotal = roundMoney((quantity / 100) * baseSubtotal);
 
-    return {
+    const calculatedRow = {
       ...row,
       quantity,
       unitPrice,
       subtotal,
     };
+
+    accumulateSubtotal(nonPercentageTotals, resolveRowBucket(row), subtotal);
+
+    return calculatedRow;
   });
 }
 
@@ -179,6 +183,7 @@ function buildCategoryTotals(rows: ApuCalculationRow[]): ApuCategoryTotal[] {
 function getPercentageBaseSubtotal(
   normalizedUnit: string,
   totals: { labor: number; material: number; equipment: number; tools: number; subcontract: number },
+  fallbackBaseSubtotal: number,
 ) {
   const baseToken = normalizedUnit.replace("%", "");
 
@@ -188,7 +193,7 @@ function getPercentageBaseSubtotal(
   if (baseToken === "TOOLS" || baseToken === "HERRAMIENTAS") return totals.tools;
   if (baseToken === "SUB" || baseToken === "SUBCONTRATO" || baseToken === "SUBCONTRACT") return totals.subcontract;
 
-  return 0;
+  return fallbackBaseSubtotal;
 }
 
 function accumulateSubtotal(

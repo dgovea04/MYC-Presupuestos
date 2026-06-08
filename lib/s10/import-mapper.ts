@@ -45,6 +45,19 @@ export type S10SubpresupuestoDetalleRow = {
   CodPartida?: string | null;
   CodPresupuestoPartida?: string | null;
   PropioPartida?: string | null;
+  LevelCode?: string | null;
+};
+
+export type S10BudgetLevelRow = {
+  CodPresupuesto: string;
+  CodSubpresupuesto: string;
+  Codigo: string;
+  Descripcion: string;
+  Nivel?: number | null;
+  Tipo?: BudgetLevelRecord["type"] | null;
+  ParentCodigo?: string | null;
+  Orden?: string | null;
+  SortOrder?: number | null;
 };
 
 export type S10ApuDetalleRow = {
@@ -89,16 +102,20 @@ export type S10ExportSnapshot = {
   subpresupuestos: S10SubpresupuestoRow[];
   partidas: S10PartidaRow[];
   apuDetalles: S10ApuDetalleRow[];
+  budgetLevels?: S10BudgetLevelRow[];
   subpresupuestoDetalles?: S10SubpresupuestoDetalleRow[];
   pieSubpresupuestos?: S10PieSubpresupuestoRow[];
   resultadoPieSubpresupuestos?: S10ResultadoPieSubpresupuestoRow[];
 };
+
+export type ImportSourceSystem = "S10" | "RW7" | "DELPHIN";
 
 export type S10ImportMapperOptions = {
   budgetCode?: string;
   companyId?: string;
   projectId?: string;
   defaultRates?: S10ImportDefaultRates;
+  sourceSystem?: ImportSourceSystem;
 };
 
 export type S10ImportDefaultRates = {
@@ -108,7 +125,7 @@ export type S10ImportDefaultRates = {
 };
 
 export type MycS10ImportDraft = {
-  source: "S10";
+  source: ImportSourceSystem;
   sourceBudgetCode: string;
   project: {
     id: string;
@@ -183,9 +200,11 @@ const knownS10Units = new Map<string, string>([
 export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options: S10ImportMapperOptions = {}): MycS10ImportDraft {
   const warnings = new Set<string>();
   const itemMetadata: S10ItemImportMetadata[] = [];
+  const sourceSystem = options.sourceSystem ?? "S10";
+  const sourcePrefix = sourceSystem.toLowerCase();
   const presupuesto = selectPresupuesto(snapshot.presupuestos, options.budgetCode);
   const sourceBudgetCode = presupuesto.CodPresupuesto;
-  const projectId = options.projectId ?? createId("s10-project", sourceBudgetCode);
+  const projectId = options.projectId ?? createId(`${sourcePrefix}-project`, sourceBudgetCode);
   const currency = normalizeCurrency(presupuesto.Moneda);
   const subpresupuestos = snapshot.subpresupuestos
     .filter((subpresupuesto) => subpresupuesto.CodPresupuesto === sourceBudgetCode)
@@ -193,6 +212,7 @@ export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options
     .sort((left, right) => left.CodSubpresupuesto.localeCompare(right.CodSubpresupuesto));
   const partidas = snapshot.partidas.filter((partida) => partida.CodPresupuesto === sourceBudgetCode);
   const apuDetalles = snapshot.apuDetalles.filter((detalle) => detalle.CodPresupuesto === sourceBudgetCode);
+  const budgetLevels = (snapshot.budgetLevels ?? []).filter((level) => level.CodPresupuesto === sourceBudgetCode);
   const subpresupuestoDetalles = (snapshot.subpresupuestoDetalles ?? []).filter(
     (detalle) => detalle.CodPresupuesto === sourceBudgetCode && isImportableSubpresupuestoDetalle(detalle),
   );
@@ -203,6 +223,8 @@ export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options
   const resources = createResources(apuDetalles, {
     companyId: options.companyId,
     currency,
+    sourceSystem,
+    sourcePrefix,
     warnings,
   });
   const { budgets, budgetFooterRows } = createBudgets({
@@ -211,21 +233,24 @@ export function createMycImportDraftFromS10(snapshot: S10ExportSnapshot, options
     currency,
     subpresupuestos,
     partidas,
+    budgetLevels,
     subpresupuestoDetalles,
     apuDetalles,
     pieSubpresupuestos,
     resultadoPieSubpresupuestos,
     defaultRates: options.defaultRates,
+    sourceSystem,
+    sourcePrefix,
     itemMetadata,
     warnings,
   });
 
   if (partidas.length > 0 && subpresupuestoDetalles.length === 0) {
-    warnings.add("No se encontraron metrados directos de partida en el snapshot S10; se uso cantidad 1 en cada item importado.");
+    warnings.add(`No se encontraron metrados directos de partida en el snapshot ${sourceSystem}; se uso cantidad 1 en cada item importado.`);
   }
 
   return {
-    source: "S10",
+    source: sourceSystem,
     sourceBudgetCode,
     project: {
       id: projectId,
@@ -273,7 +298,7 @@ function selectPresupuesto(presupuestos: S10PresupuestoRow[], budgetCode?: strin
 
 function createResources(
   apuDetalles: S10ApuDetalleRow[],
-  options: { companyId?: string; currency: string; warnings: Set<string> },
+  options: { companyId?: string; currency: string; sourceSystem: ImportSourceSystem; sourcePrefix: string; warnings: Set<string> },
 ) {
   const resourcesByCode = new Map<string, ResourceRecord>();
 
@@ -286,7 +311,7 @@ function createResources(
     const unit = normalizeKnownUnit(detalle.CodUnidad, options.warnings);
     const category = inferResourceCategory(detalle, unit);
     resourcesByCode.set(code, {
-      id: createId("s10-resource", code),
+      id: createId(`${options.sourcePrefix}-resource`, code),
       companyId: options.companyId ?? null,
       code,
       description: cleanText(detalle.Descripcion),
@@ -295,7 +320,7 @@ function createResources(
       unit,
       unitPrice: roundMoney(detalle.Precio1),
       currency: options.currency,
-      source: "S10",
+      source: options.sourceSystem,
     });
   }
 
@@ -308,11 +333,14 @@ function createBudgets(input: {
   currency: string;
   subpresupuestos: S10SubpresupuestoRow[];
   partidas: S10PartidaRow[];
+  budgetLevels: S10BudgetLevelRow[];
   subpresupuestoDetalles: S10SubpresupuestoDetalleRow[];
   apuDetalles: S10ApuDetalleRow[];
   pieSubpresupuestos: S10PieSubpresupuestoRow[];
   resultadoPieSubpresupuestos: S10ResultadoPieSubpresupuestoRow[];
   defaultRates?: S10ImportDefaultRates;
+  sourceSystem: ImportSourceSystem;
+  sourcePrefix: string;
   itemMetadata: S10ItemImportMetadata[];
   warnings: Set<string>;
 }) {
@@ -324,6 +352,7 @@ function createBudgets(input: {
       projectId: input.projectId,
       currency: input.currency,
       partidas: input.partidas.filter((partida) => partida.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto),
+      budgetLevels: input.budgetLevels.filter((level) => level.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto),
       subpresupuestoDetalles: input.subpresupuestoDetalles.filter(
         (detalle) => detalle.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto,
       ),
@@ -335,6 +364,8 @@ function createBudgets(input: {
       itemMetadata: input.itemMetadata,
       sortOrderOffset: index * 100000,
       defaultRates: input.defaultRates,
+      sourceSystem: input.sourceSystem,
+      sourcePrefix: input.sourcePrefix,
       warnings: input.warnings,
     }),
   );
@@ -347,7 +378,7 @@ function createBudgets(input: {
   });
   const generalRates = inferRatesFromResultadoPie(generalPieRows.resultadoRows, input.defaultRates);
   const generalBudget = calculateBudgetRecord({
-    id: createId("s10-budget", input.presupuesto.CodPresupuesto),
+    id: createId(`${input.sourcePrefix}-budget`, input.presupuesto.CodPresupuesto),
     projectId: input.projectId,
     parentBudgetId: null,
     kind: "GENERAL",
@@ -362,8 +393,8 @@ function createBudgets(input: {
     totalTax: 0,
     totalAmount: 0,
     levels: input.subpresupuestos.map((subpresupuesto, index) => ({
-      id: createId("s10-level", input.presupuesto.CodPresupuesto, subpresupuesto.CodSubpresupuesto),
-      budgetId: createId("s10-budget", input.presupuesto.CodPresupuesto),
+      id: createId(`${input.sourcePrefix}-level`, input.presupuesto.CodPresupuesto, subpresupuesto.CodSubpresupuesto),
+      budgetId: createId(`${input.sourcePrefix}-budget`, input.presupuesto.CodPresupuesto),
       parentId: null,
       type: "TITLE",
       code: subpresupuesto.CodSubpresupuesto,
@@ -373,9 +404,9 @@ function createBudgets(input: {
     items: subBudgets.flatMap((budget, index) =>
       budget.items.map((item, itemIndex) => ({
         ...item,
-        id: createId("s10-general-item", input.presupuesto.CodPresupuesto, item.code, String(index), String(itemIndex)),
-        budgetId: createId("s10-budget", input.presupuesto.CodPresupuesto),
-        levelId: createId("s10-level", input.presupuesto.CodPresupuesto, input.subpresupuestos[index]?.CodSubpresupuesto ?? "0"),
+        id: createId(`${input.sourcePrefix}-general-item`, input.presupuesto.CodPresupuesto, item.code, String(index), String(itemIndex)),
+        budgetId: createId(`${input.sourcePrefix}-budget`, input.presupuesto.CodPresupuesto),
+        levelId: createId(`${input.sourcePrefix}-level`, input.presupuesto.CodPresupuesto, input.subpresupuestos[index]?.CodSubpresupuesto ?? "0"),
         apu: null,
         sortOrder: index * 100000 + itemIndex + 1,
       })),
@@ -403,6 +434,7 @@ function createSubBudgetRecord(input: {
   projectId: string;
   currency: string;
   partidas: S10PartidaRow[];
+  budgetLevels: S10BudgetLevelRow[];
   subpresupuestoDetalles: S10SubpresupuestoDetalleRow[];
   apuDetalles: S10ApuDetalleRow[];
   pieSubpresupuestos: S10PieSubpresupuestoRow[];
@@ -410,20 +442,19 @@ function createSubBudgetRecord(input: {
   itemMetadata: S10ItemImportMetadata[];
   sortOrderOffset: number;
   defaultRates?: S10ImportDefaultRates;
+  sourceSystem: ImportSourceSystem;
+  sourcePrefix: string;
   warnings: Set<string>;
 }): S10SubBudgetRecordWithPie {
-  const budgetId = createId("s10-subbudget", input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto);
-  const levels: BudgetLevelRecord[] = [
-    {
-      id: createId("s10-subbudget-level", input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto),
-      budgetId,
-      parentId: null,
-      type: "TITLE",
-      code: input.subpresupuesto.CodSubpresupuesto,
-      name: cleanText(input.subpresupuesto.Descripcion),
-      sortOrder: 1,
-    },
-  ];
+  const budgetId = createId(`${input.sourcePrefix}-subbudget`, input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto);
+  const levels = createSubBudgetLevels({
+    budgetId,
+    presupuesto: input.presupuesto,
+    subpresupuesto: input.subpresupuesto,
+    budgetLevels: input.budgetLevels,
+    sourcePrefix: input.sourcePrefix,
+  });
+  const levelIdsByCode = new Map(levels.map((level) => [level.code, level.id]));
   const items =
     input.subpresupuestoDetalles.length > 0
       ? input.subpresupuestoDetalles
@@ -434,11 +465,13 @@ function createSubBudgetRecord(input: {
               detalle,
               partida: findPartidaForDetalle(input.partidas, detalle),
               budgetId,
-              levelId: levels[0]?.id ?? null,
+              levelId: resolveLevelIdForDetalle(detalle, levelIdsByCode, levels[0]?.id ?? null),
               apuDetalles: input.apuDetalles.filter((apuDetalle) => matchesApuDetalleForSubpresupuestoDetalle(apuDetalle, detalle)),
               itemMetadata: input.itemMetadata,
               sortOrder: input.sortOrderOffset + index + 1,
               currency: input.currency,
+              sourceSystem: input.sourceSystem,
+              sourcePrefix: input.sourcePrefix,
               warnings: input.warnings,
             }),
           )
@@ -451,6 +484,8 @@ function createSubBudgetRecord(input: {
             itemMetadata: input.itemMetadata,
             sortOrder: input.sortOrderOffset + index + 1,
             currency: input.currency,
+            sourceSystem: input.sourceSystem,
+            sourcePrefix: input.sourcePrefix,
             warnings: input.warnings,
           }),
         );
@@ -460,7 +495,7 @@ function createSubBudgetRecord(input: {
     ...calculateBudgetRecord({
     id: budgetId,
     projectId: input.projectId,
-    parentBudgetId: createId("s10-budget", input.presupuesto.CodPresupuesto),
+    parentBudgetId: createId(`${input.sourcePrefix}-budget`, input.presupuesto.CodPresupuesto),
     kind: "SUB_BUDGET",
     name: cleanText(input.subpresupuesto.Descripcion),
     currency: input.currency,
@@ -480,6 +515,90 @@ function createSubBudgetRecord(input: {
   };
 }
 
+function createSubBudgetLevels(input: {
+  budgetId: string;
+  presupuesto: S10PresupuestoRow;
+  subpresupuesto: S10SubpresupuestoRow;
+  budgetLevels: S10BudgetLevelRow[];
+  sourcePrefix: string;
+}) {
+  if (input.budgetLevels.length === 0) {
+    return [
+      {
+        id: createId(`${input.sourcePrefix}-subbudget-level`, input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto),
+        budgetId: input.budgetId,
+        parentId: null,
+        type: "TITLE",
+        code: input.subpresupuesto.CodSubpresupuesto,
+        name: cleanText(input.subpresupuesto.Descripcion),
+        sortOrder: 1,
+      },
+    ] satisfies BudgetLevelRecord[];
+  }
+
+  const sortedLevels = input.budgetLevels.slice().sort(compareBudgetLevelRows);
+  const levelIdsByCode = new Map(
+    sortedLevels.map((level) => [
+      cleanText(level.Codigo),
+      createId(
+        `${input.sourcePrefix}-subbudget-level`,
+        input.presupuesto.CodPresupuesto,
+        input.subpresupuesto.CodSubpresupuesto,
+        cleanText(level.Codigo),
+      ),
+    ]),
+  );
+
+  return sortedLevels.map((level, index): BudgetLevelRecord => {
+    const code = cleanText(level.Codigo);
+    const parentCode = cleanOptionalText(level.ParentCodigo);
+    const depth = toDecimal(level.Nivel).toNumber();
+
+    return {
+      id: levelIdsByCode.get(code) ?? createId(`${input.sourcePrefix}-subbudget-level`, input.presupuesto.CodPresupuesto, input.subpresupuesto.CodSubpresupuesto, code),
+      budgetId: input.budgetId,
+      parentId: parentCode == null ? null : levelIdsByCode.get(parentCode) ?? null,
+      type: level.Tipo ?? (depth <= 1 ? "TITLE" : "SUBTITLE"),
+      code,
+      name: cleanText(level.Descripcion),
+      sortOrder: toDecimal(level.SortOrder ?? index + 1).toNumber(),
+    };
+  });
+}
+
+function compareBudgetLevelRows(left: S10BudgetLevelRow, right: S10BudgetLevelRow) {
+  const sortComparison = toDecimal(left.SortOrder).comparedTo(toDecimal(right.SortOrder));
+  if (sortComparison !== 0) {
+    return sortComparison;
+  }
+
+  const orderComparison = cleanText(left.Orden ?? "").localeCompare(cleanText(right.Orden ?? ""), "es", { numeric: true });
+  if (orderComparison !== 0) {
+    return orderComparison;
+  }
+
+  return cleanText(left.Codigo).localeCompare(cleanText(right.Codigo), "es", { numeric: true });
+}
+
+function resolveLevelIdForDetalle(detalle: S10SubpresupuestoDetalleRow, levelIdsByCode: Map<string, string>, fallbackLevelId: string | null) {
+  const exactCode = cleanOptionalText(detalle.LevelCode);
+  if (exactCode != null) {
+    return levelIdsByCode.get(exactCode) ?? fallbackLevelId;
+  }
+
+  const item = cleanText(detalle.Item ?? "");
+  const parts = item.split(".").filter(Boolean);
+  for (let depth = parts.length - 1; depth >= 1; depth -= 1) {
+    const candidate = parts.slice(0, depth).join(".");
+    const levelId = levelIdsByCode.get(candidate);
+    if (levelId) {
+      return levelId;
+    }
+  }
+
+  return fallbackLevelId;
+}
+
 function createBudgetItemFromSubpresupuestoDetalle(input: {
   detalle: S10SubpresupuestoDetalleRow;
   partida?: S10PartidaRow;
@@ -489,6 +608,8 @@ function createBudgetItemFromSubpresupuestoDetalle(input: {
   itemMetadata: S10ItemImportMetadata[];
   sortOrder: number;
   currency: string;
+  sourceSystem: ImportSourceSystem;
+  sourcePrefix: string;
   warnings: Set<string>;
 }): BudgetItemRecord {
   const codPartida = cleanText(input.detalle.CodPartida ?? "");
@@ -511,6 +632,8 @@ function createBudgetItemFromSubpresupuestoDetalle(input: {
     apuDetalles: input.apuDetalles,
     sortOrder: input.sortOrder,
     currency: input.currency,
+    sourceSystem: input.sourceSystem,
+    sourcePrefix: input.sourcePrefix,
     warnings: input.warnings,
     quantity: roundRate(input.detalle.Metrado),
   });
@@ -542,11 +665,13 @@ function createBudgetItem(input: {
   itemMetadata?: S10ItemImportMetadata[];
   sortOrder: number;
   currency: string;
+  sourceSystem: ImportSourceSystem;
+  sourcePrefix: string;
   warnings: Set<string>;
   quantity?: number;
 }): BudgetItemRecord {
   const itemId = createId(
-    "s10-item",
+    `${input.sourcePrefix}-item`,
     input.partida.CodPresupuesto,
     input.partida.CodSubpresupuesto,
     input.partida.CodPartida,
@@ -561,6 +686,8 @@ function createBudgetItem(input: {
     unit,
     detalles: input.apuDetalles,
     currency: input.currency,
+    sourceSystem: input.sourceSystem,
+    sourcePrefix: input.sourcePrefix,
     warnings: input.warnings,
   });
   input.itemMetadata?.push({
@@ -643,7 +770,7 @@ function resolveApuImportStatus(
     };
   }
 
-  warnings.add("Algunos APUs S10 no cuadran con el precio unitario del presupuesto; se preservo el PU/metrado/parcial S10 y se omitio el APU en esas partidas.");
+  warnings.add("Algunos APUs no cuadran con el precio unitario del presupuesto; se preservo el PU/metrado/parcial de origen y se omitio el APU en esas partidas.");
   return {
     status: "PRICE_MISMATCH",
     apu: null,
@@ -817,9 +944,11 @@ function createApu(input: {
   unit: string;
   detalles: S10ApuDetalleRow[];
   currency: string;
+  sourceSystem: ImportSourceSystem;
+  sourcePrefix: string;
   warnings: Set<string>;
 }): ApuRecord {
-  const apuId = createId("s10-apu", input.partida.CodPresupuesto, input.partida.CodSubpresupuesto, input.partida.CodPartida);
+  const apuId = createId(`${input.sourcePrefix}-apu`, input.partida.CodPresupuesto, input.partida.CodSubpresupuesto, input.partida.CodPartida);
   const performance = resolvePerformance(input.partida);
   const resources = deduplicateApuDetalles(input.detalles).map((detalle, index) =>
     createApuResource({
@@ -827,6 +956,8 @@ function createApu(input: {
       detalle,
       sortOrder: index,
       currency: input.currency,
+      sourceSystem: input.sourceSystem,
+      sourcePrefix: input.sourcePrefix,
       warnings: input.warnings,
     }),
   );
@@ -870,13 +1001,15 @@ function createApuResource(input: {
   detalle: S10ApuDetalleRow;
   sortOrder: number;
   currency: string;
+  sourceSystem: ImportSourceSystem;
+  sourcePrefix: string;
   warnings: Set<string>;
 }): ApuResourceRecord {
   const code = cleanText(input.detalle.CodInsumo);
   const unit = normalizeKnownUnit(input.detalle.CodUnidad, input.warnings);
   const category = inferResourceCategory(input.detalle, unit);
   const resource: ResourceRecord = {
-    id: createId("s10-resource", code),
+    id: createId(`${input.sourcePrefix}-resource`, code),
     companyId: null,
     code,
     description: cleanText(input.detalle.Descripcion),
@@ -885,27 +1018,27 @@ function createApuResource(input: {
     unit,
     unitPrice: roundMoney(input.detalle.Precio1),
     currency: input.currency,
-    source: "S10",
+    source: input.sourceSystem,
   };
 
   return {
-    id: createId("s10-apu-row", input.apuId, code, String(input.sortOrder)),
+    id: createId(`${input.sourcePrefix}-apu-row`, input.apuId, code, String(input.sortOrder)),
     apuId: input.apuId,
     resourceId: resource.id,
     resourceType: category,
     description: resource.description,
     unit,
     crew: null,
-    quantity: normalizeS10ApuQuantity(input.detalle.Cantidad, unit),
+    quantity: normalizeApuQuantity(input.detalle.Cantidad, unit, input.sourceSystem),
     unitPrice: roundRate(input.detalle.Precio1),
     subtotal: roundMoney(input.detalle.Parcial1 ?? new Decimal(input.detalle.Cantidad ?? 0).times(input.detalle.Precio1 ?? 0)),
     resource,
   };
 }
 
-function normalizeS10ApuQuantity(quantity: Decimal.Value | null | undefined, unit: string) {
+function normalizeApuQuantity(quantity: Decimal.Value | null | undefined, unit: string, sourceSystem: ImportSourceSystem) {
   const value = toDecimal(quantity);
-  if (unit.startsWith("%") && value.greaterThan(0) && value.lessThanOrEqualTo(1)) {
+  if (sourceSystem !== "DELPHIN" && unit.startsWith("%") && value.greaterThan(0) && value.lessThanOrEqualTo(1)) {
     return roundRate(value.times(100));
   }
 

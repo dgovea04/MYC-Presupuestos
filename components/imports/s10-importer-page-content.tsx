@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ImportProgressPanel, type ImportProgressPanelStep } from "@/components/imports/import-progress-panel";
 import type { S10ImportPreview } from "@/lib/s10/s2k-analyzer";
 import type { S10ImportDraftPreview } from "@/lib/s10/import-preview";
 import type { S10ExportSnapshot } from "@/lib/s10/import-mapper";
@@ -61,6 +62,39 @@ type S10ImporterPageContentProps = {
   companies: CompanyOption[];
 };
 
+type S10ProgressAction = "preview" | "import";
+
+type S10ProgressState = {
+  action: S10ProgressAction;
+  status: "running" | "success" | "error";
+  title: string;
+  detail: string;
+  progress: number;
+  activeStepIndex: number;
+  fileName: string;
+  fileSize: number;
+};
+
+type S10ProgressSource = {
+  fileName: string;
+  fileSize: number;
+  label: string;
+};
+
+const previewProgressSteps: ImportProgressPanelStep[] = [
+  { label: "Preparando" },
+  { label: "Subiendo" },
+  { label: "Analizando" },
+  { label: "Previsualizando" },
+];
+
+const importProgressSteps: ImportProgressPanelStep[] = [
+  { label: "Preparando" },
+  { label: "Subiendo" },
+  { label: "Creando proyecto" },
+  { label: "Guardando APUs" },
+];
+
 export function S10ImporterPageContent({ companies }: S10ImporterPageContentProps) {
   const [s2kFile, setS2kFile] = useState<File | null>(null);
   const [snapshotFile, setSnapshotFile] = useState<File | null>(null);
@@ -90,6 +124,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
   const [importError, setImportError] = useState("");
   const [selectedBudgetId, setSelectedBudgetId] = useState("");
   const [itemSearch, setItemSearch] = useState("");
+  const [progressState, setProgressState] = useState<S10ProgressState | null>(null);
   const hasPreview = draftPreview != null;
   const warningCount = draftPreview?.warnings.length ?? 0;
   const totalItems = useMemo(
@@ -156,6 +191,10 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
 
     setDraftState("loading");
     setDraftError("");
+    setImportError("");
+    setImportResult(null);
+    const progressSource = createFileProgressSource(snapshotFile, "Snapshot S10");
+    setProgressState(createInitialProgress("preview", progressSource));
 
     const formData = new FormData();
     formData.set("file", snapshotFile);
@@ -166,26 +205,35 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
       formData.set("companyId", companyId);
     }
 
-    const response = await fetch("/api/imports/s10/draft", {
-      method: "POST",
-      body: formData,
-    });
+    let stopEstimate: (() => void) | null = null;
 
-    if (!response.ok) {
+    try {
+      const nextPreview = await postFormDataJson<S10ImportDraftPreview>("/api/imports/s10/draft", formData, {
+        onUploadProgress: (uploadProgress) => {
+          setProgressState(createUploadProgress("preview", progressSource, uploadProgress));
+        },
+        onProcessing: () => {
+          setProgressState(createProcessingProgress("preview", progressSource));
+          stopEstimate = startEstimatedProgress(setProgressState, "preview");
+        },
+      });
+
+      stopEstimate?.();
+      setLocalSnapshot(null);
+      setDraftPreview(nextPreview);
+      setSelectedBudgetId(nextPreview.budgets.find((budget) => budget.kind === "SUB_BUDGET")?.id ?? "");
+      setItemSearch("");
+      setDraftState("success");
+      setImportState("idle");
+      setImportError("");
+      setImportResult(null);
+      setProgressState(createSuccessProgress("preview", progressSource));
+    } catch (error) {
+      stopEstimate?.();
       setDraftState("error");
-      setDraftError(await readApiError(response));
-      return;
+      setDraftError(error instanceof Error ? error.message : "No se pudo completar la previsualizacion S10.");
+      setProgressState(createErrorProgress("preview", progressSource));
     }
-
-    const nextPreview = (await response.json()) as S10ImportDraftPreview;
-    setLocalSnapshot(null);
-    setDraftPreview(nextPreview);
-    setSelectedBudgetId(nextPreview.budgets.find((budget) => budget.kind === "SUB_BUDGET")?.id ?? "");
-    setItemSearch("");
-    setDraftState("success");
-    setImportState("idle");
-    setImportError("");
-    setImportResult(null);
   }
 
   async function importSnapshotToMyc() {
@@ -204,31 +252,55 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
     setImportState("loading");
     setImportError("");
     setImportResult(null);
-
-    const response =
+    const progressSource =
       localSnapshot && !snapshotFile
-        ? await fetch("/api/imports/s10/import", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              snapshot: localSnapshot,
-              companyId,
-              budgetCode: budgetCode.trim() || undefined,
-            }),
-          })
-        : await importSnapshotFileToMyc();
+        ? createLocalSnapshotProgressSource(localDatabase, budgetCode)
+        : createFileProgressSource(snapshotFile, "Snapshot S10");
+    setProgressState(createInitialProgress("import", progressSource));
 
-    if (!response.ok) {
+    let stopEstimate: (() => void) | null = null;
+
+    try {
+      const result =
+        localSnapshot && !snapshotFile
+          ? await postJsonWithEstimatedProgress<S10ImportResult>(
+              "/api/imports/s10/import",
+              {
+                snapshot: localSnapshot,
+                companyId,
+                budgetCode: budgetCode.trim() || undefined,
+              },
+              {
+                onProcessing: () => {
+                  setProgressState(createProcessingProgress("import", progressSource));
+                  stopEstimate = startEstimatedProgress(setProgressState, "import");
+                },
+              },
+            )
+          : await importSnapshotFileToMyc(progressSource, (uploadProgress) => {
+              setProgressState(createUploadProgress("import", progressSource, uploadProgress));
+            }, () => {
+              setProgressState(createProcessingProgress("import", progressSource));
+              stopEstimate = startEstimatedProgress(setProgressState, "import");
+            });
+
+      stopEstimate?.();
+      setImportResult(result);
+      setImportState("success");
+      setProgressState(createSuccessProgress("import", progressSource));
+    } catch (error) {
+      stopEstimate?.();
       setImportState("error");
-      setImportError(await readApiError(response));
-      return;
+      setImportError(error instanceof Error ? error.message : "No se pudo completar la importacion S10.");
+      setProgressState(createErrorProgress("import", progressSource));
     }
-
-    setImportResult((await response.json()) as S10ImportResult);
-    setImportState("success");
   }
 
-  async function importSnapshotFileToMyc() {
+  async function importSnapshotFileToMyc(
+    progressSource: S10ProgressSource,
+    onUploadProgress: (progress: number) => void,
+    onProcessing: () => void,
+  ) {
     if (!snapshotFile) {
       throw new Error("Selecciona el snapshot JSON exportado desde S10.");
     }
@@ -240,9 +312,12 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
       formData.set("budgetCode", budgetCode.trim());
     }
 
-    return fetch("/api/imports/s10/import", {
-      method: "POST",
-      body: formData,
+    return postFormDataJson<S10ImportResult>("/api/imports/s10/import", formData, {
+      onUploadProgress,
+      onProcessing: () => {
+        setProgressState(createProcessingProgress("import", progressSource));
+        onProcessing();
+      },
     });
   }
 
@@ -314,57 +389,73 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
     setDraftError("");
     setImportResult(null);
     setImportError("");
+    const progressSource = createLocalSnapshotProgressSource(localDatabase, budgetCode);
+    setProgressState(createInitialProgress("preview", progressSource));
+    let stopEstimate: (() => void) | null = startEstimatedProgress(setProgressState, "preview");
 
-    const exportResponse = await fetch("/api/imports/s10/sqlserver/export", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        server: localServer.trim() || ".\\SQLEXPRESS",
-        databaseName: localDatabase,
-        budgetCode: budgetCode.trim(),
-        user: localUser.trim() || undefined,
-        password: localPassword.trim() || undefined,
-      }),
-    });
+    try {
+      const exportBody = await postJsonWithEstimatedProgress<{ snapshot: S10ExportSnapshot }>(
+        "/api/imports/s10/sqlserver/export",
+        {
+          server: localServer.trim() || ".\\SQLEXPRESS",
+          databaseName: localDatabase,
+          budgetCode: budgetCode.trim(),
+          user: localUser.trim() || undefined,
+          password: localPassword.trim() || undefined,
+        },
+        {
+          onProcessing: () => {
+            setProgressState({
+              ...createProcessingProgress("preview", progressSource),
+              title: "Exportando snapshot S10 local",
+              detail: "Leyendo SQL Server local y convirtiendo el presupuesto seleccionado a snapshot MYC.",
+              progress: 35,
+              activeStepIndex: 2,
+            });
+          },
+        },
+      );
+      stopEstimate?.();
+      stopEstimate = startEstimatedProgress(setProgressState, "preview");
+      const nextPreview = await postJsonWithEstimatedProgress<S10ImportDraftPreview>(
+        "/api/imports/s10/draft",
+        {
+          snapshot: exportBody.snapshot,
+          budgetCode: budgetCode.trim(),
+          companyId,
+        },
+        {
+          onProcessing: () => {
+            setProgressState({
+              ...createProcessingProgress("preview", progressSource),
+              title: "Preparando previsualizacion S10",
+              detail: "Analizando presupuestos, partidas, APUs e insumos del snapshot exportado.",
+              progress: 70,
+              activeStepIndex: 3,
+            });
+          },
+        },
+      );
 
-    if (!exportResponse.ok) {
-      const message = await readApiError(exportResponse);
+      stopEstimate?.();
+      setLocalSnapshot(exportBody.snapshot);
+      setSnapshotFile(null);
+      setDraftPreview(nextPreview);
+      setSelectedBudgetId(nextPreview.budgets.find((budget) => budget.kind === "SUB_BUDGET")?.id ?? "");
+      setItemSearch("");
+      setDraftState("success");
+      setLocalExportState("success");
+      setImportState("idle");
+      setProgressState(createSuccessProgress("preview", progressSource));
+    } catch (error) {
+      stopEstimate?.();
+      const message = error instanceof Error ? error.message : "No se pudo completar la previsualizacion S10.";
       setLocalExportState("error");
       setLocalExportError(message);
       setDraftState("error");
       setDraftError(message);
-      return;
+      setProgressState(createErrorProgress("preview", progressSource));
     }
-
-    const exportBody = (await exportResponse.json()) as { snapshot: S10ExportSnapshot };
-    const draftResponse = await fetch("/api/imports/s10/draft", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        snapshot: exportBody.snapshot,
-        budgetCode: budgetCode.trim(),
-        companyId,
-      }),
-    });
-
-    if (!draftResponse.ok) {
-      const message = await readApiError(draftResponse);
-      setLocalExportState("error");
-      setLocalExportError(message);
-      setDraftState("error");
-      setDraftError(message);
-      return;
-    }
-
-    const nextPreview = (await draftResponse.json()) as S10ImportDraftPreview;
-    setLocalSnapshot(exportBody.snapshot);
-    setSnapshotFile(null);
-    setDraftPreview(nextPreview);
-    setSelectedBudgetId(nextPreview.budgets.find((budget) => budget.kind === "SUB_BUDGET")?.id ?? "");
-    setItemSearch("");
-    setDraftState("success");
-    setLocalExportState("success");
-    setImportState("idle");
   }
 
   return (
@@ -429,6 +520,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
                 setDraftPreview(null);
                 setImportResult(null);
                 setImportError("");
+                setProgressState(null);
               }}
             />
             <select
@@ -460,6 +552,18 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
 
           {draftError ? <InlineMessage tone="error" message={draftError} /> : null}
           {companies.length === 0 ? <InlineMessage tone="error" message="Crea una empresa antes de importar proyectos S10." /> : null}
+          {progressState && progressState.action === "preview" ? (
+            <ImportProgressPanel
+              activeStepIndex={progressState.activeStepIndex}
+              detail={progressState.detail}
+              fileName={progressState.fileName}
+              fileSize={progressState.fileSize}
+              progress={progressState.progress}
+              status={progressState.status}
+              steps={previewProgressSteps}
+              title={progressState.title}
+            />
+          ) : null}
         </section>
       </div>
 
@@ -570,6 +674,18 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
           </div>
 
           {importError ? <InlineMessage tone="error" message={importError} /> : null}
+          {progressState && progressState.action === "import" ? (
+            <ImportProgressPanel
+              activeStepIndex={progressState.activeStepIndex}
+              detail={progressState.detail}
+              fileName={progressState.fileName}
+              fileSize={progressState.fileSize}
+              progress={progressState.progress}
+              status={progressState.status}
+              steps={importProgressSteps}
+              title={progressState.title}
+            />
+          ) : null}
           {importResult ? (
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -789,4 +905,222 @@ async function readApiError(response: Response) {
   } catch {
     return "No se pudo completar la operacion.";
   }
+}
+
+function createFileProgressSource(file: File, label: string): S10ProgressSource {
+  return {
+    fileName: file.name,
+    fileSize: file.size,
+    label,
+  };
+}
+
+function createLocalSnapshotProgressSource(databaseName: string, budgetCode: string): S10ProgressSource {
+  return {
+    fileName: `${databaseName || "SQL Server S10"}${budgetCode.trim() ? ` - ${budgetCode.trim()}` : ""}`,
+    fileSize: 0,
+    label: "S10 local",
+  };
+}
+
+function createInitialProgress(action: S10ProgressAction, source: S10ProgressSource): S10ProgressState {
+  return {
+    action,
+    status: "running",
+    title: action === "preview" ? `Preparando previsualizacion ${source.label}` : `Preparando importacion ${source.label}`,
+    detail: "Validando archivo, presupuesto y empresa.",
+    progress: 5,
+    activeStepIndex: 0,
+    fileName: source.fileName,
+    fileSize: source.fileSize,
+  };
+}
+
+function createUploadProgress(action: S10ProgressAction, source: S10ProgressSource, uploadProgress: number): S10ProgressState {
+  return {
+    action,
+    status: "running",
+    title: `Subiendo ${source.label}`,
+    detail: `Transferencia del archivo al servidor: ${Math.round(uploadProgress * 100)}%.`,
+    progress: 10 + uploadProgress * 35,
+    activeStepIndex: 1,
+    fileName: source.fileName,
+    fileSize: source.fileSize,
+  };
+}
+
+function createProcessingProgress(action: S10ProgressAction, source: S10ProgressSource): S10ProgressState {
+  return {
+    action,
+    status: "running",
+    title: action === "preview" ? `Analizando snapshot ${source.label}` : `Importando proyecto ${source.label}`,
+    detail:
+      action === "preview"
+        ? "Leyendo presupuestos, subpresupuestos, partidas, APUs e insumos para armar la previsualizacion."
+        : "Creando proyecto, presupuestos, partidas, APUs e insumos en MYC.",
+    progress: action === "preview" ? 58 : 55,
+    activeStepIndex: 2,
+    fileName: source.fileName,
+    fileSize: source.fileSize,
+  };
+}
+
+function createSuccessProgress(action: S10ProgressAction, source: S10ProgressSource): S10ProgressState {
+  return {
+    action,
+    status: "success",
+    title: action === "preview" ? `Previsualizacion ${source.label} lista` : `Importacion ${source.label} completada`,
+    detail:
+      action === "preview"
+        ? "Ya puedes revisar la estructura antes de crear el proyecto."
+        : "El proyecto, sus presupuestos, partidas, APUs e insumos fueron creados correctamente.",
+    progress: 100,
+    activeStepIndex: action === "preview" ? previewProgressSteps.length - 1 : importProgressSteps.length - 1,
+    fileName: source.fileName,
+    fileSize: source.fileSize,
+  };
+}
+
+function createErrorProgress(action: S10ProgressAction, source: S10ProgressSource): S10ProgressState {
+  return {
+    action,
+    status: "error",
+    title: action === "preview" ? `No se pudo previsualizar ${source.label}` : `No se pudo importar ${source.label}`,
+    detail: "Revisa el mensaje de error y vuelve a intentarlo.",
+    progress: 100,
+    activeStepIndex: action === "preview" ? previewProgressSteps.length - 1 : importProgressSteps.length - 1,
+    fileName: source.fileName,
+    fileSize: source.fileSize,
+  };
+}
+
+function startEstimatedProgress(
+  setProgressState: Dispatch<SetStateAction<S10ProgressState | null>>,
+  action: S10ProgressAction,
+) {
+  const maxProgress = action === "preview" ? 92 : 96;
+  const intervalId = window.setInterval(() => {
+    setProgressState((current) => {
+      if (!current || current.action !== action || current.status !== "running") {
+        return current;
+      }
+
+      if (current.progress >= maxProgress) {
+        return current;
+      }
+
+      const increment = current.progress < 75 ? 3 : current.progress < 88 ? 1.5 : 0.5;
+      const nextProgress = Math.min(maxProgress, current.progress + increment);
+      const nextActiveStepIndex =
+        action === "preview"
+          ? nextProgress >= 85
+            ? 3
+            : current.activeStepIndex
+          : nextProgress >= 82
+            ? 3
+            : current.activeStepIndex;
+
+      return {
+        ...current,
+        progress: nextProgress,
+        activeStepIndex: nextActiveStepIndex,
+        detail:
+          action === "preview" && nextProgress >= 85
+            ? "Preparando resumen, advertencias y muestra de partidas."
+            : action === "import" && nextProgress >= 82
+              ? "Guardando APUs e insumos; esta etapa puede tardar en archivos grandes."
+              : current.detail,
+      };
+    });
+  }, 850);
+
+  return () => window.clearInterval(intervalId);
+}
+
+function postFormDataJson<T>(
+  endpoint: string,
+  formData: FormData,
+  handlers: {
+    onUploadProgress: (progress: number) => void;
+    onProcessing: () => void;
+  },
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    let processingStarted = false;
+
+    request.open("POST", endpoint);
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) {
+        return;
+      }
+
+      handlers.onUploadProgress(Math.min(1, event.loaded / event.total));
+    };
+    request.upload.onload = () => {
+      if (!processingStarted) {
+        processingStarted = true;
+        handlers.onProcessing();
+      }
+    };
+    request.onreadystatechange = () => {
+      if (request.readyState === XMLHttpRequest.HEADERS_RECEIVED && !processingStarted) {
+        processingStarted = true;
+        handlers.onProcessing();
+      }
+    };
+    request.onload = () => {
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(readApiErrorText(request.responseText)));
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(request.responseText) as T);
+      } catch {
+        reject(new Error("La respuesta de importacion no tiene un formato valido."));
+      }
+    };
+    request.onerror = () => reject(new Error("No se pudo conectar con el servidor de importacion."));
+    request.ontimeout = () => reject(new Error("La importacion tardo demasiado en responder."));
+    request.send(formData);
+  });
+}
+
+async function postJsonWithEstimatedProgress<T>(
+  endpoint: string,
+  payload: unknown,
+  handlers: {
+    onProcessing: () => void;
+  },
+): Promise<T> {
+  handlers.onProcessing();
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  return (await response.json()) as T;
+}
+
+function readApiErrorText(responseText: string) {
+  try {
+    const payload: unknown = JSON.parse(responseText);
+    if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim().length > 0) {
+      return payload.error;
+    }
+  } catch {
+    return responseText.trim() || "No se pudo completar la operacion.";
+  }
+
+  return "No se pudo completar la operacion.";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

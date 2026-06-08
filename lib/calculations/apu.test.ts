@@ -229,4 +229,83 @@ describe("calculateApuSummary", () => {
     expect(row?.quantity).toBe(2);
     expect(row?.subtotal).toBe(160);
   });
+
+  it("uses the row unit price as base for generic percentage resources", () => {
+    const [row] = calculateApuRows(
+      [
+        {
+          id: "percent-1",
+          apuId: "apu-1",
+          resourceId: "resource-1",
+          resourceType: "MATERIAL",
+          crew: null,
+          quantity: 20,
+          unitPrice: 232.76,
+          subtotal: 0,
+          resource: {
+            id: "resource-1",
+            code: "MAT-PCT",
+            description: "Accesorios",
+            category: "MATERIAL" as const,
+            unit: "%",
+            unitPrice: 232.76,
+            currency: "PEN",
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(row?.quantity).toBe(20);
+    expect(row?.unitPrice).toBe(232.76);
+    expect(row?.subtotal).toBe(46.55);
+  });
+
+  it("lets generic percentage labor feed later %MO resources", () => {
+    const rows = calculateApuRows(
+      [
+        {
+          id: "labor-percent",
+          apuId: "apu-1",
+          resourceId: "resource-1",
+          resourceType: "LABOR",
+          crew: null,
+          quantity: 40,
+          unitPrice: 52.38,
+          subtotal: 0,
+          resource: {
+            id: "resource-1",
+            code: "MO-PCT",
+            description: "Mano de obra de instalacion",
+            category: "LABOR" as const,
+            unit: "%",
+            unitPrice: 52.38,
+            currency: "PEN",
+          },
+        },
+        {
+          id: "tools-percent",
+          apuId: "apu-1",
+          resourceId: "resource-2",
+          resourceType: "TOOLS",
+          crew: null,
+          quantity: 3,
+          unitPrice: 20.95,
+          subtotal: 0,
+          resource: {
+            id: "resource-2",
+            code: "TOOLS-PCT",
+            description: "Herramientas manuales",
+            category: "TOOLS" as const,
+            unit: "%MO",
+            unitPrice: 20.95,
+            currency: "PEN",
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(rows.map((row) => row.subtotal)).toEqual([20.95, 0.63]);
+  });
 });

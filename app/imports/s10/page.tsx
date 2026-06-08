@@ -8,10 +8,10 @@ import { getUserCompanies } from "@/lib/data/projects";
 
 export default async function S10ImportsPage() {
   const session = await getAuthSession();
-  const companies = await getUserCompanies(session!.user.id);
+  const companies = session?.user?.id ? await getUserCompanies(session.user.id) : [];
 
   return (
-    <AppShell currentUser={session!.user}>
+    <AppShell currentUser={session?.user}>
       <Card className="border-slate-200">
         <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
           <PageHeaderCard

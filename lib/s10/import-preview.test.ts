@@ -97,6 +97,54 @@ describe("createS10ImportDraftPreview", () => {
       }),
     ]);
   });
+
+  it("includes hierarchy rows when the import snapshot carries budget levels", () => {
+    const preview = createS10ImportDraftPreview(
+      {
+        ...snapshot,
+        budgetLevels: [
+          {
+            CodPresupuesto: "0201003",
+            CodSubpresupuesto: "001",
+            Codigo: "01",
+            Descripcion: "ESTRUCTURAS",
+            Nivel: 1,
+            Tipo: "TITLE",
+            SortOrder: 1,
+          },
+          {
+            CodPresupuesto: "0201003",
+            CodSubpresupuesto: "001",
+            Codigo: "01.01",
+            Descripcion: "CONCRETO SIMPLE",
+            Nivel: 2,
+            Tipo: "SUBTITLE",
+            ParentCodigo: "01",
+            SortOrder: 2,
+          },
+        ],
+        subpresupuestoDetalles: [
+          {
+            ...snapshot.subpresupuestoDetalles![0],
+            CodPresupuesto: "0201003",
+            CodSubpresupuesto: "001",
+            Descripcion: "EXCAVACION",
+            Item: "01.01.01",
+            CodPartida: "01",
+            LevelCode: "01.01",
+          },
+        ],
+      },
+      { sampleItemLimit: 1 },
+    );
+
+    const subBudget = preview.budgets.find((budget) => budget.kind === "SUB_BUDGET");
+    expect(subBudget?.rows).toEqual([
+      expect.objectContaining({ kind: "LEVEL", code: "01", description: "ESTRUCTURAS", depth: 1 }),
+      expect.objectContaining({ kind: "LEVEL", code: "01.01", description: "CONCRETO SIMPLE", depth: 2 }),
+      expect.objectContaining({ kind: "ITEM", code: "01.01.01", description: "EXCAVACION", levelCode: "01.01", depth: 3 }),
+    ]);
+  });
 });
 
 describe("parseS10ExportSnapshotJson", () => {

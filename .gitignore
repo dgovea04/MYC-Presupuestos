@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local worktrees
 .worktrees/
+
+# large local database fixtures
+presupuesto-ejemplo/**/*.sqlite

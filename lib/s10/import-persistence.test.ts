@@ -188,6 +188,10 @@ describe("importS10SnapshotToMyc", () => {
     });
     expect(mocks.assertWithinPlanLimit).toHaveBeenCalledWith({ userId: "user-1", resource: "projects" });
     expect(mocks.assertWithinPlanLimit).toHaveBeenCalledWith({ userId: "user-1", resource: "budgets" });
+    expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), {
+      maxWait: 10_000,
+      timeout: 120_000,
+    });
     expect(mocks.projectCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         companyId: "company-1",

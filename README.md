@@ -387,5 +387,6 @@ npm.cmd run test -- lib/calculations/budget.test.ts lib/calculations/apu.test.ts
 - `prd/prd_MYC_Presupuestos.md`: PRD principal.
 - `prd/PRD_MYC_MonteCarlo_Risk_Analysis.md`: PRD de riesgo.
 - `prd/prd_ai_local_myc_presupuestos_codex.md`: PRD de IA local.
+- `docs/importador-delphin.md`: reglas de jerarquia, APU y porcentajes para importaciones Delphin Express.
 - `docs/superpowers/plans`: planes de implementacion historicos.
 - `presupuesto-ejemplo`: archivos Excel y referencias de formulas.

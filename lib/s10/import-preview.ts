@@ -3,6 +3,7 @@ import type { ResourceCategory } from "@/types/resource";
 import {
   createMycImportDraftFromS10,
   type MycS10ImportDraft,
+  type ImportSourceSystem,
   type S10ApuImportStatus,
   type S10ExportSnapshot,
   type S10ImportMapperOptions,
@@ -16,8 +17,28 @@ export type S10ImportDraftPreviewBudget = {
   totalAmount: number;
   itemCount: number;
   apuCount: number;
+  rows: S10ImportDraftPreviewRow[];
   items: S10ImportDraftPreviewItem[];
 };
+
+export type S10ImportDraftPreviewLevel = {
+  kind: "LEVEL";
+  budgetName: string;
+  code: string;
+  description: string;
+  levelType: BudgetRecord["levels"][number]["type"];
+  depth: number;
+  sortOrder: number;
+};
+
+export type S10ImportDraftPreviewItemRow = S10ImportDraftPreviewItem & {
+  kind: "ITEM";
+  levelCode?: string | null;
+  depth: number;
+  sortOrder: number;
+};
+
+export type S10ImportDraftPreviewRow = S10ImportDraftPreviewLevel | S10ImportDraftPreviewItemRow;
 
 export type S10ImportDraftPreviewItem = {
   budgetName: string;
@@ -34,7 +55,7 @@ export type S10ImportDraftPreviewItem = {
 };
 
 export type S10ImportDraftPreview = {
-  source: "S10";
+  source: ImportSourceSystem;
   sourceBudgetCode: string;
   projectName: string;
   resourceCount: number;
@@ -62,7 +83,7 @@ export function summarizeS10ImportDraft(draft: MycS10ImportDraft, sampleItemLimi
   const itemMetadataById = new Map(draft.itemMetadata.map((metadata) => [metadata.budgetItemId, metadata]));
 
   return {
-    source: "S10",
+    source: draft.source,
     sourceBudgetCode: draft.sourceBudgetCode,
     projectName: draft.project.name,
     resourceCount: draft.resources.length,
@@ -75,6 +96,7 @@ export function summarizeS10ImportDraft(draft: MycS10ImportDraft, sampleItemLimi
       totalAmount: budget.totalAmount,
       itemCount: budget.items.length,
       apuCount: budget.items.filter((item) => item.apu != null).length,
+      rows: createPreviewRowsForBudget(budget, itemMetadataById),
       items: createPreviewItemsForBudget(budget, itemMetadataById),
     })),
     sampleItems: createSampleItems(draft.budgets, itemMetadataById, sampleItemLimit),
@@ -115,6 +137,37 @@ function createSampleItems(
   return items;
 }
 
+function createPreviewRowsForBudget(
+  budget: BudgetRecord,
+  itemMetadataById: Map<string, MycS10ImportDraft["itemMetadata"][number]>,
+): S10ImportDraftPreviewRow[] {
+  const levelsById = new Map(budget.levels.map((level) => [level.id, level]));
+  const rows: S10ImportDraftPreviewRow[] = [
+    ...budget.levels.map((level): S10ImportDraftPreviewLevel => ({
+      kind: "LEVEL",
+      budgetName: budget.name,
+      code: level.code,
+      description: level.name,
+      levelType: level.type,
+      depth: calculateLevelDepth(level.id, levelsById),
+      sortOrder: level.sortOrder,
+    })),
+    ...budget.items.map((item): S10ImportDraftPreviewItemRow => {
+      const level = item.levelId ? levelsById.get(item.levelId) : undefined;
+
+      return {
+        kind: "ITEM",
+        ...createPreviewItem(budget, item, itemMetadataById),
+        levelCode: level?.code ?? null,
+        depth: level ? calculateLevelDepth(level.id, levelsById) + 1 : 1,
+        sortOrder: item.sortOrder,
+      };
+    }),
+  ];
+
+  return rows.sort(comparePreviewRows);
+}
+
 function createPreviewItemsForBudget(
   budget: BudgetRecord,
   itemMetadataById: Map<string, MycS10ImportDraft["itemMetadata"][number]>,
@@ -142,6 +195,38 @@ function createPreviewItem(
     calculatedApuUnitPrice: metadata?.calculatedApuUnitPrice,
     unitPriceDifference: metadata?.unitPriceDifference,
   };
+}
+
+function calculateLevelDepth(levelId: string, levelsById: Map<string, BudgetRecord["levels"][number]>) {
+  let depth = 1;
+  let current = levelsById.get(levelId);
+  const visited = new Set<string>();
+
+  while (current?.parentId && !visited.has(current.parentId)) {
+    visited.add(current.id);
+    const parent = levelsById.get(current.parentId);
+    if (!parent) {
+      break;
+    }
+
+    depth += 1;
+    current = parent;
+  }
+
+  return depth;
+}
+
+function comparePreviewRows(left: S10ImportDraftPreviewRow, right: S10ImportDraftPreviewRow) {
+  const codeComparison = left.code.localeCompare(right.code, "es", { numeric: true });
+  if (codeComparison !== 0) {
+    return codeComparison;
+  }
+
+  if (left.kind !== right.kind) {
+    return left.kind === "LEVEL" ? -1 : 1;
+  }
+
+  return left.sortOrder - right.sortOrder;
 }
 
 function createEmptyResourceCategoryCounts(): Record<ResourceCategory, number> {
