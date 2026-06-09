@@ -194,17 +194,18 @@ function mapPartidaEvidence(partida: CatalogPartidaRecord, score: number): AiEvi
 }
 
 function mapResourceEvidence(resource: ResourceRecord, score: number): AiEvidence {
+  const source = resource.source ?? undefined;
   const excerptParts = [
     `Categoria: ${resource.category}`,
     `Unidad: ${resource.unit}`,
-    resource.source ? `Fuente: ${resource.source}` : undefined,
+    source ? `Fuente: ${source}` : undefined,
     resource.iu ? `IU: ${resource.iu}` : undefined,
     resource.iuCurrent ? `IU vigente: ${resource.iuCurrent}` : undefined,
   ];
 
   return {
     id: `resource:${resource.id}`,
-    sourceType: "catalog_resource",
+    sourceType: isS10Source(source) ? "s10_import" : "catalog_resource",
     title: resource.description,
     excerpt: truncateText(excerptParts.filter(isPresent).join(". "), EXCERPT_LIMIT),
     score: roundScore(score),
@@ -213,7 +214,7 @@ function mapResourceEvidence(resource: ResourceRecord, score: number): AiEvidenc
       code: resource.code,
       category: resource.category,
       unit: resource.unit,
-      source: resource.source,
+      source,
       iu: resource.iu,
       iuCurrent: resource.iuCurrent,
       subcategory: resource.subcategory,

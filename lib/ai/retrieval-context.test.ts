@@ -69,6 +69,7 @@ const resources: ResourceRecord[] = [
     code: "MO-001",
     description: "Operario",
     category: "LABOR",
+    subcategory: "Mano de obra",
     unit: "hh",
     unitPrice: 25,
     currency: "PEN",
@@ -133,6 +134,31 @@ describe("retrieval-context", () => {
     expect(resourceEvidence?.excerpt).toContain("IU: 21");
     expect(resourceEvidence?.score).toBeLessThanOrEqual(1);
     expect(String(resourceEvidence?.score)).toMatch(/^\d(?:\.\d{1,3})?$/);
+  });
+
+  it("classifies S10 resource evidence while preserving resource metadata", () => {
+    const evidence = buildAiRetrievalEvidence({
+      query: "operario mano obra s10",
+      action: "apu",
+      catalogPartidas: partidas,
+      resources,
+      limit: 6,
+    });
+
+    const resourceEvidence = evidence.find((item) => item.id === "resource:res-operario");
+    expect(resourceEvidence).toMatchObject({
+      sourceType: "s10_import",
+      title: "Operario",
+      metadata: expect.objectContaining({
+        resourceId: "res-operario",
+        category: "LABOR",
+        unit: "hh",
+        source: "S10_OBRA_MYC",
+      }),
+    });
+    expect(resourceEvidence?.excerpt).toContain("Categoria: LABOR");
+    expect(resourceEvidence?.excerpt).toContain("Unidad: hh");
+    expect(resourceEvidence?.excerpt).toContain("Fuente: S10_OBRA_MYC");
   });
 
   it("retrieves curated technical document evidence without treating it as official law", () => {
