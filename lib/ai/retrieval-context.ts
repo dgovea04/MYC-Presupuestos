@@ -74,6 +74,7 @@ const TECHNICAL_SNIPPETS: TechnicalSnippet[] = [
 export function buildAiRetrievalEvidence(input: BuildAiRetrievalEvidenceInput): AiEvidence[] {
   const limit = normalizeLimit(input.limit);
   const retrievalQuery = buildRetrievalQuery(input);
+  const technicalQuery = buildTechnicalRetrievalQuery(input);
   const searchLimit = Math.max(limit * 2, DEFAULT_EVIDENCE_LIMIT);
   const directPartidaScores = new Map(
     searchCatalogPartidas({
@@ -106,7 +107,7 @@ export function buildAiRetrievalEvidence(input: BuildAiRetrievalEvidenceInput): 
   return [
     ...partidaResults.map((result) => mapPartidaEvidence(result.partida, result.similarity)),
     ...resourceResults.map((result) => mapResourceEvidence(result.resource, result.score)),
-    ...searchTechnicalEvidence(retrievalQuery, searchLimit),
+    ...searchTechnicalEvidence(technicalQuery, searchLimit),
   ]
     .sort(compareEvidence)
     .slice(0, limit);
@@ -116,6 +117,8 @@ export function formatEvidenceBlock(evidence: AiEvidence[], limit?: number): str
   if (evidence.length === 0) return "";
 
   const normalizedLimit = normalizeLimit(limit);
+  if (normalizedLimit === 0) return "";
+
   const lines = [...evidence]
     .sort(compareEvidence)
     .slice(0, normalizedLimit)
@@ -139,6 +142,21 @@ function buildRetrievalQuery(input: BuildAiRetrievalEvidenceInput): string {
     context?.unit,
     context?.activeTable,
     typeof context?.currentCost === "number" ? context.currentCost.toString() : undefined,
+  ];
+
+  return fields.filter((field): field is string => typeof field === "string" && field.trim().length > 0).join(" ");
+}
+
+function buildTechnicalRetrievalQuery(input: BuildAiRetrievalEvidenceInput): string {
+  const context = input.context;
+  const fields = [
+    input.query,
+    input.unit,
+    context?.project,
+    context?.module,
+    context?.selectedItem,
+    context?.unit,
+    context?.activeTable,
   ];
 
   return fields.filter((field): field is string => typeof field === "string" && field.trim().length > 0).join(" ");

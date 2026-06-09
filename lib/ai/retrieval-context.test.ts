@@ -155,6 +155,26 @@ describe("retrieval-context", () => {
     expect(technicalEvidence?.excerpt.toLowerCase()).not.toContain("norma oficial");
   });
 
+  it("does not retrieve technical document evidence from generic action terms alone", () => {
+    const evidence = buildAiRetrievalEvidence({
+      query: "hola",
+      action: "chat",
+      limit: 6,
+    });
+
+    expect(evidence.some((item) => item.sourceType === "technical_doc")).toBe(false);
+  });
+
+  it("does not retrieve formula technical evidence unless formula terms are present", () => {
+    const evidence = buildAiRetrievalEvidence({
+      query: "partida duplicada acero",
+      action: "review",
+      limit: 6,
+    });
+
+    expect(evidence.some((item) => item.id === "technical:formula-polinomica-monomios")).toBe(false);
+  });
+
   it("formats evidence deterministically and returns an empty block when no evidence exists", () => {
     const evidence = buildAiRetrievalEvidence({
       query: "concreto fc 210 columnas cemento",
@@ -174,5 +194,6 @@ describe("retrieval-context", () => {
     expect(block).toContain("[catalog_resource] Cemento Portland Tipo I");
     expect(block.split("\n").length).toBeLessThanOrEqual(10);
     expect(formatEvidenceBlock([])).toBe("");
+    expect(formatEvidenceBlock(evidence, 0)).toBe("");
   });
 });
