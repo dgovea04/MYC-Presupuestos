@@ -3,6 +3,8 @@ import type { ApuRecord, ApuResourceRecord } from "@/types/apu";
 import type { BudgetItemRecord, BudgetLevelRecord, BudgetRecord } from "@/types/budget";
 import type { ResourceCategory, ResourceRecord } from "@/types/resource";
 import { calculateBudgetItemApu, calculateBudgetRecord } from "@/lib/calculations/budget";
+import { calculateBudgetFooterBuilder } from "@/lib/calculations/budget-footer-builder";
+import type { BudgetFooterRowRecord } from "@/lib/budget-footer/types";
 
 export type S10PresupuestoRow = {
   CodPresupuesto: string;
@@ -41,6 +43,11 @@ export type S10SubpresupuestoDetalleRow = {
   MetradoBase?: number | null;
   Precio1?: number | null;
   Parcial1?: number | null;
+  ManoDeObra1?: number | null;
+  Material1?: number | null;
+  Equipo1?: number | null;
+  Subcontrato1?: number | null;
+  Subpartida1?: number | null;
   Nivel?: number | null;
   CodPartida?: string | null;
   CodPresupuestoPartida?: string | null;
@@ -165,8 +172,37 @@ export type S10ItemImportMetadata = {
 
 const solCurrency = "PEN";
 const moneyDecimals = 4;
+const apuUnitPriceAbsoluteTolerance = new Decimal(0.05);
+const apuUnitPriceRelativeTolerance = new Decimal(0.01);
 
 const knownS10Units = new Map<string, string>([
+  ["004", "%MO"],
+  ["005", "%MT"],
+  ["006", "bal"],
+  ["011", "ciento"],
+  ["015", "gal"],
+  ["021", "kg"],
+  ["024", "m"],
+  ["025", "m2"],
+  ["026", "m3"],
+  ["030", "pie2"],
+  ["032", "plancha"],
+  ["034", "punto"],
+  ["035", "pza"],
+  ["037", "saco"],
+  ["040", "u"],
+  ["041", "varilla"],
+  ["045", "bl"],
+  ["047", "bolsa"],
+  ["048", "cartucho"],
+  ["049", "conjunto"],
+  ["053", "gal"],
+  ["054", "glb"],
+  ["055", "hh"],
+  ["056", "hm"],
+  ["065", "m"],
+  ["070", "pulg2"],
+  ["082", "pie2"],
   ["101", "u"],
   ["103", "ciento"],
   ["201", "m"],
@@ -366,6 +402,7 @@ function createBudgets(input: {
       resultadoPieSubpresupuestos: input.resultadoPieSubpresupuestos.filter(
         (row) => row.CodSubpresupuesto === subpresupuesto.CodSubpresupuesto,
       ),
+      fallbackPieSubpresupuestos: input.pieSubpresupuestos.filter((row) => row.CodSubpresupuesto === "999"),
       itemMetadata: input.itemMetadata,
       sortOrderOffset: index * 100000,
       defaultRates: input.defaultRates,
@@ -381,7 +418,7 @@ function createBudgets(input: {
     pieSubpresupuestos: input.pieSubpresupuestos,
     resultadoPieSubpresupuestos: input.resultadoPieSubpresupuestos,
   });
-  const generalRates = inferRatesFromResultadoPie(generalPieRows.resultadoRows, input.defaultRates);
+  const generalRates = inferRatesFromResultadoPie(generalPieRows.resultadoRows, input.defaultRates, generalPieRows.pieRows);
   const generalBudget = calculateBudgetRecord({
     id: createId(`${input.sourcePrefix}-budget`, input.presupuesto.CodPresupuesto),
     projectId: input.projectId,
@@ -418,9 +455,9 @@ function createBudgets(input: {
     ),
   });
 
-  budgetFooterRows.push(createFooterRowsDraft(generalBudget.id, generalPieRows.pieRows, generalPieRows.resultadoRows));
+  budgetFooterRows.push(createFooterRowsDraft(generalBudget.id, generalPieRows.pieRows, generalPieRows.resultadoRows, generalBudget));
   for (const budget of subBudgets) {
-    budgetFooterRows.push(createFooterRowsDraft(budget.id, budget.__s10PieRows ?? [], budget.__s10ResultadoPieRows ?? []));
+    budgetFooterRows.push(createFooterRowsDraft(budget.id, budget.__s10PieRows ?? [], budget.__s10ResultadoPieRows ?? [], budget));
     delete budget.__s10PieRows;
     delete budget.__s10ResultadoPieRows;
   }
@@ -444,6 +481,7 @@ function createSubBudgetRecord(input: {
   apuDetalles: S10ApuDetalleRow[];
   pieSubpresupuestos: S10PieSubpresupuestoRow[];
   resultadoPieSubpresupuestos: S10ResultadoPieSubpresupuestoRow[];
+  fallbackPieSubpresupuestos: S10PieSubpresupuestoRow[];
   itemMetadata: S10ItemImportMetadata[];
   sortOrderOffset: number;
   defaultRates?: S10ImportDefaultRates;
@@ -495,7 +533,8 @@ function createSubBudgetRecord(input: {
           }),
         );
 
-  const rates = inferRatesFromResultadoPie(input.resultadoPieSubpresupuestos, input.defaultRates);
+  const footerPieRows = selectEffectivePieRows(input.pieSubpresupuestos, input.resultadoPieSubpresupuestos, input.fallbackPieSubpresupuestos);
+  const rates = inferRatesFromResultadoPie(input.resultadoPieSubpresupuestos, input.defaultRates, footerPieRows);
   return {
     ...calculateBudgetRecord({
     id: budgetId,
@@ -515,7 +554,7 @@ function createSubBudgetRecord(input: {
     levels,
     items,
     }),
-    __s10PieRows: input.pieSubpresupuestos,
+    __s10PieRows: footerPieRows,
     __s10ResultadoPieRows: input.resultadoPieSubpresupuestos,
   };
 }
@@ -643,7 +682,22 @@ function createBudgetItemFromSubpresupuestoDetalle(input: {
     quantity: roundRate(input.detalle.Metrado),
   });
   const partial = roundMoney(input.detalle.Parcial1 ?? new Decimal(item.quantity).times(item.unitPrice));
-  const apuResolution = resolveApuImportStatus(item.apu, item.unitPrice, input.warnings);
+  let apuResolution = resolveApuImportStatus(item.apu, item.unitPrice, input.warnings, { suppressWarning: true });
+  const legacyComponentApu = createLegacyComponentApuForDetalle({
+    item,
+    detalle: input.detalle,
+    partida,
+    unit,
+    currency: input.currency,
+    sourceSystem: input.sourceSystem,
+    sourcePrefix: input.sourcePrefix,
+  });
+  if (apuResolution.status !== "OK" && legacyComponentApu) {
+    apuResolution = resolveApuImportStatus(legacyComponentApu, item.unitPrice, input.warnings, { suppressWarning: true });
+  }
+  if (apuResolution.status !== "OK") {
+    apuResolution = resolveApuImportStatus(apuResolution.apu ?? legacyComponentApu ?? item.apu, item.unitPrice, input.warnings);
+  }
   input.itemMetadata.push({
     budgetItemId: item.id,
     apuStatus: apuResolution.status,
@@ -659,6 +713,71 @@ function createBudgetItemFromSubpresupuestoDetalle(input: {
     apu: apuResolution.apu,
     unitPrice: roundMoney(input.detalle.Precio1 ?? item.unitPrice),
     partial,
+  };
+}
+
+function createLegacyComponentApuForDetalle(input: {
+  item: BudgetItemRecord;
+  detalle: S10SubpresupuestoDetalleRow;
+  partida: S10PartidaRow;
+  unit: string;
+  currency: string;
+  sourceSystem: ImportSourceSystem;
+  sourcePrefix: string;
+}): ApuRecord | null {
+  const quantity = toDecimal(input.detalle.Metrado);
+  if (quantity.lessThanOrEqualTo(0)) {
+    return null;
+  }
+
+  const components = [
+    { key: "labor", label: "MANO DE OBRA S10", category: "LABOR", value: input.detalle.ManoDeObra1 },
+    { key: "material", label: "MATERIALES S10", category: "MATERIAL", value: input.detalle.Material1 },
+    { key: "equipment", label: "EQUIPOS S10", category: "EQUIPMENT", value: input.detalle.Equipo1 },
+    { key: "subcontract", label: "SUBCONTRATOS S10", category: "SUBCONTRACT", value: input.detalle.Subcontrato1 },
+    { key: "subpartida", label: "SUBPARTIDAS S10", category: "SUBPARTIDA", value: input.detalle.Subpartida1 },
+  ] as const;
+  const apuId = createId(
+    `${input.sourcePrefix}-apu-component`,
+    input.detalle.CodPresupuesto,
+    input.detalle.CodSubpresupuesto,
+    cleanText(input.detalle.Item ?? input.partida.CodPartida),
+  );
+  const resources: ApuResourceRecord[] = [];
+
+  for (const component of components) {
+    const subtotal = toDecimal(component.value);
+    if (subtotal.equals(0)) {
+      continue;
+    }
+
+    const unitAmount = roundMoney(subtotal.dividedBy(quantity));
+    resources.push({
+      id: createId(`${input.sourcePrefix}-apu-component-row`, apuId, component.key),
+      apuId,
+      resourceId: null,
+      resourceType: component.category,
+      description: component.label,
+      unit: input.unit,
+      crew: null,
+      quantity: 1,
+      unitPrice: unitAmount,
+      subtotal: unitAmount,
+    });
+  }
+
+  if (resources.length === 0) {
+    return null;
+  }
+
+  return {
+    id: apuId,
+    budgetItemId: input.item.id,
+    name: input.partida.Descripcion,
+    unit: input.unit,
+    performance: resolvePerformance(input.partida),
+    totalUnitCost: roundMoney(resources.reduce((sum, row) => sum.plus(row.subtotal), new Decimal(0))),
+    resources,
   };
 }
 
@@ -754,6 +873,7 @@ function resolveApuImportStatus(
   apu: ApuRecord | null | undefined,
   s10UnitPrice: number,
   warnings: Set<string>,
+  options: { suppressWarning?: boolean } = {},
 ): {
   status: S10ApuImportStatus;
   apu: ApuRecord | null;
@@ -766,7 +886,7 @@ function resolveApuImportStatus(
 
   const calculatedApu = calculateBudgetItemApu(apu);
   const difference = roundMoney(new Decimal(calculatedApu.totalUnitCost).minus(s10UnitPrice).abs());
-  if (new Decimal(difference).lessThanOrEqualTo(0.01)) {
+  if (isWithinApuUnitPriceTolerance(difference, s10UnitPrice)) {
     return {
       status: "OK",
       apu: calculatedApu,
@@ -775,13 +895,29 @@ function resolveApuImportStatus(
     };
   }
 
-  warnings.add("Algunos APUs no cuadran con el precio unitario del presupuesto; se preservo el PU/metrado/parcial de origen y se omitio el APU en esas partidas.");
+  if (!options.suppressWarning) {
+    warnings.add("Algunos APUs no cuadran con el precio unitario del presupuesto; se preservo el PU/metrado/parcial de origen y se omitio el APU en esas partidas.");
+  }
   return {
     status: "PRICE_MISMATCH",
     apu: null,
     calculatedApuUnitPrice: calculatedApu.totalUnitCost,
     unitPriceDifference: difference,
   };
+}
+
+function isWithinApuUnitPriceTolerance(difference: number, s10UnitPrice: number) {
+  const absoluteDifference = new Decimal(difference);
+  if (absoluteDifference.lessThanOrEqualTo(apuUnitPriceAbsoluteTolerance)) {
+    return true;
+  }
+
+  const unitPrice = new Decimal(s10UnitPrice).abs();
+  if (unitPrice.equals(0)) {
+    return false;
+  }
+
+  return absoluteDifference.dividedBy(unitPrice).lessThanOrEqualTo(apuUnitPriceRelativeTolerance);
 }
 
 function selectGeneralPieRows(input: {
@@ -819,18 +955,25 @@ function selectSingleFooterSubbudgetCode(resultadoRows: S10ResultadoPieSubpresup
   return uniqueCodes[0] ?? "";
 }
 
-function inferRatesFromResultadoPie(rows: S10ResultadoPieSubpresupuestoRow[], defaultRates?: S10ImportDefaultRates) {
+function inferRatesFromResultadoPie(
+  rows: S10ResultadoPieSubpresupuestoRow[],
+  defaultRates?: S10ImportDefaultRates,
+  pieRows: S10PieSubpresupuestoRow[] = [],
+) {
   const directCost = findPieValueByKind(rows, "direct");
   const subtotal = findPieValueByKind(rows, "subtotal");
   const generalExpenses = findOptionalPieValueByKind(rows, "generalExpenses");
   const utility = findOptionalPieValueByKind(rows, "utility");
   const igv = findOptionalPieValueByKind(rows, "igv");
+  const generalExpensesFormulaRate = findFormulaRateByKind(pieRows, "generalExpenses");
+  const utilityFormulaRate = findFormulaRateByKind(pieRows, "utility");
+  const igvFormulaRate = findFormulaRateByKind(pieRows, "igv");
 
   return {
     generalExpensesRate:
-      generalExpenses == null ? defaultRates?.generalExpensesRate ?? 0 : divideRate(generalExpenses, directCost),
-    utilityRate: utility == null ? defaultRates?.utilityRate ?? 0 : divideRate(utility, directCost),
-    igvRate: igv == null ? defaultRates?.igvRate ?? 0.18 : divideRate(igv, subtotal) || (defaultRates?.igvRate ?? 0.18),
+      generalExpenses == null ? generalExpensesFormulaRate ?? defaultRates?.generalExpensesRate ?? 0 : divideRate(generalExpenses, directCost),
+    utilityRate: utility == null ? utilityFormulaRate ?? defaultRates?.utilityRate ?? 0 : divideRate(utility, directCost),
+    igvRate: igv == null ? igvFormulaRate ?? defaultRates?.igvRate ?? 0.18 : divideRate(igv, subtotal) || (defaultRates?.igvRate ?? 0.18),
   };
 }
 
@@ -838,10 +981,11 @@ function createFooterRowsDraft(
   budgetId: string,
   pieRows: S10PieSubpresupuestoRow[],
   resultadoRows: S10ResultadoPieSubpresupuestoRow[],
+  budget?: Pick<BudgetRecord, "totalDirectCost" | "totalGeneralExpenses" | "totalUtility" | "totalTax" | "totalAmount">,
 ): S10BudgetFooterRowsDraft {
   const pieRowsByLine = new Map(pieRows.map((row) => [cleanText(row.Linea), row]));
   const hasOfficialResults = resultadoRows.length > 0;
-  const sourceRows = hasOfficialResults ? resultadoRows : createResultadoRowsFromPie(pieRows);
+  const sourceRows = hasOfficialResults ? resultadoRows : createResultadoRowsFromPie(pieRows, budget);
 
   return {
     budgetId,
@@ -867,14 +1011,77 @@ function createFooterRowsDraft(
   };
 }
 
-function createResultadoRowsFromPie(rows: S10PieSubpresupuestoRow[]): S10ResultadoPieSubpresupuestoRow[] {
-  return rows.map((row) => ({
-    CodPresupuesto: row.CodPresupuesto,
-    CodSubpresupuesto: row.CodSubpresupuesto,
-    Linea: row.Linea,
-    Descripcion: row.Descripcion,
-    Formula: row.Formula,
-    Valor1: 0,
+function createResultadoRowsFromPie(
+  rows: S10PieSubpresupuestoRow[],
+  budget?: Pick<BudgetRecord, "totalDirectCost" | "totalGeneralExpenses" | "totalUtility" | "totalTax" | "totalAmount">,
+): S10ResultadoPieSubpresupuestoRow[] {
+  if (!budget || rows.length === 0) {
+    return rows.map((row) => ({
+      CodPresupuesto: row.CodPresupuesto,
+      CodSubpresupuesto: row.CodSubpresupuesto,
+      Linea: row.Linea,
+      Descripcion: row.Descripcion,
+      Formula: row.Formula,
+      Valor1: 0,
+    }));
+  }
+
+  const builderRows = rows.map((row, index): BudgetFooterRowRecord => {
+    const description = cleanOptionalText(row.Descripcion) ?? "";
+    const sourceFormula = cleanOptionalText(row.Formula);
+    const variable = cleanOptionalText(row.Variable) ?? inferFooterVariable(description, sourceFormula, row.Linea);
+    const kind = classifyFooterRow(description, sourceFormula);
+    const isSeparator = sourceFormula != null && /^[=\-]+$/.test(cleanText(sourceFormula));
+
+    return {
+      id: `s10-footer-${cleanText(row.CodPresupuesto)}-${cleanText(row.CodSubpresupuesto)}-${cleanText(row.Linea)}-${index}`,
+      variable,
+      description,
+      formula: kind === "direct" || isSeparator ? null : sourceFormula,
+      manualValue: kind === "direct" ? roundMoney(budget.totalDirectCost) : 0,
+      iu: null,
+      highlight: shouldHighlightFooterRow(description, variable, sourceFormula),
+      sortOrder: index,
+    };
+  });
+  const calculated = calculateBudgetFooterBuilder({
+    rows: builderRows,
+    totalDirectCost: budget.totalDirectCost,
+    totalGeneralExpenses: budget.totalGeneralExpenses,
+    totalUtility: budget.totalUtility,
+    totalTax: budget.totalTax,
+    totalAmount: budget.totalAmount,
+    currencyDecimals: moneyDecimals,
+  });
+  const calculatedById = new Map(calculated.rows.map((row) => [row.id, row]));
+
+  return rows.map((row, index) => {
+    const id = `s10-footer-${cleanText(row.CodPresupuesto)}-${cleanText(row.CodSubpresupuesto)}-${cleanText(row.Linea)}-${index}`;
+    const calculatedRow = calculatedById.get(id);
+
+    return {
+      CodPresupuesto: row.CodPresupuesto,
+      CodSubpresupuesto: row.CodSubpresupuesto,
+      Linea: row.Linea,
+      Descripcion: row.Descripcion,
+      Formula: row.Formula,
+      Valor1: calculatedRow?.error ? 0 : calculatedRow?.value ?? 0,
+    };
+  });
+}
+
+function selectEffectivePieRows(
+  ownPieRows: S10PieSubpresupuestoRow[],
+  resultadoRows: S10ResultadoPieSubpresupuestoRow[],
+  fallbackPieRows: S10PieSubpresupuestoRow[],
+) {
+  if (resultadoRows.length > 0 || ownPieRows.length > 1 || fallbackPieRows.length === 0) {
+    return ownPieRows;
+  }
+
+  return fallbackPieRows.map((row) => ({
+    ...row,
+    CodSubpresupuesto: ownPieRows[0]?.CodSubpresupuesto ?? row.CodSubpresupuesto,
   }));
 }
 
@@ -890,11 +1097,30 @@ function findOptionalPieValueByKind(
   return row ? roundMoney(row.Valor1) : null;
 }
 
+function findFormulaRateByKind(
+  rows: S10PieSubpresupuestoRow[],
+  kind: "generalExpenses" | "utility" | "igv",
+) {
+  const row = rows.find((entry) => classifyFooterRow(entry.Descripcion, entry.Formula) === kind);
+  const formula = cleanOptionalText(row?.Formula);
+  if (!formula) {
+    return null;
+  }
+
+  const match = formula.match(/\*\s*(\d+(?:[.,]\d+)?)/);
+  if (!match) {
+    return null;
+  }
+
+  const value = Number.parseFloat(match[1].replace(",", "."));
+  return Number.isFinite(value) ? roundRate(value) : null;
+}
+
 function classifyFooterRow(description: string | null | undefined, formula: string | null | undefined) {
   const text = normalizeText(`${description ?? ""} ${formula ?? ""}`);
   if (text.includes("GASTO") || /\bGG\b/.test(text)) return "generalExpenses";
   if (text.includes("UTILIDAD") || /\bUTI?\b/.test(text)) return "utility";
-  if (text.includes("IGV") || text.includes("IMPUESTO")) return "igv";
+  if (text.includes("IGV") || /I\.?G\.?V/.test(text) || text.includes("IMPUESTO")) return "igv";
   if (text.includes("SUBTOTAL") || /\bST\b/.test(text)) return "subtotal";
   if (text.includes("TOTAL") || text.includes("PRESUPUESTO") || text.includes("P_T")) return "total";
   if (text.includes("DIRECTO") || text.includes("NDIRECTO")) return "direct";

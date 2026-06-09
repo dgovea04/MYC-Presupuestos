@@ -176,8 +176,8 @@ function fail(message: string): never {
 
 function printUsage() {
   console.error("Uso:");
-  console.error("  npm.cmd run s10:inspect -- --server localhost\\SQLEXPRESS --backup presupuesto-ejemplo\\obra.S2K --filelist");
-  console.error("  npm.cmd run s10:inspect -- --server localhost\\SQLEXPRESS --backup presupuesto-ejemplo\\obra.S2K --header");
+  console.error("  npm.cmd run s10:inspect -- --server localhost\\SQLEXPRESS --backup presupuesto-ejemplo\\s10\\obra.S2K --filelist");
+  console.error("  npm.cmd run s10:inspect -- --server localhost\\SQLEXPRESS --backup presupuesto-ejemplo\\s10\\obra.S2K --header");
   console.error("  npm.cmd run s10:inspect -- --server localhost\\SQLEXPRESS --database S10_OBRA --schema --out data-for-seed\\s10-schema.json");
   console.error("");
   console.error("Autenticacion:");

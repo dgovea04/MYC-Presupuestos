@@ -23,6 +23,7 @@ import type { S10ImportDraftPreview } from "@/lib/s10/import-preview";
 import type { S10ExportSnapshot } from "@/lib/s10/import-mapper";
 
 type RequestState = "idle" | "loading" | "success" | "error";
+type RestoreBackupSourceMode = "path" | "upload";
 
 type ApiErrorResponse = {
   error?: string;
@@ -59,11 +60,21 @@ type S10LocalBudget = {
   itemCount: number;
 };
 
+type S10LocalRestoreResult = {
+  backupPath: string;
+  database: S10LocalDatabase;
+  files: Array<{
+    logicalName: string;
+    type: "data" | "log";
+    targetPath: string;
+  }>;
+};
+
 type S10ImporterPageContentProps = {
   companies: CompanyOption[];
 };
 
-type S10ProgressAction = "preview" | "import";
+type S10ProgressAction = "preview" | "import" | "restore";
 
 type S10ProgressState = {
   action: S10ProgressAction;
@@ -96,12 +107,20 @@ const importProgressSteps: ImportProgressPanelStep[] = [
   { label: "Guardando APUs" },
 ];
 
+const restoreProgressSteps: ImportProgressPanelStep[] = [
+  { label: "Preparando" },
+  { label: "Subiendo" },
+  { label: "Restaurando" },
+  { label: "Verificando" },
+];
+
 export function S10ImporterPageContent({ companies }: S10ImporterPageContentProps) {
   const [s2kFile, setS2kFile] = useState<File | null>(null);
   const [snapshotFile, setSnapshotFile] = useState<File | null>(null);
   const [budgetCode, setBudgetCode] = useState("0201003");
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
   const [analysisState, setAnalysisState] = useState<RequestState>("idle");
+  const [localRestoreState, setLocalRestoreState] = useState<RequestState>("idle");
   const [localSqlState, setLocalSqlState] = useState<RequestState>("idle");
   const [localBudgetState, setLocalBudgetState] = useState<RequestState>("idle");
   const [localExportState, setLocalExportState] = useState<RequestState>("idle");
@@ -111,13 +130,20 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
   const [localServer, setLocalServer] = useState("np:\\\\.\\pipe\\SQLLocal\\SQLEXPRESS");
   const [localUser, setLocalUser] = useState("");
   const [localPassword, setLocalPassword] = useState("");
+  const [restoreBackupSourceMode, setRestoreBackupSourceMode] = useState<RestoreBackupSourceMode>("upload");
+  const [localBackupPath, setLocalBackupPath] = useState("presupuesto-ejemplo\\s10\\obra.S2K");
+  const [localRestoreFile, setLocalRestoreFile] = useState<File | null>(null);
+  const [restoreDatabaseName, setRestoreDatabaseName] = useState("S10_OBRA_MYC");
+  const [replaceExistingDatabase, setReplaceExistingDatabase] = useState(false);
   const [localDatabase, setLocalDatabase] = useState("");
   const [localDatabases, setLocalDatabases] = useState<S10LocalDatabase[]>([]);
   const [localBudgets, setLocalBudgets] = useState<S10LocalBudget[]>([]);
+  const [localRestoreResult, setLocalRestoreResult] = useState<S10LocalRestoreResult | null>(null);
   const [localSnapshot, setLocalSnapshot] = useState<S10ExportSnapshot | null>(null);
   const [draftPreview, setDraftPreview] = useState<S10ImportDraftPreview | null>(null);
   const [importResult, setImportResult] = useState<S10ImportResult | null>(null);
   const [analysisError, setAnalysisError] = useState("");
+  const [localRestoreError, setLocalRestoreError] = useState("");
   const [localSqlError, setLocalSqlError] = useState("");
   const [localBudgetError, setLocalBudgetError] = useState("");
   const [localExportError, setLocalExportError] = useState("");
@@ -344,6 +370,105 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
     setLocalSqlState("success");
   }
 
+  async function restoreLocalS2kBackup() {
+    if (restoreBackupSourceMode === "path" && !localBackupPath.trim()) {
+      setLocalRestoreError("Indica la ruta local del archivo .S2K.");
+      setLocalRestoreState("error");
+      return;
+    }
+
+    if (restoreBackupSourceMode === "upload" && !localRestoreFile) {
+      setLocalRestoreError("Selecciona un archivo .S2K.");
+      setLocalRestoreState("error");
+      return;
+    }
+
+    if (!restoreDatabaseName.trim()) {
+      setLocalRestoreError("Indica el nombre de la base destino.");
+      setLocalRestoreState("error");
+      return;
+    }
+
+    setLocalRestoreState("loading");
+    setLocalRestoreError("");
+    setLocalRestoreResult(null);
+    setLocalBudgets([]);
+    setLocalBudgetError("");
+    setLocalExportError("");
+    const progressSource =
+      restoreBackupSourceMode === "upload" && localRestoreFile
+        ? createFileProgressSource(localRestoreFile, "respaldo S10")
+        : createRestoreBackupPathProgressSource(localBackupPath);
+    setProgressState(createInitialProgress("restore", progressSource));
+    let stopEstimate: (() => void) | null = null;
+
+    try {
+      const result = restoreBackupSourceMode === "upload" && localRestoreFile
+        ? await restoreUploadedS2kBackup(
+            localRestoreFile,
+            (uploadProgress) => setProgressState(createUploadProgress("restore", progressSource, uploadProgress)),
+            () => {
+              setProgressState(createProcessingProgress("restore", progressSource));
+              stopEstimate = startEstimatedProgress(setProgressState, "restore");
+            },
+          )
+        : await postJsonWithEstimatedProgress<S10LocalRestoreResult>(
+            "/api/imports/s10/sqlserver/restore",
+            {
+              server: localServer.trim() || ".\\SQLEXPRESS",
+              backupPath: localBackupPath.trim(),
+              databaseName: restoreDatabaseName.trim(),
+              replaceExisting: replaceExistingDatabase,
+              user: localUser.trim() || undefined,
+              password: localPassword.trim() || undefined,
+            },
+            {
+              onProcessing: () => {
+                setProgressState(createProcessingProgress("restore", progressSource));
+                stopEstimate = startEstimatedProgress(setProgressState, "restore");
+              },
+            },
+          );
+
+      stopEstimate?.();
+      setLocalRestoreResult(result);
+      setLocalDatabases((current) => upsertLocalDatabase(current, result.database));
+      setLocalDatabase(result.database.databaseName);
+      setLocalRestoreState("success");
+      setLocalSqlState("success");
+      setLocalBudgetState("idle");
+      setProgressState(createSuccessProgress("restore", progressSource));
+    } catch (error) {
+      stopEstimate?.();
+      setLocalRestoreState("error");
+      setLocalRestoreError(error instanceof Error ? error.message : "No se pudo restaurar el backup S10 local.");
+      setProgressState(createErrorProgress("restore", progressSource));
+    }
+  }
+
+  async function restoreUploadedS2kBackup(
+    file: File,
+    onUploadProgress: (progress: number) => void,
+    onProcessing: () => void,
+  ) {
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("server", localServer.trim() || ".\\SQLEXPRESS");
+    formData.set("databaseName", restoreDatabaseName.trim());
+    formData.set("replaceExisting", replaceExistingDatabase ? "true" : "false");
+    if (localUser.trim()) {
+      formData.set("user", localUser.trim());
+    }
+    if (localPassword.trim()) {
+      formData.set("password", localPassword.trim());
+    }
+
+    return postFormDataJson<S10LocalRestoreResult>("/api/imports/s10/sqlserver/restore", formData, {
+      onUploadProgress,
+      onProcessing,
+    });
+  }
+
   async function loadLocalBudgets(databaseName = localDatabase) {
     if (!databaseName) {
       setLocalBudgetError("Selecciona una base S10.");
@@ -461,7 +586,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.3fr)_minmax(0,0.7fr)]">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
@@ -500,71 +625,106 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <FileJson className="h-4 w-4 text-sky-600" />
-                Draft MYC
+                <Upload className="h-4 w-4 text-sky-600" />
+                Restaurar respaldo .S2K
               </div>
-              <p className="text-sm text-slate-500">Previsualizacion de presupuestos, partidas, APUs e insumos.</p>
+              <p className="text-sm text-slate-500">
+                Crea una base local de SQL Server desde un respaldo S10 antes de listar presupuestos y exportar el draft.
+              </p>
             </div>
-            <StatusBadge state={draftState} />
+            <StatusBadge state={localRestoreState} />
           </div>
 
-          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(160px,220px)_140px_auto]">
-            <Input
-              accept=".json,application/json"
-              type="file"
-              onChange={(event) => {
-                setSnapshotFile(event.target.files?.[0] ?? null);
-                setLocalSnapshot(null);
-                setDraftPreview(null);
-                setImportResult(null);
-                setImportError("");
-                setProgressState(null);
-              }}
-            />
-            <select
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 disabled:bg-slate-50 disabled:text-slate-400"
-              disabled={companies.length === 0}
-              value={companyId}
-              onChange={(event) => {
-                setCompanyId(event.target.value);
-                setImportResult(null);
-                setImportError("");
-              }}
-            >
-              {companies.length === 0 ? (
-                <option value="">Sin empresas</option>
-              ) : (
-                companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.name}
-                  </option>
-                ))
-              )}
-            </select>
-            <Input value={budgetCode} onChange={(event) => setBudgetCode(event.target.value)} placeholder="0201003" />
-            <Button className="gap-2" disabled={draftState === "loading"} onClick={previewSnapshotDraft}>
-              {draftState === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-              Previsualizar
-            </Button>
-          </div>
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-3xl space-y-1">
+                <p className="text-sm font-medium text-slate-900">Origen del archivo</p>
+                <p className="text-sm text-slate-500">
+                  Buscar archivo es el flujo recomendado. Para archivos grandes, especialmente mayores a 100 MB, usa Ruta local si el .S2K
+                  ya esta en la misma maquina donde corre npm.cmd run dev. Si esta en otra maquina, subelo con Buscar archivo, copialo a esta
+                  maquina o usa una ruta compartida UNC como \\SERVIDOR\carpeta\obra.S2K.
+                </p>
+              </div>
+              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                <button
+                  className={createRestoreSourceModeClassName(restoreBackupSourceMode === "upload")}
+                  type="button"
+                  onClick={() => setRestoreBackupSourceMode("upload")}
+                >
+                  Buscar archivo
+                </button>
+                <button
+                  className={createRestoreSourceModeClassName(restoreBackupSourceMode === "path")}
+                  type="button"
+                  onClick={() => {
+                    setRestoreBackupSourceMode("path");
+                    setLocalRestoreFile(null);
+                  }}
+                >
+                  Ruta local
+                </button>
+              </div>
+            </div>
 
-          {draftError ? <InlineMessage tone="error" message={draftError} /> : null}
-          {companies.length === 0 ? <InlineMessage tone="error" message="Crea una empresa antes de importar proyectos S10." /> : null}
-          {progressState && progressState.action === "preview" ? (
-            <ImportProgressPanel
-              activeStepIndex={progressState.activeStepIndex}
-              detail={progressState.detail}
-              fileName={progressState.fileName}
-              fileSize={progressState.fileSize}
-              progress={progressState.progress}
-              status={progressState.status}
-              steps={previewProgressSteps}
-              title={progressState.title}
-            />
-          ) : null}
+            <div className="grid gap-3 xl:grid-cols-[minmax(180px,1fr)_minmax(150px,220px)]">
+              <div>
+                {restoreBackupSourceMode === "upload" ? (
+                  <Input
+                    key="restore-file-input"
+                    accept=".s2k,.S2K"
+                    type="file"
+                    onChange={(event) => setLocalRestoreFile(event.target.files?.[0] ?? null)}
+                  />
+                ) : (
+                  <Input
+                    key="restore-path-input"
+                    value={localBackupPath}
+                    onChange={(event) => setLocalBackupPath(event.target.value)}
+                    placeholder="presupuesto-ejemplo\\s10\\obra.S2K"
+                  />
+                )}
+              </div>
+              <Input value={restoreDatabaseName} onChange={(event) => setRestoreDatabaseName(event.target.value)} placeholder="S10_OBRA_MYC" />
+            </div>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700">
+                <input
+                  checked={replaceExistingDatabase}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  type="checkbox"
+                  onChange={(event) => setReplaceExistingDatabase(event.target.checked)}
+                />
+                Reemplazar
+              </label>
+              <Button className="gap-2" disabled={localRestoreState === "loading"} onClick={restoreLocalS2kBackup}>
+                {localRestoreState === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Restaurar .S2K
+              </Button>
+            </div>
+            {localRestoreError ? <InlineMessage tone="error" message={localRestoreError} /> : null}
+            {progressState && progressState.action === "restore" ? (
+              <ImportProgressPanel
+                activeStepIndex={progressState.activeStepIndex}
+                detail={progressState.detail}
+                fileName={progressState.fileName}
+                fileSize={progressState.fileSize}
+                progress={progressState.progress}
+                status={progressState.status}
+                steps={restoreProgressSteps}
+                title={progressState.title}
+              />
+            ) : null}
+            {localRestoreResult ? (
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <Metric label="Base restaurada" value={localRestoreResult.database.databaseName} />
+                <Metric label="Presupuestos" value={localRestoreResult.database.presupuestoCount.toString()} />
+                <Metric label="Archivos" value={localRestoreResult.files.length.toString()} />
+              </div>
+            ) : null}
+          </div>
         </section>
       </div>
 
@@ -575,13 +735,9 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
               <Server className="h-4 w-4 text-sky-600" />
               SQL Server S10 local
             </div>
-            <p className="text-sm text-slate-500">Lee bases S10 existentes en SQL Server Express y genera el draft sin restaurar un .S2K.</p>
+            <p className="text-sm text-slate-500">Lee bases S10 existentes en SQL Server Express y genera el draft MYC.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge state={localSqlState} />
-            <StatusBadge state={localBudgetState} />
-            <StatusBadge state={localExportState} />
-          </div>
+          <StatusBadge state={localSqlState} />
         </div>
 
         <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(240px,1fr)_minmax(140px,180px)_minmax(140px,180px)_auto]">
@@ -644,6 +800,74 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
         ) : null}
         {localBudgetError ? <InlineMessage tone="error" message={localBudgetError} /> : null}
         {localExportError ? <InlineMessage tone="error" message={localExportError} /> : null}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <FileJson className="h-4 w-4 text-sky-600" />
+              Draft MYC
+            </div>
+            <p className="text-sm text-slate-500">Previsualizacion de presupuestos, partidas, APUs e insumos.</p>
+          </div>
+          <StatusBadge state={draftState} />
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(160px,220px)_140px_auto]">
+          <Input
+            accept=".json,application/json"
+            type="file"
+            onChange={(event) => {
+              setSnapshotFile(event.target.files?.[0] ?? null);
+              setLocalSnapshot(null);
+              setDraftPreview(null);
+              setImportResult(null);
+              setImportError("");
+              setProgressState(null);
+            }}
+          />
+          <select
+            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 disabled:bg-slate-50 disabled:text-slate-400"
+            disabled={companies.length === 0}
+            value={companyId}
+            onChange={(event) => {
+              setCompanyId(event.target.value);
+              setImportResult(null);
+              setImportError("");
+            }}
+          >
+            {companies.length === 0 ? (
+              <option value="">Sin empresas</option>
+            ) : (
+              companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))
+            )}
+          </select>
+          <Input value={budgetCode} onChange={(event) => setBudgetCode(event.target.value)} placeholder="0201003" />
+          <Button className="gap-2" disabled={draftState === "loading"} onClick={previewSnapshotDraft}>
+            {draftState === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            Previsualizar
+          </Button>
+        </div>
+
+        {draftError ? <InlineMessage tone="error" message={draftError} /> : null}
+        {companies.length === 0 ? <InlineMessage tone="error" message="Crea una empresa antes de importar proyectos S10." /> : null}
+        {progressState && progressState.action === "preview" ? (
+          <ImportProgressPanel
+            activeStepIndex={progressState.activeStepIndex}
+            detail={progressState.detail}
+            fileName={progressState.fileName}
+            fileSize={progressState.fileSize}
+            progress={progressState.progress}
+            status={progressState.status}
+            steps={previewProgressSteps}
+            title={progressState.title}
+          />
+        ) : null}
       </section>
 
       {hasPreview ? (
@@ -853,6 +1077,13 @@ function InlineMessage({ message, tone }: { message: string; tone: "error" }) {
   return <div className={`mt-4 rounded-xl border px-3 py-2 text-sm ${className}`}>{message}</div>;
 }
 
+function createRestoreSourceModeClassName(active: boolean) {
+  return [
+    "h-8 rounded-lg px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70",
+    active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+  ].join(" ");
+}
+
 function formatNumber(value: number) {
   return value.toLocaleString("es-PE", {
     maximumFractionDigits: 4,
@@ -894,6 +1125,11 @@ function createLocalSqlServerParams(server: string, user: string, password: stri
   return params;
 }
 
+function upsertLocalDatabase(databases: S10LocalDatabase[], nextDatabase: S10LocalDatabase) {
+  const withoutCurrent = databases.filter((database) => database.databaseName !== nextDatabase.databaseName);
+  return [nextDatabase, ...withoutCurrent].sort((left, right) => left.databaseName.localeCompare(right.databaseName));
+}
+
 async function readApiError(response: Response) {
   try {
     const body = (await response.json()) as ApiErrorResponse;
@@ -919,12 +1155,25 @@ function createLocalSnapshotProgressSource(databaseName: string, budgetCode: str
   };
 }
 
+function createRestoreBackupPathProgressSource(backupPath: string): S10ProgressSource {
+  return {
+    fileName: backupPath.trim() || "Respaldo S10",
+    fileSize: 0,
+    label: "respaldo S10",
+  };
+}
+
 function createInitialProgress(action: S10ProgressAction, source: S10ProgressSource): S10ProgressState {
   return {
     action,
     status: "running",
-    title: action === "preview" ? `Preparando previsualizacion ${source.label}` : `Preparando importacion ${source.label}`,
-    detail: "Validando archivo, presupuesto y empresa.",
+    title:
+      action === "preview"
+        ? `Preparando previsualizacion ${source.label}`
+        : action === "restore"
+          ? `Preparando restauracion ${source.label}`
+          : `Preparando importacion ${source.label}`,
+    detail: action === "restore" ? "Validando respaldo, base destino y conexion SQL Server." : "Validando archivo, presupuesto y empresa.",
     progress: 5,
     activeStepIndex: 0,
     fileName: source.fileName,
@@ -949,10 +1198,17 @@ function createProcessingProgress(action: S10ProgressAction, source: S10Progress
   return {
     action,
     status: "running",
-    title: action === "preview" ? `Analizando snapshot ${source.label}` : `Importando proyecto ${source.label}`,
+    title:
+      action === "preview"
+        ? `Analizando snapshot ${source.label}`
+        : action === "restore"
+          ? `Restaurando base ${source.label}`
+          : `Importando proyecto ${source.label}`,
     detail:
       action === "preview"
         ? "Leyendo presupuestos, subpresupuestos, partidas, APUs e insumos para armar la previsualizacion."
+        : action === "restore"
+          ? "SQL Server esta restaurando el respaldo y moviendo archivos de datos y log."
         : "Creando proyecto, presupuestos, partidas, APUs e insumos en MYC.",
     progress: action === "preview" ? 58 : 55,
     activeStepIndex: 2,
@@ -965,13 +1221,25 @@ function createSuccessProgress(action: S10ProgressAction, source: S10ProgressSou
   return {
     action,
     status: "success",
-    title: action === "preview" ? `Previsualizacion ${source.label} lista` : `Importacion ${source.label} completada`,
+    title:
+      action === "preview"
+        ? `Previsualizacion ${source.label} lista`
+        : action === "restore"
+          ? `Restauracion ${source.label} completada`
+          : `Importacion ${source.label} completada`,
     detail:
       action === "preview"
         ? "Ya puedes revisar la estructura antes de crear el proyecto."
+        : action === "restore"
+          ? "La base S10 fue restaurada y verificada. Ya puedes listar sus presupuestos."
         : "El proyecto, sus presupuestos, partidas, APUs e insumos fueron creados correctamente.",
     progress: 100,
-    activeStepIndex: action === "preview" ? previewProgressSteps.length - 1 : importProgressSteps.length - 1,
+    activeStepIndex:
+      action === "preview"
+        ? previewProgressSteps.length - 1
+        : action === "restore"
+          ? restoreProgressSteps.length - 1
+          : importProgressSteps.length - 1,
     fileName: source.fileName,
     fileSize: source.fileSize,
   };
@@ -981,10 +1249,20 @@ function createErrorProgress(action: S10ProgressAction, source: S10ProgressSourc
   return {
     action,
     status: "error",
-    title: action === "preview" ? `No se pudo previsualizar ${source.label}` : `No se pudo importar ${source.label}`,
+    title:
+      action === "preview"
+        ? `No se pudo previsualizar ${source.label}`
+        : action === "restore"
+          ? `No se pudo restaurar ${source.label}`
+          : `No se pudo importar ${source.label}`,
     detail: "Revisa el mensaje de error y vuelve a intentarlo.",
     progress: 100,
-    activeStepIndex: action === "preview" ? previewProgressSteps.length - 1 : importProgressSteps.length - 1,
+    activeStepIndex:
+      action === "preview"
+        ? previewProgressSteps.length - 1
+        : action === "restore"
+          ? restoreProgressSteps.length - 1
+          : importProgressSteps.length - 1,
     fileName: source.fileName,
     fileSize: source.fileSize,
   };
@@ -994,7 +1272,7 @@ function startEstimatedProgress(
   setProgressState: Dispatch<SetStateAction<S10ProgressState | null>>,
   action: S10ProgressAction,
 ) {
-  const maxProgress = action === "preview" ? 92 : 96;
+  const maxProgress = action === "preview" ? 92 : action === "restore" ? 94 : 96;
   const intervalId = window.setInterval(() => {
     setProgressState((current) => {
       if (!current || current.action !== action || current.status !== "running") {
@@ -1012,6 +1290,10 @@ function startEstimatedProgress(
           ? nextProgress >= 85
             ? 3
             : current.activeStepIndex
+          : action === "restore"
+            ? nextProgress >= 88
+              ? 3
+              : current.activeStepIndex
           : nextProgress >= 82
             ? 3
             : current.activeStepIndex;
@@ -1023,6 +1305,8 @@ function startEstimatedProgress(
         detail:
           action === "preview" && nextProgress >= 85
             ? "Preparando resumen, advertencias y muestra de partidas."
+            : action === "restore" && nextProgress >= 88
+              ? "Verificando tablas S10 y presupuestos disponibles en la base restaurada."
             : action === "import" && nextProgress >= 82
               ? "Guardando APUs e insumos; esta etapa puede tardar en archivos grandes."
               : current.detail,

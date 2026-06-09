@@ -544,6 +544,106 @@ describe("createMycImportDraftFromS10", () => {
     });
   });
 
+  it("calculates footer values from S10 pie formulas when official result rows are missing", () => {
+    const draft = createMycImportDraftFromS10({
+      ...fixture,
+      presupuestos: [{ ...fixture.presupuestos[0], CostoOferta1: 855.6 }],
+      subpresupuestos: [
+        ...fixture.subpresupuestos,
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "002",
+          Descripcion: "ARQUITECTURA",
+        },
+      ],
+      pieSubpresupuestos: [
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "001",
+          Linea: "01",
+          Descripcion: "COSTO DIRECTO",
+          Variable: "nDirecto",
+          Formula: "nDirecto",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "002",
+          Linea: "01",
+          Descripcion: "COSTO DIRECTO",
+          Variable: "nDirecto",
+          Formula: "nDirecto",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "999",
+          Linea: "01",
+          Descripcion: "COSTO DIRECTO",
+          Variable: "nDirecto",
+          Formula: "nDirecto",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "999",
+          Linea: "02",
+          Descripcion: "GASTOS GENERALES",
+          Variable: "GG",
+          Formula: "nDirecto*0.125",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "999",
+          Linea: "03",
+          Descripcion: "UTILIDAD",
+          Variable: "UTI",
+          Formula: "nDirecto*0.075",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "999",
+          Linea: "04",
+          Descripcion: "SUB TOTAL",
+          Variable: "s_T",
+          Formula: "nDirecto+GG+UTI",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "999",
+          Linea: "05",
+          Descripcion: "I.G.V.(19%)",
+          Variable: "IGV",
+          Formula: "s_T*0.19",
+        },
+        {
+          CodPresupuesto: "0201003",
+          CodSubpresupuesto: "999",
+          Linea: "06",
+          Descripcion: "TOTAL",
+          Variable: "p_t",
+          Formula: "s_T+IGV",
+        },
+      ],
+      resultadoPieSubpresupuestos: [],
+    });
+
+    expect(draft.budgets[0]).toMatchObject({
+      generalExpensesRate: 0.125,
+      utilityRate: 0.075,
+      igvRate: 0.19,
+    });
+    expect(draft.budgetFooterRows.find((entry) => entry.budgetId === draft.budgets[0]?.id)?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ variable: "nDirecto", description: "COSTO DIRECTO", manualValue: 599.16 }),
+        expect.objectContaining({ variable: "GG", description: "GASTOS GENERALES", manualValue: 74.895 }),
+        expect.objectContaining({ variable: "UTI", description: "UTILIDAD", manualValue: 44.937 }),
+        expect.objectContaining({ variable: "s_T", description: "SUB TOTAL", manualValue: 718.992 }),
+        expect.objectContaining({ variable: "IGV", description: "I.G.V.(19%)", manualValue: 136.6085 }),
+        expect.objectContaining({ variable: "p_t", description: "TOTAL", manualValue: 855.6005 }),
+      ]),
+    );
+    expect(draft.budgetFooterRows.find((entry) => entry.budgetId === draft.budgets[1]?.id)?.rows).toHaveLength(6);
+    expect(draft.budgetFooterRows.find((entry) => entry.budgetId === draft.budgets[2]?.id)?.rows).toHaveLength(6);
+  });
+
   it("can select a specific S10 budget code", () => {
     const draft = createMycImportDraftFromS10(
       {
@@ -1089,6 +1189,171 @@ describe("createMycImportDraftFromS10", () => {
     expect(items.map((item) => item.apu?.totalUnitCost)).toEqual([52.39, 52.39]);
     expect(draft.itemMetadata.map((metadata) => metadata.apuStatus)).toEqual(["OK", "OK"]);
   });
+
+  it("accepts small S10 APU unit price differences as rounding noise", () => {
+    const draft = createMycImportDraftFromS10({
+      presupuestos: [
+        {
+          CodPresupuesto: "0302044",
+          Descripcion: "OBRA CON REDONDEO S10",
+          Moneda: "S/.",
+          CostoOferta1: 100.5,
+        },
+      ],
+      subpresupuestos: [
+        {
+          CodPresupuesto: "0302044",
+          CodSubpresupuesto: "001",
+          Descripcion: "ESTRUCTURAS",
+        },
+      ],
+      partidas: [
+        {
+          CodPresupuesto: "0302044",
+          CodSubpresupuesto: "001",
+          CodPartida: "900000000001",
+          Descripcion: "PARTIDA CON DIFERENCIA MENOR AL UNO POR CIENTO",
+          CodUnidad: "040",
+          Precio1: 100,
+        },
+      ],
+      subpresupuestoDetalles: [
+        {
+          CodPresupuesto: "0302044",
+          CodSubpresupuesto: "001",
+          Item: "01.01",
+          Orden: "01.01",
+          Secuencial: 1,
+          CodPartida: "900000000001",
+          CodPresupuestoPartida: "0302044",
+          PropioPartida: "01",
+          Descripcion: "PARTIDA CON DIFERENCIA MENOR AL UNO POR CIENTO",
+          Metrado: 1,
+          Precio1: 100,
+          Parcial1: 100,
+        },
+      ],
+      apuDetalles: [
+        {
+          CodPresupuesto: "0302044",
+          CodSubpresupuesto: "001",
+          CodPartida: "900000000001",
+          CodPresupuestoPartida: "0302044",
+          PropioPartida: "01",
+          CodInsumo: "0200000001",
+          Descripcion: "INSUMO REDONDEADO",
+          CodUnidad: "040",
+          Cantidad: 1,
+          Precio1: 100.5,
+          Parcial1: 100.5,
+        },
+      ],
+    });
+
+    expect(draft.itemMetadata[0]).toMatchObject({
+      apuStatus: "OK",
+      calculatedApuUnitPrice: 100.5,
+      unitPriceDifference: 0.5,
+    });
+    expect(draft.budgets[1]?.items[0]?.apu?.totalUnitCost).toBe(100.5);
+  });
+
+  it("uses legacy S10 component totals when catalog APU rows do not match the budget item unit price", () => {
+    const draft = createMycImportDraftFromS10({
+      presupuestos: [
+        {
+          CodPresupuesto: "0201001",
+          Descripcion: "HOSPITAL DE VENTANILLA",
+          Moneda: "S/.",
+          CostoOferta1: 45594.34,
+        },
+      ],
+      subpresupuestos: [
+        {
+          CodPresupuesto: "0201001",
+          CodSubpresupuesto: "001",
+          Descripcion: "ESTRUCTURAS",
+        },
+      ],
+      partidas: [
+        {
+          CodPresupuesto: "0201001",
+          CodSubpresupuesto: "001",
+          CodPartida: "907701050602",
+          CodPresupuestoPartida: "9999999",
+          Descripcion: "LOSA ALIGERADA - LADRILLO HUECO 20x30x30",
+          CodUnidad: "040",
+          Precio1: 1.67,
+          RendimientoMO: 1300,
+          RendimientoEQ: 1300,
+        },
+      ],
+      subpresupuestoDetalles: [
+        {
+          CodPresupuesto: "0201001",
+          CodSubpresupuesto: "001",
+          Item: "000000000000101",
+          Orden: "05.10.04",
+          Secuencial: 101,
+          CodPartida: "907701050602",
+          CodPresupuestoPartida: "9999999",
+          PropioPartida: "99",
+          Descripcion: "LOSA ALIGERADA - LADRILLO HUECO 20x30x30",
+          Unidad: "040",
+          Metrado: 27302,
+          Precio1: 1.67,
+          Parcial1: 45594.34,
+          ManoDeObra1: 13104.96,
+          Material1: 32216.36,
+          Equipo1: 273.02,
+        },
+      ],
+      apuDetalles: [
+        {
+          CodPresupuesto: "0201001",
+          CodSubpresupuesto: "001",
+          CodPartida: "907701050602",
+          CodPresupuestoPartida: "9999999",
+          PropioPartida: "99",
+          CodInsumo: "0147040001",
+          Descripcion: "PEON",
+          CodUnidad: "055",
+          Cantidad: 64,
+          Precio1: 8.25,
+          Parcial1: 528,
+          Tipo: "MO",
+        },
+        {
+          CodPresupuesto: "0201001",
+          CodSubpresupuesto: "001",
+          CodPartida: "907701050602",
+          CodPresupuestoPartida: "9999999",
+          PropioPartida: "99",
+          CodInsumo: "0217010001",
+          Descripcion: "LADRILLO PARA TECHO 20x30x30 cm",
+          CodUnidad: "040",
+          Cantidad: 1.03,
+          Precio1: 1.15,
+          Parcial1: 1.1845,
+        },
+      ],
+    });
+
+    const item = draft.budgets[1]?.items[0];
+
+    expect(draft.itemMetadata[0]).toMatchObject({
+      apuStatus: "OK",
+      s10UnitPrice: 1.67,
+      calculatedApuUnitPrice: 1.67,
+      unitPriceDifference: 0,
+    });
+    expect(item?.apu?.totalUnitCost).toBe(1.67);
+    expect(item?.apu?.resources.map((row) => [row.resourceType, row.description, row.unitPrice, row.subtotal])).toEqual([
+      ["LABOR", "MANO DE OBRA S10", 0.48, 0.48],
+      ["MATERIAL", "MATERIALES S10", 1.18, 1.18],
+      ["EQUIPMENT", "EQUIPOS S10", 0.01, 0.01],
+    ]);
+  });
 });
 
 describe("normalizeS10Unit", () => {
@@ -1107,5 +1372,13 @@ describe("normalizeS10Unit", () => {
     expect(normalizeS10Unit("603")).toBe("cm3");
     expect(normalizeS10Unit("922")).toBe("hja");
     expect(normalizeS10Unit("923")).toBe("jgo");
+    expect(normalizeS10Unit("055")).toBe("hh");
+    expect(normalizeS10Unit("056")).toBe("hm");
+    expect(normalizeS10Unit("040")).toBe("u");
+    expect(normalizeS10Unit("024")).toBe("m");
+    expect(normalizeS10Unit("025")).toBe("m2");
+    expect(normalizeS10Unit("026")).toBe("m3");
+    expect(normalizeS10Unit("004")).toBe("%MO");
+    expect(normalizeS10Unit("005")).toBe("%MT");
   });
 });

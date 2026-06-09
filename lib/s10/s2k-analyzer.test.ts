@@ -48,6 +48,13 @@ describe("analyzeS2kBuffer", () => {
     expect(result.asciiPreview).toContain("SQLite format 3");
   });
 
+  it("keeps the original file size when analyzing only a header slice", () => {
+    const result = analyzeS2kBuffer(Buffer.from("SQLite format 3\u0000rest"), 128, 113070592);
+
+    expect(result.detectedKind).toBe("sqlite");
+    expect(result.sizeBytes).toBe(113070592);
+  });
+
   it("keeps unknown binary files analyzable without throwing", () => {
     const result = analyzeS2kBuffer(Buffer.from([0, 1, 2, 255, 16, 32, 48]));
 

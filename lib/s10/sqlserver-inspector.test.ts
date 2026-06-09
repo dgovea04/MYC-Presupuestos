@@ -6,10 +6,13 @@ import {
   buildSqlcmdArgs,
   buildS10SchemaInspectionSql,
   buildSqlServerDatabaseListSql,
+  buildSqlServerDefaultPathsSql,
   buildSqlServerBackupFileListSql,
+  buildSqlServerRestoreDatabaseSql,
   createS10DatabaseCandidate,
   createS10SchemaManifest,
   extractJsonObjectFromSqlcmdOutput,
+  parseSqlServerBackupFileListRows,
   parseS10BudgetSummaries,
   parseSqlServerDatabaseNames,
   parseSqlcmdTsv,
@@ -45,6 +48,65 @@ describe("buildSqlServerBackupFileListSql", () => {
     expect(buildSqlServerBackupFileListSql("C:\\S10\\obra's.s2k")).toBe(
       "RESTORE FILELISTONLY FROM DISK = N'C:\\S10\\obra''s.s2k';",
     );
+  });
+});
+
+describe("buildSqlServerDefaultPathsSql", () => {
+  it("reads the instance default data and log paths", () => {
+    const sql = buildSqlServerDefaultPathsSql();
+
+    expect(sql).toContain("SERVERPROPERTY('InstanceDefaultDataPath')");
+    expect(sql).toContain("SERVERPROPERTY('InstanceDefaultLogPath')");
+  });
+});
+
+describe("parseSqlServerBackupFileListRows", () => {
+  it("parses logical backup files from RESTORE FILELISTONLY rows", () => {
+    expect(
+      parseSqlServerBackupFileListRows([
+        ["S10_Data", "C:\\Old\\S10.mdf", "D"],
+        ["S10_Datos", "C:\\Old\\S10_1.ndf", "D"],
+        ["S10_Log", "C:\\Old\\S10.ldf", "L"],
+      ]),
+    ).toEqual([
+      { logicalName: "S10_Data", type: "data" },
+      { logicalName: "S10_Datos", type: "data" },
+      { logicalName: "S10_Log", type: "log" },
+    ]);
+  });
+});
+
+describe("buildSqlServerRestoreDatabaseSql", () => {
+  it("builds a restore statement with MOVE targets and without replace by default", () => {
+    const sql = buildSqlServerRestoreDatabaseSql({
+      backupPath: "C:\\S10\\obra.S2K",
+      databaseName: "S10_OBRA_MYC",
+      files: [
+        { logicalName: "S10_Data", type: "data", targetPath: "C:\\SqlData\\S10_OBRA_MYC.mdf" },
+        { logicalName: "S10_Datos", type: "data", targetPath: "C:\\SqlData\\S10_OBRA_MYC_1.ndf" },
+        { logicalName: "S10_Log", type: "log", targetPath: "C:\\SqlLog\\S10_OBRA_MYC_log.ldf" },
+      ],
+      replaceExisting: false,
+    });
+
+    expect(sql).toContain("RESTORE DATABASE [S10_OBRA_MYC]");
+    expect(sql).toContain("FROM DISK = N'C:\\S10\\obra.S2K'");
+    expect(sql).toContain("MOVE N'S10_Data' TO N'C:\\SqlData\\S10_OBRA_MYC.mdf'");
+    expect(sql).toContain("MOVE N'S10_Log' TO N'C:\\SqlLog\\S10_OBRA_MYC_log.ldf'");
+    expect(sql).not.toContain("REPLACE");
+  });
+
+  it("sets single user and uses replace when requested", () => {
+    const sql = buildSqlServerRestoreDatabaseSql({
+      backupPath: "C:\\S10\\obra.S2K",
+      databaseName: "S10_OBRA_MYC",
+      files: [{ logicalName: "S10_Data", type: "data", targetPath: "C:\\SqlData\\S10_OBRA_MYC.mdf" }],
+      replaceExisting: true,
+    });
+
+    expect(sql).toContain("ALTER DATABASE [S10_OBRA_MYC] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;");
+    expect(sql).toContain("REPLACE");
+    expect(sql).toContain("ALTER DATABASE [S10_OBRA_MYC] SET MULTI_USER;");
   });
 });
 

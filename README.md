@@ -208,7 +208,17 @@ Por defecto usa `.\SQLEXPRESS` con seguridad integrada de Windows y `Trust serve
 npm.cmd run s10:sqlserver -- --list-databases --server localhost\SQLEXPRESS
 ```
 
-### 2. Ver presupuestos dentro de una base
+### 2. Restaurar un respaldo .S2K local
+
+Si tienes un archivo `.S2K` de S10, puedes restaurarlo como una base local de SQL Server Express:
+
+```powershell
+npm.cmd run s10:sqlserver -- --restore --backup presupuesto-ejemplo\s10\obra.S2K --database S10_OBRA_MYC
+```
+
+El comando valida que el `.S2K` sea un backup SQL Server, ejecuta `RESTORE FILELISTONLY`, mueve los archivos logicos al directorio local de datos/logs de SQL Server y verifica que la base restaurada tenga tablas S10. Si quieres sobrescribir una base existente, agrega `--replace`.
+
+### 3. Ver presupuestos dentro de una base
 
 ```powershell
 npm.cmd run s10:sqlserver -- --list-budgets --database S10_OBRA_MYC
@@ -216,7 +226,7 @@ npm.cmd run s10:sqlserver -- --list-budgets --database S10_OBRA_MYC
 
 Esto muestra codigos como `0302044` junto con la descripcion del presupuesto.
 
-### 3. Exportar el snapshot JSON
+### 4. Exportar el snapshot JSON
 
 ```powershell
 npm.cmd run s10:sqlserver -- --export --database S10_OBRA_MYC --budget 0302044 --out data-for-seed\s10-export-0302044.json

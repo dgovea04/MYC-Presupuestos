@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { createS10ImportPreview } from "@/lib/s10/s2k-analyzer";
 
-const maxS2kUploadBytes = 80 * 1024 * 1024;
+const maxS2kUploadBytes = 160 * 1024 * 1024;
+const s2kAnalysisReadBytes = 4096;
 
 export async function POST(request: Request) {
   const session = await getAuthSession();
@@ -25,13 +26,14 @@ export async function POST(request: Request) {
     }
 
     if (file.size > maxS2kUploadBytes) {
-      return NextResponse.json({ error: "El archivo .s2k supera el limite de 80 MB para analisis local." }, { status: 413 });
+      return NextResponse.json({ error: "El archivo .s2k supera el limite de 160 MB para analisis local." }, { status: 413 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = await file.slice(0, s2kAnalysisReadBytes).arrayBuffer();
     const preview = createS10ImportPreview({
       fileName: file.name,
       buffer: Buffer.from(arrayBuffer),
+      sizeBytes: file.size,
     });
 
     return NextResponse.json(preview);

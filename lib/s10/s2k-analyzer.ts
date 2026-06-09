@@ -18,7 +18,7 @@ export type S10ImportPreview = {
 
 const defaultPreviewBytes = 128;
 
-export function analyzeS2kBuffer(buffer: Buffer, previewBytes = defaultPreviewBytes): S2kAnalysis {
+export function analyzeS2kBuffer(buffer: Buffer, previewBytes = defaultPreviewBytes, sizeBytes = buffer.length): S2kAnalysis {
   const preview = buffer.subarray(0, Math.max(0, previewBytes));
   const asciiPreview = toVisibleAscii(preview);
   const utf16Preview = toVisibleUtf16Le(preview);
@@ -29,7 +29,7 @@ export function analyzeS2kBuffer(buffer: Buffer, previewBytes = defaultPreviewBy
   return {
     detectedKind,
     signature,
-    sizeBytes: buffer.length,
+    sizeBytes,
     hexPreview,
     asciiPreview,
     recommendedAction: getRecommendedAction(detectedKind),
@@ -39,11 +39,13 @@ export function analyzeS2kBuffer(buffer: Buffer, previewBytes = defaultPreviewBy
 export function createS10ImportPreview({
   fileName,
   buffer,
+  sizeBytes,
 }: {
   fileName: string;
   buffer: Buffer;
+  sizeBytes?: number;
 }): S10ImportPreview {
-  const analysis = analyzeS2kBuffer(buffer);
+  const analysis = analyzeS2kBuffer(buffer, defaultPreviewBytes, sizeBytes);
 
   return {
     fileName,

@@ -38,6 +38,24 @@ export type S10BudgetSummary = {
   itemCount: number;
 };
 
+export type SqlServerBackupFileType = "data" | "log";
+
+export type SqlServerBackupFile = {
+  logicalName: string;
+  type: SqlServerBackupFileType;
+};
+
+export type SqlServerRestoreTargetFile = SqlServerBackupFile & {
+  targetPath: string;
+};
+
+export type SqlServerRestoreDatabaseOptions = {
+  backupPath: string;
+  databaseName: string;
+  files: SqlServerRestoreTargetFile[];
+  replaceExisting: boolean;
+};
+
 export type SqlcmdOptions = {
   server: string;
   query: string;
@@ -146,6 +164,42 @@ export function buildSqlServerBackupHeaderSql(backupPath: string) {
   return `RESTORE HEADERONLY FROM DISK = N'${escapeSqlString(backupPath)}';`;
 }
 
+export function buildSqlServerDefaultPathsSql() {
+  return [
+    "SET NOCOUNT ON;",
+    "SELECT",
+    "  CONVERT(nvarchar(4000), SERVERPROPERTY('InstanceDefaultDataPath')) AS data_path,",
+    "  CONVERT(nvarchar(4000), SERVERPROPERTY('InstanceDefaultLogPath')) AS log_path;",
+  ].join("\n");
+}
+
+export function buildSqlServerRestoreDatabaseSql(options: SqlServerRestoreDatabaseOptions) {
+  const restoreLines = [
+    `RESTORE DATABASE ${quoteSqlIdentifier(options.databaseName)}`,
+    `FROM DISK = N'${escapeSqlString(options.backupPath)}'`,
+    "WITH",
+    ...options.files.map(
+      (file) => `  MOVE N'${escapeSqlString(file.logicalName)}' TO N'${escapeSqlString(file.targetPath)}',`,
+    ),
+    ...(options.replaceExisting ? ["  REPLACE,"] : []),
+    "  RECOVERY,",
+    "  STATS = 5;",
+  ];
+
+  if (!options.replaceExisting) {
+    return restoreLines.join("\n");
+  }
+
+  return [
+    `IF DB_ID(N'${escapeSqlString(options.databaseName)}') IS NOT NULL`,
+    "BEGIN",
+    `  ALTER DATABASE ${quoteSqlIdentifier(options.databaseName)} SET SINGLE_USER WITH ROLLBACK IMMEDIATE;`,
+    "END;",
+    ...restoreLines,
+    `ALTER DATABASE ${quoteSqlIdentifier(options.databaseName)} SET MULTI_USER;`,
+  ].join("\n");
+}
+
 export function buildS10SchemaInspectionSql(databaseName: string) {
   return [
     `USE ${quoteSqlIdentifier(databaseName)};`,
@@ -179,6 +233,22 @@ export function parseSqlcmdTsv(output: string) {
 
 export function parseSqlServerDatabaseNames(rows: string[][]) {
   return rows.map((row) => row[0]).filter((name): name is string => Boolean(name));
+}
+
+export function parseSqlServerBackupFileListRows(rows: string[][]): SqlServerBackupFile[] {
+  return rows
+    .map((row) => {
+      const logicalName = row[0] ?? "";
+      const rawType = (row[2] ?? "").toUpperCase();
+      const type: SqlServerBackupFileType | null = rawType === "D" ? "data" : rawType === "L" ? "log" : null;
+
+      if (!logicalName || !type) {
+        return null;
+      }
+
+      return { logicalName, type };
+    })
+    .filter((file): file is SqlServerBackupFile => file !== null);
 }
 
 export function createS10DatabaseCandidate(databaseName: string, rows: string[][]): S10DatabaseCandidate {

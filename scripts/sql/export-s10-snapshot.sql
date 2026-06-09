@@ -48,6 +48,11 @@ SELECT
       MetradoBase,
       Precio1,
       Parcial1,
+      ManoDeObra1,
+      Material1,
+      Equipo1,
+      Subcontrato1,
+      Subpartida1,
       Nivel,
       CodPartida,
       CodPresupuestoPartida,
@@ -155,8 +160,8 @@ SELECT
         pd.PropioPartida,
         pd.CodInsumo,
         pd.Cantidad,
-        COALESCE(ppi.Precio1, pi.Precio1) AS Precio1,
-        CONVERT(numeric(18, 4), ISNULL(pd.Cantidad, 0) * ISNULL(COALESCE(ppi.Precio1, pi.Precio1), 0)) AS Parcial1,
+        COALESCE(pi.Precio1, ppi.Precio1) AS Precio1,
+        CONVERT(numeric(18, 4), ISNULL(pd.Cantidad, 0) * ISNULL(COALESCE(pi.Precio1, ppi.Precio1), 0)) AS Parcial1,
         i.Descripcion,
         i.CodUnidad,
         i.CodIndiceUnificado
@@ -173,19 +178,34 @@ SELECT
           AND CodPartida <> '999999999999'
           AND ISNULL(Tipo, 1) <> 0
       ) spd
+      INNER JOIN dbo.Presupuesto pr
+        ON pr.CodPresupuesto = spd.CodPresupuesto
       INNER JOIN dbo.PartidaDetalle pd
         ON pd.CodPartida = spd.CodPartida
        AND pd.CodPresupuesto = spd.CodPresupuestoPartida
        AND pd.PropioPartida = spd.PropioPartida
       LEFT JOIN dbo.Insumo i
         ON i.CodInsumo = pd.CodInsumo
-      LEFT JOIN dbo.PrecioParticularInsumo ppi
-        ON ppi.CodPresupuesto = spd.CodPresupuesto
-       AND ppi.CodSubpresupuesto = spd.CodSubpresupuesto
-       AND ppi.CodInsumo = pd.CodInsumo
       LEFT JOIN dbo.PresupuestoInsumo pi
         ON pi.CodPresupuesto = spd.CodPresupuesto
        AND pi.CodInsumo = pd.CodInsumo
+      OUTER APPLY (
+        SELECT TOP 1 ppiLookup.Precio1
+        FROM dbo.PrecioParticularInsumo ppiLookup
+        WHERE ppiLookup.CodPresupuesto = spd.CodPresupuesto
+          AND ppiLookup.CodSubpresupuesto = spd.CodSubpresupuesto
+          AND ppiLookup.CodInsumo = pd.CodInsumo
+        ORDER BY
+          CASE
+            WHEN ppiLookup.Ano = CONVERT(char(4), YEAR(pr.Fecha))
+             AND ppiLookup.Mes = RIGHT('0' + CONVERT(varchar(2), MONTH(pr.Fecha)), 2)
+            THEN 0
+            ELSE 1
+          END,
+          ppiLookup.Ano DESC,
+          ppiLookup.Mes DESC,
+          ppiLookup.Precio1 ASC
+      ) ppi
       WHERE NOT EXISTS (
           SELECT 1
           FROM dbo.PresupuestoPartidaDetalle existing

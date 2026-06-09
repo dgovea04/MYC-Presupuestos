@@ -15,18 +15,21 @@ import {
   prepareS10SnapshotExportSql,
   type S10DatabaseCandidate,
 } from "@/lib/s10/sqlserver-inspector";
+import { restoreLocalS10Backup } from "@/lib/s10/sqlserver-local";
 
-type CliMode = "list-databases" | "list-budgets" | "export";
+type CliMode = "list-databases" | "list-budgets" | "export" | "restore";
 
 type CliOptions = {
   mode?: CliMode;
   server: string;
   databaseName?: string;
   budgetCode?: string;
+  backupPath?: string;
   outputPath?: string;
   user?: string;
   password?: string;
   trustServerCertificate: boolean;
+  replaceExisting: boolean;
 };
 
 const options = parseCliOptions(process.argv.slice(2));
@@ -39,6 +42,10 @@ if ((options.mode === "list-budgets" || options.mode === "export") && !options.d
   fail("Falta --database.");
 }
 
+if (options.mode === "restore" && (!options.databaseName || !options.backupPath)) {
+  fail("Falta --backup y --database para restaurar.");
+}
+
 if (options.mode === "export" && !options.budgetCode) {
   fail("Falta --budget.");
 }
@@ -47,6 +54,8 @@ if (options.mode === "list-databases") {
   listDatabases(options);
 } else if (options.mode === "list-budgets") {
   listBudgets(options);
+} else if (options.mode === "restore") {
+  restoreBackup(options);
 } else {
   exportSnapshot(options);
 }
@@ -114,6 +123,27 @@ function exportSnapshot(cliOptions: CliOptions) {
   } finally {
     fs.rmSync(tempSqlPath, { force: true });
     fs.rmSync(tempOutputPath, { force: true });
+  }
+}
+
+function restoreBackup(cliOptions: CliOptions) {
+  const result = restoreLocalS10Backup({
+    server: cliOptions.server,
+    backupPath: cliOptions.backupPath ?? "",
+    databaseName: cliOptions.databaseName ?? "",
+    replaceExisting: cliOptions.replaceExisting,
+    user: cliOptions.user,
+    password: cliOptions.password,
+    trustServerCertificate: cliOptions.trustServerCertificate,
+  });
+
+  console.log(`Backup S10 restaurado en ${result.database.databaseName}`);
+  console.log(`Archivo: ${result.backupPath}`);
+  console.log(`Tablas S10: ${result.database.matchedTables.join(", ")}`);
+  console.log(`Presupuestos: ${result.database.presupuestoCount}`);
+  console.log("Archivos restaurados:");
+  for (const file of result.files) {
+    console.log(`- ${file.logicalName} -> ${file.targetPath}`);
   }
 }
 
@@ -185,6 +215,7 @@ function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {
     server: ".\\SQLEXPRESS",
     trustServerCertificate: true,
+    replaceExisting: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -197,11 +228,16 @@ function parseCliOptions(args: string[]): CliOptions {
       options.mode = "list-budgets";
     } else if (token === "--export") {
       options.mode = "export";
+    } else if (token === "--restore") {
+      options.mode = "restore";
     } else if (token === "--server") {
       options.server = requireValue(token, value);
       index += 1;
     } else if (token === "--database") {
       options.databaseName = requireValue(token, value);
+      index += 1;
+    } else if (token === "--backup") {
+      options.backupPath = requireValue(token, value);
       index += 1;
     } else if (token === "--budget") {
       options.budgetCode = requireValue(token, value);
@@ -217,6 +253,8 @@ function parseCliOptions(args: string[]): CliOptions {
       index += 1;
     } else if (token === "--no-trust-server-certificate") {
       options.trustServerCertificate = false;
+    } else if (token === "--replace") {
+      options.replaceExisting = true;
     } else if (token === "--help" || token === "-h") {
       printUsage();
       process.exit(0);
@@ -247,10 +285,12 @@ function printUsage() {
   console.error("Uso:");
   console.error("  npm.cmd run s10:sqlserver -- --list-databases");
   console.error("  npm.cmd run s10:sqlserver -- --list-budgets --database S10_OBRA_MYC");
+  console.error("  npm.cmd run s10:sqlserver -- --restore --backup presupuesto-ejemplo\\s10\\obra.S2K --database S10_OBRA_MYC");
   console.error("  npm.cmd run s10:sqlserver -- --export --database S10_OBRA_MYC --budget 0302044 --out data-for-seed\\s10-export-0302044.json");
   console.error("");
   console.error("Opciones:");
   console.error("  --server .\\SQLEXPRESS                  Servidor SQL Server. Por defecto usa .\\SQLEXPRESS.");
   console.error("  --user sa --password <clave>            Usa SQL auth; si no, usa seguridad integrada de Windows.");
   console.error("  --no-trust-server-certificate           Desactiva -C si el servidor tiene certificado confiable.");
+  console.error("  --replace                               Reemplaza la base destino si ya existe.");
 }
