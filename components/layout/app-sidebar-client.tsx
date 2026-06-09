@@ -57,7 +57,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
     ],
   },
   { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
-  { href: "/ai", label: "IA Local", icon: BotMessageSquare, requiredFeature: "ai.local" },
+  { href: "/ai", label: "Khipu", icon: BotMessageSquare, requiredFeature: "ai.local" },
   {
     id: "catalogos",
     label: "Catalogos",
