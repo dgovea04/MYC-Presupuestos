@@ -226,6 +226,28 @@ export function AIWorkspace({
     { label: "Costo actual", value: typeof context.currentCost === "number" ? String(context.currentCost) : undefined },
     { label: "Tabla activa", value: context.activeTable },
   ].filter((row): row is { label: string; value: string } => typeof row.value === "string" && row.value.trim().length > 0);
+  const nextActionShortcuts = [
+    {
+      label: "Explicar contexto",
+      description: "Abre el chat tecnico con los datos visibles.",
+      onSelect: () => switchAction("chat"),
+    },
+    {
+      label: "Generar APU",
+      description: "Prepara una propuesta editable de recursos.",
+      onSelect: () => switchAction("apu"),
+    },
+    {
+      label: "Revisar presupuesto",
+      description: "Busca unidades, duplicados y costos sospechosos.",
+      onSelect: () => switchAction("review"),
+    },
+    {
+      label: "Autocompletar texto",
+      description: "Completa una descripcion tecnica breve.",
+      onSelect: () => switchAction("autocomplete"),
+    },
+  ];
 
   const submitRequest = async (request: RequestState) => {
     setLoading(true);
@@ -615,7 +637,7 @@ export function AIWorkspace({
         ) : null}
       </div>
 
-      <ContextSidebar context={context} onChange={setContext} />
+      <ContextSidebar context={context} shortcuts={nextActionShortcuts} onChange={setContext} />
     </section>
   );
 
