@@ -145,6 +145,7 @@ describe("AppSidebarClient", () => {
       "/settings",
       "/account",
     ]);
+    expect(container.textContent).toContain("Khipu");
     expect(container.textContent).toContain("Maria Lopez");
     expect(container.textContent).toContain("maria@example.com");
     expect(container.textContent).toContain("Mi perfil");
