@@ -101,6 +101,13 @@ const ACTIONS = [
   },
 ] as const;
 
+const ACTION_HELPERS: Record<AiAction, string> = {
+  chat: "Consulta criterios tecnicos con el contexto activo.",
+  apu: "Genera una propuesta editable de recursos y rendimiento.",
+  review: "Revisa unidades, duplicados y costos sospechosos.",
+  autocomplete: "Completa descripciones tecnicas sin perder el contexto.",
+};
+
 export function AIWorkspace({
   initialAction = "chat",
   initialContext = {
@@ -206,6 +213,19 @@ export function AIWorkspace({
   const ActiveIcon = activeConfig.icon;
   const activeHealth = useMemo(() => (health ? health.actions[activeAction] : null), [activeAction, health]);
   const providerStatus = readProviderStatus(provider, health?.status, bridgeState);
+  const switchAction = (action: AiAction) => {
+    setActiveAction(action);
+    setResult(null);
+    setError("");
+  };
+  const contextRows = [
+    { label: "Proyecto", value: context.project },
+    { label: "Modulo", value: context.module },
+    { label: "Partida seleccionada", value: context.selectedItem },
+    { label: "Unidad", value: context.unit },
+    { label: "Costo actual", value: typeof context.currentCost === "number" ? String(context.currentCost) : undefined },
+    { label: "Tabla activa", value: context.activeTable },
+  ].filter((row): row is { label: string; value: string } => typeof row.value === "string" && row.value.trim().length > 0);
 
   const submitRequest = async (request: RequestState) => {
     setLoading(true);
@@ -298,13 +318,39 @@ export function AIWorkspace({
           </CardContent>
         </Card>
 
+        <Card className="border-slate-200 bg-white shadow-sm">
+          <CardContent className="space-y-3 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Trabajo activo</p>
+                <p className="mt-1 text-sm text-slate-500">Contexto visible que Khipu usara en esta sesion.</p>
+              </div>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                Sesion actual
+              </span>
+            </div>
+            {contextRows.length ? (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {contextRows.map((row) => (
+                  <div key={row.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{row.label}</p>
+                    <p className="mt-1 truncate text-sm font-medium text-slate-900">{row.value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">Sin contexto activo</p>
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="border-slate-200 bg-slate-50/60">
           <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_260px_260px]">
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900">Estado de runtime</p>
+                <p className="text-sm font-semibold text-slate-900">Preparacion</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  Diagnostico compacto del proveedor y modelos disponibles para la accion activa.
+                  Proveedor, modelos y latencia para ejecutar la accion activa.
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -414,11 +460,7 @@ export function AIWorkspace({
                 )}
                 type="button"
                 aria-pressed={active}
-                onClick={() => {
-                  setActiveAction(action.id);
-                  setResult(null);
-                  setError("");
-                }}
+                onClick={() => switchAction(action.id)}
               >
                 <span
                   className={cn(
@@ -428,8 +470,13 @@ export function AIWorkspace({
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                <span>
-                  <span className="block font-semibold">{action.label}</span>
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{action.label}</span>
+                    {active ? (
+                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">Recomendado</span>
+                    ) : null}
+                  </span>
                   <span className="mt-1 block text-sm leading-5 text-slate-500">{action.description}</span>
                 </span>
               </button>
@@ -444,8 +491,9 @@ export function AIWorkspace({
                 <ActiveIcon className="h-5 w-5" />
               </span>
               <div>
-                <h2 className="text-xl font-semibold text-slate-950">{activeConfig.label}</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-500">{activeConfig.description}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ejecucion</p>
+                <h2 className="mt-1 text-xl font-semibold text-slate-950">{activeConfig.label}</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-500">{ACTION_HELPERS[activeAction]}</p>
               </div>
             </div>
 
