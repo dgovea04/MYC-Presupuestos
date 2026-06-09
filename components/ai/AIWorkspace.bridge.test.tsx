@@ -46,10 +46,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getButtonByText("Actualizar estado")).toBeTruthy();
     expect(getButtonByText("Ollama local")).toBeTruthy();
     expect(getButtonByText("ChatGPT Bridge")).toBeTruthy();
-    expect(getButtonByText("Chat tecnico")).toBeTruthy();
-    expect(getButtonByText("Generar APU")).toBeTruthy();
-    expect(getButtonByText("Revisar presupuesto")).toBeTruthy();
-    expect(getButtonByText("Autocompletar")).toBeTruthy();
+    expect(getTextContaining("Chat tecnico")).toBeTruthy();
+    expect(getTextContaining("Generar APU")).toBeTruthy();
+    expect(getTextContaining("Revisar presupuesto")).toBeTruthy();
+    expect(getTextContaining("Autocompletar")).toBeTruthy();
     expect(getTextContaining("Modelo resuelto")).toBeTruthy();
     expect(getTextContaining("Ultima latencia")).toBeTruthy();
   });

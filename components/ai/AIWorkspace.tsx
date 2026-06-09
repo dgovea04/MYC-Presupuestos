@@ -78,28 +78,28 @@ const ACTIONS = [
   {
     id: "chat",
     label: "Chat tecnico",
-    description: "Consultas de obra, costos, metrados y formula polinomica.",
+    description: "Resolver dudas tecnicas con contexto de obra.",
     icon: BotMessageSquare,
   },
   {
     id: "apu",
     label: "Generar APU",
-    description: "Propuesta inicial con recursos, cuadrilla y rendimiento.",
+    description: "Crear una propuesta revisable de recursos y rendimiento.",
     icon: Sparkles,
   },
   {
     id: "review",
     label: "Revisar presupuesto",
-    description: "Deteccion de duplicados, unidades y costos sospechosos.",
+    description: "Detectar unidades, duplicados y costos sospechosos.",
     icon: FileSearch,
   },
   {
     id: "autocomplete",
     label: "Autocompletar",
-    description: "Nombres, observaciones y especificaciones tecnicas.",
+    description: "Completar descripciones y especificaciones tecnicas.",
     icon: WandSparkles,
   },
- ] as const;
+] as const;
 
 export function AIWorkspace({
   initialAction = "chat",
@@ -393,7 +393,7 @@ export function AIWorkspace({
           </CardContent>
         </Card>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           {ACTIONS.map((action) => {
             const Icon = action.icon;
             const active = action.id === activeAction;
@@ -402,8 +402,8 @@ export function AIWorkspace({
               <button
                 key={action.id}
                 className={cn(
-                  "rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
-                  active ? "border-sky-300 bg-sky-50 text-slate-950" : "border-slate-200 bg-white text-slate-800",
+                  "flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                  active ? "border-blue-300 bg-blue-50 text-slate-950 shadow-sm" : "border-slate-200 bg-white text-slate-800",
                 )}
                 type="button"
                 onClick={() => {
@@ -414,14 +414,16 @@ export function AIWorkspace({
               >
                 <span
                   className={cn(
-                    "inline-flex h-10 w-10 items-center justify-center rounded-xl",
-                    active ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-700",
+                    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                    active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700",
                   )}
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                <span className="mt-3 block font-semibold">{action.label}</span>
-                <span className="mt-1 block text-sm leading-5 text-slate-500">{action.description}</span>
+                <span>
+                  <span className="block font-semibold">{action.label}</span>
+                  <span className="mt-1 block text-sm leading-5 text-slate-500">{action.description}</span>
+                </span>
               </button>
             );
           })}
@@ -442,7 +444,7 @@ export function AIWorkspace({
             <form className="space-y-4" onSubmit={handleSubmit}>
               {activeAction === "chat" ? (
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Consulta
+                  Consulta tecnica
                   <Textarea value={chatMessage} onChange={(event) => setChatMessage(event.target.value)} />
                 </label>
               ) : null}
@@ -462,7 +464,7 @@ export function AIWorkspace({
 
               {activeAction === "review" ? (
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Resumen del presupuesto o partidas
+                  Resumen del presupuesto
                   <Textarea
                     className="min-h-36"
                     value={reviewSummary}
