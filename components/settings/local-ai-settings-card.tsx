@@ -182,7 +182,7 @@ export function LocalAiSettingsCard() {
             </div>
           </Panel>
 
-          <Panel title="Contexto del copiloto" description="Datos que se comparten para mejorar respuestas.">
+          <Panel title="Contexto de Khipu" description="Datos que se comparten para mejorar respuestas.">
             <div className="flex flex-wrap gap-2">
               {CONTEXT_SOURCES.map((source) => (
                 <span key={source} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">

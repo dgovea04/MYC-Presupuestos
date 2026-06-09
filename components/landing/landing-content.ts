@@ -68,7 +68,7 @@ export const featureItems: FeatureItem[] = [
   },
   {
     title: "IA local para revisión y APU",
-    description: "Usa copiloto con Ollama para chat técnico, generación de APU, revisión de costos y autocompletado.",
+    description: "Usa Khipu con Ollama para chat técnico, generación de APU, revisión de costos y autocompletado.",
     icon: BotMessageSquare,
   },
   {
@@ -170,7 +170,7 @@ export const pricingPlans: PricingPlan[] = [
     description: "Para oficinas técnicas que quieren automatización, IA y reportes avanzados sin perder control.",
     highlight: true,
     features: [
-      "Copiloto IA local con tokens mensuales incluidos",
+      "Khipu con IA local y tokens mensuales incluidos",
       "Generador de partidas por similitud",
       "Búsqueda, sugerencias y pegado avanzado",
       "Cronograma inteligente con valorización, recursos y Curva S",

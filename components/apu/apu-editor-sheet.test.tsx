@@ -49,7 +49,7 @@ describe("ApuEditorSheet", () => {
     expect(getGripForRow("resource-subpartida").className).toContain("text-violet-600");
     expect(getByTestId("apu-add-resource-search").getAttribute("data-excel-field-border-opt-out")).toBe("true");
     const explainHref = getLinkByText("Explicar partida").getAttribute("href") ?? "";
-    const copilotHref = getLinkByText("Abrir en Copiloto").getAttribute("href") ?? "";
+    const khipuHref = getLinkByText("Abrir en Khipu").getAttribute("href") ?? "";
     const generatorHref = getLinkByText("Generador de partidas").getAttribute("href") ?? "";
     expect(explainHref).toContain("/ai?action=chat");
     expect(explainHref).toContain("selectedItem=Partida+demo");
@@ -60,10 +60,10 @@ describe("ApuEditorSheet", () => {
     expect(generatorHref).toContain("sourceText=Partida+demo");
     expect(generatorHref).toContain("generatedName=Partida+demo");
     expect(generatorHref).toContain("unit=m2");
-    expect(copilotHref).toContain("/ai?action=apu");
-    expect(copilotHref).toContain("selectedItem=Partida+demo");
-    expect(copilotHref).toContain("description=Partida+demo");
-    expect(copilotHref).toContain("apuUnit=m2");
+    expect(khipuHref).toContain("/ai?action=apu");
+    expect(khipuHref).toContain("selectedItem=Partida+demo");
+    expect(khipuHref).toContain("description=Partida+demo");
+    expect(khipuHref).toContain("apuUnit=m2");
   });
 
   it("allows crew input for equipment rows", async () => {

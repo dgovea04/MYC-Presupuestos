@@ -23,8 +23,8 @@ export default async function AIPage({
     return (
       <AppShell currentUser={session.user} settings={settings}>
         <UpgradeCTA
-          title="IA local disponible en Pro"
-          description="Activa el copiloto tecnico para chat, generacion de APU, revision de presupuesto y autocompletado asistido."
+          title="Khipu disponible en Pro"
+          description="Activa Khipu para chat tecnico, generacion de APU, revision de presupuesto y autocompletado asistido."
           benefits={[
             "Chat tecnico con contexto de obra",
             "Generacion y revision asistida de APU",

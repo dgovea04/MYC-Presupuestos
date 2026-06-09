@@ -20,7 +20,7 @@ El sistema NO debe comportarse como un chatbot genérico.
 
 Debe funcionar como:
 
-# Engineering AI Copilot
+# Khipu Engineering AI
 
 Especializado en:
 
@@ -678,7 +678,7 @@ Detectar:
 
 ---
 
-## AI Copilot Contextual
+## Khipu Contextual
 
 La IA entiende:
 
@@ -711,7 +711,7 @@ MYC Presupuestos debe evolucionar hacia:
 
 La IA debe sentirse como:
 
-- copiloto técnico
+- Khipu técnico
 - asistente especializado
 - sistema inteligente de presupuestos
 
@@ -730,4 +730,3 @@ IA = asistente
 Backend = validador
 Usuario = aprobador final
 ```
-

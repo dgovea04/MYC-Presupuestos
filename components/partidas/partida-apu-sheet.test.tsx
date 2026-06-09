@@ -62,7 +62,7 @@ describe("PartidaApuSheet", () => {
     expect(getByTestId("partida-apu-add-resource-search").getAttribute("disabled")).toBeNull();
     expect(getByTestId("partida-apu-add-manual-row-button").getAttribute("disabled")).toBeNull();
     expect(getButtonByText("Generar con IA")).toBeTruthy();
-    expect(getLinkByText("Abrir en Copiloto").getAttribute("href")).toContain("/ai?action=apu");
+    expect(getLinkByText("Abrir en Khipu").getAttribute("href")).toContain("/ai?action=apu");
     expect(getLinkByText("Explicar partida").getAttribute("href")).toContain("/ai?action=chat");
   });
 

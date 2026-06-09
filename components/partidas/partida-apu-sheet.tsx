@@ -344,7 +344,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
             </Button>
             <Link href={buildAiHref("apu", currentPartida.description, currentPartida.unit)}>
               <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
-                Abrir en Copiloto
+                Abrir en Khipu
               </Button>
             </Link>
             <Dialog.Close asChild>
@@ -368,7 +368,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
             onApply={applyAiApuSuggestion}
             onDismiss={() => setAiApuResult(null)}
             onSelectSimilarPartida={selectAiApuSimilarPartida}
-            copilotHref={buildAiHref("apu", currentPartida.description, currentPartida.unit)}
+            khipuHref={buildAiHref("apu", currentPartida.description, currentPartida.unit)}
           />
         ) : null}
 
@@ -856,14 +856,14 @@ function AiApuPreview({
   onApply,
   onDismiss,
   onSelectSimilarPartida,
-  copilotHref,
+  khipuHref,
 }: {
   result: AiApuPreviewResult;
   isExcelMode: boolean;
   onApply: () => void;
   onDismiss: () => void;
   onSelectSimilarPartida: (partidaId: string) => void;
-  copilotHref: string;
+  khipuHref: string;
 }) {
   const catalogData = isAiApuCatalogGenerationResult(result) ? result : null;
   const structuredData = isAiApuCatalogGenerationResult(result)
@@ -888,8 +888,8 @@ function AiApuPreview({
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           {result.fallbackUsed ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">Fallback activo</span> : null}
-          <Link href={copilotHref}>
-            <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>Abrir en Copiloto</Button>
+          <Link href={khipuHref}>
+            <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>Abrir en Khipu</Button>
           </Link>
         </div>
       </div>
@@ -932,7 +932,7 @@ function AiApuPreview({
         </div>
       ) : (
         <p className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
-          La IA devolvio texto libre. Puedes revisarlo en el copiloto antes de aplicar cambios manuales.
+          La IA devolvio texto libre. Puedes revisarlo en Khipu antes de aplicar cambios manuales.
         </p>
       )}
 

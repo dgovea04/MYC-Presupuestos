@@ -22,7 +22,7 @@ La IA debe funcionar inicialmente como:
 3. Generador de APU
 4. Revisor de presupuestos
 5. Autocompletado técnico
-6. Copilot contextual estilo Cursor / Notion AI
+6. Khipu contextual estilo Cursor / Notion AI
 
 ---
 
@@ -542,7 +542,7 @@ Posible integración futura:
 MYC Presupuestos debe evolucionar hacia:
 
 - plataforma SaaS moderna
-- copiloto de ingeniería
+- Khipu como asistente de ingeniería
 - sistema inteligente de presupuestos
 - asistente contextual para construcción
 
@@ -554,6 +554,5 @@ No debe sentirse como:
 Debe sentirse como:
 
 - AI-native construction platform
-- engineering copilot
+- engineering assistant
 - modern construction SaaS
-
