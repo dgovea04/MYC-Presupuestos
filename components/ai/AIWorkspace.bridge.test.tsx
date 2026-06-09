@@ -36,7 +36,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { getButtonByText, getByText, getTextContaining } = await renderWorkspace();
+    const { getButtonByAriaLabel, getButtonByText, getByText, getTextContaining } = await renderWorkspace();
 
     expect(getByText("Khipu")).toBeTruthy();
     expect(getByText("Asistente tecnico de obra")).toBeTruthy();
@@ -44,6 +44,27 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(
       getTextContaining("Revisa APU, genera partidas y responde con contexto del presupuesto activo."),
     ).toBeTruthy();
+    expect(getByText("Trabajo activo")).toBeTruthy();
+    expect(getTextContaining("Proyecto")).toBeTruthy();
+    expect(getTextContaining("Edificio Multifamiliar")).toBeTruthy();
+    expect(getTextContaining("Modulo")).toBeTruthy();
+    expect(getTextContaining("APU")).toBeTruthy();
+    expect(getTextContaining("Partida seleccionada")).toBeTruthy();
+    expect(getTextContaining("Concreto f'c=210")).toBeTruthy();
+    expect(getTextContaining("Unidad")).toBeTruthy();
+    expect(getTextContaining("m3")).toBeTruthy();
+    expect(getTextContaining("Costo actual")).toBeTruthy();
+    expect(getTextContaining("420")).toBeTruthy();
+    expect(getTextContaining("Tabla activa")).toBeTruthy();
+    expect(getTextContaining("Analisis de precios unitarios")).toBeTruthy();
+    expect(getTextContaining("Preparacion")).toBeTruthy();
+    expect(getTextContaining("Proveedor, modelos y latencia para ejecutar la accion activa.")).toBeTruthy();
+    expect(getTextContaining("Recomendado")).toBeTruthy();
+    expect(getTextContaining("Ejecucion")).toBeTruthy();
+    expect(getTextContaining("Consulta criterios tecnicos con el contexto activo.")).toBeTruthy();
+    expect(getTextContaining("Siguientes acciones")).toBeTruthy();
+    expect(getButtonByAriaLabel("Explicar contexto")).toBeTruthy();
+    expect(getButtonByAriaLabel("Autocompletar texto")).toBeTruthy();
     expect(getTextContaining("Proveedor activo")).toBeTruthy();
     expect(getTextContaining("Ollama listo")).toBeTruthy();
     expect(getByText("Contexto de trabajo")).toBeTruthy();
@@ -59,6 +80,45 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("Autocompletar")).toBeTruthy();
     expect(getTextContaining("Modelo resuelto")).toBeTruthy();
     expect(getTextContaining("Ultima latencia")).toBeTruthy();
+  });
+
+  it("switches commands from next-action shortcuts without submitting", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => createHealthPayload(),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByAriaLabel, getTextContaining, getTextareaByLabel } = await renderWorkspace();
+
+    expect(getTextContaining("Consulta criterios tecnicos con el contexto activo.")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByAriaLabel("Generar APU").click();
+    });
+
+    expect(getTextContaining("Genera una propuesta editable de recursos y rendimiento.")).toBeTruthy();
+    expect(getTextContaining("Recomendado")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByAriaLabel("Revisar presupuesto").click();
+    });
+
+    expect(getTextContaining("Revisa unidades, duplicados y costos sospechosos.")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByAriaLabel("Autocompletar texto").click();
+    });
+
+    expect(getTextContaining("Completa descripciones tecnicas sin perder el contexto.")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByAriaLabel("Explicar contexto").click();
+    });
+
+    expect(getTextareaByLabel("Consulta tecnica").value).toBe("Consulta inicial");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/ai/health");
   });
 
   it("summarizes ChatGPT Bridge state instead of Ollama health when the bridge provider is selected", async () => {
@@ -240,6 +300,14 @@ async function renderWorkspace() {
       const element = [...document.body.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
       if (!(element instanceof HTMLButtonElement)) {
         throw new Error(`Missing button: ${text}`);
+      }
+
+      return element;
+    },
+    getButtonByAriaLabel: (label: string) => {
+      const element = document.body.querySelector(`button[aria-label="${label}"]`);
+      if (!(element instanceof HTMLButtonElement)) {
+        throw new Error(`Missing button aria-label: ${label}`);
       }
 
       return element;
