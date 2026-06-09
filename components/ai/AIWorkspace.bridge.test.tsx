@@ -48,12 +48,35 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getButtonByText("Actualizar estado")).toBeTruthy();
     expect(getButtonByText("Ollama local")).toBeTruthy();
     expect(getButtonByText("ChatGPT Bridge")).toBeTruthy();
+    expect(getButtonByText("Ollama local").getAttribute("aria-pressed")).toBe("true");
+    expect(getButtonByText("ChatGPT Bridge").getAttribute("aria-pressed")).toBe("false");
     expect(getTextContaining("Chat tecnico")).toBeTruthy();
     expect(getTextContaining("Generar APU")).toBeTruthy();
     expect(getTextContaining("Revisar presupuesto")).toBeTruthy();
     expect(getTextContaining("Autocompletar")).toBeTruthy();
     expect(getTextContaining("Modelo resuelto")).toBeTruthy();
     expect(getTextContaining("Ultima latencia")).toBeTruthy();
+  });
+
+  it("summarizes ChatGPT Bridge state instead of Ollama health when the bridge provider is selected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => createHealthPayload("down"),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getTextContaining, queryTextContaining } = await renderWorkspace();
+
+    expect(getTextContaining("Ollama no disponible")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("ChatGPT Bridge").click();
+    });
+
+    expect(getButtonByText("Ollama local").getAttribute("aria-pressed")).toBe("false");
+    expect(getButtonByText("ChatGPT Bridge").getAttribute("aria-pressed")).toBe("true");
+    expect(getTextContaining("Bridge esperando")).toBeTruthy();
+    expect(queryTextContaining("Ollama no disponible")).toBeNull();
   });
 
   it("sends the active AI request through the browser bridge when ChatGPT Bridge is selected", async () => {
@@ -250,13 +273,20 @@ async function renderWorkspace() {
 
       return element;
     },
+    queryTextContaining: (text: string) =>
+      [...document.body.querySelectorAll("*")].find((candidate) => {
+        if (!(candidate instanceof HTMLElement)) return false;
+        if (!candidate.textContent?.includes(text)) return false;
+
+        return [...candidate.children].every((child) => !child.textContent?.includes(text));
+      }) ?? null,
   };
 }
 
-function createHealthPayload() {
+function createHealthPayload(status: "ok" | "degraded" | "down" = "ok") {
   return {
-    status: "ok",
-    ollamaReachable: true,
+    status,
+    ollamaReachable: status !== "down",
     availableModels: ["llama3.1"],
     requiredModels: [{ model: "llama3.1", installed: true, actions: ["chat", "review"] }],
     actions: {

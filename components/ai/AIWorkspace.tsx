@@ -205,6 +205,7 @@ export function AIWorkspace({
   const activeConfig = ACTIONS.find((action) => action.id === activeAction) ?? ACTIONS[0];
   const ActiveIcon = activeConfig.icon;
   const activeHealth = useMemo(() => (health ? health.actions[activeAction] : null), [activeAction, health]);
+  const providerStatus = readProviderStatus(provider, health?.status, bridgeState);
 
   const submitRequest = async (request: RequestState) => {
     setLoading(true);
@@ -279,8 +280,8 @@ export function AIWorkspace({
               <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
                 <div className="flex items-center justify-between gap-4">
                   <span className="font-semibold text-slate-900">Proveedor activo</span>
-                  <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", readHealthBadgeClass(health?.status))}>
-                    {readHealthLabel(health?.status)}
+                  <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", providerStatus.className)}>
+                    {providerStatus.label}
                   </span>
                 </div>
                 <p>{provider === "ollama" ? "Ollama local" : "ChatGPT Bridge"}</p>
@@ -323,6 +324,7 @@ export function AIWorkspace({
                     provider === "ollama" ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
                   )}
                   type="button"
+                  aria-pressed={provider === "ollama"}
                   onClick={() => {
                     setProvider("ollama");
                     pendingBridgeRequestId.current = null;
@@ -343,6 +345,7 @@ export function AIWorkspace({
                       : "border-slate-200 bg-white text-slate-600",
                   )}
                   type="button"
+                  aria-pressed={provider === "chatgpt-bridge"}
                   onClick={() => {
                     setProvider("chatgpt-bridge");
                     setError("");
@@ -406,6 +409,7 @@ export function AIWorkspace({
                   active ? "border-blue-300 bg-blue-50 text-slate-950 shadow-sm" : "border-slate-200 bg-white text-slate-800",
                 )}
                 type="button"
+                aria-pressed={active}
                 onClick={() => {
                   setActiveAction(action.id);
                   setResult(null);
@@ -815,6 +819,34 @@ function readHealthLabel(status: AiHealth["status"] | undefined) {
   if (status === "ok") return "Ollama listo";
   if (status === "degraded") return "Ollama con fallback";
   return "Ollama no disponible";
+}
+
+function readProviderStatus(provider: AiProvider, status: AiHealth["status"] | undefined, bridgeState: MYCBridgeState | null) {
+  if (provider === "ollama") {
+    return {
+      label: readHealthLabel(status),
+      className: readHealthBadgeClass(status),
+    };
+  }
+
+  if (bridgeState?.lastError) {
+    return {
+      label: "Bridge con alerta",
+      className: "bg-rose-100 text-rose-700",
+    };
+  }
+
+  if (!bridgeState || bridgeState.status === "waiting_manual_copy" || bridgeState.hasChatGPTTab === false) {
+    return {
+      label: "Bridge esperando",
+      className: "bg-amber-100 text-amber-800",
+    };
+  }
+
+  return {
+    label: "Bridge listo",
+    className: "bg-emerald-100 text-emerald-700",
+  };
 }
 
 function formatLatency(latencyMs: number | null | undefined) {
