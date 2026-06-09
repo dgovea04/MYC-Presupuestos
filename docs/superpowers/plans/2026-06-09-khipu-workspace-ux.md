@@ -644,7 +644,7 @@ Expected: PASS with no ESLint errors.
 Run:
 
 ```bash
-rg -n "Copiloto|copiloto|Copilot|copilot" app components lib docs prd README.md
+rg -n "(?i)copilo(to|t)" app components lib docs prd README.md
 ```
 
 Expected: no output.
