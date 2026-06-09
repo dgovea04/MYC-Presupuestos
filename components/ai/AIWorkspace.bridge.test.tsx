@@ -236,9 +236,12 @@ async function renderWorkspace() {
       return element;
     },
     getTextContaining: (text: string) => {
-      const element = [...document.body.querySelectorAll("*")].find((candidate) =>
-        candidate.textContent?.includes(text),
-      );
+      const element = [...document.body.querySelectorAll("*")].find((candidate) => {
+        if (!(candidate instanceof HTMLElement)) return false;
+        if (!candidate.textContent?.includes(text)) return false;
+
+        return [...candidate.children].every((child) => !child.textContent?.includes(text));
+      });
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing text containing: ${text}`);
       }
