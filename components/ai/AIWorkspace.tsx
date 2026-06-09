@@ -2,9 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   BotMessageSquare,
-  CheckCircle2,
   FileSearch,
   Loader2,
   RefreshCw,
@@ -264,62 +262,52 @@ export function AIWorkspace({
   return (
     <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-5">
-        <Card className="overflow-hidden border-sky-100 bg-[linear-gradient(135deg,#ffffff_0%,#f3f9ff_52%,#edf6ff_100%)]">
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <Card className="border-slate-200 bg-white shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl space-y-3">
-                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
-                  IA local
+                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+                  Asistente tecnico
                 </span>
                 <div>
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-                    Copiloto tecnico de presupuestos
-                  </h1>
-                  <p className="mt-3 text-sm leading-6 text-slate-600 md:text-base">
-                    Conecta MYC Presupuestos con Ollama local para chat tecnico, APU, revision inteligente y
-                    autocompletado sin enviar datos a servicios externos.
+                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Khipu</h1>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+                    Asistente tecnico para presupuestos, APU, revision y autocompletado en MYC Presupuestos.
                   </p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm text-slate-600 shadow-sm">
-                <p className="font-semibold text-slate-900">Proveedor activo</p>
-                <p className="mt-1">{provider === "ollama" ? "Ollama local" : "ChatGPT Bridge"}</p>
+              <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="font-semibold text-slate-900">Proveedor activo</span>
+                  <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", readHealthBadgeClass(health?.status))}>
+                    {readHealthLabel(health?.status)}
+                  </span>
+                </div>
+                <p>{provider === "ollama" ? "Ollama local" : "ChatGPT Bridge"}</p>
+                <Button variant="outline" size="sm" className="w-fit gap-2" onClick={() => void loadHealth()}>
+                  <RefreshCw className="h-4 w-4" />
+                  Actualizar estado
+                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200">
-          <CardContent className="grid gap-4 p-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <Card className="border-slate-200 bg-slate-50/60">
+          <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_260px_260px]">
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
-                    readHealthBadgeClass(health?.status),
-                  )}
-                >
-                  {health?.status === "ok" ? (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                  )}
-                  {readHealthLabel(health?.status)}
-                </span>
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadHealth()}>
-                  <RefreshCw className="h-4 w-4" />
-                  Actualizar estado
-                </Button>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Estado de runtime</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Diagnostico compacto del proveedor y modelos disponibles para la accion activa.
+                </p>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {(health?.requiredModels ?? []).map((model) => (
-                  <div key={model.model} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
-                    <p className="text-sm font-semibold text-slate-900">{model.model}</p>
-                    <p className={cn("mt-1 text-xs font-medium", model.installed ? "text-emerald-700" : "text-amber-700")}>
-                      {model.installed ? "Instalado" : "Pendiente en Ollama"}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {model.actions.length ? model.actions.join(" · ") : "Preparado para acciones avanzadas"}
+                  <div key={model.model} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs font-semibold text-slate-900">{model.model}</p>
+                    <p className={cn("mt-1 text-[11px] font-medium", model.installed ? "text-emerald-700" : "text-amber-700")}>
+                      {model.installed ? "Instalado" : "Pendiente"}
                     </p>
                   </div>
                 ))}
@@ -327,12 +315,12 @@ export function AIWorkspace({
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-slate-900">Proveedor de IA</p>
+              <p className="text-sm font-semibold text-slate-900">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   className={cn(
-                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
-                    provider === "ollama" ? "border-sky-300 bg-sky-50 text-sky-800" : "border-slate-200 bg-white text-slate-600",
+                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                    provider === "ollama" ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
                   )}
                   type="button"
                   onClick={() => {
@@ -349,9 +337,9 @@ export function AIWorkspace({
                 </button>
                 <button
                   className={cn(
-                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                     provider === "chatgpt-bridge"
-                      ? "border-sky-300 bg-sky-50 text-sky-800"
+                      ? "border-blue-300 bg-blue-50 text-blue-800"
                       : "border-slate-200 bg-white text-slate-600",
                   )}
                   type="button"
@@ -365,7 +353,7 @@ export function AIWorkspace({
                 </button>
               </div>
               {provider === "chatgpt-bridge" ? (
-                <p className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-800">
+                <p className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
                   Estado: {readBridgeStateLabel(bridgeState)}
                 </p>
               ) : null}
@@ -386,17 +374,16 @@ export function AIWorkspace({
                 </span>
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Fallback:{" "}
-                <span className="font-medium text-slate-700">
-                  {provider === "ollama" ? activeHealth?.fallbackUsed ? "Si" : "No" : "No aplica"}
-                </span>
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
                 Ultima latencia:{" "}
                 <span className="font-medium text-slate-700">
                   {provider === "ollama" ? formatLatency(health?.metrics[activeAction]?.latencyMs) : "Depende de ChatGPT"}
                 </span>
               </p>
+              {provider === "ollama" && activeHealth?.fallbackUsed ? (
+                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  Fallback activo para esta accion.
+                </p>
+              ) : null}
               {provider === "ollama" && health?.metrics[activeAction]?.lastError ? (
                 <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                   {health.metrics[activeAction].lastError}
