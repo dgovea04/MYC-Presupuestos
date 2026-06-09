@@ -267,13 +267,17 @@ export function AIWorkspace({
           <CardContent className="p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl space-y-3">
-                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
-                  Asistente tecnico
+                <span className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
+                  <BotMessageSquare className="h-3.5 w-3.5" />
+                  Khipu
                 </span>
                 <div>
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Khipu</h1>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Asistente tecnico de obra</p>
+                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
+                    Criterio tecnico para presupuestos de obra.
+                  </h1>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-                    Asistente tecnico para presupuestos, APU, revision y autocompletado en MYC Presupuestos.
+                    Revisa APU, genera partidas y responde con contexto del presupuesto activo.
                   </p>
                 </div>
               </div>
