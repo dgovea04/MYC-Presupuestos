@@ -57,6 +57,7 @@ vi.mock("@/lib/billing/entitlements", () => ({
 describe("AIPage", () => {
   beforeEach(() => {
     mockAvailableFeatures = ["exports.basic", "polynomial_formula", "ai.local"];
+    aiWorkspaceSpy.mockClear();
   });
 
   it("renders Khipu upgrade copy when the user lacks local AI access", async () => {
@@ -72,8 +73,6 @@ describe("AIPage", () => {
   });
 
   it("hydrates active context from Khipu links that send selected item and APU data", async () => {
-    aiWorkspaceSpy.mockClear();
-
     renderToStaticMarkup(await AIPage({
       searchParams: Promise.resolve({
         action: "apu",
@@ -104,8 +103,6 @@ describe("AIPage", () => {
   });
 
   it("keeps compatibility with older Khipu links that only send item", async () => {
-    aiWorkspaceSpy.mockClear();
-
     renderToStaticMarkup(await AIPage({
       searchParams: Promise.resolve({
         action: "apu",
