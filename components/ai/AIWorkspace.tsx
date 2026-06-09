@@ -521,9 +521,9 @@ export function AIWorkspace({
           <Card>
             <CardContent className="space-y-4 p-6">
               <div>
-                <h3 className="text-lg font-semibold text-slate-950">Historial local de sesion</h3>
+                <h3 className="text-lg font-semibold text-slate-950">Actividad reciente de Khipu</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Se guarda solo en este navegador para retomar contexto y revisar resultados recientes.
+                  Se guarda solo en este navegador para retomar resultados recientes; no es memoria del proyecto.
                 </p>
               </div>
               <div className="space-y-3">
