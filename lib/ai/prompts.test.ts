@@ -21,6 +21,59 @@ describe("AI prompts", () => {
     expect(messages[2]).toEqual({ role: "user", content: "Revisa el rendimiento" });
   });
 
+  it("adds retrieval evidence to chat messages only when provided", () => {
+    const messages = buildChatMessages({
+      message: "Revisa el rendimiento",
+      evidence: [
+        {
+          id: "technical:formula-polinomica-monomios",
+          sourceType: "technical_doc",
+          title: "Formula polinomica Peru - reglas de monomios",
+          excerpt: "Referencia interna: evitar monomios con incidencia menor a 0.05 salvo criterio tecnico sustentado.",
+          score: 0.684,
+          metadata: {
+            sourcePath: "prd/formula-polinomica-peru-webapp-spec.md",
+            referenceType: "internal_technical_reference",
+          },
+        },
+      ],
+    });
+
+    expect(messages[1]).toMatchObject({ role: "system" });
+    expect(messages[1]?.content).toContain("Fuentes consultadas:");
+    expect(messages[1]?.content).toContain("[technical_doc] Formula polinomica Peru - reglas de monomios");
+    expect(messages.at(-1)).toEqual({ role: "user", content: "Revisa el rendimiento" });
+
+    const messagesWithoutEvidence = buildChatMessages({ message: "Revisa el rendimiento" });
+    expect(messagesWithoutEvidence.map((message) => message.content).join("\n")).not.toContain("Fuentes consultadas:");
+  });
+
+  it("adds retrieval evidence to review prompts without changing the structured JSON instruction", () => {
+    const prompt = buildReviewPrompt("Partida duplicada de acero", {
+      evidence: [
+        {
+          id: "partida:par-acero",
+          sourceType: "catalog_partida",
+          title: "Acero de refuerzo fy=4200 kg/cm2",
+          excerpt: "Unidad: kg. Fuente: catalogo-propio. APU: Operario, Acero corrugado.",
+          score: 0.912,
+          metadata: {
+            partidaId: "par-acero",
+            unit: "kg",
+            source: "catalogo-propio",
+          },
+        },
+      ],
+    });
+
+    expect(prompt).toContain("Fuentes consultadas:");
+    expect(prompt).toContain("[catalog_partida] Acero de refuerzo fy=4200 kg/cm2");
+    expect(prompt).toContain('{"answer":"resumen corto"');
+    expect(prompt).toContain("No modifiques datos automaticamente");
+
+    expect(buildReviewPrompt("Partida duplicada de acero")).not.toContain("Fuentes consultadas:");
+  });
+
   it("builds specialized prompts without allowing automatic budget mutation", () => {
     expect(buildApuPrompt("Concreto armado f'c=210", "m3")).toContain("Genera un analisis de precios unitarios");
     expect(buildReviewPrompt("Partida duplicada de acero")).toContain("No modifiques datos automaticamente");

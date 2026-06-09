@@ -1,4 +1,5 @@
 import { buildContextBlock } from "@/lib/ai/context-builder";
+import { formatEvidenceBlock, type AiEvidence } from "@/lib/ai/retrieval-context";
 import type { AiContext, AiMessage } from "@/lib/ai/types";
 
 export const MYC_AI_SYSTEM_PROMPT = [
@@ -8,12 +9,29 @@ export const MYC_AI_SYSTEM_PROMPT = [
   "Cuando entregues sugerencias de costos o APU, indica supuestos y pide validacion tecnica antes de aplicar cambios.",
 ].join(" ");
 
-export function buildChatMessages({ message, context }: { message: string; context?: AiContext }): AiMessage[] {
+function buildEvidenceSystemMessage(evidence: AiEvidence[]): string {
+  const evidenceBlock = formatEvidenceBlock(evidence);
+  if (!evidenceBlock) return "";
+
+  return ["Usa estas fuentes como contexto de apoyo. Si una respuesta requiere validacion normativa u oficial, indicalo.", evidenceBlock].join("\n");
+}
+
+export function buildChatMessages({
+  message,
+  context,
+  evidence = [],
+}: {
+  message: string;
+  context?: AiContext;
+  evidence?: AiEvidence[];
+}): AiMessage[] {
   const contextBlock = buildContextBlock(context);
+  const evidenceBlock = buildEvidenceSystemMessage(evidence);
 
   return [
     { role: "system", content: MYC_AI_SYSTEM_PROMPT },
     ...(contextBlock ? [{ role: "system" as const, content: contextBlock }] : []),
+    ...(evidenceBlock ? [{ role: "system" as const, content: evidenceBlock }] : []),
     { role: "user", content: message },
   ];
 }
@@ -132,7 +150,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function buildReviewPrompt(budgetSummary: string) {
+export function buildReviewPrompt(budgetSummary: string, options: { evidence?: AiEvidence[] } = {}) {
+  const evidenceBlock = buildEvidenceSystemMessage(options.evidence ?? []);
+
   return [
     "Revisa el siguiente presupuesto o conjunto de partidas de construccion en Peru.",
     "Detecta partidas duplicadas, costos anormales, unidades incorrectas, inconsistencias y metrados sospechosos.",
@@ -140,6 +160,7 @@ export function buildReviewPrompt(budgetSummary: string) {
     'Usa esta forma exacta: {"answer":"resumen corto","findings":[{"severity":"low|medium|high","type":"duplicate|unit|cost|quantity|consistency|other","description":"...","impact":"...","recommendedAction":"..."}],"assumptions":["..."]}.',
     "No modifiques datos automaticamente; solo entrega una revision tecnica para confirmacion del usuario.",
     "",
+    ...(evidenceBlock ? [evidenceBlock, ""] : []),
     budgetSummary,
   ].join("\n");
 }
