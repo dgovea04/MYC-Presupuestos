@@ -29,6 +29,31 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     vi.restoreAllMocks();
   });
 
+  it("renders Khipu as an operational workspace with command actions and runtime status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => createHealthPayload(),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText, getTextContaining } = await renderWorkspace();
+
+    expect(getByText("Khipu")).toBeTruthy();
+    expect(getByText("Asistente tecnico")).toBeTruthy();
+    expect(getTextContaining("Asistente tecnico para presupuestos, APU, revision y autocompletado")).toBeTruthy();
+    expect(getTextContaining("Proveedor activo")).toBeTruthy();
+    expect(getTextContaining("Ollama listo")).toBeTruthy();
+    expect(getButtonByText("Actualizar estado")).toBeTruthy();
+    expect(getButtonByText("Ollama local")).toBeTruthy();
+    expect(getButtonByText("ChatGPT Bridge")).toBeTruthy();
+    expect(getButtonByText("Chat tecnico")).toBeTruthy();
+    expect(getButtonByText("Generar APU")).toBeTruthy();
+    expect(getButtonByText("Revisar presupuesto")).toBeTruthy();
+    expect(getButtonByText("Autocompletar")).toBeTruthy();
+    expect(getTextContaining("Modelo resuelto")).toBeTruthy();
+    expect(getTextContaining("Ultima latencia")).toBeTruthy();
+  });
+
   it("sends the active AI request through the browser bridge when ChatGPT Bridge is selected", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -42,7 +67,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     await act(async () => {
       getButtonByText("ChatGPT Bridge").click();
     });
-    expect(getTextareaByLabel("Consulta").value).toBe("Consulta inicial");
+    expect(getTextareaByLabel("Consulta tecnica").value).toBe("Consulta inicial");
     await act(async () => {
       getButtonByText("Enviar a ChatGPT").click();
     });
@@ -153,6 +178,8 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     const { getButtonByText, getByText } = await renderWorkspace();
 
+    expect(getByText("Actividad reciente de Khipu")).toBeTruthy();
+
     await act(async () => {
       getButtonByText("Ver detalle").click();
     });
@@ -204,6 +231,16 @@ async function renderWorkspace() {
       const element = [...document.body.querySelectorAll("*")].find((candidate) => candidate.textContent?.trim() === text);
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing text: ${text}`);
+      }
+
+      return element;
+    },
+    getTextContaining: (text: string) => {
+      const element = [...document.body.querySelectorAll("*")].find((candidate) =>
+        candidate.textContent?.includes(text),
+      );
+      if (!(element instanceof HTMLElement)) {
+        throw new Error(`Missing text containing: ${text}`);
       }
 
       return element;
