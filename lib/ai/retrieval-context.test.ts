@@ -88,6 +88,7 @@ describe("retrieval-context", () => {
     });
 
     const concreteEvidence = evidence.find((item) => item.id === "partida:par-concreto-columnas");
+    const irrelevantPartida = evidence.find((item) => item.id === "partida:par-tarrajeo");
     expect(concreteEvidence).toMatchObject({
       sourceType: "s10_import",
       title: "Concreto f'c=210 kg/cm2 en columnas",
@@ -101,7 +102,9 @@ describe("retrieval-context", () => {
     expect(concreteEvidence?.excerpt).toContain("Fuente: S10_OBRA_MYC");
     expect(concreteEvidence?.excerpt).toContain("APU: Cemento Portland Tipo I, Arena gruesa");
     expect(concreteEvidence?.score).toBeGreaterThan(0.6);
+    expect(concreteEvidence?.score).toBeLessThanOrEqual(1);
     expect(String(concreteEvidence?.score)).toMatch(/^\d(?:\.\d{1,3})?$/);
+    expect(irrelevantPartida).toBeUndefined();
   });
 
   it("maps catalog resources with category, unit, source, IU, and rounded score", () => {
@@ -128,6 +131,7 @@ describe("retrieval-context", () => {
     expect(resourceEvidence?.excerpt).toContain("Categoria: MATERIAL");
     expect(resourceEvidence?.excerpt).toContain("Unidad: bol");
     expect(resourceEvidence?.excerpt).toContain("IU: 21");
+    expect(resourceEvidence?.score).toBeLessThanOrEqual(1);
     expect(String(resourceEvidence?.score)).toMatch(/^\d(?:\.\d{1,3})?$/);
   });
 
@@ -162,6 +166,8 @@ describe("retrieval-context", () => {
     });
 
     const block = formatEvidenceBlock(evidence);
+    const repeatedBlock = formatEvidenceBlock(evidence);
+    expect(repeatedBlock).toBe(block);
     expect(block).toContain("Fuentes consultadas:");
     expect(block).toContain("1. [s10_import] Concreto f'c=210 kg/cm2 en columnas");
     expect(block).toContain("score ");
