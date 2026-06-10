@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
 import { buildAutocompletePrompt, buildChatMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { generateAiResponse } from "@/lib/ai/service";
@@ -16,6 +17,15 @@ export async function POST(request: Request) {
       userId: session.user.id,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(
+      await attachProjectHistoryEntry({
+        action: "autocomplete",
+        context: data.context,
+        projectId: data.projectId,
+        result,
+        summary: data.input,
+        userId: session.user.id,
+      }),
+    );
   });
 }

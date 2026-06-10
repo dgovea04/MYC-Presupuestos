@@ -9,15 +9,19 @@ const aiContextSchema = z.object({
   activeTable: z.string().trim().min(1).optional(),
 });
 
+const projectIdSchema = z.string().trim().min(1).optional();
+
 export const aiChatRequestSchema = z.object({
   message: z.string().trim().min(1, "Ingresa una consulta para la IA."),
   context: aiContextSchema.optional(),
+  projectId: projectIdSchema,
 });
 
 export const aiApuRequestSchema = z.object({
   description: z.string().trim().min(3, "Ingresa la descripcion de la partida."),
   unit: z.string().trim().min(1).optional(),
   context: aiContextSchema.optional(),
+  projectId: projectIdSchema,
 });
 
 export const aiApuCatalogGenerateRequestSchema = z.object({
@@ -26,14 +30,17 @@ export const aiApuCatalogGenerateRequestSchema = z.object({
   category: z.string().trim().min(1).optional(),
   project_type: z.string().trim().min(1).optional(),
   context: aiContextSchema.optional(),
+  projectId: projectIdSchema,
 });
 
 export const aiReviewRequestSchema = z.object({
   budgetSummary: z.string().trim().min(10, "Ingresa informacion suficiente para revisar el presupuesto."),
   context: aiContextSchema.optional(),
+  projectId: projectIdSchema,
 });
 
 export const aiAutocompleteRequestSchema = z.object({
   input: z.string().trim().min(3, "Ingresa un texto base para autocompletar."),
   context: aiContextSchema.optional(),
+  projectId: projectIdSchema,
 });
