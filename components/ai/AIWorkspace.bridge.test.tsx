@@ -185,6 +185,41 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     window.removeEventListener("MYCBridgeSendPrompt", bridgeListener);
   });
 
+  it("omits project id from ChatGPT Bridge prompt payload when project-aware", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const bridgeListener = vi.fn<(event: Event) => void>();
+    window.addEventListener("MYCBridgeSendPrompt", bridgeListener);
+
+    const { getButtonByText } = await renderWorkspace({ projectId: "project-1" });
+
+    await act(async () => {
+      getButtonByText("ChatGPT Bridge").click();
+    });
+    await act(async () => {
+      getButtonByText("Enviar a ChatGPT").click();
+    });
+
+    expect(bridgeListener).toHaveBeenCalledTimes(1);
+    const event = bridgeListener.mock.calls[0]?.[0];
+    expect(event).toBeInstanceOf(CustomEvent);
+    expect((event as CustomEvent).detail.jsonPrompt.payload).toEqual(
+      expect.not.objectContaining({ projectId: "project-1" }),
+    );
+
+    window.removeEventListener("MYCBridgeSendPrompt", bridgeListener);
+  });
+
   it("renders generic structured JSON fields from a copied ChatGPT bridge response", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -277,9 +312,436 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getByText("Dato historico completo")).toBeTruthy();
     expect(getByText("Ver respuesta completa")).toBeTruthy();
   });
+
+  it("loads project history when a project id is provided", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            entries: [
+              {
+                id: "history-malformed",
+                projectId: "project-1",
+                userId: "user-1",
+                action: "chat",
+                summary: "Consulta corrupta",
+                context: { project: "Hospital Norte", module: "APU" },
+                result: {
+                  model: "llama3.1",
+                  requestedModel: "llama3.1",
+                  fallbackUsed: false,
+                  warnings: [],
+                },
+                timestamp: "2026-06-09T16:19:00.000Z",
+              },
+              {
+                id: "history-project-1",
+                projectId: "project-1",
+                userId: "user-1",
+                action: "chat",
+                summary: "Consulta persistida",
+                context: { project: "Hospital Norte", module: "APU" },
+                result: {
+                  answer: "Respuesta persistida",
+                  model: "llama3.1",
+                  requestedModel: "llama3.1",
+                  fallbackUsed: false,
+                  warnings: [],
+                },
+                timestamp: "2026-06-09T16:20:00.000Z",
+              },
+            ],
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText, getTextContaining, queryByText } = await renderWorkspace({ projectId: "project-1" });
+
+    expect(getByText("Consulta persistida")).toBeTruthy();
+    expect(queryByText("Consulta corrupta")).toBeNull();
+    expect(
+      getTextContaining("Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesion."),
+    ).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Ver detalle").click();
+    });
+
+    expect(getByText("Respuesta persistida")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/ai-history");
+    expect(window.localStorage.getItem("myc-ai-session-history")).toBeNull();
+  });
+
+  it("restores browser history when project id is removed without persisting project history", async () => {
+    window.localStorage.setItem(
+      "myc-ai-session-history",
+      JSON.stringify([
+        {
+          id: "history-session",
+          action: "chat",
+          summary: "Consulta de navegador",
+          context: { project: "Edificio Multifamiliar", module: "APU" },
+          result: {
+            answer: "Respuesta local",
+            model: "ChatGPT Bridge",
+            requestedModel: "ChatGPT web",
+            fallbackUsed: false,
+            warnings: [],
+          },
+          timestamp: "2026-06-09T16:18:00.000Z",
+        },
+      ]),
+    );
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            entries: [
+              {
+                id: "history-project-1",
+                projectId: "project-1",
+                userId: "user-1",
+                action: "chat",
+                summary: "Consulta persistida",
+                context: { project: "Hospital Norte", module: "APU" },
+                result: {
+                  answer: "Respuesta persistida",
+                  model: "llama3.1",
+                  requestedModel: "llama3.1",
+                  fallbackUsed: false,
+                  warnings: [],
+                },
+                timestamp: "2026-06-09T16:20:00.000Z",
+              },
+            ],
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getByText, queryByText, rerender } = await renderWorkspace({ projectId: "project-1" });
+
+    expect(getByText("Consulta persistida")).toBeTruthy();
+
+    await rerender({});
+
+    expect(getByText("Consulta de navegador")).toBeTruthy();
+    expect(queryByText("Consulta persistida")).toBeNull();
+    expect(window.localStorage.getItem("myc-ai-session-history")).not.toContain("Consulta persistida");
+  });
+
+  it("clears stale project history while the next project history is loading", async () => {
+    let resolveProjectTwoHistory: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => undefined;
+    const projectTwoHistory = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      resolveProjectTwoHistory = resolve;
+    });
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            entries: [
+              {
+                id: "history-project-1",
+                projectId: "project-1",
+                userId: "user-1",
+                action: "chat",
+                summary: "Consulta proyecto uno",
+                context: { project: "Hospital Norte", module: "APU" },
+                result: {
+                  answer: "Respuesta proyecto uno",
+                  model: "llama3.1",
+                  requestedModel: "llama3.1",
+                  fallbackUsed: false,
+                  warnings: [],
+                },
+                timestamp: "2026-06-09T16:20:00.000Z",
+              },
+            ],
+          }),
+        });
+      }
+
+      if (url === "/api/projects/project-2/ai-history") {
+        return projectTwoHistory;
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getByText, queryByText, rerender } = await renderWorkspace({ projectId: "project-1" });
+
+    expect(getByText("Consulta proyecto uno")).toBeTruthy();
+
+    await rerender({ projectId: "project-2" });
+
+    expect(queryByText("Consulta proyecto uno")).toBeNull();
+
+    await act(async () => {
+      resolveProjectTwoHistory({
+        ok: true,
+        json: async () => ({
+          entries: [
+            {
+              id: "history-project-2",
+              projectId: "project-2",
+              userId: "user-1",
+              action: "chat",
+              summary: "Consulta proyecto dos",
+              context: { project: "Colegio Sur", module: "APU" },
+              result: {
+                answer: "Respuesta proyecto dos",
+                model: "llama3.1",
+                requestedModel: "llama3.1",
+                fallbackUsed: false,
+                warnings: [],
+              },
+              timestamp: "2026-06-09T16:30:00.000Z",
+            },
+          ],
+        }),
+      });
+      await projectTwoHistory;
+      await Promise.resolve();
+    });
+
+    expect(getByText("Consulta proyecto dos")).toBeTruthy();
+  });
+
+  it("prepends returned project history after a successful project-aware Ollama request", async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
+      }
+
+      if (url === "/api/ai/chat") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            answer: "Nueva respuesta",
+            model: "llama3.1",
+            requestedModel: "llama3.1",
+            fallbackUsed: false,
+            warnings: [],
+            historyEntry: {
+              id: "history-new",
+              projectId: "project-1",
+              userId: "user-1",
+              action: "chat",
+              summary: "Consulta inicial",
+              context: { project: "Edificio Multifamiliar", module: "APU" },
+              result: {
+                answer: "Nueva respuesta",
+                model: "llama3.1",
+                requestedModel: "llama3.1",
+                fallbackUsed: false,
+                warnings: [],
+              },
+              timestamp: "2026-06-09T16:25:00.000Z",
+            },
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url} ${JSON.stringify(init)}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText } = await renderWorkspace({ projectId: "project-1" });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    expect(getByText("Consulta inicial")).toBeTruthy();
+    expect(getByText("Nueva respuesta")).toBeTruthy();
+    const chatRequest = fetchMock.mock.calls.find(([url]) => url === "/api/ai/chat");
+    expect(JSON.parse(String(chatRequest?.[1]?.body))).toEqual(expect.objectContaining({ projectId: "project-1" }));
+    expect(window.localStorage.getItem("myc-ai-session-history")).toBeNull();
+  });
+
+  it("does not create local fallback history for project-aware Ollama responses without a history entry", async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
+      }
+
+      if (url === "/api/ai/chat") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            answer: "Respuesta sin historial persistido",
+            model: "llama3.1",
+            requestedModel: "llama3.1",
+            fallbackUsed: false,
+            warnings: [],
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url} ${JSON.stringify(init)}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText, queryByText } = await renderWorkspace({ projectId: "project-1" });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    expect(getByText("Respuesta sin historial persistido")).toBeTruthy();
+    expect(queryByText("Actividad reciente de Khipu")).toBeNull();
+    expect(window.localStorage.getItem("myc-ai-session-history")).toBeNull();
+  });
+
+  it("does not add stale project Ollama history when the project changes before the response resolves", async () => {
+    let resolveChat: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => undefined;
+    const chatResponse = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      resolveChat = resolve;
+    });
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history" || url === "/api/projects/project-2/ai-history") {
+        return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
+      }
+
+      if (url === "/api/ai/chat") {
+        return chatResponse;
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url} ${JSON.stringify(init)}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, queryByText, rerender } = await renderWorkspace({ projectId: "project-1" });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    await rerender({ projectId: "project-2" });
+
+    await act(async () => {
+      resolveChat({
+        ok: true,
+        json: async () => ({
+          answer: "Respuesta tardia proyecto uno",
+          model: "llama3.1",
+          requestedModel: "llama3.1",
+          fallbackUsed: false,
+          warnings: [],
+          historyEntry: {
+            id: "history-project-1-late",
+            projectId: "project-1",
+            userId: "user-1",
+            action: "chat",
+            summary: "Historial tardio proyecto uno",
+            context: { project: "Hospital Norte", module: "APU" },
+            result: {
+              answer: "Respuesta tardia proyecto uno",
+              model: "llama3.1",
+              requestedModel: "llama3.1",
+              fallbackUsed: false,
+              warnings: [],
+            },
+            timestamp: "2026-06-09T16:45:00.000Z",
+          },
+        }),
+      });
+      await chatResponse;
+      await Promise.resolve();
+    });
+
+    expect(queryByText("Historial tardio proyecto uno")).toBeNull();
+    expect(window.localStorage.getItem("myc-ai-session-history")).toBeNull();
+  });
+
+  it("does not add stale ChatGPT Bridge history after leaving the request scope", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const bridgeListener = vi.fn<(event: Event) => void>();
+    window.addEventListener("MYCBridgeSendPrompt", bridgeListener);
+
+    const { getButtonByText, getByText, queryByText, rerender } = await renderWorkspace({ projectId: "project-1" });
+
+    await act(async () => {
+      getButtonByText("ChatGPT Bridge").click();
+    });
+    await act(async () => {
+      getButtonByText("Enviar a ChatGPT").click();
+    });
+
+    const sentEvent = bridgeListener.mock.calls[0]?.[0] as CustomEvent;
+
+    await rerender({});
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("MYCBridgeResponse", {
+          detail: {
+            requestId: sentEvent.detail.requestId,
+            raw: "{\"answer\":\"Respuesta tardia de Bridge\"}",
+            jsonValid: true,
+            json: {
+              answer: "Respuesta tardia de Bridge",
+            },
+          },
+        }),
+      );
+    });
+
+    expect(getByText("Respuesta tardia de Bridge")).toBeTruthy();
+    expect(queryByText("Actividad reciente de Khipu")).toBeNull();
+    expect(window.localStorage.getItem("myc-ai-session-history") ?? "").not.toContain("Consulta inicial");
+
+    window.removeEventListener("MYCBridgeSendPrompt", bridgeListener);
+  });
 });
 
-async function renderWorkspace() {
+async function renderWorkspace(props: Partial<React.ComponentProps<typeof AIWorkspace>> = {}) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -288,7 +750,7 @@ async function renderWorkspace() {
   (nextContainer as HTMLDivElement & { __root?: typeof root }).__root = root;
 
   await act(async () => {
-    root.render(<AIWorkspace initialChatMessage="Consulta inicial" />);
+    root.render(<AIWorkspace initialChatMessage="Consulta inicial" {...props} />);
   });
 
   await act(async () => {
@@ -296,6 +758,15 @@ async function renderWorkspace() {
   });
 
   return {
+    rerender: async (props: Partial<React.ComponentProps<typeof AIWorkspace>> = {}) => {
+      await act(async () => {
+        root.render(<AIWorkspace initialChatMessage="Consulta inicial" {...props} />);
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+    },
     getButtonByText: (text: string) => {
       const element = [...document.body.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
       if (!(element instanceof HTMLButtonElement)) {
@@ -331,6 +802,8 @@ async function renderWorkspace() {
 
       return element;
     },
+    queryByText: (text: string) =>
+      [...document.body.querySelectorAll("*")].find((candidate) => candidate.textContent?.trim() === text) ?? null,
     getTextContaining: (text: string) => {
       const element = [...document.body.querySelectorAll("*")].find((candidate) => {
         if (!(candidate instanceof HTMLElement)) return false;

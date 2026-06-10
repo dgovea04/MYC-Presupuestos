@@ -31,6 +31,10 @@ type AiProvider = "ollama" | "chatgpt-bridge";
 
 type AiResult = AiEndpointResult;
 
+type AiResultWithHistory = AiResult & {
+  historyEntry?: AiHistoryEntry;
+};
+
 type AiHealth = {
   status: "ok" | "degraded" | "down";
   ollamaReachable: boolean;
@@ -61,6 +65,20 @@ type AiHealth = {
 type RequestState = {
   action: AiAction;
   payload: Record<string, unknown>;
+};
+
+type HistoryScope =
+  | {
+      mode: "project";
+      projectId: string;
+    }
+  | {
+      mode: "session";
+    };
+
+type ScopedRequestState = {
+  request: RequestState;
+  historyScope: HistoryScope;
 };
 
 type AiHistoryEntry = {
@@ -108,7 +126,23 @@ const ACTION_HELPERS: Record<AiAction, string> = {
   autocomplete: "Completa descripciones tecnicas sin perder el contexto.",
 };
 
-export function AIWorkspace({
+type AIWorkspaceProps = {
+  projectId?: string;
+  initialAction?: AiAction;
+  initialContext?: AiContext;
+  initialChatMessage?: string;
+  initialApuDescription?: string;
+  initialApuUnit?: string;
+  initialReviewSummary?: string;
+  initialAutocompleteInput?: string;
+};
+
+export function AIWorkspace(props: AIWorkspaceProps) {
+  return <AIWorkspaceContent key={props.projectId ? `project:${props.projectId}` : "session"} {...props} />;
+}
+
+function AIWorkspaceContent({
+  projectId,
   initialAction = "chat",
   initialContext = {
     project: "Edificio Multifamiliar",
@@ -123,15 +157,7 @@ export function AIWorkspace({
   initialApuUnit = "m3",
   initialReviewSummary = "Partida 01.02 Concreto f'c=210 m3 S/ 420. Partida 01.03 Concreto f'c=210 m2 S/ 415.",
   initialAutocompleteInput = "Excavacion manual en",
-}: {
-  initialAction?: AiAction;
-  initialContext?: AiContext;
-  initialChatMessage?: string;
-  initialApuDescription?: string;
-  initialApuUnit?: string;
-  initialReviewSummary?: string;
-  initialAutocompleteInput?: string;
-}) {
+}: AIWorkspaceProps) {
   const [activeAction, setActiveAction] = useState<AiAction>(initialAction);
   const [context, setContext] = useState<AiContext>(initialContext);
   const [chatMessage, setChatMessage] = useState(initialChatMessage);
@@ -146,10 +172,11 @@ export function AIWorkspace({
   const [health, setHealth] = useState<AiHealth | null>(null);
   const [provider, setProvider] = useState<AiProvider>("ollama");
   const [bridgeState, setBridgeState] = useState<MYCBridgeState | null>(null);
-  const [history, setHistory] = useState<AiHistoryEntry[]>(() => readStoredHistory());
+  const [history, setHistory] = useState<AiHistoryEntry[]>(() => (projectId ? [] : readStoredHistory()));
+  const latestHistoryScope = useRef<HistoryScope>(readHistoryScope(projectId));
   const pendingBridgeRequestId = useRef<string | null>(null);
   const pendingBridgeTimeoutId = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const latestBridgeRequest = useRef<RequestState | null>(null);
+  const latestBridgeRequest = useRef<ScopedRequestState | null>(null);
   const latestContext = useRef(context);
 
   useEffect(() => {
@@ -157,8 +184,30 @@ export function AIWorkspace({
   }, []);
 
   useEffect(() => {
+    if (projectId) {
+      return;
+    }
+
     window.localStorage.setItem(AI_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 8)));
-  }, [history]);
+  }, [history, projectId]);
+
+  useEffect(() => {
+    if (!projectId) {
+      return;
+    }
+
+    let active = true;
+
+    void loadProjectHistory(projectId).then((entries) => {
+      if (active) {
+        setHistory(entries);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     latestContext.current = context;
@@ -183,10 +232,11 @@ export function AIWorkspace({
       const nextResult = readBridgeAiResult(response);
       setResult(nextResult);
 
-      const request = latestBridgeRequest.current;
+      const scopedRequest = latestBridgeRequest.current;
       latestBridgeRequest.current = null;
 
-      if (request) {
+      if (scopedRequest && isSameHistoryScope(scopedRequest.historyScope, latestHistoryScope.current)) {
+        const request = scopedRequest.request;
         setHistory((current) => [
           {
             id: `${Date.now()}-${request.action}-chatgpt-bridge`,
@@ -254,9 +304,10 @@ export function AIWorkspace({
     setError("");
     setResult(null);
     setLastRequest(request);
-    latestBridgeRequest.current = request;
+    const requestHistoryScope = readHistoryScope(projectId);
 
     if (provider === "chatgpt-bridge") {
+      latestBridgeRequest.current = { request, historyScope: requestHistoryScope };
       submitBridgeRequest(request);
       return;
     }
@@ -267,7 +318,11 @@ export function AIWorkspace({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(request.payload),
+        body: JSON.stringify(
+          requestHistoryScope.mode === "project"
+            ? { ...request.payload, projectId: requestHistoryScope.projectId }
+            : request.payload,
+        ),
       });
       const payload: unknown = await response.json();
 
@@ -277,17 +332,22 @@ export function AIWorkspace({
 
       const nextResult = readAiResult(payload);
       setResult(nextResult);
-      setHistory((current) => [
-        {
-          id: `${Date.now()}-${request.action}`,
-          action: request.action,
-          summary: summarizeRequest(request),
-          context,
-          result: nextResult,
-          timestamp: new Date().toISOString(),
-        },
-        ...current,
-      ]);
+      const nextHistoryEntry =
+        nextResult.historyEntry ??
+        (requestHistoryScope.mode === "session"
+          ? {
+              id: `${Date.now()}-${request.action}`,
+              action: request.action,
+              summary: summarizeRequest(request),
+              context,
+              result: nextResult,
+              timestamp: new Date().toISOString(),
+            }
+          : null);
+
+      if (nextHistoryEntry && isSameHistoryScope(requestHistoryScope, latestHistoryScope.current)) {
+        setHistory((current) => [nextHistoryEntry, ...current]);
+      }
       void loadHealth();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "No se pudo completar la solicitud de IA.");
@@ -601,7 +661,9 @@ export function AIWorkspace({
               <div>
                 <h3 className="text-lg font-semibold text-slate-950">Actividad reciente de Khipu</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Se guarda solo en este navegador para retomar resultados recientes; no es memoria del proyecto.
+                  {projectId
+                    ? "Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesion."
+                    : "Se guarda solo en este navegador para retomar resultados recientes; no es memoria del proyecto."}
                 </p>
               </div>
               <div className="space-y-3">
@@ -735,27 +797,16 @@ export function AIWorkspace({
 
 }
 
-function readAiResult(payload: unknown): AiResult {
-  if (
-    !isRecord(payload) ||
-    typeof payload.answer !== "string" ||
-    typeof payload.model !== "string" ||
-    typeof payload.requestedModel !== "string" ||
-    typeof payload.fallbackUsed !== "boolean" ||
-    !Array.isArray(payload.warnings)
-  ) {
+function readAiResult(payload: unknown): AiResultWithHistory {
+  const result = readHistoryResult(payload);
+
+  if (!result || !isRecord(payload)) {
     throw new Error("La respuesta de IA no tiene el formato esperado.");
   }
 
-  return {
-    answer: payload.answer,
-    model: payload.model,
-    requestedModel: payload.requestedModel,
-    fallbackUsed: payload.fallbackUsed,
-    warnings: payload.warnings.filter((warning): warning is string => typeof warning === "string"),
-    latencyMs: typeof payload.latencyMs === "number" ? payload.latencyMs : undefined,
-    structuredData: payload.structuredData,
-  };
+  const historyEntry = readHistoryEntry(payload.historyEntry);
+
+  return historyEntry ? { ...result, historyEntry } : result;
 }
 
 function readBridgeAiResult(response: MYCBridgeResponse): AiResult {
@@ -881,6 +932,113 @@ function readErrorMessage(payload: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readHistoryScope(projectId: string | undefined): HistoryScope {
+  return projectId ? { mode: "project", projectId } : { mode: "session" };
+}
+
+function isSameHistoryScope(left: HistoryScope, right: HistoryScope) {
+  if (left.mode !== right.mode) {
+    return false;
+  }
+
+  if (left.mode === "session") {
+    return true;
+  }
+
+  return right.mode === "project" && left.projectId === right.projectId;
+}
+
+async function loadProjectHistory(projectId: string) {
+  try {
+    const response = await fetch(`/api/projects/${projectId}/ai-history`);
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload: unknown = await response.json();
+    if (!isRecord(payload) || !Array.isArray(payload.entries)) {
+      return [];
+    }
+
+    return payload.entries.map(readHistoryEntry).filter((entry): entry is AiHistoryEntry => entry !== null);
+  } catch {
+    return [];
+  }
+}
+
+function readHistoryEntry(value: unknown): AiHistoryEntry | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.action !== "string" ||
+    typeof value.summary !== "string" ||
+    typeof value.timestamp !== "string" ||
+    !isRecord(value.result)
+  ) {
+    return null;
+  }
+
+  const result = readHistoryResult(value.result);
+  if (!result) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    action: readHistoryAction(value.action),
+    summary: value.summary,
+    context: readAiContext(value.context),
+    result,
+    timestamp: value.timestamp,
+  };
+}
+
+function readHistoryResult(value: unknown): AiResult | null {
+  if (
+    !isRecord(value) ||
+    typeof value.answer !== "string" ||
+    typeof value.model !== "string" ||
+    typeof value.requestedModel !== "string" ||
+    typeof value.fallbackUsed !== "boolean" ||
+    !Array.isArray(value.warnings)
+  ) {
+    return null;
+  }
+
+  return {
+    answer: value.answer,
+    model: value.model,
+    requestedModel: value.requestedModel,
+    fallbackUsed: value.fallbackUsed,
+    warnings: value.warnings.filter((warning): warning is string => typeof warning === "string"),
+    latencyMs: typeof value.latencyMs === "number" ? value.latencyMs : undefined,
+    structuredData: value.structuredData,
+  };
+}
+
+function readHistoryAction(action: string): AiAction {
+  if (action === "apu" || action === "review" || action === "autocomplete") {
+    return action;
+  }
+
+  return "chat";
+}
+
+function readAiContext(value: unknown): AiContext {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return {
+    project: typeof value.project === "string" ? value.project : undefined,
+    module: typeof value.module === "string" ? value.module : undefined,
+    selectedItem: typeof value.selectedItem === "string" ? value.selectedItem : undefined,
+    unit: typeof value.unit === "string" ? value.unit : undefined,
+    currentCost: typeof value.currentCost === "number" ? value.currentCost : undefined,
+    activeTable: typeof value.activeTable === "string" ? value.activeTable : undefined,
+  };
 }
 
 function readHealthBadgeClass(status: AiHealth["status"] | undefined) {
