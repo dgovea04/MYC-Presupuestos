@@ -183,6 +183,7 @@ model User {
   aiUsagePeriods      AiUsagePeriod[]
   aiTokenLedger       AiTokenLedger[] @relation("AiTokenLedgerUser")
   aiTokenAdjustments  AiTokenLedger[] @relation("AiTokenLedgerAdmin")
+  aiProjectHistoryEntries AiProjectHistoryEntry[]
   billingSubscriptions BillingSubscription[]
   noteTasks           NoteTask[]
   generatedPartidas   GeneratedPartida[]
@@ -282,6 +283,29 @@ model AiTokenLedger {
   @@index([action, createdAt(sort: Desc)])
 }
 
+model AiProjectHistoryEntry {
+  id             String   @id @default(cuid())
+  projectId      String
+  userId         String
+  action         String
+  summary        String
+  context        Json
+  answer         String
+  structuredData Json?
+  model          String
+  requestedModel String
+  fallbackUsed   Boolean  @default(false)
+  warnings       String[] @default([])
+  latencyMs      Int?
+  createdAt      DateTime @default(now())
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+}
+
 model ActivityEvent {
   id        String            @id @default(cuid())
   userId    String
@@ -349,6 +373,7 @@ model Project {
   noteTasks   NoteTask[]
   metradoSheets MetradoSheet[]
   budgetTemplates BudgetTemplate[]
+  aiProjectHistoryEntries AiProjectHistoryEntry[]
 
   @@index([companyId])
 }
