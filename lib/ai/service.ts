@@ -1,7 +1,14 @@
 import type { z } from "zod";
 import { AiRuntimeError } from "@/lib/ai/errors";
 import { resolveAiModel } from "@/lib/ai/models";
-import { askOllama, listInstalledOllamaModels, OllamaConnectionError, OllamaResponseError, OllamaTimeoutError } from "@/lib/ai/ollama";
+import {
+  askOllama,
+  listInstalledOllamaModels,
+  OllamaConnectionError,
+  OllamaResponseError,
+  OllamaTimeoutError,
+  streamOllamaChat,
+} from "@/lib/ai/ollama";
 import { buildStructuredRepairPrompt } from "@/lib/ai/prompts";
 import { recordAiActionMetric } from "@/lib/ai/runtime";
 import { parseStructuredAiOutput } from "@/lib/ai/structured-output";
@@ -17,6 +24,103 @@ type GenerateAiResponseInput<TStructuredData = unknown> = {
   fetchImpl?: FetchLike;
   userId?: string;
 };
+
+type StreamChatAiResponseInput = {
+  messages: AiMessage[];
+  fetchImpl?: FetchLike;
+  userId?: string;
+};
+
+export type StreamChatAiResponseEvent =
+  | { type: "delta"; text: string }
+  | { type: "final"; result: AiEndpointResult };
+
+export async function* streamChatAiResponse({
+  messages,
+  fetchImpl,
+  userId,
+}: StreamChatAiResponseInput): AsyncIterable<StreamChatAiResponseEvent> {
+  const action: AiAction = "chat";
+  const startedAt = Date.now();
+  const promptText = messages.map((message) => message.content).join("\n");
+  const estimatedTokens = estimateAiTokens(promptText);
+  let answer = "";
+
+  try {
+    if (userId) {
+      await assertCanUseAi({ userId, estimatedTokens });
+    }
+
+    const availableModels = await listInstalledOllamaModels(fetchImpl);
+    const resolution = resolveAiModel(action, availableModels);
+
+    for await (const text of streamOllamaChat({
+      model: resolution.model,
+      messages,
+      fetchImpl,
+    })) {
+      answer += text;
+      yield { type: "delta", text };
+    }
+
+    const latencyMs = Date.now() - startedAt;
+    const result: AiEndpointResult = {
+      answer: answer.trim(),
+      model: resolution.model,
+      requestedModel: resolution.requestedModel,
+      fallbackUsed: resolution.fallbackUsed,
+      warnings: resolution.warnings,
+      latencyMs,
+      debug: {
+        structuredParseStatus: "not_requested",
+        rawAnswer: answer,
+      },
+    };
+
+    recordAiActionMetric(action, { latencyMs, lastError: result.warnings[0] ?? null });
+
+    if (userId) {
+      await recordAiUsage({
+        userId,
+        action,
+        provider: "ollama",
+        model: resolution.model,
+        estimatedTokens,
+        actualTokens: estimateAiTokens(`${promptText}\n${result.answer}`),
+      });
+    }
+
+    yield { type: "final", result };
+  } catch (error) {
+    const latencyMs = Date.now() - startedAt;
+    recordAiActionMetric(action, {
+      latencyMs,
+      lastError: error instanceof Error ? error.message : "Error inesperado de IA",
+    });
+
+    if (error instanceof OllamaConnectionError) {
+      throw new AiRuntimeError("connection", error.message);
+    }
+
+    if (error instanceof OllamaResponseError) {
+      throw new AiRuntimeError("invalid_response", error.message);
+    }
+
+    if (error instanceof OllamaTimeoutError) {
+      throw new AiRuntimeError("timeout", error.message);
+    }
+
+    if (error instanceof AiRuntimeError) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.message.includes("Falta instalar")) {
+      throw new AiRuntimeError("model_missing", error.message);
+    }
+
+    throw error;
+  }
+}
 
 export async function generateAiResponse<TStructuredData = unknown>({
   action,
@@ -115,7 +219,7 @@ export async function generateAiResponse<TStructuredData = unknown>({
   }
 }
 
-function estimateAiTokens(text: string) {
+export function estimateAiTokens(text: string) {
   return Math.max(1, Math.ceil(text.length / 4));
 }
 
