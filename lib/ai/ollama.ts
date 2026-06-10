@@ -17,6 +17,11 @@ type OllamaTagsPayload = {
   }>;
 };
 
+type OllamaStreamChunk = {
+  done: boolean;
+  text: string;
+};
+
 export class OllamaConnectionError extends Error {
   constructor() {
     super("No se pudo conectar con Ollama. Verifica que Ollama este activo en http://localhost:11434 y que el modelo este descargado.");
@@ -104,6 +109,131 @@ export async function askOllama({
 
   const payload: unknown = await response.json();
   return parseOllamaAnswer(payload);
+}
+
+export function parseOllamaStreamLine(line: string): OllamaStreamChunk | null {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(trimmed);
+  } catch {
+    throw new OllamaResponseError("Ollama devolvio un fragmento streaming invalido.");
+  }
+
+  if (!isRecord(payload)) {
+    throw new OllamaResponseError("Ollama devolvio un fragmento streaming invalido.");
+  }
+
+  const done = payload.done === true;
+  if (done) {
+    return { done: true, text: "" };
+  }
+
+  const message = payload.message;
+  if (!isRecord(message) || typeof message.content !== "string") {
+    throw new OllamaResponseError("Ollama devolvio un fragmento streaming sin contenido.");
+  }
+
+  return {
+    done: false,
+    text: message.content,
+  };
+}
+
+export async function* streamOllamaChat({
+  model,
+  messages,
+  timeoutMs = DEFAULT_OLLAMA_TIMEOUT_MS,
+  fetchImpl = fetch,
+}: Omit<AskOllamaInput, "responseFormat">): AsyncIterable<string> {
+  let response: Response;
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+
+  try {
+    response = await fetchImpl(getOllamaChatUrl(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: abortController.signal,
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: true,
+        options: {
+          temperature: 0.2,
+          num_predict: DEFAULT_CHAT_NUM_PREDICT,
+        },
+      }),
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    if (abortController.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+      throw new OllamaTimeoutError(timeoutMs);
+    }
+
+    throw new OllamaConnectionError();
+  }
+
+  if (!response.ok) {
+    clearTimeout(timeout);
+    throw new OllamaResponseError(`Ollama respondio con estado ${response.status}.`);
+  }
+
+  if (!response.body) {
+    clearTimeout(timeout);
+    throw new OllamaResponseError("Ollama no devolvio un stream de respuesta.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const chunk = parseOllamaStreamLine(line);
+        if (!chunk) {
+          continue;
+        }
+
+        if (chunk.done) {
+          return;
+        }
+
+        yield chunk.text;
+      }
+    }
+
+    buffer += decoder.decode();
+    const finalChunk = parseOllamaStreamLine(buffer);
+    if (finalChunk && !finalChunk.done) {
+      yield finalChunk.text;
+    }
+  } catch (error) {
+    if (abortController.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+      throw new OllamaTimeoutError(timeoutMs);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    reader.releaseLock();
+  }
 }
 
 export async function listInstalledOllamaModels(fetchImpl = fetch) {

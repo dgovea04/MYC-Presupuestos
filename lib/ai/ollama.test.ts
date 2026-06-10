@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { askOllama, OllamaConnectionError, OllamaTimeoutError, parseOllamaAnswer } from "@/lib/ai/ollama";
+import {
+  askOllama,
+  OllamaConnectionError,
+  OllamaResponseError,
+  OllamaTimeoutError,
+  parseOllamaAnswer,
+  parseOllamaStreamLine,
+  streamOllamaChat,
+} from "@/lib/ai/ollama";
 import { AI_MODELS } from "@/lib/ai/models";
 
 describe("Ollama service", () => {
@@ -95,5 +103,78 @@ describe("Ollama service", () => {
         fetchImpl,
       }),
     ).rejects.toBeInstanceOf(OllamaTimeoutError);
+  });
+
+  it("parses Ollama streaming lines into text deltas", () => {
+    expect(parseOllamaStreamLine(JSON.stringify({ message: { content: "Hola" }, done: false }))).toEqual({
+      done: false,
+      text: "Hola",
+    });
+    expect(parseOllamaStreamLine(JSON.stringify({ done: true }))).toEqual({ done: true, text: "" });
+    expect(parseOllamaStreamLine("")).toBeNull();
+  });
+
+  it("rejects malformed Ollama streaming lines", () => {
+    expect(() => parseOllamaStreamLine("{bad json")).toThrow(OllamaResponseError);
+    expect(() => parseOllamaStreamLine(JSON.stringify({ message: { content: 12 } }))).toThrow(OllamaResponseError);
+  });
+
+  it("streams chat deltas from Ollama", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(`${JSON.stringify({ message: { content: "Hola " }, done: false })}\n`));
+        controller.enqueue(encoder.encode(`${JSON.stringify({ message: { content: "obra" }, done: false })}\n`));
+        controller.enqueue(encoder.encode(`${JSON.stringify({ done: true })}\n`));
+        controller.close();
+      },
+    });
+    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+      return new Response(stream, { status: 200 });
+    });
+
+    const chunks = [];
+    for await (const chunk of streamOllamaChat({
+      model: AI_MODELS.CHAT,
+      messages: [{ role: "user", content: "Hola" }],
+      fetchImpl,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual(["Hola ", "obra"]);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://localhost:11434/api/chat",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          model: "llama3.1",
+          messages: [{ role: "user", content: "Hola" }],
+          stream: true,
+          options: {
+            temperature: 0.2,
+            num_predict: 1200,
+          },
+        }),
+      }),
+    );
+  });
+
+  it("throws a response error when Ollama streaming has no response body", async () => {
+    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+      return new Response(null, { status: 200 });
+    });
+
+    const consume = async () => {
+      for await (const _chunk of streamOllamaChat({
+        model: AI_MODELS.CHAT,
+        messages: [{ role: "user", content: "Hola" }],
+        fetchImpl,
+      })) {
+        // consume stream
+      }
+    };
+
+    await expect(consume()).rejects.toBeInstanceOf(OllamaResponseError);
   });
 });
