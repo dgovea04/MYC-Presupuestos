@@ -593,6 +593,60 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(window.localStorage.getItem("myc-ai-session-history")).toBeNull();
   });
 
+  it("renders streamed chat text before the final event arrives", async () => {
+    let enqueueStreamEvent: (event: { event: string; data: unknown }) => void = () => undefined;
+    let closeStream: () => void = () => undefined;
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/ai/chat/stream") {
+        return Promise.resolve({
+          ok: true,
+          body: createControlledSseStream((enqueue, close) => {
+            enqueueStreamEvent = enqueue;
+            closeStream = close;
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText } = await renderWorkspace();
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    await act(async () => {
+      enqueueStreamEvent({ event: "delta", data: { text: "Primer avance" } });
+      await Promise.resolve();
+    });
+
+    expect(getByText("Primer avance")).toBeTruthy();
+    expect(getButtonByText("Khipu respondiendo")).toBeTruthy();
+
+    await act(async () => {
+      enqueueStreamEvent({
+        event: "final",
+        data: {
+          answer: "Primer avance completo",
+          model: "llama3.1",
+          requestedModel: "llama3.1",
+          fallbackUsed: false,
+          warnings: [],
+        },
+      });
+      closeStream();
+      await Promise.resolve();
+    });
+
+    expect(getByText("Primer avance completo")).toBeTruthy();
+  });
+
   it("falls back to the non-streaming chat endpoint when the stream request is unavailable", async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === "/api/ai/health") {
@@ -916,6 +970,23 @@ function createSseStream(events: Array<{ event: string; data: unknown }>) {
       }
 
       controller.close();
+    },
+  });
+}
+
+function createControlledSseStream(
+  setup: (enqueue: (event: { event: string; data: unknown }) => void, close: () => void) => void,
+) {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      setup(
+        (event) => {
+          controller.enqueue(encoder.encode(`event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`));
+        },
+        () => controller.close(),
+      );
     },
   });
 }

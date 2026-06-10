@@ -69,6 +69,8 @@ describe("POST /api/ai/chat/stream", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(response.headers.get("x-accel-buffering")).toBe("no");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     const body = await response.text();
     expect(body).toContain('event: delta\ndata: {"text":"Hola "}');
     expect(body).toContain('event: final\ndata: {"answer":"Hola obra"');
@@ -81,6 +83,51 @@ describe("POST /api/ai/chat/stream", () => {
       summary: "Consulta tecnica",
       userId: "user-1",
     });
+  });
+
+  it("makes the first delta readable before the final event resolves", async () => {
+    let resolveFinal: () => void = () => undefined;
+    const waitForFinal = new Promise<void>((resolve) => {
+      resolveFinal = resolve;
+    });
+    mocks.streamChatAiResponse.mockImplementation(async function* () {
+      yield { type: "delta", text: "Hola " };
+      await waitForFinal;
+      yield {
+        type: "final",
+        result: {
+          answer: "Hola obra",
+          model: "llama3.1",
+          requestedModel: "llama3.1",
+          fallbackUsed: false,
+          warnings: [],
+        },
+      };
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/ai/chat/stream", {
+        method: "POST",
+        body: JSON.stringify({ message: "Consulta tecnica" }),
+      }),
+    );
+
+    const reader = response.body?.getReader();
+    expect(reader).toBeTruthy();
+    const decoder = new TextDecoder();
+    let firstChunk = "";
+
+    while (!firstChunk.includes("event: delta")) {
+      const nextRead = await reader?.read();
+      expect(nextRead?.done).toBe(false);
+      firstChunk += decoder.decode(nextRead?.value);
+    }
+
+    expect(firstChunk).toContain('event: delta\ndata: {"text":"Hola "}');
+    expect(firstChunk).not.toContain("event: final");
+
+    resolveFinal();
+    reader?.releaseLock();
   });
 
   it("emits an error event when streaming fails after the response starts", async () => {

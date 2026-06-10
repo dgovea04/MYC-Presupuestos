@@ -173,6 +173,7 @@ function AIWorkspaceContent({
   const [result, setResult] = useState<AiResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [lastRequest, setLastRequest] = useState<RequestState | null>(null);
   const [health, setHealth] = useState<AiHealth | null>(null);
   const [provider, setProvider] = useState<AiProvider>("ollama");
@@ -272,6 +273,7 @@ function AIWorkspaceContent({
     setActiveAction(action);
     setResult(null);
     setError("");
+    setStreaming(false);
   };
   const contextRows = [
     { label: "Proyecto", value: context.project },
@@ -306,6 +308,7 @@ function AIWorkspaceContent({
 
   const submitRequest = async (request: RequestState) => {
     setLoading(true);
+    setStreaming(false);
     setError("");
     setResult(null);
     setLastRequest(request);
@@ -366,6 +369,7 @@ function AIWorkspaceContent({
       setError(caughtError instanceof Error ? caughtError.message : "No se pudo completar la solicitud de IA.");
       void loadHealth();
     } finally {
+      setStreaming(false);
       setLoading(false);
     }
   };
@@ -475,6 +479,7 @@ function AIWorkspaceContent({
                     pendingBridgeRequestId.current = null;
                     latestBridgeRequest.current = null;
                     clearPendingBridgeTimeout();
+                    setStreaming(false);
                     setLoading(false);
                     setError("");
                     setResult(null);
@@ -493,6 +498,7 @@ function AIWorkspaceContent({
                   aria-pressed={provider === "chatgpt-bridge"}
                   onClick={() => {
                     setProvider("chatgpt-bridge");
+                    setStreaming(false);
                     setError("");
                     setResult(null);
                   }}
@@ -634,7 +640,7 @@ function AIWorkspaceContent({
               <div className="flex flex-wrap items-center gap-3">
                 <Button className="gap-2" disabled={loading} type="submit">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {readSubmitLabel(provider, loading)}
+                  {readSubmitLabel(provider, loading, streaming)}
                 </Button>
                 {lastRequest && error ? (
                   <Button
@@ -825,6 +831,7 @@ function AIWorkspaceContent({
       await readStreamEvents(response, (event) => {
         if (event.event === "delta") {
           streamedAnswer += event.data.text;
+          setStreaming(true);
           setResult({
             answer: streamedAnswer,
             model: "Khipu",
@@ -840,6 +847,7 @@ function AIWorkspaceContent({
         }
 
         receivedFinal = true;
+        setStreaming(false);
         setResult(event.data);
         const nextHistoryEntry =
           event.data.historyEntry ??
@@ -861,6 +869,7 @@ function AIWorkspaceContent({
 
       return receivedFinal;
     } catch {
+      setStreaming(false);
       return false;
     }
   }
@@ -1031,9 +1040,13 @@ function readBridgeOutputFormat(action: AiAction) {
   return "Respuesta tecnica clara; si incluyes datos estructurados, usa JSON valido.";
 }
 
-function readSubmitLabel(provider: AiProvider, loading: boolean) {
+function readSubmitLabel(provider: AiProvider, loading: boolean, streaming: boolean) {
   if (provider === "chatgpt-bridge") {
     return loading ? "Consultando ChatGPT" : "Enviar a ChatGPT";
+  }
+
+  if (streaming) {
+    return "Khipu respondiendo";
   }
 
   return loading ? "Consultando IA local" : "Enviar a Ollama";

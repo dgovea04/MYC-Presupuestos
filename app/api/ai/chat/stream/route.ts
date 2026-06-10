@@ -5,6 +5,7 @@ import { streamChatAiResponse } from "@/lib/ai/service";
 import { aiChatRequestSchema } from "@/lib/ai/validation";
 
 const encoder = new TextEncoder();
+const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
@@ -14,6 +15,8 @@ export async function POST(request: Request) {
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
+          writePreamble(controller);
+
           for await (const event of streamChatAiResponse({
             messages,
             userId: session.user.id,
@@ -48,9 +51,15 @@ export async function POST(request: Request) {
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
         "Content-Type": "text/event-stream; charset=utf-8",
+        "X-Accel-Buffering": "no",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   });
+}
+
+function writePreamble(controller: ReadableStreamDefaultController<Uint8Array>) {
+  controller.enqueue(encoder.encode(STREAM_PREAMBLE));
 }
 
 function writeEvent(controller: ReadableStreamDefaultController<Uint8Array>, event: string, data: unknown) {
