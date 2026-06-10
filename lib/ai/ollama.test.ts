@@ -166,12 +166,12 @@ describe("Ollama service", () => {
     });
 
     const consume = async () => {
-      for await (const _chunk of streamOllamaChat({
+      for await (const chunk of streamOllamaChat({
         model: AI_MODELS.CHAT,
         messages: [{ role: "user", content: "Hola" }],
         fetchImpl,
       })) {
-        // consume stream
+        expect(chunk).toBe("");
       }
     };
 
