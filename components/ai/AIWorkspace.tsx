@@ -67,6 +67,11 @@ type RequestState = {
   payload: Record<string, unknown>;
 };
 
+type StreamEvent =
+  | { event: "delta"; data: { text: string } }
+  | { event: "final"; data: AiResultWithHistory }
+  | { event: "error"; data: { error: string } };
+
 type HistoryScope =
   | {
       mode: "project";
@@ -313,6 +318,14 @@ function AIWorkspaceContent({
     }
 
     try {
+      if (request.action === "chat") {
+        const streamed = await submitStreamingChatRequest(request, requestHistoryScope);
+        if (streamed) {
+          void loadHealth();
+          return;
+        }
+      }
+
       const response = await fetch(`/api/ai/${request.action}`, {
         method: "POST",
         headers: {
@@ -788,6 +801,70 @@ function AIWorkspaceContent({
     }
   }
 
+  async function submitStreamingChatRequest(request: RequestState, requestHistoryScope: HistoryScope) {
+    try {
+      const response = await fetch("/api/ai/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          requestHistoryScope.mode === "project"
+            ? { ...request.payload, projectId: requestHistoryScope.projectId }
+            : request.payload,
+        ),
+      });
+
+      if (!response.ok || !response.body) {
+        return false;
+      }
+
+      let receivedFinal = false;
+      let streamedAnswer = "";
+
+      await readStreamEvents(response, (event) => {
+        if (event.event === "delta") {
+          streamedAnswer += event.data.text;
+          setResult({
+            answer: streamedAnswer,
+            model: "Khipu",
+            requestedModel: "Streaming",
+            fallbackUsed: false,
+            warnings: [],
+          });
+          return;
+        }
+
+        if (event.event === "error") {
+          throw new Error(event.data.error);
+        }
+
+        receivedFinal = true;
+        setResult(event.data);
+        const nextHistoryEntry =
+          event.data.historyEntry ??
+          (requestHistoryScope.mode === "session"
+            ? {
+                id: `${Date.now()}-${request.action}`,
+                action: request.action,
+                summary: summarizeRequest(request),
+                context,
+                result: event.data,
+                timestamp: new Date().toISOString(),
+              }
+            : null);
+
+        if (nextHistoryEntry && isSameHistoryScope(requestHistoryScope, latestHistoryScope.current)) {
+          setHistory((current) => [nextHistoryEntry, ...current]);
+        }
+      });
+
+      return receivedFinal;
+    } catch {
+      return false;
+    }
+  }
+
   function clearPendingBridgeTimeout() {
     if (pendingBridgeTimeoutId.current) {
       window.clearTimeout(pendingBridgeTimeoutId.current);
@@ -807,6 +884,75 @@ function readAiResult(payload: unknown): AiResultWithHistory {
   const historyEntry = readHistoryEntry(payload.historyEntry);
 
   return historyEntry ? { ...result, historyEntry } : result;
+}
+
+async function readStreamEvents(response: Response, onEvent: (event: StreamEvent) => void) {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("La respuesta de IA no tiene un stream legible.");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        const event = readStreamEvent(frame);
+        if (event) {
+          onEvent(event);
+        }
+      }
+    }
+
+    buffer += decoder.decode();
+    const finalEvent = readStreamEvent(buffer);
+    if (finalEvent) {
+      onEvent(finalEvent);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function readStreamEvent(frame: string): StreamEvent | null {
+  const lines = frame
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const eventLine = lines.find((line) => line.startsWith("event:"));
+  const dataLine = lines.find((line) => line.startsWith("data:"));
+
+  if (!eventLine || !dataLine) {
+    return null;
+  }
+
+  const eventName = eventLine.slice("event:".length).trim();
+  const dataText = dataLine.slice("data:".length).trim();
+  const parsed: unknown = JSON.parse(dataText);
+
+  if (eventName === "delta" && isRecord(parsed) && typeof parsed.text === "string") {
+    return { event: "delta", data: { text: parsed.text } };
+  }
+
+  if (eventName === "error" && isRecord(parsed) && typeof parsed.error === "string") {
+    return { event: "error", data: { error: parsed.error } };
+  }
+
+  if (eventName === "final") {
+    return { event: "final", data: readAiResult(parsed) };
+  }
+
+  return null;
 }
 
 function readBridgeAiResult(response: MYCBridgeResponse): AiResult {

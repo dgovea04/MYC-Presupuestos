@@ -530,7 +530,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getByText("Consulta proyecto dos")).toBeTruthy();
   });
 
-  it("prepends returned project history after a successful project-aware Ollama request", async () => {
+  it("renders partial streamed chat text and commits history after final event", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/ai/health") {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
@@ -540,32 +540,39 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
       }
 
-      if (url === "/api/ai/chat") {
+      if (url === "/api/ai/chat/stream") {
         return Promise.resolve({
           ok: true,
-          json: async () => ({
-            answer: "Nueva respuesta",
-            model: "llama3.1",
-            requestedModel: "llama3.1",
-            fallbackUsed: false,
-            warnings: [],
-            historyEntry: {
-              id: "history-new",
-              projectId: "project-1",
-              userId: "user-1",
-              action: "chat",
-              summary: "Consulta inicial",
-              context: { project: "Edificio Multifamiliar", module: "APU" },
-              result: {
-                answer: "Nueva respuesta",
+          body: createSseStream([
+            { event: "delta", data: { text: "Hola " } },
+            { event: "delta", data: { text: "obra" } },
+            {
+              event: "final",
+              data: {
+                answer: "Hola obra",
                 model: "llama3.1",
                 requestedModel: "llama3.1",
                 fallbackUsed: false,
                 warnings: [],
+                historyEntry: {
+                  id: "history-new",
+                  projectId: "project-1",
+                  userId: "user-1",
+                  action: "chat",
+                  summary: "Consulta inicial",
+                  context: { project: "Edificio Multifamiliar", module: "APU" },
+                  result: {
+                    answer: "Hola obra",
+                    model: "llama3.1",
+                    requestedModel: "llama3.1",
+                    fallbackUsed: false,
+                    warnings: [],
+                  },
+                  timestamp: "2026-06-09T16:25:00.000Z",
+                },
               },
-              timestamp: "2026-06-09T16:25:00.000Z",
             },
-          }),
+          ]),
         });
       }
 
@@ -580,10 +587,51 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
 
     expect(getByText("Consulta inicial")).toBeTruthy();
-    expect(getByText("Nueva respuesta")).toBeTruthy();
-    const chatRequest = fetchMock.mock.calls.find(([url]) => url === "/api/ai/chat");
+    expect(getByText("Hola obra")).toBeTruthy();
+    const chatRequest = fetchMock.mock.calls.find(([url]) => url === "/api/ai/chat/stream");
     expect(JSON.parse(String(chatRequest?.[1]?.body))).toEqual(expect.objectContaining({ projectId: "project-1" }));
     expect(window.localStorage.getItem("myc-ai-session-history")).toBeNull();
+  });
+
+  it("falls back to the non-streaming chat endpoint when the stream request is unavailable", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/ai/chat/stream") {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ error: "Streaming no disponible" }),
+        });
+      }
+
+      if (url === "/api/ai/chat") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            answer: "Respuesta sin streaming",
+            model: "llama3.1",
+            requestedModel: "llama3.1",
+            fallbackUsed: false,
+            warnings: [],
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText } = await renderWorkspace();
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    expect(getByText("Respuesta sin streaming")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/ai/chat/stream")).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/ai/chat")).toBe(true);
   });
 
   it("does not create local fallback history for project-aware Ollama responses without a history entry", async () => {
@@ -596,16 +644,21 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
       }
 
-      if (url === "/api/ai/chat") {
+      if (url === "/api/ai/chat/stream") {
         return Promise.resolve({
           ok: true,
-          json: async () => ({
-            answer: "Respuesta sin historial persistido",
-            model: "llama3.1",
-            requestedModel: "llama3.1",
-            fallbackUsed: false,
-            warnings: [],
-          }),
+          body: createSseStream([
+            {
+              event: "final",
+              data: {
+                answer: "Respuesta sin historial persistido",
+                model: "llama3.1",
+                requestedModel: "llama3.1",
+                fallbackUsed: false,
+                warnings: [],
+              },
+            },
+          ]),
         });
       }
 
@@ -625,8 +678,8 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
   });
 
   it("does not add stale project Ollama history when the project changes before the response resolves", async () => {
-    let resolveChat: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => undefined;
-    const chatResponse = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+    let resolveChat: (value: { ok: boolean; body: ReadableStream<Uint8Array> }) => void = () => undefined;
+    const chatResponse = new Promise<{ ok: boolean; body: ReadableStream<Uint8Array> }>((resolve) => {
       resolveChat = resolve;
     });
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -638,7 +691,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
       }
 
-      if (url === "/api/ai/chat") {
+      if (url === "/api/ai/chat/stream") {
         return chatResponse;
       }
 
@@ -657,29 +710,34 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     await act(async () => {
       resolveChat({
         ok: true,
-        json: async () => ({
-          answer: "Respuesta tardia proyecto uno",
-          model: "llama3.1",
-          requestedModel: "llama3.1",
-          fallbackUsed: false,
-          warnings: [],
-          historyEntry: {
-            id: "history-project-1-late",
-            projectId: "project-1",
-            userId: "user-1",
-            action: "chat",
-            summary: "Historial tardio proyecto uno",
-            context: { project: "Hospital Norte", module: "APU" },
-            result: {
+        body: createSseStream([
+          {
+            event: "final",
+            data: {
               answer: "Respuesta tardia proyecto uno",
               model: "llama3.1",
               requestedModel: "llama3.1",
               fallbackUsed: false,
               warnings: [],
+              historyEntry: {
+                id: "history-project-1-late",
+                projectId: "project-1",
+                userId: "user-1",
+                action: "chat",
+                summary: "Historial tardio proyecto uno",
+                context: { project: "Hospital Norte", module: "APU" },
+                result: {
+                  answer: "Respuesta tardia proyecto uno",
+                  model: "llama3.1",
+                  requestedModel: "llama3.1",
+                  fallbackUsed: false,
+                  warnings: [],
+                },
+                timestamp: "2026-06-09T16:45:00.000Z",
+              },
             },
-            timestamp: "2026-06-09T16:45:00.000Z",
           },
-        }),
+        ]),
       });
       await chatResponse;
       await Promise.resolve();
@@ -846,4 +904,18 @@ function createHealthPayload(status: "ok" | "degraded" | "down" = "ok") {
       autocomplete: { latencyMs: null, lastError: null },
     },
   };
+}
+
+function createSseStream(events: Array<{ event: string; data: unknown }>) {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`));
+      }
+
+      controller.close();
+    },
+  });
 }
