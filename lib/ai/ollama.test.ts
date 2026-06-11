@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   askOllama,
   OllamaConnectionError,
@@ -11,6 +11,10 @@ import {
 import { AI_MODELS } from "@/lib/ai/models";
 
 describe("Ollama service", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("extracts assistant content from Ollama chat responses", () => {
     expect(parseOllamaAnswer({ message: { content: "Respuesta tecnica" } })).toBe("Respuesta tecnica");
   });
@@ -158,6 +162,45 @@ describe("Ollama service", () => {
         }),
       }),
     );
+  });
+
+  it("keeps an active streaming chat alive beyond the idle timeout window", async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(`${JSON.stringify({ message: { content: "Hola " }, done: false })}\n`));
+        setTimeout(() => {
+          controller.enqueue(encoder.encode(`${JSON.stringify({ message: { content: "obra" }, done: false })}\n`));
+        }, 900);
+        setTimeout(() => {
+          controller.enqueue(encoder.encode(`${JSON.stringify({ done: true })}\n`));
+          controller.close();
+        }, 1800);
+      },
+    });
+    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+      return new Response(stream, { status: 200 });
+    });
+
+    const chunksPromise = (async () => {
+      const chunks: string[] = [];
+      for await (const chunk of streamOllamaChat({
+        model: AI_MODELS.CHAT,
+        messages: [{ role: "user", content: "Hola" }],
+        timeoutMs: 1000,
+        fetchImpl,
+      })) {
+        chunks.push(chunk);
+      }
+
+      return chunks;
+    })();
+
+    await vi.advanceTimersByTimeAsync(900);
+    await vi.advanceTimersByTimeAsync(900);
+
+    await expect(chunksPromise).resolves.toEqual(["Hola ", "obra"]);
   });
 
   it("throws a response error when Ollama streaming has no response body", async () => {

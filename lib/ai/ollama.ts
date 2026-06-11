@@ -152,7 +152,11 @@ export async function* streamOllamaChat({
 }: Omit<AskOllamaInput, "responseFormat">): AsyncIterable<string> {
   let response: Response;
   const abortController = new AbortController();
-  const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+  let timeout = setTimeout(() => abortController.abort(), timeoutMs);
+  const resetTimeout = () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => abortController.abort(), timeoutMs);
+  };
 
   try {
     response = await fetchImpl(getOllamaChatUrl(), {
@@ -196,6 +200,7 @@ export async function* streamOllamaChat({
 
   try {
     while (true) {
+      resetTimeout();
       const { done, value } = await reader.read();
       if (done) {
         break;
