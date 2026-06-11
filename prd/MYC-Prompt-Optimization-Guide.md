@@ -34,9 +34,8 @@ Ejemplo para generacion de APU:
   },
   "guardrails": {
     "humanReviewRequired": true,
-    "doNotInventExactPrices": true,
-    "preserveFinancialFormulas": true,
-    "returnOnlyRequestedFormat": true
+    "noAutomaticBudgetMutation": true,
+    "noExactPriceFabrication": true
   }
 }
 ```
