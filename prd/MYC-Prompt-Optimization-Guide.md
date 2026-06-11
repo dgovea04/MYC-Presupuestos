@@ -4,7 +4,9 @@
 
 Este documento define el contrato implementado para enviar tareas de IA desde MYC Presupuestos hacia Khipu y ChatGPT Bridge V2.
 
-Las reglas estables viven en los prompt builders y en ChatGPT Bridge. La webapp solo envia un `INPUT JSON` limpio con la tarea, el rol, el formato esperado, el contexto necesario y los datos concretos del usuario.
+Las reglas estables viven en `lib/ai/prompts.ts` y en la base de prompt de la extension. La webapp solo envia un `INPUT JSON` limpio con la tarea, el rol, el formato esperado, el contexto necesario y los datos concretos del usuario.
+
+ChatGPT Bridge transporta y envia ese JSON limpio, inyecta la base de prompt en ChatGPT y devuelve la respuesta para revision. No es responsable de hacer cumplir reglas de negocio, schemas, revision humana o precios.
 
 Este contrato reduce tokens, evita reglas duplicadas en cada request y mantiene las reglas criticas fuera del payload dinamico.
 
@@ -51,13 +53,13 @@ Ejemplo para generacion de APU:
 
 ## Reglas Base de Prompt
 
-Los prompt builders y ChatGPT Bridge son responsables de aplicar las reglas permanentes:
+`lib/ai/prompts.ts` y la base de prompt de la extension proveen las reglas permanentes al modelo:
 
 - Usar el rol tecnico definido para presupuestos de construccion en Peru.
 - Respetar el tipo de tarea indicado en `task`.
 - Responder en el formato declarado por `output.format`.
 - Cuando `output.format` sea `json_only`, devolver solo JSON valido.
-- Aplicar el schema declarado por `output.schema`.
+- Seguir el schema declarado por `output.schema` cuando se solicite salida estructurada.
 - Tratar precios, rendimientos, metrados y costos como datos para revision humana.
 - Declarar supuestos o datos faltantes cuando no haya informacion suficiente.
 - Mantener las recomendaciones como apoyo tecnico, no como aprobacion automatica.
@@ -68,13 +70,13 @@ Los prompt builders y ChatGPT Bridge son responsables de aplicar las reglas perm
 - No incluir reglas largas dentro del JSON enviado por la webapp.
 - No cambiar formulas ni calculos financieros desde este contrato.
 - No modificar la logica de formula polinomica, costos, decimales o precision financiera.
-- La salida estructurada sigue siendo validada en backend antes de usarse en la aplicacion.
+- La salida estructurada sigue siendo validada en backend antes de mostrarse o aplicarse en la aplicacion.
 - La webapp debe mantener el payload enfocado en datos de entrada, contexto minimo y formato esperado.
 
 ## Validacion Backend
 
 El contrato de prompts no reemplaza la validacion del backend.
 
-Toda respuesta estructurada debe validarse antes de persistirse, renderizarse como dato confiable o usarse para actualizar presupuestos, APUs, partidas, recursos, metrados o reportes.
+Toda respuesta estructurada debe validarse en backend antes de persistirse, renderizarse como dato confiable o usarse para actualizar presupuestos, APUs, partidas, recursos, metrados o reportes. Esa validacion mantiene la compatibilidad de schemas para flujos Ollama/API y protege la aplicacion antes de mostrar o aplicar resultados.
 
 La IA puede sugerir, completar o revisar contenido, pero los cambios que afecten calculos o documentos tecnicos deben pasar por las reglas existentes de dominio y revision humana.
