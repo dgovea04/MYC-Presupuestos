@@ -54,10 +54,6 @@ window.dispatchEvent(
           source: "myc-presupuestos",
           action: "apu"
         }
-      },
-      settings: {
-        requireJson: true,
-        autoSend: false
       }
     }
   })
