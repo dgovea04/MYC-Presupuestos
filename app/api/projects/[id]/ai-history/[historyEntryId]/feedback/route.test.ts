@@ -116,6 +116,19 @@ describe("POST /api/projects/[id]/ai-history/[historyEntryId]/feedback", () => {
       notes: undefined,
     });
   });
+
+  it("returns 500 when recording feedback fails unexpectedly", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.getProjectHeaderById.mockResolvedValue({ id: "project-1", name: "Hospital Norte" });
+    mocks.recordAiSuggestionFeedback.mockRejectedValue(new Error("database unavailable"));
+
+    const response = await POST(createRequest({ feedbackType: "APPLIED" }), {
+      params: Promise.resolve({ id: "project-1", historyEntryId: "history-1" }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "Unable to record feedback" });
+  });
 });
 
 function createRequest(body: Record<string, unknown>): Request {

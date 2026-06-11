@@ -76,4 +76,17 @@ describe("GET /api/projects/[id]/ai-feedback/summary", () => {
       userId: "user-1",
     });
   });
+
+  it("returns 500 when loading the feedback summary fails unexpectedly", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.getProjectHeaderById.mockResolvedValue({ id: "project-1", name: "Hospital Norte" });
+    mocks.getAiSuggestionFeedbackSummary.mockRejectedValue(new Error("database unavailable"));
+
+    const response = await GET(new Request("http://localhost/api/projects/project-1/ai-feedback/summary"), {
+      params: Promise.resolve({ id: "project-1" }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "Unable to load feedback summary" });
+  });
 });
