@@ -826,6 +826,7 @@ function AIWorkspaceContent({
       }
 
       setStreaming(true);
+      await waitForStreamPaint();
       let receivedFinal = false;
       let streamedAnswer = "";
 
@@ -919,6 +920,7 @@ async function readStreamEvents(response: Response, onEvent: (event: StreamEvent
         const event = readStreamEvent(frame);
         if (event) {
           onEvent(event);
+          await waitForStreamPaint();
         }
       }
     }
@@ -927,10 +929,17 @@ async function readStreamEvents(response: Response, onEvent: (event: StreamEvent
     const finalEvent = readStreamEvent(buffer);
     if (finalEvent) {
       onEvent(finalEvent);
+      await waitForStreamPaint();
     }
   } finally {
     reader.releaseLock();
   }
+}
+
+async function waitForStreamPaint() {
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
 }
 
 function readStreamEvent(frame: string): StreamEvent | null {
