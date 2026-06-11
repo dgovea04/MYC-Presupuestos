@@ -847,6 +847,95 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(JSON.parse(String(feedbackRequest?.[1]?.body))).toEqual({ feedbackType: "EDITED" });
   });
 
+  it("keeps optimistic project feedback counters when summary reconciliation fails after a successful POST", async () => {
+    let summaryRequestCount = 0;
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        summaryRequestCount += 1;
+        if (summaryRequestCount === 1) {
+          return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
+        }
+
+        return Promise.reject(new Error("Summary reload failed"));
+      }
+
+      if (url === "/api/ai/chat/stream") {
+        return Promise.resolve({
+          ok: true,
+          body: createSseStream([
+            {
+              event: "final",
+              data: {
+                answer: "Respuesta proyecto",
+                model: "llama3.1",
+                requestedModel: "llama3.1",
+                fallbackUsed: false,
+                warnings: [],
+                historyEntry: {
+                  id: "history-1",
+                  projectId: "project-1",
+                  userId: "user-1",
+                  action: "chat",
+                  summary: "Consulta inicial",
+                  context: { project: "Edificio Multifamiliar" },
+                  result: {
+                    answer: "Respuesta proyecto",
+                    model: "llama3.1",
+                    requestedModel: "llama3.1",
+                    fallbackUsed: false,
+                    warnings: [],
+                  },
+                  timestamp: "2026-06-11T16:10:00.000Z",
+                },
+              },
+            },
+          ]),
+        });
+      }
+
+      if (url === "/api/projects/project-1/ai-history/history-1/feedback") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            feedback: {
+              id: "feedback-1",
+              historyEntryId: "history-1",
+              projectId: "project-1",
+              userId: "user-1",
+              feedbackType: "EDITED",
+              timestamp: "2026-06-11T16:11:00.000Z",
+            },
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url} ${JSON.stringify(init)}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getMetricValue } = await renderWorkspace({ projectId: "project-1" });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+    await act(async () => {
+      getButtonByText("Editada").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(summaryRequestCount).toBe(2);
+    expect(getMetricValue("Editadas")).toBe("1");
+  });
+
   it("reconciles project feedback counters after editing historical feedback", async () => {
     let summaryRequestCount = 0;
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {

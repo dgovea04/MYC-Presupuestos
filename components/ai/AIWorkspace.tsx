@@ -45,6 +45,16 @@ type AiFeedbackSummary = {
 };
 
 type AiFeedbackState = Record<string, AiFeedbackType>;
+type AiFeedbackPendingState = Record<string, boolean>;
+
+type AiFeedbackSummaryLoadResult =
+  | {
+      ok: true;
+      summary: AiFeedbackSummary;
+    }
+  | {
+      ok: false;
+    };
 
 type AiHealth = {
   status: "ok" | "degraded" | "down";
@@ -195,6 +205,7 @@ function AIWorkspaceContent({
   const [feedbackByHistoryId, setFeedbackByHistoryId] = useState<AiFeedbackState>(() =>
     projectId ? {} : readStoredFeedback(),
   );
+  const [pendingFeedbackByHistoryId, setPendingFeedbackByHistoryId] = useState<AiFeedbackPendingState>({});
   const [feedbackSummary, setFeedbackSummary] = useState<AiFeedbackSummary>(() =>
     projectId ? createEmptyFeedbackSummary() : summarizeFeedbackState(readStoredFeedback()),
   );
@@ -221,7 +232,7 @@ function AIWorkspaceContent({
       return;
     }
 
-    window.localStorage.setItem(AI_FEEDBACK_STORAGE_KEY, JSON.stringify(feedbackByHistoryId));
+    persistStoredFeedback(feedbackByHistoryId);
     setFeedbackSummary(summarizeFeedbackState(feedbackByHistoryId));
   }, [feedbackByHistoryId, projectId]);
 
@@ -238,10 +249,11 @@ function AIWorkspaceContent({
     }
 
     setFeedbackByHistoryId({});
-    void Promise.all([loadProjectHistory(projectId), loadProjectFeedbackSummary(projectId)]).then(([entries, summary]) => {
+    setPendingFeedbackByHistoryId({});
+    void Promise.all([loadProjectHistory(projectId), loadProjectFeedbackSummary(projectId)]).then(([entries, summaryResult]) => {
       if (active) {
         setHistory(entries);
-        setFeedbackSummary(summary);
+        setFeedbackSummary(summaryResult.ok ? summaryResult.summary : createEmptyFeedbackSummary());
       }
     });
 
@@ -426,6 +438,10 @@ function AIWorkspaceContent({
   async function submitFeedback(entry: AiHistoryEntry, feedbackType: AiFeedbackType) {
     setFeedbackError("");
 
+    if (pendingFeedbackByHistoryId[entry.id]) {
+      return;
+    }
+
     if (!projectId) {
       setFeedbackByHistoryId((current) => ({
         ...current,
@@ -435,6 +451,10 @@ function AIWorkspaceContent({
     }
 
     const previousFeedback = feedbackByHistoryId[entry.id];
+    setPendingFeedbackByHistoryId((current) => ({
+      ...current,
+      [entry.id]: true,
+    }));
     setFeedbackByHistoryId((current) => ({
       ...current,
       [entry.id]: feedbackType,
@@ -456,7 +476,9 @@ function AIWorkspaceContent({
       }
 
       const reconciledSummary = await loadProjectFeedbackSummary(projectId);
-      setFeedbackSummary(reconciledSummary);
+      if (reconciledSummary.ok) {
+        setFeedbackSummary(reconciledSummary.summary);
+      }
     } catch (caughtError) {
       setFeedbackByHistoryId((current) => {
         const next = { ...current };
@@ -471,6 +493,12 @@ function AIWorkspaceContent({
       setFeedbackError(
         caughtError instanceof Error ? caughtError.message : "No se pudo registrar la metrica de calidad.",
       );
+    } finally {
+      setPendingFeedbackByHistoryId((current) => {
+        const next = { ...current };
+        delete next[entry.id];
+        return next;
+      });
     }
   }
 
@@ -767,6 +795,7 @@ function AIWorkspaceContent({
             <AIMessage content={result.answer} model={result.model} />
             {activeFeedbackEntry ? (
               <FeedbackControls
+                disabled={pendingFeedbackByHistoryId[activeFeedbackEntry.id] === true}
                 selected={feedbackByHistoryId[activeFeedbackEntry.id]}
                 onSelect={(feedbackType) => {
                   void submitFeedback(activeFeedbackEntry, feedbackType);
@@ -1012,9 +1041,11 @@ function QualityMetric({ label, value }: { label: string; value: number }) {
 }
 
 function FeedbackControls({
+  disabled = false,
   onSelect,
   selected,
 }: {
+  disabled?: boolean;
   onSelect: (feedbackType: AiFeedbackType) => void;
   selected?: AiFeedbackType;
 }) {
@@ -1032,6 +1063,7 @@ function FeedbackControls({
           size="sm"
           type="button"
           variant={selected === option.value ? "default" : "outline"}
+          disabled={disabled}
           onClick={() => onSelect(option.value)}
         >
           {option.label}
@@ -1399,6 +1431,14 @@ function readStoredFeedback(): AiFeedbackState {
   }
 }
 
+function persistStoredFeedback(feedback: AiFeedbackState) {
+  try {
+    window.localStorage.setItem(AI_FEEDBACK_STORAGE_KEY, JSON.stringify(feedback));
+  } catch {
+    // Feedback persistence is best-effort in session mode.
+  }
+}
+
 function isFeedbackType(value: unknown): value is AiFeedbackType {
   return value === "APPLIED" || value === "EDITED" || value === "DISMISSED";
 }
@@ -1445,21 +1485,21 @@ async function loadProjectHistory(projectId: string) {
   }
 }
 
-async function loadProjectFeedbackSummary(projectId: string): Promise<AiFeedbackSummary> {
+async function loadProjectFeedbackSummary(projectId: string): Promise<AiFeedbackSummaryLoadResult> {
   try {
     const response = await fetch(`/api/projects/${projectId}/ai-feedback/summary`);
     if (!response.ok) {
-      return createEmptyFeedbackSummary();
+      return { ok: false };
     }
 
     const payload: unknown = await response.json();
     if (!isRecord(payload) || !isRecord(payload.summary)) {
-      return createEmptyFeedbackSummary();
+      return { ok: false };
     }
 
-    return readFeedbackSummary(payload.summary);
+    return { ok: true, summary: readFeedbackSummary(payload.summary) };
   } catch {
-    return createEmptyFeedbackSummary();
+    return { ok: false };
   }
 }
 
