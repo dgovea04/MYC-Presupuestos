@@ -54,6 +54,32 @@ describe("POST /api/projects/[id]/ai-history/[historyEntryId]/feedback", () => {
     expect(mocks.recordAiSuggestionFeedback).not.toHaveBeenCalled();
   });
 
+  it("returns 400 for a null request body", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.getProjectHeaderById.mockResolvedValue({ id: "project-1", name: "Hospital Norte" });
+
+    const response = await POST(createRawRequest("null"), {
+      params: Promise.resolve({ id: "project-1", historyEntryId: "history-1" }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid request body" });
+    expect(mocks.recordAiSuggestionFeedback).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for malformed JSON", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.getProjectHeaderById.mockResolvedValue({ id: "project-1", name: "Hospital Norte" });
+
+    const response = await POST(createRawRequest("{"), {
+      params: Promise.resolve({ id: "project-1", historyEntryId: "history-1" }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid request body" });
+    expect(mocks.recordAiSuggestionFeedback).not.toHaveBeenCalled();
+  });
+
   it("records feedback after project access is verified", async () => {
     const feedback = {
       id: "feedback-1",
@@ -132,8 +158,12 @@ describe("POST /api/projects/[id]/ai-history/[historyEntryId]/feedback", () => {
 });
 
 function createRequest(body: Record<string, unknown>): Request {
+  return createRawRequest(JSON.stringify(body));
+}
+
+function createRawRequest(body: string): Request {
   return new Request("http://localhost/api/projects/project-1/ai-history/history-1/feedback", {
     method: "POST",
-    body: JSON.stringify(body),
+    body,
   });
 }

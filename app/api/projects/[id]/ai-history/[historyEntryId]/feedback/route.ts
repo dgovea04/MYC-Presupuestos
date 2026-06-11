@@ -29,7 +29,19 @@ export async function POST(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const body = (await request.json()) as { feedbackType?: unknown; notes?: unknown };
+    let parsedBody: unknown;
+
+    try {
+      parsedBody = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    if (!isRecord(parsedBody)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const body = parsedBody;
 
     if (typeof body.feedbackType !== "string" || !FEEDBACK_TYPES.has(body.feedbackType)) {
       return NextResponse.json({ error: "Invalid feedback type" }, { status: 400 });
@@ -52,4 +64,8 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Unable to record feedback" }, { status: 500 });
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
