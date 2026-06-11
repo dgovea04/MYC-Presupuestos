@@ -80,6 +80,13 @@ describe("AI prompts", () => {
     expect(prompt).toContain('"schema": "budget_review_v1"');
     expect(prompt).toContain('"budgetSummary": "Partida duplicada de acero"');
     expect(prompt).toContain('"noAutomaticBudgetMutation": true');
+    expect(prompt).toContain("OUTPUT JSON SHAPE:");
+    expect(prompt).toContain('"findings"');
+    expect(prompt).toContain('"recommendedAction"');
+    expect(prompt).toContain("low|medium|high");
+    expect(prompt).toContain("duplicate|unit|cost|quantity|consistency|other");
+    expect(prompt).not.toContain("instrucciones");
+    expect(prompt).not.toContain("formatoSalida");
 
     expect(buildReviewPrompt("Partida duplicada de acero")).not.toContain("Fuentes consultadas:");
   });
@@ -135,13 +142,24 @@ describe("AI prompts", () => {
     expect(prompt).toContain('"description": "Concreto armado f\'c=210"');
     expect(prompt).toContain('"unit": "m3"');
     expect(prompt).toContain('"humanReviewRequired": true');
+    expect(prompt).toContain("OUTPUT JSON SHAPE:");
+    expect(prompt).toContain('"materials"');
+    expect(prompt).toContain('"labor"');
+    expect(prompt).toContain('"equipment"');
+    expect(prompt).toContain('"observations"');
+    expect(prompt).toContain('"assumptions"');
     expect(prompt).not.toContain("Devuelve solo un objeto JSON valido sin markdown ni texto adicional.");
+    expect(prompt).not.toContain("instrucciones");
+    expect(prompt).not.toContain("formatoSalida");
   });
 
   it("builds specialized prompts without allowing automatic budget mutation", () => {
     expect(buildApuPrompt("Concreto armado f'c=210", "m3")).toContain('"noAutomaticBudgetMutation": true');
     expect(buildReviewPrompt("Partida duplicada de acero")).toContain('"noAutomaticBudgetMutation": true');
     expect(buildAutocompletePrompt("Excavacion manual en")).toContain('"task": "autocomplete_construction_text"');
+    expect(buildAutocompletePrompt("Excavacion manual en")).toContain("Devuelve solo el texto completado, sin explicaciones ni formato adicional.");
+    expect(buildAutocompletePrompt("Excavacion manual en")).not.toContain("instrucciones");
+    expect(buildAutocompletePrompt("Excavacion manual en")).not.toContain("formatoSalida");
   });
 
   it("includes an exact valid catalog APU JSON example with a real matching resource", () => {

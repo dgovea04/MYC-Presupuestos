@@ -30,6 +30,36 @@ export function buildPromptFromTaskPayload(payload: AiTaskPayload) {
   return ["INPUT JSON:", JSON.stringify(payload, null, 2)].join("\n");
 }
 
+const APU_OUTPUT_JSON_SHAPE = {
+  answer: "resumen corto",
+  unit: "...",
+  performance: "...",
+  crew: "...",
+  materials: [{ description: "...", unit: "...", quantity: "...", notes: "..." }],
+  labor: [{ description: "...", unit: "...", quantity: "..." }],
+  equipment: [{ description: "...", unit: "...", quantity: "..." }],
+  observations: ["..."],
+  assumptions: ["..."],
+};
+
+const REVIEW_OUTPUT_JSON_SHAPE = {
+  answer: "resumen corto",
+  findings: [
+    {
+      severity: "low|medium|high",
+      type: "duplicate|unit|cost|quantity|consistency|other",
+      description: "...",
+      impact: "...",
+      recommendedAction: "...",
+    },
+  ],
+  assumptions: ["..."],
+};
+
+function buildOutputJsonShapeBlock(shape: object) {
+  return ["OUTPUT JSON SHAPE:", JSON.stringify(shape, null, 2)].join("\n");
+}
+
 function buildEvidenceSystemMessage(evidence: AiEvidence[]): string {
   const evidenceBlock = formatEvidenceBlock(evidence);
   if (!evidenceBlock) return "";
@@ -58,7 +88,7 @@ export function buildChatMessages({
 }
 
 export function buildApuPrompt(description: string, unit?: string) {
-  return buildPromptFromTaskPayload(
+  const taskPrompt = buildPromptFromTaskPayload(
     buildAiTaskPayload({
       action: "apu",
       payload: {
@@ -67,6 +97,8 @@ export function buildApuPrompt(description: string, unit?: string) {
       },
     }),
   );
+
+  return [taskPrompt, "", buildOutputJsonShapeBlock(APU_OUTPUT_JSON_SHAPE)].join("\n");
 }
 
 export function buildCatalogApuSystemPrompt() {
@@ -183,11 +215,11 @@ export function buildReviewPrompt(budgetSummary: string, options: { evidence?: A
     }),
   );
 
-  return [taskPrompt, ...(evidenceBlock ? ["", evidenceBlock] : [])].join("\n");
+  return [taskPrompt, "", buildOutputJsonShapeBlock(REVIEW_OUTPUT_JSON_SHAPE), ...(evidenceBlock ? ["", evidenceBlock] : [])].join("\n");
 }
 
 export function buildAutocompletePrompt(input: string) {
-  return buildPromptFromTaskPayload(
+  const taskPrompt = buildPromptFromTaskPayload(
     buildAiTaskPayload({
       action: "autocomplete",
       payload: {
@@ -195,6 +227,8 @@ export function buildAutocompletePrompt(input: string) {
       },
     }),
   );
+
+  return [taskPrompt, "", "Devuelve solo el texto completado, sin explicaciones ni formato adicional."].join("\n");
 }
 
 export function buildStructuredRepairPrompt() {
