@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildApuPrompt, buildAutocompletePrompt, buildCatalogApuPrompt, buildChatMessages, buildReviewPrompt } from "@/lib/ai/prompts";
+import {
+  buildApuPrompt,
+  buildAutocompletePrompt,
+  buildCatalogApuPrompt,
+  buildChatMessages,
+  buildPromptFromTaskPayload,
+  buildReviewPrompt,
+  buildTaskPayloadSystemPrompt,
+} from "@/lib/ai/prompts";
 
 describe("AI prompts", () => {
   it("adds the MYC construction system prompt and contextual budget data to chat messages", () => {
@@ -48,7 +56,7 @@ describe("AI prompts", () => {
     expect(messagesWithoutEvidence.map((message) => message.content).join("\n")).not.toContain("Fuentes consultadas:");
   });
 
-  it("adds retrieval evidence to review prompts without changing the structured JSON instruction", () => {
+  it("adds retrieval evidence to review prompts without changing the structured payload", () => {
     const prompt = buildReviewPrompt("Partida duplicada de acero", {
       evidence: [
         {
@@ -68,16 +76,72 @@ describe("AI prompts", () => {
 
     expect(prompt).toContain("Fuentes consultadas:");
     expect(prompt).toContain("[catalog_partida] Acero de refuerzo fy=4200 kg/cm2");
-    expect(prompt).toContain('{"answer":"resumen corto"');
-    expect(prompt).toContain("No modifiques datos automaticamente");
+    expect(prompt).toContain('"task": "review_budget"');
+    expect(prompt).toContain('"schema": "budget_review_v1"');
+    expect(prompt).toContain('"budgetSummary": "Partida duplicada de acero"');
+    expect(prompt).toContain('"noAutomaticBudgetMutation": true');
 
     expect(buildReviewPrompt("Partida duplicada de acero")).not.toContain("Fuentes consultadas:");
   });
 
+  it("keeps stable task rules in the system prompt instead of the task payload", () => {
+    const systemPrompt = buildTaskPayloadSystemPrompt({ jsonOnly: true });
+
+    expect(systemPrompt).toContain("Eres un asistente tecnico experto");
+    expect(systemPrompt).toContain("Responde unicamente con JSON valido");
+    expect(systemPrompt).toContain("No modifiques presupuestos automaticamente");
+    expect(systemPrompt).toContain("Toda recomendacion debe quedar para revision humana");
+  });
+
+  it("renders a clean INPUT JSON payload from an AI task payload", () => {
+    const prompt = buildPromptFromTaskPayload({
+      task: "generate_apu",
+      role: "construction_cost_assistant_peru",
+      output: {
+        format: "json_only",
+        schema: "apu_generation_v1",
+      },
+      context: {
+        project: "Edificio Multifamiliar",
+        selectedItem: "Concreto f'c=210",
+        unit: "m3",
+        currentCost: 420,
+      },
+      input: {
+        description: "Concreto armado f'c=210",
+        unit: "m3",
+      },
+      guardrails: {
+        humanReviewRequired: true,
+        noAutomaticBudgetMutation: true,
+        noExactPriceFabrication: true,
+      },
+    });
+
+    expect(prompt).toContain("INPUT JSON:");
+    expect(prompt).toContain('"task": "generate_apu"');
+    expect(prompt).toContain('"schema": "apu_generation_v1"');
+    expect(prompt).toContain('"description": "Concreto armado f\'c=210"');
+    expect(prompt).not.toContain("instrucciones");
+    expect(prompt).not.toContain("formatoSalida");
+  });
+
+  it("builds structured APU prompts from a clean task payload while preserving schema instructions", () => {
+    const prompt = buildApuPrompt("Concreto armado f'c=210", "m3");
+
+    expect(prompt).toContain("INPUT JSON:");
+    expect(prompt).toContain('"task": "generate_apu"');
+    expect(prompt).toContain('"schema": "apu_generation_v1"');
+    expect(prompt).toContain('"description": "Concreto armado f\'c=210"');
+    expect(prompt).toContain('"unit": "m3"');
+    expect(prompt).toContain('"humanReviewRequired": true');
+    expect(prompt).not.toContain("Devuelve solo un objeto JSON valido sin markdown ni texto adicional.");
+  });
+
   it("builds specialized prompts without allowing automatic budget mutation", () => {
-    expect(buildApuPrompt("Concreto armado f'c=210", "m3")).toContain("Genera un analisis de precios unitarios");
-    expect(buildReviewPrompt("Partida duplicada de acero")).toContain("No modifiques datos automaticamente");
-    expect(buildAutocompletePrompt("Excavacion manual en")).toContain("Devuelve solo el texto completado");
+    expect(buildApuPrompt("Concreto armado f'c=210", "m3")).toContain('"noAutomaticBudgetMutation": true');
+    expect(buildReviewPrompt("Partida duplicada de acero")).toContain('"noAutomaticBudgetMutation": true');
+    expect(buildAutocompletePrompt("Excavacion manual en")).toContain('"task": "autocomplete_construction_text"');
   });
 
   it("includes an exact valid catalog APU JSON example with a real matching resource", () => {

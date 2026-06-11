@@ -1,5 +1,6 @@
 import { buildContextBlock } from "@/lib/ai/context-builder";
 import { formatEvidenceBlock, type AiEvidence } from "@/lib/ai/retrieval-context";
+import { buildAiTaskPayload, type AiTaskPayload } from "@/lib/ai/task-payloads";
 import type { AiContext, AiMessage } from "@/lib/ai/types";
 
 export const MYC_AI_SYSTEM_PROMPT = [
@@ -8,6 +9,26 @@ export const MYC_AI_SYSTEM_PROMPT = [
   "No ejecutes SQL, no propongas borrar informacion y no modifiques presupuestos automaticamente.",
   "Cuando entregues sugerencias de costos o APU, indica supuestos y pide validacion tecnica antes de aplicar cambios.",
 ].join(" ");
+
+export function buildTaskPayloadSystemPrompt({ jsonOnly }: { jsonOnly: boolean }) {
+  return [
+    "Eres un asistente tecnico experto en presupuestos de construccion en Peru, APU, metrados, costos, rendimientos y formula polinomica.",
+    "Debes ejecutar la tarea indicada en INPUT JSON.",
+    "Reglas obligatorias:",
+    jsonOnly ? "- Responde unicamente con JSON valido." : "- Responde de forma tecnica, clara, estructurada y profesional.",
+    "- No uses markdown cuando el output.format sea json_only.",
+    "- No agregues explicacion antes ni despues cuando el output.format sea json_only.",
+    "- No uses bloques de codigo.",
+    "- No modifiques presupuestos automaticamente.",
+    "- No inventes precios exactos.",
+    "- Si falta informacion, declara supuestos o datos requeridos.",
+    "- Toda recomendacion debe quedar para revision humana.",
+  ].join("\n");
+}
+
+export function buildPromptFromTaskPayload(payload: AiTaskPayload) {
+  return ["INPUT JSON:", JSON.stringify(payload, null, 2)].join("\n");
+}
 
 function buildEvidenceSystemMessage(evidence: AiEvidence[]): string {
   const evidenceBlock = formatEvidenceBlock(evidence);
@@ -37,14 +58,15 @@ export function buildChatMessages({
 }
 
 export function buildApuPrompt(description: string, unit?: string) {
-  return [
-    "Genera un analisis de precios unitarios para una partida de construccion en Peru.",
-    `Partida: ${description}`,
-    unit ? `Unidad: ${unit}` : "Unidad: propon una unidad tecnica razonable si no fue indicada.",
-    "Devuelve solo un objeto JSON valido sin markdown ni texto adicional.",
-    'Usa esta forma exacta: {"answer":"resumen corto","unit":"...","performance":"...","crew":"...","materials":[{"description":"...","unit":"...","quantity":"...","notes":"..."}],"labor":[{"description":"...","unit":"...","quantity":"..."}],"equipment":[{"description":"...","unit":"...","quantity":"..."}],"observations":["..."],"assumptions":["..."]}.',
-    "No modifiques datos automaticamente; esto es una propuesta para revision humana.",
-  ].join("\n");
+  return buildPromptFromTaskPayload(
+    buildAiTaskPayload({
+      action: "apu",
+      payload: {
+        description,
+        unit,
+      },
+    }),
+  );
 }
 
 export function buildCatalogApuSystemPrompt() {
@@ -152,26 +174,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function buildReviewPrompt(budgetSummary: string, options: { evidence?: AiEvidence[] } = {}) {
   const evidenceBlock = buildEvidenceSystemMessage(options.evidence ?? []);
+  const taskPrompt = buildPromptFromTaskPayload(
+    buildAiTaskPayload({
+      action: "review",
+      payload: {
+        budgetSummary,
+      },
+    }),
+  );
 
-  return [
-    "Revisa el siguiente presupuesto o conjunto de partidas de construccion en Peru.",
-    "Detecta partidas duplicadas, costos anormales, unidades incorrectas, inconsistencias y metrados sospechosos.",
-    "Devuelve solo un objeto JSON valido sin markdown ni texto adicional.",
-    'Usa esta forma exacta: {"answer":"resumen corto","findings":[{"severity":"low|medium|high","type":"duplicate|unit|cost|quantity|consistency|other","description":"...","impact":"...","recommendedAction":"..."}],"assumptions":["..."]}.',
-    "No modifiques datos automaticamente; solo entrega una revision tecnica para confirmacion del usuario.",
-    "",
-    ...(evidenceBlock ? [evidenceBlock, ""] : []),
-    budgetSummary,
-  ].join("\n");
+  return [taskPrompt, ...(evidenceBlock ? ["", evidenceBlock] : [])].join("\n");
 }
 
 export function buildAutocompletePrompt(input: string) {
-  return [
-    "Completa tecnicamente el siguiente texto de construccion en Peru.",
-    "Devuelve solo el texto completado, sin explicaciones ni formato adicional.",
-    "",
-    input,
-  ].join("\n");
+  return buildPromptFromTaskPayload(
+    buildAiTaskPayload({
+      action: "autocomplete",
+      payload: {
+        input,
+      },
+    }),
+  );
 }
 
 export function buildStructuredRepairPrompt() {
