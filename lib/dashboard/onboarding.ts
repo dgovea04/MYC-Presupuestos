@@ -51,3 +51,7 @@ export function buildDashboardOnboardingSteps(stats: DashboardOnboardingStats): 
     },
   ];
 }
+
+export function shouldShowDashboardOnboarding(stats: DashboardOnboardingStats): boolean {
+  return stats.projectsCount <= 1 && buildDashboardOnboardingSteps(stats).some((step) => !step.completed);
+}

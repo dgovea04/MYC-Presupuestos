@@ -27,7 +27,11 @@ import { FilterPillLink } from "@/components/ui/filter-pill-link";
 import { ToneBadge } from "@/components/ui/context-badges";
 import { OperationalPanel, OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { getAuthSession } from "@/lib/auth/session";
-import { buildDashboardOnboardingSteps, type DashboardOnboardingStep } from "@/lib/dashboard/onboarding";
+import {
+  buildDashboardOnboardingSteps,
+  shouldShowDashboardOnboarding,
+  type DashboardOnboardingStep,
+} from "@/lib/dashboard/onboarding";
 import { getDashboardStats, type DashboardActivityItem, type DashboardPendingItem } from "@/lib/data/dashboard";
 import { getProjectStatusLabel } from "@/lib/project-status";
 import { getUserSettings } from "@/lib/data/settings";
@@ -74,6 +78,7 @@ export default async function DashboardPage({
   const paginatedRecentActivity = paginateItems(stats.recentActivity, requestedActivityPage, DASHBOARD_SECTION_PAGE_SIZE);
   const groupedPendingItems = groupPendingItemsByPriority(paginatedPendingItems.items);
   const onboardingSteps = buildDashboardOnboardingSteps(stats);
+  const showOnboarding = shouldShowDashboardOnboarding(stats);
 
   return (
     <AppShell currentUser={session!.user} settings={settings}>
@@ -110,7 +115,7 @@ export default async function DashboardPage({
         />
       </section>
 
-      {onboardingSteps.some((step) => !step.completed) ? (
+      {showOnboarding ? (
         <Card className="border-sky-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4fbff_52%,#eff6ff_100%)]">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader
@@ -126,73 +131,7 @@ export default async function DashboardPage({
         </Card>
       ) : null}
 
-      <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
-        <CardContent className="space-y-4 p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <OperationalSectionHeader
-              title="Plantillas reutilizables"
-              description="Indicadores de biblioteca para acelerar nuevos presupuestos sin perder trazabilidad tecnica."
-            />
-            <SecondaryLink href="/templates">Abrir biblioteca</SecondaryLink>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <CompactStatCard
-              label="Guardadas"
-              value={String(stats.templateSummary.savedTemplatesCount)}
-              tone="emerald"
-            />
-            <CompactStatCard
-              label="Aplicadas"
-              value={String(stats.templateSummary.templateBudgetApplicationCount)}
-              tone="sky"
-            />
-            <CompactStatCard
-              label="Mantenimiento"
-              value={String(stats.templateSummary.templateMaintenanceEventCount)}
-              tone="violet"
-            />
-            <CompactStatCard
-              label="Partidas capturadas"
-              value={String(stats.templateSummary.totalTemplateItems)}
-              tone="amber"
-            />
-            <CompactStatCard
-              label="Promedio por plantilla"
-              value={String(stats.templateSummary.averageItemsPerTemplate)}
-              tone="slate"
-            />
-          </div>
-          {stats.templateSummary.latestTemplate ? (
-            <DashboardRecordLink
-              href={`/templates/budget/${stats.templateSummary.latestTemplate.id}`}
-              tone="sky"
-              metaTitle="Ver plantilla"
-              metaDetail={`Actualizada ${formatDate(stats.templateSummary.latestTemplate.updatedAt, settings.dateFormat)}`}
-            >
-              <div className="flex items-start gap-3">
-                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                  <BookOpenCheck className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 space-y-1">
-                  <p className="font-medium text-slate-900">{stats.templateSummary.latestTemplate.name}</p>
-                  <p className="text-sm text-slate-600">
-                    Ultima plantilla guardada con {stats.templateSummary.latestTemplate.itemCount} partidas capturadas.
-                  </p>
-                </div>
-              </div>
-            </DashboardRecordLink>
-          ) : (
-            <EmptyState
-              title="Aun no hay plantillas guardadas"
-              description="Guarda un presupuesto como plantilla para reutilizar estructura, partidas y APU en futuros proyectos."
-              href="/templates"
-              action="Explorar biblioteca"
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="h-full border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)]">
           <CardContent className="flex h-full flex-col gap-5 p-6">
             <OperationalSectionHeader
@@ -290,7 +229,7 @@ export default async function DashboardPage({
         </Card>
       </section>
 
-      <section className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+      <section className="grid items-start gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="min-h-full">
           <CardContent className="space-y-4 p-6">
             <OperationalPanel
@@ -538,6 +477,72 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
       </section>
+
+      <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+        <CardContent className="space-y-4 p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <OperationalSectionHeader
+              title="Plantillas reutilizables"
+              description="Indicadores de biblioteca para acelerar nuevos presupuestos sin perder trazabilidad tecnica."
+            />
+            <SecondaryLink href="/templates">Abrir biblioteca</SecondaryLink>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <CompactStatCard
+              label="Guardadas"
+              value={String(stats.templateSummary.savedTemplatesCount)}
+              tone="emerald"
+            />
+            <CompactStatCard
+              label="Aplicadas"
+              value={String(stats.templateSummary.templateBudgetApplicationCount)}
+              tone="sky"
+            />
+            <CompactStatCard
+              label="Mantenimiento"
+              value={String(stats.templateSummary.templateMaintenanceEventCount)}
+              tone="violet"
+            />
+            <CompactStatCard
+              label="Partidas capturadas"
+              value={String(stats.templateSummary.totalTemplateItems)}
+              tone="amber"
+            />
+            <CompactStatCard
+              label="Promedio por plantilla"
+              value={String(stats.templateSummary.averageItemsPerTemplate)}
+              tone="slate"
+            />
+          </div>
+          {stats.templateSummary.latestTemplate ? (
+            <DashboardRecordLink
+              href={`/templates/budget/${stats.templateSummary.latestTemplate.id}`}
+              tone="sky"
+              metaTitle="Ver plantilla"
+              metaDetail={`Actualizada ${formatDate(stats.templateSummary.latestTemplate.updatedAt, settings.dateFormat)}`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <BookOpenCheck className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 space-y-1">
+                  <p className="font-medium text-slate-900">{stats.templateSummary.latestTemplate.name}</p>
+                  <p className="text-sm text-slate-600">
+                    Ultima plantilla guardada con {stats.templateSummary.latestTemplate.itemCount} partidas capturadas.
+                  </p>
+                </div>
+              </div>
+            </DashboardRecordLink>
+          ) : (
+            <EmptyState
+              title="Aun no hay plantillas guardadas"
+              description="Guarda un presupuesto como plantilla para reutilizar estructura, partidas y APU en futuros proyectos."
+              href="/templates"
+              action="Explorar biblioteca"
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-6 lg:grid-cols-2">
         <Card className="min-h-full">

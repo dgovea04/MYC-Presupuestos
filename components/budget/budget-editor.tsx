@@ -165,6 +165,11 @@ const pasteModeLabel: Record<BudgetPasteMode, string> = {
 };
 const BUDGET_ROW_OVERSCAN = 10;
 const BUDGET_TABLE_COLUMN_COUNT = 7;
+const BUDGET_TABLE_CODE_COLUMN_BASE_WIDTH = 70;
+const BUDGET_TABLE_CODE_CHARACTER_WIDTH = 6.75;
+const BUDGET_TABLE_CODE_INPUT_HORIZONTAL_PADDING_WIDTH = 16;
+const BUDGET_TABLE_CODE_PARENT_ICON_WIDTH = 16;
+const BUDGET_TABLE_CODE_PARENT_GAP_WIDTH = 8;
 const ACTION_MENU_OFFSET = 6;
 const ACTION_MENU_VIEWPORT_PADDING = 12;
 const LEVEL_ACTION_MENU_WIDTH = 192;
@@ -335,6 +340,7 @@ export function BudgetEditor({
     [itemQualityStateById, summary.items],
   );
   const rows = useMemo(() => buildDisplayRows(summary), [summary]);
+  const codeColumnWidth = useMemo(() => calculateBudgetCodeColumnWidth(rows), [rows]);
   const rowNavigationLookup = useMemo(() => {
     const rowIdToIndex = new Map<string, number>();
     const rowIdToColumns = new Map<string, EditableColumn[]>();
@@ -1876,6 +1882,7 @@ export function BudgetEditor({
           onCatalogHighlightChange={setCatalogHighlightedIndex}
           currency={budget.currency}
           totalAmount={summary.totals.totalAmount}
+          codeColumnWidth={codeColumnWidth}
           virtualBudgetRange={virtualBudgetRange}
           onDragStart={setDragState}
           onDragEnd={clearDragState}
@@ -3643,12 +3650,13 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
       )}
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
           <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
           <BufferedInput
             value={row.level.code}
             onCommit={(value) => onUpdateLevel(row.level.id, { code: value })}
-            className={cn(getInputDensityClass(densityMode, isExcelMode), isTitleOrSubtitle && "font-medium")}
+            className={cn(getInputDensityClass(densityMode, isExcelMode), "w-auto max-w-full px-2", isTitleOrSubtitle && "font-medium")}
+            style={getCodeInputStyle(row.level.code)}
             ref={(element) => onSetCellRef(row.level.id, "code", element)}
             onKeyDown={(event) => onNavigate(event, row.level.id, "code")}
             onPaste={(event) => onPasteRows(event, row, "code")}
@@ -3920,12 +3928,13 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
       )}
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
           <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
           <BufferedInput
             value={row.item.code}
             onCommit={(value) => onUpdateItem(row.item.id, { code: value })}
-            className={getInputDensityClass(densityMode, isExcelMode)}
+            className={cn(getInputDensityClass(densityMode, isExcelMode), "w-auto max-w-full px-2")}
+            style={getCodeInputStyle(row.item.code)}
             ref={(element) => onSetCellRef(row.item.id, "code", element)}
             onKeyDown={(event) => onNavigate(event, row.item.id, "code")}
             onPaste={(event) => onPasteRows(event, row, "code")}
@@ -4172,6 +4181,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onCatalogHighlightChange,
   currency,
   totalAmount,
+  codeColumnWidth,
   virtualBudgetRange,
   onDragStart,
   onDragEnd,
@@ -4212,6 +4222,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onCatalogHighlightChange: React.Dispatch<React.SetStateAction<number>>;
   currency: BudgetRecord["currency"];
   totalAmount: number;
+  codeColumnWidth: number;
   virtualBudgetRange: {
     visibleRows: BudgetDisplayRow[];
     topSpacerHeight: number;
@@ -4254,12 +4265,13 @@ const BudgetTableSection = memo(function BudgetTableSection({
       >
         <Table
           className={cn(
-            "table-fixed min-w-[1100px] w-full",
+            "table-fixed w-full",
             isExcelMode && "[&_td]:px-2 [&_th]:px-2 [&_tr]:border-b [&_tr]:border-slate-200",
           )}
+          style={{ minWidth: Math.max(1100, codeColumnWidth + 1030) }}
         >
           <colgroup>
-            <col className="w-[70px]" />
+            <col style={{ width: codeColumnWidth }} />
             <col className="w-[420px]" />
             <col className="w-[90px]" />
             <col className="w-[92px]" />
@@ -5170,4 +5182,30 @@ function getBodyCellClass(
     activeColumn === column ? "bg-sky-50/70" : "",
     extraClassName,
   );
+}
+
+function calculateBudgetCodeColumnWidth(rows: BudgetDisplayRow[]): number {
+  const longestFitContentWidth = rows.reduce((longest, row) => {
+    const code = row.kind === "level" ? row.level.code : row.item.code;
+
+    return Math.max(longest, calculateCodeParentWidth(code));
+  }, calculateCodeParentWidth("Código"));
+
+  return Math.max(BUDGET_TABLE_CODE_COLUMN_BASE_WIDTH, longestFitContentWidth);
+}
+
+function getCodeInputStyle(code: string): React.CSSProperties {
+  return {
+    width: calculateCodeInputWidth(code),
+  };
+}
+
+function calculateCodeInputWidth(code: string): number {
+  const characterCount = Math.max(code.length, 2);
+
+  return characterCount * BUDGET_TABLE_CODE_CHARACTER_WIDTH + BUDGET_TABLE_CODE_INPUT_HORIZONTAL_PADDING_WIDTH;
+}
+
+function calculateCodeParentWidth(code: string): number {
+  return calculateCodeInputWidth(code) + BUDGET_TABLE_CODE_PARENT_ICON_WIDTH + BUDGET_TABLE_CODE_PARENT_GAP_WIDTH;
 }

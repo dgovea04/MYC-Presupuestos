@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDashboardOnboardingSteps } from "@/lib/dashboard/onboarding";
+import { buildDashboardOnboardingSteps, shouldShowDashboardOnboarding } from "@/lib/dashboard/onboarding";
 import type { DashboardPendingItem } from "@/lib/data/dashboard";
 
 describe("buildDashboardOnboardingSteps", () => {
@@ -52,6 +52,52 @@ describe("buildDashboardOnboardingSteps", () => {
     });
 
     expect(steps.every((step) => step.completed)).toBe(true);
+  });
+});
+
+describe("shouldShowDashboardOnboarding", () => {
+  it("shows onboarding for a new account with pending setup steps", () => {
+    expect(
+      shouldShowDashboardOnboarding({
+        budgetsCount: 0,
+        companiesCount: 0,
+        pendingItems: [],
+        projectsCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("shows onboarding for the first project while setup is incomplete", () => {
+    expect(
+      shouldShowDashboardOnboarding({
+        budgetsCount: 0,
+        companiesCount: 1,
+        pendingItems: [],
+        projectsCount: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it("hides onboarding once the first project setup is complete", () => {
+    expect(
+      shouldShowDashboardOnboarding({
+        budgetsCount: 1,
+        companiesCount: 1,
+        pendingItems: [],
+        projectsCount: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("hides onboarding when the account already has more than one project", () => {
+    expect(
+      shouldShowDashboardOnboarding({
+        budgetsCount: 1,
+        companiesCount: 1,
+        pendingItems: [buildPendingItem("MISSING_POLYNOMIAL_FORMULA")],
+        projectsCount: 2,
+      }),
+    ).toBe(false);
   });
 });
 
