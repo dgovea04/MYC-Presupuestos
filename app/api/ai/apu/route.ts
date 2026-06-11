@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
-import { buildApuPrompt, buildChatMessages } from "@/lib/ai/prompts";
+import { buildApuPrompt, buildTaskPayloadMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { generateAiResponse } from "@/lib/ai/service";
 import { aiApuStructuredSchema } from "@/lib/ai/structured-output";
@@ -11,7 +11,8 @@ export async function POST(request: Request) {
     const data = aiApuRequestSchema.parse(await request.json());
     const result = await generateAiResponse({
       action: "apu",
-      messages: buildChatMessages({
+      messages: buildTaskPayloadMessages({
+        jsonOnly: true,
         message: buildApuPrompt(data.description, data.unit),
         context: data.context,
       }),

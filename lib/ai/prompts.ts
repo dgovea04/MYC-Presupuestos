@@ -87,6 +87,28 @@ export function buildChatMessages({
   ];
 }
 
+export function buildTaskPayloadMessages({
+  jsonOnly,
+  message,
+  context,
+  evidence = [],
+}: {
+  jsonOnly: boolean;
+  message: string;
+  context?: AiContext;
+  evidence?: AiEvidence[];
+}): AiMessage[] {
+  const contextBlock = buildContextBlock(context);
+  const evidenceBlock = buildEvidenceSystemMessage(evidence);
+
+  return [
+    { role: "system", content: buildTaskPayloadSystemPrompt({ jsonOnly }) },
+    ...(contextBlock ? [{ role: "system" as const, content: contextBlock }] : []),
+    ...(evidenceBlock ? [{ role: "system" as const, content: evidenceBlock }] : []),
+    { role: "user", content: message },
+  ];
+}
+
 export function buildApuPrompt(description: string, unit?: string) {
   const taskPrompt = buildPromptFromTaskPayload(
     buildAiTaskPayload({

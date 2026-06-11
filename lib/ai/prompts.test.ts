@@ -6,6 +6,7 @@ import {
   buildChatMessages,
   buildPromptFromTaskPayload,
   buildReviewPrompt,
+  buildTaskPayloadMessages,
   buildTaskPayloadSystemPrompt,
 } from "@/lib/ai/prompts";
 
@@ -98,6 +99,41 @@ describe("AI prompts", () => {
     expect(systemPrompt).toContain("Responde unicamente con JSON valido");
     expect(systemPrompt).toContain("No modifiques presupuestos automaticamente");
     expect(systemPrompt).toContain("Toda recomendacion debe quedar para revision humana");
+  });
+
+  it("builds task payload messages with strict JSON system rules for structured endpoints", () => {
+    const messages = buildTaskPayloadMessages({
+      jsonOnly: true,
+      message: buildApuPrompt("Concreto armado f'c=210", "m3"),
+      context: {
+        project: "Edificio Multifamiliar",
+        selectedItem: "Concreto f'c=210",
+        unit: "m3",
+      },
+    });
+
+    expect(messages[0]).toMatchObject({ role: "system" });
+    expect(messages[0]?.content).toContain("Debes ejecutar la tarea indicada en INPUT JSON");
+    expect(messages[0]?.content).toContain("Responde unicamente con JSON valido");
+    expect(messages[0]?.content).toContain("No uses markdown cuando el output.format sea json_only");
+    expect(messages[0]?.content).not.toContain("Responde de forma tecnica, clara, estructurada y profesional.");
+    expect(messages[1]?.content).toContain("Proyecto: Edificio Multifamiliar");
+    expect(messages.at(-1)).toMatchObject({ role: "user" });
+    expect(messages.at(-1)?.content).toContain('"task": "generate_apu"');
+    expect(messages.at(-1)?.content).toContain("OUTPUT JSON SHAPE:");
+  });
+
+  it("builds task payload messages with non-json task rules for autocomplete", () => {
+    const messages = buildTaskPayloadMessages({
+      jsonOnly: false,
+      message: buildAutocompletePrompt("Excavacion manual en"),
+    });
+
+    expect(messages[0]?.content).toContain("Responde de forma tecnica, clara, estructurada y profesional.");
+    expect(messages[0]?.content).not.toContain("Responde unicamente con JSON valido");
+    expect(messages[1]).toMatchObject({ role: "user" });
+    expect(messages[1]?.content).toContain('"task": "autocomplete_construction_text"');
+    expect(messages[1]?.content).toContain("Devuelve solo el texto completado, sin explicaciones ni formato adicional.");
   });
 
   it("renders a clean INPUT JSON payload from an AI task payload", () => {
