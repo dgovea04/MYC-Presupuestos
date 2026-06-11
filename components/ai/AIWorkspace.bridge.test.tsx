@@ -167,10 +167,20 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
       expect.objectContaining({
         requestId: expect.stringMatching(/^myc-\d+-[a-z0-9]+$/),
         jsonPrompt: expect.objectContaining({
-          accion: "chat",
-          payload: expect.objectContaining({
+          task: "technical_chat",
+          role: "construction_cost_assistant_peru",
+          output: {
+            format: "text",
+            schema: "technical_chat_v1",
+          },
+          input: {
             message: "Consulta inicial",
-          }),
+          },
+          guardrails: {
+            humanReviewRequired: true,
+            noAutomaticBudgetMutation: true,
+            noExactPriceFabrication: true,
+          },
         }),
         metadata: expect.objectContaining({
           source: "myc-presupuestos",
@@ -179,6 +189,9 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         }),
       }),
     );
+    expect((event as CustomEvent).detail.jsonPrompt).not.toHaveProperty("accion");
+    expect((event as CustomEvent).detail.jsonPrompt).not.toHaveProperty("instrucciones");
+    expect((event as CustomEvent).detail.jsonPrompt).not.toHaveProperty("formatoSalida");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith("/api/ai/health");
 
@@ -217,9 +230,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(bridgeListener).toHaveBeenCalledTimes(1);
     const event = bridgeListener.mock.calls[0]?.[0];
     expect(event).toBeInstanceOf(CustomEvent);
-    expect((event as CustomEvent).detail.jsonPrompt.payload).toEqual(
+    expect((event as CustomEvent).detail.jsonPrompt.input).toEqual(
       expect.not.objectContaining({ projectId: "project-1" }),
     );
+    expect(JSON.stringify((event as CustomEvent).detail.jsonPrompt)).not.toContain("project-1");
 
     window.removeEventListener("MYCBridgeSendPrompt", bridgeListener);
   });

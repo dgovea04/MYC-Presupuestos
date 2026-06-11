@@ -23,6 +23,7 @@ import {
   type MYCBridgeResponse,
   type MYCBridgeState,
 } from "@/lib/ai/myc-bridge-client";
+import { buildBridgeTaskPayload } from "@/lib/ai/task-payloads";
 import type { AiApuStructuredData, AiContext, AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
 
@@ -1312,55 +1313,7 @@ function readAnswerFromBridgeJson(value: unknown) {
 }
 
 function buildBridgePrompt(request: RequestState) {
-  return {
-    accion: request.action,
-    instrucciones: [
-      "Eres un asistente experto en presupuestos de construccion, APU, metrados, costos y formula polinomica en Peru.",
-      "Responde de forma tecnica, clara y profesional.",
-      "No modifiques presupuestos automaticamente; entrega propuestas para revision humana.",
-      "Cuando la accion requiera estructura, devuelve solo JSON valido sin markdown.",
-    ],
-    payload: request.payload,
-    formatoSalida: readBridgeOutputFormat(request.action),
-  };
-}
-
-function readBridgeOutputFormat(action: AiAction) {
-  if (action === "apu") {
-    return {
-      answer: "resumen corto",
-      unit: "unidad tecnica",
-      performance: "rendimiento",
-      crew: "cuadrilla",
-      materials: [{ description: "recurso", unit: "unidad", quantity: "cantidad", notes: "supuesto" }],
-      labor: [{ description: "recurso", unit: "unidad", quantity: "cantidad" }],
-      equipment: [{ description: "recurso", unit: "unidad", quantity: "cantidad" }],
-      observations: ["observacion tecnica"],
-      assumptions: ["supuesto para validar"],
-    };
-  }
-
-  if (action === "review") {
-    return {
-      answer: "resumen corto",
-      findings: [
-        {
-          severity: "low|medium|high",
-          type: "duplicate|unit|cost|quantity|consistency|other",
-          description: "hallazgo",
-          impact: "impacto",
-          recommendedAction: "accion recomendada",
-        },
-      ],
-      assumptions: ["supuesto para validar"],
-    };
-  }
-
-  if (action === "autocomplete") {
-    return "Texto completado sin explicaciones adicionales.";
-  }
-
-  return "Respuesta tecnica clara; si incluyes datos estructurados, usa JSON valido.";
+  return buildBridgeTaskPayload({ action: request.action, payload: request.payload });
 }
 
 function readSubmitLabel(provider: AiProvider, loading: boolean, streaming: boolean) {
