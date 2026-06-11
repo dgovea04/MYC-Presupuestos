@@ -45,3 +45,4 @@ next-env.d.ts
 
 # large local database fixtures
 presupuesto-ejemplo/**/*.sqlite
+presupuesto-ejemplo/s10/*.S2K
