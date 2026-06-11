@@ -49,11 +49,11 @@ window.dispatchEvent(
           humanReviewRequired: true,
           noAutomaticBudgetMutation: true,
           noExactPriceFabrication: true
-        },
-        metadata: {
-          source: "myc-presupuestos",
-          action: "apu"
         }
+      },
+      metadata: {
+        source: "myc-presupuestos",
+        action: "apu"
       }
     }
   })
@@ -83,32 +83,34 @@ Ejemplo:
 ```js
 import { sendToMYCChatGPTBridge, onMYCBridgeResponse } from "@/lib/myc-bridge-client";
 
-const requestId = sendToMYCChatGPTBridge({
-  task: "generate_apu",
-  role: "construction_cost_assistant_peru",
-  output: {
-    format: "json_only",
-    schema: "apu_generation_v1"
+const requestId = sendToMYCChatGPTBridge(
+  {
+    task: "generate_apu",
+    role: "construction_cost_assistant_peru",
+    output: {
+      format: "json_only",
+      schema: "apu_generation_v1"
+    },
+    context: {
+      project: "Edificio Multifamiliar",
+      selectedItem: "Concreto f'c=210 kg/cm2",
+      unit: "m3"
+    },
+    input: {
+      description: "Concreto f'c=210 kg/cm2",
+      unit: "m3"
+    },
+    guardrails: {
+      humanReviewRequired: true,
+      noAutomaticBudgetMutation: true,
+      noExactPriceFabrication: true
+    }
   },
-  context: {
-    project: "Edificio Multifamiliar",
-    selectedItem: "Concreto f'c=210 kg/cm2",
-    unit: "m3"
-  },
-  input: {
-    description: "Concreto f'c=210 kg/cm2",
-    unit: "m3"
-  },
-  guardrails: {
-    humanReviewRequired: true,
-    noAutomaticBudgetMutation: true,
-    noExactPriceFabrication: true
-  },
-  metadata: {
+  {
     source: "myc-presupuestos",
     action: "apu"
   }
-});
+);
 
 const unsubscribe = onMYCBridgeResponse((response) => {
   console.log(response.jsonValid, response.json, response.raw);
