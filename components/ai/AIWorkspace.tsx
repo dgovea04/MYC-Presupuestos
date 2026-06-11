@@ -809,28 +809,18 @@ function AIWorkspaceContent({
 
   async function submitStreamingChatRequest(request: RequestState, requestHistoryScope: HistoryScope) {
     try {
-      const response = await fetch("/api/ai/chat/stream", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          requestHistoryScope.mode === "project"
-            ? { ...request.payload, projectId: requestHistoryScope.projectId }
-            : request.payload,
-        ),
-      });
-
-      if (!response.ok || !response.body) {
-        return false;
-      }
+      const requestBody = JSON.stringify(
+        requestHistoryScope.mode === "project"
+          ? { ...request.payload, projectId: requestHistoryScope.projectId }
+          : request.payload,
+      );
 
       setStreaming(true);
       await waitForStreamPaint();
       let receivedFinal = false;
       let streamedAnswer = "";
 
-      await readStreamEvents(response, (event) => {
+      const handleStreamEvent = (event: StreamEvent) => {
         if (event.event === "delta") {
           streamedAnswer += event.data.text;
           setResult({
@@ -866,7 +856,12 @@ function AIWorkspaceContent({
         if (nextHistoryEntry && isSameHistoryScope(requestHistoryScope, latestHistoryScope.current)) {
           setHistory((current) => [nextHistoryEntry, ...current]);
         }
-      });
+      };
+
+      const streamStarted = await readStreamingChatEvents("/api/ai/chat/stream", requestBody, handleStreamEvent);
+      if (!streamStarted) {
+        return false;
+      }
 
       return receivedFinal;
     } catch {
@@ -894,6 +889,85 @@ function readAiResult(payload: unknown): AiResultWithHistory {
   const historyEntry = readHistoryEntry(payload.historyEntry);
 
   return historyEntry ? { ...result, historyEntry } : result;
+}
+
+async function readStreamingChatEvents(url: string, body: string, onEvent: (event: StreamEvent) => void) {
+  if (shouldUseXhrStreaming()) {
+    return readXhrStreamEvents(url, body, onEvent);
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+
+  if (!response.ok || !response.body) {
+    return false;
+  }
+
+  await readStreamEvents(response, onEvent);
+  return true;
+}
+
+function shouldUseXhrStreaming() {
+  return typeof window !== "undefined" && typeof window.XMLHttpRequest !== "undefined" && process.env.NODE_ENV !== "test";
+}
+
+async function readXhrStreamEvents(url: string, body: string, onEvent: (event: StreamEvent) => void) {
+  return new Promise<boolean>((resolve, reject) => {
+    const request = new window.XMLHttpRequest();
+    let cursor = 0;
+    let buffer = "";
+    let settled = false;
+
+    const settle = (value: boolean) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+
+    const processText = () => {
+      const nextText = request.responseText.slice(cursor);
+      cursor = request.responseText.length;
+      buffer = processStreamText(`${buffer}${nextText}`, onEvent);
+    };
+
+    request.open("POST", url, true);
+    request.setRequestHeader("Content-Type", "application/json");
+    request.setRequestHeader("Accept", "text/event-stream");
+    request.onprogress = () => {
+      try {
+        processText();
+      } catch (error) {
+        request.abort();
+        reject(error);
+      }
+    };
+    request.onload = () => {
+      try {
+        if (request.status < 200 || request.status >= 300) {
+          settle(false);
+          return;
+        }
+
+        processText();
+        const finalEvent = readStreamEvent(buffer);
+        if (finalEvent) {
+          onEvent(finalEvent);
+        }
+        settle(true);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    request.onerror = () => settle(false);
+    request.onabort = () => settle(false);
+    request.send(body);
+  });
 }
 
 async function readStreamEvents(response: Response, onEvent: (event: StreamEvent) => void) {
@@ -934,6 +1008,20 @@ async function readStreamEvents(response: Response, onEvent: (event: StreamEvent
   } finally {
     reader.releaseLock();
   }
+}
+
+function processStreamText(text: string, onEvent: (event: StreamEvent) => void) {
+  const frames = text.split("\n\n");
+  const nextBuffer = frames.pop() ?? "";
+
+  for (const frame of frames) {
+    const event = readStreamEvent(frame);
+    if (event) {
+      onEvent(event);
+    }
+  }
+
+  return nextBuffer;
 }
 
 async function waitForStreamPaint() {
