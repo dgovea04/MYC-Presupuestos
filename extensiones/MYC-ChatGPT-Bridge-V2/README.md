@@ -30,11 +30,11 @@ window.dispatchEvent(
   new CustomEvent("MYCBridgeSendPrompt", {
     detail: {
       jsonPrompt: {
-        task: "generate_apu_suggestion",
-        role: "construction_budget_assistant",
+        task: "generate_apu",
+        role: "construction_cost_assistant_peru",
         output: {
           format: "json_only",
-          schema: "apu_suggestion_v1"
+          schema: "apu_generation_v1"
         },
         context: {
           country: "PE",
@@ -87,10 +87,11 @@ Ejemplo:
 import { sendToMYCChatGPTBridge, onMYCBridgeResponse } from "@/lib/myc-bridge-client";
 
 const requestId = sendToMYCChatGPTBridge({
-  task: "review_apu_cost_drivers",
-  role: "construction_budget_assistant",
+  task: "review_budget",
+  role: "construction_cost_assistant_peru",
   output: {
-    format: "structured_text"
+    format: "json_only",
+    schema: "budget_review_v1"
   },
   context: {
     country: "PE",
