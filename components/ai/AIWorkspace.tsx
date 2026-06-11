@@ -35,6 +35,17 @@ type AiResultWithHistory = AiResult & {
   historyEntry?: AiHistoryEntry;
 };
 
+type AiFeedbackType = "APPLIED" | "EDITED" | "DISMISSED";
+
+type AiFeedbackSummary = {
+  applied: number;
+  edited: number;
+  dismissed: number;
+  total?: number;
+};
+
+type AiFeedbackState = Record<string, AiFeedbackType>;
+
 type AiHealth = {
   status: "ok" | "degraded" | "down";
   ollamaReachable: boolean;
@@ -96,6 +107,7 @@ type AiHistoryEntry = {
 };
 
 const AI_HISTORY_STORAGE_KEY = "myc-ai-session-history";
+const AI_FEEDBACK_STORAGE_KEY = "myc-ai-session-feedback";
 
 const ACTIONS = [
   {
@@ -170,8 +182,9 @@ function AIWorkspaceContent({
   const [apuUnit, setApuUnit] = useState(initialApuUnit);
   const [reviewSummary, setReviewSummary] = useState(initialReviewSummary);
   const [autocompleteInput, setAutocompleteInput] = useState(initialAutocompleteInput);
-  const [result, setResult] = useState<AiResult | null>(null);
+  const [result, setResult] = useState<AiResultWithHistory | null>(null);
   const [error, setError] = useState("");
+  const [feedbackError, setFeedbackError] = useState("");
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [lastRequest, setLastRequest] = useState<RequestState | null>(null);
@@ -179,6 +192,12 @@ function AIWorkspaceContent({
   const [provider, setProvider] = useState<AiProvider>("ollama");
   const [bridgeState, setBridgeState] = useState<MYCBridgeState | null>(null);
   const [history, setHistory] = useState<AiHistoryEntry[]>(() => (projectId ? [] : readStoredHistory()));
+  const [feedbackByHistoryId, setFeedbackByHistoryId] = useState<AiFeedbackState>(() =>
+    projectId ? {} : readStoredFeedback(),
+  );
+  const [feedbackSummary, setFeedbackSummary] = useState<AiFeedbackSummary>(() =>
+    projectId ? createEmptyFeedbackSummary() : summarizeFeedbackState(readStoredFeedback()),
+  );
   const latestHistoryScope = useRef<HistoryScope>(readHistoryScope(projectId));
   const pendingBridgeRequestId = useRef<string | null>(null);
   const pendingBridgeTimeoutId = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -198,15 +217,31 @@ function AIWorkspaceContent({
   }, [history, projectId]);
 
   useEffect(() => {
-    if (!projectId) {
+    if (projectId) {
       return;
     }
 
+    window.localStorage.setItem(AI_FEEDBACK_STORAGE_KEY, JSON.stringify(feedbackByHistoryId));
+    setFeedbackSummary(summarizeFeedbackState(feedbackByHistoryId));
+  }, [feedbackByHistoryId, projectId]);
+
+  useEffect(() => {
     let active = true;
 
-    void loadProjectHistory(projectId).then((entries) => {
+    if (!projectId) {
+      const storedFeedback = readStoredFeedback();
+      setFeedbackByHistoryId(storedFeedback);
+      setFeedbackSummary(summarizeFeedbackState(storedFeedback));
+      return () => {
+        active = false;
+      };
+    }
+
+    setFeedbackByHistoryId({});
+    void Promise.all([loadProjectHistory(projectId), loadProjectFeedbackSummary(projectId)]).then(([entries, summary]) => {
       if (active) {
         setHistory(entries);
+        setFeedbackSummary(summary);
       }
     });
 
@@ -236,25 +271,32 @@ function AIWorkspaceContent({
       }
 
       const nextResult = readBridgeAiResult(response);
-      setResult(nextResult);
 
       const scopedRequest = latestBridgeRequest.current;
       latestBridgeRequest.current = null;
 
       if (scopedRequest && isSameHistoryScope(scopedRequest.historyScope, latestHistoryScope.current)) {
         const request = scopedRequest.request;
-        setHistory((current) => [
-          {
-            id: `${Date.now()}-${request.action}-chatgpt-bridge`,
-            action: request.action,
-            summary: summarizeRequest(request),
-            context: latestContext.current,
-            result: nextResult,
-            timestamp: new Date().toISOString(),
-          },
-          ...current,
-        ]);
+        const nextHistoryEntry =
+          scopedRequest.historyScope.mode === "session"
+            ? {
+                id: `${Date.now()}-${request.action}-chatgpt-bridge`,
+                action: request.action,
+                summary: summarizeRequest(request),
+                context: latestContext.current,
+                result: nextResult,
+                timestamp: new Date().toISOString(),
+              }
+            : null;
+
+        if (nextHistoryEntry) {
+          setResult({ ...nextResult, historyEntry: nextHistoryEntry });
+          setHistory((current) => [nextHistoryEntry, ...current]);
+          return;
+        }
       }
+
+      setResult(nextResult);
     });
     const unsubscribeState = onMYCBridgeState(setBridgeState);
 
@@ -347,7 +389,6 @@ function AIWorkspaceContent({
       }
 
       const nextResult = readAiResult(payload);
-      setResult(nextResult);
       const nextHistoryEntry =
         nextResult.historyEntry ??
         (requestHistoryScope.mode === "session"
@@ -361,6 +402,7 @@ function AIWorkspaceContent({
             }
           : null);
 
+      setResult(nextHistoryEntry ? { ...nextResult, historyEntry: nextHistoryEntry } : nextResult);
       if (nextHistoryEntry && isSameHistoryScope(requestHistoryScope, latestHistoryScope.current)) {
         setHistory((current) => [nextHistoryEntry, ...current]);
       }
@@ -378,6 +420,56 @@ function AIWorkspaceContent({
     event.preventDefault();
     void submitRequest(buildRequest(activeAction, context));
   };
+
+  const activeFeedbackEntry = result ? readFeedbackEntryForResult(result, history) : null;
+
+  async function submitFeedback(entry: AiHistoryEntry, feedbackType: AiFeedbackType) {
+    setFeedbackError("");
+
+    if (!projectId) {
+      setFeedbackByHistoryId((current) => ({
+        ...current,
+        [entry.id]: feedbackType,
+      }));
+      return;
+    }
+
+    const previousFeedback = feedbackByHistoryId[entry.id];
+    setFeedbackByHistoryId((current) => ({
+      ...current,
+      [entry.id]: feedbackType,
+    }));
+    setFeedbackSummary((current) => updateFeedbackSummary(current, previousFeedback, feedbackType));
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/ai-history/${entry.id}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ feedbackType }),
+      });
+      const payload: unknown = await response.json();
+
+      if (!response.ok || !isRecord(payload)) {
+        throw new Error(readFeedbackErrorMessage(payload));
+      }
+    } catch (caughtError) {
+      setFeedbackByHistoryId((current) => {
+        const next = { ...current };
+        if (previousFeedback) {
+          next[entry.id] = previousFeedback;
+        } else {
+          delete next[entry.id];
+        }
+        return next;
+      });
+      setFeedbackSummary((current) => updateFeedbackSummary(current, feedbackType, previousFeedback));
+      setFeedbackError(
+        caughtError instanceof Error ? caughtError.message : "No se pudo registrar la metrica de calidad.",
+      );
+    }
+  }
 
   return (
     <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -659,10 +751,25 @@ function AIWorkspaceContent({
           </CardContent>
         </Card>
 
+        <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
+          <QualityMetric label="Aplicadas" value={feedbackSummary.applied} />
+          <QualityMetric label="Editadas" value={feedbackSummary.edited} />
+          <QualityMetric label="Descartadas" value={feedbackSummary.dismissed} />
+        </div>
+
         {error ? <AIMessage content={error} tone="error" /> : null}
+        {feedbackError ? <AIMessage content={feedbackError} tone="error" /> : null}
         {result ? (
           <div className="space-y-3">
             <AIMessage content={result.answer} model={result.model} />
+            {activeFeedbackEntry ? (
+              <FeedbackControls
+                selected={feedbackByHistoryId[activeFeedbackEntry.id]}
+                onSelect={(feedbackType) => {
+                  void submitFeedback(activeFeedbackEntry, feedbackType);
+                }}
+              />
+            ) : null}
             {result.warnings.length ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 {result.warnings.map((warning) => (
@@ -704,8 +811,9 @@ function AIWorkspaceContent({
                       onClick={() => {
                         setActiveAction(entry.action);
                         setContext(entry.context);
-                        setResult(entry.result);
+                        setResult({ ...entry.result, historyEntry: entry });
                         setError("");
+                        setFeedbackError("");
                       }}
                     >
                       Ver detalle
@@ -839,7 +947,6 @@ function AIWorkspaceContent({
 
         receivedFinal = true;
         setStreaming(false);
-        setResult(event.data);
         const nextHistoryEntry =
           event.data.historyEntry ??
           (requestHistoryScope.mode === "session"
@@ -853,6 +960,7 @@ function AIWorkspaceContent({
               }
             : null);
 
+        setResult(nextHistoryEntry ? { ...event.data, historyEntry: nextHistoryEntry } : event.data);
         if (nextHistoryEntry && isSameHistoryScope(requestHistoryScope, latestHistoryScope.current)) {
           setHistory((current) => [nextHistoryEntry, ...current]);
         }
@@ -889,6 +997,45 @@ function readAiResult(payload: unknown): AiResultWithHistory {
   const historyEntry = readHistoryEntry(payload.historyEntry);
 
   return historyEntry ? { ...result, historyEntry } : result;
+}
+
+function QualityMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function FeedbackControls({
+  onSelect,
+  selected,
+}: {
+  onSelect: (feedbackType: AiFeedbackType) => void;
+  selected?: AiFeedbackType;
+}) {
+  const options: Array<{ value: AiFeedbackType; label: string }> = [
+    { value: "APPLIED", label: "Aplicada" },
+    { value: "EDITED", label: "Editada" },
+    { value: "DISMISSED", label: "Descartada" },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          size="sm"
+          type="button"
+          variant={selected === option.value ? "default" : "outline"}
+          onClick={() => onSelect(option.value)}
+        >
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  );
 }
 
 async function readStreamingChatEvents(url: string, body: string, onEvent: (event: StreamEvent) => void) {
@@ -1186,8 +1333,79 @@ function readErrorMessage(payload: unknown) {
   return "No se pudo completar la solicitud de IA.";
 }
 
+function readFeedbackErrorMessage(payload: unknown) {
+  if (isRecord(payload) && typeof payload.error === "string") {
+    return payload.error;
+  }
+
+  return "No se pudo registrar la metrica de calidad.";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function createEmptyFeedbackSummary(): AiFeedbackSummary {
+  return { applied: 0, edited: 0, dismissed: 0 };
+}
+
+function summarizeFeedbackState(state: AiFeedbackState): AiFeedbackSummary {
+  return Object.values(state).reduce(
+    (summary, feedbackType) => updateFeedbackSummary(summary, undefined, feedbackType),
+    createEmptyFeedbackSummary(),
+  );
+}
+
+function updateFeedbackSummary(
+  summary: AiFeedbackSummary,
+  previous: AiFeedbackType | undefined,
+  next: AiFeedbackType | undefined,
+): AiFeedbackSummary {
+  const updated = { ...summary };
+  if (previous === "APPLIED") updated.applied -= 1;
+  if (previous === "EDITED") updated.edited -= 1;
+  if (previous === "DISMISSED") updated.dismissed -= 1;
+  if (next === "APPLIED") updated.applied += 1;
+  if (next === "EDITED") updated.edited += 1;
+  if (next === "DISMISSED") updated.dismissed += 1;
+
+  return {
+    applied: Math.max(0, updated.applied),
+    edited: Math.max(0, updated.edited),
+    dismissed: Math.max(0, updated.dismissed),
+    total: updated.total,
+  };
+}
+
+function readStoredFeedback(): AiFeedbackState {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(AI_FEEDBACK_STORAGE_KEY) ?? "{}");
+    if (!isRecord(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, AiFeedbackType] => isFeedbackType(entry[1])),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function isFeedbackType(value: unknown): value is AiFeedbackType {
+  return value === "APPLIED" || value === "EDITED" || value === "DISMISSED";
+}
+
+function readFeedbackEntryForResult(result: AiResultWithHistory, history: AiHistoryEntry[]) {
+  if (result.historyEntry) {
+    return result.historyEntry;
+  }
+
+  return history.find((entry) => entry.result === result) ?? null;
 }
 
 function readHistoryScope(projectId: string | undefined): HistoryScope {
@@ -1222,6 +1440,33 @@ async function loadProjectHistory(projectId: string) {
   } catch {
     return [];
   }
+}
+
+async function loadProjectFeedbackSummary(projectId: string): Promise<AiFeedbackSummary> {
+  try {
+    const response = await fetch(`/api/projects/${projectId}/ai-feedback/summary`);
+    if (!response.ok) {
+      return createEmptyFeedbackSummary();
+    }
+
+    const payload: unknown = await response.json();
+    if (!isRecord(payload) || !isRecord(payload.summary)) {
+      return createEmptyFeedbackSummary();
+    }
+
+    return readFeedbackSummary(payload.summary);
+  } catch {
+    return createEmptyFeedbackSummary();
+  }
+}
+
+function readFeedbackSummary(value: Record<string, unknown>): AiFeedbackSummary {
+  return {
+    applied: typeof value.applied === "number" ? value.applied : 0,
+    edited: typeof value.edited === "number" ? value.edited : 0,
+    dismissed: typeof value.dismissed === "number" ? value.dismissed : 0,
+    total: typeof value.total === "number" ? value.total : undefined,
+  };
 }
 
 function readHistoryEntry(value: unknown): AiHistoryEntry | null {

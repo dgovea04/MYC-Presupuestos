@@ -191,6 +191,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
       }
 
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
+      }
+
       if (url === "/api/projects/project-1/ai-history") {
         return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
       }
@@ -319,6 +323,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
       }
 
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
+      }
+
       if (url === "/api/projects/project-1/ai-history") {
         return Promise.resolve({
           ok: true,
@@ -406,6 +414,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
       }
 
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
+      }
+
       if (url === "/api/projects/project-1/ai-history") {
         return Promise.resolve({
           ok: true,
@@ -455,6 +467,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === "/api/ai/health") {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary" || url === "/api/projects/project-2/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
       }
 
       if (url === "/api/projects/project-1/ai-history") {
@@ -534,6 +550,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/ai/health") {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
       }
 
       if (url === "/api/projects/project-1/ai-history") {
@@ -689,10 +709,143 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/ai/chat")).toBe(true);
   });
 
+  it("records local session feedback and updates quality counters", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/ai/chat/stream") {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ error: "Streaming no disponible" }),
+        });
+      }
+
+      if (url === "/api/ai/chat") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            answer: "Respuesta para medir",
+            model: "llama3.1",
+            requestedModel: "llama3.1",
+            fallbackUsed: false,
+            warnings: [],
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText } = await renderWorkspace();
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+    await act(async () => {
+      getButtonByText("Aplicada").click();
+    });
+
+    expect(getByText("Aplicadas")).toBeTruthy();
+    expect(getByText("1")).toBeTruthy();
+    expect(window.localStorage.getItem("myc-ai-session-feedback")).toContain("APPLIED");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/feedback"))).toBe(false);
+  });
+
+  it("records project feedback through the API and updates counters", async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({ ok: true, json: async () => ({ entries: [] }) });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
+      }
+
+      if (url === "/api/ai/chat/stream") {
+        return Promise.resolve({
+          ok: true,
+          body: createSseStream([
+            {
+              event: "final",
+              data: {
+                answer: "Respuesta proyecto",
+                model: "llama3.1",
+                requestedModel: "llama3.1",
+                fallbackUsed: false,
+                warnings: [],
+                historyEntry: {
+                  id: "history-1",
+                  projectId: "project-1",
+                  userId: "user-1",
+                  action: "chat",
+                  summary: "Consulta inicial",
+                  context: { project: "Edificio Multifamiliar" },
+                  result: {
+                    answer: "Respuesta proyecto",
+                    model: "llama3.1",
+                    requestedModel: "llama3.1",
+                    fallbackUsed: false,
+                    warnings: [],
+                  },
+                  timestamp: "2026-06-11T16:10:00.000Z",
+                },
+              },
+            },
+          ]),
+        });
+      }
+
+      if (url === "/api/projects/project-1/ai-history/history-1/feedback") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            feedback: {
+              id: "feedback-1",
+              historyEntryId: "history-1",
+              projectId: "project-1",
+              userId: "user-1",
+              feedbackType: "EDITED",
+              timestamp: "2026-06-11T16:11:00.000Z",
+            },
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url} ${JSON.stringify(init)}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText } = await renderWorkspace({ projectId: "project-1" });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+    await act(async () => {
+      getButtonByText("Editada").click();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/ai-feedback/summary");
+    expect(getByText("Editadas")).toBeTruthy();
+    expect(getByText("1")).toBeTruthy();
+    const feedbackRequest = fetchMock.mock.calls.find(([url]) => url === "/api/projects/project-1/ai-history/history-1/feedback");
+    expect(JSON.parse(String(feedbackRequest?.[1]?.body))).toEqual({ feedbackType: "EDITED" });
+  });
+
   it("does not create local fallback history for project-aware Ollama responses without a history entry", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/ai/health") {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
       }
 
       if (url === "/api/projects/project-1/ai-history") {
@@ -740,6 +893,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/ai/health") {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary" || url === "/api/projects/project-2/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
       }
 
       if (url === "/api/projects/project-1/ai-history" || url === "/api/projects/project-2/ai-history") {
@@ -806,6 +963,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === "/api/ai/health") {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
       }
 
       if (url === "/api/projects/project-1/ai-history") {
@@ -959,6 +1120,10 @@ function createHealthPayload(status: "ok" | "degraded" | "down" = "ok") {
       autocomplete: { latencyMs: null, lastError: null },
     },
   };
+}
+
+function createFeedbackSummaryPayload() {
+  return { summary: { applied: 0, edited: 0, dismissed: 0 } };
 }
 
 function createSseStream(events: Array<{ event: string; data: unknown }>) {
