@@ -46,6 +46,14 @@ type AiFeedbackSummary = {
 
 type AiFeedbackState = Record<string, AiFeedbackType>;
 type AiFeedbackPendingState = Record<string, boolean>;
+type ProjectFeedbackState = {
+  projectId: string;
+  feedback: AiFeedbackState;
+};
+type ProjectFeedbackSummaryState = {
+  projectId: string;
+  summary: AiFeedbackSummary;
+};
 
 type AiFeedbackSummaryLoadResult =
   | {
@@ -202,13 +210,26 @@ function AIWorkspaceContent({
   const [provider, setProvider] = useState<AiProvider>("ollama");
   const [bridgeState, setBridgeState] = useState<MYCBridgeState | null>(null);
   const [history, setHistory] = useState<AiHistoryEntry[]>(() => (projectId ? [] : readStoredHistory()));
-  const [feedbackByHistoryId, setFeedbackByHistoryId] = useState<AiFeedbackState>(() =>
-    projectId ? {} : readStoredFeedback(),
-  );
+  const [sessionFeedbackByHistoryId, setSessionFeedbackByHistoryId] = useState<AiFeedbackState>(readStoredFeedback);
+  const [projectFeedbackByHistoryId, setProjectFeedbackByHistoryId] = useState<ProjectFeedbackState | null>(null);
   const [pendingFeedbackByHistoryId, setPendingFeedbackByHistoryId] = useState<AiFeedbackPendingState>({});
-  const [feedbackSummary, setFeedbackSummary] = useState<AiFeedbackSummary>(() =>
-    projectId ? createEmptyFeedbackSummary() : summarizeFeedbackState(readStoredFeedback()),
+  const [projectFeedbackSummary, setProjectFeedbackSummary] = useState<ProjectFeedbackSummaryState | null>(null);
+  const feedbackByHistoryId =
+    projectId
+      ? projectFeedbackByHistoryId?.projectId === projectId
+        ? projectFeedbackByHistoryId.feedback
+        : {}
+      : sessionFeedbackByHistoryId;
+  const sessionFeedbackSummary = useMemo(
+    () => summarizeFeedbackState(sessionFeedbackByHistoryId),
+    [sessionFeedbackByHistoryId],
   );
+  const feedbackSummary =
+    projectId
+      ? projectFeedbackSummary?.projectId === projectId
+        ? projectFeedbackSummary.summary
+        : createEmptyFeedbackSummary()
+      : sessionFeedbackSummary;
   const latestHistoryScope = useRef<HistoryScope>(readHistoryScope(projectId));
   const pendingBridgeRequestId = useRef<string | null>(null);
   const pendingBridgeTimeoutId = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -224,7 +245,7 @@ function AIWorkspaceContent({
       return;
     }
 
-    window.localStorage.setItem(AI_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 8)));
+    persistStoredHistory(history);
   }, [history, projectId]);
 
   useEffect(() => {
@@ -232,28 +253,25 @@ function AIWorkspaceContent({
       return;
     }
 
-    persistStoredFeedback(feedbackByHistoryId);
-    setFeedbackSummary(summarizeFeedbackState(feedbackByHistoryId));
-  }, [feedbackByHistoryId, projectId]);
+    persistStoredFeedback(sessionFeedbackByHistoryId);
+  }, [sessionFeedbackByHistoryId, projectId]);
 
   useEffect(() => {
     let active = true;
 
     if (!projectId) {
-      const storedFeedback = readStoredFeedback();
-      setFeedbackByHistoryId(storedFeedback);
-      setFeedbackSummary(summarizeFeedbackState(storedFeedback));
       return () => {
         active = false;
       };
     }
 
-    setFeedbackByHistoryId({});
-    setPendingFeedbackByHistoryId({});
     void Promise.all([loadProjectHistory(projectId), loadProjectFeedbackSummary(projectId)]).then(([entries, summaryResult]) => {
       if (active) {
         setHistory(entries);
-        setFeedbackSummary(summaryResult.ok ? summaryResult.summary : createEmptyFeedbackSummary());
+        setProjectFeedbackSummary({
+          projectId,
+          summary: summaryResult.ok ? summaryResult.summary : createEmptyFeedbackSummary(),
+        });
       }
     });
 
@@ -443,7 +461,7 @@ function AIWorkspaceContent({
     }
 
     if (!projectId) {
-      setFeedbackByHistoryId((current) => ({
+      setSessionFeedbackByHistoryId((current) => ({
         ...current,
         [entry.id]: feedbackType,
       }));
@@ -455,11 +473,24 @@ function AIWorkspaceContent({
       ...current,
       [entry.id]: true,
     }));
-    setFeedbackByHistoryId((current) => ({
-      ...current,
-      [entry.id]: feedbackType,
+    setProjectFeedbackByHistoryId((current) => {
+      const currentFeedback = current?.projectId === projectId ? current.feedback : {};
+      return {
+        projectId,
+        feedback: {
+          ...currentFeedback,
+          [entry.id]: feedbackType,
+        },
+      };
+    });
+    setProjectFeedbackSummary((current) => ({
+      projectId,
+      summary: updateFeedbackSummary(
+        current?.projectId === projectId ? current.summary : createEmptyFeedbackSummary(),
+        previousFeedback,
+        feedbackType,
+      ),
     }));
-    setFeedbackSummary((current) => updateFeedbackSummary(current, previousFeedback, feedbackType));
 
     try {
       const response = await fetch(`/api/projects/${projectId}/ai-history/${entry.id}/feedback`, {
@@ -477,19 +508,26 @@ function AIWorkspaceContent({
 
       const reconciledSummary = await loadProjectFeedbackSummary(projectId);
       if (reconciledSummary.ok) {
-        setFeedbackSummary(reconciledSummary.summary);
+        setProjectFeedbackSummary({ projectId, summary: reconciledSummary.summary });
       }
     } catch (caughtError) {
-      setFeedbackByHistoryId((current) => {
-        const next = { ...current };
+      setProjectFeedbackByHistoryId((current) => {
+        const next = current?.projectId === projectId ? { ...current.feedback } : {};
         if (previousFeedback) {
           next[entry.id] = previousFeedback;
         } else {
           delete next[entry.id];
         }
-        return next;
+        return { projectId, feedback: next };
       });
-      setFeedbackSummary((current) => updateFeedbackSummary(current, feedbackType, previousFeedback));
+      setProjectFeedbackSummary((current) => ({
+        projectId,
+        summary: updateFeedbackSummary(
+          current?.projectId === projectId ? current.summary : createEmptyFeedbackSummary(),
+          feedbackType,
+          previousFeedback,
+        ),
+      }));
       setFeedbackError(
         caughtError instanceof Error ? caughtError.message : "No se pudo registrar la metrica de calidad.",
       );
@@ -1657,6 +1695,14 @@ function readStoredHistory() {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function persistStoredHistory(history: AiHistoryEntry[]) {
+  try {
+    window.localStorage.setItem(AI_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 8)));
+  } catch {
+    // History persistence is best-effort in session mode.
   }
 }
 
