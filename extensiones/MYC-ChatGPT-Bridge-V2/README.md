@@ -30,12 +30,33 @@ window.dispatchEvent(
   new CustomEvent("MYCBridgeSendPrompt", {
     detail: {
       jsonPrompt: {
-        accion: "generar_apu",
-        partida: "Muro de ladrillo King Kong",
-        unidad: "m2"
+        task: "generate_apu_suggestion",
+        role: "construction_budget_assistant",
+        output: {
+          format: "json_only",
+          schema: "apu_suggestion_v1"
+        },
+        context: {
+          country: "PE",
+          currency: "PEN",
+          projectType: "edificacion"
+        },
+        input: {
+          itemName: "Muro de ladrillo King Kong",
+          unit: "m2"
+        },
+        guardrails: {
+          requireAssumptionsForMissingData: true,
+          humanReviewRequired: true
+        },
+        metadata: {
+          source: "myc-presupuestos",
+          action: "create_apu_draft"
+        }
       },
-      metadata: {
-        source: "myc-presupuestos"
+      settings: {
+        requireJson: true,
+        autoSend: false
       }
     }
   })
@@ -66,9 +87,28 @@ Ejemplo:
 import { sendToMYCChatGPTBridge, onMYCBridgeResponse } from "@/lib/myc-bridge-client";
 
 const requestId = sendToMYCChatGPTBridge({
-  accion: "generar_apu",
-  partida: "Concreto f'c=210 kg/cm2",
-  unidad: "m3"
+  task: "review_apu_cost_drivers",
+  role: "construction_budget_assistant",
+  output: {
+    format: "structured_text"
+  },
+  context: {
+    country: "PE",
+    currency: "PEN",
+    projectType: "edificacion"
+  },
+  input: {
+    itemName: "Concreto f'c=210 kg/cm2",
+    unit: "m3"
+  },
+  guardrails: {
+    doNotFabricateExactPrices: true,
+    humanReviewRequired: true
+  },
+  metadata: {
+    source: "myc-presupuestos",
+    action: "review_apu"
+  }
 });
 
 const unsubscribe = onMYCBridgeResponse((response) => {

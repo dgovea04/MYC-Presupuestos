@@ -227,17 +227,19 @@
   }
 
   function buildPrompt(jsonPrompt, settings) {
-    const strictJson = settings?.requireJson !== false;
+    const strictJson = settings?.requireJson !== false && jsonPrompt?.output?.format === "json_only";
 
-    const rules = strictJson
-      ? [
-          "Responde ÚNICAMENTE con JSON válido.",
-          "No uses markdown.",
-          "No agregues explicación antes ni después.",
-          "No uses bloques ```.",
-          "Si no puedes completar algo, responde JSON con keys: error, reason, partial."
-        ].join("\n")
-      : "Responde de forma clara y estructurada.";
+    const rules = [
+      "Eres un asistente experto en presupuestos de construcción en Perú, APU, metrados, costos, rendimientos y fórmula polinómica.",
+      "Ejecuta la tarea indicada en el INPUT JSON.",
+      strictJson
+        ? "Responde únicamente con JSON válido."
+        : "Responde de forma clara, estructurada y profesional.",
+      "Cuando la salida sea JSON-only, no uses markdown, bloques de código ni texto antes o después del JSON.",
+      "No modifiques automáticamente ningún presupuesto; entrega resultados y recomendaciones para revisión.",
+      "No fabriques precios exactos. Si falta información, declárala como supuesto o dato requerido.",
+      "Toda recomendación debe ser revisada por una persona antes de aplicarse."
+    ].join("\n");
 
     return [
       rules,
