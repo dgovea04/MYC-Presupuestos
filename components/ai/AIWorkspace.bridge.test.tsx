@@ -621,13 +621,14 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
       getButtonByText("Enviar a Ollama").click();
     });
 
+    expect(getButtonByText("Khipu respondiendo")).toBeTruthy();
+
     await act(async () => {
       enqueueStreamEvent({ event: "delta", data: { text: "Primer avance" } });
       await Promise.resolve();
     });
 
     expect(getByText("Primer avance")).toBeTruthy();
-    expect(getButtonByText("Khipu respondiendo")).toBeTruthy();
 
     await act(async () => {
       enqueueStreamEvent({

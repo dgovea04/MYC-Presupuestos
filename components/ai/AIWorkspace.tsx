@@ -825,13 +825,13 @@ function AIWorkspaceContent({
         return false;
       }
 
+      setStreaming(true);
       let receivedFinal = false;
       let streamedAnswer = "";
 
       await readStreamEvents(response, (event) => {
         if (event.event === "delta") {
           streamedAnswer += event.data.text;
-          setStreaming(true);
           setResult({
             answer: streamedAnswer,
             model: "Khipu",
