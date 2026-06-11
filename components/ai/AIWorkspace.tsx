@@ -265,15 +265,20 @@ function AIWorkspaceContent({
       };
     }
 
-    void Promise.all([loadProjectHistory(projectId), loadProjectFeedbackSummary(projectId)]).then(([entries, summaryResult]) => {
-      if (active) {
-        setHistory(entries);
-        setProjectFeedbackSummary({
-          projectId,
-          summary: summaryResult.ok ? summaryResult.summary : createEmptyFeedbackSummary(),
-        });
-      }
-    });
+    void Promise.all([loadProjectHistory(projectId), loadProjectFeedbackSummary(projectId)]).then(
+      async ([entries, summaryResult]) => {
+        const feedbackByHistoryId = await loadProjectLatestFeedback(projectId, entries.map((entry) => entry.id));
+
+        if (active) {
+          setHistory(entries);
+          setProjectFeedbackByHistoryId({ projectId, feedback: feedbackByHistoryId });
+          setProjectFeedbackSummary({
+            projectId,
+            summary: summaryResult.ok ? summaryResult.summary : createEmptyFeedbackSummary(),
+          });
+        }
+      },
+    );
 
     return () => {
       active = false;
@@ -1101,6 +1106,7 @@ function FeedbackControls({
           size="sm"
           type="button"
           variant={selected === option.value ? "default" : "outline"}
+          aria-pressed={selected === option.value}
           disabled={disabled}
           onClick={() => onSelect(option.value)}
         >
@@ -1538,6 +1544,37 @@ async function loadProjectFeedbackSummary(projectId: string): Promise<AiFeedback
     return { ok: true, summary: readFeedbackSummary(payload.summary) };
   } catch {
     return { ok: false };
+  }
+}
+
+async function loadProjectLatestFeedback(projectId: string, historyEntryIds: string[]): Promise<AiFeedbackState> {
+  if (historyEntryIds.length === 0) {
+    return {};
+  }
+
+  const query = new URLSearchParams();
+  for (const historyEntryId of historyEntryIds) {
+    query.append("historyEntryId", historyEntryId);
+  }
+
+  try {
+    const response = await fetch(`/api/projects/${projectId}/ai-feedback/latest?${query.toString()}`);
+    if (!response.ok) {
+      return {};
+    }
+
+    const payload: unknown = await response.json();
+    if (!isRecord(payload) || !isRecord(payload.feedbackByHistoryId)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(payload.feedbackByHistoryId).filter(
+        (entry): entry is [string, AiFeedbackType] => typeof entry[0] === "string" && isFeedbackType(entry[1]),
+      ),
+    );
+  } catch {
+    return {};
   }
 }
 

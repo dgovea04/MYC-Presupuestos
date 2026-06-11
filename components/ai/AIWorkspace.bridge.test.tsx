@@ -389,6 +389,71 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(window.localStorage.getItem("myc-ai-session-history")).toBeNull();
   });
 
+  it("selects persisted latest feedback when opening a project history entry", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            entries: [
+              {
+                id: "history-applied",
+                projectId: "project-1",
+                userId: "user-1",
+                action: "chat",
+                summary: "Consulta aplicada",
+                context: { project: "Hospital Norte", module: "APU" },
+                result: {
+                  answer: "Respuesta aplicada",
+                  model: "llama3.1",
+                  requestedModel: "llama3.1",
+                  fallbackUsed: false,
+                  warnings: [],
+                },
+                timestamp: "2026-06-09T16:20:00.000Z",
+              },
+            ],
+          }),
+        });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/latest?historyEntryId=history-applied") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ feedbackByHistoryId: { "history-applied": "APPLIED" } }),
+        });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/latest?historyEntryId=history-project-1") {
+        return Promise.resolve({ ok: true, json: async () => ({ feedbackByHistoryId: {} }) });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getByText } = await renderWorkspace({ projectId: "project-1" });
+
+    expect(getByText("Consulta aplicada")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Ver detalle").click();
+    });
+
+    expect(getByText("Respuesta aplicada")).toBeTruthy();
+    expect(getButtonByText("Aplicada").getAttribute("aria-pressed")).toBe("true");
+    expect(getButtonByText("Editada").getAttribute("aria-pressed")).toBe("false");
+    expect(getButtonByText("Descartada").getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("restores browser history when project id is removed without persisting project history", async () => {
     window.localStorage.setItem(
       "myc-ai-session-history",
@@ -499,8 +564,16 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
         });
       }
 
+      if (url === "/api/projects/project-1/ai-feedback/latest?historyEntryId=history-project-1") {
+        return Promise.resolve({ ok: true, json: async () => ({ feedbackByHistoryId: {} }) });
+      }
+
       if (url === "/api/projects/project-2/ai-history") {
         return projectTwoHistory;
+      }
+
+      if (url === "/api/projects/project-2/ai-feedback/latest?historyEntryId=history-project-2") {
+        return Promise.resolve({ ok: true, json: async () => ({ feedbackByHistoryId: {} }) });
       }
 
       return Promise.reject(new Error(`Unexpected fetch ${url}`));
@@ -967,6 +1040,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
             ],
           }),
         });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/latest?historyEntryId=history-1") {
+        return Promise.resolve({ ok: true, json: async () => ({ feedbackByHistoryId: { "history-1": "APPLIED" } }) });
       }
 
       if (url === "/api/projects/project-1/ai-feedback/summary") {
