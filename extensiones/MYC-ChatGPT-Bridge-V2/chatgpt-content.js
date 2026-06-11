@@ -227,7 +227,9 @@
   }
 
   function buildPrompt(jsonPrompt, settings) {
-    const strictJson = jsonPrompt?.output?.format === "json_only" || settings?.requireJson === true;
+    const strictJson =
+      jsonPrompt?.output?.format === "json_only" ||
+      (jsonPrompt?.output?.format === undefined && settings?.requireJson === true);
 
     const rules = [
       "Eres un asistente tecnico experto en presupuestos de construccion en Peru, APU, metrados, costos, rendimientos y formula polinomica.",
