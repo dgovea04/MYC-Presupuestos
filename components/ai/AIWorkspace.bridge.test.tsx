@@ -755,6 +755,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
   });
 
   it("records project feedback through the API and updates counters", async () => {
+    let summaryRequestCount = 0;
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/ai/health") {
         return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
@@ -765,7 +766,14 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
       }
 
       if (url === "/api/projects/project-1/ai-feedback/summary") {
-        return Promise.resolve({ ok: true, json: async () => createFeedbackSummaryPayload() });
+        summaryRequestCount += 1;
+        return Promise.resolve({
+          ok: true,
+          json: async () =>
+            summaryRequestCount === 1
+              ? createFeedbackSummaryPayload()
+              : { summary: { applied: 0, edited: 1, dismissed: 0 } },
+        });
       }
 
       if (url === "/api/ai/chat/stream") {
@@ -822,7 +830,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { getButtonByText, getByText } = await renderWorkspace({ projectId: "project-1" });
+    const { getButtonByText, getByText, getMetricValue } = await renderWorkspace({ projectId: "project-1" });
 
     await act(async () => {
       getButtonByText("Enviar a Ollama").click();
@@ -833,9 +841,101 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/ai-feedback/summary");
     expect(getByText("Editadas")).toBeTruthy();
-    expect(getByText("1")).toBeTruthy();
+    expect(summaryRequestCount).toBe(2);
+    expect(getMetricValue("Editadas")).toBe("1");
     const feedbackRequest = fetchMock.mock.calls.find(([url]) => url === "/api/projects/project-1/ai-history/history-1/feedback");
     expect(JSON.parse(String(feedbackRequest?.[1]?.body))).toEqual({ feedbackType: "EDITED" });
+  });
+
+  it("reconciles project feedback counters after editing historical feedback", async () => {
+    let summaryRequestCount = 0;
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/ai/health") {
+        return Promise.resolve({ ok: true, json: async () => createHealthPayload() });
+      }
+
+      if (url === "/api/projects/project-1/ai-history") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            entries: [
+              {
+                id: "history-1",
+                projectId: "project-1",
+                userId: "user-1",
+                action: "chat",
+                summary: "Consulta persistida",
+                context: { project: "Hospital Norte", module: "APU" },
+                result: {
+                  answer: "Respuesta persistida",
+                  model: "llama3.1",
+                  requestedModel: "llama3.1",
+                  fallbackUsed: false,
+                  warnings: [],
+                },
+                timestamp: "2026-06-09T16:20:00.000Z",
+              },
+            ],
+          }),
+        });
+      }
+
+      if (url === "/api/projects/project-1/ai-feedback/summary") {
+        summaryRequestCount += 1;
+        return Promise.resolve({
+          ok: true,
+          json: async () =>
+            summaryRequestCount === 1
+              ? { summary: { applied: 1, edited: 0, dismissed: 0 } }
+              : { summary: { applied: 0, edited: 1, dismissed: 0 } },
+        });
+      }
+
+      if (url === "/api/projects/project-1/ai-history/history-1/feedback") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            feedback: {
+              id: "feedback-1",
+              historyEntryId: "history-1",
+              projectId: "project-1",
+              userId: "user-1",
+              feedbackType: "EDITED",
+              timestamp: "2026-06-11T16:11:00.000Z",
+            },
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch ${url} ${JSON.stringify(init)}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getButtonByText, getMetricValue } = await renderWorkspace({ projectId: "project-1" });
+
+    expect(getMetricValue("Aplicadas")).toBe("1");
+    expect(getMetricValue("Editadas")).toBe("0");
+
+    await act(async () => {
+      getButtonByText("Ver detalle").click();
+    });
+    await act(async () => {
+      getButtonByText("Editada").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/ai-feedback/summary");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/projects/project-1/ai-history/history-1/feedback",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ feedbackType: "EDITED" }),
+      }),
+    );
+    expect(summaryRequestCount).toBe(2);
+    expect(getMetricValue("Aplicadas")).toBe("0");
+    expect(getMetricValue("Editadas")).toBe("1");
   });
 
   it("does not create local fallback history for project-aware Ollama responses without a history entry", async () => {
@@ -1090,6 +1190,15 @@ async function renderWorkspace(props: Partial<React.ComponentProps<typeof AIWork
       }
 
       return element;
+    },
+    getMetricValue: (label: string) => {
+      const labelElement = [...document.body.querySelectorAll("p")].find((candidate) => candidate.textContent?.trim() === label);
+      const valueElement = labelElement?.parentElement?.querySelector("p:last-child");
+      if (!(valueElement instanceof HTMLElement)) {
+        throw new Error(`Missing metric: ${label}`);
+      }
+
+      return valueElement.textContent?.trim() ?? "";
     },
     queryTextContaining: (text: string) =>
       [...document.body.querySelectorAll("*")].find((candidate) => {

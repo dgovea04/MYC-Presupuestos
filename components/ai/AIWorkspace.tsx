@@ -454,6 +454,9 @@ function AIWorkspaceContent({
       if (!response.ok || !isRecord(payload)) {
         throw new Error(readFeedbackErrorMessage(payload));
       }
+
+      const reconciledSummary = await loadProjectFeedbackSummary(projectId);
+      setFeedbackSummary(reconciledSummary);
     } catch (caughtError) {
       setFeedbackByHistoryId((current) => {
         const next = { ...current };
