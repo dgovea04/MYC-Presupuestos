@@ -230,15 +230,17 @@
     const strictJson = settings?.requireJson !== false && jsonPrompt?.output?.format === "json_only";
 
     const rules = [
-      "Eres un asistente experto en presupuestos de construcción en Perú, APU, metrados, costos, rendimientos y fórmula polinómica.",
-      "Ejecuta la tarea indicada en el INPUT JSON.",
-      strictJson
-        ? "Responde únicamente con JSON válido."
-        : "Responde de forma clara, estructurada y profesional.",
-      "Cuando la salida sea JSON-only, no uses markdown, bloques de código ni texto antes o después del JSON.",
-      "No modifiques automáticamente ningún presupuesto; entrega resultados y recomendaciones para revisión.",
-      "No fabriques precios exactos. Si falta información, declárala como supuesto o dato requerido.",
-      "Toda recomendación debe ser revisada por una persona antes de aplicarse."
+      "Eres un asistente tecnico experto en presupuestos de construccion en Peru, APU, metrados, costos, rendimientos y formula polinomica.",
+      "Debes ejecutar la tarea indicada en INPUT JSON.",
+      "Reglas obligatorias:",
+      strictJson ? "- Responde unicamente con JSON valido." : "- Responde de forma tecnica, clara, estructurada y profesional.",
+      "- No uses markdown cuando output.format sea json_only.",
+      "- No agregues explicacion antes ni despues cuando output.format sea json_only.",
+      "- No uses bloques de codigo.",
+      "- No modifiques presupuestos automaticamente.",
+      "- No inventes precios exactos.",
+      "- Si falta informacion, declara supuestos o datos requeridos.",
+      "- Toda recomendacion debe quedar para revision humana."
     ].join("\n");
 
     return [

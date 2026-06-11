@@ -37,21 +37,22 @@ window.dispatchEvent(
           schema: "apu_generation_v1"
         },
         context: {
-          country: "PE",
-          currency: "PEN",
-          projectType: "edificacion"
+          project: "Edificio Multifamiliar",
+          selectedItem: "Muro de ladrillo King Kong",
+          unit: "m2"
         },
         input: {
-          itemName: "Muro de ladrillo King Kong",
+          description: "Muro de ladrillo King Kong",
           unit: "m2"
         },
         guardrails: {
-          requireAssumptionsForMissingData: true,
-          humanReviewRequired: true
+          humanReviewRequired: true,
+          noAutomaticBudgetMutation: true,
+          noExactPriceFabrication: true
         },
         metadata: {
           source: "myc-presupuestos",
-          action: "create_apu_draft"
+          action: "apu"
         }
       },
       settings: {
@@ -87,28 +88,29 @@ Ejemplo:
 import { sendToMYCChatGPTBridge, onMYCBridgeResponse } from "@/lib/myc-bridge-client";
 
 const requestId = sendToMYCChatGPTBridge({
-  task: "review_budget",
+  task: "generate_apu",
   role: "construction_cost_assistant_peru",
   output: {
     format: "json_only",
-    schema: "budget_review_v1"
+    schema: "apu_generation_v1"
   },
   context: {
-    country: "PE",
-    currency: "PEN",
-    projectType: "edificacion"
+    project: "Edificio Multifamiliar",
+    selectedItem: "Concreto f'c=210 kg/cm2",
+    unit: "m3"
   },
   input: {
-    itemName: "Concreto f'c=210 kg/cm2",
+    description: "Concreto f'c=210 kg/cm2",
     unit: "m3"
   },
   guardrails: {
-    doNotFabricateExactPrices: true,
-    humanReviewRequired: true
+    humanReviewRequired: true,
+    noAutomaticBudgetMutation: true,
+    noExactPriceFabrication: true
   },
   metadata: {
     source: "myc-presupuestos",
-    action: "review_apu"
+    action: "apu"
   }
 });
 
