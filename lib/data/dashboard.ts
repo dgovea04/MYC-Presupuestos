@@ -576,7 +576,7 @@ export function normalizePolynomialFormulaActivityHref(
   href: string,
   polynomialFormulaRouteBudgetIdByBudgetId: Map<string, string>,
 ) {
-  const match = href.match(/^\/budgets\/([^/?#]+)\/polynomial-formula(?<suffix>[?#].*)?$/);
+  const match = href.match(/^\/budgets\/([^/?#]+)\/polynomial-formula([?#].*)?$/);
   if (!match) return href;
 
   const budgetId = match[1];
@@ -585,7 +585,7 @@ export function normalizePolynomialFormulaActivityHref(
   const routeBudgetId = polynomialFormulaRouteBudgetIdByBudgetId.get(budgetId);
   if (!routeBudgetId || routeBudgetId === budgetId) return href;
 
-  return `/budgets/${routeBudgetId}/polynomial-formula${match.groups?.suffix ?? ""}`;
+  return `/budgets/${routeBudgetId}/polynomial-formula${match[2] ?? ""}`;
 }
 
 function buildPolynomialFormulaActivityHref(

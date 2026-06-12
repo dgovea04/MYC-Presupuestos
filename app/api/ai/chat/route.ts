@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
+import { executeAiTask } from "@/lib/ai/gateway/execute";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
-import { buildChatMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
-import { generateAiResponse } from "@/lib/ai/service";
 import { aiChatRequestSchema } from "@/lib/ai/validation";
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiChatRequestSchema.parse(await request.json());
-    const result = await generateAiResponse({
-      action: "chat",
-      messages: buildChatMessages(data),
+    const result = await executeAiTask({
+      provider: data.provider,
+      task: "chat",
+      payload: {
+        message: data.message,
+        context: data.context,
+      },
+      projectId: data.projectId,
       userId: session.user.id,
     });
 

@@ -68,6 +68,7 @@ function buildEvidenceSystemMessage(evidence: AiEvidence[]): string {
 }
 
 export function buildChatMessages({
+  assembledContextBlock,
   message,
   context,
   evidence = [],
@@ -75,12 +76,14 @@ export function buildChatMessages({
   message: string;
   context?: AiContext;
   evidence?: AiEvidence[];
+  assembledContextBlock?: string;
 }): AiMessage[] {
   const contextBlock = buildContextBlock(context);
   const evidenceBlock = buildEvidenceSystemMessage(evidence);
 
   return [
     { role: "system", content: MYC_AI_SYSTEM_PROMPT },
+    ...(assembledContextBlock ? [{ role: "system" as const, content: assembledContextBlock }] : []),
     ...(contextBlock ? [{ role: "system" as const, content: contextBlock }] : []),
     ...(evidenceBlock ? [{ role: "system" as const, content: evidenceBlock }] : []),
     { role: "user", content: message },
@@ -88,6 +91,7 @@ export function buildChatMessages({
 }
 
 export function buildTaskPayloadMessages({
+  assembledContextBlock,
   jsonOnly,
   message,
   context,
@@ -97,12 +101,14 @@ export function buildTaskPayloadMessages({
   message: string;
   context?: AiContext;
   evidence?: AiEvidence[];
+  assembledContextBlock?: string;
 }): AiMessage[] {
   const contextBlock = buildContextBlock(context);
   const evidenceBlock = buildEvidenceSystemMessage(evidence);
 
   return [
     { role: "system", content: buildTaskPayloadSystemPrompt({ jsonOnly }) },
+    ...(assembledContextBlock ? [{ role: "system" as const, content: assembledContextBlock }] : []),
     ...(contextBlock ? [{ role: "system" as const, content: contextBlock }] : []),
     ...(evidenceBlock ? [{ role: "system" as const, content: evidenceBlock }] : []),
     { role: "user", content: message },

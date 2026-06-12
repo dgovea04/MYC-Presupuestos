@@ -1,22 +1,20 @@
 import { NextResponse } from "next/server";
+import { executeAiTask } from "@/lib/ai/gateway/execute";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
-import { buildReviewPrompt, buildTaskPayloadMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
-import { generateAiResponse } from "@/lib/ai/service";
-import { aiReviewStructuredSchema } from "@/lib/ai/structured-output";
 import { aiReviewRequestSchema } from "@/lib/ai/validation";
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiReviewRequestSchema.parse(await request.json());
-    const result = await generateAiResponse({
-      action: "review",
-      messages: buildTaskPayloadMessages({
-        jsonOnly: true,
-        message: buildReviewPrompt(data.budgetSummary),
+    const result = await executeAiTask({
+      provider: data.provider,
+      task: "review_budget",
+      payload: {
+        budgetSummary: data.budgetSummary,
         context: data.context,
-      }),
-      schema: aiReviewStructuredSchema,
+      },
+      projectId: data.projectId,
       userId: session.user.id,
     });
 

@@ -47,6 +47,10 @@ describe("LocalAiSettingsCard", () => {
     expect(getByText("deepseek-coder")).toBeTruthy();
     expect(getByText("JSON estructurado")).toBeTruthy();
     expect(getByText("Generar APU")).toBeTruthy();
+    expect(getByText("OpenAI")).toBeTruthy();
+    expect(getByText("Gemini")).toBeTruthy();
+    expect(getByText("Revision de presupuesto")).toBeTruthy();
+    expect(getByText("openai -> gemini -> ollama")).toBeTruthy();
     expect(getByText("La IA nunca modifica presupuestos automaticamente.")).toBeTruthy();
   });
 
@@ -170,6 +174,24 @@ function createHealthPayload() {
       review: { latencyMs: null, lastError: null },
       autocomplete: { latencyMs: null, lastError: null },
       json: { latencyMs: null, lastError: null },
+    },
+    providers: {
+      ollama: { configured: true, reachable: true },
+      openai: { configured: true, reachable: null },
+      gemini: { configured: false, reachable: null },
+      chatgpt_bridge: { configured: true, reachable: null },
+    },
+    routing: {
+      review_apu: ["openai", "gemini", "ollama"],
+      generate_apu: ["openai", "gemini", "ollama"],
+      suggest_insumos: ["ollama"],
+      review_budget: ["openai", "gemini", "ollama"],
+      generate_partida: ["openai", "gemini", "ollama"],
+      review_formula_polinomica: ["openai", "gemini", "ollama"],
+      review_quantity_takeoff: ["openai", "gemini", "ollama"],
+      montecarlo_risk_analysis: ["gemini", "ollama"],
+      chat: ["chatgpt_bridge"],
+      autocomplete: ["ollama"],
     },
   };
 }

@@ -2,6 +2,9 @@ export type AiMessageRole = "system" | "user" | "assistant";
 
 export type AiAction = "chat" | "apu" | "review" | "autocomplete" | "json";
 
+export type { AiProviderId, ExecuteAiTaskInput, KhipuAiTask } from "@/lib/ai/gateway/types";
+import type { AiProviderId, KhipuAiTask } from "@/lib/ai/gateway/types";
+
 export type AiMessage = {
   role: AiMessageRole;
   content: string;
@@ -24,6 +27,10 @@ export type AiEndpointResult = {
   warnings: string[];
   latencyMs?: number;
   structuredData?: unknown;
+  provider?: Exclude<AiProviderId, "auto">;
+  task?: KhipuAiTask;
+  promptHash?: string;
+  responseHash?: string;
   debug?: AiEndpointDebug;
 };
 

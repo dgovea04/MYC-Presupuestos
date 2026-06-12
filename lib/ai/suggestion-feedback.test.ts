@@ -36,6 +36,11 @@ describe("Khipu suggestion feedback service", () => {
       id: "history-1",
       projectId: "project-1",
       userId: "user-1",
+      provider: "openai",
+      model: "gpt-5-mini",
+      task: "review_budget",
+      promptHash: "prompt-hash-1",
+      responseHash: "response-hash-1",
     });
     prismaMock.aiSuggestionFeedbackEvent.create.mockResolvedValue(
       createDbFeedbackEvent({
@@ -45,6 +50,11 @@ describe("Khipu suggestion feedback service", () => {
         userId: "user-1",
         feedbackType: AiSuggestionFeedbackType.EDITED,
         notes: "Usar metrados actualizados",
+        provider: "openai",
+        model: "gpt-5-mini",
+        task: "review_budget",
+        promptHash: "prompt-hash-1",
+        responseHash: "response-hash-1",
         createdAt,
       }),
     );
@@ -72,6 +82,11 @@ describe("Khipu suggestion feedback service", () => {
         id: true,
         projectId: true,
         userId: true,
+        provider: true,
+        model: true,
+        task: true,
+        promptHash: true,
+        responseHash: true,
       },
     });
     expect(prismaMock.aiSuggestionFeedbackEvent.create).toHaveBeenCalledWith({
@@ -81,6 +96,11 @@ describe("Khipu suggestion feedback service", () => {
         userId: "user-1",
         feedbackType: AiSuggestionFeedbackType.EDITED,
         notes: `Usar metrados actualizados${"x".repeat(474)}`,
+        provider: "openai",
+        model: "gpt-5-mini",
+        task: "review_budget",
+        promptHash: "prompt-hash-1",
+        responseHash: "response-hash-1",
       },
     });
     expect(event).toEqual({
@@ -90,6 +110,11 @@ describe("Khipu suggestion feedback service", () => {
       userId: "user-1",
       feedbackType: AiSuggestionFeedbackType.EDITED,
       notes: "Usar metrados actualizados",
+      provider: "openai",
+      model: "gpt-5-mini",
+      task: "review_budget",
+      promptHash: "prompt-hash-1",
+      responseHash: "response-hash-1",
       timestamp: "2026-06-10T14:00:00.000Z",
     });
   });
@@ -170,24 +195,28 @@ describe("Khipu suggestion feedback service", () => {
         id: "feedback-4",
         historyEntryId: "history-3",
         feedbackType: AiSuggestionFeedbackType.DISMISSED,
+        provider: "gemini",
         createdAt: new Date("2026-06-10T14:15:00.000Z"),
       }),
       createDbFeedbackEvent({
         id: "feedback-3",
         historyEntryId: "history-2",
         feedbackType: AiSuggestionFeedbackType.APPLIED,
+        provider: "openai",
         createdAt: new Date("2026-06-10T14:10:00.000Z"),
       }),
       createDbFeedbackEvent({
         id: "feedback-2",
         historyEntryId: "history-1",
         feedbackType: AiSuggestionFeedbackType.EDITED,
+        provider: "openai",
         createdAt: new Date("2026-06-10T14:05:00.000Z"),
       }),
       createDbFeedbackEvent({
         id: "feedback-1",
         historyEntryId: "history-1",
         feedbackType: AiSuggestionFeedbackType.APPLIED,
+        provider: "ollama",
         createdAt: new Date("2026-06-10T14:00:00.000Z"),
       }),
     ]);
@@ -202,6 +231,27 @@ describe("Khipu suggestion feedback service", () => {
       edited: 1,
       dismissed: 1,
       total: 3,
+      acceptanceRate: "0.333",
+      editRate: "0.333",
+      discardRate: "0.333",
+      providerQuality: [
+        {
+          provider: "openai",
+          applied: 1,
+          edited: 1,
+          dismissed: 0,
+          total: 2,
+          acceptanceRate: "0.500",
+        },
+        {
+          provider: "gemini",
+          applied: 0,
+          edited: 0,
+          dismissed: 1,
+          total: 1,
+          acceptanceRate: "0.000",
+        },
+      ],
     });
     expect(prismaMock.aiSuggestionFeedbackEvent.findMany).toHaveBeenCalledWith({
       where: {
@@ -230,6 +280,11 @@ function createDbFeedbackEvent({
   historyEntryId,
   id,
   notes = null,
+  provider = null,
+  model = null,
+  task = null,
+  promptHash = null,
+  responseHash = null,
   projectId = "project-1",
   userId = "user-1",
 }: {
@@ -238,6 +293,11 @@ function createDbFeedbackEvent({
   historyEntryId: string;
   id: string;
   notes?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  task?: string | null;
+  promptHash?: string | null;
+  responseHash?: string | null;
   projectId?: string;
   userId?: string;
 }) {
@@ -248,6 +308,11 @@ function createDbFeedbackEvent({
     userId,
     feedbackType,
     notes,
+    provider,
+    model,
+    task,
+    promptHash,
+    responseHash,
     createdAt,
   };
 }

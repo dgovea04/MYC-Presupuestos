@@ -98,6 +98,10 @@ describe("Khipu project history data service", () => {
         createdAt,
         action: "review",
         summary: "Revision de presupuesto",
+        provider: "openai",
+        task: "review_budget",
+        promptHash: "prompt-hash-1",
+        responseHash: "response-hash-1",
       }),
     );
 
@@ -114,6 +118,10 @@ describe("Khipu project history data service", () => {
         fallbackUsed: false,
         warnings: ["Validar precios"],
         latencyMs: 450,
+        provider: "openai",
+        task: "review_budget",
+        promptHash: "prompt-hash-1",
+        responseHash: "response-hash-1",
         structuredData: {
           answer: "Respuesta tecnica",
           findings: [],
@@ -140,9 +148,22 @@ describe("Khipu project history data service", () => {
         fallbackUsed: false,
         warnings: ["Validar precios"],
         latencyMs: 450,
+        provider: "openai",
+        task: "review_budget",
+        promptHash: "prompt-hash-1",
+        responseHash: "response-hash-1",
       },
     });
-    expect(entry).toEqual(expect.objectContaining({ id: "history-created", action: "review" }));
+    expect(entry).toEqual(
+      expect.objectContaining({
+        id: "history-created",
+        action: "review",
+        provider: "openai",
+        task: "review_budget",
+        promptHash: "prompt-hash-1",
+        responseHash: "response-hash-1",
+      }),
+    );
   });
 
   it("does not record history for an inaccessible project", async () => {
@@ -200,6 +221,10 @@ describe("Khipu project history data service", () => {
           warnings: [],
           structuredData: { answer: "Respuesta estructurada" },
         },
+        provider: undefined,
+        task: undefined,
+        promptHash: undefined,
+        responseHash: undefined,
         timestamp: "2026-06-09T15:45:00.000Z",
       },
     ]);
@@ -243,6 +268,10 @@ function createDbEntry({
   projectId,
   summary = "Consulta tecnica",
   userId,
+  provider = null,
+  task = null,
+  promptHash = null,
+  responseHash = null,
 }: {
   action?: string;
   createdAt: Date;
@@ -250,6 +279,10 @@ function createDbEntry({
   projectId: string;
   summary?: string;
   userId: string;
+  provider?: string | null;
+  task?: string | null;
+  promptHash?: string | null;
+  responseHash?: string | null;
 }) {
   return {
     id,
@@ -265,6 +298,10 @@ function createDbEntry({
     fallbackUsed: false,
     warnings: [],
     latencyMs: 350,
+    provider,
+    task,
+    promptHash,
+    responseHash,
     createdAt,
   };
 }

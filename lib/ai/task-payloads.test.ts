@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildAiTaskPayload,
   buildBridgeTaskPayload,
+  buildKhipuTaskPayload,
   type AiTaskPayload,
 } from "@/lib/ai/task-payloads";
+import { aiExecuteRequestSchema } from "@/lib/ai/validation";
 
 describe("AI task payloads", () => {
   it("builds a clean chat task payload with role, output, context, and input", () => {
@@ -160,5 +162,72 @@ describe("AI task payloads", () => {
         payload: { message: " " },
       }),
     ).toThrowError("Missing AI task input: message");
+  });
+
+  it("builds payloads from official Khipu task names without changing legacy callers", () => {
+    expect(
+      buildKhipuTaskPayload({
+        task: "review_apu",
+        payload: {
+          description: "Concreto f'c=210",
+          unit: "m3",
+        },
+      }),
+    ).toMatchObject({
+      task: "review_apu",
+      output: {
+        format: "json_only",
+        schema: "apu_review_v1",
+      },
+      input: {
+        description: "Concreto f'c=210",
+        unit: "m3",
+      },
+    });
+
+    expect(
+      buildKhipuTaskPayload({
+        task: "review_formula_polinomica",
+        payload: {
+          formulaSummary: "Monomio mano de obra coeficiente 0.312",
+        },
+      }),
+    ).toMatchObject({
+      task: "review_formula_polinomica",
+      output: {
+        format: "json_only",
+        schema: "formula_polinomica_review_v1",
+      },
+      input: {
+        formulaSummary: "Monomio mano de obra coeficiente 0.312",
+      },
+    });
+  });
+
+  it("validates canonical execute requests with auto provider by default", () => {
+    expect(
+      aiExecuteRequestSchema.parse({
+        task: "review_budget",
+        payload: {
+          budgetSummary: "Presupuesto con partidas de concreto y acero",
+        },
+        projectId: "project-1",
+      }),
+    ).toEqual({
+      provider: "auto",
+      task: "review_budget",
+      payload: {
+        budgetSummary: "Presupuesto con partidas de concreto y acero",
+      },
+      projectId: "project-1",
+    });
+
+    expect(() =>
+      aiExecuteRequestSchema.parse({
+        provider: "anthropic",
+        task: "review_budget",
+        payload: {},
+      }),
+    ).toThrow();
   });
 });

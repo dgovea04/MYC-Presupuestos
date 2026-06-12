@@ -732,6 +732,7 @@ export async function getBudgetPolynomialFormulaSectionData(
       id: true,
       name: true,
       kind: true,
+      currency: true,
     },
   });
 
@@ -774,6 +775,7 @@ export async function getBudgetPolynomialFormulaSectionData(
             "El IGV no participa en la base de la formula polinomica.",
           ],
     budgetId: budget.id,
+    currency: budget.currency,
     formula,
     summary: buildSectionSummary(formula),
   };

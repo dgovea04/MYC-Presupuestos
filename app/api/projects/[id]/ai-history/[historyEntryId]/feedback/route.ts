@@ -54,6 +54,13 @@ export async function POST(
       userId: session.user.id,
       feedbackType: body.feedbackType as AiSuggestionFeedbackType,
       notes: notes === "" ? undefined : notes,
+      provider: readOptionalString(body.provider),
+      model: readOptionalString(body.model),
+      task: readOptionalString(body.task),
+      suggestionType: readOptionalString(body.suggestionType),
+      actionType: readOptionalString(body.actionType),
+      promptHash: readOptionalString(body.promptHash),
+      responseHash: readOptionalString(body.responseHash),
     });
 
     if (!feedback) {
@@ -68,4 +75,13 @@ export async function POST(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized === "" ? undefined : normalized;
 }

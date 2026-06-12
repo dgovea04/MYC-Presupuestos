@@ -9,6 +9,13 @@ export type AiSuggestionFeedbackEventDto = {
   userId: string;
   feedbackType: AiSuggestionFeedbackType;
   notes?: string;
+  provider?: string;
+  model?: string;
+  task?: string;
+  suggestionType?: string;
+  actionType?: string;
+  promptHash?: string;
+  responseHash?: string;
   timestamp: string;
 };
 
@@ -17,6 +24,19 @@ export type AiSuggestionFeedbackSummary = {
   edited: number;
   dismissed: number;
   total: number;
+  acceptanceRate: string;
+  editRate: string;
+  discardRate: string;
+  providerQuality: AiSuggestionFeedbackProviderQuality[];
+};
+
+export type AiSuggestionFeedbackProviderQuality = {
+  provider: string;
+  applied: number;
+  edited: number;
+  dismissed: number;
+  total: number;
+  acceptanceRate: string;
 };
 
 export type RecordAiSuggestionFeedbackInput = {
@@ -25,6 +45,13 @@ export type RecordAiSuggestionFeedbackInput = {
   userId: string;
   feedbackType: AiSuggestionFeedbackType;
   notes?: string;
+  provider?: string;
+  model?: string;
+  task?: string;
+  suggestionType?: string;
+  actionType?: string;
+  promptHash?: string;
+  responseHash?: string;
 };
 
 export type GetLatestAiSuggestionFeedbackInput = {
@@ -45,16 +72,30 @@ type AiSuggestionFeedbackEventRecord = {
   userId: string;
   feedbackType: AiSuggestionFeedbackType;
   notes: string | null;
+  provider?: string | null;
+  model?: string | null;
+  task?: string | null;
+  suggestionType?: string | null;
+  actionType?: string | null;
+  promptHash?: string | null;
+  responseHash?: string | null;
   createdAt: Date;
 };
 
 const MAX_NOTES_LENGTH = 500;
 
 export async function recordAiSuggestionFeedback({
+  actionType,
   feedbackType,
   historyEntryId,
+  model,
   notes,
+  promptHash,
   projectId,
+  provider,
+  responseHash,
+  suggestionType,
+  task,
   userId,
 }: RecordAiSuggestionFeedbackInput): Promise<AiSuggestionFeedbackEventDto | null> {
   const historyEntry = await findOwnedHistoryEntry({ historyEntryId, projectId, userId });
@@ -70,6 +111,13 @@ export async function recordAiSuggestionFeedback({
       userId: historyEntry.userId,
       feedbackType,
       notes: normalizeNotes(notes),
+      provider: normalizeMetadata(provider) ?? normalizeMetadata(historyEntry.provider),
+      model: normalizeMetadata(model) ?? normalizeMetadata(historyEntry.model),
+      task: normalizeMetadata(task) ?? normalizeMetadata(historyEntry.task),
+      suggestionType: normalizeMetadata(suggestionType),
+      actionType: normalizeMetadata(actionType),
+      promptHash: normalizeMetadata(promptHash) ?? normalizeMetadata(historyEntry.promptHash),
+      responseHash: normalizeMetadata(responseHash) ?? normalizeMetadata(historyEntry.responseHash),
     },
   });
 
@@ -162,6 +210,11 @@ function findOwnedHistoryEntry({
       id: true,
       projectId: true,
       userId: true,
+      provider: true,
+      model: true,
+      task: true,
+      promptHash: true,
+      responseHash: true,
     },
   });
 }
@@ -186,22 +239,89 @@ function summarizeLatestFeedbackState(events: AiSuggestionFeedbackEventRecord[])
     edited: 0,
     dismissed: 0,
     total: 0,
+    acceptanceRate: "0.000",
+    editRate: "0.000",
+    discardRate: "0.000",
+    providerQuality: [],
   };
-  const latestByHistoryEntry = getLatestFeedbackState(events);
+  const latestEvents = getLatestFeedbackEvents(events);
 
-  for (const feedbackType of Object.values(latestByHistoryEntry)) {
-    if (feedbackType === AiSuggestionFeedbackType.APPLIED) {
-      summary.applied += 1;
-    } else if (feedbackType === AiSuggestionFeedbackType.EDITED) {
-      summary.edited += 1;
-    } else if (feedbackType === AiSuggestionFeedbackType.DISMISSED) {
-      summary.dismissed += 1;
-    }
+  for (const event of latestEvents) {
+    incrementSummary(summary, event.feedbackType);
   }
 
   summary.total = summary.applied + summary.edited + summary.dismissed;
+  summary.acceptanceRate = formatRate(summary.applied, summary.total);
+  summary.editRate = formatRate(summary.edited, summary.total);
+  summary.discardRate = formatRate(summary.dismissed, summary.total);
+  summary.providerQuality = summarizeProviderQuality(latestEvents);
 
   return summary;
+}
+
+function getLatestFeedbackEvents(events: AiSuggestionFeedbackEventRecord[]): AiSuggestionFeedbackEventRecord[] {
+  const latestByHistoryEntry: Record<string, AiSuggestionFeedbackEventRecord> = {};
+
+  for (const event of events) {
+    if (latestByHistoryEntry[event.historyEntryId] === undefined) {
+      latestByHistoryEntry[event.historyEntryId] = event;
+    }
+  }
+
+  return Object.values(latestByHistoryEntry);
+}
+
+function summarizeProviderQuality(events: AiSuggestionFeedbackEventRecord[]): AiSuggestionFeedbackProviderQuality[] {
+  const byProvider = new Map<string, AiSuggestionFeedbackProviderQuality>();
+
+  for (const event of events) {
+    const provider = event.provider?.trim();
+    if (!provider) {
+      continue;
+    }
+
+    const summary =
+      byProvider.get(provider) ??
+      ({
+        provider,
+        applied: 0,
+        edited: 0,
+        dismissed: 0,
+        total: 0,
+        acceptanceRate: "0.000",
+      } satisfies AiSuggestionFeedbackProviderQuality);
+
+    incrementSummary(summary, event.feedbackType);
+    summary.total = summary.applied + summary.edited + summary.dismissed;
+    summary.acceptanceRate = formatRate(summary.applied, summary.total);
+    byProvider.set(provider, summary);
+  }
+
+  return [...byProvider.values()].sort((left, right) => {
+    if (right.total !== left.total) return right.total - left.total;
+    return left.provider.localeCompare(right.provider);
+  });
+}
+
+function incrementSummary(
+  summary: Pick<AiSuggestionFeedbackSummary, "applied" | "edited" | "dismissed">,
+  feedbackType: AiSuggestionFeedbackType,
+) {
+  if (feedbackType === AiSuggestionFeedbackType.APPLIED) {
+    summary.applied += 1;
+  } else if (feedbackType === AiSuggestionFeedbackType.EDITED) {
+    summary.edited += 1;
+  } else if (feedbackType === AiSuggestionFeedbackType.DISMISSED) {
+    summary.dismissed += 1;
+  }
+}
+
+function formatRate(part: number, total: number) {
+  if (total === 0) {
+    return "0.000";
+  }
+
+  return (part / total).toFixed(3);
 }
 
 function mapFeedbackEvent(event: AiSuggestionFeedbackEventRecord): AiSuggestionFeedbackEventDto {
@@ -212,6 +332,13 @@ function mapFeedbackEvent(event: AiSuggestionFeedbackEventRecord): AiSuggestionF
     userId: event.userId,
     feedbackType: event.feedbackType,
     notes: event.notes ?? undefined,
+    provider: event.provider ?? undefined,
+    model: event.model ?? undefined,
+    task: event.task ?? undefined,
+    suggestionType: event.suggestionType ?? undefined,
+    actionType: event.actionType ?? undefined,
+    promptHash: event.promptHash ?? undefined,
+    responseHash: event.responseHash ?? undefined,
     timestamp: event.createdAt.toISOString(),
   };
 }
@@ -220,4 +347,10 @@ function normalizeNotes(notes: string | undefined): string | undefined {
   const normalized = notes?.trim().slice(0, MAX_NOTES_LENGTH);
 
   return normalized === "" ? undefined : normalized;
+}
+
+function normalizeMetadata(value: string | null | undefined): string | undefined {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : undefined;
 }

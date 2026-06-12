@@ -245,7 +245,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
         },
       });
 
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setLocalSnapshot(null);
       setDraftPreview(nextPreview);
       setSelectedBudgetId(nextPreview.budgets.find((budget) => budget.kind === "SUB_BUDGET")?.id ?? "");
@@ -256,7 +256,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
       setImportResult(null);
       setProgressState(createSuccessProgress("preview", progressSource));
     } catch (error) {
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setDraftState("error");
       setDraftError(error instanceof Error ? error.message : "No se pudo completar la previsualizacion S10.");
       setProgressState(createErrorProgress("preview", progressSource));
@@ -282,7 +282,16 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
     const progressSource =
       localSnapshot && !snapshotFile
         ? createLocalSnapshotProgressSource(localDatabase, budgetCode)
-        : createFileProgressSource(snapshotFile, "Snapshot S10");
+        : snapshotFile
+          ? createFileProgressSource(snapshotFile, "Snapshot S10")
+          : null;
+
+    if (!progressSource) {
+      setImportError("Selecciona el snapshot JSON exportado desde S10.");
+      setImportState("error");
+      return;
+    }
+
     setProgressState(createInitialProgress("import", progressSource));
 
     let stopEstimate: (() => void) | null = null;
@@ -304,19 +313,23 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
                 },
               },
             )
-          : await importSnapshotFileToMyc(progressSource, (uploadProgress) => {
-              setProgressState(createUploadProgress("import", progressSource, uploadProgress));
-            }, () => {
+          : await importSnapshotFileToMyc(
+              progressSource,
+              (uploadProgress) => {
+                setProgressState(createUploadProgress("import", progressSource, uploadProgress));
+              },
+              () => {
               setProgressState(createProcessingProgress("import", progressSource));
               stopEstimate = startEstimatedProgress(setProgressState, "import");
-            });
+              },
+            );
 
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setImportResult(result);
       setImportState("success");
       setProgressState(createSuccessProgress("import", progressSource));
     } catch (error) {
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setImportState("error");
       setImportError(error instanceof Error ? error.message : "No se pudo completar la importacion S10.");
       setProgressState(createErrorProgress("import", progressSource));
@@ -430,7 +443,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
             },
           );
 
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setLocalRestoreResult(result);
       setLocalDatabases((current) => upsertLocalDatabase(current, result.database));
       setLocalDatabase(result.database.databaseName);
@@ -439,7 +452,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
       setLocalBudgetState("idle");
       setProgressState(createSuccessProgress("restore", progressSource));
     } catch (error) {
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setLocalRestoreState("error");
       setLocalRestoreError(error instanceof Error ? error.message : "No se pudo restaurar el backup S10 local.");
       setProgressState(createErrorProgress("restore", progressSource));
@@ -541,7 +554,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
           },
         },
       );
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       stopEstimate = startEstimatedProgress(setProgressState, "preview");
       const nextPreview = await postJsonWithEstimatedProgress<S10ImportDraftPreview>(
         "/api/imports/s10/draft",
@@ -563,7 +576,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
         },
       );
 
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setLocalSnapshot(exportBody.snapshot);
       setSnapshotFile(null);
       setDraftPreview(nextPreview);
@@ -574,7 +587,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
       setImportState("idle");
       setProgressState(createSuccessProgress("preview", progressSource));
     } catch (error) {
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       const message = error instanceof Error ? error.message : "No se pudo completar la previsualizacion S10.";
       setLocalExportState("error");
       setLocalExportError(message);
@@ -1315,6 +1328,12 @@ function startEstimatedProgress(
   }, 850);
 
   return () => window.clearInterval(intervalId);
+}
+
+function stopProgressEstimate(stopEstimate: (() => void) | null) {
+  if (stopEstimate) {
+    stopEstimate();
+  }
 }
 
 function postFormDataJson<T>(

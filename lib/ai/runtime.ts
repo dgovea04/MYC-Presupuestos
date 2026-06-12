@@ -1,4 +1,6 @@
 import { AI_REQUIRED_MODELS, resolveAiModel, summarizeAvailableModels, type AiAction, type AiModelResolution } from "@/lib/ai/models";
+import { getProviderFallbackChain } from "@/lib/ai/gateway/router";
+import type { AiProviderId, KhipuAiTask } from "@/lib/ai/gateway/types";
 import { listInstalledOllamaModels } from "@/lib/ai/ollama";
 
 type FetchLike = typeof fetch;
@@ -17,6 +19,13 @@ export type AiHealth = {
   requiredModels: ReturnType<typeof summarizeAvailableModels>;
   actions: Record<AiAction, Omit<AiModelResolution, "action">>;
   metrics: Record<AiAction, AiActionMetric>;
+  providers: Record<Exclude<AiProviderId, "auto">, AiProviderHealth>;
+  routing: Record<KhipuAiTask, Exclude<AiProviderId, "auto">[]>;
+};
+
+export type AiProviderHealth = {
+  configured: boolean;
+  reachable: boolean | null;
 };
 
 const aiMetricsState: Record<AiAction, AiActionMetric> = {
@@ -40,6 +49,8 @@ export async function getAiHealth(fetchImpl?: FetchLike): Promise<AiHealth> {
       requiredModels: summarizeAvailableModels(availableModels),
       actions,
       metrics: cloneMetrics(),
+      providers: buildProviderHealth(true),
+      routing: buildRoutingHealth(),
     };
   } catch (error) {
     return {
@@ -49,6 +60,8 @@ export async function getAiHealth(fetchImpl?: FetchLike): Promise<AiHealth> {
       requiredModels: AI_REQUIRED_MODELS.map((model) => ({ model, installed: false, actions: [] })),
       actions: buildUnavailableActionResolutions(error),
       metrics: cloneMetrics(),
+      providers: buildProviderHealth(false),
+      routing: buildRoutingHealth(),
     };
   }
 }
@@ -124,4 +137,48 @@ function cloneMetrics(): Record<AiAction, AiActionMetric> {
     autocomplete: { ...aiMetricsState.autocomplete },
     json: { ...aiMetricsState.json },
   };
+}
+
+function buildProviderHealth(ollamaReachable: boolean): AiHealth["providers"] {
+  return {
+    ollama: {
+      configured: true,
+      reachable: ollamaReachable,
+    },
+    openai: {
+      configured: hasEnvValue(process.env.OPENAI_API_KEY),
+      reachable: null,
+    },
+    gemini: {
+      configured: hasEnvValue(process.env.GEMINI_API_KEY),
+      reachable: null,
+    },
+    chatgpt_bridge: {
+      configured: true,
+      reachable: null,
+    },
+  };
+}
+
+function buildRoutingHealth(): AiHealth["routing"] {
+  const tasks: KhipuAiTask[] = [
+    "review_apu",
+    "generate_apu",
+    "suggest_insumos",
+    "review_budget",
+    "generate_partida",
+    "review_formula_polinomica",
+    "review_quantity_takeoff",
+    "montecarlo_risk_analysis",
+    "chat",
+    "autocomplete",
+  ];
+
+  return Object.fromEntries(
+    tasks.map((task) => [task, getProviderFallbackChain({ provider: "auto", task })]),
+  ) as AiHealth["routing"];
+}
+
+function hasEnvValue(value: string | undefined) {
+  return typeof value === "string" && value.trim().length > 0;
 }
