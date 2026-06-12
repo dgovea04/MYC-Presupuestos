@@ -80,7 +80,7 @@ function readOutput(action: AiPromptAction): AiTaskPayload["output"] {
     return { format: "text", schema: "autocomplete_text_v1" };
   }
 
-  return { format: "text", schema: "technical_chat_v1" };
+  return { format: "json_only", schema: "technical_chat_v1" };
 }
 
 function readInput(action: AiPromptAction, payload: Record<string, unknown>): Record<string, string> {

@@ -230,6 +230,18 @@
     const strictJson =
       jsonPrompt?.output?.format === "json_only" ||
       (jsonPrompt?.output?.format === undefined && settings?.requireJson === true);
+    const responseContract =
+      jsonPrompt?.output?.schema === "technical_chat_v1"
+        ? [
+            "Contrato de respuesta para technical_chat_v1:",
+            "- Responde con un objeto JSON con keys: answer, recommendations, technical_observations, human_review_required, automatic_budget_mutation.",
+            "- answer debe ser un resumen tecnico breve.",
+            "- recommendations debe ser un array de recomendaciones accionables.",
+            "- technical_observations debe ser un array de observaciones tecnicas relevantes.",
+            "- human_review_required debe ser true.",
+            "- automatic_budget_mutation debe ser false."
+          ].join("\n")
+        : null;
 
     const rules = [
       "Eres un asistente tecnico experto en presupuestos de construccion en Peru, APU, metrados, costos, rendimientos y formula polinomica.",
@@ -247,10 +259,11 @@
 
     return [
       rules,
+      responseContract,
       "",
       "INPUT JSON:",
       JSON.stringify(jsonPrompt, null, 2)
-    ].join("\n");
+    ].filter(Boolean).join("\n");
   }
 
   async function processPrompt(payload) {

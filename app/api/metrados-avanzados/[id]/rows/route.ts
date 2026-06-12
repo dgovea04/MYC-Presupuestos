@@ -8,7 +8,7 @@ import type {
   MetradoUnit,
 } from "@/types/metrado";
 
-const units = ["m", "m2", "m3", "kg", "und", "glb"] as const satisfies MetradoUnit[];
+const units = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"] as const satisfies MetradoUnit[];
 const inputsSchema = z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.number().finite()).default({});
 
 const rowSchema = z.object({
@@ -22,6 +22,7 @@ const rowSchema = z.object({
   formulaKey: z.string().trim().min(1),
   inputs: inputsSchema,
   partial: z.number().finite().default(0),
+  groupLabel: z.string().nullable().optional(),
   sortOrder: z.number().int().positive().optional(),
 });
 
@@ -51,6 +52,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         formulaKey: row.formulaKey,
         inputs: row.inputs,
         partial: row.partial,
+        groupLabel: row.groupLabel ?? null,
         sortOrder: row.sortOrder ?? index + 1,
       }),
     );

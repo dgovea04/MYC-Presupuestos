@@ -102,7 +102,7 @@ export function MetradoExportActions({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,.json"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,.json,.csv,text/csv,text/plain"
         className="hidden"
         aria-label="Importar metrado"
         onChange={(event) => {

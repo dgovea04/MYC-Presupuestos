@@ -10,7 +10,7 @@ import {
 import { validateCustomMetradoExpression } from "@/lib/metrados/formula-engine";
 import type { MetradoFormulaRecord, MetradoUnit } from "@/types/metrado";
 
-const units = ["m", "m2", "m3", "kg", "und", "glb"] as const satisfies MetradoUnit[];
+const units = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"] as const satisfies MetradoUnit[];
 
 const variableNameSchema = z
   .string()

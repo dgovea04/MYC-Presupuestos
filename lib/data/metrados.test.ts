@@ -100,6 +100,7 @@ describe("metrado data helpers", () => {
       formulaKey: "volume",
       inputs: { largo: 2, ancho: 3, alto: 4 },
       partial: 24,
+      groupLabel: null,
       sortOrder: 1,
     });
   });

@@ -10,7 +10,26 @@ export type MetradoTemplateType =
   | "ROOFING"
   | "CUSTOM";
 
-export type MetradoUnit = "m" | "m2" | "m3" | "kg" | "und" | "glb";
+export type MetradoUnit =
+  | "m"
+  | "m2"
+  | "m3"
+  | "kg"
+  | "und"
+  | "glb"
+  | "p2"
+  | "ml"
+  | "pza"
+  | "bol"
+  | "gal"
+  | "ton"
+  | "mes"
+  | "día"
+  | "viaje"
+  | "pto"
+  | "jgo"
+  | "pln"
+  | "mll";
 
 export type MetradoSheetStatus = "DRAFT" | "VALIDATED" | "SENT_TO_BUDGET";
 
@@ -66,6 +85,7 @@ export type MetradoRowRecord = {
   formulaKey: MetradoFormulaKey;
   inputs: MetradoFormulaInputs;
   partial: number;
+  groupLabel?: string | null;
   sortOrder: number;
 };
 

@@ -51,6 +51,7 @@ export const addMetradoRow = (
     formulaKey,
     inputs: {},
     partial: 0,
+    groupLabel: null,
     sortOrder: rows.length + 1,
   };
 
@@ -92,6 +93,50 @@ export const deleteMetradoRow = (
   const nextRows = rows.filter((row) => row.id !== rowId);
 
   return resequenceRows(nextRows);
+};
+
+export const deleteSelectedRows = (
+  rows: readonly MetradoRowRecord[],
+  rowIds: ReadonlySet<string>,
+): MetradoRowRecord[] => {
+  const nextRows = rows.filter((row) => !rowIds.has(row.id));
+  return resequenceRows(nextRows);
+};
+
+export const applyFormulaToRows = (
+  rows: readonly MetradoRowRecord[],
+  rowIds: ReadonlySet<string>,
+  formulaKey: MetradoFormulaKey,
+  unit: MetradoUnit,
+): MetradoRowRecord[] =>
+  resequenceRows(
+    rows.map((row) =>
+      rowIds.has(row.id) && !row.groupLabel
+        ? { ...row, formulaKey, unit, inputs: {} }
+        : row,
+    ),
+  );
+
+export const fillDownRows = (
+  rows: readonly MetradoRowRecord[],
+  sourceRowId: string,
+  targetRowIds: ReadonlySet<string>,
+): MetradoRowRecord[] => {
+  const sourceRow = rows.find((row) => row.id === sourceRowId);
+  if (!sourceRow) return resequenceRows(rows);
+
+  return resequenceRows(
+    rows.map((row) =>
+      targetRowIds.has(row.id) && !row.groupLabel
+        ? {
+            ...row,
+            formulaKey: sourceRow.formulaKey,
+            unit: sourceRow.unit,
+            inputs: { ...sourceRow.inputs },
+          }
+        : row,
+    ),
+  );
 };
 
 export const updateMetradoRowInput = (

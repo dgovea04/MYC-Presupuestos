@@ -194,6 +194,54 @@ export const pricingPlans: PricingPlan[] = [
   },
 ];
 
+export type FaqItem = {
+  question: string;
+  answer: string;
+};
+
+export const faqItems: FaqItem[] = [
+  {
+    question: "¿Qué norma peruana usan para la fórmula polinómica?",
+    answer:
+      "MYC Presupuestos implementa la fórmula polinómica según el Decreto Supremo N° 011-79-VC y sus modificatorias, usando los índices unificados de precios del INEI. La estructura de monomios, coeficientes y reajustes se calcula con precisión de 3 decimales y se mantiene trazable para revisión técnica.",
+  },
+  {
+    question: "¿Puedo migrar mis presupuestos desde Excel?",
+    answer:
+      "Sí. MYC permite importar datos desde Excel con pegado avanzado que normaliza metrados, códigos y unidades. También puedes importar archivos S10, Delphin y RW7 para no empezar desde cero. La plataforma detecta inconsistencias y te avisa antes de guardar.",
+  },
+  {
+    question: "¿La IA reemplaza al ingeniero o solo asiste?",
+    answer:
+      "La IA de MYC — Khipu — es un asistente técnico, no un reemplazo. Sugiere insumos, compara partidas similares y revisa costos, pero toda decisión queda en manos del equipo. Cada sugerencia muestra su fuente y nivel de confianza para que puedas evaluarla antes de aplicarla.",
+  },
+  {
+    question: "¿Cómo funciona el plan Starter gratuito?",
+    answer:
+      "El plan Starter te permite crear presupuestos reales con límites operativos: puedes armar partidas, APU manual, catálogo básico de insumos y exportar a PDF/Excel. No es una demo limitada a unos días: es un plan útil para trabajar de verdad. Cuando necesites automatización, IA o cronograma inteligente, pasas a Pro.",
+  },
+  {
+    question: "¿Mis datos están seguros en la nube?",
+    answer:
+      "Sí. MYC Presupuestos usa infraestructura moderna con cifrado en reposo y en tránsito, autenticación segura, backups automáticos y controles de acceso por rol. Tus presupuestos, APU y catálogos solo son visibles para tu equipo. Además, con Khipu local puedes ejecutar IA sin enviar datos a servicios externos.",
+  },
+  {
+    question: "¿Puedo trabajar sin conexión a internet?",
+    answer:
+      "Actualmente MYC es una plataforma web que requiere conexión. Sin embargo, el modo Excel permite operar con fluidez incluso en conexiones lentas, y las exportaciones a PDF/Excel/ZIP te permiten llevar la información a obra sin depender de la nube. Estamos explorando capacidades offline para el futuro.",
+  },
+  {
+    question: "¿Qué tipo de soporte ofrecen?",
+    answer:
+      "Todos los planes incluyen documentación y guías de inicio. El plan Pro incluye soporte por chat técnico. El plan Empresa suma soporte prioritario, onboarding personalizado y acompañamiento para estandarizar procesos internos. También ofrecemos demo guiada para equipos que quieren evaluar antes de decidir.",
+  },
+  {
+    question: "¿Puedo personalizar los formatos de exportación?",
+    answer:
+      "Sí. MYC te permite configurar logotipo, firma, decimales, columnas visibles y presets de exportación. Puedes generar paquetes ZIP con presupuesto, APU, cronograma, calendario valorizado y Curva S listos para presentar a clientes o revisión técnica.",
+  },
+];
+
 export const footerLinks = {
   producto: ["Presupuesto y APU", "IA local", "Cronograma", "Exportaciones"],
   empresa: ["Nosotros", "Clientes", "Seguridad", "Contacto"],

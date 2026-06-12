@@ -7,7 +7,7 @@ import type {
   MetradoValidationIssue,
 } from "@/types/metrado";
 
-const validUnits = new Set<MetradoUnit>(["m", "m2", "m3", "kg", "und", "glb"]);
+const validUnits = new Set<MetradoUnit>(["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"]);
 
 function normalizeLinkedUnit(unit: string): string {
   return unit.trim().toLowerCase();

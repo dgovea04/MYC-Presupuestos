@@ -17,6 +17,7 @@ import type {
   MetradoRowRecord,
   MetradoSheetRecord,
   MetradoSheetStatus,
+  MetradoTemplateRecord,
   MetradoTemplateType,
   MetradoUnit,
 } from "@/types/metrado";
@@ -33,9 +34,15 @@ const formulaInputKeys = [
   "area",
   "factor",
   "manual",
+  // Spatial / coordinate inputs for linear metrados
+  "progresivaInicio",
+  "progresivaFin",
+  "coordenadaX",
+  "coordenadaY",
+  "coordenadaZ",
 ] as const satisfies MetradoFormulaInputKey[];
 
-const metradoUnits = ["m", "m2", "m3", "kg", "und", "glb"] as const satisfies MetradoUnit[];
+const metradoUnits = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"] as const satisfies MetradoUnit[];
 
 const metradoSheetInclude = Prisma.validator<Prisma.MetradoSheetInclude>()({
   project: true,
@@ -77,6 +84,7 @@ type MetradoRowCreateData = {
   formulaKey: MetradoFormulaKey;
   inputs: MetradoFormulaInputs;
   partial: number;
+  groupLabel?: string | null;
   sortOrder: number;
 };
 
@@ -175,6 +183,7 @@ export function buildMetradoRowCreateData(
     formulaKey: row.formulaKey,
     inputs: row.inputs,
     partial: row.partial,
+    groupLabel: row.groupLabel ?? null,
     sortOrder: row.sortOrder,
   };
 }
@@ -876,6 +885,7 @@ function mapMetradoRowRecord(row: {
   formulaKey: string;
   inputs: Prisma.JsonValue;
   partial: Prisma.Decimal;
+  groupLabel: string | null;
   sortOrder: number;
 }): MetradoRowRecord {
   return {
@@ -889,7 +899,224 @@ function mapMetradoRowRecord(row: {
     formulaKey: toMetradoFormulaKey(row.formulaKey),
     inputs: parseMetradoInputs(row.inputs),
     partial: Number(row.partial),
+    groupLabel: row.groupLabel,
     sortOrder: row.sortOrder,
+  };
+}
+
+export function aggregateMetradoSheetsByMonth(
+  sheets: Array<{ createdAt?: Date | string | null }>,
+): Array<{ year: number; month: number; sheetCount: number }> {
+  const monthMap = new Map<string, { year: number; month: number; sheetCount: number }>();
+
+  for (const sheet of sheets) {
+    if (!sheet.createdAt) continue;
+    const createdDate =
+      typeof sheet.createdAt === "string" ? new Date(sheet.createdAt) : sheet.createdAt;
+    // Use UTC methods since createdAt values from the database are UTC timestamps
+    const year = createdDate.getUTCFullYear();
+    const month = createdDate.getUTCMonth() + 1;
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+    const existing = monthMap.get(monthKey);
+    if (existing) {
+      existing.sheetCount++;
+    } else {
+      monthMap.set(monthKey, { year, month, sheetCount: 1 });
+    }
+  }
+
+  return Array.from(monthMap.values()).sort((a, b) =>
+    a.year !== b.year ? b.year - a.year : b.month - a.month,
+  );
+}
+
+export type ProjectMetradoSummary = {
+  totalSheets: number;
+  totalsByUnit: Record<MetradoUnit, number>;
+  totalsByTemplate: Array<{
+    templateType: MetradoTemplateType;
+    templateName: string;
+    sheetCount: number;
+    totalsByUnit: Record<MetradoUnit, number>;
+  }>;
+  totalsByMonth: Array<{
+    year: number;
+    month: number;
+    sheetCount: number;
+  }>;
+  sheets: Array<{
+    id: string;
+    name: string;
+    templateType: MetradoTemplateType;
+    templateName: string;
+    unit: MetradoUnit;
+    totalQuantity: number;
+    partidaCode: string;
+    partidaDescription: string;
+    partidaUnit: string;
+  }>;
+};
+
+export async function getMetradoProjectSummary(
+  projectId: string,
+  userId: string,
+  options?: { dateFrom?: string; dateTo?: string },
+): Promise<ProjectMetradoSummary> {
+  await ensureMetradoTemplates();
+
+  const sheets = await prisma.metradoSheet.findMany({
+    where: { projectId, userId },
+    include: {
+      template: { select: { type: true, name: true } },
+      partidaLinks: {
+        include: { budgetItem: { select: { code: true, description: true, unit: true } } },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
+      rows: {
+        orderBy: { sortOrder: "asc" },
+        select: { unit: true, partial: true, groupLabel: true },
+      },
+    },
+    orderBy: [{ template: { type: "asc" } }, { name: "asc" }],
+  });
+
+  // Filter sheets by creation date range if provided
+  let filteredSheets = sheets;
+  if (options?.dateFrom || options?.dateTo) {
+    filteredSheets = sheets.filter((sheet) => {
+      if (!sheet.createdAt) return true;
+      const created = sheet.createdAt.getTime();
+      if (
+        options?.dateFrom &&
+        created < new Date(options.dateFrom + "T00:00:00").getTime()
+      )
+        return false;
+      if (
+        options?.dateTo &&
+        created > new Date(options.dateTo + "T23:59:59").getTime()
+      )
+        return false;
+      return true;
+    });
+  }
+
+  const rowsByUnit = metradoUnits.reduce<Record<MetradoUnit, number>>(
+    (acc, u) => {
+      acc[u] = 0;
+      return acc;
+    },
+    {} as Record<MetradoUnit, number>,
+  );
+  const templateTotals = new Map<
+    MetradoTemplateType,
+    {
+      templateName: string;
+      sheetCount: number;
+      totalsByUnit: Record<MetradoUnit, number>;
+    }
+  >();
+  for (const sheet of filteredSheets) {
+    const tt = toMetradoTemplateType(sheet.template.type);
+    if (!templateTotals.has(tt)) {
+      templateTotals.set(tt, {
+        templateName: sheet.template.name,
+        sheetCount: 0,
+        totalsByUnit: { ...rowsByUnit },
+      });
+    }
+
+    const entry = templateTotals.get(tt)!;
+    entry.sheetCount++;
+
+    for (const row of sheet.rows) {
+      if (row.groupLabel) continue;
+      const unit = toMetradoUnit(row.unit);
+      const partial = new Decimal(Number(row.partial));
+      entry.totalsByUnit[unit] = new Decimal(entry.totalsByUnit[unit]).plus(partial).toNumber();
+      rowsByUnit[unit] = new Decimal(rowsByUnit[unit]).plus(partial).toNumber();
+    }
+  }
+
+  return {
+    totalSheets: filteredSheets.length,
+    totalsByUnit: rowsByUnit,
+    totalsByMonth: aggregateMetradoSheetsByMonth(filteredSheets),
+    totalsByTemplate: Array.from(templateTotals.entries()).map(([templateType, data]) => ({
+      templateType,
+      templateName: data.templateName,
+      sheetCount: data.sheetCount,
+      totalsByUnit: data.totalsByUnit,
+    })),
+    sheets: filteredSheets.map((sheet) => {
+      const link = sheet.partidaLinks[0];
+      return {
+        id: sheet.id,
+        name: sheet.name,
+        templateType: toMetradoTemplateType(sheet.template.type),
+        templateName: sheet.template.name,
+        unit: toMetradoUnit(sheet.unit),
+        totalQuantity: Number(sheet.totalQuantity),
+        partidaCode: link?.budgetItem.code ?? "-",
+        partidaDescription: link?.budgetItem.description ?? "-",
+        partidaUnit: link?.budgetItem.unit ?? "-",
+      };
+    }),
+  };
+}
+
+export async function listMetradoTemplates(): Promise<MetradoTemplateRecord[]> {
+  await ensureMetradoTemplates();
+
+  const templates = await prisma.metradoTemplate.findMany({
+    include: {
+      formulas: {
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return templates.map(mapDbTemplateRecord);
+}
+
+function mapDbTemplateRecord(template: {
+  id: string;
+  type: string;
+  name: string;
+  description: string;
+  defaultUnit: string;
+  formulas: Array<{
+    id: string;
+    templateId: string;
+    key: string;
+    label: string;
+    expression: string;
+    requiredInputs: string[];
+    resultUnit: string;
+  }>;
+}): MetradoTemplateRecord {
+  const formulas = template.formulas.map(
+    (formula): MetradoFormulaRecord => ({
+      id: formula.id,
+      templateId: formula.templateId,
+      key: formula.key,
+      label: formula.label,
+      expression: formula.expression,
+      requiredInputs: formula.requiredInputs,
+      resultUnit: toMetradoUnit(formula.resultUnit),
+      source: "system",
+    }),
+  );
+
+  return {
+    id: template.id,
+    type: toMetradoTemplateType(template.type),
+    name: template.name,
+    description: template.description,
+    defaultUnit: toMetradoUnit(template.defaultUnit),
+    formulaKeys: formulas.map((f) => f.key),
+    formulas,
   };
 }
 

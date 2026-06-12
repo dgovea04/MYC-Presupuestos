@@ -27,7 +27,7 @@ describe("AI task payloads", () => {
       task: "technical_chat",
       role: "construction_cost_assistant_peru",
       output: {
-        format: "text",
+        format: "json_only",
         schema: "technical_chat_v1",
       },
       context: {

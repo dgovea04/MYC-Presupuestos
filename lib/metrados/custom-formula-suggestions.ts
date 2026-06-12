@@ -133,4 +133,53 @@ export const customMetradoFormulaSuggestions: MetradoFormulaRecord[] = [
     resultUnit: "kg",
     source: "suggestion",
   },
+  // ── Linear / spatial metrado suggestions ──
+  {
+    id: "suggestion-linear-progresivas",
+    templateId: "custom-suggestions",
+    key: "suggestion-linear-progresivas",
+    label: "Longitud entre progresivas",
+    category: "Lineales / Espaciales",
+    expression: "progresivaFin - progresivaInicio",
+    requiredInputs: ["progresivaInicio", "progresivaFin"],
+    resultUnit: "m",
+    source: "suggestion",
+  },
+  {
+    id: "suggestion-linear-length",
+    templateId: "custom-suggestions",
+    key: "suggestion-linear-length",
+    label: "Longitud simple",
+    category: "Lineales / Espaciales",
+    expression: "longitud",
+    requiredInputs: ["longitud"],
+    resultUnit: "m",
+    source: "suggestion",
+  },
+  {
+    id: "suggestion-linear-longitud-cantidad",
+    templateId: "custom-suggestions",
+    key: "suggestion-linear-longitud-cantidad",
+    label: "Longitud x cantidad",
+    category: "Lineales / Espaciales",
+    expression: "longitud * cantidad",
+    requiredInputs: ["longitud", "cantidad"],
+    resultUnit: "m",
+    source: "suggestion",
+  },
+  // Note: Euclidean distance formulas (sqrt(x²+y²)) require ^ operator
+  // which is not supported by the formula engine yet.
+  // For coordinate-based calculations, users can create custom formulas
+  // or use simple progressive difference: progresivaFin - progresivaInicio.
+  {
+    id: "suggestion-linear-tuberia-progresivas",
+    templateId: "custom-suggestions",
+    key: "suggestion-linear-tuberia-progresivas",
+    label: "Longitud tuberia x cantidad (progresivas)",
+    category: "Lineales / Espaciales",
+    expression: "(progresivaFin - progresivaInicio) * cantidad",
+    requiredInputs: ["progresivaInicio", "progresivaFin", "cantidad"],
+    resultUnit: "m",
+    source: "suggestion",
+  },
 ];

@@ -12,12 +12,19 @@ import type {
   MetradoValidationIssue,
 } from "@/types/metrado";
 
-const metradoUnits: MetradoUnit[] = ["m", "m2", "m3", "kg", "und", "glb"];
+const metradoUnits: MetradoUnit[] = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"];
 
 function evaluateMetradoRow(row: MetradoRowRecord, formulas: MetradoFormulaRecord[] = []): {
   row: MetradoRowRecord;
   issues: MetradoValidationIssue[];
 } {
+  if (row.groupLabel) {
+    return {
+      row: { ...row, partial: 0 },
+      issues: [],
+    };
+  }
+
   const formula = formulas.find((entry) => entry.key === row.formulaKey) ?? null;
   const result = evaluateMetradoFormula(row.formulaKey, row.inputs, row.id, formula);
 
@@ -50,7 +57,7 @@ export function calculateMetradoSheet(input: {
       totals[unit] = roundMetradoNumber(total);
       return totals;
     },
-    { m: 0, m2: 0, m3: 0, kg: 0, und: 0, glb: 0 },
+    { m: 0, m2: 0, m3: 0, kg: 0, und: 0, glb: 0, p2: 0, ml: 0, pza: 0, bol: 0, gal: 0, ton: 0, mes: 0, "día": 0, viaje: 0, pto: 0, jgo: 0, pln: 0, mll: 0 },
   );
   const issues = evaluatedRows.flatMap((evaluatedRow) => evaluatedRow.issues);
 

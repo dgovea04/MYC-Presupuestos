@@ -22,7 +22,7 @@ const validFormulaKeys = new Set<MetradoFormulaKey>([
   "manual",
 ]);
 
-const validUnits = new Set<MetradoUnit>(["m", "m2", "m3", "kg", "und", "glb"]);
+const validUnits = new Set<MetradoUnit>(["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"]);
 
 const inputKeys = [
   "largo",
@@ -36,6 +36,12 @@ const inputKeys = [
   "area",
   "factor",
   "manual",
+  // Spatial / coordinate inputs for linear metrados
+  "progresivaInicio",
+  "progresivaFin",
+  "coordenadaX",
+  "coordenadaY",
+  "coordenadaZ",
 ] as const satisfies MetradoFormulaInputKey[];
 
 export function normalizeMetradoImportRows(

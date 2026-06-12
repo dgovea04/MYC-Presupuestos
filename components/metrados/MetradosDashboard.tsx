@@ -4,18 +4,24 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CellValue, Worksheet } from "exceljs";
-import { Calculator, ChevronRight, Copy, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
+import { BarChart3, Calculator, ChevronRight, Copy, FileSpreadsheet, Plus, Redo, Trash2, Undo2 } from "lucide-react";
+import Link from "next/link";
 
 import {
   addMetradoRow,
+  applyFormulaToRows,
   buildDefaultMetradoSheetName,
   buildMetradoSheetSelectPlaceholder,
   buildMetradoTemplatePrefillMessage,
   buildNewMetradoSheetDraft,
   deleteMetradoRow,
+  deleteSelectedRows,
   duplicateMetradoRow,
+  fillDownRows,
   updateMetradoRowInput,
 } from "@/components/metrados/metrado-view-model";
+import { isCsvFile, parseCsvRows } from "@/lib/metrados/csv-import";
+import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { MetradoExportActions } from "@/components/metrados/MetradoExportActions";
 import { MetradoFormulaBar } from "@/components/metrados/MetradoFormulaBar";
 import { type MetradoActiveCell, MetradoSheetTable } from "@/components/metrados/MetradoSheetTable";
@@ -28,7 +34,6 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { calculateMetradoSheet } from "@/lib/calculations/metrados";
 import { customMetradoFormulaSuggestions } from "@/lib/metrados/custom-formula-suggestions";
-import { metradoTemplates } from "@/lib/metrados/templates";
 import { validateMetradoSheet } from "@/lib/metrados/validation";
 import { cn } from "@/lib/utils";
 import type {
@@ -37,6 +42,7 @@ import type {
   MetradoFormulaRecord,
   MetradoRowRecord,
   MetradoSheetRecord,
+  MetradoTemplateRecord,
   MetradoTemplateType,
   MetradoUnit,
 } from "@/types/metrado";
@@ -71,6 +77,7 @@ type MetradosDashboardProps = {
   partidas: MetradoPartidaOption[];
   customFormulas: CustomMetradoFormulaRecord[];
   initialTemplateType?: MetradoTemplateType | null;
+  templates: MetradoTemplateRecord[];
 };
 
 type ImportPreviewResponse = {
@@ -86,7 +93,7 @@ type FormulaResponse = {
   formula: CustomMetradoFormulaRecord;
 };
 
-const units = ["m", "m2", "m3", "kg", "und", "glb"] as const satisfies MetradoUnit[];
+const units = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"] as const satisfies MetradoUnit[];
 
 export function MetradosDashboard({
   initialSheets,
@@ -95,10 +102,11 @@ export function MetradosDashboard({
   partidas,
   customFormulas: initialCustomFormulas,
   initialTemplateType = null,
+  templates,
 }: MetradosDashboardProps) {
   const [sheets, setSheets] = useState<MetradoSheetRecord[]>(initialSheets);
   const [customFormulas, setCustomFormulas] = useState<CustomMetradoFormulaRecord[]>(initialCustomFormulas);
-  const initialTemplate = metradoTemplates.find((entry) => entry.type === initialTemplateType) ?? null;
+  const initialTemplate = templates.find((entry) => entry.type === initialTemplateType) ?? null;
   const shouldStartFromTemplate = Boolean(initialTemplate);
   const [selectedSheetId, setSelectedSheetId] = useState(shouldStartFromTemplate ? "" : initialSheets[0]?.id ?? "");
   const selectedSheet = sheets.find((sheet) => sheet.id === selectedSheetId) ?? null;
@@ -119,7 +127,15 @@ export function MetradosDashboard({
     selectedSheet?.name ?? (initialTemplate ? buildDefaultMetradoSheetName({ templateName: initialTemplate.name }) : "Nuevo metrado"),
   );
   const [sheetUnit, setSheetUnit] = useState<MetradoUnit>(selectedSheet?.unit ?? initialTemplate?.defaultUnit ?? "m3");
-  const [rows, setRows] = useState<MetradoRowRecord[]>(selectedSheet?.rows ?? []);
+  const {
+    state: rows,
+    setState: setRows,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    reset: resetRows,
+  } = useUndoRedo<MetradoRowRecord[]>(selectedSheet?.rows ?? []);
   const [preferredFormulaKey, setPreferredFormulaKey] = useState(selectedSheet?.rows[0]?.formulaKey ?? "manual");
   const [activeCell, setActiveCell] = useState<MetradoActiveCell | null>(null);
   const [actionState, setActionState] = useState<ActionState>("idle");
@@ -131,13 +147,16 @@ export function MetradosDashboard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [customFormulaSheetOpen, setCustomFormulaSheetOpen] = useState(false);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const isHydrated = useRef(false);
   const saveRef = useRef<((isAutosave?: boolean) => Promise<boolean>) | null>(null);
   const lastSavedPayload = useRef("");
 
   const template = useMemo(
-    () => metradoTemplates.find((entry) => entry.type === templateType) ?? metradoTemplates[0],
-    [templateType],
+    () => templates.find((entry) => entry.type === templateType) ?? templates[0],
+    [templateType, templates],
   );
   const availableFormulas = useMemo(
     () => (templateType === "CUSTOM" ? [...template.formulas, ...customFormulas] : template.formulas),
@@ -193,6 +212,17 @@ export function MetradosDashboard({
 
     return links;
   }, [sheets]);
+  const filteredSheets = useMemo(() => {
+    if (!dateFrom && !dateTo) return sheets;
+    return sheets.filter((sheet) => {
+      if (!sheet.createdAt) return true; // keep sheets without dates
+      const created = new Date(sheet.createdAt).getTime();
+      if (dateFrom && created < new Date(dateFrom + "T00:00:00").getTime()) return false;
+      if (dateTo && created > new Date(dateTo + "T23:59:59").getTime()) return false;
+      return true;
+    });
+  }, [sheets, dateFrom, dateTo]);
+
   const selectedPartidaActiveSheet = partidaId ? activeSheetByPartidaId.get(partidaId) ?? null : null;
   const activeRow = calculated.rows.find((row) => row.id === activeCell?.rowId) ?? calculated.rows[0] ?? null;
   const activeFormula =
@@ -239,6 +269,31 @@ export function MetradosDashboard({
     return () => window.clearTimeout(timeout);
   }, [hasBlockingIssues, saveState, selectedSheet]);
 
+  // Keyboard shortcuts: Ctrl+Z / Cmd+Z for undo, Ctrl+Y / Ctrl+Shift+Z / Cmd+Shift+Z for redo
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "z" && (event.metaKey || event.ctrlKey)) {
+        if (event.shiftKey) {
+          event.preventDefault();
+          redo();
+        } else {
+          event.preventDefault();
+          undo();
+        }
+        return;
+      }
+
+      if (event.key === "y" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
+
   useEffect(() => {
     if (!lastSavedAt) {
       return;
@@ -257,7 +312,8 @@ export function MetradosDashboard({
     const nextSheet = sheets.find((sheet) => sheet.id === sheetId) ?? null;
     setSelectedSheetId(sheetId);
     if (!nextSheet) {
-      setRows([]);
+      resetRows([]);
+      setSelectedRowIds(new Set());
       setActiveCell(null);
       setSaveState("idle");
       setLastSavedAt(null);
@@ -271,7 +327,8 @@ export function MetradosDashboard({
     setTemplateType(nextSheet.templateType);
     setSheetName(nextSheet.name);
     setSheetUnit(nextSheet.unit);
-    setRows(nextSheet.rows);
+    resetRows(nextSheet.rows);
+    setSelectedRowIds(new Set());
     setPreferredFormulaKey(nextSheet.rows[0]?.formulaKey ?? (nextSheet.templateType === "CUSTOM" ? "manual" : ""));
     setActiveCell(null);
     setSaveState("idle");
@@ -288,7 +345,8 @@ export function MetradosDashboard({
     setTemplateType(sheet.templateType);
     setSheetName(sheet.name);
     setSheetUnit(sheet.unit);
-    setRows(sheet.rows);
+    resetRows(sheet.rows);
+    setSelectedRowIds(new Set());
     setPreferredFormulaKey(sheet.rows[0]?.formulaKey ?? (sheet.templateType === "CUSTOM" ? "manual" : ""));
     setActiveCell(null);
     setSaveState("idle");
@@ -298,7 +356,7 @@ export function MetradosDashboard({
   }
 
   function startNewSheet() {
-    const nextTemplate = metradoTemplates[0];
+    const nextTemplate = templates[0];
     const draft = buildNewMetradoSheetDraft({
       budgets,
       currentBudgetId: budgetId,
@@ -316,7 +374,8 @@ export function MetradosDashboard({
     setTemplateType(draft.templateType);
     setSheetUnit(draft.sheetUnit);
     setSheetName(draft.sheetName);
-    setRows([]);
+    resetRows([]);
+    setSelectedRowIds(new Set());
     setPreferredFormulaKey("manual");
     setActiveCell(null);
     setSaveState("idle");
@@ -466,15 +525,50 @@ export function MetradosDashboard({
 
     await runAction(async () => {
       const rawRows = await extractRowsFromFile(file);
+
+      // Detect spatial/coordinate columns in the imported data
+      const hasSpatialColumns = rawRows.some(
+        (row) =>
+          "progresivaInicio" in row ||
+          "progresivaFin" in row ||
+          "coordenadaX" in row ||
+          "coordenadaY" in row ||
+          "coordenadaZ" in row,
+      );
+
       const response = await fetch(`/api/metrados-avanzados/${selectedSheet.id}/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: rawRows }),
       });
       const payload = await readJson<ImportPreviewResponse>(response);
-      const nextRows = payload.rows.map((row) => ({ ...row, sheetId: selectedSheet.id }));
-      setRows(nextRows);
-      setFeedback(`Importacion lista: ${nextRows.length} filas.`);
+
+      let nextRows = payload.rows.map((row) => ({ ...row, sheetId: selectedSheet.id }));
+
+      // Auto-assign progressive formula to rows with spatial data
+      if (hasSpatialColumns) {
+        const progressiveKey = "suggestion-linear-progresivas";
+        setPreferredFormulaKey(progressiveKey);
+
+        nextRows = nextRows.map((row) => {
+          if (row.formulaKey === "manual") {
+            const hasProgresiva =
+              "progresivaInicio" in row.inputs || "progresivaFin" in row.inputs;
+            if (hasProgresiva) {
+              return { ...row, formulaKey: progressiveKey, unit: "m" as MetradoUnit };
+            }
+          }
+          return row;
+        });
+
+        setFeedback(
+          `Importacion lista: ${nextRows.length} filas. Formula espacial auto-asignada.`,
+        );
+      } else {
+        setFeedback(`Importacion lista: ${nextRows.length} filas.`);
+      }
+
+      resetRows(nextRows);
       if (payload.issues.length > 0) {
         setError(`${payload.issues.length} alertas de importacion.`);
       }
@@ -524,6 +618,71 @@ export function MetradosDashboard({
     return payload.formula;
   }
 
+  function handleBatchAction(action: "apply_formula" | "fill_down" | "delete") {
+    if (selectedRowIds.size === 0) return;
+
+    if (action === "delete") {
+      setRows((current) => deleteSelectedRows(current, selectedRowIds));
+      setSelectedRowIds(new Set());
+      setActiveCell(null);
+      return;
+    }
+
+    if (action === "apply_formula") {
+      const formulaKey = preferredFormulaKey || availableFormulas[0]?.key || "manual";
+      const formula = availableFormulas.find((f) => f.key === formulaKey);
+      const targetUnit = (formula?.resultUnit ?? sheetUnit) as MetradoUnit;
+      setRows((current) => applyFormulaToRows(current, selectedRowIds, formulaKey, targetUnit));
+      return;
+    }
+
+    if (action === "fill_down") {
+      // rows matches calculated.rows order — partial values don't affect positioning
+      const normalRows = rows.filter((r) => !r.groupLabel);
+      const sortedSelected = [...selectedRowIds]
+        .map((id) => ({ id, index: normalRows.findIndex((r) => r.id === id) }))
+        .filter((entry) => entry.index !== -1)
+        .sort((a, b) => a.index - b.index);
+
+      if (sortedSelected.length < 2) {
+        setError("Selecciona al menos 2 filas para rellenar hacia abajo.");
+        return;
+      }
+
+      const sourceId = sortedSelected[0]!.id;
+      const targetIds = new Set(sortedSelected.slice(1).map((entry) => entry.id));
+      setRows((current) => fillDownRows(current, sourceId, targetIds));
+    }
+  }
+
+  function addGroupRow() {
+    if (!selectedSheet) return;
+    const groupId = `group-${Date.now()}`;
+    setRows((current) => [
+      ...current,
+      {
+        id: groupId,
+        sheetId: selectedSheet.id,
+        sector: "",
+        eje: "",
+        nivel: "",
+        description: "",
+        unit: sheetUnit,
+        formulaKey: "manual",
+        inputs: {},
+        partial: 0,
+        groupLabel: "Nuevo grupo",
+        sortOrder: current.length + 1,
+      },
+    ]);
+  }
+
+  function updateGroupLabel(rowId: string, label: string) {
+    setRows((current) =>
+      current.map((row) => (row.id === rowId ? { ...row, groupLabel: label || null } : row)),
+    );
+  }
+
   function patchRow(
     rowId: string,
     patch: Partial<Pick<MetradoRowRecord, "sector" | "eje" | "nivel" | "description" | "unit" | "formulaKey">>,
@@ -569,7 +728,7 @@ export function MetradosDashboard({
     });
     const payload = await readJson<SheetResponse>(rowsResponse);
     setSheets((current) => current.map((sheet) => (sheet.id === payload.sheet.id ? payload.sheet : sheet)));
-    setRows(payload.sheet.rows);
+    resetRows(payload.sheet.rows);
     setSheetUnit(payload.sheet.unit);
     lastSavedPayload.current = JSON.stringify(
       getSheetSavePayload({ name: payload.sheet.name, unit: payload.sheet.unit, rows: payload.sheet.rows }),
@@ -593,7 +752,52 @@ export function MetradosDashboard({
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Hoja de metrados</h1>
           <p className="text-xs leading-5 text-slate-500">Registro de cantidades con formulas, autosave y envio a partida.</p>
         </div>
-        <div className="flex flex-col gap-2 lg:items-end">
+        <div className="flex items-center gap-2">
+          {projectId ? (
+            <Link
+              href={`/metrados-avanzados/resumen?projectId=${projectId}`}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-blue-600"
+              title="Ver resumen del proyecto"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Resumen
+            </Link>
+          ) : null}
+          {selectedSheet ? (
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-1.5 py-1 shadow-sm">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={!canUndo}
+                className={cn(
+                  "inline-flex items-center justify-center rounded-lg p-1.5 text-sm transition",
+                  canUndo
+                    ? "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                    : "text-slate-300 cursor-not-allowed",
+                )}
+                aria-label="Deshacer (Ctrl+Z)"
+                title="Deshacer (Ctrl+Z)"
+              >
+                <Undo2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!canRedo}
+                className={cn(
+                  "inline-flex items-center justify-center rounded-lg p-1.5 text-sm transition",
+                  canRedo
+                    ? "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                    : "text-slate-300 cursor-not-allowed",
+                )}
+                aria-label="Rehacer (Ctrl+Y)"
+                title="Rehacer (Ctrl+Y)"
+              >
+                <Redo className="h-4 w-4" />
+              </button>
+              <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden />
+            </div>
+          ) : null}
           <MetradoExportActions
             exportHref={exportHref}
             actionState={actionState}
@@ -641,50 +845,89 @@ export function MetradosDashboard({
         </summary>
         <div className="space-y-4 border-t border-slate-100 px-4 py-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.2fr)_minmax(180px,0.9fr)_minmax(180px,0.9fr)]">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-              <Field label="Hoja existente">
-                <Select
-                  id="metrado-sheet-select"
-                  value={selectedSheetId}
-                  onChange={(event) => selectSheet(event.currentTarget.value)}
-                >
-                  <option value="" disabled>
-                    {buildMetradoSheetSelectPlaceholder({
-                      hasSheets: sheets.length > 0,
-                      isCreatingSheet,
-                    })}
-                  </option>
-                  {sheets.map((sheet) => (
-                    <option key={sheet.id} value={sheet.id}>
-                      {sheet.name}
+            <div className="space-y-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                <Field label="Hoja existente">
+                  <Select
+                    id="metrado-sheet-select"
+                    value={selectedSheetId}
+                    onChange={(event) => selectSheet(event.currentTarget.value)}
+                  >
+                    <option value="" disabled>
+                      {buildMetradoSheetSelectPlaceholder({
+                        hasSheets: sheets.length > 0,
+                        isCreatingSheet,
+                      })}
                     </option>
-                  ))}
-                </Select>
-              </Field>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 w-10 px-0"
-                disabled={!selectedSheet || actionState === "saving" || hasBlockingIssues}
-                aria-label="Duplicar hoja seleccionada"
-                title="Duplicar hoja seleccionada"
-                onClick={() => void duplicateSelectedSheet()}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 w-10 px-0 text-rose-600 hover:bg-rose-50"
-                disabled={!selectedSheet || actionState === "saving"}
-                aria-label="Eliminar hoja seleccionada"
-                title="Eliminar hoja seleccionada"
-                onClick={requestDeleteSelectedSheet}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+                    {filteredSheets.map((sheet) => (
+                      <option key={sheet.id} value={sheet.id}>
+                        {sheet.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 w-10 px-0"
+                  disabled={!selectedSheet || actionState === "saving" || hasBlockingIssues}
+                  aria-label="Duplicar hoja seleccionada"
+                  title="Duplicar hoja seleccionada"
+                  onClick={() => void duplicateSelectedSheet()}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 w-10 px-0 text-rose-600 hover:bg-rose-50"
+                  disabled={!selectedSheet || actionState === "saving"}
+                  aria-label="Eliminar hoja seleccionada"
+                  title="Eliminar hoja seleccionada"
+                  onClick={requestDeleteSelectedSheet}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              {/* Date filter */}
+              <div className="flex items-center gap-2 pl-0.5">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] font-medium text-slate-500">Desde</label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.currentTarget.value)}
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-sm transition hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    aria-label="Filtrar desde fecha"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] font-medium text-slate-500">Hasta</label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.currentTarget.value)}
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-sm transition hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    aria-label="Filtrar hasta fecha"
+                  />
+                </div>
+                {(dateFrom || dateTo) && filteredSheets.length < sheets.length ? (
+                  <span className="text-[11px] text-slate-400">
+                    {filteredSheets.length} de {sheets.length}
+                  </span>
+                ) : null}
+                {(dateFrom || dateTo) ? (
+                  <button
+                    type="button"
+                    onClick={() => { setDateFrom(""); setDateTo(""); }}
+                    className="text-[11px] font-medium text-blue-600 transition hover:text-blue-800"
+                  >
+                    Limpiar
+                  </button>
+                ) : null}
+              </div>
             </div>
             <Field label="Proyecto">
               <Select
@@ -810,14 +1053,14 @@ export function MetradosDashboard({
             </div>
           </div>
           <MetradoTemplateSelector
-            templates={metradoTemplates}
+            templates={templates}
             value={templateType}
             customFormulaValue={templateType === "CUSTOM" ? preferredFormulaKey : null}
             customFormulaSuggestions={pinnedCustomFormulas}
             disabled={Boolean(selectedSheet)}
             onChange={(nextTemplateType) => {
               setTemplateType(nextTemplateType);
-              const nextTemplate = metradoTemplates.find((entry) => entry.type === nextTemplateType);
+              const nextTemplate = templates.find((entry) => entry.type === nextTemplateType);
               if (nextTemplate) {
                 setSheetUnit(nextTemplate.defaultUnit);
                 setPreferredFormulaKey(nextTemplate.formulaKeys[0] ?? "manual");
@@ -895,7 +1138,35 @@ export function MetradosDashboard({
 
       {selectedSheet ? (
         <>
-          <MetradoFormulaBar activeRow={activeRow} formula={activeFormula} />
+          <MetradoFormulaBar
+            activeRow={activeRow}
+            formula={activeFormula}
+            onExpressionChange={async (rowId, expression) => {
+              const baseFormula = activeFormula ?? availableFormulas[0];
+              if (!baseFormula) return;
+
+              try {
+                const saved = await saveCustomFormula({
+                  name: baseFormula.label,
+                  description: "",
+                  category: "Personalizado",
+                  expression,
+                  requiredInputs: baseFormula.requiredInputs,
+                  resultUnit: (activeRow?.unit ?? baseFormula.resultUnit) as MetradoUnit,
+                  showInSuggestions: false,
+                });
+                setTemplateType("CUSTOM");
+                setPreferredFormulaKey(saved.key);
+                setRows((current) =>
+                  current.map((row) =>
+                    row.id === rowId ? { ...row, formulaKey: saved.key, unit: saved.resultUnit } : row,
+                  ),
+                );
+              } catch {
+                setError("No se pudo guardar la formula editada.");
+              }
+            }}
+          />
 
           <div
             className={cn(
@@ -908,6 +1179,7 @@ export function MetradosDashboard({
               formulas={availableFormulas}
               inputColumns={inputColumns}
               activeCell={activeCell}
+              selectedRowIds={selectedRowIds}
               onActiveCellChange={setActiveCell}
               onAddRow={() =>
                 setRows((current) =>
@@ -919,6 +1191,8 @@ export function MetradosDashboard({
                   ),
                 )
               }
+              onAddGroupRow={addGroupRow}
+              onChangeGroupLabel={updateGroupLabel}
               onDuplicateRow={(rowId) => setRows((current) => duplicateMetradoRow(current, rowId))}
               onDeleteRow={(rowId) => setRows((current) => deleteMetradoRow(current, rowId))}
               onPatchRow={(rowId, patch) => {
@@ -934,6 +1208,8 @@ export function MetradosDashboard({
                 patchRow(rowId, patch);
               }}
               onInputChange={updateInput}
+              onSelectionChange={(ids) => setSelectedRowIds(ids)}
+              onBatchAction={handleBatchAction}
             />
             <aside className="space-y-4">
               <MetradoSummaryPanel
@@ -994,7 +1270,8 @@ export function MetradosDashboard({
     setSelectedSheetId(sheet.id);
     setTemplateType(sheet.templateType);
     setSheetUnit(sheet.unit);
-    setRows(nextRows);
+    resetRows(nextRows);
+    setSelectedRowIds(new Set());
     setActiveCell(null);
     setSaveState("idle");
     setLastSavedAt(null);
@@ -1404,16 +1681,18 @@ async function readJson<TPayload>(response: Response): Promise<TPayload> {
   }
 
   return body;
-}
+}  async function extractRowsFromFile(file: File): Promise<Record<string, unknown>[]> {
+    if (isExcelFile(file)) {
+      return parseExcelRows(file);
+    }
 
-async function extractRowsFromFile(file: File): Promise<Record<string, unknown>[]> {
-  if (isExcelFile(file)) {
-    return parseExcelRows(file);
+    if (isCsvFile(file)) {
+      return parseCsvRows(await file.text());
+    }
+
+    const parsed = JSON.parse(await file.text()) as unknown;
+    return extractRowsArray(parsed);
   }
-
-  const parsed = JSON.parse(await file.text()) as unknown;
-  return extractRowsArray(parsed);
-}
 
 async function parseExcelRows(file: File): Promise<Record<string, unknown>[]> {
   const ExcelJS = await import("exceljs");
@@ -1552,6 +1831,7 @@ function getSheetSavePayload({
       formulaKey: row.formulaKey,
       inputs: row.inputs,
       partial: row.partial,
+      groupLabel: row.groupLabel ?? null,
       sortOrder: row.sortOrder,
     })),
   };

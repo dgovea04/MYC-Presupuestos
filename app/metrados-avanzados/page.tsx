@@ -11,6 +11,7 @@ import {
   listCustomMetradoFormulas,
   listMetradoCreationOptions,
   listMetradoSheetsByUser,
+  listMetradoTemplates,
 } from "@/lib/data/metrados";
 
 export default async function MetradosAvanzadosPage({
@@ -30,10 +31,11 @@ export default async function MetradosAvanzadosPage({
     : resolvedSearchParams?.template;
   const initialTemplateType = parseMetradoTemplateTypeParam(templateParam);
 
-  const [initialSheets, creationOptions, customFormulas] = await Promise.all([
+  const [initialSheets, creationOptions, customFormulas, templates] = await Promise.all([
     listMetradoSheetsByUser(session.user.id),
     listMetradoCreationOptions(session.user.id),
     listCustomMetradoFormulas(session.user.id),
+    listMetradoTemplates(),
   ]);
 
   return (
@@ -55,6 +57,7 @@ export default async function MetradosAvanzadosPage({
             partidas={creationOptions.partidas}
             customFormulas={customFormulas}
             initialTemplateType={initialTemplateType}
+            templates={templates}
           />
         </CardContent>
       </Card>
