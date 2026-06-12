@@ -1,11 +1,11 @@
+import type { KhipuAiTask } from "@/lib/ai/gateway/types";
 import type { AiContext } from "@/lib/ai/types";
 
 export type AiPromptAction = "chat" | "apu" | "review" | "autocomplete";
 
 export type AiTaskName =
+  | KhipuAiTask
   | "technical_chat"
-  | "generate_apu"
-  | "review_budget"
   | "autocomplete_construction_text";
 
 export type AiOutputFormat = "text" | "json_only";
@@ -13,8 +13,14 @@ export type AiOutputFormat = "text" | "json_only";
 export type AiOutputSchemaName =
   | "technical_chat_v1"
   | "apu_generation_v1"
+  | "apu_review_v1"
   | "budget_review_v1"
-  | "autocomplete_text_v1";
+  | "autocomplete_text_v1"
+  | "formula_polinomica_review_v1"
+  | "quantity_takeoff_review_v1"
+  | "montecarlo_risk_analysis_v1"
+  | "catalog_insumo_suggestions_v1"
+  | "partida_generation_v1";
 
 export type AiTaskPayload = {
   task: AiTaskName;
@@ -37,11 +43,23 @@ type BuildAiTaskPayloadInput = {
   payload: Record<string, unknown>;
 };
 
+type BuildKhipuTaskPayloadInput = {
+  task: KhipuAiTask;
+  payload: Record<string, unknown>;
+};
+
 const GUARDRAILS: AiTaskPayload["guardrails"] = {
   humanReviewRequired: true,
   noAutomaticBudgetMutation: true,
   noExactPriceFabrication: true,
 };
+
+const LEGACY_ACTION_TO_TASK = {
+  chat: "chat",
+  apu: "generate_apu",
+  review: "review_budget",
+  autocomplete: "autocomplete",
+} as const satisfies Record<AiPromptAction, KhipuAiTask>;
 
 export function buildAiTaskPayload({ action, payload }: BuildAiTaskPayloadInput): AiTaskPayload {
   const context = readContext(payload.context);
@@ -60,11 +78,25 @@ export function buildBridgeTaskPayload(input: BuildAiTaskPayloadInput): AiTaskPa
   return buildAiTaskPayload(input);
 }
 
+export function buildKhipuTaskPayload({ task, payload }: BuildKhipuTaskPayloadInput): AiTaskPayload {
+  const context = readContext(payload.context);
+
+  return {
+    task,
+    role: "construction_cost_assistant_peru",
+    output: readKhipuOutput(task),
+    ...(context ? { context } : {}),
+    input: readKhipuInput(task, payload),
+    guardrails: GUARDRAILS,
+  };
+}
+
 function readTaskName(action: AiPromptAction): AiTaskName {
+  const officialTask = LEGACY_ACTION_TO_TASK[action];
   if (action === "apu") return "generate_apu";
   if (action === "review") return "review_budget";
   if (action === "autocomplete") return "autocomplete_construction_text";
-  return "technical_chat";
+  return officialTask === "chat" ? "technical_chat" : officialTask;
 }
 
 function readOutput(action: AiPromptAction): AiTaskPayload["output"] {
@@ -106,6 +138,96 @@ function readInput(action: AiPromptAction, payload: Record<string, unknown>): Re
   return {
     message: readRequiredString(payload.message, "message"),
   };
+}
+
+function readKhipuOutput(task: KhipuAiTask): AiTaskPayload["output"] {
+  if (task === "chat") {
+    return { format: "text", schema: "technical_chat_v1" };
+  }
+
+  if (task === "autocomplete") {
+    return { format: "text", schema: "autocomplete_text_v1" };
+  }
+
+  if (task === "review_apu") {
+    return { format: "json_only", schema: "apu_review_v1" };
+  }
+
+  if (task === "generate_apu") {
+    return { format: "json_only", schema: "apu_generation_v1" };
+  }
+
+  if (task === "review_budget") {
+    return { format: "json_only", schema: "budget_review_v1" };
+  }
+
+  if (task === "review_formula_polinomica") {
+    return { format: "json_only", schema: "formula_polinomica_review_v1" };
+  }
+
+  if (task === "review_quantity_takeoff") {
+    return { format: "json_only", schema: "quantity_takeoff_review_v1" };
+  }
+
+  if (task === "montecarlo_risk_analysis") {
+    return { format: "json_only", schema: "montecarlo_risk_analysis_v1" };
+  }
+
+  if (task === "suggest_insumos") {
+    return { format: "json_only", schema: "catalog_insumo_suggestions_v1" };
+  }
+
+  return { format: "json_only", schema: "partida_generation_v1" };
+}
+
+function readKhipuInput(task: KhipuAiTask, payload: Record<string, unknown>): Record<string, string> {
+  if (task === "chat") {
+    return {
+      message: readRequiredString(payload.message, "message"),
+    };
+  }
+
+  if (task === "autocomplete") {
+    return {
+      input: readRequiredString(payload.input, "input"),
+    };
+  }
+
+  if (task === "review_budget") {
+    return {
+      budgetSummary: readRequiredString(payload.budgetSummary, "budgetSummary"),
+    };
+  }
+
+  if (task === "review_formula_polinomica") {
+    return {
+      formulaSummary: readRequiredString(payload.formulaSummary, "formulaSummary"),
+    };
+  }
+
+  if (task === "review_quantity_takeoff") {
+    return {
+      quantityTakeoffSummary: readRequiredString(payload.quantityTakeoffSummary, "quantityTakeoffSummary"),
+    };
+  }
+
+  if (task === "montecarlo_risk_analysis") {
+    return {
+      riskSummary: readRequiredString(payload.riskSummary, "riskSummary"),
+    };
+  }
+
+  if (task === "suggest_insumos") {
+    return omitEmptyStrings({
+      description: readRequiredString(payload.description, "description"),
+      unit: readOptionalString(payload.unit),
+    });
+  }
+
+  return omitEmptyStrings({
+    description: readRequiredString(payload.description, "description"),
+    unit: readOptionalString(payload.unit),
+  });
 }
 
 function readContext(value: unknown): AiContext | undefined {

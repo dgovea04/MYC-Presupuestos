@@ -57,6 +57,31 @@ describe("AI prompts", () => {
     expect(messagesWithoutEvidence.map((message) => message.content).join("\n")).not.toContain("Fuentes consultadas:");
   });
 
+  it("adds assembled Khipu context blocks to chat and task messages when provided", () => {
+    const chatMessages = buildChatMessages({
+      message: "Revisa el presupuesto",
+      assembledContextBlock: "Contexto del proyecto\nProyecto: Hospital Norte\nMemoria del proyecto\nUsa CAT 320",
+    });
+
+    expect(chatMessages[1]).toEqual({
+      role: "system",
+      content: "Contexto del proyecto\nProyecto: Hospital Norte\nMemoria del proyecto\nUsa CAT 320",
+    });
+    expect(chatMessages.at(-1)).toEqual({ role: "user", content: "Revisa el presupuesto" });
+
+    const taskMessages = buildTaskPayloadMessages({
+      jsonOnly: true,
+      message: buildReviewPrompt("Partida de concreto"),
+      assembledContextBlock: "Fuentes consultadas\nConcreto f'c=210",
+    });
+
+    expect(taskMessages[1]).toEqual({
+      role: "system",
+      content: "Fuentes consultadas\nConcreto f'c=210",
+    });
+    expect(taskMessages.at(-1)?.content).toContain('"task": "review_budget"');
+  });
+
   it("adds retrieval evidence to review prompts without changing the structured payload", () => {
     const prompt = buildReviewPrompt("Partida duplicada de acero", {
       evidence: [

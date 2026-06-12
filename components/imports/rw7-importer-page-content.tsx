@@ -41,22 +41,24 @@ type ImportProgressState = {
   fileSize: number;
 };
 
-type Rw7ImporterPageContentProps = {
-  companies: CompanyOption[];
-  copy?: {
-    accept: string;
-    draftEndpoint: string;
-    importEndpoint: string;
-    fileLabel: string;
-    missingFileMessage: string;
-    noCompaniesMessage: string;
-    projectLabel: string;
-    sourceCodeLabel: string;
-    uploadDescription: string;
-  };
+type Rw7ImporterCopy = {
+  accept: string;
+  draftEndpoint: string;
+  importEndpoint: string;
+  fileLabel: string;
+  missingFileMessage: string;
+  noCompaniesMessage: string;
+  projectLabel: string;
+  sourceCodeLabel: string;
+  uploadDescription: string;
 };
 
-const defaultCopy: Rw7ImporterPageContentProps["copy"] = {
+type Rw7ImporterPageContentProps = {
+  companies: CompanyOption[];
+  copy?: Rw7ImporterCopy;
+};
+
+const defaultCopy: Rw7ImporterCopy = {
   accept: ".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   draftEndpoint: "/api/imports/rw7/draft",
   importEndpoint: "/api/imports/rw7/import",
@@ -156,7 +158,7 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
         },
       });
 
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setDraftPreview(nextPreview);
       setSelectedBudgetId(nextPreview.budgets.find((budget) => budget.kind === "SUB_BUDGET")?.id ?? "");
       setItemSearch("");
@@ -164,7 +166,7 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
       setImportState("idle");
       setProgressState(createSuccessProgress("preview", file, copy.projectLabel));
     } catch (error) {
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setDraftState("error");
       setDraftError(error instanceof Error ? error.message : "No se pudo completar la previsualizacion.");
       setProgressState(createErrorProgress("preview", file, copy.projectLabel));
@@ -206,12 +208,12 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
         },
       });
 
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setImportResult(result);
       setImportState("success");
       setProgressState(createSuccessProgress("import", file, copy.projectLabel));
     } catch (error) {
-      stopEstimate?.();
+      stopProgressEstimate(stopEstimate);
       setImportState("error");
       setImportError(error instanceof Error ? error.message : "No se pudo completar la importacion.");
       setProgressState(createErrorProgress("import", file, copy.projectLabel));
@@ -648,6 +650,12 @@ function startEstimatedProgress(
   }, 850);
 
   return () => window.clearInterval(intervalId);
+}
+
+function stopProgressEstimate(stopEstimate: (() => void) | null) {
+  if (stopEstimate) {
+    stopEstimate();
+  }
 }
 
 function postFormDataJson<T>(

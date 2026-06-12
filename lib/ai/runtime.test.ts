@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AI_MODELS, AI_REQUIRED_MODELS, resolveAiModel, summarizeAvailableModels } from "@/lib/ai/models";
+import { getAiHealth } from "@/lib/ai/runtime";
 
 describe("AI model runtime", () => {
   it("keeps the requested model when it is available", () => {
@@ -76,5 +77,26 @@ describe("AI model runtime", () => {
     ]);
 
     expect(AI_REQUIRED_MODELS).toEqual(["llama3.1", "mistral", "qwen2.5-coder:7b", "deepseek-coder"]);
+  });
+
+  it("reports multi-provider health and auto routing without removing Ollama diagnostics", async () => {
+    const fetchImpl = async () =>
+      new Response(
+        JSON.stringify({
+          models: [{ name: "llama3.1" }, { name: "mistral" }, { name: "qwen2.5-coder:7b" }, { name: "deepseek-coder" }],
+        }),
+      );
+
+    const health = await getAiHealth(fetchImpl);
+
+    expect(health.providers).toEqual({
+      ollama: { configured: true, reachable: true },
+      openai: { configured: false, reachable: null },
+      gemini: { configured: false, reachable: null },
+      chatgpt_bridge: { configured: true, reachable: null },
+    });
+    expect(health.routing.review_budget).toEqual(["openai", "gemini", "ollama"]);
+    expect(health.routing.autocomplete).toEqual(["ollama"]);
+    expect(health.availableModels).toEqual(["llama3.1", "mistral", "qwen2.5-coder:7b", "deepseek-coder"]);
   });
 });

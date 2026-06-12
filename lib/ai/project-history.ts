@@ -11,6 +11,10 @@ export type AiProjectHistoryEntry = {
   summary: string;
   context: AiContext;
   result: AiEndpointResult;
+  provider?: string;
+  task?: string;
+  promptHash?: string;
+  responseHash?: string;
   timestamp: string;
 };
 
@@ -81,6 +85,10 @@ export async function recordAiProjectHistory({
       fallbackUsed: result.fallbackUsed,
       warnings: result.warnings,
       latencyMs: result.latencyMs,
+      provider: result.provider,
+      task: result.task,
+      promptHash: result.promptHash,
+      responseHash: result.responseHash,
     },
   });
 
@@ -123,6 +131,10 @@ function mapHistoryEntry(entry: {
   fallbackUsed: boolean;
   warnings: string[];
   latencyMs: number | null;
+  provider: string | null;
+  task: string | null;
+  promptHash: string | null;
+  responseHash: string | null;
   createdAt: Date;
 }): AiProjectHistoryEntry {
   return {
@@ -141,6 +153,10 @@ function mapHistoryEntry(entry: {
       latencyMs: entry.latencyMs ?? undefined,
       structuredData: entry.structuredData ?? undefined,
     },
+    provider: entry.provider ?? undefined,
+    task: entry.task ?? undefined,
+    promptHash: entry.promptHash ?? undefined,
+    responseHash: entry.responseHash ?? undefined,
     timestamp: entry.createdAt.toISOString(),
   };
 }

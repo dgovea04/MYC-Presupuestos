@@ -8,6 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 
 type AiAction = "chat" | "apu" | "review" | "autocomplete" | "json";
+type AiProviderId = "ollama" | "openai" | "gemini" | "chatgpt_bridge";
+type KhipuAiTask =
+  | "review_apu"
+  | "generate_apu"
+  | "suggest_insumos"
+  | "review_budget"
+  | "generate_partida"
+  | "review_formula_polinomica"
+  | "review_quantity_takeoff"
+  | "montecarlo_risk_analysis"
+  | "chat"
+  | "autocomplete";
 
 type AiHealth = {
   status: "ok" | "degraded" | "down";
@@ -34,6 +46,14 @@ type AiHealth = {
       lastError: string | null;
     }
   >;
+  providers: Record<
+    AiProviderId,
+    {
+      configured: boolean;
+      reachable: boolean | null;
+    }
+  >;
+  routing: Record<KhipuAiTask, AiProviderId[]>;
 };
 
 const AI_HISTORY_STORAGE_KEY = "myc-ai-session-history";
@@ -44,6 +64,26 @@ const ACTION_LABELS: Record<AiAction, string> = {
   review: "Revisar presupuesto",
   autocomplete: "Autocompletar",
   json: "JSON estructurado",
+};
+
+const PROVIDER_LABELS: Record<AiProviderId, string> = {
+  ollama: "Ollama",
+  openai: "OpenAI",
+  gemini: "Gemini",
+  chatgpt_bridge: "ChatGPT Bridge",
+};
+
+const TASK_LABELS: Record<KhipuAiTask, string> = {
+  review_apu: "Revision APU",
+  generate_apu: "Generacion APU",
+  suggest_insumos: "Sugerencia de insumos",
+  review_budget: "Revision de presupuesto",
+  generate_partida: "Generacion de partida",
+  review_formula_polinomica: "Formula polinomica",
+  review_quantity_takeoff: "Revision de metrados",
+  montecarlo_risk_analysis: "Riesgo Monte Carlo",
+  chat: "Chat tecnico",
+  autocomplete: "Autocompletar",
 };
 
 const CONTEXT_SOURCES = ["Proyecto actual", "Módulo abierto", "Partida seleccionada", "Unidad", "Costo actual", "Tabla activa"] as const;
@@ -169,6 +209,40 @@ export function LocalAiSettingsCard() {
                   </div>
                 );
               })}
+            </div>
+          </Panel>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <Panel title="Proveedores V2" description="Estado de configuracion para cada motor disponible.">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(Object.keys(PROVIDER_LABELS) as AiProviderId[]).map((provider) => {
+                const providerHealth = health?.providers[provider];
+                const status =
+                  providerHealth?.reachable === true
+                    ? "Alcanzable"
+                    : providerHealth?.configured
+                      ? "Configurado"
+                      : "Pendiente";
+
+                return (
+                  <div key={provider} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="font-medium text-slate-900">{PROVIDER_LABELS[provider]}</p>
+                    <p className="mt-1 text-xs text-slate-500">{status}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </Panel>
+
+          <Panel title="Rutas Khipu V2" description="Cadena de fallback usada cuando el proveedor esta en automatico.">
+            <div className="grid gap-2 md:grid-cols-2">
+              {(Object.keys(TASK_LABELS) as KhipuAiTask[]).map((task) => (
+                <div key={task} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="font-medium text-slate-900">{TASK_LABELS[task]}</p>
+                  <p className="mt-1 text-xs text-slate-500">{(health?.routing[task] ?? []).join(" -> ") || "Sin ruta"}</p>
+                </div>
+              ))}
             </div>
           </Panel>
         </section>
@@ -303,6 +377,8 @@ function readAiHealth(payload: unknown): AiHealth {
       autocomplete: readMetric(payload.metrics.autocomplete),
       json: readMetric(payload.metrics.json),
     },
+    providers: readProviders(payload.providers),
+    routing: readRouting(payload.routing),
   };
 }
 
@@ -326,6 +402,49 @@ function readMetric(value: unknown) {
   };
 }
 
+function readProviders(value: unknown): AiHealth["providers"] {
+  const providers = isRecord(value) ? value : {};
+
+  return {
+    ollama: readProviderHealth(providers.ollama, true, null),
+    openai: readProviderHealth(providers.openai, false, null),
+    gemini: readProviderHealth(providers.gemini, false, null),
+    chatgpt_bridge: readProviderHealth(providers.chatgpt_bridge, true, null),
+  };
+}
+
+function readProviderHealth(value: unknown, configuredFallback: boolean, reachableFallback: boolean | null) {
+  if (!isRecord(value)) {
+    return { configured: configuredFallback, reachable: reachableFallback };
+  }
+
+  return {
+    configured: value.configured === true,
+    reachable: typeof value.reachable === "boolean" ? value.reachable : null,
+  };
+}
+
+function readRouting(value: unknown): AiHealth["routing"] {
+  const routing = isRecord(value) ? value : {};
+
+  return {
+    review_apu: readProviderChain(routing.review_apu),
+    generate_apu: readProviderChain(routing.generate_apu),
+    suggest_insumos: readProviderChain(routing.suggest_insumos),
+    review_budget: readProviderChain(routing.review_budget),
+    generate_partida: readProviderChain(routing.generate_partida),
+    review_formula_polinomica: readProviderChain(routing.review_formula_polinomica),
+    review_quantity_takeoff: readProviderChain(routing.review_quantity_takeoff),
+    montecarlo_risk_analysis: readProviderChain(routing.montecarlo_risk_analysis),
+    chat: readProviderChain(routing.chat),
+    autocomplete: readProviderChain(routing.autocomplete),
+  };
+}
+
+function readProviderChain(value: unknown): AiProviderId[] {
+  return Array.isArray(value) ? value.filter(isAiProviderId) : [];
+}
+
 function isRequiredModel(value: unknown): value is AiHealth["requiredModels"][number] {
   return (
     isRecord(value) &&
@@ -338,6 +457,10 @@ function isRequiredModel(value: unknown): value is AiHealth["requiredModels"][nu
 
 function isAiAction(value: unknown): value is AiAction {
   return value === "chat" || value === "apu" || value === "review" || value === "autocomplete" || value === "json";
+}
+
+function isAiProviderId(value: unknown): value is AiProviderId {
+  return value === "ollama" || value === "openai" || value === "gemini" || value === "chatgpt_bridge";
 }
 
 function readErrorMessage(payload: unknown) {

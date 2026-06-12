@@ -9,7 +9,7 @@ import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 type AiRouteSession = NonNullable<Awaited<ReturnType<typeof getAuthSession>>>;
 
-export async function withAiRoute(handler: (session: AiRouteSession) => Promise<NextResponse>) {
+export async function withAiRoute(handler: (session: AiRouteSession) => Promise<Response>) {
   const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

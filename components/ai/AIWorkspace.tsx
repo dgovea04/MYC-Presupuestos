@@ -233,7 +233,7 @@ function AIWorkspaceContent({
       : sessionFeedbackSummary;
   const latestHistoryScope = useRef<HistoryScope>(readHistoryScope(projectId));
   const pendingBridgeRequestId = useRef<string | null>(null);
-  const pendingBridgeTimeoutId = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const pendingBridgeTimeoutId = useRef<number | null>(null);
   const latestBridgeRequest = useRef<ScopedRequestState | null>(null);
   const latestContext = useRef(context);
 

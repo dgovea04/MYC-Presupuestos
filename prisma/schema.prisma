@@ -108,6 +108,13 @@ enum AiSuggestionFeedbackType {
   DISMISSED
 }
 
+enum AiProjectMemoryType {
+  FACT
+  PREFERENCE
+  CONSTRAINT
+  ASSUMPTION
+}
+
 enum BillingMode {
   FREE
   STRIPE
@@ -304,6 +311,10 @@ model AiProjectHistoryEntry {
   fallbackUsed   Boolean  @default(false)
   warnings       String[] @default([])
   latencyMs      Int?
+  provider       String?
+  task           String?
+  promptHash     String?
+  responseHash   String?
   createdAt      DateTime @default(now())
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -312,6 +323,8 @@ model AiProjectHistoryEntry {
   @@index([projectId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@index([action, createdAt(sort: Desc)])
+  @@index([provider, createdAt(sort: Desc)])
+  @@index([task, createdAt(sort: Desc)])
 }
 
 model AiSuggestionFeedbackEvent {
@@ -321,6 +334,13 @@ model AiSuggestionFeedbackEvent {
   projectId      String
   feedbackType   AiSuggestionFeedbackType
   notes          String?
+  provider       String?
+  model          String?
+  task           String?
+  suggestionType String?
+  actionType     String?
+  promptHash     String?
+  responseHash   String?
   createdAt      DateTime                 @default(now())
   historyEntry   AiProjectHistoryEntry    @relation(fields: [historyEntryId], references: [id], onDelete: Cascade)
   user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -330,6 +350,8 @@ model AiSuggestionFeedbackEvent {
   @@index([projectId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@index([feedbackType, createdAt(sort: Desc)])
+  @@index([provider, createdAt(sort: Desc)])
+  @@index([task, createdAt(sort: Desc)])
 }
 
 model ActivityEvent {
@@ -401,8 +423,25 @@ model Project {
   budgetTemplates BudgetTemplate[]
   aiProjectHistoryEntries AiProjectHistoryEntry[]
   aiSuggestionFeedbackEvents AiSuggestionFeedbackEvent[]
+  aiMemory AiProjectMemory[]
 
   @@index([companyId])
+}
+
+model AiProjectMemory {
+  id         String              @id @default(cuid())
+  projectId  String
+  memoryType AiProjectMemoryType @default(FACT)
+  fact       String
+  confidence Decimal             @default(0.8) @db.Decimal(4, 3)
+  source     String
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([memoryType])
+  @@map("project_ai_memory")
 }
 
 model Budget {

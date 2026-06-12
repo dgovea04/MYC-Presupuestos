@@ -84,7 +84,8 @@ const rateDecimals = 4;
 
 export async function parseRw7WorkbookToS10Snapshot(input: Rw7WorkbookInput): Promise<S10ExportSnapshot> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(input.buffer);
+  const workbookBuffer = input.buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
+  await workbook.xlsx.load(workbookBuffer);
 
   const budgetSheet = getRequiredWorksheet(workbook, "Pto");
   const apuSheet = getRequiredWorksheet(workbook, "ApuB");
@@ -217,7 +218,7 @@ function readBudgetStructure(worksheet: ExcelJS.Worksheet, fallbackSubbudgetDesc
 
     const titleLevel = parseBudgetLevelRow(marker, item, titleDescription);
     if (titleLevel) {
-      const levelSubbudget = currentSubbudget ?? createFallbackSubbudget(fallbackSubbudgetDescription, subpresupuestos);
+      const levelSubbudget: Rw7Subbudget = currentSubbudget ?? createFallbackSubbudget(fallbackSubbudgetDescription, subpresupuestos);
       if (!currentSubbudget) {
         currentSubbudget = levelSubbudget;
         subpresupuestos.push(currentSubbudget);
@@ -253,7 +254,7 @@ function readBudgetStructure(worksheet: ExcelJS.Worksheet, fallbackSubbudgetDesc
       continue;
     }
 
-    const itemSubbudget = currentSubbudget ?? createFallbackSubbudget(fallbackSubbudgetDescription, subpresupuestos);
+    const itemSubbudget: Rw7Subbudget = currentSubbudget ?? createFallbackSubbudget(fallbackSubbudgetDescription, subpresupuestos);
     if (!currentSubbudget) {
       currentSubbudget = itemSubbudget;
       subpresupuestos.push(currentSubbudget);
@@ -723,11 +724,15 @@ function readNumber(worksheet: ExcelJS.Worksheet, rowNumber: number, columnNumbe
 }
 
 function scalarCellValue(value: ExcelJS.CellValue): string | number | boolean | Date | null {
-  if (value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value instanceof Date) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value instanceof Date) {
     return value;
   }
 
-  const record = value as Record<string, unknown>;
+  const record = value as unknown as Record<string, unknown>;
   if ("result" in record) {
     return scalarUnknown(record.result);
   }
@@ -746,7 +751,11 @@ function scalarCellValue(value: ExcelJS.CellValue): string | number | boolean | 
 }
 
 function scalarUnknown(value: unknown): string | number | boolean | Date | null {
-  if (value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value instanceof Date) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value instanceof Date) {
     return value;
   }
 

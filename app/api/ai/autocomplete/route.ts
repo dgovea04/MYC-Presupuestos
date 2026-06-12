@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
+import { executeAiTask } from "@/lib/ai/gateway/execute";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
-import { buildAutocompletePrompt, buildTaskPayloadMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
-import { generateAiResponse } from "@/lib/ai/service";
 import { aiAutocompleteRequestSchema } from "@/lib/ai/validation";
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiAutocompleteRequestSchema.parse(await request.json());
-    const result = await generateAiResponse({
-      action: "autocomplete",
-      messages: buildTaskPayloadMessages({
-        jsonOnly: false,
-        message: buildAutocompletePrompt(data.input),
+    const result = await executeAiTask({
+      provider: data.provider,
+      task: "autocomplete",
+      payload: {
+        input: data.input,
         context: data.context,
-      }),
+      },
+      projectId: data.projectId,
       userId: session.user.id,
     });
 

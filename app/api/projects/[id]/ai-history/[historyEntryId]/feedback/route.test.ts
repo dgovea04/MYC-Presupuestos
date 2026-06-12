@@ -94,9 +94,22 @@ describe("POST /api/projects/[id]/ai-history/[historyEntryId]/feedback", () => {
     mocks.getProjectHeaderById.mockResolvedValue({ id: "project-1", name: "Hospital Norte" });
     mocks.recordAiSuggestionFeedback.mockResolvedValue(feedback);
 
-    const response = await POST(createRequest({ feedbackType: "EDITED", notes: "  Adjusted quantity  " }), {
-      params: Promise.resolve({ id: "project-1", historyEntryId: "history-1" }),
-    });
+    const response = await POST(
+      createRequest({
+        feedbackType: "EDITED",
+        notes: "  Adjusted quantity  ",
+        provider: " openai ",
+        model: "gpt-5-mini",
+        task: "review_budget",
+        suggestionType: "budget_review",
+        actionType: "manual_review",
+        promptHash: "prompt-hash-1",
+        responseHash: "response-hash-1",
+      }),
+      {
+        params: Promise.resolve({ id: "project-1", historyEntryId: "history-1" }),
+      },
+    );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ feedback });
@@ -107,6 +120,13 @@ describe("POST /api/projects/[id]/ai-history/[historyEntryId]/feedback", () => {
       userId: "user-1",
       feedbackType: "EDITED",
       notes: "Adjusted quantity",
+      provider: "openai",
+      model: "gpt-5-mini",
+      task: "review_budget",
+      suggestionType: "budget_review",
+      actionType: "manual_review",
+      promptHash: "prompt-hash-1",
+      responseHash: "response-hash-1",
     });
   });
 

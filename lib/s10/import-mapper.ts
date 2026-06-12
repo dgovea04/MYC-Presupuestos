@@ -658,7 +658,7 @@ function createBudgetItemFromSubpresupuestoDetalle(input: {
 }): BudgetItemRecord {
   const codPartida = cleanText(input.detalle.CodPartida ?? "");
   const description = cleanOptionalText(input.detalle.Descripcion) ?? cleanOptionalText(input.partida?.Descripcion) ?? codPartida;
-  const unit = cleanOptionalText(input.detalle.Unidad) ?? input.partida?.CodUnidad;
+  const unit = normalizeKnownUnit(cleanOptionalText(input.detalle.Unidad) ?? input.partida?.CodUnidad, input.warnings);
   const partida = {
     CodPresupuesto: input.detalle.CodPresupuesto,
     CodSubpresupuesto: input.detalle.CodSubpresupuesto,
