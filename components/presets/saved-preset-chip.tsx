@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Bookmark, GripVertical, Trash2 } from "lucide-react";
+import type React from "react";
 
 import type { DatePreset } from "@/lib/resumen-date-presets";
 
@@ -67,13 +68,15 @@ export function SavedPresetChip({
       transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
       draggable="true"
       onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", preset.id);
+        const dragEvent = event as unknown as React.DragEvent<HTMLDivElement>;
+        dragEvent.dataTransfer.effectAllowed = "move";
+        dragEvent.dataTransfer.setData("text/plain", preset.id);
         onDragIndexChange(index);
       }}
       onDragOver={(event) => {
+        const dragEvent = event as unknown as React.DragEvent<HTMLDivElement>;
         event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
+        dragEvent.dataTransfer.dropEffect = "move";
         if (dragIndex !== index) {
           onDropTargetChange(index);
         }

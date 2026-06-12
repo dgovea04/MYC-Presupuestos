@@ -9,9 +9,11 @@ export function THead({ className, ...props }: React.HTMLAttributes<HTMLTableSec
   return <thead className={cn("ui-table-head [&_tr]:border-b [&_tr]:border-slate-200", className)} {...props} />;
 }
 
-export function TBody({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <tbody className={cn("ui-table-body [&_tr:last-child]:border-0", className)} {...props} />;
-}
+export const TBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  function TBody({ className, ...props }, ref) {
+    return <tbody ref={ref} className={cn("ui-table-body [&_tr:last-child]:border-0", className)} {...props} />;
+  },
+);
 
 export const TR = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(function TR(
   { className, ...props },

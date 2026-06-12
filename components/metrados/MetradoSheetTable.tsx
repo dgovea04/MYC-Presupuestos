@@ -392,8 +392,8 @@ export function MetradoSheetTable({
                   onInputChange={onInputChange}
                   onDuplicateRow={onDuplicateRow}
                   onDeleteRow={onDeleteRow}
-                  onDragFillStart={(field, rawValue, isInput, pointerEvent) =>
-                    startDragFill(row.id, field, rawValue, isInput, pointerEvent)
+                  onDragFillStart={(field, rawValue, isInput) =>
+                    startDragFill(row.id, field, rawValue, isInput)
                   }
                 />
               ),
