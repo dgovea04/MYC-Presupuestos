@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     root: workspaceRoot,
   },
   images: {
+    formats: ["image/avif", "image/webp"],
     localPatterns: [
       {
         pathname: "/**",
@@ -21,7 +22,7 @@ const nextConfig: NextConfig = {
         search: "?v=20260529b",
       },
       {
-        pathname: "/myc-logo-tr-mini.png",
+        pathname: "/myc-logo-tr-mini.svg",
         search: "?v=20260529b",
       },
       {

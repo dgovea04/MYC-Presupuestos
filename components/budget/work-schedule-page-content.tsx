@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   memo,
@@ -19,8 +20,9 @@ import { CalendarDays, ChartSpline, MoreHorizontal, Package2, PenSquare, Save, W
 import type ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ExportPanel } from "@/components/exports/export-panel";
 import { Input } from "@/components/ui/input";
+
+const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";

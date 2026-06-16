@@ -7,8 +7,9 @@ import dynamic from "next/dynamic";
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { PolynomialAdjustmentHistory } from "@/components/budget/polynomial-adjustment-history";
 import { PolynomialAutoAdjustmentPreviewDialog } from "@/components/budget/polynomial-auto-adjustment-preview-dialog";
-import { ExportPanel } from "@/components/exports/export-panel";
 import { PolynomialFormulaMath } from "@/components/budget/polynomial-formula-math";
+
+const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
 import { PolynomialKCalculator } from "@/components/budget/polynomial-k-calculator";
 import { PolynomialMonomialsTable } from "@/components/budget/polynomial-monomials-table";
 import { PolynomialValidationSummary } from "@/components/budget/polynomial-validation-summary";

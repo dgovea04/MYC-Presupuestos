@@ -1,18 +1,28 @@
 import type { AiProviderRequest, AiProviderResult } from "@/lib/ai/gateway/types";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
+export const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+export const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
 
 export async function executeOpenAIProvider({
   fetchImpl = fetch,
   messages,
+  apiKey: requestApiKey,
+  modelPreference,
 }: AiProviderRequest): Promise<AiProviderResult> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const requestedModel = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+  const apiKey = requestApiKey || process.env.OPENAI_API_KEY;
+  const requestedModel = modelPreference || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY no configurado");
   }
+
+  const requestBody: Record<string, unknown> = {
+    model: requestedModel,
+    input: messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+  };
 
   const response = await fetchImpl(OPENAI_RESPONSES_URL, {
     method: "POST",
@@ -20,13 +30,7 @@ export async function executeOpenAIProvider({
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: requestedModel,
-      input: messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -44,6 +48,7 @@ export async function executeOpenAIProvider({
     requestedModel,
     fallbackUsed: false,
     warnings: [],
+    requestBody,
   };
 }
 

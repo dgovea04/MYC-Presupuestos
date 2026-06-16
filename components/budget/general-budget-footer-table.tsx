@@ -1,9 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Save, Trash2 } from "lucide-react";
-import { ExportPanel } from "@/components/exports/export-panel";
+
+const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
 import { Button } from "@/components/ui/button";
 import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";

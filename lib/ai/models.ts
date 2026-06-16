@@ -1,7 +1,7 @@
 export const AI_MODELS = {
   CHAT: "llama3.1",
   APU: "mistral",
-  REVIEW: "llama3.1",
+  REVIEW: "qwen2.5-coder:7b",
   AUTOCOMPLETE: "mistral",
   QWEN_CODE: "qwen2.5-coder:7b",
   CODE: "deepseek-coder",
@@ -49,6 +49,7 @@ const AI_ACTION_MODELS: Record<AiAction, AiActionModelConfig> = {
   },
   review: {
     requestedModel: AI_MODELS.REVIEW,
+    fallbackModel: AI_MODELS.CODE,
   },
   autocomplete: {
     requestedModel: AI_MODELS.AUTOCOMPLETE,

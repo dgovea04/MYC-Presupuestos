@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "UserSettings"
+ADD COLUMN IF NOT EXISTS "openaiApiKey" TEXT,
+ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
+ADD COLUMN IF NOT EXISTS "aiProviderPreference" TEXT NOT NULL DEFAULT 'auto',
+ADD COLUMN IF NOT EXISTS "openaiModel" TEXT,
+ADD COLUMN IF NOT EXISTS "geminiModel" TEXT;

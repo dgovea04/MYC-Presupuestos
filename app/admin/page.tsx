@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { Activity, Bot, ShieldCheck, Users } from "lucide-react";
+import { AdminCloudAiSettings } from "@/components/admin/admin-cloud-ai-settings";
 import { AdminUserAccessForm } from "@/components/admin/admin-user-access-form";
 import { ManualPaymentRequests } from "@/components/admin/manual-payment-requests";
 import { AppShell } from "@/components/layout/app-shell";
@@ -109,6 +110,10 @@ export default async function AdminPage({
             <ManualPaymentRequests requests={stats.manualPaymentRequests} />
           </CardContent>
         </Card>
+      </section>
+
+      <section>
+        <AdminCloudAiSettings />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">

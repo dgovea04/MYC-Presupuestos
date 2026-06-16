@@ -2,9 +2,50 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RiskAnalysisDashboard } from "@/components/risk/risk-analysis-dashboard";
 import type { RiskAnalysisPayload } from "@/types/risk";
+
+// Mock dynamically imported chart modules so they resolve synchronously
+vi.mock("@/components/risk/histogram-chart", () => ({
+  HistogramChart: (props: Record<string, unknown>) =>
+    React.createElement(
+      "div",
+      null,
+      props.result ? "Chart with data" : "Ejecuta una simulacion para ver el histograma.",
+    ),
+}));
+
+vi.mock("@/components/risk/s-curve-chart", () => ({
+  SCurveChart: () => React.createElement("div", null, "Curva S placeholder"),
+}));
+
+// Mock next/dynamic to synchronously render components via useEffect+useState
+vi.mock("next/dynamic", () => ({
+  default: (importFn: () => Promise<React.ComponentType | { default: React.ComponentType }>) => {
+    const DynamicWrapper = (props: Record<string, unknown>) => {
+      const [Comp, setComp] = React.useState<React.ComponentType | null>(null);
+      React.useEffect(() => {
+        let cancelled = false;
+        importFn().then((mod) => {
+          if (cancelled) return;
+          const component =
+            typeof mod === "function"
+              ? mod
+              : (mod as { default: React.ComponentType }).default ??
+                (Object.values(mod as Record<string, React.ComponentType>)[0] as React.ComponentType);
+          setComp(() => component);
+        });
+        return () => {
+          cancelled = true;
+        };
+      }, []);
+      return Comp ? React.createElement(Comp, props) : null;
+    };
+    DynamicWrapper.displayName = "DynamicMock";
+    return DynamicWrapper;
+  },
+}));
 
 let activeContainer: HTMLDivElement | null = null;
 
@@ -45,6 +86,11 @@ async function renderRiskAnalysisDashboard() {
 
   await act(async () => {
     root.render(<RiskAnalysisDashboard currencyDecimals={2} payload={createPayload()} />);
+  });
+
+  // Flush useEffect from the mocked next/dynamic wrapper so dynamic imports resolve
+  await act(async () => {
+    await Promise.resolve();
   });
 
   return {

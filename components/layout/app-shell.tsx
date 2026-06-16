@@ -56,6 +56,7 @@ export async function AppShell({
     defaultGeneralExpensesRate: 0.1,
     defaultUtilityRate: 0.08,
     defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+    aiProviderPreference: "auto",
   };
   const userId = session?.user?.id ?? currentUser?.id;
   const settings = initialSettings ?? (userId ? await getUserSettings(userId) : fallbackSettings);

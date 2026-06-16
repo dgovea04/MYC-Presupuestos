@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AI_PROVIDER_OPTIONS,
   DATE_FORMAT_OPTIONS,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
@@ -46,6 +47,11 @@ export const userSettingsSchema = z.object({
   defaultGeneralExpensesRate: decimalRateSchema,
   defaultUtilityRate: decimalRateSchema,
   defaultSubBudgetNames: projectSubBudgetNamesSchema.default([...DEFAULT_INITIAL_SUB_BUDGET_NAMES]),
+  openaiApiKey: z.string().trim().optional().nullable(),
+  geminiApiKey: z.string().trim().optional().nullable(),
+  aiProviderPreference: z.enum(AI_PROVIDER_OPTIONS).default("auto"),
+  openaiModel: z.string().trim().optional().nullable(),
+  geminiModel: z.string().trim().optional().nullable(),
 });
 
 export type UserSettingsInput = z.infer<typeof userSettingsSchema>;

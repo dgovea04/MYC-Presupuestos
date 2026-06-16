@@ -134,7 +134,7 @@ export function HeroSection() {
               Vista global del dashboard
             </div>
             <Image
-              src="/hero-1.png"
+              src="/hero-1.webp"
               alt="Dashboard de MYC Presupuestos con resumen de proyectos, presupuesto total y acciones rápidas"
               width={1200}
               height={575}

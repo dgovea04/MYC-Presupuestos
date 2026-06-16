@@ -1,8 +1,15 @@
 import { formatAssembledContextBlock } from "@/lib/ai/context/assembled-context";
-import { buildPromptFromTaskPayload, buildTaskPayloadMessages } from "@/lib/ai/prompts";
+import {
+  APU_OUTPUT_JSON_SHAPE,
+  buildOutputJsonShapeBlock,
+  buildPromptFromTaskPayload,
+  buildTaskPayloadMessages,
+  REVIEW_OUTPUT_JSON_SHAPE,
+} from "@/lib/ai/prompts";
 import { aiApuStructuredSchema, aiReviewStructuredSchema } from "@/lib/ai/structured-output";
 import { buildKhipuTaskPayload } from "@/lib/ai/task-payloads";
 import type { KhipuAiTask } from "@/lib/ai/gateway/types";
+import type { AiOutputSchemaName } from "@/lib/ai/task-payloads";
 import type { BuildSkillProviderRequestInput, KhipuSkill, SkillMessageInput } from "@/lib/ai/skills/types";
 
 const SKILLS: KhipuSkill[] = [
@@ -114,12 +121,32 @@ function createSkill({
 
 function buildDefaultSkillMessages({ assembledContext, payload, task }: SkillMessageInput, instruction: string) {
   const taskPayload = buildKhipuTaskPayload({ task, payload });
+  const taskPrompt = buildPromptFromTaskPayload(taskPayload);
+  const outputShapeBlock = getOutputShapeBlock(taskPayload.output.schema);
+  const userMessage = outputShapeBlock
+    ? [taskPrompt, "", outputShapeBlock].join("\n")
+    : taskPrompt;
+
   return [
     ...buildTaskPayloadMessages({
       jsonOnly: taskPayload.output.format === "json_only",
-      message: buildPromptFromTaskPayload(taskPayload),
+      message: userMessage,
       assembledContextBlock: formatAssembledContextBlock(assembledContext),
     }),
     { role: "system" as const, content: instruction },
   ];
+}
+
+function getOutputShapeBlock(schemaName: AiOutputSchemaName): string {
+  switch (schemaName) {
+    case "budget_review_v1":
+    case "formula_polinomica_review_v1":
+    case "quantity_takeoff_review_v1":
+    case "montecarlo_risk_analysis_v1":
+      return buildOutputJsonShapeBlock(REVIEW_OUTPUT_JSON_SHAPE);
+    case "apu_generation_v1":
+      return buildOutputJsonShapeBlock(APU_OUTPUT_JSON_SHAPE);
+    default:
+      return "";
+  }
 }

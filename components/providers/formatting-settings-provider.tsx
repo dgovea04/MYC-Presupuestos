@@ -22,6 +22,7 @@ const defaultFormattingSettings: UserSettingsRecord = {
   defaultGeneralExpensesRate: 0.1,
   defaultUtilityRate: 0.08,
   defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+  aiProviderPreference: "auto",
 };
 
 const FormattingSettingsContext = createContext<UserSettingsRecord>(defaultFormattingSettings);

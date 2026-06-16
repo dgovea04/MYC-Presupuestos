@@ -19,6 +19,7 @@ const validSettings = {
   defaultGeneralExpensesRate: 0.12,
   defaultUtilityRate: 0.08,
   defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+  aiProviderPreference: "auto" as const,
 };
 
 describe("userSettingsSchema", () => {

@@ -71,9 +71,9 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("Estos datos guian la respuesta de Khipu")).toBeTruthy();
     expect(getButtonByText("Actualizar estado")).toBeTruthy();
     expect(getButtonByText("Ollama local")).toBeTruthy();
-    expect(getButtonByText("ChatGPT Bridge")).toBeTruthy();
+    expect(getButtonByText("Bridge")).toBeTruthy();
     expect(getButtonByText("Ollama local").getAttribute("aria-pressed")).toBe("true");
-    expect(getButtonByText("ChatGPT Bridge").getAttribute("aria-pressed")).toBe("false");
+    expect(getButtonByText("Bridge").getAttribute("aria-pressed")).toBe("false");
     expect(getTextContaining("Chat tecnico")).toBeTruthy();
     expect(getTextContaining("Generar APU")).toBeTruthy();
     expect(getTextContaining("Revisar presupuesto")).toBeTruthy();
@@ -117,7 +117,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
 
     expect(getTextareaByLabel("Consulta tecnica").value).toBe("Consulta inicial");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledWith("/api/ai/health");
   });
 
@@ -133,11 +133,11 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("Ollama no disponible")).toBeTruthy();
 
     await act(async () => {
-      getButtonByText("ChatGPT Bridge").click();
+      getButtonByText("Bridge").click();
     });
 
     expect(getButtonByText("Ollama local").getAttribute("aria-pressed")).toBe("false");
-    expect(getButtonByText("ChatGPT Bridge").getAttribute("aria-pressed")).toBe("true");
+    expect(getButtonByText("Bridge").getAttribute("aria-pressed")).toBe("true");
     expect(getTextContaining("Bridge esperando")).toBeTruthy();
     expect(queryTextContaining("Ollama no disponible")).toBeNull();
   });
@@ -153,7 +153,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     const { getButtonByText, getTextareaByLabel } = await renderWorkspace();
     await act(async () => {
-      getButtonByText("ChatGPT Bridge").click();
+      getButtonByText("Bridge").click();
     });
     expect(getTextareaByLabel("Consulta tecnica").value).toBe("Consulta inicial");
     await act(async () => {
@@ -192,7 +192,8 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect((event as CustomEvent).detail.jsonPrompt).not.toHaveProperty("accion");
     expect((event as CustomEvent).detail.jsonPrompt).not.toHaveProperty("instrucciones");
     expect((event as CustomEvent).detail.jsonPrompt).not.toHaveProperty("formatoSalida");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Health + cloud status fetches on mount
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledWith("/api/ai/health");
 
     window.removeEventListener("MYCBridgeSendPrompt", bridgeListener);
@@ -221,7 +222,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const { getButtonByText } = await renderWorkspace({ projectId: "project-1" });
 
     await act(async () => {
-      getButtonByText("ChatGPT Bridge").click();
+      getButtonByText("Bridge").click();
     });
     await act(async () => {
       getButtonByText("Enviar a ChatGPT").click();
@@ -249,7 +250,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     const { getButtonByText, getByText } = await renderWorkspace();
     await act(async () => {
-      getButtonByText("ChatGPT Bridge").click();
+      getButtonByText("Bridge").click();
     });
     await act(async () => {
       getButtonByText("Enviar a ChatGPT").click();
@@ -1262,7 +1263,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const { getButtonByText, getByText, queryByText, rerender } = await renderWorkspace({ projectId: "project-1" });
 
     await act(async () => {
-      getButtonByText("ChatGPT Bridge").click();
+      getButtonByText("Bridge").click();
     });
     await act(async () => {
       getButtonByText("Enviar a ChatGPT").click();

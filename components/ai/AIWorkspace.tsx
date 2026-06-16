@@ -24,11 +24,23 @@ import {
   type MYCBridgeState,
 } from "@/lib/ai/myc-bridge-client";
 import { buildBridgeTaskPayload } from "@/lib/ai/task-payloads";
+import { PreviewDebugPanel } from "@/components/ai/debug-panel";
+import { APU_OUTPUT_JSON_SHAPE, REVIEW_OUTPUT_JSON_SHAPE } from "@/lib/ai/prompts";
 import type { AiApuStructuredData, AiContext, AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
 
 type AiAction = "chat" | "apu" | "review" | "autocomplete";
-type AiProvider = "ollama" | "chatgpt-bridge";
+type AiProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini";
+
+function toBackendProvider(frontend: AiProvider): "ollama" | "chatgpt_bridge" | "openai" | "gemini" {
+  return frontend === "chatgpt-bridge" ? "chatgpt_bridge" : frontend;
+}
+
+function mapActionToKhipuTask(action: AiAction): "chat" | "generate_apu" | "review_budget" | "autocomplete" {
+  if (action === "apu") return "generate_apu";
+  if (action === "review") return "review_budget";
+  return action;
+}
 
 type AiResult = AiEndpointResult;
 
@@ -209,6 +221,7 @@ function AIWorkspaceContent({
   const [lastRequest, setLastRequest] = useState<RequestState | null>(null);
   const [health, setHealth] = useState<AiHealth | null>(null);
   const [provider, setProvider] = useState<AiProvider>("ollama");
+  const [cloudConfigured, setCloudConfigured] = useState<{ openai: boolean; gemini: boolean }>({ openai: false, gemini: false });
   const [bridgeState, setBridgeState] = useState<MYCBridgeState | null>(null);
   const [history, setHistory] = useState<AiHistoryEntry[]>(() => (projectId ? [] : readStoredHistory()));
   const [sessionFeedbackByHistoryId, setSessionFeedbackByHistoryId] = useState<AiFeedbackState>(readStoredFeedback);
@@ -239,6 +252,7 @@ function AIWorkspaceContent({
 
   useEffect(() => {
     void loadHealth();
+    void loadCloudStatus();
   }, []);
 
   useEffect(() => {
@@ -346,7 +360,7 @@ function AIWorkspaceContent({
   const activeConfig = ACTIONS.find((action) => action.id === activeAction) ?? ACTIONS[0];
   const ActiveIcon = activeConfig.icon;
   const activeHealth = useMemo(() => (health ? health.actions[activeAction] : null), [activeAction, health]);
-  const providerStatus = readProviderStatus(provider, health?.status, bridgeState);
+  const providerStatus = readProviderStatus(provider, health?.status, bridgeState, cloudConfigured);
   const switchAction = (action: AiAction) => {
     setActiveAction(action);
     setResult(null);
@@ -355,7 +369,7 @@ function AIWorkspaceContent({
   };
   const contextRows = [
     { label: "Proyecto", value: context.project },
-    { label: "Modulo", value: context.module },
+    { label: "Módulo", value: context.module },
     { label: "Partida seleccionada", value: context.selectedItem },
     { label: "Unidad", value: context.unit },
     { label: "Costo actual", value: typeof context.currentCost === "number" ? String(context.currentCost) : undefined },
@@ -398,6 +412,12 @@ function AIWorkspaceContent({
       return;
     }
 
+    // Cloud providers go through /api/ai/execute with user API keys
+    if (provider === "openai" || provider === "gemini") {
+      await submitCloudRequest(request, requestHistoryScope, provider);
+      return;
+    }
+
     try {
       if (request.action === "chat") {
         const streamed = await submitStreamingChatRequest(request, requestHistoryScope);
@@ -414,8 +434,8 @@ function AIWorkspaceContent({
         },
         body: JSON.stringify(
           requestHistoryScope.mode === "project"
-            ? { ...request.payload, projectId: requestHistoryScope.projectId }
-            : request.payload,
+            ? { ...request.payload, provider: toBackendProvider(provider), projectId: requestHistoryScope.projectId }
+            : { ...request.payload, provider: toBackendProvider(provider) },
         ),
       });
       const payload: unknown = await response.json();
@@ -574,7 +594,7 @@ function AIWorkspaceContent({
                     {providerStatus.label}
                   </span>
                 </div>
-                <p>{provider === "ollama" ? "Ollama local" : "ChatGPT Bridge"}</p>
+                <p>{readProviderLabel(provider)}</p>
                 <Button variant="outline" size="sm" className="w-fit gap-2" onClick={() => void loadHealth()}>
                   <RefreshCw className="h-4 w-4" />
                   Actualizar estado
@@ -634,48 +654,39 @@ function AIWorkspaceContent({
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-sm font-semibold text-slate-900">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-                    provider === "ollama" ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
-                  )}
-                  type="button"
-                  aria-pressed={provider === "ollama"}
-                  onClick={() => {
-                    setProvider("ollama");
-                    pendingBridgeRequestId.current = null;
-                    latestBridgeRequest.current = null;
-                    clearPendingBridgeTimeout();
-                    setStreaming(false);
-                    setLoading(false);
-                    setError("");
-                    setResult(null);
-                  }}
-                >
-                  Ollama local
-                </button>
-                <button
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-                    provider === "chatgpt-bridge"
-                      ? "border-blue-300 bg-blue-50 text-blue-800"
-                      : "border-slate-200 bg-white text-slate-600",
-                  )}
-                  type="button"
-                  aria-pressed={provider === "chatgpt-bridge"}
-                  onClick={() => {
-                    setProvider("chatgpt-bridge");
-                    setStreaming(false);
-                    setError("");
-                    setResult(null);
-                  }}
-                >
-                  ChatGPT Bridge
-                </button>
+                {(["ollama", "chatgpt-bridge", "openai", "gemini"] as AiProvider[]).map((p) => (
+                  <button
+                    key={p}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                      provider === p ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
+                      (p === "openai" || p === "gemini") && !cloudConfigured[p] ? "opacity-60" : "",
+                    )}
+                    type="button"
+                    aria-pressed={provider === p}
+                    onClick={() => {
+                      setProvider(p);
+                      pendingBridgeRequestId.current = null;
+                      latestBridgeRequest.current = null;
+                      clearPendingBridgeTimeout();
+                      setStreaming(false);
+                      setLoading(false);
+                      setError("");
+                      setResult(null);
+                    }}
+                  >
+                    {readProviderButtonLabel(p)}
+                  </button>
+                ))}
               </div>
               {provider === "chatgpt-bridge" ? (
                 <p className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
                   Estado: {readBridgeStateLabel(bridgeState)}
+                </p>
+              ) : null}
+              {(provider === "openai" || provider === "gemini") && !cloudConfigured[provider] ? (
+                <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  {provider === "openai" ? "OpenAI" : "Gemini"} no configurado. Agrega tu API key en Configuración.
                 </p>
               ) : null}
             </div>
@@ -685,19 +696,19 @@ function AIWorkspaceContent({
               <p className="mt-1 text-sm text-slate-500">
                 Modelo solicitado:{" "}
                 <span className="font-medium text-slate-700">
-                  {provider === "ollama" ? activeHealth?.requestedModel ?? "Sin datos" : "ChatGPT web"}
+                  {readActiveModelLabel(provider, activeHealth, bridgeState)}
                 </span>
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 Modelo resuelto:{" "}
                 <span className="font-medium text-slate-700">
-                  {provider === "ollama" ? activeHealth?.model ?? "Sin datos" : "Pestana ChatGPT"}
+                  {readResolvedModelLabel(provider, activeHealth, bridgeState)}
                 </span>
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 Ultima latencia:{" "}
                 <span className="font-medium text-slate-700">
-                  {provider === "ollama" ? formatLatency(health?.metrics[activeAction]?.latencyMs) : "Depende de ChatGPT"}
+                  {readLatencyLabel(provider, health?.metrics[activeAction]?.latencyMs)}
                 </span>
               </p>
               {provider === "ollama" && activeHealth?.fallbackUsed ? (
@@ -854,6 +865,9 @@ function AIWorkspaceContent({
               </div>
             ) : null}
             {renderStructuredResult(result)}
+            {result.debug ? (
+              <PreviewDebugPanel debug={result.debug} />
+            ) : null}
           </div>
         ) : null}
 
@@ -962,6 +976,22 @@ function AIWorkspaceContent({
     }
   }
 
+  async function loadCloudStatus() {
+    try {
+      const response = await fetch("/api/settings/ai-provider");
+      if (!response.ok) return;
+      const payload: unknown = await response.json();
+      if (isRecord(payload)) {
+        setCloudConfigured({
+          openai: payload.openaiConfigured === true,
+          gemini: payload.geminiConfigured === true,
+        });
+      }
+    } catch {
+      // Cloud status is best-effort
+    }
+  }
+
   function submitBridgeRequest(request: RequestState) {
     try {
       const requestId = sendToMYCChatGPTBridge(buildBridgePrompt(request), {
@@ -995,8 +1025,8 @@ function AIWorkspaceContent({
     try {
       const requestBody = JSON.stringify(
         requestHistoryScope.mode === "project"
-          ? { ...request.payload, projectId: requestHistoryScope.projectId }
-          : request.payload,
+          ? { ...request.payload, provider: toBackendProvider(provider), projectId: requestHistoryScope.projectId }
+          : { ...request.payload, provider: toBackendProvider(provider) },
       );
 
       setStreaming(true);
@@ -1051,6 +1081,53 @@ function AIWorkspaceContent({
     } catch {
       setStreaming(false);
       return false;
+    }
+  }
+
+  async function submitCloudRequest(request: RequestState, requestHistoryScope: HistoryScope, cloudProvider: "openai" | "gemini") {
+    try {
+      const body: Record<string, unknown> = {
+        provider: cloudProvider,
+        task: mapActionToKhipuTask(request.action),
+        payload: request.payload as Record<string, unknown>,
+      };
+
+      if (requestHistoryScope.mode === "project") {
+        body.projectId = requestHistoryScope.projectId;
+      }
+
+      const response = await fetch("/api/ai/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload: unknown = await response.json();
+
+      if (!response.ok) {
+        throw new Error(readErrorMessage(payload));
+      }
+
+      const nextResult = readAiResult(payload);
+      const nextHistoryEntry =
+        requestHistoryScope.mode === "session"
+          ? {
+              id: `${Date.now()}-${request.action}-cloud`,
+              action: request.action,
+              summary: summarizeRequest(request),
+              context,
+              result: nextResult,
+              timestamp: new Date().toISOString(),
+            }
+          : null;
+
+      setResult(nextHistoryEntry ? { ...nextResult, historyEntry: nextHistoryEntry } : nextResult);
+      if (nextHistoryEntry && isSameHistoryScope(requestHistoryScope, latestHistoryScope.current)) {
+        setHistory((current) => [nextHistoryEntry, ...current]);
+      }
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "No se pudo completar la solicitud de IA.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1312,13 +1389,38 @@ function readAnswerFromBridgeJson(value: unknown) {
   return typeof value.answer === "string" ? value.answer : null;
 }
 
-function buildBridgePrompt(request: RequestState) {
-  return buildBridgeTaskPayload({ action: request.action, payload: request.payload });
+function buildBridgePrompt(request: RequestState): Record<string, unknown> {
+  const taskPayload = buildBridgeTaskPayload({ action: request.action, payload: request.payload });
+  const shape = getBridgeOutputShape(request.action);
+
+  if (!shape) return { ...taskPayload };
+
+  return {
+    ...taskPayload,
+    output: {
+      ...taskPayload.output,
+      shape,
+    },
+  };
+}
+
+function getBridgeOutputShape(action: AiAction): Record<string, unknown> | null {
+  if (action === "apu") return APU_OUTPUT_JSON_SHAPE;
+  if (action === "review") return REVIEW_OUTPUT_JSON_SHAPE;
+  return null;
 }
 
 function readSubmitLabel(provider: AiProvider, loading: boolean, streaming: boolean) {
   if (provider === "chatgpt-bridge") {
     return loading ? "Consultando ChatGPT" : "Enviar a ChatGPT";
+  }
+
+  if (provider === "openai") {
+    return loading ? "Consultando OpenAI" : "Enviar a OpenAI";
+  }
+
+  if (provider === "gemini") {
+    return loading ? "Consultando Gemini" : "Enviar a Gemini";
   }
 
   if (streaming) {
@@ -1587,6 +1689,7 @@ function readHistoryResult(value: unknown): AiResult | null {
     warnings: value.warnings.filter((warning): warning is string => typeof warning === "string"),
     latencyMs: typeof value.latencyMs === "number" ? value.latencyMs : undefined,
     structuredData: value.structuredData,
+    debug: isRecord(value.debug) ? value.debug : undefined,
   };
 }
 
@@ -1625,7 +1728,7 @@ function readHealthLabel(status: AiHealth["status"] | undefined) {
   return "Ollama no disponible";
 }
 
-function readProviderStatus(provider: AiProvider, status: AiHealth["status"] | undefined, bridgeState: MYCBridgeState | null) {
+function readProviderStatus(provider: AiProvider, status: AiHealth["status"] | undefined, bridgeState: MYCBridgeState | null, cloudConfigured?: { openai: boolean; gemini: boolean }) {
   if (provider === "ollama") {
     return {
       label: readHealthLabel(status),
@@ -1633,24 +1736,40 @@ function readProviderStatus(provider: AiProvider, status: AiHealth["status"] | u
     };
   }
 
-  if (bridgeState?.lastError) {
+  if (provider === "chatgpt-bridge") {
+    if (bridgeState?.lastError) {
+      return {
+        label: "Bridge con alerta",
+        className: "bg-rose-100 text-rose-700",
+      };
+    }
+
+    if (!bridgeState || bridgeState.status === "waiting_manual_copy" || bridgeState.hasChatGPTTab === false) {
+      return {
+        label: "Bridge esperando",
+        className: "bg-amber-100 text-amber-800",
+      };
+    }
+
     return {
-      label: "Bridge con alerta",
-      className: "bg-rose-100 text-rose-700",
+      label: "Bridge listo",
+      className: "bg-emerald-100 text-emerald-700",
     };
   }
 
-  if (!bridgeState || bridgeState.status === "waiting_manual_copy" || bridgeState.hasChatGPTTab === false) {
-    return {
-      label: "Bridge esperando",
-      className: "bg-amber-100 text-amber-800",
-    };
+  if (provider === "openai") {
+    return cloudConfigured?.openai
+      ? { label: "OpenAI API listo", className: "bg-emerald-100 text-emerald-700" }
+      : { label: "OpenAI sin key", className: "bg-amber-100 text-amber-800" };
   }
 
-  return {
-    label: "Bridge listo",
-    className: "bg-emerald-100 text-emerald-700",
-  };
+  if (provider === "gemini") {
+    return cloudConfigured?.gemini
+      ? { label: "Gemini API listo", className: "bg-emerald-100 text-emerald-700" }
+      : { label: "Gemini sin key", className: "bg-amber-100 text-amber-800" };
+  }
+
+  return { label: "Desconocido", className: "bg-slate-100 text-slate-600" };
 }
 
 function formatLatency(latencyMs: number | null | undefined) {
@@ -1909,4 +2028,43 @@ function readSeverityClass(severity: AiReviewStructuredData["findings"][number][
   if (severity === "high") return "bg-rose-100 text-rose-700";
   if (severity === "medium") return "bg-amber-100 text-amber-800";
   return "bg-emerald-100 text-emerald-700";
+}
+
+function readProviderLabel(provider: AiProvider) {
+  if (provider === "ollama") return "Ollama local";
+  if (provider === "chatgpt-bridge") return "ChatGPT Bridge";
+  if (provider === "openai") return "ChatGPT API";
+  if (provider === "gemini") return "Gemini API";
+  return provider;
+}
+
+function readProviderButtonLabel(provider: AiProvider) {
+  if (provider === "ollama") return "Ollama local";
+  if (provider === "chatgpt-bridge") return "Bridge";
+  if (provider === "openai") return "ChatGPT";
+  if (provider === "gemini") return "Gemini";
+  return provider;
+}
+
+function readActiveModelLabel(provider: AiProvider, activeHealth: { requestedModel?: string } | null, _bridgeState: MYCBridgeState | null) {
+  if (provider === "ollama") return activeHealth?.requestedModel ?? "Sin datos";
+  if (provider === "chatgpt-bridge") return "ChatGPT web";
+  if (provider === "openai") return "OpenAI API";
+  if (provider === "gemini") return "Gemini API";
+  return "Sin datos";
+}
+
+function readResolvedModelLabel(provider: AiProvider, activeHealth: { model?: string } | null, _bridgeState: MYCBridgeState | null) {
+  if (provider === "ollama") return activeHealth?.model ?? "Sin datos";
+  if (provider === "chatgpt-bridge") return "Pestana ChatGPT";
+  if (provider === "openai") return "OpenAI API";
+  if (provider === "gemini") return "Gemini API";
+  return "Sin datos";
+}
+
+function readLatencyLabel(provider: AiProvider, latencyMs: number | null | undefined) {
+  if (provider === "ollama") return formatLatency(latencyMs);
+  if (provider === "chatgpt-bridge") return "Depende de ChatGPT";
+  if (provider === "openai" || provider === "gemini") return "Nube";
+  return "Sin ejecuciones";
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Activity, ArrowRight, Calculator, FileSpreadsheet, ListTree, ReceiptText, Sigma } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -23,6 +24,27 @@ import { getUserSettings } from "@/lib/data/settings";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const session = await getAuthSession();
+  if (!session) return { title: "Presupuesto | MYC Presupuestos" };
+
+  const budget = await getBudgetById(id, session.user.id);
+  if (!budget) return { title: "Presupuesto | MYC Presupuestos" };
+
+  const isGeneral = budget.kind === "GENERAL";
+  const kindLabel = isGeneral ? "Presupuesto General" : "Sub Presupuesto";
+
+  return {
+    title: `${budget.name} | MYC Presupuestos`,
+    description: `${kindLabel} — ${budget.name}. Moneda: ${budget.currency}. Total: ${budget.totalAmount}. Presupuesto de obra para construcción.`,
+    openGraph: {
+      title: `${budget.name} | MYC Presupuestos`,
+      description: `${kindLabel}: ${budget.name}. Gestión de costos y presupuestos de obra.`,
+    },
+  };
+}
 
 export default async function BudgetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -62,6 +62,48 @@ describe("AI model runtime", () => {
     expect(resolveAiModel("json", ["deepseek-code:latest"]).model).toBe(AI_MODELS.CODE);
   });
 
+  it("uses qwen2.5-coder:7b for review budget when available", () => {
+    const resolution = resolveAiModel("review", ["qwen2.5-coder:7b", "deepseek-coder", "llama3.1"]);
+
+    expect(resolution).toEqual({
+      action: "review",
+      requestedModel: AI_MODELS.REVIEW,
+      model: AI_MODELS.REVIEW,
+      fallbackUsed: false,
+      warnings: [],
+    });
+  });
+
+  it("falls back to deepseek-coder when qwen2.5-coder:7b is missing for review budget", () => {
+    const resolution = resolveAiModel("review", ["deepseek-code:latest", "llama3.1"]);
+
+    expect(resolution.model).toBe(AI_MODELS.CODE);
+    expect(resolution.requestedModel).toBe(AI_MODELS.REVIEW);
+    expect(resolution.fallbackUsed).toBe(true);
+    expect(resolution.warnings[0]).toContain("qwen2.5-coder:7b");
+    expect(resolution.warnings[0]).toContain("deepseek-coder");
+  });
+
+  it("throws a functional error when neither qwen2.5-coder:7b nor its fallback is installed for review", () => {
+    expect(() => resolveAiModel("review", ["mistral"])).toThrowError(
+      "Falta instalar qwen2.5-coder:7b en Ollama para review. Tambien se intento usar deepseek-coder como fallback, pero no esta disponible.",
+    );
+  });
+
+  it("accepts qwen2.5-coder:latest as the 7b model for review", () => {
+    const resolution = resolveAiModel("review", ["qwen2.5-coder:latest"]);
+
+    expect(resolution.model).toBe(AI_MODELS.QWEN_CODE);
+    expect(resolution.fallbackUsed).toBe(false);
+  });
+
+  it("accepts deepseek-code as an Ollama alias for the review fallback model", () => {
+    const resolution = resolveAiModel("review", ["deepseek-code:latest", "llama3.1"]);
+
+    expect(resolution.model).toBe(AI_MODELS.CODE);
+    expect(resolution.fallbackUsed).toBe(true);
+  });
+
   it("does not fall back to mistral for structured JSON generation", () => {
     expect(() => resolveAiModel("json", ["mistral"])).toThrowError(
       "Falta instalar qwen2.5-coder:7b en Ollama para json. Tambien se intento usar deepseek-coder como fallback, pero no esta disponible.",
@@ -70,10 +112,10 @@ describe("AI model runtime", () => {
 
   it("reports required models with installation status for the diagnostics panel", () => {
     expect(summarizeAvailableModels(["llama3.1", "llama3.2:3b"])).toEqual([
-      { model: "llama3.1", installed: true, actions: ["chat", "review", "apu", "autocomplete"] },
+      { model: "llama3.1", installed: true, actions: ["chat", "apu", "autocomplete"] },
       { model: "mistral", installed: false, actions: ["apu", "autocomplete"] },
-      { model: "qwen2.5-coder:7b", installed: false, actions: ["json"] },
-      { model: "deepseek-coder", installed: false, actions: ["json"] },
+      { model: "qwen2.5-coder:7b", installed: false, actions: ["review", "json"] },
+      { model: "deepseek-coder", installed: false, actions: ["review", "json"] },
     ]);
 
     expect(AI_REQUIRED_MODELS).toEqual(["llama3.1", "mistral", "qwen2.5-coder:7b", "deepseek-coder"]);

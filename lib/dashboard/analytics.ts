@@ -1,0 +1,252 @@
+import { decimalToNumber } from "@/lib/db/serializers";
+import { prisma } from "@/lib/db/prisma";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type SubBudgetBreakdown = {
+  subBudgetName: string;
+  totalDirectCost: number;
+  totalAmount: number;
+  currency: string;
+};
+
+export type CostByPhaseItem = {
+  projectId: string;
+  projectName: string;
+  generalBudgetId: string;
+  generalTotal: number;
+  currency: string;
+  subBudgets: SubBudgetBreakdown[];
+};
+
+export type BudgetComparisonItem = {
+  projectId: string;
+  projectName: string;
+  budgetId: string;
+  totalAmount: number;
+  totalDirectCost: number;
+  currency: string;
+  updatedAt: Date;
+};
+
+export type CostTrendPoint = {
+  period: string; // "YYYY-MM"
+  label: string;
+  kValue: number;
+  projectName: string;
+  budgetName: string;
+};
+
+export type DeviationAlert = {
+  id: string;
+  projectName: string;
+  budgetName: string;
+  href: string;
+  originalAmount: number;
+  adjustedAmount: number;
+  deviationAmount: number;
+  deviationPercent: number;
+  period: string;
+  severity: "high" | "medium" | "low";
+  currency: string;
+};
+
+// ─── Analytics queries ────────────────────────────────────────────────────────
+
+export async function getCostByPhaseAnalytics(userId: string): Promise<CostByPhaseItem[]> {
+  const projects = await prisma.project.findMany({
+    where: {
+      company: { userId },
+    },
+    select: {
+      id: true,
+      name: true,
+      budgets: {
+        where: { kind: "GENERAL" },
+        select: {
+          id: true,
+          currency: true,
+          totalAmount: true,
+          childBudgets: {
+            where: { kind: "SUB_BUDGET" },
+            select: {
+              name: true,
+              totalDirectCost: true,
+              totalAmount: true,
+              currency: true,
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return projects
+    .filter((project) => project.budgets.length > 0)
+    .map((project) => {
+      const general = project.budgets[0];
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        generalBudgetId: general.id,
+        generalTotal: decimalToNumber(general.totalAmount),
+        currency: general.currency,
+        subBudgets: general.childBudgets.map((child) => ({
+          subBudgetName: child.name,
+          totalDirectCost: decimalToNumber(child.totalDirectCost),
+          totalAmount: decimalToNumber(child.totalAmount),
+          currency: child.currency,
+        })),
+      };
+    });
+}
+
+export async function getBudgetComparison(userId: string): Promise<BudgetComparisonItem[]> {
+  const budgets = await prisma.budget.findMany({
+    where: {
+      kind: "GENERAL",
+      project: {
+        company: { userId },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      currency: true,
+      totalAmount: true,
+      totalDirectCost: true,
+      updatedAt: true,
+      projectId: true,
+      project: {
+        select: { name: true },
+      },
+    },
+    orderBy: { totalAmount: "desc" },
+  });
+
+  return budgets.map((budget) => ({
+    projectId: budget.projectId,
+    projectName: budget.project.name,
+    budgetId: budget.id,
+    totalAmount: decimalToNumber(budget.totalAmount),
+    totalDirectCost: decimalToNumber(budget.totalDirectCost),
+    currency: budget.currency,
+    updatedAt: budget.updatedAt,
+  }));
+}
+
+export async function getCostTrends(userId: string): Promise<CostTrendPoint[]> {
+  const formulas = await prisma.polynomialFormula.findMany({
+    where: {
+      project: {
+        company: { userId },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      project: {
+        select: { name: true },
+      },
+      adjustments: {
+        select: {
+          month: true,
+          year: true,
+          kRounded: true,
+        },
+        orderBy: [{ year: "asc" }, { month: "asc" }],
+      },
+    },
+  });
+
+  const points: CostTrendPoint[] = [];
+
+  for (const formula of formulas) {
+    for (const adj of formula.adjustments) {
+      const kValue = decimalToNumber(adj.kRounded);
+      if (kValue === 0) continue;
+
+      const monthStr = String(adj.month).padStart(2, "0");
+      points.push({
+        period: `${adj.year}-${monthStr}`,
+        label: `${monthStr}/${adj.year}`,
+        kValue,
+        projectName: formula.project.name,
+        budgetName: formula.name,
+      });
+    }
+  }
+
+  return points.sort((a, b) => a.period.localeCompare(b.period));
+}
+
+export async function getDeviationAlerts(userId: string): Promise<DeviationAlert[]> {
+  const formulas = await prisma.polynomialFormula.findMany({
+    where: {
+      project: {
+        company: { userId },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      totalBaseAmount: true,
+      budgetId: true,
+      project: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      adjustments: {
+        select: {
+          id: true,
+          month: true,
+          year: true,
+          originalAmount: true,
+          adjustedAmount: true,
+        },
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+      },
+    },
+  });
+
+  const alerts: DeviationAlert[] = [];
+
+  for (const formula of formulas) {
+    // Take only the latest adjustment per formula
+    const latestAdjustment = formula.adjustments[0];
+    if (!latestAdjustment) continue;
+
+    const originalAmount = decimalToNumber(latestAdjustment.originalAmount);
+    const adjustedAmount = decimalToNumber(latestAdjustment.adjustedAmount);
+    const deviationAmount = Math.abs(adjustedAmount - originalAmount);
+    const deviationPercent =
+      originalAmount > 0 ? (deviationAmount / originalAmount) * 100 : 0;
+
+    if (deviationAmount < 1) continue; // Skip negligible deviations
+
+    const severity: DeviationAlert["severity"] =
+      deviationPercent > 15 ? "high" : deviationPercent > 7 ? "medium" : "low";
+
+    alerts.push({
+      id: latestAdjustment.id,
+      projectName: formula.project.name,
+      budgetName: formula.name,
+      href: `/budgets/${formula.budgetId}/polynomial-formula?focus=adjustment`,
+      originalAmount,
+      adjustedAmount,
+      deviationAmount,
+      deviationPercent: Math.round(deviationPercent * 10) / 10,
+      period: `${latestAdjustment.month}/${latestAdjustment.year}`,
+      severity,
+      currency: "PEN",
+    });
+  }
+
+  return alerts.sort((a, b) => b.deviationPercent - a.deviationPercent);
+}

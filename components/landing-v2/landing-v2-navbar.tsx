@@ -4,15 +4,13 @@ import { Menu } from "lucide-react";
 import { landingV2NavItems } from "@/components/landing-v2/landing-v2-content";
 import { LandingV2Button } from "@/components/landing-v2/landing-v2-button";
 
-const LOGO_VERSION = "20260529b";
-
 export function LandingV2Navbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-[#222222] bg-[#0f0f0f]/92 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-6 px-4 sm:px-6 xl:px-0">
         <Link href="/" className="flex items-center gap-3" aria-label="MYC Presupuestos">
           <Image
-            src={`/myc-logo-white-tr-300px-v1.png?v=${LOGO_VERSION}`}
+            src="/nuevo-logo-white-300-v3.png"
             alt="MYC Presupuestos"
             width={132}
             height={43}

@@ -45,6 +45,14 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import type { CellValue } from "exceljs";
 import { suggestPartidaMatches, type BudgetPasteSuggestedMatch } from "@/lib/budgets/sub-budget-partida-suggestions";
 import type { AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
+import {
+  onMYCBridgeResponse,
+  sendToMYCChatGPTBridge,
+  type MYCBridgeResponse,
+} from "@/lib/ai/myc-bridge-client";
+import { buildBridgeTaskPayload } from "@/lib/ai/task-payloads";
+import { readBridgeAiResult } from "@/lib/ai/bridge-parsing";
+import { REVIEW_OUTPUT_JSON_SHAPE } from "@/lib/ai/prompts";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import type { NoteTaskRecord } from "@/types/notes";
 import type { BudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
@@ -112,6 +120,12 @@ type HeaderActionMenuState = {
   left: number;
   trigger: HTMLElement | null;
 };
+
+type AiProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini";
+
+function toBackendProvider(frontend: AiProvider): "ollama" | "chatgpt_bridge" | "openai" | "gemini" {
+  return frontend === "chatgpt-bridge" ? "chatgpt_bridge" : frontend;
+}
 type AiBudgetPanelState =
   | {
       kind: "chat";
@@ -301,6 +315,7 @@ export function BudgetEditor({
   const [itemActionMenu, setItemActionMenu] = useState<ItemActionMenuState | null>(null);
   const [headerActionMenu, setHeaderActionMenu] = useState<HeaderActionMenuState | null>(null);
   const [aiPanel, setAiPanel] = useState<AiBudgetPanelState | null>(null);
+  const [provider, setProvider] = useState<AiProvider>("ollama");
   const [catalogInsertTarget, setCatalogInsertTarget] = useState<InsertTarget | null>(null);
   const [catalogInsertQuery, setCatalogInsertQuery] = useState("");
   const [catalogSelectedIds, setCatalogSelectedIds] = useState<string[]>([]);
@@ -408,6 +423,8 @@ export function BudgetEditor({
   const levelActionMenuRef = useRef<HTMLDivElement | null>(null);
   const itemActionMenuRef = useRef<HTMLDivElement | null>(null);
   const headerActionMenuRef = useRef<HTMLDivElement | null>(null);
+  const pendingBridgeRequestIdRef = useRef<string | null>(null);
+  const pendingBridgeTimeoutRef = useRef<number | null>(null);
   const estimatedBudgetRowHeight = isExcelMode ? excelRowHeight : 58;
 
   useEffect(() => {
@@ -765,6 +782,31 @@ export function BudgetEditor({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeRowId, apuSheetSession, levelIdSet, openApuSheet, summary]);
 
+  useEffect(() => {
+    const unsubscribeResponse = onMYCBridgeResponse((response) => {
+      if (response.requestId && pendingBridgeRequestIdRef.current && response.requestId !== pendingBridgeRequestIdRef.current) return;
+      clearPendingBridgeTimeoutInternal();
+      pendingBridgeRequestIdRef.current = null;
+      if (response.error) {
+        setAiPanel((current) =>
+          current && current.kind === "review" ? { ...current, loading: false, error: response.error ?? "" } : current,
+        );
+        return;
+      }
+      const nextResult = readBridgeAiResult(response);
+      setAiPanel((current) =>
+        current && current.kind === "review"
+          ? { ...current, result: nextResult, loading: false, error: "" }
+          : current,
+      );
+    });
+
+    return () => {
+      unsubscribeResponse();
+      clearPendingBridgeTimeoutInternal();
+    };
+  }, []);
+
   function addLevel(type: BudgetLevelType, parentId?: string | null) {
     const insertion = resolveLevelInsertion(type, rows, state.levels, activeRowIdRef.current, parentId);
 
@@ -846,6 +888,64 @@ export function BudgetEditor({
     setExcelImportLoading(false);
   }
 
+  function submitBudgetBridgeReview(budgetSummary: string) {
+    try {
+      const bridgePrompt = buildBudgetBridgePrompt(budgetSummary);
+      const requestId = sendToMYCChatGPTBridge(bridgePrompt, {
+        source: "myc-presupuestos",
+        provider: "chatgpt-bridge",
+        action: "review_budget",
+      });
+      pendingBridgeRequestIdRef.current = requestId;
+      clearPendingBridgeTimeoutInternal();
+      pendingBridgeTimeoutRef.current = window.setTimeout(() => {
+        if (pendingBridgeRequestIdRef.current !== requestId) return;
+        pendingBridgeRequestIdRef.current = null;
+        setAiPanel((current) =>
+          current && current.kind === "review"
+            ? { ...current, loading: false, error: "ChatGPT Bridge no devolvió respuesta. Verifica que la extensión esté cargada." }
+            : current,
+        );
+      }, 600000);
+    } catch (caughtError) {
+      setAiPanel({
+        kind: "review",
+        title: "Revision IA del presupuesto",
+        result: null,
+        loading: false,
+        error: caughtError instanceof Error ? caughtError.message : "No se pudo enviar la solicitud a ChatGPT Bridge.",
+      });
+    }
+  }
+
+  function clearPendingBridgeTimeoutInternal() {
+    if (pendingBridgeTimeoutRef.current) {
+      window.clearTimeout(pendingBridgeTimeoutRef.current);
+      pendingBridgeTimeoutRef.current = null;
+    }
+  }
+
+  function buildBudgetBridgePrompt(budgetSummary: string): Record<string, unknown> {
+    const taskPayload = buildBridgeTaskPayload({
+      action: "review",
+      payload: {
+        budgetSummary,
+        context: {
+          project: projectName,
+          module: "Editor de presupuesto",
+          activeTable: "Presupuesto",
+        },
+      },
+    });
+    return {
+      ...taskPayload,
+      output: {
+        ...taskPayload.output,
+        shape: REVIEW_OUTPUT_JSON_SHAPE,
+      },
+    };
+  }
+
   const updateLevel = useCallback((levelId: string, patch: Partial<BudgetLevelRecord>) => {
     setState((current) => ({
       ...current,
@@ -884,7 +984,7 @@ export function BudgetEditor({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, provider: toBackendProvider(provider) }),
       });
       const payload: unknown = await response.json();
 
@@ -909,6 +1009,17 @@ export function BudgetEditor({
     const title = "Revision IA del presupuesto";
     setAiPanel({ kind: "review", title, result: null, loading: true, error: "" });
 
+    if (provider === "chatgpt-bridge") {
+      const budgetSummary = buildAiBudgetReviewSummary({
+        budgetName: summary.name,
+        currency: summary.currency,
+        items: summary.items,
+        totalDirectCost: summary.totals.totalDirectCost,
+      });
+      submitBudgetBridgeReview(budgetSummary);
+      return;
+    }
+
     try {
       const response = await fetch("/api/ai/review", {
         method: "POST",
@@ -916,6 +1027,7 @@ export function BudgetEditor({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          provider: toBackendProvider(provider),
           budgetSummary: buildAiBudgetReviewSummary({
             budgetName: summary.name,
             currency: summary.currency,
@@ -1807,6 +1919,22 @@ export function BudgetEditor({
                 >
                   {saving ? "Guardando..." : "Guardar"}
                 </Button>
+                <div className="inline-flex items-center rounded-full border border-slate-200/90 bg-white/90 p-0.5 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
+                  {(["ollama", "chatgpt-bridge", "openai", "gemini"] as AiProvider[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setProvider(p)}
+                      aria-pressed={provider === p}
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                        provider === p ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700",
+                      )}
+                    >
+                      {getBudgetProviderLabel(p)}
+                    </button>
+                  ))}
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -1936,7 +2064,7 @@ export function BudgetEditor({
       ) : null}
 
       {aiPanel ? (
-        <AiBudgetActionDialog panel={aiPanel} onClose={() => setAiPanel(null)} onApplyAutocomplete={applyAiAutocomplete} />
+        <AiBudgetActionDialog panel={aiPanel} onClose={() => setAiPanel(null)} onApplyAutocomplete={applyAiAutocomplete} provider={provider} />
       ) : null}
 
       {isCatalogMenuOpen && catalogMenu?.rowId === catalogSelectorRowId ? (
@@ -2539,10 +2667,12 @@ function AiBudgetActionDialog({
   panel,
   onClose,
   onApplyAutocomplete,
+  provider = "ollama",
 }: {
   panel: AiBudgetPanelState;
   onClose: () => void;
   onApplyAutocomplete: () => void;
+  provider?: AiProvider;
 }) {
   const reviewData = panel.result && isAiReviewStructuredData(panel.result.structuredData) ? panel.result.structuredData : null;
 
@@ -2566,7 +2696,7 @@ function AiBudgetActionDialog({
             </Dialog.Close>
           </div>
 
-          {panel.loading ? <p className="mt-4 shrink-0 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-700">Consultando Ollama local...</p> : null}
+          {panel.loading ? <p className="mt-4 shrink-0 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-700">{readBudgetAiLoadingLabel(provider)}</p> : null}
           {panel.error ? <p className="mt-4 shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{panel.error}</p> : null}
 
           {panel.result ? (
@@ -5156,7 +5286,7 @@ function readString(value: unknown): string {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getHeaderCellClass(column: ActiveColumn, activeColumn: ActiveColumn, isExcelMode: boolean, extraClassName?: string) {
@@ -5208,4 +5338,55 @@ function calculateCodeInputWidth(code: string): number {
 
 function calculateCodeParentWidth(code: string): number {
   return calculateCodeInputWidth(code) + BUDGET_TABLE_CODE_PARENT_ICON_WIDTH + BUDGET_TABLE_CODE_PARENT_GAP_WIDTH;
+}
+
+function tryParseJsonFromRawText(text: string): Record<string, unknown> | null {
+  // Intento 1: parsear directamente
+  try {
+    const parsed = JSON.parse(text);
+    if (isRecord(parsed)) return parsed;
+  } catch {
+    // No es JSON directo
+  }
+
+  // Intento 2: extraer desde bloque markdown ```json ... ```
+  const jsonBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (jsonBlockMatch) {
+    try {
+      const parsed = JSON.parse(jsonBlockMatch[1].trim());
+      if (isRecord(parsed)) return parsed;
+    } catch {
+      // No es JSON dentro del bloque
+    }
+  }
+
+  // Intento 3: buscar el primer objeto JSON {} en el texto
+  const objectMatch = text.match(/\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/);
+  if (objectMatch) {
+    try {
+      const parsed = JSON.parse(objectMatch[0]);
+      if (isRecord(parsed)) return parsed;
+    } catch {
+      // No se pudo extraer JSON
+    }
+  }
+
+  return null;
+}
+
+export { tryParseJsonFromRawText };
+
+function getBudgetProviderLabel(provider: AiProvider) {
+  if (provider === "ollama") return "Ollama";
+  if (provider === "chatgpt-bridge") return "Bridge";
+  if (provider === "openai") return "ChatGPT";
+  if (provider === "gemini") return "Gemini";
+  return provider;
+}
+
+function readBudgetAiLoadingLabel(provider: AiProvider) {
+  if (provider === "chatgpt-bridge") return "Enviando a ChatGPT...";
+  if (provider === "openai") return "Consultando OpenAI...";
+  if (provider === "gemini") return "Consultando Gemini...";
+  return "Consultando Ollama local...";
 }

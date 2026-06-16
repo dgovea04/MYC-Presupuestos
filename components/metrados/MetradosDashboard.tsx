@@ -1194,7 +1194,14 @@ export function MetradosDashboard({
               onAddGroupRow={addGroupRow}
               onChangeGroupLabel={updateGroupLabel}
               onDuplicateRow={(rowId) => setRows((current) => duplicateMetradoRow(current, rowId))}
-              onDeleteRow={(rowId) => setRows((current) => deleteMetradoRow(current, rowId))}
+              onDeleteRow={(rowId) => {
+                setRows((current) => deleteMetradoRow(current, rowId));
+                setSelectedRowIds((current) => {
+                  const next = new Set(current);
+                  next.delete(rowId);
+                  return next;
+                });
+              }}
               onPatchRow={(rowId, patch) => {
                 if (patch.formulaKey) {
                   const selectedFormula = availableFormulas.find((formula) => formula.key === patch.formulaKey);

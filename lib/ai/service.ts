@@ -14,8 +14,12 @@ import { recordAiActionMetric } from "@/lib/ai/runtime";
 import { parseStructuredAiOutput } from "@/lib/ai/structured-output";
 import type { AiAction, AiEndpointResult, AiMessage } from "@/lib/ai/types";
 import { assertCanUseAi, recordAiUsage } from "@/lib/ai/usage";
+import { OPENAI_RESPONSES_URL, DEFAULT_OPENAI_MODEL } from "@/lib/ai/gateway/providers/openai-provider";
+import { buildGeminiRequestBody, DEFAULT_GEMINI_MODEL, isGemmaModel, resolveEffectiveGeminiModel, simplifyMessagesForGemma } from "@/lib/ai/gateway/providers/gemini-provider";
 
 type FetchLike = typeof fetch;
+
+const STREAM_TIMEOUT_MS = 180_000;
 
 type GenerateAiResponseInput<TStructuredData = unknown> = {
   action: AiAction;
@@ -25,56 +29,298 @@ type GenerateAiResponseInput<TStructuredData = unknown> = {
   userId?: string;
 };
 
+type RequestBodyRef = { current?: Record<string, unknown> };
+
 type StreamChatAiResponseInput = {
   messages: AiMessage[];
   fetchImpl?: FetchLike;
   userId?: string;
+  provider?: string;
+  apiKey?: string;
+  modelPreference?: string;
 };
 
 export type StreamChatAiResponseEvent =
   | { type: "delta"; text: string }
   | { type: "final"; result: AiEndpointResult };
 
+export async function* streamOpenAIChat({
+  messages,
+  apiKey,
+  modelPreference,
+  fetchImpl = fetch,
+  requestBodyRef,
+}: {
+  messages: AiMessage[];
+  apiKey: string;
+  modelPreference?: string;
+  fetchImpl?: FetchLike;
+  requestBodyRef?: RequestBodyRef;
+}): AsyncIterable<string> {
+  const model = modelPreference || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    input: messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    stream: true,
+  };
+  if (requestBodyRef) requestBodyRef.current = requestBody;
+
+  let response: Response;
+  const abortController = new AbortController();
+  let timeout = setTimeout(() => abortController.abort(), STREAM_TIMEOUT_MS);
+  const resetTimeout = () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => abortController.abort(), STREAM_TIMEOUT_MS);
+  };
+
+  try {
+    response = await fetchImpl(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      signal: abortController.signal,
+      body: JSON.stringify(requestBody),
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    if (abortController.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+      throw new AiRuntimeError("timeout", `OpenAI tardo mas de ${Math.round(STREAM_TIMEOUT_MS / 1000)} segundos en responder.`);
+    }
+    throw new AiRuntimeError("connection", "No se pudo conectar con OpenAI. Verifica tu API key y conexion a internet.");
+  }
+
+  if (!response.ok) {
+    clearTimeout(timeout);
+    const errorText = await readResponseTextSafely(response);
+    throw new AiRuntimeError("invalid_response", `OpenAI respondio con estado ${response.status}. ${errorText}`.trim());
+  }
+
+  if (!response.body) {
+    clearTimeout(timeout);
+    throw new AiRuntimeError("invalid_response", "OpenAI no devolvio un stream de respuesta.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      resetTimeout();
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const text = parseOpenAIStreamLine(line);
+        if (text) yield text;
+      }
+    }
+
+    buffer += decoder.decode();
+    const finalText = parseOpenAIStreamLine(buffer);
+    if (finalText) yield finalText;
+  } finally {
+    clearTimeout(timeout);
+    reader.releaseLock();
+  }
+}
+
+export async function* streamGeminiChat({
+  messages,
+  apiKey,
+  modelPreference,
+  fetchImpl = fetch,
+  requestBodyRef,
+}: {
+  messages: AiMessage[];
+  apiKey: string;
+  modelPreference?: string;
+  fetchImpl?: FetchLike;
+  requestBodyRef?: RequestBodyRef;
+}): AsyncIterable<string> {
+  const model = modelPreference || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  const isGemma = isGemmaModel(model);
+  const effectiveMessages = isGemma ? simplifyMessagesForGemma(messages) : messages;
+  // Gemma uses simplified messages with flat prompt (Ollama-style SYSTEM: prefix in contents)
+  const requestBody = buildGeminiRequestBody(effectiveMessages, { useFlatPrompt: isGemma });
+  if (requestBodyRef) requestBodyRef.current = requestBody;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+
+  let response: Response;
+  const abortController = new AbortController();
+  let timeout = setTimeout(() => abortController.abort(), STREAM_TIMEOUT_MS);
+  const resetTimeout = () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => abortController.abort(), STREAM_TIMEOUT_MS);
+  };
+
+  try {
+    response = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: abortController.signal,
+      body: JSON.stringify(requestBody),
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    if (abortController.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+      throw new AiRuntimeError("timeout", `Gemini tardo mas de ${Math.round(STREAM_TIMEOUT_MS / 1000)} segundos en responder.`);
+    }
+    throw new AiRuntimeError("connection", "No se pudo conectar con Gemini. Verifica tu API key y conexion a internet.");
+  }
+
+  if (!response.ok) {
+    clearTimeout(timeout);
+    const errorText = await readResponseTextSafely(response);
+    throw new AiRuntimeError("invalid_response", `Gemini respondio con estado ${response.status}. ${errorText}`.trim());
+  }
+
+  if (!response.body) {
+    clearTimeout(timeout);
+    throw new AiRuntimeError("invalid_response", "Gemini no devolvio un stream de respuesta.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      resetTimeout();
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const text = parseGeminiStreamLine(line);
+        if (text) yield text;
+      }
+    }
+
+    buffer += decoder.decode();
+    const finalText = parseGeminiStreamLine(buffer);
+    if (finalText) yield finalText;
+  } finally {
+    clearTimeout(timeout);
+    reader.releaseLock();
+  }
+}
+
 export async function* streamChatAiResponse({
   messages,
   fetchImpl,
   userId,
+  provider,
+  apiKey,
+  modelPreference,
 }: StreamChatAiResponseInput): AsyncIterable<StreamChatAiResponseEvent> {
   const action: AiAction = "chat";
   const startedAt = Date.now();
   const promptText = messages.map((message) => message.content).join("\n");
   const estimatedTokens = estimateAiTokens(promptText);
   let answer = "";
+  let resolvedModel = "";
+  let requestedModel = "";
+  let fallbackUsed = false;
+  const warnings: string[] = [];
+  const requestBodyRef: RequestBodyRef = {};
+  const effectiveProvider = resolveStreamingProvider(provider);
 
   try {
     if (userId) {
       await assertCanUseAi({ userId, estimatedTokens });
     }
 
-    const availableModels = await listInstalledOllamaModels(fetchImpl);
-    const resolution = resolveAiModel(action, availableModels);
+    // Route streaming to the appropriate provider
+    if (effectiveProvider === "openai") {
+      if (!apiKey) {
+        throw new AiRuntimeError("connection", "OPENAI_API_KEY no configurado. Agrega tu API key en Configuracion.");
+      }
+      const model = modelPreference || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+      resolvedModel = model;
+      requestedModel = model;
 
-    for await (const text of streamOllamaChat({
-      model: resolution.model,
-      messages,
-      fetchImpl,
-    })) {
-      answer += text;
-      yield { type: "delta", text };
+      for await (const text of streamOpenAIChat({ messages, apiKey, modelPreference, fetchImpl, requestBodyRef })) {
+        answer += text;
+        yield { type: "delta", text };
+      }
+    } else if (effectiveProvider === "gemini") {
+      if (!apiKey) {
+        throw new AiRuntimeError("connection", "GEMINI_API_KEY no configurado. Agrega tu API key en Configuracion.");
+      }
+      const rawModel = modelPreference || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+      // Streaming is only used for chat; Gemma models fall back to default for non-autocomplete tasks
+      const resolved = resolveEffectiveGeminiModel(rawModel, "chat");
+      requestedModel = rawModel;
+      resolvedModel = resolved.model;
+      if (resolved.warning) warnings.push(resolved.warning);
+
+      for await (const text of streamGeminiChat({ messages, apiKey, modelPreference: resolved.model, fetchImpl, requestBodyRef })) {
+        answer += text;
+        yield { type: "delta", text };
+      }
+    } else {
+      // Ollama (default)
+      const availableModels = await listInstalledOllamaModels(fetchImpl);
+      const resolution = resolveAiModel(action, availableModels);
+      resolvedModel = resolution.model;
+      requestedModel = resolution.requestedModel;
+      fallbackUsed = resolution.fallbackUsed;
+      warnings.push(...resolution.warnings);
+
+      for await (const text of streamOllamaChat({
+        model: resolution.model,
+        messages,
+        fetchImpl,
+      })) {
+        answer += text;
+        yield { type: "delta", text };
+      }
     }
 
     const latencyMs = Date.now() - startedAt;
+
+    // Build enriched debug similar to generateAiResponse
+    const enrichedDebug: AiEndpointResult["debug"] = {
+      structuredParseStatus: "not_requested",
+      rawAnswer: answer,
+      context: messages.find((m) => m.role === "system")?.content ?? undefined,
+      messages,
+      ai: {
+        answer: answer.trim(),
+        rawAnswer: answer,
+        structuredParseStatus: "not_requested",
+      },
+      fallback: {
+        used: fallbackUsed,
+        reason: warnings.length > 0 ? warnings.join("; ") : undefined,
+      },
+      validationWarnings: warnings,
+      requestBody: requestBodyRef.current,
+    };
+
     const result: AiEndpointResult = {
       answer: answer.trim(),
-      model: resolution.model,
-      requestedModel: resolution.requestedModel,
-      fallbackUsed: resolution.fallbackUsed,
-      warnings: resolution.warnings,
+      model: resolvedModel,
+      requestedModel,
+      fallbackUsed,
+      warnings,
       latencyMs,
-      debug: {
-        structuredParseStatus: "not_requested",
-        rawAnswer: answer,
-      },
+      debug: enrichedDebug,
     };
 
     recordAiActionMetric(action, { latencyMs, lastError: result.warnings[0] ?? null });
@@ -83,8 +329,8 @@ export async function* streamChatAiResponse({
       await recordAiUsage({
         userId,
         action,
-        provider: "ollama",
-        model: resolution.model,
+        provider: provider ?? "ollama",
+        model: resolvedModel,
         estimatedTokens,
         actualTokens: estimateAiTokens(`${promptText}\n${result.answer}`),
       });
@@ -120,6 +366,73 @@ export async function* streamChatAiResponse({
 
     throw error;
   }
+}
+
+function resolveStreamingProvider(provider?: string): "ollama" | "openai" | "gemini" {
+  if (provider === "openai") return "openai";
+  if (provider === "gemini") return "gemini";
+  return "ollama";
+}
+
+function parseOpenAIStreamLine(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data: ")) return null;
+
+  const dataText = trimmed.slice("data: ".length);
+  if (dataText === "[DONE]") return null;
+
+  try {
+    const parsed = JSON.parse(dataText);
+    if (!isRecord(parsed)) return null;
+
+    // Handle response.output_text.delta events
+    if (parsed.type === "response.output_text.delta" && typeof parsed.delta === "string") {
+      return parsed.delta;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseGeminiStreamLine(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data: ")) return null;
+
+  const dataText = trimmed.slice("data: ".length);
+  if (!dataText) return null;
+
+  try {
+    const parsed = JSON.parse(dataText);
+    if (!isRecord(parsed) || !Array.isArray(parsed.candidates)) return null;
+
+    let combined = "";
+    for (const candidate of parsed.candidates) {
+      if (!isRecord(candidate) || !isRecord(candidate.content) || !Array.isArray(candidate.content.parts)) continue;
+      for (const part of candidate.content.parts) {
+        if (isRecord(part) && typeof part.text === "string") {
+          combined += part.text;
+        }
+      }
+    }
+
+    return combined.length > 0 ? combined : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readResponseTextSafely(response: Response): Promise<string> {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function generateAiResponse<TStructuredData = unknown>({
@@ -178,6 +491,30 @@ export async function generateAiResponse<TStructuredData = unknown>({
       });
     }
 
+    const repairedRawAnswer =
+      result.debug && "repairedRawAnswer" in result.debug
+        ? (result.debug as { repairedRawAnswer?: string }).repairedRawAnswer
+        : undefined;
+
+    const enrichedDebug = result.debug
+      ? {
+          ...result.debug,
+          context: messages.find((m) => m.role === "system")?.content ?? undefined,
+          messages,
+          ai: {
+            answer: result.answer,
+            rawAnswer: result.debug.rawAnswer,
+            repairedRawAnswer,
+            structuredParseStatus: result.debug.structuredParseStatus,
+          },
+          fallback: {
+            used: resolution.fallbackUsed,
+            reason: resolution.warnings.length > 0 ? resolution.warnings.join("; ") : undefined,
+          },
+          validationWarnings: result.warnings,
+        }
+      : undefined;
+
     return {
       answer: result.answer,
       model: resolution.model,
@@ -186,7 +523,7 @@ export async function generateAiResponse<TStructuredData = unknown>({
       warnings: result.warnings,
       latencyMs,
       structuredData: result.structuredData,
-      debug: result.debug,
+      debug: enrichedDebug,
     };
   } catch (error) {
     const latencyMs = Date.now() - startedAt;

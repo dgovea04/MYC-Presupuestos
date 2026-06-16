@@ -38,6 +38,26 @@ export type AiEndpointDebug = {
   structuredParseStatus: "not_requested" | "parsed" | "repaired" | "failed";
   rawAnswer?: string;
   repairedRawAnswer?: string;
+  /** Contexto del backend (budget summary, project info, etc.) */
+  context?: unknown;
+  /** Mensajes enviados al modelo */
+  messages?: AiMessage[];
+  /** Datos de la respuesta IA */
+  ai?: {
+    answer: string;
+    rawAnswer?: string;
+    repairedRawAnswer?: string;
+    structuredParseStatus: AiEndpointDebug["structuredParseStatus"];
+  };
+  /** Información de fallback de modelo */
+  fallback?: {
+    used: boolean;
+    reason?: string;
+  };
+  /** Advertencias de validación */
+  validationWarnings?: string[];
+  /** Request body crudo enviado a la API del proveedor */
+  requestBody?: Record<string, unknown>;
 };
 
 export type AiStructuredLineItem = {

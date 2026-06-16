@@ -56,7 +56,7 @@ export function parseOllamaAnswer(payload: unknown) {
   return message.content.trim();
 }
 
-const DEFAULT_OLLAMA_TIMEOUT_MS = 90_000;
+const DEFAULT_OLLAMA_TIMEOUT_MS = 180_000;
 const DEFAULT_JSON_NUM_PREDICT = 900;
 const DEFAULT_CHAT_NUM_PREDICT = 1_200;
 

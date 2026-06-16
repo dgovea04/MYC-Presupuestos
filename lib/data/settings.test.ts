@@ -27,19 +27,22 @@ function mockUserSettingsColumnSupport({
   defaultViewMode = true,
   excelShowFieldBorders = true,
   excelRowHeight = true,
+  aiProviderPreference = false,
 }: {
   defaultSubBudgetNames?: boolean;
   dateFormat?: boolean;
   defaultViewMode?: boolean;
   excelShowFieldBorders?: boolean;
   excelRowHeight?: boolean;
+  aiProviderPreference?: boolean;
 }) {
   queryRawMock
     .mockResolvedValueOnce([{ exists: defaultSubBudgetNames }])
     .mockResolvedValueOnce([{ exists: dateFormat }])
     .mockResolvedValueOnce([{ exists: defaultViewMode }])
     .mockResolvedValueOnce([{ exists: excelShowFieldBorders }])
-    .mockResolvedValueOnce([{ exists: excelRowHeight }]);
+    .mockResolvedValueOnce([{ exists: excelRowHeight }])
+    .mockResolvedValueOnce([{ exists: aiProviderPreference }]);
 }
 
 describe("user settings data", () => {
@@ -64,10 +67,11 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
     expect(settings).not.toBe(defaultUserSettings);
-    expect(queryRawMock).toHaveBeenCalledTimes(6);
-    expect(queryRawMock.mock.calls[5]?.[1]).toBe("user-1");
+    expect(queryRawMock).toHaveBeenCalledTimes(7);
+    expect(queryRawMock.mock.calls[6]?.[2]).toBe("user-1");
     expect(defaultUserSettings).toEqual({
       defaultCurrency: "PEN",
       currencyDecimals: 2,
@@ -79,6 +83,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
   });
 
@@ -111,6 +116,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
   });
 
@@ -144,6 +150,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: customSubBudgets,
+      aiProviderPreference: "auto",
     });
   });
 
@@ -176,8 +183,9 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
-    expect(queryRawMock).toHaveBeenCalledTimes(6);
+    expect(queryRawMock).toHaveBeenCalledTimes(7);
   });
 
   it("falls back to default date format when the legacy database has no dateFormat column", async () => {
@@ -212,6 +220,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: customSubBudgets,
+      aiProviderPreference: "auto",
     });
   });
 
@@ -291,6 +300,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
 
     await expect(getUserSettings("invalid-currency")).resolves.toEqual({
@@ -304,6 +314,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.11,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
 
     await expect(getUserSettings("invalid-decimals")).resolves.toEqual({
@@ -317,6 +328,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.15,
       defaultUtilityRate: 0.07,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
 
     await expect(getUserSettings("coerced-decimals")).resolves.toEqual({
@@ -330,6 +342,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
   });
 
@@ -365,6 +378,7 @@ describe("user settings data", () => {
         defaultGeneralExpensesRate: 0.12,
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: customSubBudgets,
+        aiProviderPreference: "auto",
       }),
     ).resolves.toEqual({
       defaultCurrency: "USD",
@@ -377,9 +391,10 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: customSubBudgets,
+      aiProviderPreference: "auto",
     });
 
-    expect(queryRawMock).toHaveBeenCalledTimes(6);
+    expect(queryRawMock).toHaveBeenCalledTimes(7);
   });
 
   it("persists and returns all settings fields", async () => {
@@ -387,6 +402,7 @@ describe("user settings data", () => {
     queryRawMock.mockImplementationOnce(
         async (
           _query,
+          _aiProviderColumn,
           id,
           userId,
           defaultCurrency,
@@ -399,6 +415,12 @@ describe("user settings data", () => {
           defaultGeneralExpensesRate,
           defaultUtilityRate,
           defaultSubBudgetNames,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Prisma.empty tagged template arg shift
+          _aiProviderValue,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _aiProviderConflict,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _aiProviderReturning,
         ) => {
           expect(typeof id).toBe("string");
           expect(userId).toBe("user-2");
@@ -442,6 +464,7 @@ describe("user settings data", () => {
         defaultGeneralExpensesRate: 0.12,
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+        aiProviderPreference: "auto",
       }),
     ).resolves.toEqual({
       defaultCurrency: "USD",
@@ -454,9 +477,10 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      aiProviderPreference: "auto",
     });
 
-    expect(queryRawMock).toHaveBeenCalledTimes(6);
+    expect(queryRawMock).toHaveBeenCalledTimes(7);
   });
 
   it("normalizes Prisma.Decimal-backed rate fields from write returns", async () => {
@@ -490,6 +514,7 @@ describe("user settings data", () => {
         defaultGeneralExpensesRate: 0.12,
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: customSubBudgets,
+        aiProviderPreference: "auto",
       }),
     ).resolves.toEqual({
         defaultCurrency: "USD",
@@ -502,6 +527,7 @@ describe("user settings data", () => {
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: customSubBudgets,
+      aiProviderPreference: "auto",
     });
   });
 
@@ -521,6 +547,7 @@ describe("user settings data", () => {
         defaultGeneralExpensesRate: 0.1,
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+        aiProviderPreference: "auto",
       }),
     ).rejects.toThrow("Failed to persist user settings");
   });

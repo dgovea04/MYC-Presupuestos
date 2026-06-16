@@ -107,16 +107,23 @@ La aplicacion esta orientada a ingenieros, contratistas, oficinas tecnicas y emp
 - Histograma, curva acumulada y KPIs estadisticos.
 - Persistencia de variables y resumen de corridas.
 
-### IA local
+### IA (Khipu)
 
-- Workspace de IA local protegido por plan Pro.
-- Chat tecnico.
+- Workspace de IA (`/ai`) protegido por plan Pro.
+- Chat tecnico con streaming.
 - Generacion asistida de APU.
 - Revision de presupuesto.
 - Autocompletado tecnico.
-- Health check de Ollama y modelos instalados.
+- Proveedores multiples: Ollama local, ChatGPT Bridge, OpenAI API y Gemini API.
+- Proveedor por defecto configurable en `/settings`.
+- API keys de OpenAI y Gemini encriptadas con AES-256-GCM.
+- Panel "Proveedores Cloud IA" en Configuracion para gestionar keys, testear conexion y elegir modelo.
+- Rate limiting (3 intentos cada 5 minutos) en el endpoint de test de API keys.
+- Seleccion de proveedor en el workspace con indicadores de estado (listo / sin key / con alerta).
+- Health check de Ollama con modelos instalados y estado de cloud providers por usuario.
 - Control de consumo de tokens por periodo y por accion.
 - Administracion de cupos extra desde panel admin.
+- Validacion de ENCRYPTION_KEY al iniciar el servidor (warning si no esta configurada).
 
 ### Administracion y facturacion
 
@@ -151,6 +158,14 @@ Crea un archivo `.env` en la raiz del proyecto tomando como base `.env.example`.
 DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/myc_presupuestos?schema=public"
 AUTH_SECRET="una-clave-segura-y-larga"
 NEXTAUTH_URL="http://localhost:3000"
+
+# Opcional: clave dedicada para encriptar API keys de cloud providers (OpenAI/Gemini).
+# Si no se configura, se usa AUTH_SECRET como fallback.
+ENCRYPTION_KEY="una-clave-dedicada-de-32-bytes"
+
+# Opcional: API keys de entorno para OpenAI y Gemini (fallback si el usuario no configura las suyas).
+OPENAI_API_KEY="sk-..."
+GEMINI_API_KEY="AIza..."
 ```
 
 ### 2. Crear base de datos
@@ -267,7 +282,10 @@ Tambien puedes crear una cuenta desde `/register`.
 - `/partidas/generar`: generador de partidas por similitud.
 - `/unified-indices`: indices unificados.
 - `/unified-index-dictionary`: diccionario de IU.
-- `/ai`: workspace de IA local.
+- `/ai`: workspace de IA (Khipu).
+- `/api/settings/ai-provider`: GET/PUT de configuracion de proveedores cloud IA.
+- `/api/settings/ai-provider/test`: POST para validar API keys (con rate limiting).
+- `/api/ai/chat/stream`: streaming SSE para chat IA.
 - `/settings`: configuracion.
 - `/account`: cuenta y membresia.
 - `/admin`: administracion.
@@ -385,7 +403,8 @@ npm.cmd run test -- lib/calculations/budget.test.ts lib/calculations/apu.test.ts
 ## Limitaciones actuales
 
 - Algunas experiencias avanzadas ya tienen backend y rutas, pero requieren mas pulido visual y QA de casos reales.
-- La IA local depende de Ollama y de modelos instalados en la maquina del usuario.
+- La IA funciona con Ollama local, ChatGPT Bridge (extension de navegador), OpenAI API y Gemini API.
+- Las API keys de cloud providers se encriptan con AES-256-GCM; requieren `ENCRYPTION_KEY` en `.env` para produccion.
 - Los modulos Pro existen por entitlements; en Starter se muestran bloqueos o llamados de upgrade.
 - El editor tipo spreadsheet todavia no cubre toda la experiencia de Excel profesional.
 - No hay colaboracion multiusuario avanzada ni permisos granulares por proyecto.

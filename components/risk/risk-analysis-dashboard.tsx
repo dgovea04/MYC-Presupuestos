@@ -1,19 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef } from "react";
-import { HistogramChart } from "@/components/risk/histogram-chart";
 import { PercentilesTable } from "@/components/risk/percentiles-table";
 import { RiskKPICards } from "@/components/risk/risk-kpi-cards";
 import { RiskValidationPanel } from "@/components/risk/risk-validation-panel";
 import { RiskVariableModal } from "@/components/risk/risk-variable-modal";
 import { RiskVariablesTable } from "@/components/risk/risk-variables-table";
-import { SCurveChart } from "@/components/risk/s-curve-chart";
 import { SimulationToolbar } from "@/components/risk/simulation-toolbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { runRiskSimulationWorker, type RiskWorkerController } from "@/lib/risk/monte-carlo-worker-client";
 import { useRiskAnalysisStore } from "@/lib/risk/store";
 import { formatCurrency } from "@/lib/utils";
 import { MONTE_CARLO_ITERATIONS, type RiskAnalysisPayload, type RiskSimulationInput, type RiskSimulationSummary, type RiskVariableRecord } from "@/types/risk";
+
+const HistogramChart = dynamic(() => import("@/components/risk/histogram-chart").then((mod) => mod.HistogramChart));
+const SCurveChart = dynamic(() => import("@/components/risk/s-curve-chart").then((mod) => mod.SCurveChart));
 
 export function RiskAnalysisDashboard({
   currencyDecimals,

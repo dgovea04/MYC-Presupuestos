@@ -1,8 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
-import { ExportPanel } from "@/components/exports/export-panel";
+const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";

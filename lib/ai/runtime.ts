@@ -2,6 +2,8 @@ import { AI_REQUIRED_MODELS, resolveAiModel, summarizeAvailableModels, type AiAc
 import { getProviderFallbackChain } from "@/lib/ai/gateway/router";
 import type { AiProviderId, KhipuAiTask } from "@/lib/ai/gateway/types";
 import { listInstalledOllamaModels } from "@/lib/ai/ollama";
+import { getAiProviderSettings } from "@/lib/data/settings";
+import { getSystemSettings } from "@/lib/data/system-settings";
 
 type FetchLike = typeof fetch;
 
@@ -36,11 +38,34 @@ const aiMetricsState: Record<AiAction, AiActionMetric> = {
   json: { latencyMs: null, lastError: null },
 };
 
-export async function getAiHealth(fetchImpl?: FetchLike): Promise<AiHealth> {
+export async function getAiHealth(fetchImpl?: FetchLike, userId?: string): Promise<AiHealth> {
   try {
     const availableModels = await listInstalledOllamaModels(fetchImpl);
     const actions = buildActionResolutions(availableModels);
     const warningsCount = Object.values(actions).filter((action) => action.fallbackUsed || action.warnings.length > 0).length;
+
+    let cloudConfigured = { openai: false, gemini: false };
+    if (userId) {
+      try {
+        const cloudSettings = await getAiProviderSettings(userId);
+        cloudConfigured = { openai: cloudSettings.openaiConfigured, gemini: cloudSettings.geminiConfigured };
+      } catch {
+        // Cloud status is best-effort
+      }
+    }
+
+    // Also check system settings for fallback keys
+    if (!cloudConfigured.openai || !cloudConfigured.gemini) {
+      try {
+        const systemSettings = await getSystemSettings();
+        cloudConfigured = {
+          openai: cloudConfigured.openai || systemSettings.openaiConfigured,
+          gemini: cloudConfigured.gemini || systemSettings.geminiConfigured,
+        };
+      } catch {
+        // System settings check is best-effort
+      }
+    }
 
     return {
       status: warningsCount > 0 ? "degraded" : "ok",
@@ -49,10 +74,33 @@ export async function getAiHealth(fetchImpl?: FetchLike): Promise<AiHealth> {
       requiredModels: summarizeAvailableModels(availableModels),
       actions,
       metrics: cloneMetrics(),
-      providers: buildProviderHealth(true),
+      providers: buildProviderHealth(true, cloudConfigured),
       routing: buildRoutingHealth(),
     };
   } catch (error) {
+    let cloudConfigured = { openai: false, gemini: false };
+    if (userId) {
+      try {
+        const cloudSettings = await getAiProviderSettings(userId);
+        cloudConfigured = { openai: cloudSettings.openaiConfigured, gemini: cloudSettings.geminiConfigured };
+      } catch {
+        // Cloud status is best-effort
+      }
+    }
+
+    // Also check system settings for fallback keys
+    if (!cloudConfigured.openai || !cloudConfigured.gemini) {
+      try {
+        const systemSettings = await getSystemSettings();
+        cloudConfigured = {
+          openai: cloudConfigured.openai || systemSettings.openaiConfigured,
+          gemini: cloudConfigured.gemini || systemSettings.geminiConfigured,
+        };
+      } catch {
+        // System settings check is best-effort
+      }
+    }
+
     return {
       status: "down",
       ollamaReachable: false,
@@ -60,7 +108,7 @@ export async function getAiHealth(fetchImpl?: FetchLike): Promise<AiHealth> {
       requiredModels: AI_REQUIRED_MODELS.map((model) => ({ model, installed: false, actions: [] })),
       actions: buildUnavailableActionResolutions(error),
       metrics: cloneMetrics(),
-      providers: buildProviderHealth(false),
+      providers: buildProviderHealth(false, cloudConfigured),
       routing: buildRoutingHealth(),
     };
   }
@@ -100,9 +148,9 @@ function buildUnavailableActionResolutions(error: unknown): Record<AiAction, Omi
       warnings: [warning],
     },
     review: {
-      requestedModel: "llama3.1",
-      model: "llama3.1",
-      fallbackUsed: false,
+      requestedModel: "qwen2.5-coder:7b",
+      model: "deepseek-coder",
+      fallbackUsed: true,
       warnings: [warning],
     },
     autocomplete: {
@@ -139,18 +187,18 @@ function cloneMetrics(): Record<AiAction, AiActionMetric> {
   };
 }
 
-function buildProviderHealth(ollamaReachable: boolean): AiHealth["providers"] {
+function buildProviderHealth(ollamaReachable: boolean, cloudConfigured?: { openai: boolean; gemini: boolean }): AiHealth["providers"] {
   return {
     ollama: {
       configured: true,
       reachable: ollamaReachable,
     },
     openai: {
-      configured: hasEnvValue(process.env.OPENAI_API_KEY),
+      configured: (cloudConfigured?.openai ?? false) || hasEnvValue(process.env.OPENAI_API_KEY),
       reachable: null,
     },
     gemini: {
-      configured: hasEnvValue(process.env.GEMINI_API_KEY),
+      configured: (cloudConfigured?.gemini ?? false) || hasEnvValue(process.env.GEMINI_API_KEY),
       reachable: null,
     },
     chatgpt_bridge: {

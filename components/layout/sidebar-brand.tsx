@@ -21,11 +21,11 @@ export function SidebarBrand({
       <div className={cn("flex", isMini ? "flex-col items-center" : "flex-col items-start gap-2")}>
         <div className={cn("relative overflow-hidden", isMini ? "w-10" : "w-[140px]")}>
           <Image
-            src={isMini ? `/myc-logo-tr-mini.png?v=${LOGO_VERSION}` : `/myc-logo-white-tr-300px-v1.png?v=${LOGO_VERSION}`}
+            src={isMini ? `/myc-logo-tr-mini.svg?v=${LOGO_VERSION}` : "/nuevo-logo-white-300-v3.png"}
             alt="MYC Presupuestos"
             priority
-            width={140}
-            height={40}
+            width={isMini ? 40 : 140}
+            height={isMini ? 40 : 40}
             className={cn("object-contain object-left", isMini && "h-full w-full object-contain object-center")}
           />
         </div>

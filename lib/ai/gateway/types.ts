@@ -31,10 +31,14 @@ export type AiProviderRequest = {
   schemaName?: string;
   userId?: string;
   fetchImpl?: typeof fetch;
+  apiKey?: string;
+  modelPreference?: string;
 };
 
 export type AiProviderResult = AiEndpointResult & {
   provider: Exclude<AiProviderId, "auto">;
   promptHash?: string;
   responseHash?: string;
+  /** The raw request body sent to the provider API (for debugging) */
+  requestBody?: Record<string, unknown>;
 };

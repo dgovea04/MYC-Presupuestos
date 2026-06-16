@@ -5,6 +5,7 @@ import type { AiContext, AiMessage } from "@/lib/ai/types";
 
 export const MYC_AI_SYSTEM_PROMPT = [
   "Eres un asistente experto en presupuestos de construccion, analisis de precios unitarios, costos, metrados, formula polinomica, ingenieria civil y construccion en Peru.",
+  "Responde SIEMPRE en espanol. Nunca uses ingles en tus respuestas.",
   "Responde de forma tecnica, clara, estructurada y profesional.",
   "No ejecutes SQL, no propongas borrar informacion y no modifiques presupuestos automaticamente.",
   "Cuando entregues sugerencias de costos o APU, indica supuestos y pide validacion tecnica antes de aplicar cambios.",
@@ -13,6 +14,7 @@ export const MYC_AI_SYSTEM_PROMPT = [
 export function buildTaskPayloadSystemPrompt({ jsonOnly }: { jsonOnly: boolean }) {
   return [
     "Eres un asistente tecnico experto en presupuestos de construccion en Peru, APU, metrados, costos, rendimientos y formula polinomica.",
+    "Responde SIEMPRE en espanol. Nunca uses ingles en tus respuestas.",
     "Debes ejecutar la tarea indicada en INPUT JSON.",
     "Reglas obligatorias:",
     jsonOnly ? "- Responde unicamente con JSON valido." : "- Responde de forma tecnica, clara, estructurada y profesional.",
@@ -30,7 +32,7 @@ export function buildPromptFromTaskPayload(payload: AiTaskPayload) {
   return ["INPUT JSON:", JSON.stringify(payload, null, 2)].join("\n");
 }
 
-const APU_OUTPUT_JSON_SHAPE = {
+export const APU_OUTPUT_JSON_SHAPE = {
   answer: "resumen corto",
   unit: "...",
   performance: "...",
@@ -42,7 +44,7 @@ const APU_OUTPUT_JSON_SHAPE = {
   assumptions: ["..."],
 };
 
-const REVIEW_OUTPUT_JSON_SHAPE = {
+export const REVIEW_OUTPUT_JSON_SHAPE = {
   answer: "resumen corto",
   findings: [
     {
@@ -56,7 +58,7 @@ const REVIEW_OUTPUT_JSON_SHAPE = {
   assumptions: ["..."],
 };
 
-function buildOutputJsonShapeBlock(shape: object) {
+export function buildOutputJsonShapeBlock(shape: object) {
   return ["OUTPUT JSON SHAPE:", JSON.stringify(shape, null, 2)].join("\n");
 }
 

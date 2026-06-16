@@ -1,12 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { userSettingsSchema, type UserSettingsInput } from "@/lib/validations/settings";
+import { encryptApiKey, decryptApiKey, maskApiKey } from "@/lib/ai/encryption";
 import {
   DEFAULT_DATE_FORMAT,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   DEFAULT_VIEW_MODE,
+  type AiProviderPreference,
   type UserSettingsRecord,
 } from "@/types/settings";
 import { z } from "zod";
@@ -22,6 +24,7 @@ export const defaultUserSettings: UserSettingsRecord = {
   defaultGeneralExpensesRate: 0.1,
   defaultUtilityRate: 0.08,
   defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+  aiProviderPreference: "auto",
 };
 
 const userSettingsStoredRowSchema = z.object({
@@ -36,6 +39,32 @@ const userSettingsStoredRowSchema = z.object({
   defaultUtilityRate: userSettingsSchema.shape.defaultUtilityRate,
   defaultSubBudgetNames: userSettingsSchema.shape.defaultSubBudgetNames,
 });
+
+const aiProviderSettingsStoredRowSchema = z.object({
+  aiProviderPreference: userSettingsSchema.shape.aiProviderPreference,
+  openaiApiKey: z.string().nullable().optional(),
+  geminiApiKey: z.string().nullable().optional(),
+  openaiModel: z.string().nullable().optional(),
+  geminiModel: z.string().nullable().optional(),
+});
+
+export type AiProviderSettingsInput = {
+  aiProviderPreference: AiProviderPreference;
+  openaiApiKey?: string | null;
+  geminiApiKey?: string | null;
+  openaiModel?: string | null;
+  geminiModel?: string | null;
+};
+
+export type AiProviderSettings = {
+  aiProviderPreference: AiProviderPreference;
+  openaiApiKeyMasked: string;
+  geminiApiKeyMasked: string;
+  openaiModel: string;
+  geminiModel: string;
+  openaiConfigured: boolean;
+  geminiConfigured: boolean;
+};
 
 function createDefaultUserSettings(): UserSettingsRecord {
   return { ...defaultUserSettings };
@@ -61,6 +90,13 @@ function normalizeUserSettingsRateFields(row: Record<string, unknown>): Record<s
     defaultUtilityRate: normalizeRateValue(row.defaultUtilityRate),
     defaultSubBudgetNames: row.defaultSubBudgetNames,
   };
+}
+
+function readAiProviderPreference(value: unknown): AiProviderPreference {
+  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini"].includes(value)) {
+    return value as AiProviderPreference;
+  }
+  return "auto";
 }
 
 function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
@@ -97,6 +133,7 @@ function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
     defaultSubBudgetNames: defaultSubBudgetNames.success
       ? defaultSubBudgetNames.data
       : defaultUserSettings.defaultSubBudgetNames,
+    aiProviderPreference: readAiProviderPreference(rowRecord.aiProviderPreference),
   };
 }
 
@@ -111,7 +148,10 @@ function parseStoredUserSettingsRow(row: unknown): UserSettingsRecord {
     throw new Error("Failed to persist user settings");
   }
 
-  return parsedRow.data;
+  return {
+    ...parsedRow.data,
+    aiProviderPreference: "auto",
+  };
 }
 
 const columnExistsRowSchema = z.object({
@@ -134,19 +174,204 @@ async function hasUserSettingsColumn(columnName: string) {
   return parsedResult.success ? parsedResult.data.exists : false;
 }
 
+const aiProviderColumns = [
+  "openaiApiKey",
+  "openaiModel",
+  "geminiApiKey",
+  "geminiModel",
+  "aiProviderPreference",
+] as const;
+
+export async function getAiProviderSettings(userId: string): Promise<AiProviderSettings> {
+  const columnFlags = await Promise.all(
+    aiProviderColumns.map((column) => hasUserSettingsColumn(column)),
+  );
+  const [supportsOpenaiApiKey, supportsOpenaiModel, supportsGeminiApiKey, supportsGeminiModel, supportsAiProviderPreference] = columnFlags;
+
+  const hasAnyAiColumn = columnFlags.some(Boolean);
+
+  if (!hasAnyAiColumn) {
+    return {
+      aiProviderPreference: "auto",
+      openaiApiKeyMasked: "",
+      geminiApiKeyMasked: "",
+      openaiModel: "",
+      geminiModel: "",
+      openaiConfigured: false,
+      geminiConfigured: false,
+    };
+  }
+
+  const [settings] = await prisma.$queryRaw<Array<unknown>>`
+    SELECT
+      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
+      ${supportsOpenaiApiKey ? Prisma.sql`"openaiApiKey",` : Prisma.empty}
+      ${supportsGeminiApiKey ? Prisma.sql`"geminiApiKey",` : Prisma.empty}
+      ${supportsOpenaiModel ? Prisma.sql`"openaiModel",` : Prisma.empty}
+      ${supportsGeminiModel ? Prisma.sql`"geminiModel"` : Prisma.empty}
+    FROM "UserSettings"
+    WHERE "userId" = ${userId}
+    LIMIT 1
+  `;
+
+  if (!settings || typeof settings !== "object") {
+    return {
+      aiProviderPreference: "auto",
+      openaiApiKeyMasked: "",
+      geminiApiKeyMasked: "",
+      openaiModel: "",
+      geminiModel: "",
+      openaiConfigured: false,
+      geminiConfigured: false,
+    };
+  }
+
+  const row = settings as Record<string, unknown>;
+  const encryptedOpenaiKey = supportsOpenaiApiKey && typeof row.openaiApiKey === "string" ? row.openaiApiKey : "";
+  const encryptedGeminiKey = supportsGeminiApiKey && typeof row.geminiApiKey === "string" ? row.geminiApiKey : "";
+  const decryptedOpenaiKey = encryptedOpenaiKey ? decryptApiKey(encryptedOpenaiKey) : "";
+  const decryptedGeminiKey = encryptedGeminiKey ? decryptApiKey(encryptedGeminiKey) : "";
+  const openaiModel = supportsOpenaiModel && typeof row.openaiModel === "string" ? row.openaiModel : "";
+  const geminiModel = supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : "";
+
+  return {
+    aiProviderPreference: readAiProviderPreference(supportsAiProviderPreference ? row.aiProviderPreference : undefined),
+    openaiApiKeyMasked: maskApiKey(decryptedOpenaiKey),
+    geminiApiKeyMasked: maskApiKey(decryptedGeminiKey),
+    openaiModel,
+    geminiModel,
+    openaiConfigured: decryptedOpenaiKey.length > 0,
+    geminiConfigured: decryptedGeminiKey.length > 0,
+  };
+}
+
+export async function getDecryptedOpenaiApiKey(userId: string): Promise<string> {
+  const [supportsOpenaiApiKey] = await Promise.all([hasUserSettingsColumn("openaiApiKey")]);
+
+  if (!supportsOpenaiApiKey) return "";
+
+  const [settings] = await prisma.$queryRaw<Array<unknown>>`
+    SELECT "openaiApiKey" FROM "UserSettings" WHERE "userId" = ${userId} LIMIT 1
+  `;
+
+  if (!settings || typeof settings !== "object") return "";
+  const row = settings as Record<string, unknown>;
+  const encrypted = typeof row.openaiApiKey === "string" ? row.openaiApiKey : "";
+  return encrypted ? decryptApiKey(encrypted) : "";
+}
+
+export async function getDecryptedGeminiApiKey(userId: string): Promise<string> {
+  const [supportsGeminiApiKey] = await Promise.all([hasUserSettingsColumn("geminiApiKey")]);
+
+  if (!supportsGeminiApiKey) return "";
+
+  const [settings] = await prisma.$queryRaw<Array<unknown>>`
+    SELECT "geminiApiKey" FROM "UserSettings" WHERE "userId" = ${userId} LIMIT 1
+  `;
+
+  if (!settings || typeof settings !== "object") return "";
+  const row = settings as Record<string, unknown>;
+  const encrypted = typeof row.geminiApiKey === "string" ? row.geminiApiKey : "";
+  return encrypted ? decryptApiKey(encrypted) : "";
+}
+
+export async function updateAiProviderSettings(
+  userId: string,
+  input: AiProviderSettingsInput,
+): Promise<AiProviderSettings> {
+  const columnFlags = await Promise.all(
+    aiProviderColumns.map((column) => hasUserSettingsColumn(column)),
+  );
+  const [supportsOpenaiApiKey, supportsOpenaiModel, supportsGeminiApiKey, supportsGeminiModel, supportsAiProviderPreference] = columnFlags;
+
+  const encryptedOpenaiKey = input.openaiApiKey && input.openaiApiKey.trim().length > 0
+    ? encryptApiKey(input.openaiApiKey.trim())
+    : input.openaiApiKey === "" ? "" : undefined;
+  const encryptedGeminiKey = input.geminiApiKey && input.geminiApiKey.trim().length > 0
+    ? encryptApiKey(input.geminiApiKey.trim())
+    : input.geminiApiKey === "" ? "" : undefined;
+
+  const [settings] = await prisma.$queryRaw<Array<unknown>>`
+    INSERT INTO "UserSettings" (
+      "id",
+      "userId",
+      "defaultCurrency",
+      "currencyDecimals",
+      "defaultIgvRate",
+      "defaultGeneralExpensesRate",
+      "defaultUtilityRate",
+      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
+      ${supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? Prisma.sql`"openaiApiKey",` : Prisma.empty}
+      ${supportsGeminiApiKey && encryptedGeminiKey !== undefined ? Prisma.sql`"geminiApiKey",` : Prisma.empty}
+      ${supportsOpenaiModel ? Prisma.sql`"openaiModel",` : Prisma.empty}
+      ${supportsGeminiModel ? Prisma.sql`"geminiModel",` : Prisma.empty}
+      "createdAt",
+      "updatedAt"
+    )
+    VALUES (
+      ${crypto.randomUUID()},
+      ${userId},
+      ${"PEN"},
+      ${2},
+      ${0.18},
+      ${0.10},
+      ${0.08},
+      ${supportsAiProviderPreference ? Prisma.sql`${input.aiProviderPreference},` : Prisma.empty}
+      ${supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? Prisma.sql`${encryptedOpenaiKey},` : Prisma.empty}
+      ${supportsGeminiApiKey && encryptedGeminiKey !== undefined ? Prisma.sql`${encryptedGeminiKey},` : Prisma.empty}
+      ${supportsOpenaiModel ? Prisma.sql`${input.openaiModel ?? null},` : Prisma.empty}
+      ${supportsGeminiModel ? Prisma.sql`${input.geminiModel ?? null},` : Prisma.empty}
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT ("userId")
+    DO UPDATE SET
+      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference" = EXCLUDED."aiProviderPreference",` : Prisma.empty}
+      ${supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? Prisma.sql`"openaiApiKey" = EXCLUDED."openaiApiKey",` : Prisma.empty}
+      ${supportsGeminiApiKey && encryptedGeminiKey !== undefined ? Prisma.sql`"geminiApiKey" = EXCLUDED."geminiApiKey",` : Prisma.empty}
+      ${supportsOpenaiModel ? Prisma.sql`"openaiModel" = EXCLUDED."openaiModel",` : Prisma.empty}
+      ${supportsGeminiModel ? Prisma.sql`"geminiModel" = EXCLUDED."geminiModel",` : Prisma.empty}
+      "updatedAt" = NOW()
+    RETURNING
+      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
+      ${supportsOpenaiApiKey ? Prisma.sql`"openaiApiKey",` : Prisma.empty}
+      ${supportsGeminiApiKey ? Prisma.sql`"geminiApiKey",` : Prisma.empty}
+      ${supportsOpenaiModel ? Prisma.sql`"openaiModel",` : Prisma.empty}
+      ${supportsGeminiModel ? Prisma.sql`"geminiModel"` : Prisma.empty}
+  `;
+
+  const row = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
+  const storedEncryptedOpenaiKey = supportsOpenaiApiKey && typeof row.openaiApiKey === "string" ? row.openaiApiKey : "";
+  const storedEncryptedGeminiKey = supportsGeminiApiKey && typeof row.geminiApiKey === "string" ? row.geminiApiKey : "";
+  const storedDecryptedOpenai = storedEncryptedOpenaiKey ? decryptApiKey(storedEncryptedOpenaiKey) : "";
+  const storedDecryptedGemini = storedEncryptedGeminiKey ? decryptApiKey(storedEncryptedGeminiKey) : "";
+
+  return {
+    aiProviderPreference: readAiProviderPreference(supportsAiProviderPreference ? row.aiProviderPreference : input.aiProviderPreference),
+    openaiApiKeyMasked: maskApiKey(storedDecryptedOpenai),
+    geminiApiKeyMasked: maskApiKey(storedDecryptedGemini),
+    openaiModel: supportsOpenaiModel && typeof row.openaiModel === "string" ? row.openaiModel : input.openaiModel ?? "",
+    geminiModel: supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : input.geminiModel ?? "",
+    openaiConfigured: storedDecryptedOpenai.length > 0,
+    geminiConfigured: storedDecryptedGemini.length > 0,
+  };
+}
+
 export async function getUserSettings(userId: string): Promise<UserSettingsRecord> {
-  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight] = await Promise.all([
+  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
     hasUserSettingsColumn("defaultViewMode"),
     hasUserSettingsColumn("excelShowFieldBorders"),
     hasUserSettingsColumn("excelRowHeight"),
+    hasUserSettingsColumn("aiProviderPreference"),
   ]);
 
   if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
     const [settings] = await prisma.$queryRaw<Array<unknown>>`
       SELECT "defaultCurrency", "currencyDecimals", "dateFormat", "defaultViewMode", "excelShowFieldBorders", "excelRowHeight", "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
       , "defaultSubBudgetNames"
+      ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
       FROM "UserSettings"
       WHERE "userId" = ${userId}
       LIMIT 1
@@ -163,6 +388,7 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
     ${supportsExcelRowHeight ? Prisma.sql`, "excelRowHeight"` : Prisma.empty}
     , "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
     ${supportsDefaultSubBudgetNames ? Prisma.sql`, "defaultSubBudgetNames"` : Prisma.empty}
+    ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
     FROM "UserSettings"
     WHERE "userId" = ${userId}
     LIMIT 1
@@ -196,12 +422,13 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
 
 export async function updateUserSettings(userId: string, input: UserSettingsInput): Promise<UserSettingsRecord> {
   const data = userSettingsSchema.parse(input);
-  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight] = await Promise.all([
+  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
     hasUserSettingsColumn("defaultViewMode"),
     hasUserSettingsColumn("excelShowFieldBorders"),
     hasUserSettingsColumn("excelRowHeight"),
+    hasUserSettingsColumn("aiProviderPreference"),
   ]);
 
   if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
@@ -219,6 +446,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultGeneralExpensesRate",
         "defaultUtilityRate",
         "defaultSubBudgetNames",
+        ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
         "createdAt",
         "updatedAt"
       )
@@ -235,6 +463,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         ${data.defaultGeneralExpensesRate},
         ${data.defaultUtilityRate},
         ${data.defaultSubBudgetNames},
+        ${supportsAiProviderPreference ? Prisma.sql`${data.aiProviderPreference},` : Prisma.empty}
         NOW(),
         NOW()
       )
@@ -250,6 +479,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultGeneralExpensesRate" = EXCLUDED."defaultGeneralExpensesRate",
         "defaultUtilityRate" = EXCLUDED."defaultUtilityRate",
         "defaultSubBudgetNames" = EXCLUDED."defaultSubBudgetNames",
+        ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference" = EXCLUDED."aiProviderPreference",` : Prisma.empty}
         "updatedAt" = NOW()
       RETURNING
         "defaultCurrency",
@@ -262,9 +492,17 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultGeneralExpensesRate",
         "defaultUtilityRate",
         "defaultSubBudgetNames"
+        ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
     `;
 
-    return parseStoredUserSettingsRow(settings);
+    return {
+      ...parseStoredUserSettingsRow(settings),
+      aiProviderPreference: readAiProviderPreference(
+        supportsAiProviderPreference && settings && typeof settings === "object"
+          ? (settings as Record<string, unknown>).aiProviderPreference
+          : data.aiProviderPreference,
+      ),
+    };
   }
 
   const [settings] = await prisma.$queryRaw<Array<unknown>>`
@@ -280,6 +518,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultIgvRate",
       "defaultGeneralExpensesRate",
       "defaultUtilityRate",
+      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
       "createdAt",
       "updatedAt"
     )
@@ -295,6 +534,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       ${data.defaultIgvRate},
       ${data.defaultGeneralExpensesRate},
       ${data.defaultUtilityRate},
+      ${supportsAiProviderPreference ? Prisma.sql`${data.aiProviderPreference},` : Prisma.empty}
       NOW(),
       NOW()
     )
@@ -309,6 +549,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultIgvRate" = EXCLUDED."defaultIgvRate",
       "defaultGeneralExpensesRate" = EXCLUDED."defaultGeneralExpensesRate",
       "defaultUtilityRate" = EXCLUDED."defaultUtilityRate",
+      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference" = EXCLUDED."aiProviderPreference",` : Prisma.empty}
       "updatedAt" = NOW()
     RETURNING
       "defaultCurrency",
@@ -320,22 +561,30 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultIgvRate",
       "defaultGeneralExpensesRate",
       "defaultUtilityRate"
+      ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
   `;
 
   const storedSettings = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
 
-  return parseStoredUserSettingsRow({
-    ...storedSettings,
-    dateFormat: supportsDateFormat && typeof storedSettings.dateFormat !== "undefined" ? storedSettings.dateFormat : data.dateFormat,
-    defaultViewMode: supportsDefaultViewMode && typeof storedSettings.defaultViewMode !== "undefined"
-      ? storedSettings.defaultViewMode
-      : data.defaultViewMode,
-    excelShowFieldBorders: supportsExcelShowFieldBorders && typeof storedSettings.excelShowFieldBorders !== "undefined"
-      ? storedSettings.excelShowFieldBorders
-      : data.excelShowFieldBorders,
-    excelRowHeight: supportsExcelRowHeight && typeof storedSettings.excelRowHeight !== "undefined"
-      ? storedSettings.excelRowHeight
-      : data.excelRowHeight,
-    defaultSubBudgetNames: data.defaultSubBudgetNames,
-  });
+  return {
+    ...parseStoredUserSettingsRow({
+      ...storedSettings,
+      dateFormat: supportsDateFormat && typeof storedSettings.dateFormat !== "undefined" ? storedSettings.dateFormat : data.dateFormat,
+      defaultViewMode: supportsDefaultViewMode && typeof storedSettings.defaultViewMode !== "undefined"
+        ? storedSettings.defaultViewMode
+        : data.defaultViewMode,
+      excelShowFieldBorders: supportsExcelShowFieldBorders && typeof storedSettings.excelShowFieldBorders !== "undefined"
+        ? storedSettings.excelShowFieldBorders
+        : data.excelShowFieldBorders,
+      excelRowHeight: supportsExcelRowHeight && typeof storedSettings.excelRowHeight !== "undefined"
+        ? storedSettings.excelRowHeight
+        : data.excelRowHeight,
+      defaultSubBudgetNames: data.defaultSubBudgetNames,
+    }),
+    aiProviderPreference: readAiProviderPreference(
+      supportsAiProviderPreference && typeof storedSettings.aiProviderPreference !== "undefined"
+        ? storedSettings.aiProviderPreference
+        : data.aiProviderPreference,
+    ),
+  };
 }

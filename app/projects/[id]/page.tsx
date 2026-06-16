@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { FolderKanban } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
@@ -39,6 +40,25 @@ const projectSections = [
     description: "Actividad reciente registrada para auditoria tecnica.",
   },
 ] as const;
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const session = await getAuthSession();
+  const project = await getProjectOverviewById(id, session!.user.id);
+
+  return {
+    title: project ? `${project.name} | MYC Presupuestos` : "Proyecto | MYC Presupuestos",
+    description: project
+      ? `${project.name} — ${project.clientName || "Sin cliente"}. ${project.location || "Ubicación no especificada"}. Estado: ${project.status}.`
+      : "Detalle del proyecto de construcción con presupuestos, cronogramas y control de costos.",
+    openGraph: {
+      title: project ? `${project.name} | MYC Presupuestos` : "Proyecto | MYC Presupuestos",
+      description: project
+        ? `Gestión de presupuestos y costos para el proyecto ${project.name}.`
+        : "Detalle del proyecto de construcción.",
+    },
+  };
+}
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

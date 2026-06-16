@@ -1,7 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { ExportPanel } from "@/components/exports/export-panel";
+
+const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
 import { ResourceCreateSheet } from "@/components/resources/resource-create-sheet";
 import { ResourcesTable } from "@/components/resources/resources-table";
 import { getExportDefinition } from "@/lib/exports/definitions";

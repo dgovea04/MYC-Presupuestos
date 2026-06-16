@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { FolderKanban, Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProjectsTable } from "@/components/projects/projects-table";
@@ -8,6 +9,15 @@ import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectsListByUser } from "@/lib/data/projects";
 
+export const metadata: Metadata = {
+  title: "Proyectos | MYC Presupuestos",
+  description:
+    "Gestiona obras, clientes y accesos rápidos a presupuestos desde una tabla operativa. Proyectos de construcción, ingeniería y costos.",
+  openGraph: {
+    title: "Proyectos | MYC Presupuestos",
+    description: "Panel de gestión de proyectos de construcción con presupuestos, cronogramas y control de costos.",
+  },
+};
 export default async function ProjectsPage() {
   const session = await getAuthSession();
   const projects = await getProjectsListByUser(session!.user.id);

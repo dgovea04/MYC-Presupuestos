@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
@@ -6,7 +7,29 @@ import { RiskAnalysisDashboard } from "@/components/risk/risk-analysis-dashboard
 import { getAuthSession } from "@/lib/auth/session";
 import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
+import { getBudgetById } from "@/lib/data/budgets";
 import { getRiskAnalysisPayload, RiskBudgetAccessError } from "@/lib/risk/data";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const session = await getAuthSession();
+  if (!session) return { title: "Riesgos | MYC Presupuestos" };
+
+  const budget = await getBudgetById(id, session.user.id);
+
+  return {
+    title: budget ? `Riesgos — ${budget.name} | MYC Presupuestos` : "Riesgos | MYC Presupuestos",
+    description: budget
+      ? `Análisis de riesgo Monte Carlo para ${budget.name}. Simulación probabilística con percentiles, histograma y curva S.`
+      : "Análisis de riesgo, simulación Monte Carlo y percentiles para presupuestos de obra.",
+    openGraph: {
+      title: budget ? `Riesgos — ${budget.name} | MYC Presupuestos` : "Riesgos | MYC Presupuestos",
+      description: budget
+        ? `Simulación de riesgo probabilística para el presupuesto ${budget.name}.`
+        : "Evaluación de riesgos y contingencias en presupuestos de construcción.",
+    },
+  };
+}
 
 export default async function BudgetRiskAnalysisPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

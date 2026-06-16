@@ -147,9 +147,6 @@ export function MetradoSheetTable({
     }
 
     function handlePointerUp() {
-      document.removeEventListener("pointermove", handlePointerMove);
-      document.removeEventListener("pointerup", handlePointerUp);
-
       const state = dragFillRef.current;
       if (!state) return;
 
@@ -187,7 +184,11 @@ export function MetradoSheetTable({
     field: string,
     rawValue: string | number | undefined,
     isInput: boolean,
+    event?: React.PointerEvent,
   ) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
     const state: DragFillState = {
       sourceRowId,
       field,
@@ -392,8 +393,8 @@ export function MetradoSheetTable({
                   onInputChange={onInputChange}
                   onDuplicateRow={onDuplicateRow}
                   onDeleteRow={onDeleteRow}
-                  onDragFillStart={(field, rawValue, isInput) =>
-                    startDragFill(row.id, field, rawValue, isInput)
+                  onDragFillStart={(field, rawValue, isInput, event) =>
+                    startDragFill(row.id, field, rawValue, isInput, event)
                   }
                 />
               ),
