@@ -1,6 +1,9 @@
 "use client";
 
 import { BotMessageSquare, X } from "lucide-react";
+import { AiAssistantPanel } from "@/components/ai/ai-assistant-panel";
+import { useActiveAiViewContext } from "@/components/ai/ai-view-context";
+import { useAiAssistantController } from "@/components/ai/use-ai-assistant-controller";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -10,25 +13,35 @@ type FloatingAiAssistantProps = {
 };
 
 export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantProps) {
+  const viewContext = useActiveAiViewContext();
+  const controller = useAiAssistantController({
+    projectId: undefined,
+    initialAction: "chat",
+    initialContext: viewContext,
+  });
+
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-[60] flex items-end justify-end">
       {open ? (
         <Card className="pointer-events-auto w-[min(420px,calc(100vw-2rem))] rounded-3xl border-slate-200 shadow-xl">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Khipu</p>
-              <h2 className="text-base font-semibold text-slate-950">Asistente tecnico</h2>
+          <CardContent className="space-y-4 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Khipu</p>
+                <h2 className="text-base font-semibold text-slate-950">Asistente tecnico</h2>
+              </div>
+              <Button
+                data-khipu-close
+                type="button"
+                variant="ghost"
+                className="h-9 w-9 rounded-xl p-0"
+                aria-label="Cerrar Khipu"
+                onClick={() => onOpenChange(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <Button
-              data-khipu-close
-              type="button"
-              variant="ghost"
-              className="h-9 w-9 rounded-xl p-0"
-              aria-label="Cerrar Khipu"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <AiAssistantPanel controller={controller} layout="floating" />
           </CardContent>
         </Card>
       ) : null}
