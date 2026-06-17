@@ -24,8 +24,6 @@ if (c.includes(oldDebugUsage)) {
 // Step 2: Add PreviewDebugPanel after the panel.result block ends (after the last null)
 // The pattern is: `          ) : null}` which closes the panel.result ternary
 // Let's find the null that closes the panel.result block and add debug panel after it
-const resultBlockEnd = `          ) : null}`;
-
 // But we need to be careful - this pattern appears multiple times.
 // Let's find the specific one that closes the panel.result block.
 // It should be around where the PreviewDebugPanel was (before we removed it)

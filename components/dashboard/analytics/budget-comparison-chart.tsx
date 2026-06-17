@@ -19,11 +19,9 @@ const GRADIENT_BARS = ["#2563EB", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE"];
 function CustomTooltip({
   active,
   payload,
-  label,
 }: {
   active?: boolean;
   payload?: Array<{ value?: number; payload?: BudgetComparisonItem }>;
-  label?: string;
 }) {
   if (!active || !payload?.length) return null;
 
@@ -53,10 +51,8 @@ function CustomTooltip({
 
 export function BudgetComparisonChart({
   data,
-  currencyDecimals,
 }: {
   data: BudgetComparisonItem[];
-  currencyDecimals: number;
 }) {
   if (data.length === 0) {
     return (

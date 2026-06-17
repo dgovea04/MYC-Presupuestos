@@ -1,7 +1,7 @@
 import type { AiEndpointResult, AiMessage } from "@/lib/ai/types";
 import type { z } from "zod";
 
-export type AiProviderId = "auto" | "ollama" | "chatgpt_bridge" | "openai" | "gemini";
+export type AiProviderId = "auto" | "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter";
 
 export type KhipuAiTask =
   | "review_apu"

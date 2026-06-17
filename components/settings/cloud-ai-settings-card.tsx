@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-type AiProviderPreference = "auto" | "ollama" | "chatgpt_bridge" | "openai" | "gemini";
+type AiProviderPreference = "auto" | "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter";
 
 type AiProviderSettingsState = {
   aiProviderPreference: AiProviderPreference;
@@ -25,16 +25,12 @@ const PROVIDER_OPTIONS: Array<{ value: AiProviderPreference; label: string; desc
   { value: "chatgpt_bridge", label: "ChatGPT Bridge", description: "Usa ChatGPT via extensión del navegador." },
   { value: "openai", label: "ChatGPT API", description: "API de OpenAI con tu propia key." },
   { value: "gemini", label: "Gemini API", description: "API de Google Gemini con tu propia key." },
+  { value: "openrouter", label: "OpenRouter", description: "AI SDK via OpenRouter, configurado por .env." },
 ];
 
 import { DEFAULT_GEMINI_MODEL, GEMINI_MODEL_OPTIONS } from "@/lib/ai/gateway/providers/gemini-provider";
 
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
-
-function readProviderLabel(provider: AiProviderPreference): string {
-  const match = PROVIDER_OPTIONS.find((option) => option.value === provider);
-  return match?.label ?? provider;
-}
 
 export function CloudAiSettingsCard() {
   const [settings, setSettings] = useState<AiProviderSettingsState | null>(null);
@@ -599,7 +595,7 @@ function readAiProviderSettings(payload: unknown): AiProviderSettingsState {
 }
 
 function readProviderPreference(value: unknown): AiProviderPreference {
-  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini"].includes(value)) {
+  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"].includes(value)) {
     return value as AiProviderPreference;
   }
   return "auto";

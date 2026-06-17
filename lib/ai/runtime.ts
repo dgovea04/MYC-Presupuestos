@@ -201,6 +201,10 @@ function buildProviderHealth(ollamaReachable: boolean, cloudConfigured?: { opena
       configured: (cloudConfigured?.gemini ?? false) || hasEnvValue(process.env.GEMINI_API_KEY),
       reachable: null,
     },
+    openrouter: {
+      configured: hasEnvValue(process.env.OPENROUTER_API_KEY),
+      reachable: null,
+    },
     chatgpt_bridge: {
       configured: true,
       reachable: null,

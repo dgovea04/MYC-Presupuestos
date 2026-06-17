@@ -45,5 +45,9 @@ export function getProviderFallbackChain(input: ResolveAiProviderInput): Executa
     return ["gemini", "ollama"];
   }
 
+  if (resolvedProvider === "openrouter") {
+    return ["openrouter"];
+  }
+
   return [resolvedProvider];
 }

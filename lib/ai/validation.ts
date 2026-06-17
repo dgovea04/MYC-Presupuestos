@@ -11,7 +11,7 @@ const aiContextSchema = z.object({
 
 const projectIdSchema = z.string().trim().min(1).optional();
 
-export const aiProviderSchema = z.enum(["auto", "ollama", "chatgpt_bridge", "openai", "gemini"]);
+export const aiProviderSchema = z.enum(["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"]);
 
 export const khipuAiTaskSchema = z.enum([
   "review_apu",

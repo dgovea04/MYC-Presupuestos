@@ -12,7 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import type { CostByPhaseItem } from "@/lib/dashboard/analytics";
 
 const SUB_BUDGET_COLORS = [
@@ -62,11 +62,9 @@ function buildChartData(items: CostByPhaseItem[]): ProjectChartDatum[] {
 function CustomTooltip({
   active,
   payload,
-  label,
 }: {
   active?: boolean;
   payload?: Array<{ name?: string; value?: number; fill?: string }>;
-  label?: string;
 }) {
   if (!active || !payload?.length) return null;
 
@@ -121,10 +119,6 @@ export function CostByPhaseChart({
 
   if (!selected) return null;
 
-  const stackedBars = [
-    { dataKey: "total", label: "Subpresupuesto", fill: true },
-  ];
-
   return (
     <Card className="border-slate-200">
       <CardHeader className="flex flex-row items-center justify-between px-5 py-3">
@@ -177,7 +171,7 @@ export function CostByPhaseChart({
         </ResponsiveContainer>
 
         <div className="mt-4 flex flex-wrap gap-3">
-          {selected.subBudgets.map((sub, i) => (
+          {selected.subBudgets.map((sub) => (
             <div key={sub.name} className="flex items-center gap-1.5 text-xs text-slate-600">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-sm"

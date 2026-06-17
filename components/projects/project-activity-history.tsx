@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Clock3, History, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -73,13 +73,9 @@ export function ProjectActivityHistory({
   }, [events, filter, debouncedSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
-  const startIndex = (page - 1) * PAGE_SIZE;
+  const safePage = Math.min(page, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
   const visibleEvents = filteredEvents.slice(startIndex, startIndex + PAGE_SIZE);
-
-  // Clamp page when filtered events change (filter toggle, search, or events refresh)
-  useEffect(() => {
-    setPage((prev) => Math.min(prev, Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE))));
-  }, [filteredEvents.length]);
 
   const filterCounts = useMemo(() => {
     const counts: Record<FilterLabel, number> = {

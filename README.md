@@ -114,7 +114,7 @@ La aplicacion esta orientada a ingenieros, contratistas, oficinas tecnicas y emp
 - Generacion asistida de APU.
 - Revision de presupuesto.
 - Autocompletado tecnico.
-- Proveedores multiples: Ollama local, ChatGPT Bridge, OpenAI API y Gemini API.
+- Proveedores multiples: Ollama local, ChatGPT Bridge, OpenAI API, Gemini API y OpenRouter.
 - Proveedor por defecto configurable en `/settings`.
 - API keys de OpenAI y Gemini encriptadas con AES-256-GCM.
 - Panel "Proveedores Cloud IA" en Configuracion para gestionar keys, testear conexion y elegir modelo.
@@ -163,9 +163,11 @@ NEXTAUTH_URL="http://localhost:3000"
 # Si no se configura, se usa AUTH_SECRET como fallback.
 ENCRYPTION_KEY="una-clave-dedicada-de-32-bytes"
 
-# Opcional: API keys de entorno para OpenAI y Gemini (fallback si el usuario no configura las suyas).
+# Opcional: API keys de entorno para OpenAI, Gemini y OpenRouter (fallback si el usuario no configura las suyas).
 OPENAI_API_KEY="sk-..."
 GEMINI_API_KEY="AIza..."
+OPENROUTER_API_KEY="sk-or-..."
+OPENROUTER_MODEL="deepseek/deepseek-chat-v3-0324:free"
 ```
 
 ### 2. Crear base de datos
@@ -403,7 +405,7 @@ npm.cmd run test -- lib/calculations/budget.test.ts lib/calculations/apu.test.ts
 ## Limitaciones actuales
 
 - Algunas experiencias avanzadas ya tienen backend y rutas, pero requieren mas pulido visual y QA de casos reales.
-- La IA funciona con Ollama local, ChatGPT Bridge (extension de navegador), OpenAI API y Gemini API.
+- La IA funciona con Ollama local, ChatGPT Bridge (extension de navegador), OpenAI API, Gemini API y OpenRouter.
 - Las API keys de cloud providers se encriptan con AES-256-GCM; requieren `ENCRYPTION_KEY` en `.env` para produccion.
 - Los modulos Pro existen por entitlements; en Starter se muestran bloqueos o llamados de upgrade.
 - El editor tipo spreadsheet todavia no cubre toda la experiencia de Excel profesional.

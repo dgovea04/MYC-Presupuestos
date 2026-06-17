@@ -135,6 +135,7 @@ describe("AI model runtime", () => {
       ollama: { configured: true, reachable: true },
       openai: { configured: false, reachable: null },
       gemini: { configured: false, reachable: null },
+      openrouter: { configured: expect.any(Boolean), reachable: null },
       chatgpt_bridge: { configured: true, reachable: null },
     });
     expect(health.routing.review_budget).toEqual(["openai", "gemini", "ollama"]);

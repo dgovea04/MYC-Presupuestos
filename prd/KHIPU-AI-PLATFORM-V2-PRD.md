@@ -97,7 +97,8 @@ AI Gateway
       ├── Ollama Provider
       ├── ChatGPT Bridge Provider
       ├── OpenAI Provider
-      └── Gemini Provider
+      ├── Gemini Provider
+      └── OpenRouter Provider
       │
       ▼
 Context Builder
@@ -132,6 +133,7 @@ La aplicación nunca debe depender directamente de:
 - OpenAI
 - Gemini
 - ChatGPT Bridge
+- OpenRouter
 
 Toda llamada debe pasar por:
 
@@ -247,6 +249,39 @@ executeGemini()
 
 ---
 
+## OpenRouter Provider
+
+Implementar:
+
+```ts
+provider: "openrouter"
+```
+
+Modelos iniciales:
+
+- DeepSeek Chat V3
+
+Uso:
+
+- fallback alternativo de nube
+- pruebas de razonamiento
+- acceso a modelos agregados
+
+Variables:
+
+```env
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=
+```
+
+Servicio:
+
+```ts
+executeOpenRouter()
+```
+
+---
+
 # Routing Inteligente
 
 Provider auto:
@@ -266,11 +301,16 @@ Documentos grandes
 Desarrollo local
 → ChatGPT Bridge
 
+Proveedor cloud alternativo
+→ OpenRouter
+
 Fallback:
 
 OpenAI
 ↓
 Gemini
+↓
+OpenRouter
 ↓
 Ollama
 
@@ -511,6 +551,10 @@ OpenAI Provider
 Gemini Provider
 
 ## V2.6
+
+OpenRouter Provider
+
+## V2.7
 
 Skill Engine
 

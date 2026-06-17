@@ -16,6 +16,7 @@ import type { AiAction, AiEndpointResult, AiMessage } from "@/lib/ai/types";
 import { assertCanUseAi, recordAiUsage } from "@/lib/ai/usage";
 import { OPENAI_RESPONSES_URL, DEFAULT_OPENAI_MODEL } from "@/lib/ai/gateway/providers/openai-provider";
 import { buildGeminiRequestBody, DEFAULT_GEMINI_MODEL, isGemmaModel, resolveEffectiveGeminiModel, simplifyMessagesForGemma } from "@/lib/ai/gateway/providers/gemini-provider";
+import { DEFAULT_OPENROUTER_MODEL, streamOpenRouterChat } from "@/lib/ai/gateway/providers/openrouter-provider";
 
 type FetchLike = typeof fetch;
 
@@ -273,6 +274,19 @@ export async function* streamChatAiResponse({
         answer += text;
         yield { type: "delta", text };
       }
+    } else if (effectiveProvider === "openrouter") {
+      const openRouterApiKey = apiKey || process.env.OPENROUTER_API_KEY;
+      if (!openRouterApiKey) {
+        throw new AiRuntimeError("connection", "OPENROUTER_API_KEY no configurado. Agrega tu API key en .env.");
+      }
+      const model = modelPreference || process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
+      resolvedModel = model;
+      requestedModel = model;
+
+      for await (const text of streamOpenRouterChat({ messages, apiKey: openRouterApiKey, modelPreference: model, fetchImpl, requestBodyRef })) {
+        answer += text;
+        yield { type: "delta", text };
+      }
     } else {
       // Ollama (default)
       const availableModels = await listInstalledOllamaModels(fetchImpl);
@@ -368,9 +382,10 @@ export async function* streamChatAiResponse({
   }
 }
 
-function resolveStreamingProvider(provider?: string): "ollama" | "openai" | "gemini" {
+function resolveStreamingProvider(provider?: string): "ollama" | "openai" | "gemini" | "openrouter" {
   if (provider === "openai") return "openai";
   if (provider === "gemini") return "gemini";
+  if (provider === "openrouter") return "openrouter";
   return "ollama";
 }
 

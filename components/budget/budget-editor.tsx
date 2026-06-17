@@ -42,13 +42,14 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatAiText } from "@/lib/ai/formatting";
+import { renderMarkdownLite } from "@/components/ai/AIMessage";
 import type { CellValue } from "exceljs";
 import { suggestPartidaMatches, type BudgetPasteSuggestedMatch } from "@/lib/budgets/sub-budget-partida-suggestions";
 import type { AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
 import {
   onMYCBridgeResponse,
   sendToMYCChatGPTBridge,
-  type MYCBridgeResponse,
 } from "@/lib/ai/myc-bridge-client";
 import { buildBridgeTaskPayload } from "@/lib/ai/task-payloads";
 import { readBridgeAiResult } from "@/lib/ai/bridge-parsing";
@@ -121,9 +122,9 @@ type HeaderActionMenuState = {
   trigger: HTMLElement | null;
 };
 
-type AiProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini";
+type AiProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter";
 
-function toBackendProvider(frontend: AiProvider): "ollama" | "chatgpt_bridge" | "openai" | "gemini" {
+function toBackendProvider(frontend: AiProvider): "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" {
   return frontend === "chatgpt-bridge" ? "chatgpt_bridge" : frontend;
 }
 type AiBudgetPanelState =
@@ -1061,7 +1062,7 @@ export function BudgetEditor({
 
   function applyAiAutocomplete() {
     if (aiPanel?.kind !== "autocomplete" || !aiPanel.result?.answer.trim()) return;
-    updateItem(aiPanel.itemId, { description: aiPanel.result.answer.trim() });
+    updateItem(aiPanel.itemId, { description: formatAiText(aiPanel.result.answer).trim() });
     setAiPanel(null);
   }
 
@@ -1920,7 +1921,7 @@ export function BudgetEditor({
                   {saving ? "Guardando..." : "Guardar"}
                 </Button>
                 <div className="inline-flex items-center rounded-full border border-slate-200/90 bg-white/90 p-0.5 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
-                  {(["ollama", "chatgpt-bridge", "openai", "gemini"] as AiProvider[]).map((p) => (
+                  {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"] as AiProvider[]).map((p) => (
                     <button
                       key={p}
                       type="button"
@@ -2726,7 +2727,7 @@ function AiBudgetActionDialog({
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                    {panel.result.answer}
+                    {renderMarkdownLite(formatAiText(panel.result.answer))}
                   </div>
                 )}
               </div>
@@ -5381,6 +5382,7 @@ function getBudgetProviderLabel(provider: AiProvider) {
   if (provider === "chatgpt-bridge") return "Bridge";
   if (provider === "openai") return "ChatGPT";
   if (provider === "gemini") return "Gemini";
+  if (provider === "openrouter") return "OpenRouter";
   return provider;
 }
 
@@ -5388,5 +5390,6 @@ function readBudgetAiLoadingLabel(provider: AiProvider) {
   if (provider === "chatgpt-bridge") return "Enviando a ChatGPT...";
   if (provider === "openai") return "Consultando OpenAI...";
   if (provider === "gemini") return "Consultando Gemini...";
+  if (provider === "openrouter") return "Consultando OpenRouter...";
   return "Consultando Ollama local...";
 }

@@ -59,7 +59,7 @@ export async function PUT(request: Request) {
 }
 
 function readAiProviderPreference(value: unknown): AiProviderSettingsInput["aiProviderPreference"] {
-  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini"].includes(value)) {
+  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"].includes(value)) {
     return value as AiProviderSettingsInput["aiProviderPreference"];
   }
   return "auto";

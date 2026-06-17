@@ -7,6 +7,7 @@ import { executeBridgeProvider } from "@/lib/ai/gateway/providers/bridge-provide
 import { executeGeminiProvider } from "@/lib/ai/gateway/providers/gemini-provider";
 import { executeOllamaProvider } from "@/lib/ai/gateway/providers/ollama-provider";
 import { executeOpenAIProvider } from "@/lib/ai/gateway/providers/openai-provider";
+import { executeOpenRouterProvider } from "@/lib/ai/gateway/providers/openrouter-provider";
 import { buildSkillProviderRequest } from "@/lib/ai/skills/registry";
 import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getAiProviderSettings } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
@@ -28,6 +29,7 @@ const DEFAULT_PROVIDERS: Record<ExecutableProviderId, AiProviderExecutor> = {
   ollama: executeOllamaProvider,
   openai: executeOpenAIProvider,
   gemini: executeGeminiProvider,
+  openrouter: executeOpenRouterProvider,
   chatgpt_bridge: executeBridgeProvider,
 };
 

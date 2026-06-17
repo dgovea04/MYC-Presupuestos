@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 
 type AiAction = "chat" | "apu" | "review" | "autocomplete" | "json";
-type AiProviderId = "ollama" | "openai" | "gemini" | "chatgpt_bridge";
+type AiProviderId = "ollama" | "openai" | "gemini" | "chatgpt_bridge" | "openrouter";
 type KhipuAiTask =
   | "review_apu"
   | "generate_apu"
@@ -71,6 +71,7 @@ const PROVIDER_LABELS: Record<AiProviderId, string> = {
   openai: "OpenAI",
   gemini: "Gemini",
   chatgpt_bridge: "ChatGPT Bridge",
+  openrouter: "OpenRouter",
 };
 
 const TASK_LABELS: Record<KhipuAiTask, string> = {
@@ -410,6 +411,7 @@ function readProviders(value: unknown): AiHealth["providers"] {
     openai: readProviderHealth(providers.openai, false, null),
     gemini: readProviderHealth(providers.gemini, false, null),
     chatgpt_bridge: readProviderHealth(providers.chatgpt_bridge, true, null),
+    openrouter: readProviderHealth(providers.openrouter, false, null),
   };
 }
 
@@ -460,7 +462,7 @@ function isAiAction(value: unknown): value is AiAction {
 }
 
 function isAiProviderId(value: unknown): value is AiProviderId {
-  return value === "ollama" || value === "openai" || value === "gemini" || value === "chatgpt_bridge";
+  return value === "ollama" || value === "openai" || value === "gemini" || value === "chatgpt_bridge" || value === "openrouter";
 }
 
 function readErrorMessage(payload: unknown) {

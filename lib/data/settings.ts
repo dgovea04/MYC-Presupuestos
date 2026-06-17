@@ -40,14 +40,6 @@ const userSettingsStoredRowSchema = z.object({
   defaultSubBudgetNames: userSettingsSchema.shape.defaultSubBudgetNames,
 });
 
-const aiProviderSettingsStoredRowSchema = z.object({
-  aiProviderPreference: userSettingsSchema.shape.aiProviderPreference,
-  openaiApiKey: z.string().nullable().optional(),
-  geminiApiKey: z.string().nullable().optional(),
-  openaiModel: z.string().nullable().optional(),
-  geminiModel: z.string().nullable().optional(),
-});
-
 export type AiProviderSettingsInput = {
   aiProviderPreference: AiProviderPreference;
   openaiApiKey?: string | null;
@@ -93,7 +85,7 @@ function normalizeUserSettingsRateFields(row: Record<string, unknown>): Record<s
 }
 
 function readAiProviderPreference(value: unknown): AiProviderPreference {
-  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini"].includes(value)) {
+  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"].includes(value)) {
     return value as AiProviderPreference;
   }
   return "auto";

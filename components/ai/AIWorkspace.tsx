@@ -26,13 +26,13 @@ import {
 import { buildBridgeTaskPayload } from "@/lib/ai/task-payloads";
 import { PreviewDebugPanel } from "@/components/ai/debug-panel";
 import { APU_OUTPUT_JSON_SHAPE, REVIEW_OUTPUT_JSON_SHAPE } from "@/lib/ai/prompts";
-import type { AiApuStructuredData, AiContext, AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
+import type { AiApuStructuredData, AiContext, AiEndpointResult, AiMessage, AiReviewStructuredData } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
 
 type AiAction = "chat" | "apu" | "review" | "autocomplete";
-type AiProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini";
+type AiProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter";
 
-function toBackendProvider(frontend: AiProvider): "ollama" | "chatgpt_bridge" | "openai" | "gemini" {
+function toBackendProvider(frontend: AiProvider): "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" {
   return frontend === "chatgpt-bridge" ? "chatgpt_bridge" : frontend;
 }
 
@@ -102,6 +102,10 @@ type AiHealth = {
       lastError: string | null;
     }
   >;
+  providers: Record<"ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter", {
+    configured: boolean;
+    reachable: boolean | null;
+  }>;
 };
 
 type RequestState = {
@@ -221,7 +225,11 @@ function AIWorkspaceContent({
   const [lastRequest, setLastRequest] = useState<RequestState | null>(null);
   const [health, setHealth] = useState<AiHealth | null>(null);
   const [provider, setProvider] = useState<AiProvider>("ollama");
-  const [cloudConfigured, setCloudConfigured] = useState<{ openai: boolean; gemini: boolean }>({ openai: false, gemini: false });
+  const [cloudConfigured, setCloudConfigured] = useState<{ openai: boolean; gemini: boolean; openrouter: boolean }>({
+    openai: false,
+    gemini: false,
+    openrouter: false,
+  });
   const [bridgeState, setBridgeState] = useState<MYCBridgeState | null>(null);
   const [history, setHistory] = useState<AiHistoryEntry[]>(() => (projectId ? [] : readStoredHistory()));
   const [sessionFeedbackByHistoryId, setSessionFeedbackByHistoryId] = useState<AiFeedbackState>(readStoredFeedback);
@@ -654,13 +662,13 @@ function AIWorkspaceContent({
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-sm font-semibold text-slate-900">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {(["ollama", "chatgpt-bridge", "openai", "gemini"] as AiProvider[]).map((p) => (
+                {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"] as AiProvider[]).map((p) => (
                   <button
                     key={p}
                     className={cn(
                       "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                       provider === p ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
-                      (p === "openai" || p === "gemini") && !cloudConfigured[p] ? "opacity-60" : "",
+                      (p === "openai" || p === "gemini" || p === "openrouter") && !cloudConfigured[p] ? "opacity-60" : "",
                     )}
                     type="button"
                     aria-pressed={provider === p}
@@ -684,9 +692,9 @@ function AIWorkspaceContent({
                   Estado: {readBridgeStateLabel(bridgeState)}
                 </p>
               ) : null}
-              {(provider === "openai" || provider === "gemini") && !cloudConfigured[provider] ? (
+              {(provider === "openai" || provider === "gemini" || provider === "openrouter") && !cloudConfigured[provider] ? (
                 <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                  {provider === "openai" ? "OpenAI" : "Gemini"} no configurado. Agrega tu API key en Configuración.
+                  {readProviderButtonLabel(provider)} no configurado. Agrega tu API key en .env o Configuracion.
                 </p>
               ) : null}
             </div>
@@ -970,7 +978,12 @@ function AIWorkspaceContent({
         throw new Error(readErrorMessage(payload));
       }
 
-      setHealth(readAiHealth(payload));
+      const nextHealth = readAiHealth(payload);
+      setHealth(nextHealth);
+      setCloudConfigured((current) => ({
+        ...current,
+        openrouter: nextHealth.providers?.openrouter?.configured === true,
+      }));
     } catch {
       setHealth(null);
     }
@@ -982,10 +995,11 @@ function AIWorkspaceContent({
       if (!response.ok) return;
       const payload: unknown = await response.json();
       if (isRecord(payload)) {
-        setCloudConfigured({
+        setCloudConfigured((current) => ({
           openai: payload.openaiConfigured === true,
           gemini: payload.geminiConfigured === true,
-        });
+          openrouter: payload.openrouterConfigured === true || current.openrouter,
+        }));
       }
     } catch {
       // Cloud status is best-effort
@@ -1423,6 +1437,10 @@ function readSubmitLabel(provider: AiProvider, loading: boolean, streaming: bool
     return loading ? "Consultando Gemini" : "Enviar a Gemini";
   }
 
+  if (provider === "openrouter") {
+    return loading ? "Consultando OpenRouter" : "Enviar a OpenRouter";
+  }
+
   if (streaming) {
     return "Khipu respondiendo";
   }
@@ -1689,8 +1707,52 @@ function readHistoryResult(value: unknown): AiResult | null {
     warnings: value.warnings.filter((warning): warning is string => typeof warning === "string"),
     latencyMs: typeof value.latencyMs === "number" ? value.latencyMs : undefined,
     structuredData: value.structuredData,
-    debug: isRecord(value.debug) ? value.debug : undefined,
+    debug: readAiDebug(value.debug),
   };
+}
+
+function readAiDebug(value: unknown): AiEndpointResult["debug"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const status = value.structuredParseStatus;
+  if (status !== "not_requested" && status !== "parsed" && status !== "repaired" && status !== "failed") {
+    return undefined;
+  }
+
+  return {
+    structuredParseStatus: status,
+    rawAnswer: typeof value.rawAnswer === "string" ? value.rawAnswer : undefined,
+    repairedRawAnswer: typeof value.repairedRawAnswer === "string" ? value.repairedRawAnswer : undefined,
+    context: value.context,
+    messages: Array.isArray(value.messages) ? value.messages.filter(isAiMessage) : undefined,
+    ai: isRecord(value.ai) && typeof value.ai.answer === "string"
+      ? {
+          answer: value.ai.answer,
+          rawAnswer: typeof value.ai.rawAnswer === "string" ? value.ai.rawAnswer : undefined,
+          repairedRawAnswer: typeof value.ai.repairedRawAnswer === "string" ? value.ai.repairedRawAnswer : undefined,
+          structuredParseStatus: readStructuredParseStatus(value.ai.structuredParseStatus) ?? status,
+        }
+      : undefined,
+    fallback: isRecord(value.fallback) && typeof value.fallback.used === "boolean"
+      ? {
+          used: value.fallback.used,
+          reason: typeof value.fallback.reason === "string" ? value.fallback.reason : undefined,
+        }
+      : undefined,
+    validationWarnings: Array.isArray(value.validationWarnings)
+      ? value.validationWarnings.filter((warning): warning is string => typeof warning === "string")
+      : undefined,
+    requestBody: isRecord(value.requestBody) ? value.requestBody : undefined,
+  };
+}
+
+function readStructuredParseStatus(value: unknown): NonNullable<AiEndpointResult["debug"]>["structuredParseStatus"] | undefined {
+  return value === "not_requested" || value === "parsed" || value === "repaired" || value === "failed" ? value : undefined;
+}
+
+function isAiMessage(value: unknown): value is AiMessage {
+  return isRecord(value) &&
+    (value.role === "system" || value.role === "user" || value.role === "assistant") &&
+    typeof value.content === "string";
 }
 
 function readHistoryAction(action: string): AiAction {
@@ -1728,7 +1790,12 @@ function readHealthLabel(status: AiHealth["status"] | undefined) {
   return "Ollama no disponible";
 }
 
-function readProviderStatus(provider: AiProvider, status: AiHealth["status"] | undefined, bridgeState: MYCBridgeState | null, cloudConfigured?: { openai: boolean; gemini: boolean }) {
+function readProviderStatus(
+  provider: AiProvider,
+  status: AiHealth["status"] | undefined,
+  bridgeState: MYCBridgeState | null,
+  cloudConfigured?: { openai: boolean; gemini: boolean; openrouter: boolean },
+) {
   if (provider === "ollama") {
     return {
       label: readHealthLabel(status),
@@ -1767,6 +1834,12 @@ function readProviderStatus(provider: AiProvider, status: AiHealth["status"] | u
     return cloudConfigured?.gemini
       ? { label: "Gemini API listo", className: "bg-emerald-100 text-emerald-700" }
       : { label: "Gemini sin key", className: "bg-amber-100 text-amber-800" };
+  }
+
+  if (provider === "openrouter") {
+    return cloudConfigured?.openrouter
+      ? { label: "OpenRouter listo", className: "bg-emerald-100 text-emerald-700" }
+      : { label: "OpenRouter sin key", className: "bg-amber-100 text-amber-800" };
   }
 
   return { label: "Desconocido", className: "bg-slate-100 text-slate-600" };
@@ -2035,6 +2108,7 @@ function readProviderLabel(provider: AiProvider) {
   if (provider === "chatgpt-bridge") return "ChatGPT Bridge";
   if (provider === "openai") return "ChatGPT API";
   if (provider === "gemini") return "Gemini API";
+  if (provider === "openrouter") return "OpenRouter";
   return provider;
 }
 
@@ -2043,28 +2117,31 @@ function readProviderButtonLabel(provider: AiProvider) {
   if (provider === "chatgpt-bridge") return "Bridge";
   if (provider === "openai") return "ChatGPT";
   if (provider === "gemini") return "Gemini";
+  if (provider === "openrouter") return "OpenRouter";
   return provider;
 }
 
-function readActiveModelLabel(provider: AiProvider, activeHealth: { requestedModel?: string } | null, _bridgeState: MYCBridgeState | null) {
+function readActiveModelLabel(provider: AiProvider, activeHealth: { requestedModel?: string } | null) {
   if (provider === "ollama") return activeHealth?.requestedModel ?? "Sin datos";
   if (provider === "chatgpt-bridge") return "ChatGPT web";
   if (provider === "openai") return "OpenAI API";
   if (provider === "gemini") return "Gemini API";
+  if (provider === "openrouter") return "OpenRouter API";
   return "Sin datos";
 }
 
-function readResolvedModelLabel(provider: AiProvider, activeHealth: { model?: string } | null, _bridgeState: MYCBridgeState | null) {
+function readResolvedModelLabel(provider: AiProvider, activeHealth: { model?: string } | null) {
   if (provider === "ollama") return activeHealth?.model ?? "Sin datos";
   if (provider === "chatgpt-bridge") return "Pestana ChatGPT";
   if (provider === "openai") return "OpenAI API";
   if (provider === "gemini") return "Gemini API";
+  if (provider === "openrouter") return "OpenRouter API";
   return "Sin datos";
 }
 
 function readLatencyLabel(provider: AiProvider, latencyMs: number | null | undefined) {
   if (provider === "ollama") return formatLatency(latencyMs);
   if (provider === "chatgpt-bridge") return "Depende de ChatGPT";
-  if (provider === "openai" || provider === "gemini") return "Nube";
+  if (provider === "openai" || provider === "gemini" || provider === "openrouter") return "Nube";
   return "Sin ejecuciones";
 }

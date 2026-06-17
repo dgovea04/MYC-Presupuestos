@@ -21,7 +21,7 @@ export const DEFAULT_VIEW_MODE: ViewModeOption = "modern";
 export const DEFAULT_EXCEL_SHOW_FIELD_BORDERS = true;
 export const DEFAULT_EXCEL_ROW_HEIGHT = 52;
 
-export const AI_PROVIDER_OPTIONS = ["auto", "ollama", "chatgpt_bridge", "openai", "gemini"] as const;
+export const AI_PROVIDER_OPTIONS = ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"] as const;
 export type AiProviderPreference = (typeof AI_PROVIDER_OPTIONS)[number];
 
 export type UserSettingsRecord = {
