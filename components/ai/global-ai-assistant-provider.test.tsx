@@ -45,8 +45,7 @@ describe("GlobalAiAssistantProvider", () => {
     await renderProvider("/dashboard", <div>Contenido</div>);
 
     expect(document.body.textContent).toContain("Contenido");
-    expect(document.body.textContent).toContain("Khipu");
-    expect(document.querySelector("[data-khipu-launcher]")).toBeTruthy();
+    expect(getLauncher()).toBeTruthy();
   });
 
   it("hides the floating launcher on auth routes", async () => {
@@ -61,20 +60,33 @@ describe("GlobalAiAssistantProvider", () => {
     expect(document.querySelector("[data-khipu-launcher]")).toBeNull();
   });
 
+  it("hides the floating launcher on public routes", async () => {
+    await renderProvider("/", <div>Inicio</div>);
+
+    expect(document.querySelector("[data-khipu-launcher]")).toBeNull();
+  });
+
+  it("hides the floating launcher on public landing variants", async () => {
+    await renderProvider("/landing-v2", <div>Landing</div>);
+
+    expect(document.querySelector("[data-khipu-launcher]")).toBeNull();
+  });
+
   it("toggles expanded and minimized state", async () => {
-    await renderProvider("/dashboard", <div>Contenido</div>);
+    await renderProvider("/projects/demo", <div>Contenido</div>);
 
     const launcher = getLauncher();
 
-    expect(document.body.textContent).not.toContain("Asistente tecnico");
+    expect(launcher.getAttribute("aria-expanded")).toBe("false");
+    expect(getCloseButton()).toBeNull();
 
     await act(async () => {
       launcher.click();
     });
 
-    expect(document.body.textContent).toContain("Asistente tecnico");
+    expect(launcher.getAttribute("aria-expanded")).toBe("true");
 
-    const closeButton = document.querySelector("[data-khipu-close]");
+    const closeButton = getCloseButton();
 
     expect(closeButton).toBeTruthy();
 
@@ -82,7 +94,8 @@ describe("GlobalAiAssistantProvider", () => {
       (closeButton as HTMLButtonElement).click();
     });
 
-    expect(document.body.textContent).not.toContain("Asistente tecnico");
+    expect(launcher.getAttribute("aria-expanded")).toBe("false");
+    expect(getCloseButton()).toBeNull();
   });
 });
 
@@ -109,4 +122,8 @@ function getLauncher() {
   expect(launcher).toBeTruthy();
 
   return launcher as HTMLButtonElement;
+}
+
+function getCloseButton() {
+  return document.querySelector('button[aria-label="Cerrar Khipu"]');
 }
