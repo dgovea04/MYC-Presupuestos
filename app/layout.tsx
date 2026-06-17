@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";
 import type { CSSProperties, ReactNode } from "react";
+import { GlobalAiAssistantProvider } from "@/components/ai/global-ai-assistant-provider";
 import {
   getSidebarWidthCssValue,
   isSidebarMode,
@@ -49,7 +50,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
-        {children}
+        <GlobalAiAssistantProvider>{children}</GlobalAiAssistantProvider>
         <Script id="app-preferences-bootstrap" src="/app-preferences-bootstrap.js" strategy="beforeInteractive" />
       </body>
     </html>
