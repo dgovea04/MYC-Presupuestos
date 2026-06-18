@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { Plus } from "lucide-react";
+import { AiViewContextBridge } from "@/hooks/use-ai-view-context";
 import { getAuthSession } from "@/lib/auth/session";
 import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode } from "@/lib/budget/view-mode";
 import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
@@ -28,12 +29,15 @@ import {
   DEFAULT_VIEW_MODE,
   type UserSettingsRecord,
 } from "@/types/settings";
+import type { AiContext } from "@/lib/ai/types";
 
 export async function AppShell({
+  aiContext,
   children,
   currentUser,
   settings: initialSettings,
 }: {
+  aiContext?: AiContext;
   children: ReactNode;
   currentUser?: {
     id?: string | null;
@@ -73,6 +77,7 @@ export async function AppShell({
     <FormattingSettingsProvider settings={settings}>
       <AppViewModeProvider initialViewMode={initialViewMode}>
         <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#eef4f8_40%,#f8fafc_100%)]">
+          {aiContext ? <AiViewContextBridge value={aiContext} /> : null}
           <div className="grid min-h-screen grid-cols-1 gap-5 px-3 py-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start lg:px-4 xl:px-5">
             <div
               className="z-[31] shrink-0 lg:sticky lg:top-4"

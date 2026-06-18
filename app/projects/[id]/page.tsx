@@ -83,7 +83,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   });
 
   return (
-    <AppShell settings={settings}>
+    <AppShell
+      settings={settings}
+      aiContext={{
+        route: `/projects/${project.id}`,
+        project: project.name,
+        projectId: project.id,
+        module: "Proyecto",
+        selectionType: "project",
+        selectionId: project.id,
+        viewSummary: `Vista general del proyecto ${project.name}.`,
+      }}
+    >
       <div className="space-y-5">
         <Card className="border-slate-200">
           <CardHeader className="gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">

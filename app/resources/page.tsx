@@ -19,7 +19,15 @@ export default async function ResourcesPage() {
   ]);
 
   return (
-    <AppShell currentUser={session!.user}>
+    <AppShell
+      currentUser={session!.user}
+      aiContext={{
+        route: "/resources",
+        module: "Recursos",
+        activeTable: "Catalogo de insumos",
+        viewSummary: "Catalogo general de insumos para buscar, reutilizar y ampliar recursos de obra.",
+      }}
+    >
       <Card className="border-slate-200">
         <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
           <PageHeaderCard

@@ -37,6 +37,7 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
                 <X className="h-4 w-4" />
               </Button>
             </div>
+            <FloatingContextSummary viewContext={viewContext} />
             <FloatingAiAssistantBody key={controllerKey} viewContext={viewContext} />
           </CardContent>
         </Card>
@@ -65,14 +66,29 @@ function FloatingAiAssistantBody({ viewContext }: { viewContext: ReturnType<type
   return <AiAssistantPanel controller={controller} layout="floating" />;
 }
 
+function FloatingContextSummary({ viewContext }: { viewContext: AiViewContextValue }) {
+  const moduleLabel = viewContext.module ?? "Contexto general";
+  const detail = viewContext.selectedItem ?? viewContext.viewSummary ?? "Sin seleccion activa";
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{moduleLabel}</p>
+      <p className="mt-1 text-sm font-medium text-slate-900">{detail}</p>
+    </div>
+  );
+}
+
 function readViewContextIdentity(viewContext: AiViewContextValue) {
   return JSON.stringify({
     projectId: viewContext.projectId ?? null,
     project: viewContext.project ?? null,
     module: viewContext.module ?? null,
     selectedItem: viewContext.selectedItem ?? null,
+    selectionType: viewContext.selectionType ?? null,
+    selectionId: viewContext.selectionId ?? null,
     unit: viewContext.unit ?? null,
     currentCost: viewContext.currentCost ?? null,
     activeTable: viewContext.activeTable ?? null,
+    viewSummary: viewContext.viewSummary ?? null,
   });
 }

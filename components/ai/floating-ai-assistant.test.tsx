@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiViewContextProvider, type AiViewContextValue } from "@/components/ai/ai-view-context";
 import { FloatingAiAssistant } from "@/components/ai/floating-ai-assistant";
+import { usePublishAiViewContext } from "@/hooks/use-ai-view-context";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,6 +51,51 @@ describe("FloatingAiAssistant", () => {
     expect(document.body.textContent).toContain("Khipu");
     expect(document.body.textContent).toContain("Chat tecnico");
     expect(document.body.textContent).toContain("Sin contexto activo");
+  });
+
+  it("shows published active module and selection inside the compact panel", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+
+      if (String(input) === "/api/projects/project-1/ai-history") {
+        return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+      }
+
+      if (String(input) === "/api/projects/project-1/ai-feedback/summary") {
+        return new Response(JSON.stringify({ summary: { applied: 0, edited: 0, dismissed: 0 } }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)}`);
+    }));
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    activeContainer = container;
+    activeRoot = root;
+
+    await act(async () => {
+      root.render(
+        <AiViewContextProvider>
+          <PublishBudgetContext />
+          <FloatingAiAssistant open onOpenChange={() => undefined} />
+        </AiViewContextProvider>,
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Presupuesto");
+    expect(container.textContent).toContain("Acero corrugado");
   });
 
   it("uses the active view context project id and updates visible context when the view changes", async () => {
@@ -290,4 +336,20 @@ function getButtonByText(text: string) {
   }
 
   return element;
+}
+
+function PublishBudgetContext() {
+  usePublishAiViewContext({
+    route: "/budgets/budget-1",
+    projectId: "project-1",
+    budgetId: "budget-1",
+    module: "Presupuesto",
+    activeTable: "Partidas",
+    selectedItem: "Acero corrugado",
+    selectionType: "partida",
+    selectionId: "partida-1",
+    viewSummary: "Partida activa: Acero corrugado",
+  });
+
+  return null;
 }

@@ -81,7 +81,21 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     const subBudgets = orderSubBudgetsBySpecialty(project.budgets.filter((item) => item.kind === "SUB_BUDGET"));
 
     return (
-      <AppShell currentUser={session.user} settings={settings}>
+      <AppShell
+        currentUser={session.user}
+        settings={settings}
+        aiContext={{
+          route: `/budgets/${budget.id}`,
+          project: project.name,
+          projectId: project.id,
+          budgetId: budget.id,
+          module: "Presupuesto",
+          selectionType: "budget",
+          selectionId: budget.id,
+          activeTable: "Sub presupuestos",
+          viewSummary: `Presupuesto general ${budget.name} del proyecto ${project.name}.`,
+        }}
+      >
         <div className="space-y-5">
           <Card className="border-slate-200">
             <CardHeader className="gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
@@ -251,7 +265,21 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
   const [resources, partidasCatalog] = await Promise.all([getResourcesByUser(session.user.id), getCatalogPartidas()]);
 
   return (
-    <AppShell currentUser={session.user} settings={settings}>
+    <AppShell
+      currentUser={session.user}
+      settings={settings}
+      aiContext={{
+        route: `/budgets/${budget.id}`,
+        project: project.name,
+        projectId: project.id,
+        budgetId: budget.id,
+        module: "Presupuesto",
+        selectionType: "budget",
+        selectionId: budget.id,
+        activeTable: "Partidas",
+        viewSummary: `Sub presupuesto ${budget.name} del proyecto ${project.name}.`,
+      }}
+    >
       <BudgetFlow
         budget={budget}
         projectName={project.name}

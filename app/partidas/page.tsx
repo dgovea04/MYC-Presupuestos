@@ -19,7 +19,14 @@ export default async function PartidasPage({
   const [partidas, resources] = await Promise.all([getCatalogPartidas(), getResourcesByUser(session!.user.id)]);
 
   return (
-    <AppShell>
+    <AppShell
+      aiContext={{
+        route: "/partidas",
+        module: "Partidas",
+        activeTable: "Catalogo de partidas",
+        viewSummary: "Catalogo general de partidas de obra con rendimiento y precios unitarios referenciales.",
+      }}
+    >
       <Card className="border-slate-200">
         <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
           <PageHeaderCard
