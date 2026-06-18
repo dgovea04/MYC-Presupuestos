@@ -3,10 +3,20 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { AiContext } from "@/lib/ai/types";
 
-const AiViewContext = createContext<AiContext>({});
+export type AiViewContextValue = AiContext & {
+  projectId?: string;
+};
 
-export function AiViewContextProvider({ children }: { children: ReactNode }) {
-  return <AiViewContext.Provider value={{}}>{children}</AiViewContext.Provider>;
+const AiViewContext = createContext<AiViewContextValue>({});
+
+export function AiViewContextProvider({
+  children,
+  value = {},
+}: {
+  children: ReactNode;
+  value?: AiViewContextValue;
+}) {
+  return <AiViewContext.Provider value={value}>{children}</AiViewContext.Provider>;
 }
 
 export function useActiveAiViewContext() {

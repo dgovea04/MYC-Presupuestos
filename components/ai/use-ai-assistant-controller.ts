@@ -82,6 +82,38 @@ export type AssistantRequest = {
   payload: Record<string, unknown>;
 };
 
+export type AiAssistantControllerViewModel = {
+  activeAction: AssistantAction;
+  activeFeedbackEntry: AiHistoryEntry | null;
+  bridgeState: MYCBridgeState | null;
+  cloudConfigured: {
+    openai: boolean;
+    gemini: boolean;
+    openrouter: boolean;
+  };
+  context: AiContext;
+  error: string;
+  feedbackByHistoryId: AiFeedbackState;
+  feedbackError: string;
+  feedbackSummary: AiFeedbackSummary;
+  health: AiHealth | null;
+  history: AiHistoryEntry[];
+  lastRequest: AssistantRequest | null;
+  loading: boolean;
+  pendingFeedbackByHistoryId: AiFeedbackPendingState;
+  provider: AssistantProvider;
+  refreshHealth: () => Promise<void>;
+  result: AiResultWithHistory | null;
+  retryLastRequest: () => Promise<void>;
+  selectHistoryEntry: (entry: AiHistoryEntry) => void;
+  setActiveAction: (action: AssistantAction) => void;
+  setContext: Dispatch<SetStateAction<AiContext>>;
+  setProvider: (provider: AssistantProvider) => void;
+  streaming: boolean;
+  submit: (request: AssistantRequest) => Promise<void>;
+  submitFeedback: (entry: AiHistoryEntry, feedbackType: AiFeedbackType) => Promise<void>;
+};
+
 type StreamEvent =
   | { event: "delta"; data: { text: string } }
   | { event: "final"; data: AiResultWithHistory }
@@ -121,7 +153,7 @@ export function useAiAssistantController({
   projectId?: string;
   initialAction: AssistantAction;
   initialContext: AiContext;
-}) {
+}): AiAssistantControllerViewModel {
   const [activeAction, setActiveActionState] = useState<AssistantAction>(initialAction);
   const [context, setContext] = useState<AiContext>(initialContext);
   const [result, setResult] = useState<AiResultWithHistory | null>(null);
@@ -178,6 +210,17 @@ export function useAiAssistantController({
   useEffect(() => {
     latestContext.current = context;
   }, [context]);
+
+  const previousInitialContextRef = useRef(initialContext);
+
+  useEffect(() => {
+    setContext((current) => (
+      areAiContextsEqual(current, previousInitialContextRef.current)
+        ? initialContext
+        : current
+    ));
+    previousInitialContextRef.current = initialContext;
+  }, [initialContext]);
 
   useEffect(() => {
     void loadHealth(setHealth, setCloudConfigured);
@@ -298,7 +341,7 @@ export function useAiAssistantController({
       return;
     }
 
-    if (provider === "openai" || provider === "gemini") {
+    if (provider === "openai" || provider === "gemini" || provider === "openrouter") {
       await submitCloudRequest({
         context,
         provider,
@@ -704,7 +747,7 @@ async function submitCloudRequest({
 }: {
   context: AiContext;
   latestHistoryScope: MutableRefObject<HistoryScope>;
-  provider: "openai" | "gemini";
+  provider: "openai" | "gemini" | "openrouter";
   request: AssistantRequest;
   requestHistoryScope: HistoryScope;
   setError: (value: string) => void;
@@ -1332,4 +1375,13 @@ export function hasApuStructuredShape(value: Record<string, unknown>): value is 
 
 export function hasReviewStructuredShape(value: Record<string, unknown>): value is AiReviewStructuredData {
   return Array.isArray(value.findings) && Array.isArray(value.assumptions);
+}
+
+function areAiContextsEqual(left: AiContext, right: AiContext) {
+  return left.project === right.project &&
+    left.module === right.module &&
+    left.selectedItem === right.selectedItem &&
+    left.unit === right.unit &&
+    left.currentCost === right.currentCost &&
+    left.activeTable === right.activeTable;
 }

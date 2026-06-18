@@ -2,7 +2,7 @@
 
 import { BotMessageSquare, X } from "lucide-react";
 import { AiAssistantPanel } from "@/components/ai/ai-assistant-panel";
-import { useActiveAiViewContext } from "@/components/ai/ai-view-context";
+import { useActiveAiViewContext, type AiViewContextValue } from "@/components/ai/ai-view-context";
 import { useAiAssistantController } from "@/components/ai/use-ai-assistant-controller";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,11 +14,7 @@ type FloatingAiAssistantProps = {
 
 export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantProps) {
   const viewContext = useActiveAiViewContext();
-  const controller = useAiAssistantController({
-    projectId: undefined,
-    initialAction: "chat",
-    initialContext: viewContext,
-  });
+  const controllerKey = readViewContextIdentity(viewContext);
 
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-[60] flex items-end justify-end">
@@ -41,7 +37,7 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <AiAssistantPanel controller={controller} layout="floating" />
+            <FloatingAiAssistantBody key={controllerKey} viewContext={viewContext} />
           </CardContent>
         </Card>
       ) : null}
@@ -57,4 +53,26 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
       </Button>
     </div>
   );
+}
+
+function FloatingAiAssistantBody({ viewContext }: { viewContext: ReturnType<typeof useActiveAiViewContext> }) {
+  const controller = useAiAssistantController({
+    projectId: viewContext.projectId,
+    initialAction: "chat",
+    initialContext: viewContext,
+  });
+
+  return <AiAssistantPanel controller={controller} layout="floating" />;
+}
+
+function readViewContextIdentity(viewContext: AiViewContextValue) {
+  return JSON.stringify({
+    projectId: viewContext.projectId ?? null,
+    project: viewContext.project ?? null,
+    module: viewContext.module ?? null,
+    selectedItem: viewContext.selectedItem ?? null,
+    unit: viewContext.unit ?? null,
+    currentCost: viewContext.currentCost ?? null,
+    activeTable: viewContext.activeTable ?? null,
+  });
 }

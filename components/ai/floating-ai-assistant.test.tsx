@@ -4,7 +4,7 @@ import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AiViewContextProvider } from "@/components/ai/ai-view-context";
+import { AiViewContextProvider, type AiViewContextValue } from "@/components/ai/ai-view-context";
 import { FloatingAiAssistant } from "@/components/ai/floating-ai-assistant";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,9 +51,138 @@ describe("FloatingAiAssistant", () => {
     expect(document.body.textContent).toContain("Chat tecnico");
     expect(document.body.textContent).toContain("Sin contexto activo");
   });
+
+  it("uses the active view context project id and updates visible context when the view changes", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+
+      if (String(input) === "/api/projects/project-1/ai-history") {
+        return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+      }
+
+      if (String(input) === "/api/projects/project-1/ai-feedback/summary") {
+        return new Response(JSON.stringify({ summary: { applied: 0, edited: 0, dismissed: 0 } }), { status: 200 });
+      }
+
+      if (String(input) === "/api/projects/project-2/ai-history") {
+        return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+      }
+
+      if (String(input) === "/api/projects/project-2/ai-feedback/summary") {
+        return new Response(JSON.stringify({ summary: { applied: 0, edited: 0, dismissed: 0 } }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rendered = await renderFloatingAssistant({
+      projectId: "project-1",
+      module: "Presupuestos",
+      selectedItem: "Partida 1",
+    });
+
+    expect(document.body.textContent).toContain("Presupuestos");
+    expect(document.body.textContent).toContain("Partida 1");
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/ai-history");
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/ai-feedback/summary");
+
+    await rendered.rerender({
+      projectId: "project-2",
+      module: "Cronograma",
+      selectedItem: "Partida 2",
+    });
+
+    expect(document.body.textContent).toContain("Cronograma");
+    expect(document.body.textContent).toContain("Partida 2");
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-2/ai-history");
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-2/ai-feedback/summary");
+  });
+
+  it("clears stale project result state when the active project changes", async () => {
+    vi.stubGlobal("fetch", createStreamingAssistantFetchMock("Respuesta proyecto uno"));
+
+    const rendered = await renderFloatingAssistant({
+      projectId: "project-1",
+      module: "Presupuestos",
+      selectedItem: "Partida 1",
+    });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    expect(document.body.textContent).toContain("Respuesta proyecto uno");
+
+    await rendered.rerender({
+      projectId: "project-2",
+      module: "Cronograma",
+      selectedItem: "Partida 2",
+    });
+
+    expect(document.body.textContent).not.toContain("Respuesta proyecto uno");
+    expect(document.body.textContent).toContain("Cronograma");
+    expect(document.body.textContent).toContain("Partida 2");
+  });
+
+  it("clears stale result state when a session view changes without a project id", async () => {
+    vi.stubGlobal("fetch", createStreamingAssistantFetchMock("Respuesta sesion"));
+
+    const rendered = await renderFloatingAssistant({
+      module: "Presupuestos",
+      selectedItem: "Partida 1",
+    });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    expect(document.body.textContent).toContain("Respuesta sesion");
+
+    await rendered.rerender({
+      module: "Cronograma",
+      selectedItem: "Partida 2",
+    });
+
+    expect(document.body.textContent).not.toContain("Respuesta sesion");
+    expect(document.body.textContent).toContain("Cronograma");
+    expect(document.body.textContent).toContain("Partida 2");
+  });
+
+  it("clears stale result state when the context changes within the same project", async () => {
+    vi.stubGlobal("fetch", createStreamingAssistantFetchMock("Respuesta mismo proyecto"));
+
+    const rendered = await renderFloatingAssistant({
+      projectId: "project-1",
+      module: "Presupuestos",
+      selectedItem: "Partida 1",
+    });
+
+    await act(async () => {
+      getButtonByText("Enviar a Ollama").click();
+    });
+
+    expect(document.body.textContent).toContain("Respuesta mismo proyecto");
+
+    await rendered.rerender({
+      projectId: "project-1",
+      module: "Presupuestos",
+      selectedItem: "Partida 2",
+    });
+
+    expect(document.body.textContent).not.toContain("Respuesta mismo proyecto");
+    expect(document.body.textContent).toContain("Presupuestos");
+    expect(document.body.textContent).toContain("Partida 2");
+  });
 });
 
-async function renderFloatingAssistant() {
+async function renderFloatingAssistant(value: AiViewContextValue = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -63,11 +192,31 @@ async function renderFloatingAssistant() {
 
   await act(async () => {
     root.render(
-      <AiViewContextProvider>
+      <AiViewContextProvider value={value}>
         <FloatingAiAssistant open onOpenChange={() => undefined} />
       </AiViewContextProvider>,
     );
   });
+
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  return {
+    rerender: async (nextValue: AiViewContextValue) => {
+      await act(async () => {
+        root.render(
+          <AiViewContextProvider value={nextValue}>
+            <FloatingAiAssistant open onOpenChange={() => undefined} />
+          </AiViewContextProvider>,
+        );
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+    },
+  };
 }
 
 function createHealthPayload() {
@@ -96,4 +245,49 @@ function createHealthPayload() {
       openrouter: { configured: false, reachable: null },
     },
   };
+}
+
+function createStreamingAssistantFetchMock(answer: string) {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input) === "/api/ai/health") {
+      return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+    }
+
+    if (String(input) === "/api/settings/ai-provider") {
+      return new Response(JSON.stringify({}), { status: 200 });
+    }
+
+    if (
+      String(input) === "/api/projects/project-1/ai-history" ||
+      String(input) === "/api/projects/project-2/ai-history"
+    ) {
+      return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+    }
+
+    if (
+      String(input) === "/api/projects/project-1/ai-feedback/summary" ||
+      String(input) === "/api/projects/project-2/ai-feedback/summary"
+    ) {
+      return new Response(JSON.stringify({ summary: { applied: 0, edited: 0, dismissed: 0 } }), { status: 200 });
+    }
+
+    if (String(input) === "/api/ai/chat/stream") {
+      return new Response(
+        `event: final\ndata: {"answer":"${answer}","model":"llama3","requestedModel":"llama3","fallbackUsed":false,"warnings":[]}\n\n`,
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    }
+
+    throw new Error(`Unexpected fetch ${String(input)}`);
+  });
+}
+
+function getButtonByText(text: string) {
+  const element = [...document.body.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
+
+  if (!(element instanceof HTMLButtonElement)) {
+    throw new Error(`Missing button: ${text}`);
+  }
+
+  return element;
 }

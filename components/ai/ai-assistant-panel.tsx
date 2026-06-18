@@ -15,6 +15,7 @@ import { AIMessage } from "@/components/ai/AIMessage";
 import { ContextSidebar } from "@/components/ai/ContextSidebar";
 import { PreviewDebugPanel } from "@/components/ai/debug-panel";
 import type {
+  AiAssistantControllerViewModel,
   AiFeedbackType,
   AiHealth,
   AiHistoryEntry,
@@ -22,7 +23,6 @@ import type {
   AssistantAction,
   AssistantProvider,
 } from "@/components/ai/use-ai-assistant-controller";
-import { useAiAssistantController } from "@/components/ai/use-ai-assistant-controller";
 import { hasApuStructuredShape, hasReviewStructuredShape } from "@/components/ai/use-ai-assistant-controller";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 type AiAssistantPanelLayout = "page" | "floating";
 
 type AiAssistantPanelProps = {
-  controller: ReturnType<typeof useAiAssistantController>;
+  controller: AiAssistantControllerViewModel;
   initialAutocompleteInput?: string;
   initialApuDescription?: string;
   initialApuUnit?: string;
@@ -746,8 +746,8 @@ function StructuredTextList({ items, title }: { items: string[]; title: string }
 function readProviderStatus(
   provider: AssistantProvider,
   status: AiHealth["status"] | undefined,
-  bridgeState: ReturnType<typeof useAiAssistantController>["bridgeState"],
-  cloudConfigured: ReturnType<typeof useAiAssistantController>["cloudConfigured"],
+  bridgeState: AiAssistantControllerViewModel["bridgeState"],
+  cloudConfigured: AiAssistantControllerViewModel["cloudConfigured"],
 ) {
   if (provider === "ollama") {
     return { label: readHealthLabel(status), className: readHealthBadgeClass(status) };
@@ -820,7 +820,7 @@ function readLatencyLabel(provider: AssistantProvider, latencyMs: number | null 
   return "Sin ejecuciones";
 }
 
-function readBridgeStateLabel(state: ReturnType<typeof useAiAssistantController>["bridgeState"]) {
+function readBridgeStateLabel(state: AiAssistantControllerViewModel["bridgeState"]) {
   if (!state) return "esperando extension";
   if (state.lastError) return state.lastError;
   if (state.status === "waiting_manual_copy") return "prompt insertado; esperando que copies la respuesta en ChatGPT";

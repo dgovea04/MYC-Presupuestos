@@ -123,6 +123,67 @@ describe("useAiAssistantController", () => {
     expect(result.current?.result?.answer).toBe("Respuesta nube");
   });
 
+  it("routes openrouter requests through /api/ai/execute", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(
+          JSON.stringify({ openaiConfigured: false, geminiConfigured: false, openrouterConfigured: true }),
+          { status: 200 },
+        );
+      }
+
+      if (String(input) === "/api/ai/execute") {
+        return new Response(
+          JSON.stringify({
+            answer: "Respuesta openrouter",
+            model: "openrouter/model",
+            requestedModel: "openrouter/model",
+            fallbackUsed: false,
+            warnings: [],
+          }),
+          { status: 200 },
+        );
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)} ${JSON.stringify(init)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await renderController({
+      projectId: undefined,
+      initialAction: "chat",
+      initialContext: { module: "Presupuestos" },
+    });
+
+    await act(async () => {
+      result.current?.setProvider("openrouter");
+    });
+
+    await act(async () => {
+      await result.current?.submit({
+        action: "chat",
+        payload: { message: "Explica la vista", context: { module: "Presupuestos" } },
+      });
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ai/execute",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          provider: "openrouter",
+          task: "chat",
+          payload: { message: "Explica la vista", context: { module: "Presupuestos" } },
+        }),
+      }),
+    );
+    expect(result.current?.result?.answer).toBe("Respuesta openrouter");
+  });
+
   it("adds history entries for session mode responses", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === "/api/ai/health") {
@@ -175,6 +236,38 @@ describe("useAiAssistantController", () => {
       }),
     );
   });
+
+  it("syncs context when the incoming initial context changes and the local context is still prop-driven", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await renderController({
+      projectId: undefined,
+      initialAction: "chat",
+      initialContext: { module: "Presupuestos", selectedItem: "Partida 1" },
+    });
+
+    expect(result.current?.context).toEqual({ module: "Presupuestos", selectedItem: "Partida 1" });
+
+    await result.rerender({
+      projectId: undefined,
+      initialAction: "chat",
+      initialContext: { module: "APU", selectedItem: "Partida 2" },
+    });
+
+    expect(result.current?.context).toEqual({ module: "APU", selectedItem: "Partida 2" });
+  });
+
 });
 
 async function renderController(
@@ -199,6 +292,15 @@ async function renderController(
   return {
     get current() {
       return current;
+    },
+    rerender: async (nextProps: React.ComponentProps<typeof TestHarness>["props"]) => {
+      await act(async () => {
+        root.render(<TestHarness props={nextProps} onChange={(value) => { current = value; }} />);
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
     },
   };
 }

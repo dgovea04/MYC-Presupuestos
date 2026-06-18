@@ -97,6 +97,19 @@ describe("GlobalAiAssistantProvider", () => {
     expect(launcher.getAttribute("aria-expanded")).toBe("false");
     expect(getCloseButton()).toBeNull();
   });
+
+  it("passes a minimal runtime project context to the floating assistant", async () => {
+    await renderProvider("/projects/demo/presupuestos", <div>Contenido</div>);
+
+    await act(async () => {
+      getLauncher().click();
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).not.toContain("Sin contexto activo");
+    expect(document.body.textContent).toContain("demo");
+    expect(document.body.textContent).toContain("Presupuestos");
+  });
 });
 
 async function renderProvider(pathname: string, children: React.ReactNode) {
