@@ -10,13 +10,21 @@ export type AiMessage = {
   content: string;
 };
 
+export type AiSelectionType = "project" | "budget" | "partida" | "resource" | "metrado";
+
 export type AiContext = {
+  route?: string;
+  projectId?: string;
+  budgetId?: string;
   project?: string;
   module?: string;
   selectedItem?: string;
+  selectionType?: AiSelectionType;
+  selectionId?: string;
   unit?: string;
   currentCost?: number;
   activeTable?: string;
+  viewSummary?: string;
 };
 
 export type AiEndpointResult = {

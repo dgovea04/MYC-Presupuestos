@@ -1,9 +1,10 @@
 import type { KhipuAiTask } from "@/lib/ai/gateway/types";
+import { buildContextBlock } from "@/lib/ai/context-builder";
 import { getAiProjectHistory, type AiProjectHistoryEntry } from "@/lib/ai/project-history";
 import { buildAiRetrievalEvidence, formatEvidenceBlock, type AiEvidence } from "@/lib/ai/retrieval-context";
 import { getProjectAiMemory, type ProjectAiMemoryFact } from "@/lib/ai/context/project-memory";
 import { getProjectContextSummary } from "@/lib/ai/context/project-context";
-import type { AiAction } from "@/lib/ai/types";
+import type { AiAction, AiContext } from "@/lib/ai/types";
 
 type ProjectHistorySummary = Pick<AiProjectHistoryEntry, "id" | "summary" | "result" | "timestamp">;
 
@@ -89,9 +90,14 @@ export async function buildKhipuAssembledContext({
 }
 
 export function formatAssembledContextBlock(context: KhipuAssembledContext): string {
+  const userViewContextBlock = buildContextBlock(readPayloadContext(context.userRequest.payload));
+
   return [
     "Contexto del proyecto",
     context.projectContext || "Sin contexto de proyecto disponible.",
+    "",
+    "Contexto visible del usuario",
+    userViewContextBlock || "Sin contexto visible del usuario.",
     "",
     "Historial reciente",
     formatHistory(context.projectHistory),
@@ -138,9 +144,14 @@ function formatMemory(memory: ProjectAiMemoryFact[]) {
 }
 
 function buildQueryText(payload: Record<string, unknown>) {
-  const values = Object.values(payload)
+  const values = [
+    ...Object.values(payload)
+      .flatMap((value) => (typeof value === "string" ? [value] : []))
+      .filter((value) => value.trim().length > 0),
+    ...Object.values(readPayloadContext(payload) ?? {})
     .flatMap((value) => (typeof value === "string" ? [value] : []))
-    .filter((value) => value.trim().length > 0);
+      .filter((value) => value.trim().length > 0),
+  ];
 
   return values.join(" ");
 }
@@ -154,7 +165,7 @@ function mapTaskToRetrievalAction(task: KhipuAiTask): Exclude<AiAction, "json"> 
   return "review";
 }
 
-function readPayloadContext(payload: Record<string, unknown>) {
+function readPayloadContext(payload: Record<string, unknown>): AiContext | undefined {
   const context = payload.context;
-  return typeof context === "object" && context !== null && !Array.isArray(context) ? context : undefined;
+  return typeof context === "object" && context !== null && !Array.isArray(context) ? context as AiContext : undefined;
 }

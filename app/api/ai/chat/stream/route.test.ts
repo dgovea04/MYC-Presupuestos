@@ -62,7 +62,19 @@ describe("POST /api/ai/chat/stream", () => {
         body: JSON.stringify({
           message: "Consulta tecnica",
           projectId: "project-1",
-          context: { project: "Hospital Norte" },
+          context: {
+            route: "/projects/project-1/budgets/budget-1",
+            projectId: "project-1",
+            budgetId: "budget-1",
+            module: "Presupuestos",
+            selectedItem: "Partida de concreto",
+            selectionType: "partida",
+            selectionId: "partida-1",
+            unit: "m3",
+            currentCost: 420,
+            activeTable: "presupuesto",
+            viewSummary: "Partida de concreto en el presupuesto activo",
+          },
         }),
       }),
     );
@@ -75,9 +87,39 @@ describe("POST /api/ai/chat/stream", () => {
     expect(body).toContain('event: delta\ndata: {"text":"Hola "}');
     expect(body).toContain('event: final\ndata: {"answer":"Hola obra"');
     expect(body).toContain('"historyEntry":{"id":"history-1"}');
+    expect(mocks.buildChatMessages).toHaveBeenCalledWith({
+      message: "Consulta tecnica",
+      projectId: "project-1",
+      provider: "auto",
+      context: {
+        route: "/projects/project-1/budgets/budget-1",
+        projectId: "project-1",
+        budgetId: "budget-1",
+        module: "Presupuestos",
+        selectedItem: "Partida de concreto",
+        selectionType: "partida",
+        selectionId: "partida-1",
+        unit: "m3",
+        currentCost: 420,
+        activeTable: "presupuesto",
+        viewSummary: "Partida de concreto en el presupuesto activo",
+      },
+    });
     expect(mocks.attachProjectHistoryEntry).toHaveBeenCalledWith({
       action: "chat",
-      context: { project: "Hospital Norte" },
+      context: {
+        route: "/projects/project-1/budgets/budget-1",
+        projectId: "project-1",
+        budgetId: "budget-1",
+        module: "Presupuestos",
+        selectedItem: "Partida de concreto",
+        selectionType: "partida",
+        selectionId: "partida-1",
+        unit: "m3",
+        currentCost: 420,
+        activeTable: "presupuesto",
+        viewSummary: "Partida de concreto en el presupuesto activo",
+      },
       projectId: "project-1",
       result: expect.objectContaining({ answer: "Hola obra" }),
       summary: "Consulta tecnica",

@@ -6,12 +6,18 @@ export function buildContextBlock(context?: AiContext) {
   }
 
   const entries = [
+    ["Ruta", context.route],
     ["Proyecto", context.project],
-    ["Módulo", context.module],
+    ["Project ID", context.projectId],
+    ["Budget ID", context.budgetId],
+    ["Modulo", context.module],
     ["Partida seleccionada", context.selectedItem],
+    ["Tipo de seleccion", context.selectionType],
+    ["Selection ID", context.selectionId],
     ["Unidad", context.unit],
     ["Costo actual", typeof context.currentCost === "number" ? String(context.currentCost) : undefined],
     ["Tabla activa", context.activeTable],
+    ["Resumen visible", context.viewSummary],
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
 
   if (entries.length === 0) {

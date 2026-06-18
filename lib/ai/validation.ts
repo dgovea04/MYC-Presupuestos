@@ -1,12 +1,18 @@
 import { z } from "zod";
 
 const aiContextSchema = z.object({
+  route: z.string().trim().min(1).optional(),
+  projectId: z.string().trim().min(1).optional(),
+  budgetId: z.string().trim().min(1).optional(),
   project: z.string().trim().min(1).optional(),
   module: z.string().trim().min(1).optional(),
   selectedItem: z.string().trim().min(1).optional(),
+  selectionType: z.enum(["project", "budget", "partida", "resource", "metrado"]).optional(),
+  selectionId: z.string().trim().min(1).optional(),
   unit: z.string().trim().min(1).optional(),
   currentCost: z.coerce.number().nonnegative().optional(),
   activeTable: z.string().trim().min(1).optional(),
+  viewSummary: z.string().trim().min(1).optional(),
 });
 
 const projectIdSchema = z.string().trim().min(1).optional();
