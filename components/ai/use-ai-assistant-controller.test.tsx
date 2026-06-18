@@ -237,7 +237,7 @@ describe("useAiAssistantController", () => {
     );
   });
 
-  it("syncs context when the incoming initial context changes and the local context is still prop-driven", async () => {
+  it("syncs context when Task 3-only fields change and the local context is still prop-driven", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === "/api/ai/health") {
         return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
@@ -254,18 +254,134 @@ describe("useAiAssistantController", () => {
     const result = await renderController({
       projectId: undefined,
       initialAction: "chat",
-      initialContext: { module: "Presupuestos", selectedItem: "Partida 1" },
+      initialContext: {
+        route: "/projects/project-1/budgets/budget-1",
+        projectId: "project-1",
+        budgetId: "budget-1",
+        module: "Presupuestos",
+        selectedItem: "Partida 1",
+        selectionType: "partida",
+        selectionId: "partida-1",
+        unit: "m3",
+        currentCost: 420,
+        activeTable: "presupuesto",
+        viewSummary: "Partida 1 visible",
+      },
     });
 
-    expect(result.current?.context).toEqual({ module: "Presupuestos", selectedItem: "Partida 1" });
+    expect(result.current?.context).toEqual({
+      route: "/projects/project-1/budgets/budget-1",
+      projectId: "project-1",
+      budgetId: "budget-1",
+      module: "Presupuestos",
+      selectedItem: "Partida 1",
+      selectionType: "partida",
+      selectionId: "partida-1",
+      unit: "m3",
+      currentCost: 420,
+      activeTable: "presupuesto",
+      viewSummary: "Partida 1 visible",
+    });
 
     await result.rerender({
       projectId: undefined,
       initialAction: "chat",
-      initialContext: { module: "APU", selectedItem: "Partida 2" },
+      initialContext: {
+        route: "/projects/project-1/budgets/budget-1",
+        projectId: "project-1",
+        budgetId: "budget-1",
+        module: "Presupuestos",
+        selectedItem: "Partida 1",
+        selectionType: "partida",
+        selectionId: "partida-2",
+        unit: "m3",
+        currentCost: 420,
+        activeTable: "presupuesto",
+        viewSummary: "Partida 1 actualizada",
+      },
     });
 
-    expect(result.current?.context).toEqual({ module: "APU", selectedItem: "Partida 2" });
+    expect(result.current?.context).toEqual({
+      route: "/projects/project-1/budgets/budget-1",
+      projectId: "project-1",
+      budgetId: "budget-1",
+      module: "Presupuestos",
+      selectedItem: "Partida 1",
+      selectionType: "partida",
+      selectionId: "partida-2",
+      unit: "m3",
+      currentCost: 420,
+      activeTable: "presupuesto",
+      viewSummary: "Partida 1 actualizada",
+    });
+  });
+
+  it("preserves Task 3 context fields when reading session history entries", async () => {
+    window.localStorage.setItem(
+      "myc-ai-session-history",
+      JSON.stringify([
+        {
+          id: "history-1",
+          action: "chat",
+          summary: "Consulta previa",
+          timestamp: "2026-06-18T10:00:00.000Z",
+          context: {
+            route: "/projects/project-1/budgets/budget-1",
+            projectId: "project-1",
+            budgetId: "budget-1",
+            project: "Hospital Norte",
+            module: "Presupuestos",
+            selectedItem: "Partida de concreto",
+            selectionType: "partida",
+            selectionId: "partida-1",
+            unit: "m3",
+            currentCost: 420,
+            activeTable: "presupuesto",
+            viewSummary: "Partida de concreto en el presupuesto activo",
+          },
+          result: {
+            answer: "Revision previa",
+            model: "llama3",
+            requestedModel: "llama3",
+            fallbackUsed: false,
+            warnings: [],
+          },
+        },
+      ]),
+    );
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)}`);
+    }));
+
+    const result = await renderController({
+      projectId: undefined,
+      initialAction: "chat",
+      initialContext: {},
+    });
+
+    expect(result.current?.history[0]?.context).toEqual({
+      route: "/projects/project-1/budgets/budget-1",
+      projectId: "project-1",
+      budgetId: "budget-1",
+      project: "Hospital Norte",
+      module: "Presupuestos",
+      selectedItem: "Partida de concreto",
+      selectionType: "partida",
+      selectionId: "partida-1",
+      unit: "m3",
+      currentCost: 420,
+      activeTable: "presupuesto",
+      viewSummary: "Partida de concreto en el presupuesto activo",
+    });
   });
 
 });
@@ -313,7 +429,20 @@ function TestHarness({
   props: {
     projectId?: string;
     initialAction: "chat" | "apu" | "review" | "autocomplete";
-    initialContext: { module?: string; selectedItem?: string };
+    initialContext: {
+      route?: string;
+      projectId?: string;
+      budgetId?: string;
+      project?: string;
+      module?: string;
+      selectedItem?: string;
+      selectionType?: "project" | "budget" | "partida" | "resource" | "metrado";
+      selectionId?: string;
+      unit?: string;
+      currentCost?: number;
+      activeTable?: string;
+      viewSummary?: string;
+    };
   };
 }) {
   const controller = useAiAssistantController(props);

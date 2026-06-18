@@ -1320,12 +1320,25 @@ function readAiContext(value: unknown): AiContext {
   }
 
   return {
+    route: typeof value.route === "string" ? value.route : undefined,
+    projectId: typeof value.projectId === "string" ? value.projectId : undefined,
+    budgetId: typeof value.budgetId === "string" ? value.budgetId : undefined,
     project: typeof value.project === "string" ? value.project : undefined,
     module: typeof value.module === "string" ? value.module : undefined,
     selectedItem: typeof value.selectedItem === "string" ? value.selectedItem : undefined,
+    selectionType:
+      value.selectionType === "project" ||
+        value.selectionType === "budget" ||
+        value.selectionType === "partida" ||
+        value.selectionType === "resource" ||
+        value.selectionType === "metrado"
+        ? value.selectionType
+        : undefined,
+    selectionId: typeof value.selectionId === "string" ? value.selectionId : undefined,
     unit: typeof value.unit === "string" ? value.unit : undefined,
     currentCost: typeof value.currentCost === "number" ? value.currentCost : undefined,
     activeTable: typeof value.activeTable === "string" ? value.activeTable : undefined,
+    viewSummary: typeof value.viewSummary === "string" ? value.viewSummary : undefined,
   };
 }
 
@@ -1378,10 +1391,16 @@ export function hasReviewStructuredShape(value: Record<string, unknown>): value 
 }
 
 function areAiContextsEqual(left: AiContext, right: AiContext) {
-  return left.project === right.project &&
+  return left.route === right.route &&
+    left.projectId === right.projectId &&
+    left.budgetId === right.budgetId &&
+    left.project === right.project &&
     left.module === right.module &&
     left.selectedItem === right.selectedItem &&
+    left.selectionType === right.selectionType &&
+    left.selectionId === right.selectionId &&
     left.unit === right.unit &&
     left.currentCost === right.currentCost &&
-    left.activeTable === right.activeTable;
+    left.activeTable === right.activeTable &&
+    left.viewSummary === right.viewSummary;
 }

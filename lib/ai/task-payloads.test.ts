@@ -155,6 +155,44 @@ describe("AI task payloads", () => {
     expect(JSON.stringify(payload)).not.toContain("project-1");
   });
 
+  it("preserves the structured Task 3 context fields in task payloads", () => {
+    const payload = buildAiTaskPayload({
+      action: "chat",
+      payload: {
+        message: "Revisa el contexto visible",
+        context: {
+          route: "/projects/project-1/budgets/budget-1",
+          projectId: "project-1",
+          budgetId: "budget-1",
+          project: "Hospital Norte",
+          module: "Presupuestos",
+          selectedItem: "Partida de concreto",
+          selectionType: "partida",
+          selectionId: "partida-1",
+          unit: "m3",
+          currentCost: 420,
+          activeTable: "presupuesto",
+          viewSummary: "Partida de concreto en el presupuesto activo",
+        },
+      },
+    });
+
+    expect(payload.context).toEqual({
+      route: "/projects/project-1/budgets/budget-1",
+      projectId: "project-1",
+      budgetId: "budget-1",
+      project: "Hospital Norte",
+      module: "Presupuestos",
+      selectedItem: "Partida de concreto",
+      selectionType: "partida",
+      selectionId: "partida-1",
+      unit: "m3",
+      currentCost: 420,
+      activeTable: "presupuesto",
+      viewSummary: "Partida de concreto en el presupuesto activo",
+    });
+  });
+
   it("throws a useful error when required input is missing", () => {
     expect(() =>
       buildAiTaskPayload({

@@ -236,12 +236,18 @@ function readContext(value: unknown): AiContext | undefined {
   }
 
   const context: AiContext = {
+    route: readOptionalString(value.route),
+    projectId: readOptionalString(value.projectId),
+    budgetId: readOptionalString(value.budgetId),
     project: readOptionalString(value.project),
     module: readOptionalString(value.module),
     selectedItem: readOptionalString(value.selectedItem),
+    selectionType: readSelectionType(value.selectionType),
+    selectionId: readOptionalString(value.selectionId),
     unit: readOptionalString(value.unit),
     currentCost: typeof value.currentCost === "number" ? value.currentCost : undefined,
     activeTable: readOptionalString(value.activeTable),
+    viewSummary: readOptionalString(value.viewSummary),
   };
 
   const entries = Object.entries(context).filter(([, entryValue]) => entryValue !== undefined);
@@ -267,6 +273,12 @@ function readRequiredString(value: unknown, key: string) {
 
 function readOptionalString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readSelectionType(value: unknown): AiContext["selectionType"] {
+  return value === "project" || value === "budget" || value === "partida" || value === "resource" || value === "metrado"
+    ? value
+    : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
