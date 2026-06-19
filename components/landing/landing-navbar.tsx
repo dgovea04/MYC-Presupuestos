@@ -121,7 +121,7 @@ export function LandingNavbar() {
           <LandingLinkButton href="/login" variant="secondary">
             Iniciar sesión
           </LandingLinkButton>
-          <LandingLinkButton href="/register">Solicitar acceso</LandingLinkButton>
+          <LandingLinkButton href="/register">Crear cuenta gratis</LandingLinkButton>
         </div>
 
         {/* Mobile hamburger */}
@@ -213,7 +213,7 @@ export function LandingNavbar() {
               Iniciar sesión
             </LandingLinkButton>
             <LandingLinkButton href="/register" className="w-full justify-center">
-              Solicitar acceso
+              Crear cuenta gratis
             </LandingLinkButton>
           </div>
         </div>

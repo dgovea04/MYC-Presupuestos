@@ -7,7 +7,7 @@ export function FeaturesSection() {
     <section id="features" className="landing-section landing-shell scroll-mt-28">
       <SectionHeading
         badge="Módulos clave"
-        title="Todo el flujo de costos de obra en una sola plataforma."
+        title="Todo lo que necesitas para preparar y controlar presupuestos de obra."
         description="Cada módulo combina operación diaria, automatización revisable y entregables listos para oficina técnica."
         align="center"
       />

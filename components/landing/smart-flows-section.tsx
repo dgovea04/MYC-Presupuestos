@@ -7,7 +7,7 @@ export function SmartFlowsSection() {
     <section id="flows" className="landing-section-tight landing-shell scroll-mt-28">
       <SectionHeading
         badge="Flujos inteligentes"
-        title="Automatización útil, siempre revisable."
+        title="Automatiza tareas repetitivas sin perder revisión técnica."
         description="MYC ayuda a avanzar más rápido, pero mantiene las decisiones técnicas en manos del equipo."
         align="center"
       />

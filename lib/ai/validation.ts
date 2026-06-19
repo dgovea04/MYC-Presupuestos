@@ -63,6 +63,27 @@ export const aiReviewRequestSchema = z.object({
   projectId: projectIdSchema,
 });
 
+const aiEndpointResultSchema = z.object({
+  answer: z.string().trim().min(1, "La respuesta de IA no puede estar vacia."),
+  model: z.string().trim().min(1, "El modelo es obligatorio."),
+  requestedModel: z.string().trim().min(1, "El modelo solicitado es obligatorio."),
+  fallbackUsed: z.boolean(),
+  warnings: z.array(z.string()).default([]),
+  latencyMs: z.number().finite().nonnegative().optional(),
+  structuredData: z.unknown().optional(),
+  provider: z.enum(["ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"]).optional(),
+  task: khipuAiTaskSchema.optional(),
+  promptHash: z.string().trim().min(1).optional(),
+  responseHash: z.string().trim().min(1).optional(),
+});
+
+export const aiBridgeReviewPersistRequestSchema = z.object({
+  budgetSummary: z.string().trim().min(10, "Ingresa informacion suficiente para revisar el presupuesto."),
+  context: aiContextSchema.optional(),
+  projectId: projectIdSchema,
+  result: aiEndpointResultSchema,
+});
+
 export const aiAutocompleteRequestSchema = z.object({
   input: z.string().trim().min(3, "Ingresa un texto base para autocompletar."),
   provider: aiProviderSchema.default("auto"),

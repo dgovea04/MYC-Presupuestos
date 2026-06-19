@@ -18,7 +18,7 @@ const planMeta: Record<string, { audience: string; cadence: string; note: string
   },
   Empresa: {
     audience: "Para constructoras y equipos multiárea",
-    cadence: "pricing consultivo",
+    cadence: "Cotización personalizada",
     note: "Administración, límites altos, estándares internos y acompañamiento.",
     cta: "Solicitar acceso",
   },
@@ -30,7 +30,7 @@ export function PricingSection() {
       <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 xl:px-12">
         <SectionHeading
           badge="Precios"
-          title="Gratis para empezar, Pro para automatizar, Empresa para estandarizar."
+          title="Elige el plan según el nivel de control que necesita tu equipo."
           description="La estrategia Starter permite trabajar de verdad; Pro monetiza automatización y entregables avanzados; Empresa suma administración, soporte y control operativo."
           align="center"
         />

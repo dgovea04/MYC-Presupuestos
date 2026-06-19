@@ -26,7 +26,7 @@ export function ProductPreviewSection() {
       <div className="landing-shell">
         <SectionHeading
           badge="Vista de producto"
-          title="Una superficie moderna para trabajar como en obra."
+          title="Trabaja con una experiencia familiar tipo Excel, pero más ordenada."
           description="Modo moderno para lectura clara, modo Excel para operación compacta, sugerencias revisables y exportes listos sin salir del flujo."
         />
         <div className="mt-14 grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">

@@ -7,7 +7,7 @@ export function TestimonialsSection() {
     <section className="mx-auto max-w-[1440px] px-4 py-20 sm:px-6 md:py-28 lg:px-8 xl:px-12">
       <SectionHeading
         badge="Testimonios"
-        title="Comentarios que suenan a obra, no a brochure."
+        title="Profesionales que buscan menos hojas sueltas y más control técnico."
         description="Historias breves de profesionales que necesitan velocidad, trazabilidad y menos dependencia de hojas dispersas."
         align="center"
       />

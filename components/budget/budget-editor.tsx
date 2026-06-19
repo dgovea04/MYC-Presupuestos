@@ -44,6 +44,7 @@ import { useFormattingSettings } from "@/components/providers/formatting-setting
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { formatAiText } from "@/lib/ai/formatting";
 import { renderMarkdownLite } from "@/components/ai/AIMessage";
+import { PreviewDebugPanel } from "@/components/ai/debug-panel";
 import type { CellValue } from "exceljs";
 import { suggestPartidaMatches, type BudgetPasteSuggestedMatch } from "@/lib/budgets/sub-budget-partida-suggestions";
 import type { AiEndpointResult, AiReviewStructuredData } from "@/lib/ai/types";
@@ -52,7 +53,7 @@ import {
   sendToMYCChatGPTBridge,
 } from "@/lib/ai/myc-bridge-client";
 import { buildBridgeTaskPayload } from "@/lib/ai/task-payloads";
-import { readBridgeAiResult } from "@/lib/ai/bridge-parsing";
+import { normalizeBridgeReviewData, readBridgeAiResult, tryParseJsonFromRawText } from "@/lib/ai/bridge-parsing";
 import { REVIEW_OUTPUT_JSON_SHAPE } from "@/lib/ai/prompts";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import type { NoteTaskRecord } from "@/types/notes";
@@ -196,6 +197,15 @@ const ITEM_ACTION_MENU_ESTIMATED_HEIGHT = 184;
 const HEADER_ADD_MENU_ESTIMATED_HEIGHT = 216;
 const HEADER_MORE_MENU_ESTIMATED_HEIGHT = 192;
 const EMPTY_CATALOG_SUGGESTIONS: CatalogPartidaRecord[] = [];
+
+type PendingBridgeBudgetReview = {
+  budgetSummary: string;
+  context: {
+    project: string;
+    module: string;
+    activeTable: string;
+  };
+};
 
 type IndexedCatalogPartida = {
   partida: CatalogPartidaRecord;
@@ -426,6 +436,7 @@ export function BudgetEditor({
   const headerActionMenuRef = useRef<HTMLDivElement | null>(null);
   const pendingBridgeRequestIdRef = useRef<string | null>(null);
   const pendingBridgeTimeoutRef = useRef<number | null>(null);
+  const pendingBridgeBudgetReviewRef = useRef<PendingBridgeBudgetReview | null>(null);
   const estimatedBudgetRowHeight = isExcelMode ? excelRowHeight : 58;
 
   useEffect(() => {
@@ -783,30 +794,63 @@ export function BudgetEditor({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeRowId, apuSheetSession, levelIdSet, openApuSheet, summary]);
 
+  const buildBudgetReviewContext = useCallback(() => ({
+    project: projectName,
+    module: "Editor de presupuesto",
+    activeTable: "Presupuesto",
+  }), [projectName]);
+
+  const persistBridgeBudgetReview = useCallback(async (result: AiEndpointResult, review: PendingBridgeBudgetReview) => {
+    if (!budget.projectId) return;
+
+    try {
+      await fetch("/api/ai/review/bridge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId: budget.projectId,
+          budgetSummary: review.budgetSummary,
+          context: review.context,
+          result,
+        }),
+      });
+    } catch {
+      // Best effort only: the review modal should remain usable even if history persistence fails.
+    }
+  }, [budget.projectId]);
+
   useEffect(() => {
     const unsubscribeResponse = onMYCBridgeResponse((response) => {
       if (response.requestId && pendingBridgeRequestIdRef.current && response.requestId !== pendingBridgeRequestIdRef.current) return;
       clearPendingBridgeTimeoutInternal();
       pendingBridgeRequestIdRef.current = null;
       if (response.error) {
+        pendingBridgeBudgetReviewRef.current = null;
         setAiPanel((current) =>
           current && current.kind === "review" ? { ...current, loading: false, error: response.error ?? "" } : current,
         );
         return;
       }
       const nextResult = readBridgeAiResult(response);
+      const pendingReview = pendingBridgeBudgetReviewRef.current;
+      pendingBridgeBudgetReviewRef.current = null;
       setAiPanel((current) =>
         current && current.kind === "review"
           ? { ...current, result: nextResult, loading: false, error: "" }
           : current,
       );
+      if (pendingReview) {
+        void persistBridgeBudgetReview(nextResult, pendingReview);
+      }
     });
 
     return () => {
       unsubscribeResponse();
       clearPendingBridgeTimeoutInternal();
     };
-  }, []);
+  }, [persistBridgeBudgetReview]);
 
   function addLevel(type: BudgetLevelType, parentId?: string | null) {
     const insertion = resolveLevelInsertion(type, rows, state.levels, activeRowIdRef.current, parentId);
@@ -891,6 +935,10 @@ export function BudgetEditor({
 
   function submitBudgetBridgeReview(budgetSummary: string) {
     try {
+      pendingBridgeBudgetReviewRef.current = {
+        budgetSummary,
+        context: buildBudgetReviewContext(),
+      };
       const bridgePrompt = buildBudgetBridgePrompt(budgetSummary);
       const requestId = sendToMYCChatGPTBridge(bridgePrompt, {
         source: "myc-presupuestos",
@@ -902,6 +950,7 @@ export function BudgetEditor({
       pendingBridgeTimeoutRef.current = window.setTimeout(() => {
         if (pendingBridgeRequestIdRef.current !== requestId) return;
         pendingBridgeRequestIdRef.current = null;
+        pendingBridgeBudgetReviewRef.current = null;
         setAiPanel((current) =>
           current && current.kind === "review"
             ? { ...current, loading: false, error: "ChatGPT Bridge no devolvió respuesta. Verifica que la extensión esté cargada." }
@@ -909,6 +958,7 @@ export function BudgetEditor({
         );
       }, 600000);
     } catch (caughtError) {
+      pendingBridgeBudgetReviewRef.current = null;
       setAiPanel({
         kind: "review",
         title: "Revision IA del presupuesto",
@@ -931,11 +981,7 @@ export function BudgetEditor({
       action: "review",
       payload: {
         budgetSummary,
-        context: {
-          project: projectName,
-          module: "Editor de presupuesto",
-          activeTable: "Presupuesto",
-        },
+        context: buildBudgetReviewContext(),
       },
     });
     return {
@@ -1029,17 +1075,14 @@ export function BudgetEditor({
         },
         body: JSON.stringify({
           provider: toBackendProvider(provider),
+          projectId: budget.projectId,
           budgetSummary: buildAiBudgetReviewSummary({
             budgetName: summary.name,
             currency: summary.currency,
             items: summary.items,
             totalDirectCost: summary.totals.totalDirectCost,
           }),
-          context: {
-            project: projectName,
-            module: "Editor de presupuesto",
-            activeTable: "Presupuesto",
-          },
+          context: buildBudgetReviewContext(),
         }),
       });
       const payload: unknown = await response.json();
@@ -2712,24 +2755,49 @@ function AiBudgetActionDialog({
                   <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{panel.result.warnings.join(" ")}</p>
                 ) : null}
                 {reviewData ? (
-                  <div className="space-y-2">
-                    {reviewData.findings.map((finding, index) => (
-                      <div key={`${finding.type}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{finding.severity}</span>
-                          <span className="text-sm font-semibold text-slate-900">{finding.type}</span>
-                        </div>
-                        <p className="mt-2 text-sm text-slate-700">{finding.description}</p>
-                        <p className="mt-1 text-xs text-slate-500">Impacto: {finding.impact}</p>
-                        <p className="mt-1 text-xs text-slate-500">Accion recomendada: {finding.recommendedAction}</p>
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumen</p>
+                      <div className="mt-2 text-sm leading-6 text-slate-700">
+                        {renderMarkdownLite(formatAiText(reviewData.answer))}
                       </div>
-                    ))}
+                    </div>
+                    {reviewData.findings.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hallazgos</p>
+                        {reviewData.findings.map((finding, index) => (
+                          <div key={`${finding.type}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{finding.severity}</span>
+                              <span className="text-sm font-semibold text-slate-900">{finding.type}</span>
+                            </div>
+                            <p className="mt-2 text-sm text-slate-700">{finding.description}</p>
+                            <p className="mt-1 text-xs text-slate-500">Impacto: {finding.impact}</p>
+                            <p className="mt-1 text-xs text-slate-500">Accion recomendada: {finding.recommendedAction}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {reviewData.assumptions.length > 0 ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supuestos</p>
+                        <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                          {reviewData.assumptions.map((assumption, index) => (
+                            <li key={`${assumption}-${index}`} className="flex gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
+                              <span>{assumption}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
                     {renderMarkdownLite(formatAiText(panel.result.answer))}
                   </div>
                 )}
+                {panel.result.debug ? <PreviewDebugPanel debug={panel.result.debug} /> : null}
               </div>
               <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-slate-100 pt-3">
                 <Button type="button" variant="outline" onClick={onClose}>
@@ -5260,14 +5328,30 @@ function buildAiItemContext(item: BudgetItemRecord, budgetName: string) {
 function readAiEndpointResult(payload: unknown): AiEndpointResult {
   if (!isRecord(payload)) throw new Error("La respuesta de IA no tiene el formato esperado.");
 
+  const debug = readAiDebug(payload.debug);
+  let structuredData = normalizeAiStructuredData(payload.structuredData);
+  let answer = readString(payload.answer);
+
+  if (!structuredData && answer) {
+    const parsedFromAnswer = tryParseJsonFromRawText(answer);
+    if (parsedFromAnswer) {
+      structuredData = normalizeAiStructuredData(parsedFromAnswer);
+    }
+  }
+
+  if (isRecord(structuredData) && typeof structuredData.answer === "string" && structuredData.answer.trim().length > 0) {
+    answer = structuredData.answer;
+  }
+
   return {
-    answer: readString(payload.answer),
+    answer,
     model: readString(payload.model),
     requestedModel: readString(payload.requestedModel),
     fallbackUsed: payload.fallbackUsed === true,
     warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((warning): warning is string => typeof warning === "string") : [],
     latencyMs: typeof payload.latencyMs === "number" ? payload.latencyMs : undefined,
-    structuredData: payload.structuredData,
+    structuredData,
+    debug,
   };
 }
 
@@ -5280,6 +5364,54 @@ function readAiErrorMessage(payload: unknown): string {
 
 function isAiReviewStructuredData(value: unknown): value is AiReviewStructuredData {
   return isRecord(value) && typeof value.answer === "string" && Array.isArray(value.findings) && Array.isArray(value.assumptions);
+}
+
+function normalizeAiStructuredData(value: unknown): unknown {
+  if (!isRecord(value)) return undefined;
+  return normalizeBridgeReviewData(value);
+}
+
+function readAiDebug(value: unknown): AiEndpointResult["debug"] | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const status = readStructuredParseStatus(value.structuredParseStatus);
+  if (!status) return undefined;
+
+  return {
+    structuredParseStatus: status,
+    rawAnswer: typeof value.rawAnswer === "string" ? value.rawAnswer : undefined,
+    repairedRawAnswer: typeof value.repairedRawAnswer === "string" ? value.repairedRawAnswer : undefined,
+    context: value.context,
+    messages: Array.isArray(value.messages) ? value.messages.filter(isAiMessage) : undefined,
+    ai: isRecord(value.ai) && typeof value.ai.answer === "string"
+      ? {
+          answer: value.ai.answer,
+          rawAnswer: typeof value.ai.rawAnswer === "string" ? value.ai.rawAnswer : undefined,
+          repairedRawAnswer: typeof value.ai.repairedRawAnswer === "string" ? value.ai.repairedRawAnswer : undefined,
+          structuredParseStatus: readStructuredParseStatus(value.ai.structuredParseStatus) ?? status,
+        }
+      : undefined,
+    fallback: isRecord(value.fallback) && typeof value.fallback.used === "boolean"
+      ? {
+          used: value.fallback.used,
+          reason: typeof value.fallback.reason === "string" ? value.fallback.reason : undefined,
+        }
+      : undefined,
+    validationWarnings: Array.isArray(value.validationWarnings)
+      ? value.validationWarnings.filter((warning): warning is string => typeof warning === "string")
+      : undefined,
+    requestBody: isRecord(value.requestBody) ? value.requestBody : undefined,
+  };
+}
+
+function readStructuredParseStatus(value: unknown): NonNullable<AiEndpointResult["debug"]>["structuredParseStatus"] | undefined {
+  return value === "not_requested" || value === "parsed" || value === "repaired" || value === "failed" ? value : undefined;
+}
+
+function isAiMessage(value: unknown): value is NonNullable<AiEndpointResult["debug"]>["messages"][number] {
+  return isRecord(value) &&
+    (value.role === "system" || value.role === "user" || value.role === "assistant") &&
+    typeof value.content === "string";
 }
 
 function readString(value: unknown): string {
@@ -5340,42 +5472,6 @@ function calculateCodeInputWidth(code: string): number {
 function calculateCodeParentWidth(code: string): number {
   return calculateCodeInputWidth(code) + BUDGET_TABLE_CODE_PARENT_ICON_WIDTH + BUDGET_TABLE_CODE_PARENT_GAP_WIDTH;
 }
-
-function tryParseJsonFromRawText(text: string): Record<string, unknown> | null {
-  // Intento 1: parsear directamente
-  try {
-    const parsed = JSON.parse(text);
-    if (isRecord(parsed)) return parsed;
-  } catch {
-    // No es JSON directo
-  }
-
-  // Intento 2: extraer desde bloque markdown ```json ... ```
-  const jsonBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-  if (jsonBlockMatch) {
-    try {
-      const parsed = JSON.parse(jsonBlockMatch[1].trim());
-      if (isRecord(parsed)) return parsed;
-    } catch {
-      // No es JSON dentro del bloque
-    }
-  }
-
-  // Intento 3: buscar el primer objeto JSON {} en el texto
-  const objectMatch = text.match(/\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/);
-  if (objectMatch) {
-    try {
-      const parsed = JSON.parse(objectMatch[0]);
-      if (isRecord(parsed)) return parsed;
-    } catch {
-      // No se pudo extraer JSON
-    }
-  }
-
-  return null;
-}
-
-export { tryParseJsonFromRawText };
 
 function getBudgetProviderLabel(provider: AiProvider) {
   if (provider === "ollama") return "Ollama";

@@ -1,76 +1,18 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LandingLinkButton } from "@/components/landing/landing-link-button";
 
 const trustSignals = ["IA local revisable", "Cronograma valorizado", "Exportes PDF / Excel / ZIP"];
 
-const socialMetrics = [
-  { value: 2500, suffix: "+", label: "presupuestos creados" },
-  { value: 180, suffix: "+", label: "oficinas técnicas" },
-  { value: 85, suffix: "%", label: "menos retrabajo manual" },
+const socialProof = [
+  "Diseñado para oficinas técnicas",
+  "Compatible con flujo Excel",
+  "Pensado para presupuestos en Perú",
 ];
-
-function AnimatedMetric({ value, suffix, label }: { value: number; suffix: string; label: string }) {
-  const [count, setCount] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const hasAnimated = useRef(false);
-  const prefersReduced = useReducedMotion();
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || hasAnimated.current) return;
-
-    if (prefersReduced) {
-      queueMicrotask(() => {
-        setCount(value);
-      });
-      hasAnimated.current = true;
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          hasAnimated.current = true;
-          const duration = 1800;
-          const startTime = performance.now();
-
-          function tick(now: number) {
-            const elapsed = now - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setCount(Math.round(eased * value));
-
-            if (progress < 1) {
-              requestAnimationFrame(tick);
-            }
-          }
-
-          requestAnimationFrame(tick);
-        }
-      },
-      { threshold: 0.5 },
-    );
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [value, prefersReduced]);
-
-  return (
-    <div ref={ref} className="flex flex-col items-center gap-1">
-      <span className="font-display text-2xl font-semibold tracking-tight text-slate-950 tabular-nums sm:text-3xl">
-        {count.toLocaleString("es-PE")}
-        {suffix}
-      </span>
-      <span className="text-xs text-slate-500 sm:text-sm">{label}</span>
-    </div>
-  );
-}
 
 export function HeroSection() {
   const prefersReduced = useReducedMotion();
@@ -84,14 +26,14 @@ export function HeroSection() {
             Plataforma operativa para oficinas técnicas
           </Badge>
           <h1 className="font-display mt-6 max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-[3.6rem]">
-            Presupuestos, APU, cronograma e IA en un solo flujo de obra.
+            Presupuesta obras con más control, menos retrabajo y reportes listos.
           </h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
-            MYC conecta costos, partidas, insumos, fórmula polinómica, notas, exportes y programación para trabajar con trazabilidad sin depender de hojas dispersas.
+            Centraliza presupuestos, APUs, metrados, fórmula polinómica, cronograma y exportaciones en una plataforma moderna para construcción en Perú.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <LandingLinkButton href="/register" className="gap-2">
-              Crear presupuesto gratis
+              Crear cuenta gratis
               <ArrowRight className="h-4 w-4" />
             </LandingLinkButton>
             <LandingLinkButton href="#preview" variant="secondary">
@@ -107,15 +49,13 @@ export function HeroSection() {
             ))}
           </div>
 
-          {/* Social metrics */}
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 sm:gap-x-12">
-            {socialMetrics.map((metric) => (
-              <AnimatedMetric
-                key={metric.label}
-                value={metric.value}
-                suffix={metric.suffix}
-                label={metric.label}
-              />
+          {/* Social proof badges replacing inflated metrics */}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm">
+            {socialProof.map((signal) => (
+              <span key={signal} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-3 py-1.5 text-slate-600 shadow-sm shadow-slate-200/60">
+                <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                {signal}
+              </span>
             ))}
           </div>
         </div>
@@ -129,10 +69,6 @@ export function HeroSection() {
           className="relative mx-auto w-full max-w-[1000px]"
         >
           <div className="landing-surface-elevated relative overflow-hidden rounded-[1.75rem] bg-white p-2">
-            <div className="absolute left-6 top-6 z-10 hidden items-center gap-2 rounded-full border border-white/70 bg-white/88 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-200/70 backdrop-blur md:flex">
-              <Sparkles className="h-4 w-4 text-blue-600" />
-              Vista global del dashboard
-            </div>
             <Image
               src="/hero-1.webp"
               alt="Dashboard de MYC Presupuestos con resumen de proyectos, presupuesto total y acciones rápidas"

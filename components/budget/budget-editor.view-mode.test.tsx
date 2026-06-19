@@ -1283,11 +1283,13 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      projectId?: string;
       budgetSummary: string;
       context: { project?: string; module?: string; activeTable?: string };
     };
 
     expect(fetchMock).toHaveBeenCalledWith("/api/ai/review", expect.objectContaining({ method: "POST" }));
+    expect(requestBody.projectId).toBe("project-1");
     expect(requestBody.budgetSummary).toContain("Presupuesto: Presupuesto Demo");
     expect(requestBody.budgetSummary).toContain("Duplicados potenciales");
     expect(requestBody.budgetSummary).toContain("Unidades poco especificas o sospechosas");
@@ -1297,8 +1299,149 @@ describe("BudgetEditor view mode integration", () => {
       activeTable: "Presupuesto",
     });
     expect(getByText("Revision IA del presupuesto")).toBeTruthy();
+    expect(getByText("Resumen")).toBeTruthy();
+    expect(getByText("Se encontraron partidas por revisar.")).toBeTruthy();
     expect(getByText("Partidas de concreto similares con unidades distintas.")).toBeTruthy();
+    expect(getByText("Supuestos")).toBeTruthy();
+    expect(getByText("Revision basada en el presupuesto visible.")).toBeTruthy();
     expect(getByTestId("ai-budget-review-scroll-area").className).toContain("overflow-y-auto");
+  });
+
+  it("normalizes review JSON text responses and shows AI debug details", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        answer: JSON.stringify({
+          answer: "Se detectaron observaciones criticas.",
+          critical_findings: [
+            {
+              severity: "high",
+              type: "duplicate",
+              description: "Dos partidas parecen describir el mismo alcance.",
+              impact: "Puede duplicar el costo directo.",
+              recommended_review: "Validar alcance y consolidar si corresponde.",
+            },
+          ],
+          technical_observations: ["Revision basada en el resumen enviado."],
+        }),
+        model: "deepseek/deepseek-chat-v3-0324:free",
+        requestedModel: "deepseek/deepseek-chat-v3-0324:free",
+        fallbackUsed: false,
+        warnings: [],
+        debug: {
+          structuredParseStatus: "not_requested",
+          context: { project: "Proyecto Demo" },
+          messages: [{ role: "system", content: "Contexto operativo" }],
+          ai: {
+            answer: "Se detectaron observaciones criticas.",
+            rawAnswer: "{\"answer\":\"Se detectaron observaciones criticas.\"}",
+            structuredParseStatus: "not_requested",
+          },
+          fallback: { used: false },
+          validationWarnings: [],
+          requestBody: { model: "deepseek/deepseek-chat-v3-0324:free" },
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { getButtonByText, getByText } = await renderEditor({
+      budget: createBudgetWithDuplicateReviewSignals(),
+    });
+
+    await act(async () => {
+      getButtonByText("Revisar Presupuesto").click();
+    });
+
+    expect(getByText("Resumen")).toBeTruthy();
+    expect(getByText("Se detectaron observaciones criticas.")).toBeTruthy();
+    expect(getByText("Dos partidas parecen describir el mismo alcance.")).toBeTruthy();
+    expect(getByText("Supuestos")).toBeTruthy();
+    expect(getByText("Revision basada en el resumen enviado.")).toBeTruthy();
+    expect(getByText("Debug IA desarrollo")).toBeTruthy();
+    expect(getByText("Request body API (enviado al proveedor)")).toBeTruthy();
+  });
+
+  it("persists chatgpt bridge budget reviews into project history", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        answer: "Se detectaron observaciones criticas.",
+        model: "ChatGPT Bridge",
+        requestedModel: "ChatGPT web",
+        fallbackUsed: false,
+        warnings: [],
+        historyEntry: { id: "history-bridge-review" },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    let bridgeRequestId: string | null = null;
+    const bridgeListener = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = event.detail as { requestId?: string };
+      bridgeRequestId = typeof detail.requestId === "string" ? detail.requestId : null;
+    };
+
+    window.addEventListener("MYCBridgeSendPrompt", bridgeListener);
+
+    try {
+      const { getButtonByText, getByText } = await renderEditor({
+        budget: createBudgetWithDuplicateReviewSignals(),
+      });
+
+      await act(async () => {
+        getButtonByText("Bridge").click();
+      });
+
+      await act(async () => {
+        getButtonByText("Revisar Presupuesto").click();
+      });
+
+      expect(bridgeRequestId).toBeTruthy();
+
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent("MYCBridgeResponse", {
+          detail: {
+            requestId: bridgeRequestId,
+            raw: JSON.stringify({
+              answer: "Se detectaron observaciones criticas.",
+              findings: [],
+              assumptions: ["Revision basada en ChatGPT Bridge."],
+            }),
+            jsonValid: true,
+            json: {
+              answer: "Se detectaron observaciones criticas.",
+              findings: [],
+              assumptions: ["Revision basada en ChatGPT Bridge."],
+            },
+          },
+        }));
+      });
+
+      expect(getByText("Se detectaron observaciones criticas.")).toBeTruthy();
+      expect(fetchMock).toHaveBeenCalledWith("/api/ai/review/bridge", expect.objectContaining({ method: "POST" }));
+
+      const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+        projectId?: string;
+        budgetSummary?: string;
+        context?: { project?: string; module?: string; activeTable?: string };
+        result?: { model?: string; requestedModel?: string };
+      };
+
+      expect(requestBody.projectId).toBe("project-1");
+      expect(requestBody.budgetSummary).toContain("Presupuesto: Presupuesto Demo");
+      expect(requestBody.context).toMatchObject({
+        project: "Proyecto Demo",
+        module: "Editor de presupuesto",
+        activeTable: "Presupuesto",
+      });
+      expect(requestBody.result).toMatchObject({
+        model: "ChatGPT Bridge",
+        requestedModel: "ChatGPT web",
+      });
+    } finally {
+      window.removeEventListener("MYCBridgeSendPrompt", bridgeListener);
+    }
   });
 
   it("previews AI autocomplete before applying a description to the budget item", async () => {

@@ -57,8 +57,8 @@ export const featureItems: FeatureItem[] = [
     icon: FileSpreadsheet,
   },
   {
-    title: "Catálogo con búsqueda avanzada",
-    description: "Encuentra insumos y partidas por descripción, unidad, código o familia para reutilizar información sin duplicar datos.",
+    title: "Reutiliza insumos y partidas sin duplicar información",
+    description: "Búsqueda por descripción, unidad, código o familia para evitar duplicar datos entre presupuestos.",
     icon: Search,
   },
   {
@@ -72,13 +72,13 @@ export const featureItems: FeatureItem[] = [
     icon: BotMessageSquare,
   },
   {
-    title: "Cronograma inteligente",
+    title: "Convierte tu presupuesto en cronograma valorizado",
     description: "Genera programación, calendario valorizado, calendario de insumos, ruta crítica visual y Curva S.",
     icon: FolderKanban,
   },
   {
-    title: "Exportaciones profesionales",
-    description: "Prepara PDF, Excel, CSV o paquetes ZIP con presets, logo, firma, vista previa y decimales configurables.",
+    title: "Entrega reportes listos para cliente, obra o licitación",
+    description: "Genera PDF, Excel, CSV o paquetes ZIP con presets, logo, firma, vista previa y decimales configurables.",
     icon: FileArchive,
   },
 ];

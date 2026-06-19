@@ -17,7 +17,14 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
   const controllerKey = readViewContextIdentity(viewContext);
 
   return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-[60] flex items-end justify-end">
+    <div
+      className="z-[60] flex flex-col items-end gap-3"
+      style={{
+        position: "fixed",
+        right: "1.25rem",
+        bottom: "1.25rem",
+      }}
+    >
       {open ? (
         <Card className="pointer-events-auto w-[min(420px,calc(100vw-2rem))] rounded-3xl border-slate-200 shadow-xl">
           <CardContent className="space-y-4 p-4">
@@ -45,7 +52,7 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
       <Button
         data-khipu-launcher
         type="button"
-        className="pointer-events-auto ml-3 h-14 rounded-2xl px-4 shadow-lg"
+        className="h-14 rounded-2xl px-4 shadow-lg"
         aria-expanded={open}
         onClick={() => onOpenChange(!open)}
       >
