@@ -18,7 +18,7 @@ import { GET, PUT } from "@/app/api/admin/system-settings/route";
 import { requireAdminSession } from "@/lib/auth/session";
 
 function mockAdminSession() {
-  vi.mocked(requireAdminSession).mockResolvedValue({ user: { id: "admin-1", role: "ADMIN" } });
+  vi.mocked(requireAdminSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "admin-1", role: "ADMIN" } });
 }
 
 function mockUnauthenticated() {

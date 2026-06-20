@@ -27,7 +27,7 @@ describe("notes route", () => {
   });
 
   it("passes query filters to the note service", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(listNoteTasks).mockResolvedValue([]);
 
     const response = await GET(new Request("http://localhost/api/notes?status=OPEN&budgetId=budget-1"));
@@ -43,7 +43,7 @@ describe("notes route", () => {
   });
 
   it("creates notes for the authenticated user", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(createNoteTask).mockResolvedValue({
       id: "note-1",
       body: "Revisar",

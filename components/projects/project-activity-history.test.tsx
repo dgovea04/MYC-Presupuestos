@@ -33,7 +33,7 @@ describe("ProjectActivityHistory", () => {
   it("renders recent project activity with contextual labels", () => {
     const markup = renderToStaticMarkup(
       <ProjectActivityHistory
-        dateFormat="dd/MM/yyyy"
+        dateFormat="DD_MM_YYYY"
         events={[
           {
             id: "activity-1",
@@ -55,7 +55,7 @@ describe("ProjectActivityHistory", () => {
   });
 
   it("renders an empty state when the project has no tracked events", () => {
-    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="dd/MM/yyyy" events={[]} />);
+    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="DD_MM_YYYY" events={[]} />);
 
     expect(markup).toContain("Sin actividad registrada");
     expect(markup).toContain("Los cambios importantes del proyecto apareceran aqui");
@@ -63,7 +63,7 @@ describe("ProjectActivityHistory", () => {
 
   it("shows filter pills when events exist", () => {
     const markup = renderToStaticMarkup(
-      <ProjectActivityHistory dateFormat="dd/MM/yyyy" events={[makeEvent(1)]} />,
+      <ProjectActivityHistory dateFormat="DD_MM_YYYY" events={[makeEvent(1)]} />,
     );
 
     expect(markup).toContain("Todos");
@@ -81,7 +81,7 @@ describe("ProjectActivityHistory", () => {
       makeEvent(4, { type: "POLYNOMIAL_FORMULA_GENERATED", title: "Formula generada" }),
       makeEvent(5, { type: "ADJUSTMENT_REGISTERED", title: "Reajuste registrado" }),
     ];
-    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="dd/MM/yyyy" events={events} />);
+    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="DD_MM_YYYY" events={events} />);
 
     // Todos count is 5, each category shows its correct count
     expect(markup).toContain("Todos");
@@ -93,7 +93,7 @@ describe("ProjectActivityHistory", () => {
 
   it("shows only the first 5 events on page 1 (via static markup)", () => {
     const events = Array.from({ length: 6 }, (_, i) => makeEvent(i + 1));
-    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="dd/MM/yyyy" events={events} />);
+    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="DD_MM_YYYY" events={events} />);
 
     expect(markup).toContain("Evento 1");
     expect(markup).toContain("Evento 5");
@@ -102,7 +102,7 @@ describe("ProjectActivityHistory", () => {
 
   it("shows pagination controls when there are more than 5 events", () => {
     const events = Array.from({ length: 10 }, (_, i) => makeEvent(i + 1));
-    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="dd/MM/yyyy" events={events} />);
+    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="DD_MM_YYYY" events={events} />);
 
     expect(markup).toContain("Siguiente");
     expect(markup).toContain("Anterior");
@@ -111,7 +111,7 @@ describe("ProjectActivityHistory", () => {
 
   it("hides pagination controls when there are 5 or fewer events", () => {
     const events = Array.from({ length: 5 }, (_, i) => makeEvent(i + 1));
-    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="dd/MM/yyyy" events={events} />);
+    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="DD_MM_YYYY" events={events} />);
 
     expect(markup).not.toContain("Siguiente");
     expect(markup).not.toContain("Anterior");
@@ -119,21 +119,21 @@ describe("ProjectActivityHistory", () => {
 
   it("search input is rendered when events exist", () => {
     const markup = renderToStaticMarkup(
-      <ProjectActivityHistory dateFormat="dd/MM/yyyy" events={[makeEvent(1)]} />,
+      <ProjectActivityHistory dateFormat="DD_MM_YYYY" events={[makeEvent(1)]} />,
     );
 
     expect(markup).toContain("Buscar en el historial...");
   });
 
   it("search input is hidden when there are no events", () => {
-    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="dd/MM/yyyy" events={[]} />);
+    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="DD_MM_YYYY" events={[]} />);
 
     expect(markup).not.toContain("Buscar en el historial...");
   });
 
   it("shows filtered empty state when filter yields no results", () => {
     const events = [makeEvent(1, { type: "BUDGET_UPDATED", title: "Presupuesto" })];
-    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="dd/MM/yyyy" events={events} />);
+    const markup = renderToStaticMarkup(<ProjectActivityHistory dateFormat="DD_MM_YYYY" events={events} />);
 
     // By default "Todos" is selected, so the event is visible
     expect(markup).toContain("Presupuesto");

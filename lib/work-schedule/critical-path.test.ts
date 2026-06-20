@@ -4,8 +4,6 @@ import type { WorkScheduleLineRecord } from "@/types/work-schedule";
 
 function line(overrides: Partial<WorkScheduleLineRecord> & Pick<WorkScheduleLineRecord, "budgetItemId" | "itemCode">): WorkScheduleLineRecord {
   return {
-    budgetItemId: overrides.budgetItemId,
-    itemCode: overrides.itemCode,
     description: overrides.description ?? overrides.itemCode,
     unit: "UND",
     quantity: 1,

@@ -41,7 +41,7 @@ describe("budget work schedule route", () => {
   });
 
   it("returns an upgrade payload when the user does not have Pro access", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(assertFeatureAccess).mockRejectedValueOnce(new FeatureAccessError("work_schedule.intelligent"));
 
     const response = await GET(new Request("http://localhost/api/budgets/budget-1/work-schedule"), {
@@ -59,7 +59,7 @@ describe("budget work schedule route", () => {
   });
 
   it("returns the consolidated work schedule on GET", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getWorkScheduleSection).mockResolvedValue({
       budgetId: "budget-1",
       budgetName: "Presupuesto General",
@@ -82,7 +82,7 @@ describe("budget work schedule route", () => {
   });
 
   it("persists a scheduled partida payload on PATCH", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(saveWorkScheduleItem).mockResolvedValue({
       budgetId: "budget-1",
       budgetName: "Presupuesto General",
@@ -122,7 +122,7 @@ describe("budget work schedule route", () => {
   });
 
   it("generates the intelligent base gantt on POST", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(generateWorkScheduleBase).mockResolvedValue({
       budgetId: "budget-1",
       budgetName: "Presupuesto General",

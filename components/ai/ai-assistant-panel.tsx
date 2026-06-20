@@ -1,17 +1,31 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   BotMessageSquare,
+  ChevronDown,
+  ExternalLink,
   FileSearch,
+  FileText,
+  GitCompareArrows,
+  Lightbulb,
   Loader2,
+  Pencil,
   RefreshCw,
+  Search,
   Send,
   Sparkles,
+  TrendingUp,
   WandSparkles,
 } from "lucide-react";
 import { AIMessage } from "@/components/ai/AIMessage";
+import { ChatHistory } from "@/components/ai/ChatHistory";
+import { ClearHistoryButton } from "@/components/ai/ClearHistoryButton";
+import { HistoryCountBadge } from "@/components/ai/HistoryCountBadge";
+import { TypingIndicator } from "@/components/ai/TypingIndicator";
+import { useDedupedHistory } from "@/components/ai/use-deduped-history";
 import { ContextSidebar } from "@/components/ai/ContextSidebar";
 import { PreviewDebugPanel } from "@/components/ai/debug-panel";
 import type {
@@ -24,11 +38,19 @@ import type {
   AssistantProvider,
 } from "@/components/ai/use-ai-assistant-controller";
 import { hasApuStructuredShape, hasReviewStructuredShape } from "@/components/ai/use-ai-assistant-controller";
+import { KhipuLogo } from "@/components/khipu/KhipuLogo";
+import { KhipuQuickActions } from "@/components/khipu/KhipuQuickActions";
+import type { KhipuQuickAction } from "@/components/khipu/KhipuQuickActions";
+import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { AiApuStructuredData, AiReviewStructuredData } from "@/lib/ai/types";
+import { isKhipuActionArray, getActionLabel, getActionDescription } from "@/lib/ai/actions";
+import type { KhipuAction } from "@/lib/ai/actions";
+import { useKhipuActionDispatcher } from "@/hooks/use-khipu-action-dispatcher";
+import { useKhipuActionRegistry } from "@/components/ai/khipu-action-registry";
 import { cn } from "@/lib/utils";
 
 type AiAssistantPanelLayout = "page" | "floating";
@@ -42,6 +64,7 @@ type AiAssistantPanelProps = {
   initialReviewSummary?: string;
   layout: AiAssistantPanelLayout;
   projectId?: string;
+  reducedMotion?: boolean;
 };
 
 const ACTIONS = [
@@ -78,6 +101,25 @@ const ACTION_HELPERS: Record<AssistantAction, string> = {
   autocomplete: "Completa descripciones tecnicas sin perder el contexto.",
 };
 
+const HISTORY_COLLAPSED_STORAGE_KEY = "myc-khipu-history-collapsed";
+
+function readStoredHistoryCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(HISTORY_COLLAPSED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function persistHistoryCollapsed(collapsed: boolean) {
+  try {
+    window.localStorage.setItem(HISTORY_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch {
+    // Best effort only
+  }
+}
+
 export function AiAssistantPanel({
   controller,
   initialAutocompleteInput = "Excavacion manual en",
@@ -87,12 +129,101 @@ export function AiAssistantPanel({
   initialReviewSummary = "Partida 01.02 Concreto f'c=210 m3 S/ 420. Partida 01.03 Concreto f'c=210 m2 S/ 415.",
   layout,
   projectId,
+  reducedMotion = false,
 }: AiAssistantPanelProps) {
   const [chatMessage, setChatMessage] = useState(initialChatMessage);
   const [apuDescription, setApuDescription] = useState(initialApuDescription);
   const [apuUnit, setApuUnit] = useState(initialApuUnit);
   const [reviewSummary, setReviewSummary] = useState(initialReviewSummary);
   const [autocompleteInput, setAutocompleteInput] = useState(initialAutocompleteInput);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(() => readStoredHistoryCollapsed());
+
+  useEffect(() => {
+    persistHistoryCollapsed(historyCollapsed);
+  }, [historyCollapsed]);
+
+  // Auto-expand history when it becomes empty (e.g. after clearing)
+  const prevHistoryLengthRef = useRef(controller.history.length);
+  useEffect(() => {
+    if (controller.history.length === 0 && prevHistoryLengthRef.current > 0) {
+      setHistoryCollapsed(false);
+    }
+    prevHistoryLengthRef.current = controller.history.length;
+  }, [controller.history.length]);
+
+  // Dismiss clear confirmation when the active action changes
+  const prevConfirmActionRef = useRef(controller.activeAction);
+  useEffect(() => {
+    if (controller.activeAction !== prevConfirmActionRef.current) {
+      setConfirmClear(false);
+      prevConfirmActionRef.current = controller.activeAction;
+    }
+  }, [controller.activeAction]);
+
+
+  const dedupedHistory = useDedupedHistory(controller);
+
+  const actionRegistry = useKhipuActionRegistry();
+  const { executeAction, executingActionId } = useKhipuActionDispatcher({
+    controller,
+    onNavigate: actionRegistry.onNavigate,
+    onOpenApuEditor: actionRegistry.onOpenApuEditor,
+  });
+
+  const setActiveAction = controller.setActiveAction;
+
+  const quickStartActions: KhipuQuickAction[] = [
+    {
+      id: "analyze-budget",
+      label: "Analizar presupuesto",
+      description: "Detecta partidas que requieren revisión.",
+      icon: Search,
+      onSelect: () => setActiveAction("review"),
+    },
+    {
+      id: "review-apu",
+      label: "Revisar APU",
+      description: "Evalúa insumos, rendimientos y coherencia técnica.",
+      icon: FileSearch,
+      onSelect: () => setActiveAction("apu"),
+    },
+    {
+      id: "compare",
+      label: "Comparar alternativas",
+      description: "Compara soluciones y escenarios de costo.",
+      icon: GitCompareArrows,
+      onSelect: () => setActiveAction("chat"),
+    },
+    {
+      id: "optimize",
+      label: "Optimizar costos",
+      description: "Sugiere alternativas para reducir costos.",
+      icon: TrendingUp,
+      onSelect: () => setActiveAction("chat"),
+    },
+    {
+      id: "report",
+      label: "Generar reporte",
+      description: "Resume observaciones para el equipo técnico.",
+      icon: FileText,
+      onSelect: () => setActiveAction("chat"),
+    },
+    {
+      id: "inconsistencies",
+      label: "Detectar inconsistencias",
+      description: "Identifica posibles errores en cantidades y unidades.",
+      icon: Lightbulb,
+      onSelect: () => setActiveAction("review"),
+    },
+  ];
+
+  const actionButtons = useMemo(() => {
+    const structuredData = controller.result?.structuredData;
+    if (!isRecord(structuredData)) return [];
+    const actions = structuredData.actions;
+    return isKhipuActionArray(actions) ? actions : [];
+  }, [controller.result?.structuredData]);
 
   const activeConfig = ACTIONS.find((action) => action.id === controller.activeAction) ?? ACTIONS[0];
   const ActiveIcon = activeConfig.icon;
@@ -171,65 +302,341 @@ export function AiAssistantPanel({
   }
 
   if (layout === "floating") {
+    // Show greeting on initial state (no result, no error, no request yet)
+    const showGreeting = !controller.result && !controller.error && !controller.loading;
+
+    // Respect reduced motion preference: kill all animation durations
+    const anim = (duration: number, delay = 0) =>
+      reducedMotion
+        ? { duration: 0 }
+        : { duration, ease: "easeOut" as const, delay };
+
+    // Staggered entry: greeting first, then context, then actions, then form
+    const staggerDelays = showGreeting
+      ? { greeting: 0, context: 0.08, actions: 0.16, form: 0.24 }
+      : { context: 0, actions: 0.08, form: 0.16 };
+
     return (
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Chat tecnico</p>
-          <p className="text-sm text-slate-600">{ACTION_HELPERS[controller.activeAction]}</p>
-        </div>
-        {contextRows.length ? (
-          <div className="grid gap-2">
-            {contextRows.slice(0, 3).map((row) => (
-              <div key={row.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{row.label}</p>
-                <p className="mt-1 text-sm font-medium text-slate-900">{row.value}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">Sin contexto activo</p>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          {ACTIONS.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              className={cn(
-                "rounded-xl border px-3 py-2 text-left text-sm font-semibold transition",
-                controller.activeAction === action.id ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-700",
-              )}
-              onClick={() => controller.setActiveAction(action.id)}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-        <form className="space-y-3" onSubmit={(event) => void handleSubmit(event)}>
-          {controller.activeAction === "chat" ? (
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Consulta tecnica
-              <Textarea value={chatMessage} onChange={(event) => setChatMessage(event.target.value)} />
-            </label>
+      <div className="space-y-3">
+        {/* Welcome greeting — compact */}
+        {showGreeting ? (
+          <motion.div
+            initial={reducedMotion ? undefined : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={anim(0.35, staggerDelays.greeting)}
+            className="flex items-center gap-2.5 rounded-xl border border-[var(--khipu-cyan)]/20 bg-gradient-to-br from-[var(--khipu-soft-blue)] to-[var(--khipu-soft-cyan)] px-3 py-2.5"
+          >
+            <KhipuSymbol className="h-6 w-6 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">Hola, soy Khipu</p>
+              <p className="text-xs text-slate-600">¿En qué puedo ayudarte hoy?</p>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {/* Context section — compact */}
+        <motion.div
+          initial={reducedMotion ? undefined : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={anim(0.3, staggerDelays.context)}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{ACTION_HELPERS[controller.activeAction]}</p>
+          {contextRows.length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {contextRows.slice(0, 3).map((row) => (
+                <span key={row.label} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-[11px]">
+                  <span className="font-semibold text-slate-500">{row.label}:</span>
+                  <span className="font-medium text-slate-900">{row.value}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-500">
+              Selecciona un presupuesto, partida o APU para que Khipu pueda analizarlo con contexto.
+            </p>
+          )}
+          {contextRows.length > 0 && contextRows.length <= 2 ? (
+            <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800">
+              Necesito más información — selecciona una partida, APU o incluye metrados.
+            </p>
           ) : null}
-          {controller.activeAction === "apu" ? (
-            <div className="grid gap-3">
-              <Input value={apuDescription} onChange={(event) => setApuDescription(event.target.value)} />
-              <Input value={apuUnit} onChange={(event) => setApuUnit(event.target.value)} />
+        </motion.div>
+
+        {/* Actions grid — compact pills */}
+        <motion.div
+          initial={reducedMotion ? undefined : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={anim(0.3, staggerDelays.actions)}
+        >
+          <div className="flex flex-wrap gap-1.5">
+            {ACTIONS.map((action) => {
+              const Icon = action.icon;
+              const active = action.id === controller.activeAction;
+
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all duration-200 hover:border-cyan-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                    active ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
+                  )}
+                  onClick={() => controller.setActiveAction(action.id)}
+                >
+                  <Icon className={cn("h-3.5 w-3.5", active ? "text-blue-600" : "text-cyan-600")} />
+                  {action.label}
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        {/* Chat history */}
+        {controller.history.length > 0 ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 transition hover:text-slate-600"
+                  onClick={() => setHistoryCollapsed((c) => !c)}
+                >
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", historyCollapsed && "-rotate-90")} />                   Historial
+                  {controller.history.length > 0 ? (
+                    <HistoryCountBadge className="ml-1.5 px-1.5 text-[10px]" count={controller.history.length} />
+                  ) : null}
+                </button>
+                <ClearHistoryButton
+                  buttonClassName="h-6 w-6"
+                  cancelButtonClassName="h-6 px-2 text-[11px]"
+                  confirmClear={confirmClear}
+                  confirmLabel="¿Limpiar?"
+                  confirmWrapperClassName="gap-1.5 rounded-lg px-2 py-1"
+                  iconClassName="h-3.5 w-3.5"
+                  labelClassName="text-[11px]"
+                  confirmButtonClassName="h-6 px-2 text-[11px]"
+                  onCancel={() => setConfirmClear(false)}
+                  onClear={() => {
+                    controller.clearHistory();
+                    setConfirmClear(false);
+                  }}
+                  onRequestClear={() => setConfirmClear(true)}
+                />
+              </div>
+              <AnimatePresence>
+                {!historyCollapsed ? (
+                <motion.div
+                  initial={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+                  transition={anim(0.25)}
+                  className="overflow-hidden"
+                >
+                <ChatHistory
+                  history={controller.history}
+                  onSelect={controller.selectHistoryEntry}
+                  reducedMotion={reducedMotion}
+                />
+                </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
           ) : null}
-          {controller.activeAction === "review" ? (
-            <Textarea className="min-h-28" value={reviewSummary} onChange={(event) => setReviewSummary(event.target.value)} />
-          ) : null}
-          {controller.activeAction === "autocomplete" ? (
-            <Input value={autocompleteInput} onChange={(event) => setAutocompleteInput(event.target.value)} />
-          ) : null}
-          <Button className="w-full gap-2" disabled={controller.loading} type="submit">
-            {controller.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {readSubmitLabel(controller.provider, controller.loading, controller.streaming)}
-          </Button>
-        </form>
-        {controller.error ? <AIMessage content={controller.error} tone="error" /> : null}
-        {controller.result ? <AIMessage content={controller.result.answer} model={controller.result.model} /> : null}
+
+        {/* Current result/error — compact preview (full response is in ChatHistory) */}
+        {(controller.error || controller.result) ? (
+          <div className="overflow-x-hidden break-words">
+            {controller.error ? <AIMessage content={controller.error} tone="error" /> : null}
+            {controller.result ? (
+              <div className="space-y-2">
+                <div className="max-h-24 overflow-hidden rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="line-clamp-3 text-sm leading-5 text-slate-700">
+                    {controller.result.answer}
+                  </div>
+                  {!controller.streaming && controller.result.answer.length > 200 ? (
+                    <p className="mt-1 text-[11px] font-medium text-blue-600">
+                      Ver respuesta completa en el historial
+                    </p>
+                  ) : null}
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  Revisión técnica requerida antes de aplicar al presupuesto.
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Khipu actions — executable buttons from structured response */}
+        {actionButtons.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Acciones</p>
+            <div className="flex flex-wrap gap-2">
+              {actionButtons.map((action, index) => {
+                const actionKey = `${action.type}-${index}`;
+                return (
+                <KhipuActionButton
+                  key={actionKey}
+                  action={action}
+                  loading={executingActionId !== null}
+                  onExecute={executeAction}
+                />
+              )})}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Form — sticky at the bottom so it's always visible */}
+        <div className="sticky bottom-0 space-y-3 bg-white pt-3">
+          <AnimatePresence>
+            {controller.loading && !controller.streaming ? (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={anim(0.25)}
+              >
+                <TypingIndicator />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+          <motion.div
+            initial={reducedMotion ? undefined : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={anim(0.3, staggerDelays.form)}
+          >
+            <form onSubmit={(event) => void handleSubmit(event)}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={controller.activeAction}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={anim(0.18)}
+                >
+                  {controller.activeAction === "chat" ? (
+                    <div className="relative">
+                      <Textarea
+                        value={chatMessage}
+                        onChange={(event) => setChatMessage(event.target.value)}
+                        className="min-h-0 pr-14"
+                        rows={3}
+                        placeholder="Escribe tu consulta..."
+                      />
+                      <button
+                        type="submit"
+                        aria-label="Enviar consulta"
+                        disabled={controller.loading}
+                        className={cn(
+                          "btn-ripple absolute bottom-4 right-2.5 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                          controller.loading
+                            ? "cursor-not-allowed bg-slate-300 text-slate-500"
+                            : "bg-gradient-to-br from-[var(--khipu-blue)] to-[var(--khipu-cyan)] text-white shadow-sm hover:shadow-md hover:scale-110 active:scale-90",
+                        )}
+                      >
+                        {controller.loading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+                  {controller.activeAction === "apu" ? (
+                    <div className="space-y-2">
+                      <Input
+                        value={apuUnit}
+                        onChange={(event) => setApuUnit(event.target.value)}
+                        placeholder="Unidad (m3, m2, etc.)"
+                      />
+                      <div className="relative">
+                        <Textarea
+                          value={apuDescription}
+                          onChange={(event) => setApuDescription(event.target.value)}
+                          className="min-h-0 pr-14"
+                          rows={3}
+                          placeholder="Descripcion de partida"
+                        />
+                        <button
+                          type="submit"
+                          aria-label="Generar APU"
+                          disabled={controller.loading}
+                          className={cn(
+                            "btn-ripple absolute bottom-4 right-2.5 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                            controller.loading
+                              ? "cursor-not-allowed bg-slate-300 text-slate-500"
+                              : "bg-gradient-to-br from-[var(--khipu-blue)] to-[var(--khipu-cyan)] text-white shadow-sm hover:shadow-md hover:scale-110 active:scale-90",
+                          )}
+                        >
+                          {controller.loading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {controller.activeAction === "review" ? (
+                    <div className="relative">
+                      <Textarea
+                        className="min-h-0 pr-14"
+                        rows={3}
+                        value={reviewSummary}
+                        onChange={(event) => setReviewSummary(event.target.value)}
+                        placeholder="Pega el resumen del presupuesto..."
+                      />
+                      <button
+                        type="submit"
+                        aria-label="Revisar presupuesto"
+                        disabled={controller.loading}
+                        className={cn(
+                          "btn-ripple absolute bottom-4 right-2.5 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                          controller.loading
+                            ? "cursor-not-allowed bg-slate-300 text-slate-500"
+                            : "bg-gradient-to-br from-[var(--khipu-blue)] to-[var(--khipu-cyan)] text-white shadow-sm hover:shadow-md hover:scale-110 active:scale-90",
+                        )}
+                      >
+                        {controller.loading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+                  {controller.activeAction === "autocomplete" ? (
+                    <div className="relative">
+                      <Textarea
+                        value={autocompleteInput}
+                        onChange={(event) => setAutocompleteInput(event.target.value)}
+                        className="min-h-0 pr-14"
+                        rows={3}
+                        placeholder="Texto base para autocompletar..."
+                      />
+                      <button
+                        type="submit"
+                        aria-label="Autocompletar"
+                        disabled={controller.loading}
+                        className={cn(
+                          "btn-ripple absolute bottom-4 right-2.5 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                          controller.loading
+                            ? "cursor-not-allowed bg-slate-300 text-slate-500"
+                            : "bg-gradient-to-br from-[var(--khipu-blue)] to-[var(--khipu-cyan)] text-white shadow-sm hover:shadow-md hover:scale-110 active:scale-90",
+                        )}
+                      >
+                        {controller.loading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+                </motion.div>
+              </AnimatePresence>
+            </form>
+          </motion.div>
+        </div>
       </div>
     );
   }
@@ -241,10 +648,7 @@ export function AiAssistantPanel({
           <CardContent className="p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl space-y-3">
-                <span className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
-                  <BotMessageSquare className="h-3.5 w-3.5" />
-                  Khipu
-                </span>
+                <KhipuLogo size="sm" showSubtitle={false} />
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Asistente tecnico de obra</p>
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
@@ -293,8 +697,16 @@ export function AiAssistantPanel({
                 ))}
               </div>
             ) : (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">Sin contexto activo</p>
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                Selecciona un presupuesto, partida o APU para que Khipu pueda analizarlo con contexto.
+              </p>
             )}
+            {contextRows.length > 0 && contextRows.length <= 2 ? (
+              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                Necesito más información para darte una recomendación confiable. Puedes seleccionar una partida, abrir un
+                APU o incluir metrados y costos relacionados.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -374,6 +786,20 @@ export function AiAssistantPanel({
           </CardContent>
         </Card>
 
+        <Card className="border-slate-200 bg-white shadow-sm">
+          <CardContent className="space-y-3 p-5">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Inicio rapido</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Acciones frecuentes para empezar a trabajar con Khipu.
+              </p>
+            </div>
+            <KhipuQuickActions
+              actions={quickStartActions}
+            />
+          </CardContent>
+        </Card>
+
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           {ACTIONS.map((action) => {
             const Icon = action.icon;
@@ -383,22 +809,22 @@ export function AiAssistantPanel({
               <button
                 key={action.id}
                 className={cn(
-                  "flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-                  active ? "border-blue-300 bg-blue-50 text-slate-950 shadow-sm" : "border-slate-200 bg-white text-slate-800",
+                  "group flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left shadow-sm transition hover:border-cyan-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                  active ? "border-blue-300 bg-blue-50 text-slate-950" : "border-slate-200 bg-white text-slate-800",
                 )}
                 type="button"
                 aria-pressed={active}
                 onClick={() => controller.setActiveAction(action.id)}
               >
-                <span className={cn("inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700")}>
+                <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition group-hover:scale-105", active ? "bg-blue-600 text-white" : "bg-cyan-50 text-cyan-600")}>
                   <Icon className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold">{action.label}</span>
-                    {active ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">Recomendado</span> : null}
+                    <span className="text-sm font-semibold">{action.label}</span>
+                    {active && action.id === "chat" ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">Recomendado</span> : null}
                   </span>
-                  <span className="mt-1 block text-sm leading-5 text-slate-500">{action.description}</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">{action.description}</span>
                 </span>
               </button>
             );
@@ -475,7 +901,14 @@ export function AiAssistantPanel({
         {controller.feedbackError ? <AIMessage content={controller.feedbackError} tone="error" /> : null}
         {controller.result ? (
           <div className="space-y-3">
-            <AIMessage content={controller.result.answer} model={controller.result.model} />
+            <AIMessage
+              content={controller.result.answer}
+              model={controller.result.model}
+              streaming={controller.streaming}
+            />
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Esta recomendación requiere revisión técnica antes de aplicarse al presupuesto.
+            </div>
             {controller.activeFeedbackEntry ? (
               <FeedbackControls
                 disabled={controller.pendingFeedbackByHistoryId[controller.activeFeedbackEntry.id] === true}
@@ -494,40 +927,90 @@ export function AiAssistantPanel({
             ) : null}
             {renderStructuredResult(controller.result)}
             {controller.result.debug ? <PreviewDebugPanel debug={controller.result.debug} /> : null}
+            {actionButtons.length > 0 ? (
+              <Card>
+                <CardContent className="space-y-3 p-5">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Acciones sugeridas</p>
+                    <p className="mt-1 text-sm text-slate-500">Khipu sugiere estas acciones para continuar. Haz clic para ejecutarlas.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {actionButtons.map((action, index) => {
+                      const actionKey = `${action.type}-${index}`;
+                      return (
+                      <KhipuActionButton
+                        key={actionKey}
+                        action={action}
+                        loading={executingActionId !== null}
+                        onExecute={executeAction}
+                      />
+                    )})}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
         ) : null}
 
-        {controller.history.length ? (
-          <Card>
-            <CardContent className="space-y-4 p-6">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-950">Actividad reciente de Khipu</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  {projectId
-                    ? "Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesion."
-                    : "Se guarda solo en este navegador para retomar resultados recientes; no es memoria del proyecto."}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {controller.history.slice(0, 4).map((entry) => (
-                  <div key={entry.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{readActionLabel(entry.action)}</p>
-                      <p className="text-xs text-slate-500">{new Date(entry.timestamp).toLocaleString()}</p>
+        {dedupedHistory.length > 0 ? (
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={historyCollapsed ? "Expandir historial" : "Colapsar historial"}
+                        className="flex items-center gap-1 transition hover:text-slate-600"
+                        onClick={() => setHistoryCollapsed((c) => !c)}
+                      >
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", historyCollapsed && "-rotate-90")} />
+                      </button>
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-950">Actividad reciente de Khipu</h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                    {projectId
+                      ? "Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesion."
+                      : "Se guarda solo en este navegador para retomar resultados recientes; no es memoria del proyecto."}
+                      {dedupedHistory.length > 0 ? (
+                        <HistoryCountBadge className="ml-2 inline-flex items-center px-2 text-[11px]" count={dedupedHistory.length} />
+                      ) : null}
+                      </p>
+                      </div>
                     </div>
-                    <p className="mt-2 text-sm text-slate-700">{entry.summary}</p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Modelo: {entry.result.model} {entry.result.fallbackUsed ? "· fallback activo" : ""}
-                    </p>
-                    <Button className="mt-3" size="sm" type="button" variant="outline" onClick={() => controller.selectHistoryEntry(entry)}>
-                      Ver detalle
-                    </Button>
+                    <ClearHistoryButton
+                      confirmClear={confirmClear}
+                      confirmLabel="¿Limpiar historial?"
+                      onCancel={() => setConfirmClear(false)}
+                      onClear={() => {
+                        controller.clearHistory();
+                        setConfirmClear(false);
+                      }}
+                      onRequestClear={() => setConfirmClear(true)}
+                    />
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
+                </div>              <AnimatePresence>
+                {!historyCollapsed ? (
+                <motion.div
+                  initial={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+                  transition={reducedMotion ? { duration: 0 } : { duration: 0.25, ease: "easeOut" }}
+                  className="overflow-hidden"
+                >
+                <ChatHistory
+                  history={dedupedHistory}
+                  maxHeight="max-h-96"
+                  onSelect={controller.selectHistoryEntry}
+                  reducedMotion={reducedMotion}
+                  truncateLength={false}
+                />
+                </motion.div>
+                ) : null}
+              </AnimatePresence>
+              </CardContent>
+            </Card>
+          ) : null}
       </div>
 
       <ContextSidebar context={controller.context} shortcuts={nextActionShortcuts} onChange={controller.setContext} />
@@ -601,6 +1084,12 @@ function renderStructuredResult(result: AiResult) {
           </div>
           <StructuredTextList title="Observaciones" items={structuredData.observations} />
           <StructuredTextList title="Supuestos" items={structuredData.assumptions} />
+          <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Aviso de precios</p>
+            <p className="mt-1 text-sm leading-5 text-amber-900">
+              No se generaron precios exactos porque deben validarse con tu catálogo, mercado local o base histórica.
+            </p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -840,11 +1329,6 @@ function readSubmitLabel(provider: AssistantProvider, loading: boolean, streamin
   return loading ? "Consultando IA local" : "Enviar a Ollama";
 }
 
-function readActionLabel(action: AssistantAction) {
-  const match = ACTIONS.find((entry) => entry.id === action);
-  return match?.label ?? action;
-}
-
 function renderGenericValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
@@ -860,6 +1344,49 @@ function readSeverityClass(severity: AiReviewStructuredData["findings"][number][
   if (severity === "high") return "bg-rose-100 text-rose-700";
   if (severity === "medium") return "bg-amber-100 text-amber-800";
   return "bg-emerald-100 text-emerald-700";
+}
+
+function KhipuActionButton({
+  action,
+  loading = false,
+  onExecute,
+}: {
+  action: KhipuAction;
+  loading?: boolean;
+  onExecute: (action: KhipuAction) => Promise<boolean>;
+}) {
+  const label = getActionLabel(action);
+  const description = getActionDescription(action);
+  const icon = getActionIcon(action.type);
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={loading}
+      className="gap-2 border-sky-200 bg-gradient-to-br from-sky-50 to-cyan-50 text-xs font-semibold text-sky-800 transition hover:border-sky-300 hover:from-sky-100 hover:to-cyan-100 hover:shadow-sm disabled:opacity-60"
+      title={description}
+      onClick={() => void onExecute(action)}
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
+      {label}
+    </Button>
+  );
+}
+
+function getActionIcon(type: KhipuAction["type"]) {
+  switch (type) {
+    case "navigate":
+      return <ExternalLink className="h-4 w-4" />;
+    case "open_apu_editor":
+      return <Sparkles className="h-4 w-4" />;
+    case "select_partida":
+      return <Send className="h-4 w-4" />;
+    case "fill_form":
+      return <Pencil className="h-4 w-4" />;
+    case "run_ai_action":
+      return <BotMessageSquare className="h-4 w-4" />;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

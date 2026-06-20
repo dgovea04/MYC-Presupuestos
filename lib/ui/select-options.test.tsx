@@ -25,9 +25,9 @@ describe("extractSelectOptions", () => {
 
   it("separates disabled empty placeholders from renderable options", () => {
     const options = [
-      { value: "", label: "Selecciona una opcion", disabled: true, tone: "default" },
-      { value: "A", label: "Opcion A", disabled: false, tone: "default" },
-      { value: "B", label: "Opcion B", disabled: false, tone: "default" },
+      { value: "", label: "Selecciona una opcion", disabled: true, tone: "default" as const },
+      { value: "A", label: "Opcion A", disabled: false, tone: "default" as const },
+      { value: "B", label: "Opcion B", disabled: false, tone: "default" as const },
     ];
 
     expect(partitionSelectOptions(options)).toEqual({

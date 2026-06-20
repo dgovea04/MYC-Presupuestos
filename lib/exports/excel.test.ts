@@ -40,7 +40,7 @@ const budgetFixture: BudgetRecord = {
             apuId: "apu-1",
             resourceId: "resource-1",
             quantity: 2,
-            crew: "1 cuadrilla",
+            crew: "1 cuadrilla" as unknown as number | null,
             unitPrice: 75,
             subtotal: 150,
             resourceType: "MATERIAL",

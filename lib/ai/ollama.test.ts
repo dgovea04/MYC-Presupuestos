@@ -20,7 +20,7 @@ describe("Ollama service", () => {
   });
 
   it("posts typed chat requests to the local Ollama endpoint", async () => {
-    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+    const fetchImpl = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(async () => {
       return new Response(JSON.stringify({ message: { content: "APU generado" } }), { status: 200 });
     });
 
@@ -49,7 +49,7 @@ describe("Ollama service", () => {
   });
 
   it("requests JSON mode from Ollama when structured output is required", async () => {
-    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+    const fetchImpl = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(async () => {
       return new Response(JSON.stringify({ message: { content: "{\"ok\":true}" } }), { status: 200 });
     });
 
@@ -78,7 +78,7 @@ describe("Ollama service", () => {
   });
 
   it("returns a clear connection error when Ollama is unavailable", async () => {
-    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+    const fetchImpl = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(async () => {
       throw new TypeError("fetch failed");
     });
 
@@ -133,7 +133,7 @@ describe("Ollama service", () => {
         controller.close();
       },
     });
-    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+    const fetchImpl = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(async () => {
       return new Response(stream, { status: 200 });
     });
 
@@ -179,7 +179,7 @@ describe("Ollama service", () => {
         }, 1800);
       },
     });
-    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+    const fetchImpl = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(async () => {
       return new Response(stream, { status: 200 });
     });
 
@@ -204,7 +204,7 @@ describe("Ollama service", () => {
   });
 
   it("throws a response error when Ollama streaming has no response body", async () => {
-    const fetchImpl = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async () => {
+    const fetchImpl = vi.fn<(...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>>(async () => {
       return new Response(null, { status: 200 });
     });
 

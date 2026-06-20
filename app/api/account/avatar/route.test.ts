@@ -46,7 +46,7 @@ describe("account avatar route", () => {
   });
 
   it("stores a valid avatar and persists the returned url", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getUserAccount).mockResolvedValue({
       id: "user-1",
       name: "Maria",
@@ -79,7 +79,7 @@ describe("account avatar route", () => {
   });
 
   it("rejects invalid avatar files", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const formData = new FormData();
     formData.set("avatar", new File(["avatar"], "avatar.txt", { type: "text/plain" }));
@@ -98,7 +98,7 @@ describe("account avatar route", () => {
   });
 
   it("rejects webp avatars so exported documents keep using compatible image formats", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const formData = new FormData();
     formData.set("avatar", new File(["avatar"], "avatar.webp", { type: "image/webp" }));
@@ -117,7 +117,7 @@ describe("account avatar route", () => {
   });
 
   it("clears the avatar and removes the local file", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getUserAccount).mockResolvedValue({
       id: "user-1",
       name: "Maria",

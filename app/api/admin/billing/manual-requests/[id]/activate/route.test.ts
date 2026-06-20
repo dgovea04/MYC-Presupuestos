@@ -29,7 +29,7 @@ describe("admin manual payment activation route", () => {
   });
 
   it("activates a pending manual request", async () => {
-    vi.mocked(requireAdminSession).mockResolvedValue({ user: { id: "admin-1", role: "ADMIN" } });
+    vi.mocked(requireAdminSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "admin-1", role: "ADMIN" } });
 
     const response = await POST(new Request("http://localhost/api/admin/billing/manual-requests/request-1/activate"), {
       params: Promise.resolve({ id: "request-1" }),

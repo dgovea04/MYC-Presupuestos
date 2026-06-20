@@ -28,7 +28,7 @@ describe("S10 SQL Server export route", () => {
   });
 
   it("requires a valid JSON body", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const response = await POST(
       new Request("http://localhost/api/imports/s10/sqlserver/export", {
@@ -42,7 +42,7 @@ describe("S10 SQL Server export route", () => {
   });
 
   it("exports and parses a S10 snapshot", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(exportLocalS10Snapshot).mockReturnValue(JSON.stringify(snapshot));
 
     const response = await POST(

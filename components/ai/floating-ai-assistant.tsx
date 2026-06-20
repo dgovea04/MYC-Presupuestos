@@ -1,11 +1,14 @@
 "use client";
 
-import { BotMessageSquare, X } from "lucide-react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AiAssistantPanel } from "@/components/ai/ai-assistant-panel";
 import { useActiveAiViewContext, type AiViewContextValue } from "@/components/ai/ai-view-context";
 import { useAiAssistantController } from "@/components/ai/use-ai-assistant-controller";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { KhipuChatPanel } from "@/components/khipu/KhipuChatPanel";
+import { KhipuFloatingButton } from "@/components/khipu/KhipuFloatingButton";
+import { useResizablePanel } from "@/hooks/use-resizable-panel";
 
 type FloatingAiAssistantProps = {
   open: boolean;
@@ -15,62 +18,97 @@ type FloatingAiAssistantProps = {
 export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantProps) {
   const viewContext = useActiveAiViewContext();
   const controllerKey = readViewContextIdentity(viewContext);
+  const prefersReducedMotion = useReducedMotion();
+  const { size, onResizeStart } = useResizablePanel("myc-khipu-panel-size-v2");
+  const [expanded, setExpanded] = useState(false);
+
+  const panelTransition = prefersReducedMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: 450, damping: 30, mass: 0.8 };
+
+  const buttonTransition = prefersReducedMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: 400, damping: 25 };
+
+  // When expanded, the container spans the full viewport like a modal
+  const containerStyle = expanded
+    ? { position: "fixed" as const, inset: "1rem" }
+    : { position: "fixed" as const, right: "1.25rem", bottom: "1.25rem" };
 
   return (
     <div
-      className="z-[60] flex flex-col items-end gap-3"
-      style={{
-        position: "fixed",
-        right: "1.25rem",
-        bottom: "1.25rem",
-      }}
+      className={cn(
+        "z-[60] flex flex-col gap-3",
+        expanded ? "items-stretch" : "items-end",
+      )}
+      style={containerStyle}
     >
-      {open ? (
-        <Card className="pointer-events-auto w-[min(420px,calc(100vw-2rem))] rounded-3xl border-slate-200 shadow-xl">
-          <CardContent className="space-y-4 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Khipu</p>
-                <h2 className="text-base font-semibold text-slate-950">Asistente tecnico</h2>
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            className={expanded ? "flex min-h-0 flex-1" : ""}
+            initial={expanded ? undefined : { opacity: 0, scale: 0.9, y: 20 }}
+            animate={expanded ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={panelTransition}
+          >
+            <KhipuChatPanel
+              className={cn("pointer-events-auto", expanded && "h-full w-full")}
+              style={expanded ? undefined : { width: size.width, maxHeight: size.height }}
+              expanded={expanded}
+              onExpand={() => setExpanded(!expanded)}
+              onClose={() => onOpenChange(false)}
+            >
+              {/* Resize grip — top-left corner (hidden in fullscreen) */}
+              {!expanded ? (
+                <div
+                  className="group absolute left-0 top-0 z-10 flex h-8 w-8 cursor-nwse-resize items-start justify-start rounded-tl-3xl pt-0.5 pl-0.5 opacity-0 transition-opacity hover:opacity-100"
+                  onMouseDown={onResizeStart}
+                  onTouchStart={onResizeStart}
+                  aria-label="Redimensionar panel"
+                >
+                {/* CSS-only grip dots */}
+                <span className="flex gap-[2px]">
+                  <span className="block h-[3px] w-[3px] rounded-full bg-slate-300 transition-colors group-hover:bg-slate-400" />
+                  <span className="block h-[3px] w-[3px] rounded-full bg-slate-300 transition-colors group-hover:bg-slate-400" />
+                </span>
+                <span className="-mt-[2px] flex gap-[2px]">
+                  <span className="block h-[3px] w-[3px] rounded-full bg-slate-300 transition-colors group-hover:bg-slate-400" />
+                  <span className="block h-[3px] w-[3px] rounded-full bg-slate-300 transition-colors group-hover:bg-slate-400" />
+                </span>
               </div>
-              <Button
-                data-khipu-close
-                type="button"
-                variant="ghost"
-                className="h-9 w-9 rounded-xl p-0"
-                aria-label="Cerrar Khipu"
-                onClick={() => onOpenChange(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <FloatingContextSummary viewContext={viewContext} />
-            <FloatingAiAssistantBody key={controllerKey} viewContext={viewContext} />
-          </CardContent>
-        </Card>
+              ) : null}
+              <div className="space-y-4 p-4">
+                <FloatingContextSummary viewContext={viewContext} />
+                <FloatingAiAssistantBody key={controllerKey} viewContext={viewContext} reducedMotion={prefersReducedMotion} />
+              </div>
+            </KhipuChatPanel>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+      {!expanded ? (
+        <motion.div
+          animate={{ rotate: open ? 45 : 0 }}
+          transition={buttonTransition}
+        >
+          <KhipuFloatingButton
+            open={open}
+            onClick={() => onOpenChange(!open)}
+          />
+        </motion.div>
       ) : null}
-      <Button
-        data-khipu-launcher
-        type="button"
-        className="h-14 rounded-2xl px-4 shadow-lg"
-        aria-expanded={open}
-        onClick={() => onOpenChange(!open)}
-      >
-        <BotMessageSquare className="mr-2 h-5 w-5" />
-        Khipu
-      </Button>
     </div>
   );
 }
 
-function FloatingAiAssistantBody({ viewContext }: { viewContext: ReturnType<typeof useActiveAiViewContext> }) {
+function FloatingAiAssistantBody({ viewContext, reducedMotion }: { viewContext: ReturnType<typeof useActiveAiViewContext>; reducedMotion: boolean | null }) {
   const controller = useAiAssistantController({
     projectId: viewContext.projectId,
     initialAction: "chat",
     initialContext: viewContext,
   });
 
-  return <AiAssistantPanel controller={controller} layout="floating" />;
+  return <AiAssistantPanel controller={controller} layout="floating" reducedMotion={reducedMotion ?? false} />;
 }
 
 function FloatingContextSummary({ viewContext }: { viewContext: AiViewContextValue }) {

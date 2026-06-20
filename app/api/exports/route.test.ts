@@ -35,7 +35,7 @@ describe("central exports route", () => {
   });
 
   it("returns a binary export response with download headers", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(createCentralizedExport).mockResolvedValue({
       content: Buffer.from("xlsx"),
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -69,7 +69,7 @@ describe("central exports route", () => {
   });
 
   it("allows standard polynomial formula exports without advanced export access", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(createCentralizedExport).mockResolvedValue({
       content: Buffer.from("xlsx"),
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -93,7 +93,7 @@ describe("central exports route", () => {
   });
 
   it("rejects unsupported export combinations with a 400 response", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(createCentralizedExport).mockRejectedValue(new Error("La combinacion de modulo, formato y preset no esta disponible"));
 
     const response = await POST(

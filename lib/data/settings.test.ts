@@ -66,7 +66,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.18,
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
     expect(settings).not.toBe(defaultUserSettings);
@@ -82,7 +82,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.18,
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
   });
@@ -115,7 +115,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.19,
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.09,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
   });
@@ -182,7 +182,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.19,
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.09,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
     expect(queryRawMock).toHaveBeenCalledTimes(7);
@@ -299,7 +299,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.2,
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
 
@@ -313,7 +313,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.18,
       defaultGeneralExpensesRate: 0.11,
       defaultUtilityRate: 0.08,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
 
@@ -327,7 +327,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.17,
       defaultGeneralExpensesRate: 0.15,
       defaultUtilityRate: 0.07,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
 
@@ -341,7 +341,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.18,
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
   });
@@ -446,7 +446,7 @@ describe("user settings data", () => {
               defaultIgvRate: 0.18,
               defaultGeneralExpensesRate: 0.12,
               defaultUtilityRate: 0.08,
-              defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+              defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
             },
           ];
         },
@@ -463,7 +463,7 @@ describe("user settings data", () => {
         defaultIgvRate: 0.18,
         defaultGeneralExpensesRate: 0.12,
         defaultUtilityRate: 0.08,
-        defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
         aiProviderPreference: "auto",
       }),
     ).resolves.toEqual({
@@ -476,7 +476,7 @@ describe("user settings data", () => {
       defaultIgvRate: 0.18,
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.08,
-      defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
     });
 
@@ -546,7 +546,7 @@ describe("user settings data", () => {
         defaultIgvRate: 0.18,
         defaultGeneralExpensesRate: 0.1,
         defaultUtilityRate: 0.08,
-        defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
         aiProviderPreference: "auto",
       }),
     ).rejects.toThrow("Failed to persist user settings");

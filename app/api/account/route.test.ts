@@ -28,7 +28,7 @@ describe("account route", () => {
   });
 
   it("returns the authenticated account profile on GET", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getUserAccount).mockResolvedValue({
       id: "user-1",
       name: "Maria Calderon",
@@ -56,7 +56,7 @@ describe("account route", () => {
   });
 
   it("validates and updates the profile name on PATCH", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(updateUserAccountProfile).mockResolvedValue({
       id: "user-1",
       name: "Maria Calderon",
@@ -91,7 +91,7 @@ describe("account route", () => {
   });
 
   it("returns 400 for invalid profile payloads", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const response = await PATCH(
       new Request("http://localhost/api/account", {

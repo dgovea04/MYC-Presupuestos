@@ -2,6 +2,7 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
+import { waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import { BudgetViewModeProvider } from "@/components/budget/view-mode-provider";
@@ -150,6 +151,12 @@ describe("ApuEditorSheet", () => {
     await act(async () => {
       searchInput.value = "excavacion";
       searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    // Poll with waitFor until the deferred value (useDeferredValue) settles
+    await waitFor(() => {
+      const option = document.querySelector("[data-testid='apu-add-subpartida-option-catalog-subpartida-1']");
+      expect(option).toBeInstanceOf(HTMLElement);
     });
 
     await act(async () => {

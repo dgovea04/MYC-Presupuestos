@@ -26,7 +26,7 @@ import {
   getDeviationAlerts,
 } from "@/lib/dashboard/analytics";
 
-function createPrismaDecimal(value: number) {
+function createPrismaDecimal(value: number | string) {
   return new Prisma.Decimal(value);
 }
 

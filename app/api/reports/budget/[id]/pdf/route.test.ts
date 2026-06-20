@@ -34,7 +34,7 @@ import { createBudgetPdf } from "@/lib/exports/pdf";
 
 describe("budget pdf report route", () => {
   it("passes account and company metadata into the pdf export", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getBudgetById).mockResolvedValue({
       id: "budget-1",
       project: { name: "Colegio Central", clientName: "Municipalidad", location: "Lima" },

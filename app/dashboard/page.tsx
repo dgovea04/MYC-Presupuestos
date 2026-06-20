@@ -51,6 +51,7 @@ import { CostByPhaseChart } from "@/components/dashboard/analytics/cost-by-phase
 import { BudgetComparisonChart } from "@/components/dashboard/analytics/budget-comparison-chart";
 import { CostTrendsChart } from "@/components/dashboard/analytics/cost-trends-chart";
 import { DeviationAlertPanel } from "@/components/dashboard/analytics/deviation-alert-panel";
+import { KhipuQualityMetrics } from "@/components/dashboard/khipu-quality-metrics";
 
 export default async function DashboardPage({
   searchParams,
@@ -660,6 +661,8 @@ export default async function DashboardPage({
           <DeviationAlertPanel data={deviationAlerts} currencyDecimals={settings.currencyDecimals} />
         </div>
       </section>
+
+      <KhipuQualityMetrics />
     </AppShell>
   );
 }

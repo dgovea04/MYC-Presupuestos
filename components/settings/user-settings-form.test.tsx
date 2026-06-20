@@ -64,6 +64,7 @@ let activeContainer: HTMLDivElement | null = null;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const baseSettings = {
+  aiProviderPreference: "auto" as const,
   defaultCurrency: "PEN" as const,
   currencyDecimals: 2,
   dateFormat: "DD_MMM_YYYY" as const,

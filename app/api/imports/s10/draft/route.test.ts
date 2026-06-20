@@ -68,7 +68,7 @@ describe("S10 draft route", () => {
   });
 
   it("returns a compact import preview for JSON request bodies", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const response = await POST(
       new Request("http://localhost/api/imports/s10/draft", {
@@ -93,7 +93,7 @@ describe("S10 draft route", () => {
   });
 
   it("returns a compact import preview for uploaded JSON snapshots", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     const formData = new FormData();
     formData.set("file", new File([`\uFEFF${JSON.stringify(snapshot)}`], "s10-export.json", { type: "application/json" }));
     formData.set("budgetCode", "0201003");
@@ -113,7 +113,7 @@ describe("S10 draft route", () => {
   });
 
   it("rejects invalid snapshot payloads", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const response = await POST(
       new Request("http://localhost/api/imports/s10/draft", {

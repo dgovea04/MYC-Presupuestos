@@ -46,7 +46,7 @@ describe("company logo route", () => {
   });
 
   it("stores a valid logo and persists the returned url", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getPrimaryCompany).mockResolvedValue({
       id: "company-1",
       name: "Constructora Andina SAC",
@@ -77,7 +77,7 @@ describe("company logo route", () => {
   });
 
   it("rejects invalid logo files", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getPrimaryCompany).mockResolvedValue({
       id: "company-1",
       name: "Constructora Andina SAC",
@@ -102,7 +102,7 @@ describe("company logo route", () => {
   });
 
   it("clears the logo and removes the local file", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(getPrimaryCompany).mockResolvedValue({
       id: "company-1",
       name: "Constructora Andina SAC",

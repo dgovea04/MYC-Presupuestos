@@ -8,12 +8,44 @@ html {
   --background: #f8fafc;
   --foreground: #0f172a;
   --muted: #64748b;
+  /* Khipu palette */
+  --khipu-navy: #0D134D;
+  --khipu-blue: #2563EB;
+  --khipu-cyan: #06CFE3;
+  --khipu-purple: #7C3AED;
+  --khipu-orange: #FF8A00;
+  --khipu-bg: #F8FAFC;
+  --khipu-surface: #FFFFFF;
+  --khipu-border: #E5E7EB;
+  --khipu-text: #111827;
+  --khipu-muted: #64748B;
+  --khipu-soft-blue: #EFF6FF;
+  --khipu-soft-cyan: #ECFEFF;
+  --khipu-soft-purple: #F5F3FF;
+  --khipu-soft-orange: #FFF7ED;
+  /* Khipu gradient */
+  --khipu-gradient: linear-gradient(135deg, #2563EB 0%, #06CFE3 48%, #7C3AED 100%);
+  --khipu-gradient-dark: radial-gradient(circle at top left, rgba(6, 207, 227, 0.18), transparent 32%), #0D134D;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-khipu-navy: var(--khipu-navy);
+  --color-khipu-blue: var(--khipu-blue);
+  --color-khipu-cyan: var(--khipu-cyan);
+  --color-khipu-purple: var(--khipu-purple);
+  --color-khipu-orange: var(--khipu-orange);
+  --color-khipu-bg: var(--khipu-bg);
+  --color-khipu-surface: var(--khipu-surface);
+  --color-khipu-border: var(--khipu-border);
+  --color-khipu-text: var(--khipu-text);
+  --color-khipu-muted: var(--khipu-muted);
+  --color-khipu-soft-blue: var(--khipu-soft-blue);
+  --color-khipu-soft-cyan: var(--khipu-soft-cyan);
+  --color-khipu-soft-purple: var(--khipu-soft-purple);
+  --color-khipu-soft-orange: var(--khipu-soft-orange);
   --font-sans: var(--font-inter), "Inter", "Segoe UI", "Aptos", sans-serif;
   --font-display: var(--font-plus-jakarta-sans), "Plus Jakarta Sans", var(--font-sans);
   --font-mono: "Cascadia Code", "Consolas", monospace;
@@ -70,6 +102,20 @@ body {
   border: 1px solid rgba(226, 232, 240, 0.95);
   background: rgba(255, 255, 255, 0.9);
   color: #475569;
+}
+
+/* Ripple effect for circular buttons */
+@keyframes btn-ripple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(37, 99, 235, 0);
+  }
+}
+
+.btn-ripple:active {
+  animation: btn-ripple 0.4s ease-out;
 }
 
 * {

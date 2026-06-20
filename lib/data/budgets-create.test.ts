@@ -48,7 +48,7 @@ describe("createBudget", () => {
     mocks.getUserSettings.mockResolvedValue({
       defaultCurrency: "PEN",
       currencyDecimals: 2,
-      dateFormat: "dd/MM/yyyy",
+      dateFormat: "DD_MM_YYYY",
       defaultViewMode: "modern",
       excelShowFieldBorders: true,
       excelRowHeight: 24,

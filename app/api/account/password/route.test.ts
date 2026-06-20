@@ -34,7 +34,7 @@ describe("account password route", () => {
   });
 
   it("updates the password when the payload is valid", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(updateUserPassword).mockResolvedValue(undefined);
 
     const response = await PATCH(
@@ -58,7 +58,7 @@ describe("account password route", () => {
   });
 
   it("returns a friendly error when the current password is incorrect", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(updateUserPassword).mockRejectedValue(new AccountCurrentPasswordError());
 
     const response = await PATCH(

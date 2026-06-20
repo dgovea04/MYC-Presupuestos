@@ -19,7 +19,7 @@ import { deleteNoteTask, updateNoteTask } from "@/lib/data/notes";
 
 describe("note detail route", () => {
   it("updates a note for the authenticated user", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(updateNoteTask).mockResolvedValue({
       id: "note-1",
       body: "Listo",
@@ -45,7 +45,7 @@ describe("note detail route", () => {
   });
 
   it("deletes a note for the authenticated user", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(deleteNoteTask).mockResolvedValue(undefined);
 
     const response = await DELETE(new Request("http://localhost/api/notes/note-1"), {

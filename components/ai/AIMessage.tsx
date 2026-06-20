@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Clipboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,17 +9,21 @@ import { formatAiText } from "@/lib/ai/formatting";
 export function AIMessage({
   content,
   model,
+  streaming = false,
   tone = "assistant",
 }: {
   content: string;
   model?: string;
+  streaming?: boolean;
   tone?: "assistant" | "user" | "error";
 }) {
+  const revealedText = useTypewriter(content, streaming);
+
   const copyContent = async () => {
     await navigator.clipboard.writeText(content);
   };
 
-  const formatted = formatAiText(content);
+  const formatted = formatAiText(revealedText);
 
   return (
     <article
@@ -128,6 +132,40 @@ export function renderMarkdownLite(content: string) {
  * Requires: at least 2 lines (header + separator), all lines contain pipes,
  * and the second line is a valid separator (dashes, pipes, colons, spaces only).
  */
+/**
+ * Typewriter hook — reveals text character by character for a
+ * natural streaming feel. When disabled, returns the full text immediately.
+ */
+function useTypewriter(text: string, enabled: boolean, speedMs = 18): string {
+  const [cursor, setCursor] = useState(0);
+  const prevTextRef = useRef(text);
+
+  // Reset cursor when text changes completely (new response)
+  useEffect(() => {
+    if (text !== prevTextRef.current && !text.startsWith(prevTextRef.current)) {
+      setCursor(0);
+    }
+    prevTextRef.current = text;
+  }, [text]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setCursor(text.length);
+      return;
+    }
+
+    if (cursor >= text.length) return;
+
+    const id = setTimeout(
+      () => setCursor((c) => Math.min(c + 1, text.length)),
+      speedMs,
+    );
+    return () => clearTimeout(id);
+  }, [cursor, text.length, enabled, speedMs]);
+
+  return enabled ? text.slice(0, cursor) : text;
+}
+
 function isMarkdownTable(lines: string[]): boolean {
   if (lines.length < 2) return false;
 

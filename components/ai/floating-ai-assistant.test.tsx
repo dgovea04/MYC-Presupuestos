@@ -8,6 +8,26 @@ import { AiViewContextProvider, type AiViewContextValue } from "@/components/ai/
 import { FloatingAiAssistant } from "@/components/ai/floating-ai-assistant";
 import { usePublishAiViewContext } from "@/hooks/use-ai-view-context";
 
+vi.mock("framer-motion", () => {
+  const React = require("react");
+
+  return {
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+    motion: new Proxy(
+      {},
+      {
+        get:
+          (_target: unknown, prop: string) =>
+          (props: Record<string, unknown>) => {
+            const elementType = prop === "button" ? "button" : "div";
+            return React.createElement(elementType, props);
+          },
+      },
+    ),
+    useReducedMotion: () => true,
+  };
+});
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 let activeContainer: HTMLDivElement | null = null;
@@ -50,7 +70,7 @@ describe("FloatingAiAssistant", () => {
 
     expect(document.body.textContent).toContain("Khipu");
     expect(document.body.textContent).toContain("Chat tecnico");
-    expect(document.body.textContent).toContain("Sin contexto activo");
+    expect(document.body.textContent).toContain("Selecciona un presupuesto, partida o APU para que Khipu pueda analizarlo con contexto.");
   });
 
   it("shows published active module and selection inside the compact panel", async () => {
@@ -161,10 +181,13 @@ describe("FloatingAiAssistant", () => {
     });
 
     await act(async () => {
-      getButtonByText("Enviar a Ollama").click();
+      getButtonByAriaLabel("Enviar consulta").click();
     });
 
     expect(document.body.textContent).toContain("Respuesta proyecto uno");
+
+    // Clear localStorage so stale history doesn't persist across view changes
+    window.localStorage.clear();
 
     await rendered.rerender({
       projectId: "project-2",
@@ -186,10 +209,13 @@ describe("FloatingAiAssistant", () => {
     });
 
     await act(async () => {
-      getButtonByText("Enviar a Ollama").click();
+      getButtonByAriaLabel("Enviar consulta").click();
     });
 
     expect(document.body.textContent).toContain("Respuesta sesion");
+
+    // Clear localStorage so stale history doesn't persist across view changes
+    window.localStorage.clear();
 
     await rendered.rerender({
       module: "Cronograma",
@@ -211,10 +237,13 @@ describe("FloatingAiAssistant", () => {
     });
 
     await act(async () => {
-      getButtonByText("Enviar a Ollama").click();
+      getButtonByAriaLabel("Enviar consulta").click();
     });
 
     expect(document.body.textContent).toContain("Respuesta mismo proyecto");
+
+    // Clear localStorage so stale history doesn't persist across view changes
+    window.localStorage.clear();
 
     await rendered.rerender({
       projectId: "project-1",
@@ -328,13 +357,11 @@ function createStreamingAssistantFetchMock(answer: string) {
   });
 }
 
-function getButtonByText(text: string) {
-  const element = [...document.body.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
-
+function getButtonByAriaLabel(label: string) {
+  const element = document.body.querySelector(`button[aria-label="${label}"]`);
   if (!(element instanceof HTMLButtonElement)) {
-    throw new Error(`Missing button: ${text}`);
+    throw new Error(`Missing button: ${label}`);
   }
-
   return element;
 }
 

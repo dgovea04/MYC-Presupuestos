@@ -29,7 +29,7 @@ describe("billing yape request route", () => {
   });
 
   it("creates a manual Yape payment request", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(createYapePaymentRequest).mockResolvedValue({
       id: "manual-request-1",
       createdAt: new Date("2026-05-29T12:00:00.000Z"),

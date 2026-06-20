@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChevronDown, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { FeatureKey } from "@/lib/billing/entitlements";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ export type SidebarNavLink = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   requiredFeature?: FeatureKey;
+  badge?: ReactNode;
 };
 
 export type SidebarNavGroup = {
@@ -163,6 +164,7 @@ export function SidebarNav({
                         >
                           <ChildIcon className="h-4 w-4 shrink-0" />
                           <span className="min-w-0 flex-1">{child.label}</span>
+                          {child.badge}
                           {childLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : null}
                         </Link>
                       );
@@ -192,6 +194,7 @@ export function SidebarNav({
                           >
                             <ChildIcon className="h-4 w-4 shrink-0" />
                             <span className="min-w-0 flex-1">{child.label}</span>
+                            {child.badge}
                             {childLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : null}
                           </Link>
                         );
@@ -233,6 +236,7 @@ export function SidebarNav({
             ) : (
               <>
                 <span className="min-w-0 flex-1">{item.label}</span>
+                {item.badge}
                 {locked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : null}
               </>
             )}

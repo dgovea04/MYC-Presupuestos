@@ -20,7 +20,7 @@ describe("S10 SQL Server budgets route", () => {
   });
 
   it("requires a database", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const response = await GET(new Request("http://localhost/api/imports/s10/sqlserver/budgets"));
 
@@ -28,7 +28,7 @@ describe("S10 SQL Server budgets route", () => {
   });
 
   it("returns budgets from the selected database", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(listLocalS10Budgets).mockReturnValue([
       {
         code: "0302044",

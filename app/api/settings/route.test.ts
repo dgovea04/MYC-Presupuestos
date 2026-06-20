@@ -19,7 +19,7 @@ import { updateUserSettings } from "@/lib/data/settings";
 
 describe("settings route copy", () => {
   it("returns the accented save error message when persistence fails", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(updateUserSettings).mockRejectedValue(new Error("db failed"));
 
     const response = await PATCH(
@@ -45,7 +45,7 @@ describe("settings route copy", () => {
   });
 
   it("returns the accented validation error message for invalid payloads", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
 
     const response = await PATCH(
       new Request("http://localhost/api/settings", {

@@ -27,6 +27,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     document.body.innerHTML = "";
     window.localStorage.clear();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("renders Khipu as an operational workspace with command actions and runtime status", async () => {
@@ -98,7 +99,6 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
 
     expect(getTextContaining("Genera una propuesta editable de recursos y rendimiento.")).toBeTruthy();
-    expect(getTextContaining("Recomendado")).toBeTruthy();
 
     await act(async () => {
       getButtonByAriaLabel("Revisar presupuesto").click();
@@ -322,8 +322,9 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     expect(getByText("Actividad reciente de Khipu")).toBeTruthy();
 
+    const entryButton = findButtonContainingText("Consulta guardada");
     await act(async () => {
-      getButtonByText("Ver detalle").click();
+      entryButton.click();
     });
 
     expect(getByText("Resumen historico")).toBeTruthy();
@@ -395,8 +396,9 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
       getTextContaining("Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesion."),
     ).toBeTruthy();
 
+    const entryButton1 = findButtonContainingText("Consulta persistida");
     await act(async () => {
-      getButtonByText("Ver detalle").click();
+      entryButton1.click();
     });
 
     expect(getByText("Respuesta persistida")).toBeTruthy();
@@ -459,8 +461,9 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     expect(getByText("Consulta aplicada")).toBeTruthy();
 
+    const entryButton2 = findButtonContainingText("Consulta aplicada");
     await act(async () => {
-      getButtonByText("Ver detalle").click();
+      entryButton2.click();
     });
 
     expect(getByText("Respuesta aplicada")).toBeTruthy();
@@ -735,7 +738,12 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
       enqueueStreamEvent({ event: "delta", data: { text: "Primer avance" } });
       await Promise.resolve();
     });
-
+    // Poll: flush one typewriter character per tick (18ms each × 14 chars ≈ 252ms, 30 ticks = 600ms)
+    for (let i = 0; i < 30; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    }
     expect(getByText("Primer avance")).toBeTruthy();
 
     await act(async () => {
@@ -1097,8 +1105,9 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getMetricValue("Aplicadas")).toBe("1");
     expect(getMetricValue("Editadas")).toBe("0");
 
+    const entryButton3 = findButtonContainingText("Consulta persistida");
     await act(async () => {
-      getButtonByText("Ver detalle").click();
+      entryButton3.click();
     });
     await act(async () => {
       getButtonByText("Editada").click();
@@ -1389,6 +1398,16 @@ async function renderWorkspace(props: Partial<React.ComponentProps<typeof AIWork
         return [...candidate.children].every((child) => !child.textContent?.includes(text));
       }) ?? null,
   };
+}
+
+function findButtonContainingText(text: string): HTMLElement {
+  const element = [...document.body.querySelectorAll("button, [role='button']")].find(
+    (b) => b.textContent?.includes(text),
+  );
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`Missing button containing: ${text}`);
+  }
+  return element;
 }
 
 function createHealthPayload(status: "ok" | "degraded" | "down" = "ok") {

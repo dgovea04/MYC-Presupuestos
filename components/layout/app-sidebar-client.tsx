@@ -4,7 +4,6 @@ import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
-  BotMessageSquare,
   FileSpreadsheet,
   FolderKanban,
   Import,
@@ -19,6 +18,8 @@ import {
   Table2,
   Wrench,
 } from "lucide-react";
+import { KhipuBadge } from "@/components/khipu/KhipuBadge";
+import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
 import type { FeatureKey } from "@/lib/billing/entitlements";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SidebarNav, type SidebarNavItem, type SidebarNavLink } from "@/components/layout/sidebar-nav";
@@ -57,7 +58,22 @@ const NAV_ITEMS: SidebarNavItem[] = [
     ],
   },
   { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
-  { href: "/ai", label: "Khipu", icon: BotMessageSquare, requiredFeature: "ai.local" },
+  {
+    href: "/ai",
+    label: "Khipu",
+    icon: function KhipuSidebarIcon({ className }: { className?: string }) {
+      return (
+        <span
+          className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden", className)}
+          style={{ width: 30, height: 30, borderRadius: 99, border: "2px solid" }}
+        >
+          <KhipuSymbol className="h-full w-full" />
+        </span>
+      );
+    },
+    badge: <KhipuBadge compact variant="dark" />,
+    requiredFeature: "ai.local",
+  },
   {
     id: "catalogos",
     label: "Catalogos",

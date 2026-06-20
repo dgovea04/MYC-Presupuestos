@@ -65,6 +65,20 @@ export type GetAiSuggestionFeedbackSummaryInput = {
   userId: string;
 };
 
+export type GetUserAiFeedbackSummaryInput = {
+  userId: string;
+};
+
+export type FeedbackTrendPoint = {
+  weekKey: string;
+  weekLabel: string;
+  applied: number;
+  edited: number;
+  dismissed: number;
+  total: number;
+  acceptanceRate: string;
+};
+
 type AiSuggestionFeedbackEventRecord = {
   id: string;
   historyEntryId: string;
@@ -186,6 +200,52 @@ export async function getAiSuggestionFeedbackSummary({
   return summarizeLatestFeedbackState(events);
 }
 
+export async function getUserAiFeedbackSummary({
+  userId,
+}: GetUserAiFeedbackSummaryInput): Promise<AiSuggestionFeedbackSummary> {
+  const events = await prisma.aiSuggestionFeedbackEvent.findMany({
+    where: {
+      userId,
+      historyEntry: {
+        userId,
+        project: {
+          company: {
+            userId,
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return summarizeLatestFeedbackState(events);
+}
+
+export async function getUserFeedbackTrends({
+  userId,
+}: GetUserAiFeedbackSummaryInput): Promise<FeedbackTrendPoint[]> {
+  const events = await prisma.aiSuggestionFeedbackEvent.findMany({
+    where: {
+      userId,
+      historyEntry: {
+        userId,
+        project: {
+          company: {
+            userId,
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  return computeWeeklyTrends(events);
+}
+
 function findOwnedHistoryEntry({
   historyEntryId,
   projectId,
@@ -217,6 +277,70 @@ function findOwnedHistoryEntry({
       responseHash: true,
     },
   });
+}
+
+function computeWeeklyTrends(events: AiSuggestionFeedbackEventRecord[]): FeedbackTrendPoint[] {
+  const latestByEntry = getLatestFeedbackEvents(events);
+  const byWeek = new Map<string, Pick<FeedbackTrendPoint, "applied" | "edited" | "dismissed"> & { weekStart: Date }>();
+
+  // Sort by createdAt ascending (oldest first) for consistent week ordering
+  const sorted = [...latestByEntry].sort(
+    (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+  );
+
+  for (const event of sorted) {
+    const weekKey = getIsoWeekKey(event.createdAt);
+    const existing = byWeek.get(weekKey);
+    if (!existing) {
+      byWeek.set(weekKey, {
+        weekStart: getWeekStart(event.createdAt),
+        applied: 0,
+        edited: 0,
+        dismissed: 0,
+      });
+    }
+    const bucket = byWeek.get(weekKey)!;
+    incrementSummary(bucket, event.feedbackType);
+  }
+
+  const sortedWeeks = [...byWeek.entries()].sort(
+    ([, left], [, right]) => left.weekStart.getTime() - right.weekStart.getTime(),
+  );
+
+  return sortedWeeks.map(([weekKey, bucket]) => {
+    const total = bucket.applied + bucket.edited + bucket.dismissed;
+    return {
+      weekKey,
+      weekLabel: formatWeekLabel(bucket.weekStart),
+      applied: bucket.applied,
+      edited: bucket.edited,
+      dismissed: bucket.dismissed,
+      total,
+      acceptanceRate: formatRate(bucket.applied, total),
+    };
+  });
+}
+
+function getIsoWeekKey(date: Date): string {
+  const year = date.getFullYear();
+  const startOfYear = new Date(year, 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - startOfYear.getTime()) / 86400000);
+  const week = Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7);
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() - d.getDay());
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatWeekLabel(weekStart: Date): string {
+  const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const day = weekStart.getDate();
+  const month = months[weekStart.getMonth()];
+  return `${day} ${month}`;
 }
 
 function getLatestFeedbackState(

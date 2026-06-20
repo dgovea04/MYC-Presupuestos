@@ -22,6 +22,8 @@ import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { buildAiBudgetReviewSummary } from "@/lib/ai/budget-review";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
+import { usePublishBudgetSelection } from "@/hooks/use-publish-budget-selection";
+import { KhipuActionRegistryProvider } from "@/components/ai/khipu-action-registry";
 import { cn } from "@/lib/utils";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { SaveBudgetTemplateButton } from "@/components/budget/save-budget-template-button";
@@ -530,6 +532,15 @@ export function BudgetEditor({
     const timeout = setTimeout(() => setPasteFeedback(""), 4000);
     return () => clearTimeout(timeout);
   }, [pasteFeedback]);
+
+  usePublishBudgetSelection({
+    activeRowId,
+    rows,
+    items: summary.items,
+    budget: { id: budget.id, name: budget.name, projectId: budget.projectId },
+    projectName,
+    apuItemDescription: apuSheetSession?.item.description ?? null,
+  });
 
   const { scrollContainerRef: tableScrollRef, scrollProps: tableScrollProps, virtualRange: virtualBudgetRange } =
     useVirtualTableWindow({
@@ -1878,7 +1889,16 @@ export function BudgetEditor({
     }
   }
 
+  const openApuEditorById = useCallback((partidaId: string, _budgetId: string) => {
+    const item = summary.items.find((i) => i.id === partidaId);
+    if (item) openApuSheet(item);
+  }, [openApuSheet, summary.items]);
+
   return (
+    <KhipuActionRegistryProvider
+      onNavigate={(href) => router.push(href)}
+      onOpenApuEditor={openApuEditorById}
+    >
     <div
       ref={editorRootRef}
       className={cn(
@@ -2598,6 +2618,7 @@ export function BudgetEditor({
         />
       ) : null}
     </div>
+    </KhipuActionRegistryProvider>
   );
 }
 

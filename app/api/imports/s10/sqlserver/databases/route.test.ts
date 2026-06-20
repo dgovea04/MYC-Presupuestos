@@ -28,7 +28,7 @@ describe("S10 SQL Server databases route", () => {
   });
 
   it("rejects when local SQL Server imports are disabled", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(isS10LocalSqlServerEnabled).mockReturnValue(false);
 
     const response = await GET(new Request("http://localhost/api/imports/s10/sqlserver/databases"));
@@ -37,7 +37,7 @@ describe("S10 SQL Server databases route", () => {
   });
 
   it("returns S10 database candidates", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(listLocalS10Databases).mockReturnValue([
       {
         databaseName: "S10_OBRA_MYC",

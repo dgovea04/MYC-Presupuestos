@@ -22,7 +22,7 @@ describe("S10 analyze route", () => {
   });
 
   it("returns an import preview for uploaded .s2k files", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     const formData = new FormData();
     formData.set("file", new File([Buffer.from("SQLite format 3\u0000payload")], "obra.s2k"));
 
@@ -44,7 +44,7 @@ describe("S10 analyze route", () => {
   });
 
   it("rejects files without the .s2k extension", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue({ user: { id: "user-1" } });
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     const formData = new FormData();
     formData.set("file", new File([Buffer.from("PK")], "obra.zip"));
 

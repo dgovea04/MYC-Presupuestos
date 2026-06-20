@@ -143,6 +143,7 @@ function getOutputShapeBlock(schemaName: AiOutputSchemaName): string {
     case "formula_polinomica_review_v1":
     case "quantity_takeoff_review_v1":
     case "montecarlo_risk_analysis_v1":
+    case "apu_review_v1":
       return buildOutputJsonShapeBlock(REVIEW_OUTPUT_JSON_SHAPE);
     case "apu_generation_v1":
       return buildOutputJsonShapeBlock(APU_OUTPUT_JSON_SHAPE);
