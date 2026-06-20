@@ -1911,6 +1911,7 @@ export function BudgetEditor({
       onBlurCapture={(event) => {
         const nextTarget = event.relatedTarget;
         if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+        if (nextTarget instanceof Element && nextTarget.closest("[data-khipu-panel]")) return;
 
         activeRowIdRef.current = null;
         activeColumnRef.current = null;

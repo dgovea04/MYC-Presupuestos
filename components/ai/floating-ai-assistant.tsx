@@ -37,6 +37,7 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
 
   return (
     <div
+      data-khipu-panel
       className={cn(
         "z-[60] flex flex-col gap-3",
         expanded ? "items-stretch" : "items-end",

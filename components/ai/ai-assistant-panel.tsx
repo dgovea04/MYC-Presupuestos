@@ -435,6 +435,7 @@ export function AiAssistantPanel({
                   history={controller.history}
                   onSelect={controller.selectHistoryEntry}
                   reducedMotion={reducedMotion}
+                  truncateLength={false}
                 />
                 </motion.div>
                 ) : null}
@@ -448,15 +449,10 @@ export function AiAssistantPanel({
             {controller.error ? <AIMessage content={controller.error} tone="error" /> : null}
             {controller.result ? (
               <div className="space-y-2">
-                <div className="max-h-24 overflow-hidden rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="line-clamp-3 text-sm leading-5 text-slate-700">
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="text-sm leading-5 text-slate-700">
                     {controller.result.answer}
                   </div>
-                  {!controller.streaming && controller.result.answer.length > 200 ? (
-                    <p className="mt-1 text-[11px] font-medium text-blue-600">
-                      Ver respuesta completa en el historial
-                    </p>
-                  ) : null}
                 </div>
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                   Revisión técnica requerida antes de aplicar al presupuesto.
