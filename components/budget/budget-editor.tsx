@@ -806,7 +806,7 @@ export function BudgetEditor({
   }, [activeRowId, apuSheetSession, levelIdSet, openApuSheet, summary]);
 
   const buildBudgetReviewContext = useCallback(() => ({
-    project: projectName,
+    project: projectName ?? "Proyecto sin nombre",
     module: "Editor de presupuesto",
     activeTable: "Presupuesto",
   }), [projectName]);
@@ -5430,7 +5430,7 @@ function readStructuredParseStatus(value: unknown): NonNullable<AiEndpointResult
   return value === "not_requested" || value === "parsed" || value === "repaired" || value === "failed" ? value : undefined;
 }
 
-function isAiMessage(value: unknown): value is NonNullable<AiEndpointResult["debug"]>["messages"][number] {
+function isAiMessage(value: unknown): value is NonNullable<NonNullable<AiEndpointResult["debug"]>["messages"]>[number] {
   return isRecord(value) &&
     (value.role === "system" || value.role === "user" || value.role === "assistant") &&
     typeof value.content === "string";

@@ -45,9 +45,28 @@ type DragOrigin = { x: number; y: number; w: number; h: number };
  * Resizable panel hook — returns current size and a mousedown handler
  * for a resize grip. Persists the final size to localStorage when the
  * user finishes dragging.
+ *
+ * @param storageKey - localStorage key for persisting the panel size.
+ * @param initialDefaultSize - Optional default size. When provided and
+ *   no custom size has been stored (factory default still in localStorage),
+ *   this value is used as the initial panel size. After the user resizes,
+ *   the dragged size takes precedence.
  */
-export function useResizablePanel(storageKey: string) {
-  const [size, setSize] = useState<PanelSize>(() => readPanelSize(storageKey));
+export function useResizablePanel(storageKey: string, initialDefaultSize?: Partial<PanelSize>) {
+  const [size, setSize] = useState<PanelSize>(() => {
+    const stored = readPanelSize(storageKey);
+    if (!initialDefaultSize) return stored;
+    const customDefault: PanelSize = {
+      width: clamp(initialDefaultSize.width ?? DEFAULT_SIZE.width, MIN_W, MAX_W),
+      height: clamp(initialDefaultSize.height ?? DEFAULT_SIZE.height, MIN_H, MAX_H),
+    };
+    // When the user has never resized, localStorage holds the factory default.
+    // In that case, use the caller-provided default instead.
+    if (stored.width === DEFAULT_SIZE.width && stored.height === DEFAULT_SIZE.height) {
+      return customDefault;
+    }
+    return stored;
+  });
   const dragRef = useRef<DragOrigin | null>(null);
 
   const persist = useCallback(

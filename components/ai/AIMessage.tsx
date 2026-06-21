@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Clipboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
 import { cn } from "@/lib/utils";
 import { formatAiText } from "@/lib/ai/formatting";
 
@@ -26,24 +27,27 @@ export function AIMessage({
   const formatted = formatAiText(revealedText);
 
   return (
-    <article
-      className={cn(
-        "rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm",
-        tone === "assistant" && "border-sky-100 bg-sky-50/70 text-slate-800",
-        tone === "user" && "border-slate-200 bg-white text-slate-800",
-        tone === "error" && "border-rose-200 bg-rose-50 text-rose-800",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">{renderMarkdownLite(formatted)}</div>
-        {tone !== "error" ? (
-          <Button aria-label="Copiar respuesta" className="h-8 shrink-0 px-2" size="sm" variant="ghost" onClick={copyContent}>
-            <Clipboard className="h-4 w-4" />
-          </Button>
-        ) : null}
-      </div>
-      {model ? <p className="mt-3 text-xs font-medium text-slate-500">Modelo local: {model}</p> : null}
-    </article>
+    <div className={cn("flex items-start gap-2.5", tone === "user" && "flex-row-reverse")}>
+      {tone === "assistant" ? <KhipuSymbol className="mt-0.5 h-6 w-6 shrink-0" /> : null}
+      <article
+        className={cn(
+          "min-w-0 rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm",
+          tone === "assistant" && "border-sky-100 bg-sky-50/70 text-slate-800",
+          tone === "user" && "border-slate-200 bg-white text-slate-800",
+          tone === "error" && "border-rose-200 bg-rose-50 text-rose-800",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">{renderMarkdownLite(formatted)}</div>
+          {tone !== "error" ? (
+            <Button aria-label="Copiar respuesta" className="h-8 shrink-0 px-2" size="sm" variant="ghost" onClick={copyContent}>
+              <Clipboard className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
+        {model ? <p className="mt-3 text-xs font-medium text-slate-500">Modelo local: {model}</p> : null}
+      </article>
+    </div>
   );
 }
 

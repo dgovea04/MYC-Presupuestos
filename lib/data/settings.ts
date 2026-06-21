@@ -8,7 +8,11 @@ import {
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   DEFAULT_VIEW_MODE,
+  FLOATING_KHIPU_DEFAULTS,
   type AiProviderPreference,
+  type FloatingKhipuFontSize,
+  type FloatingKhipuPosition,
+  type FloatingKhipuTheme,
   type UserSettingsRecord,
 } from "@/types/settings";
 import { z } from "zod";
@@ -25,6 +29,12 @@ export const defaultUserSettings: UserSettingsRecord = {
   defaultUtilityRate: 0.08,
   defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
   aiProviderPreference: "auto",
+  floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+  floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+  floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+  floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+  floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+  floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
 };
 
 const userSettingsStoredRowSchema = z.object({
@@ -91,6 +101,42 @@ function readAiProviderPreference(value: unknown): AiProviderPreference {
   return "auto";
 }
 
+function readFloatingKhipuProvider(value: unknown): AiProviderPreference {
+  if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"].includes(value)) {
+    return value as AiProviderPreference;
+  }
+  return FLOATING_KHIPU_DEFAULTS.provider;
+}
+
+function readFloatingKhipuFontSize(value: unknown): FloatingKhipuFontSize {
+  if (typeof value === "string" && ["compact", "normal", "large"].includes(value)) {
+    return value as FloatingKhipuFontSize;
+  }
+  return FLOATING_KHIPU_DEFAULTS.fontSize;
+}
+
+function readFloatingKhipuPosition(value: unknown): FloatingKhipuPosition {
+  if (typeof value === "string" && ["bottom-right", "bottom-left", "top-right", "top-left"].includes(value)) {
+    return value as FloatingKhipuPosition;
+  }
+  return FLOATING_KHIPU_DEFAULTS.position;
+}
+
+function readFloatingKhipuTheme(value: unknown): FloatingKhipuTheme {
+  if (typeof value === "string" && ["light", "dark"].includes(value)) {
+    return value as FloatingKhipuTheme;
+  }
+  return FLOATING_KHIPU_DEFAULTS.theme;
+}
+
+function readFloatingKhipuDimension(value: unknown, fallback: number): number {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return Math.round(parsed);
+  return fallback;
+}
+
 function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
   if (!row || typeof row !== "object") {
     return createDefaultUserSettings();
@@ -126,6 +172,12 @@ function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
       ? defaultSubBudgetNames.data
       : defaultUserSettings.defaultSubBudgetNames,
     aiProviderPreference: readAiProviderPreference(rowRecord.aiProviderPreference),
+    floatingKhipuProvider: readFloatingKhipuProvider(rowRecord.floatingKhipuProvider),
+    floatingKhipuWidth: readFloatingKhipuDimension(rowRecord.floatingKhipuWidth, FLOATING_KHIPU_DEFAULTS.width),
+    floatingKhipuHeight: readFloatingKhipuDimension(rowRecord.floatingKhipuHeight, FLOATING_KHIPU_DEFAULTS.height),
+    floatingKhipuFontSize: readFloatingKhipuFontSize(rowRecord.floatingKhipuFontSize),
+    floatingKhipuPosition: readFloatingKhipuPosition(rowRecord.floatingKhipuPosition),
+    floatingKhipuTheme: readFloatingKhipuTheme(rowRecord.floatingKhipuTheme),
   };
 }
 
@@ -140,9 +192,17 @@ function parseStoredUserSettingsRow(row: unknown): UserSettingsRecord {
     throw new Error("Failed to persist user settings");
   }
 
+  const rowRecord = row as Record<string, unknown>;
+
   return {
     ...parsedRow.data,
-    aiProviderPreference: "auto",
+    aiProviderPreference: readAiProviderPreference(rowRecord.aiProviderPreference),
+    floatingKhipuProvider: readFloatingKhipuProvider(rowRecord.floatingKhipuProvider),
+    floatingKhipuWidth: readFloatingKhipuDimension(rowRecord.floatingKhipuWidth, FLOATING_KHIPU_DEFAULTS.width),
+    floatingKhipuHeight: readFloatingKhipuDimension(rowRecord.floatingKhipuHeight, FLOATING_KHIPU_DEFAULTS.height),
+    floatingKhipuFontSize: readFloatingKhipuFontSize(rowRecord.floatingKhipuFontSize),
+    floatingKhipuPosition: readFloatingKhipuPosition(rowRecord.floatingKhipuPosition),
+    floatingKhipuTheme: readFloatingKhipuTheme(rowRecord.floatingKhipuTheme),
   };
 }
 
@@ -350,13 +410,24 @@ export async function updateAiProviderSettings(
 }
 
 export async function getUserSettings(userId: string): Promise<UserSettingsRecord> {
-  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference] = await Promise.all([
+  const [
+    supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode,
+    supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference,
+    supportsFloatingKhipuProvider, supportsFloatingKhipuWidth, supportsFloatingKhipuHeight,
+    supportsFloatingKhipuFontSize,    supportsFloatingKhipuPosition, supportsFloatingKhipuTheme,
+  ] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
     hasUserSettingsColumn("defaultViewMode"),
     hasUserSettingsColumn("excelShowFieldBorders"),
     hasUserSettingsColumn("excelRowHeight"),
     hasUserSettingsColumn("aiProviderPreference"),
+    hasUserSettingsColumn("floatingKhipuProvider"),
+    hasUserSettingsColumn("floatingKhipuWidth"),
+    hasUserSettingsColumn("floatingKhipuHeight"),
+    hasUserSettingsColumn("floatingKhipuFontSize"),
+    hasUserSettingsColumn("floatingKhipuPosition"),
+    hasUserSettingsColumn("floatingKhipuTheme"),
   ]);
 
   if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
@@ -364,6 +435,12 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
       SELECT "defaultCurrency", "currencyDecimals", "dateFormat", "defaultViewMode", "excelShowFieldBorders", "excelRowHeight", "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
       , "defaultSubBudgetNames"
       ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
+      ${supportsFloatingKhipuProvider ? Prisma.sql`, "floatingKhipuProvider"` : Prisma.empty}
+      ${supportsFloatingKhipuWidth ? Prisma.sql`, "floatingKhipuWidth"` : Prisma.empty}
+      ${supportsFloatingKhipuHeight ? Prisma.sql`, "floatingKhipuHeight"` : Prisma.empty}
+      ${supportsFloatingKhipuFontSize ? Prisma.sql`, "floatingKhipuFontSize"` : Prisma.empty}
+      ${supportsFloatingKhipuPosition ? Prisma.sql`, "floatingKhipuPosition"` : Prisma.empty}
+      ${supportsFloatingKhipuTheme ? Prisma.sql`, "floatingKhipuTheme"` : Prisma.empty}
       FROM "UserSettings"
       WHERE "userId" = ${userId}
       LIMIT 1
@@ -381,6 +458,12 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
     , "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
     ${supportsDefaultSubBudgetNames ? Prisma.sql`, "defaultSubBudgetNames"` : Prisma.empty}
     ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
+    ${supportsFloatingKhipuProvider ? Prisma.sql`, "floatingKhipuProvider"` : Prisma.empty}
+    ${supportsFloatingKhipuWidth ? Prisma.sql`, "floatingKhipuWidth"` : Prisma.empty}
+    ${supportsFloatingKhipuHeight ? Prisma.sql`, "floatingKhipuHeight"` : Prisma.empty}
+    ${supportsFloatingKhipuFontSize ? Prisma.sql`, "floatingKhipuFontSize"` : Prisma.empty}
+    ${supportsFloatingKhipuPosition ? Prisma.sql`, "floatingKhipuPosition"` : Prisma.empty}
+    ${supportsFloatingKhipuTheme ? Prisma.sql`, "floatingKhipuTheme"` : Prisma.empty}
     FROM "UserSettings"
     WHERE "userId" = ${userId}
     LIMIT 1
@@ -414,13 +497,24 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
 
 export async function updateUserSettings(userId: string, input: UserSettingsInput): Promise<UserSettingsRecord> {
   const data = userSettingsSchema.parse(input);
-  const [supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode, supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference] = await Promise.all([
+  const [
+    supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode,
+    supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference,
+    supportsFloatingKhipuProvider, supportsFloatingKhipuWidth, supportsFloatingKhipuHeight,
+    supportsFloatingKhipuFontSize, supportsFloatingKhipuPosition, supportsFloatingKhipuTheme,
+  ] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
     hasUserSettingsColumn("defaultViewMode"),
     hasUserSettingsColumn("excelShowFieldBorders"),
     hasUserSettingsColumn("excelRowHeight"),
     hasUserSettingsColumn("aiProviderPreference"),
+    hasUserSettingsColumn("floatingKhipuProvider"),
+    hasUserSettingsColumn("floatingKhipuWidth"),
+    hasUserSettingsColumn("floatingKhipuHeight"),
+    hasUserSettingsColumn("floatingKhipuFontSize"),
+    hasUserSettingsColumn("floatingKhipuPosition"),
+    hasUserSettingsColumn("floatingKhipuTheme"),
   ]);
 
   if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
@@ -439,6 +533,12 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultUtilityRate",
         "defaultSubBudgetNames",
         ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
+        ${supportsFloatingKhipuProvider ? Prisma.sql`"floatingKhipuProvider",` : Prisma.empty}
+        ${supportsFloatingKhipuWidth ? Prisma.sql`"floatingKhipuWidth",` : Prisma.empty}
+        ${supportsFloatingKhipuHeight ? Prisma.sql`"floatingKhipuHeight",` : Prisma.empty}
+        ${supportsFloatingKhipuFontSize ? Prisma.sql`"floatingKhipuFontSize",` : Prisma.empty}
+        ${supportsFloatingKhipuPosition ? Prisma.sql`"floatingKhipuPosition",` : Prisma.empty}
+        ${supportsFloatingKhipuTheme ? Prisma.sql`"floatingKhipuTheme",` : Prisma.empty}
         "createdAt",
         "updatedAt"
       )
@@ -456,6 +556,12 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         ${data.defaultUtilityRate},
         ${data.defaultSubBudgetNames},
         ${supportsAiProviderPreference ? Prisma.sql`${data.aiProviderPreference},` : Prisma.empty}
+        ${supportsFloatingKhipuProvider ? Prisma.sql`${data.floatingKhipuProvider},` : Prisma.empty}
+        ${supportsFloatingKhipuWidth ? Prisma.sql`${data.floatingKhipuWidth},` : Prisma.empty}
+        ${supportsFloatingKhipuHeight ? Prisma.sql`${data.floatingKhipuHeight},` : Prisma.empty}
+        ${supportsFloatingKhipuFontSize ? Prisma.sql`${data.floatingKhipuFontSize},` : Prisma.empty}
+        ${supportsFloatingKhipuPosition ? Prisma.sql`${data.floatingKhipuPosition},` : Prisma.empty}
+        ${supportsFloatingKhipuTheme ? Prisma.sql`${data.floatingKhipuTheme},` : Prisma.empty}
         NOW(),
         NOW()
       )
@@ -472,6 +578,12 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultUtilityRate" = EXCLUDED."defaultUtilityRate",
         "defaultSubBudgetNames" = EXCLUDED."defaultSubBudgetNames",
         ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference" = EXCLUDED."aiProviderPreference",` : Prisma.empty}
+        ${supportsFloatingKhipuProvider ? Prisma.sql`"floatingKhipuProvider" = EXCLUDED."floatingKhipuProvider",` : Prisma.empty}
+        ${supportsFloatingKhipuWidth ? Prisma.sql`"floatingKhipuWidth" = EXCLUDED."floatingKhipuWidth",` : Prisma.empty}
+        ${supportsFloatingKhipuHeight ? Prisma.sql`"floatingKhipuHeight" = EXCLUDED."floatingKhipuHeight",` : Prisma.empty}
+        ${supportsFloatingKhipuFontSize ? Prisma.sql`"floatingKhipuFontSize" = EXCLUDED."floatingKhipuFontSize",` : Prisma.empty}
+        ${supportsFloatingKhipuPosition ? Prisma.sql`"floatingKhipuPosition" = EXCLUDED."floatingKhipuPosition",` : Prisma.empty}
+        ${supportsFloatingKhipuTheme ? Prisma.sql`"floatingKhipuTheme" = EXCLUDED."floatingKhipuTheme",` : Prisma.empty}
         "updatedAt" = NOW()
       RETURNING
         "defaultCurrency",
@@ -485,16 +597,15 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultUtilityRate",
         "defaultSubBudgetNames"
         ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
+        ${supportsFloatingKhipuProvider ? Prisma.sql`, "floatingKhipuProvider"` : Prisma.empty}
+        ${supportsFloatingKhipuWidth ? Prisma.sql`, "floatingKhipuWidth"` : Prisma.empty}
+        ${supportsFloatingKhipuHeight ? Prisma.sql`, "floatingKhipuHeight"` : Prisma.empty}
+        ${supportsFloatingKhipuFontSize ? Prisma.sql`, "floatingKhipuFontSize"` : Prisma.empty}
+        ${supportsFloatingKhipuPosition ? Prisma.sql`, "floatingKhipuPosition"` : Prisma.empty}
+        ${supportsFloatingKhipuTheme ? Prisma.sql`, "floatingKhipuTheme"` : Prisma.empty}
     `;
 
-    return {
-      ...parseStoredUserSettingsRow(settings),
-      aiProviderPreference: readAiProviderPreference(
-        supportsAiProviderPreference && settings && typeof settings === "object"
-          ? (settings as Record<string, unknown>).aiProviderPreference
-          : data.aiProviderPreference,
-      ),
-    };
+    return parseStoredUserSettingsRow(settings);
   }
 
   const [settings] = await prisma.$queryRaw<Array<unknown>>`
@@ -511,6 +622,12 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultGeneralExpensesRate",
       "defaultUtilityRate",
       ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
+      ${supportsFloatingKhipuProvider ? Prisma.sql`"floatingKhipuProvider",` : Prisma.empty}
+      ${supportsFloatingKhipuWidth ? Prisma.sql`"floatingKhipuWidth",` : Prisma.empty}
+      ${supportsFloatingKhipuHeight ? Prisma.sql`"floatingKhipuHeight",` : Prisma.empty}
+      ${supportsFloatingKhipuFontSize ? Prisma.sql`"floatingKhipuFontSize",` : Prisma.empty}
+      ${supportsFloatingKhipuPosition ? Prisma.sql`"floatingKhipuPosition",` : Prisma.empty}
+      ${supportsFloatingKhipuTheme ? Prisma.sql`"floatingKhipuTheme",` : Prisma.empty}
       "createdAt",
       "updatedAt"
     )
@@ -527,6 +644,12 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       ${data.defaultGeneralExpensesRate},
       ${data.defaultUtilityRate},
       ${supportsAiProviderPreference ? Prisma.sql`${data.aiProviderPreference},` : Prisma.empty}
+      ${supportsFloatingKhipuProvider ? Prisma.sql`${data.floatingKhipuProvider},` : Prisma.empty}
+      ${supportsFloatingKhipuWidth ? Prisma.sql`${data.floatingKhipuWidth},` : Prisma.empty}
+      ${supportsFloatingKhipuHeight ? Prisma.sql`${data.floatingKhipuHeight},` : Prisma.empty}
+      ${supportsFloatingKhipuFontSize ? Prisma.sql`${data.floatingKhipuFontSize},` : Prisma.empty}
+      ${supportsFloatingKhipuPosition ? Prisma.sql`${data.floatingKhipuPosition},` : Prisma.empty}
+      ${supportsFloatingKhipuTheme ? Prisma.sql`${data.floatingKhipuTheme},` : Prisma.empty}
       NOW(),
       NOW()
     )
@@ -542,6 +665,12 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultGeneralExpensesRate" = EXCLUDED."defaultGeneralExpensesRate",
       "defaultUtilityRate" = EXCLUDED."defaultUtilityRate",
       ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference" = EXCLUDED."aiProviderPreference",` : Prisma.empty}
+      ${supportsFloatingKhipuProvider ? Prisma.sql`"floatingKhipuProvider" = EXCLUDED."floatingKhipuProvider",` : Prisma.empty}
+      ${supportsFloatingKhipuWidth ? Prisma.sql`"floatingKhipuWidth" = EXCLUDED."floatingKhipuWidth",` : Prisma.empty}
+      ${supportsFloatingKhipuHeight ? Prisma.sql`"floatingKhipuHeight" = EXCLUDED."floatingKhipuHeight",` : Prisma.empty}
+      ${supportsFloatingKhipuFontSize ? Prisma.sql`"floatingKhipuFontSize" = EXCLUDED."floatingKhipuFontSize",` : Prisma.empty}
+      ${supportsFloatingKhipuPosition ? Prisma.sql`"floatingKhipuPosition" = EXCLUDED."floatingKhipuPosition",` : Prisma.empty}
+      ${supportsFloatingKhipuTheme ? Prisma.sql`"floatingKhipuTheme" = EXCLUDED."floatingKhipuTheme",` : Prisma.empty}
       "updatedAt" = NOW()
     RETURNING
       "defaultCurrency",
@@ -554,29 +683,28 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultGeneralExpensesRate",
       "defaultUtilityRate"
       ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
+      ${supportsFloatingKhipuProvider ? Prisma.sql`, "floatingKhipuProvider"` : Prisma.empty}
+      ${supportsFloatingKhipuWidth ? Prisma.sql`, "floatingKhipuWidth"` : Prisma.empty}
+      ${supportsFloatingKhipuHeight ? Prisma.sql`, "floatingKhipuHeight"` : Prisma.empty}
+      ${supportsFloatingKhipuFontSize ? Prisma.sql`, "floatingKhipuFontSize"` : Prisma.empty}
+      ${supportsFloatingKhipuPosition ? Prisma.sql`, "floatingKhipuPosition"` : Prisma.empty}
+      ${supportsFloatingKhipuTheme ? Prisma.sql`, "floatingKhipuTheme"` : Prisma.empty}
   `;
 
   const storedSettings = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
 
-  return {
-    ...parseStoredUserSettingsRow({
-      ...storedSettings,
-      dateFormat: supportsDateFormat && typeof storedSettings.dateFormat !== "undefined" ? storedSettings.dateFormat : data.dateFormat,
-      defaultViewMode: supportsDefaultViewMode && typeof storedSettings.defaultViewMode !== "undefined"
-        ? storedSettings.defaultViewMode
-        : data.defaultViewMode,
-      excelShowFieldBorders: supportsExcelShowFieldBorders && typeof storedSettings.excelShowFieldBorders !== "undefined"
-        ? storedSettings.excelShowFieldBorders
-        : data.excelShowFieldBorders,
-      excelRowHeight: supportsExcelRowHeight && typeof storedSettings.excelRowHeight !== "undefined"
-        ? storedSettings.excelRowHeight
-        : data.excelRowHeight,
-      defaultSubBudgetNames: data.defaultSubBudgetNames,
-    }),
-    aiProviderPreference: readAiProviderPreference(
-      supportsAiProviderPreference && typeof storedSettings.aiProviderPreference !== "undefined"
-        ? storedSettings.aiProviderPreference
-        : data.aiProviderPreference,
-    ),
-  };
+  return parseStoredUserSettingsRow({
+    ...storedSettings,
+    dateFormat: supportsDateFormat && typeof storedSettings.dateFormat !== "undefined" ? storedSettings.dateFormat : data.dateFormat,
+    defaultViewMode: supportsDefaultViewMode && typeof storedSettings.defaultViewMode !== "undefined"
+      ? storedSettings.defaultViewMode
+      : data.defaultViewMode,
+    excelShowFieldBorders: supportsExcelShowFieldBorders && typeof storedSettings.excelShowFieldBorders !== "undefined"
+      ? storedSettings.excelShowFieldBorders
+      : data.excelShowFieldBorders,
+    excelRowHeight: supportsExcelRowHeight && typeof storedSettings.excelRowHeight !== "undefined"
+      ? storedSettings.excelRowHeight
+      : data.excelRowHeight,
+    defaultSubBudgetNames: data.defaultSubBudgetNames,
+  });
 }

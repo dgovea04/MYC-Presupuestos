@@ -6,6 +6,10 @@ import {
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   DEFAULT_VIEW_MODE,
   EXCEL_ROW_HEIGHT_OPTIONS,
+  FLOATING_KHIPU_DEFAULTS,
+  FLOATING_KHIPU_FONT_SIZES,
+  FLOATING_KHIPU_POSITIONS,
+  FLOATING_KHIPU_THEMES,
   VIEW_MODE_OPTIONS,
 } from "@/types/settings";
 
@@ -52,6 +56,12 @@ export const userSettingsSchema = z.object({
   aiProviderPreference: z.enum(AI_PROVIDER_OPTIONS).default("auto"),
   openaiModel: z.string().trim().optional().nullable(),
   geminiModel: z.string().trim().optional().nullable(),
+  floatingKhipuProvider: z.enum(AI_PROVIDER_OPTIONS).default(FLOATING_KHIPU_DEFAULTS.provider),
+  floatingKhipuWidth: numericInputSchema.pipe(z.number().int().min(320).max(800)).default(FLOATING_KHIPU_DEFAULTS.width),
+  floatingKhipuHeight: numericInputSchema.pipe(z.number().int().min(280).max(700)).default(FLOATING_KHIPU_DEFAULTS.height),
+  floatingKhipuFontSize: z.enum(FLOATING_KHIPU_FONT_SIZES).default(FLOATING_KHIPU_DEFAULTS.fontSize),
+  floatingKhipuPosition: z.enum(FLOATING_KHIPU_POSITIONS).default(FLOATING_KHIPU_DEFAULTS.position),
+  floatingKhipuTheme: z.enum(FLOATING_KHIPU_THEMES).default(FLOATING_KHIPU_DEFAULTS.theme),
 });
 
 export type UserSettingsInput = z.infer<typeof userSettingsSchema>;

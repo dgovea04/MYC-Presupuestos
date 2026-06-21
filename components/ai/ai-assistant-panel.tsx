@@ -65,6 +65,7 @@ type AiAssistantPanelProps = {
   layout: AiAssistantPanelLayout;
   projectId?: string;
   reducedMotion?: boolean;
+  showHistory?: boolean;
 };
 
 const ACTIONS = [
@@ -130,6 +131,7 @@ export function AiAssistantPanel({
   layout,
   projectId,
   reducedMotion = false,
+  showHistory = false,
 }: AiAssistantPanelProps) {
   const [chatMessage, setChatMessage] = useState(initialChatMessage);
   const [apuDescription, setApuDescription] = useState(initialApuDescription);
@@ -302,6 +304,33 @@ export function AiAssistantPanel({
   }
 
   if (layout === "floating") {
+    // History-only view: show just the ChatHistory with a clear button
+    if (showHistory) {
+      return (
+        <div className="space-y-3">
+          <ChatHistory
+            history={controller.history}
+            reducedMotion={reducedMotion}
+            expandable
+            truncateLength={200}
+          />
+          <div className="flex justify-end">
+            <ClearHistoryButton
+              confirmClear={confirmClear}
+              confirmLabel="¿Limpiar historial?"
+              onCancel={() => setConfirmClear(false)}
+              onClear={() => {
+                controller.clearHistory();
+                setConfirmClear(false);
+              }}
+              onRequestClear={() => setConfirmClear(true)}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // Normal floating view
     // Show greeting on initial state (no result, no error, no request yet)
     const showGreeting = !controller.result && !controller.error && !controller.loading;
 
@@ -391,69 +420,17 @@ export function AiAssistantPanel({
           </div>
         </motion.div>
 
-        {/* Chat history */}
-        {controller.history.length > 0 ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <button
-                  type="button"
-                  className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 transition hover:text-slate-600"
-                  onClick={() => setHistoryCollapsed((c) => !c)}
-                >
-                  <ChevronDown className={cn("h-3 w-3 transition-transform", historyCollapsed && "-rotate-90")} />                   Historial
-                  {controller.history.length > 0 ? (
-                    <HistoryCountBadge className="ml-1.5 px-1.5 text-[10px]" count={controller.history.length} />
-                  ) : null}
-                </button>
-                <ClearHistoryButton
-                  buttonClassName="h-6 w-6"
-                  cancelButtonClassName="h-6 px-2 text-[11px]"
-                  confirmClear={confirmClear}
-                  confirmLabel="¿Limpiar?"
-                  confirmWrapperClassName="gap-1.5 rounded-lg px-2 py-1"
-                  iconClassName="h-3.5 w-3.5"
-                  labelClassName="text-[11px]"
-                  confirmButtonClassName="h-6 px-2 text-[11px]"
-                  onCancel={() => setConfirmClear(false)}
-                  onClear={() => {
-                    controller.clearHistory();
-                    setConfirmClear(false);
-                  }}
-                  onRequestClear={() => setConfirmClear(true)}
-                />
-              </div>
-              <AnimatePresence>
-                {!historyCollapsed ? (
-                <motion.div
-                  initial={reducedMotion ? undefined : { opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={reducedMotion ? undefined : { opacity: 0, height: 0 }}
-                  transition={anim(0.25)}
-                  className="overflow-hidden"
-                >
-                <ChatHistory
-                  history={controller.history}
-                  onSelect={controller.selectHistoryEntry}
-                  reducedMotion={reducedMotion}
-                  truncateLength={false}
-                />
-                </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </div>
-          ) : null}
-
         {/* Current result/error — compact preview (full response is in ChatHistory) */}
         {(controller.error || controller.result) ? (
           <div className="overflow-x-hidden break-words">
             {controller.error ? <AIMessage content={controller.error} tone="error" /> : null}
             {controller.result ? (
               <div className="space-y-2">
-                <div className="rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="text-sm leading-5 text-slate-700">
-                    {controller.result.answer}
-                  </div>
-                </div>
+                <AIMessage
+                  content={controller.result.answer}
+                  model={controller.result.model}
+                  streaming={controller.streaming}
+                />
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                   Revisión técnica requerida antes de aplicar al presupuesto.
                 </div>

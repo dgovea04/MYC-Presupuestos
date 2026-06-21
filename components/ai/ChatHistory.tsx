@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import { AIMessage } from "@/components/ai/AIMessage";
 import type { AiHistoryEntry } from "@/components/ai/use-ai-assistant-controller";
 import { cn } from "@/lib/utils";
@@ -12,18 +13,32 @@ type ChatHistoryProps = {
   onSelect?: (entry: AiHistoryEntry) => void;
   reducedMotion?: boolean;
   truncateLength?: number | false;
+  /** When true, entries are initially truncated with individual expand/collapse on click */
+  expandable?: boolean;
 };
 
 /**
  * Scrollable chat history showing past interactions as user + Khipu bubbles.
  * Newest entries appear at the bottom; the container auto-scrolls down on new entries.
+ *
+ * In expandable mode, each Khipu response is initially collapsed (showing only a portion)
+ * and clicking the entry expands/collapses it individually. The container auto-scrolls
+ * to the bottom on mount so the latest response is visible.
  */
-export function ChatHistory({ history, maxHeight = "max-h-72", onSelect, reducedMotion = false, truncateLength = 300 }: ChatHistoryProps) {
+export function ChatHistory({
+  history,
+  maxHeight = "max-h-72",
+  onSelect,
+  reducedMotion = false,
+  truncateLength = 300,
+  expandable = false,
+}: ChatHistoryProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(history.length);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
 
+  // Auto-scroll to bottom when new entries are added
   useEffect(() => {
-    // Only auto-scroll when new entries are added (not on initial render or removal)
     if (history.length > prevLengthRef.current) {
       const el = bottomRef.current;
       if (el && typeof el.scrollIntoView === "function") {
@@ -33,6 +48,19 @@ export function ChatHistory({ history, maxHeight = "max-h-72", onSelect, reduced
     prevLengthRef.current = history.length;
   }, [history.length, reducedMotion]);
 
+  // In expandable mode, scroll to bottom on mount so the latest response is visible
+  useEffect(() => {
+    if (expandable && history.length > 0) {
+      const el = bottomRef.current;
+      if (el && typeof el.scrollIntoView === "function") {
+        // Use a microtask to ensure the DOM has rendered
+        requestAnimationFrame(() => {
+          el.scrollIntoView({ behavior: "auto" });
+        });
+      }
+    }
+  }, [expandable, history.length]);
+
   if (history.length === 0) {
     return null;
   }
@@ -41,11 +69,20 @@ export function ChatHistory({ history, maxHeight = "max-h-72", onSelect, reduced
   const chronological = [...history].reverse();
 
   return (
-    <div className={cn("overflow-y-auto overscroll-contain rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/60 to-slate-50/20 p-3", maxHeight)}>
+    <div
+      className={cn("overflow-y-auto overscroll-contain rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/60 to-slate-50/20 p-3", maxHeight)}
+    >
       <div className="space-y-4">
         <AnimatePresence initial={false}>
           {chronological.map((entry, index) => {
             const isLast = index === chronological.length - 1;
+            const isExpanded = expandable && expandedEntryId === entry.id;
+            const responseText = entry.result.answer;
+            const needsTruncation = truncateLength !== false && responseText.length > truncateLength;
+            const displayText =
+              truncateLength !== false && (!expandable || !isExpanded)
+                ? truncateText(responseText, truncateLength)
+                : responseText;
 
             return (
               <motion.div
@@ -62,11 +99,21 @@ export function ChatHistory({ history, maxHeight = "max-h-72", onSelect, reduced
                     role="button"
                     tabIndex={0}
                     className="max-w-[82%] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 rounded-2xl cursor-pointer"
-                    onClick={() => onSelect?.(entry)}
+                    onClick={() => {
+                      if (expandable) {
+                        setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
+                      } else {
+                        onSelect?.(entry);
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        onSelect?.(entry);
+                        if (expandable) {
+                          setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
+                        } else {
+                          onSelect?.(entry);
+                        }
                       }
                     }}
                   >
@@ -79,19 +126,43 @@ export function ChatHistory({ history, maxHeight = "max-h-72", onSelect, reduced
                   role="button"
                   tabIndex={0}
                   className="max-w-[88%] text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 rounded-2xl cursor-pointer"
-                  onClick={() => onSelect?.(entry)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
+                  onClick={() => {
+                    if (expandable) {
+                      setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
+                    } else {
                       onSelect?.(entry);
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      if (expandable) {
+                        setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
+                      } else {
+                        onSelect?.(entry);
+                      }
+                    }
+                  }}
                 >
-                  <AIMessage
-                    content={truncateLength === false ? entry.result.answer : truncateText(entry.result.answer, truncateLength)}
-                    model={entry.result.model}
-                    tone="assistant"
-                  />
+                  <div className="space-y-1.5">
+                    <AIMessage
+                      content={displayText}
+                      model={entry.result.model}
+                      tone="assistant"
+                    />
+                    {expandable && needsTruncation && !isExpanded ? (
+                      <p className="flex items-center gap-1 px-4 pb-2 text-[11px] font-medium text-blue-600">
+                        <ChevronDown className="h-3 w-3" />
+                        Ver más
+                      </p>
+                    ) : null}
+                    {expandable && isExpanded ? (
+                      <p className="flex items-center gap-1 px-4 pb-2 text-[11px] font-medium text-slate-400">
+                        <ChevronDown className="h-3 w-3 rotate-180" />
+                        Ver menos
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
 
                 {/* Timestamp divider */}

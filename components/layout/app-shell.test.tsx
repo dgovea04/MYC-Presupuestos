@@ -98,6 +98,7 @@ describe("AppShell", () => {
       defaultGeneralExpensesRate: 0.1,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: ["Estructuras"],
+      aiProviderPreference: "auto",
     });
     vi.mocked(getEffectiveUserLicense).mockResolvedValue({
       availableFeatures: ["exports.basic"],
@@ -157,6 +158,7 @@ describe("AppShell", () => {
           defaultGeneralExpensesRate: 0.1,
           defaultUtilityRate: 0.08,
           defaultSubBudgetNames: ["Arquitectura"],
+          aiProviderPreference: "auto",
         },
       }),
     );

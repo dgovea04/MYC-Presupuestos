@@ -6,6 +6,7 @@ import { Settings2 } from "lucide-react";
 import { CompanyProfileCard } from "@/components/settings/company-profile-card";
 import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
 import { CloudAiSettingsCard } from "@/components/settings/cloud-ai-settings-card";
+import { FloatingKhipuSettingsCard } from "@/components/settings/floating-khipu-settings-card";
 import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
@@ -74,6 +75,16 @@ export function SettingsPageContent({
 
           <CloudAiSettingsCard />
 
+          <FloatingKhipuSettingsCard
+            settings={settings}
+            onSaved={(khipu) => {
+              setSettings({ ...settings, ...khipu });
+              // Broadcast to the floating assistant (which sits outside
+              // the FormattingSettingsProvider context tree).
+              window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: khipu }));
+            }}
+          />
+
           <Card className="border-slate-200">
             <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#fffdf8_0%,#fffaf0_100%)]">
               <div className="flex items-center gap-3">
@@ -119,7 +130,15 @@ export function SettingsPageContent({
                   previewValue={`${settings.excelRowHeight}px`}
                 />
               </div>
-              <UserSettingsForm initialSettings={settings} onSaved={setSettings} />
+              <UserSettingsForm
+                initialSettings={settings}
+                onSaved={(saved) => {
+                  setSettings(saved);
+                  // Broadcast to the floating assistant so it picks up
+                  // currency, decimals, date format, and other general settings.
+                  window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: saved }));
+                }}
+              />
             </CardContent>
           </Card>
         </div>

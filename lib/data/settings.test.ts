@@ -7,6 +7,7 @@ import {
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   DEFAULT_VIEW_MODE,
+  FLOATING_KHIPU_DEFAULTS,
 } from "@/types/settings";
 
 const { queryRawMock } = vi.hoisted(() => ({
@@ -21,6 +22,21 @@ vi.mock("@/lib/db/prisma", () => ({
 
 import { defaultUserSettings, getUserSettings, updateUserSettings } from "@/lib/data/settings";
 
+type ColumnSupportFlags = {
+  defaultSubBudgetNames?: boolean;
+  dateFormat?: boolean;
+  defaultViewMode?: boolean;
+  excelShowFieldBorders?: boolean;
+  excelRowHeight?: boolean;
+  aiProviderPreference?: boolean;
+  floatingKhipuProvider?: boolean;
+  floatingKhipuWidth?: boolean;
+  floatingKhipuHeight?: boolean;
+  floatingKhipuFontSize?: boolean;
+  floatingKhipuPosition?: boolean;
+  floatingKhipuTheme?: boolean;
+};
+
 function mockUserSettingsColumnSupport({
   defaultSubBudgetNames = true,
   dateFormat = true,
@@ -28,27 +44,43 @@ function mockUserSettingsColumnSupport({
   excelShowFieldBorders = true,
   excelRowHeight = true,
   aiProviderPreference = false,
-}: {
-  defaultSubBudgetNames?: boolean;
-  dateFormat?: boolean;
-  defaultViewMode?: boolean;
-  excelShowFieldBorders?: boolean;
-  excelRowHeight?: boolean;
-  aiProviderPreference?: boolean;
-}) {
+  floatingKhipuProvider = false,
+  floatingKhipuWidth = false,
+  floatingKhipuHeight = false,
+  floatingKhipuFontSize = false,
+  floatingKhipuPosition = false,
+  floatingKhipuTheme = false,
+}: ColumnSupportFlags) {
   queryRawMock
     .mockResolvedValueOnce([{ exists: defaultSubBudgetNames }])
     .mockResolvedValueOnce([{ exists: dateFormat }])
     .mockResolvedValueOnce([{ exists: defaultViewMode }])
     .mockResolvedValueOnce([{ exists: excelShowFieldBorders }])
     .mockResolvedValueOnce([{ exists: excelRowHeight }])
-    .mockResolvedValueOnce([{ exists: aiProviderPreference }]);
+    .mockResolvedValueOnce([{ exists: aiProviderPreference }])
+    .mockResolvedValueOnce([{ exists: floatingKhipuProvider }])
+    .mockResolvedValueOnce([{ exists: floatingKhipuWidth }])
+    .mockResolvedValueOnce([{ exists: floatingKhipuHeight }])
+    .mockResolvedValueOnce([{ exists: floatingKhipuFontSize }])
+    .mockResolvedValueOnce([{ exists: floatingKhipuPosition }])
+    .mockResolvedValueOnce([{ exists: floatingKhipuTheme }]);
 }
+
+const DEFAULT_FLOATING_KHIPU_FIELDS = {
+  floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+  floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+  floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+  floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+  floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+  floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+};
 
 describe("user settings data", () => {
   beforeEach(() => {
     queryRawMock.mockReset();
   });
+
+  // ─── getUserSettings tests ──────────────────────────────────
 
   it("returns fallback defaults when there is no user settings row", async () => {
     mockUserSettingsColumnSupport({});
@@ -68,10 +100,11 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
     expect(settings).not.toBe(defaultUserSettings);
-    expect(queryRawMock).toHaveBeenCalledTimes(7);
-    expect(queryRawMock.mock.calls[6]?.[2]).toBe("user-1");
+    expect(queryRawMock).toHaveBeenCalledTimes(13);
+    expect(queryRawMock.mock.calls[12]?.[8]).toBe("user-1");
     expect(defaultUserSettings).toEqual({
       defaultCurrency: "PEN",
       currencyDecimals: 2,
@@ -84,6 +117,7 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
   });
 
@@ -94,6 +128,7 @@ describe("user settings data", () => {
       defaultViewMode: false,
       excelShowFieldBorders: false,
       excelRowHeight: false,
+      floatingKhipuTheme: false,
     });
     queryRawMock.mockResolvedValueOnce([
         {
@@ -117,13 +152,14 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
   });
 
   it("returns all settings fields from an existing user settings row", async () => {
     const customSubBudgets = ["Estructuras", "Arquitectura"];
 
-    mockUserSettingsColumnSupport({});
+    mockUserSettingsColumnSupport({ floatingKhipuTheme: true });
     queryRawMock.mockResolvedValueOnce([
         {
           defaultCurrency: "USD",
@@ -136,6 +172,7 @@ describe("user settings data", () => {
           defaultGeneralExpensesRate: 0.12,
           defaultUtilityRate: 0.09,
           defaultSubBudgetNames: customSubBudgets,
+          floatingKhipuTheme: "dark",
         },
       ]);
 
@@ -151,6 +188,12 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: customSubBudgets,
       aiProviderPreference: "auto",
+      floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+      floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+      floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+      floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+      floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+      floatingKhipuTheme: "dark",
     });
   });
 
@@ -184,8 +227,9 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
-    expect(queryRawMock).toHaveBeenCalledTimes(7);
+    expect(queryRawMock).toHaveBeenCalledTimes(13);
   });
 
   it("falls back to default date format when the legacy database has no dateFormat column", async () => {
@@ -221,6 +265,7 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.09,
       defaultSubBudgetNames: customSubBudgets,
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
   });
 
@@ -301,6 +346,7 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
 
     await expect(getUserSettings("invalid-currency")).resolves.toEqual({
@@ -315,6 +361,7 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
 
     await expect(getUserSettings("invalid-decimals")).resolves.toEqual({
@@ -329,6 +376,7 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.07,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
 
     await expect(getUserSettings("coerced-decimals")).resolves.toEqual({
@@ -343,8 +391,155 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
   });
+
+  // ─── getUserSettings: floating Khipu fields ─────────────────
+
+  it("returns floating Khipu defaults when columns are missing", async () => {
+    mockUserSettingsColumnSupport({
+      floatingKhipuProvider: false,
+      floatingKhipuWidth: false,
+      floatingKhipuHeight: false,
+      floatingKhipuFontSize: false,
+      floatingKhipuPosition: false,
+    });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      },
+    ]);
+
+    await expect(getUserSettings("no-floating-cols")).resolves.toEqual({
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      dateFormat: DEFAULT_DATE_FORMAT,
+      defaultViewMode: DEFAULT_VIEW_MODE,
+      excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+      excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      aiProviderPreference: "auto",
+      floatingKhipuProvider: "ollama",
+      floatingKhipuWidth: 600,
+      floatingKhipuHeight: 500,
+      floatingKhipuFontSize: "normal",
+      floatingKhipuPosition: "bottom-right",
+      floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+    });
+  });
+
+  it("reads custom floating Khipu values from the database when columns exist", async () => {
+    mockUserSettingsColumnSupport({
+      floatingKhipuProvider: true,
+      floatingKhipuWidth: true,
+      floatingKhipuHeight: true,
+      floatingKhipuFontSize: true,
+      floatingKhipuPosition: true,
+    });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        floatingKhipuProvider: "openai",
+        floatingKhipuWidth: 500,
+        floatingKhipuHeight: 400,
+        floatingKhipuFontSize: "compact",
+        floatingKhipuPosition: "top-left",
+      },
+    ]);
+
+    await expect(getUserSettings("floating-custom")).resolves.toEqual({
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      dateFormat: DEFAULT_DATE_FORMAT,
+      defaultViewMode: DEFAULT_VIEW_MODE,
+      excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+      excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      aiProviderPreference: "auto",
+      floatingKhipuProvider: "openai",
+      floatingKhipuWidth: 500,
+      floatingKhipuHeight: 400,
+      floatingKhipuFontSize: "compact",
+      floatingKhipuPosition: "top-left",
+      floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+    });
+  });
+
+  it("falls back to defaults for unrecognized floating Khipu values", async () => {
+    mockUserSettingsColumnSupport({
+      floatingKhipuProvider: true,
+      floatingKhipuWidth: true,
+      floatingKhipuHeight: true,
+      floatingKhipuFontSize: true,
+      floatingKhipuPosition: true,
+    });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        floatingKhipuProvider: "invalid_provider",
+        floatingKhipuWidth: "not-a-number",
+        floatingKhipuHeight: null,
+        floatingKhipuFontSize: "huge",
+        floatingKhipuPosition: "center",
+      },
+    ]);
+
+    await expect(getUserSettings("floating-bad")).resolves.toEqual({
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      dateFormat: DEFAULT_DATE_FORMAT,
+      defaultViewMode: DEFAULT_VIEW_MODE,
+      excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+      excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      aiProviderPreference: "auto",
+      floatingKhipuProvider: "ollama",
+      floatingKhipuWidth: 600,
+      floatingKhipuHeight: 500,
+      floatingKhipuFontSize: "normal",
+      floatingKhipuPosition: "bottom-right",
+      floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+    });
+  });
+
+  // ─── updateUserSettings tests ────────────────────────────────
 
   it("falls back to in-memory defaults for missing columns when update writes to a legacy table", async () => {
     const customSubBudgets = ["Obra", "Drenajes"];
@@ -379,6 +574,12 @@ describe("user settings data", () => {
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: customSubBudgets,
         aiProviderPreference: "auto",
+        floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+        floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+        floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+        floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+        floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+        floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
       }),
     ).resolves.toEqual({
       defaultCurrency: "USD",
@@ -392,9 +593,10 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: customSubBudgets,
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
 
-    expect(queryRawMock).toHaveBeenCalledTimes(7);
+    expect(queryRawMock).toHaveBeenCalledTimes(13);
   });
 
   it("persists and returns all settings fields", async () => {
@@ -403,6 +605,13 @@ describe("user settings data", () => {
         async (
           _query,
           _aiProviderColumn,
+          _floatingKhipuProviderColumn,
+          _floatingKhipuWidthColumn,
+          _floatingKhipuHeightColumn,
+          _floatingKhipuFontSizeColumn,
+          _floatingKhipuPositionColumn,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuThemeColumn,
           id,
           userId,
           defaultCurrency,
@@ -418,9 +627,45 @@ describe("user settings data", () => {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Prisma.empty tagged template arg shift
           _aiProviderValue,
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuProviderValue,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuWidthValue,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuHeightValue,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuFontSizeValue,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuPositionValue,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuThemeValue,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           _aiProviderConflict,
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuProviderConflict,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuWidthConflict,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuHeightConflict,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuFontSizeConflict,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuPositionConflict,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuThemeConflict,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           _aiProviderReturning,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuProviderReturning,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuWidthReturning,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuHeightReturning,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuFontSizeReturning,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuPositionReturning,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _floatingKhipuThemeReturning,
         ) => {
           expect(typeof id).toBe("string");
           expect(userId).toBe("user-2");
@@ -465,6 +710,12 @@ describe("user settings data", () => {
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
         aiProviderPreference: "auto",
+        floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+        floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+        floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+        floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+        floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+        floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
       }),
     ).resolves.toEqual({
       defaultCurrency: "USD",
@@ -478,9 +729,10 @@ describe("user settings data", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
 
-    expect(queryRawMock).toHaveBeenCalledTimes(7);
+    expect(queryRawMock).toHaveBeenCalledTimes(13);
   });
 
   it("normalizes Prisma.Decimal-backed rate fields from write returns", async () => {
@@ -515,19 +767,26 @@ describe("user settings data", () => {
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: customSubBudgets,
         aiProviderPreference: "auto",
+        floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+        floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+        floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+        floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+        floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+        floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
       }),
     ).resolves.toEqual({
-        defaultCurrency: "USD",
-        currencyDecimals: 2,
-        dateFormat: "DD_MM",
-        defaultViewMode: "excel",
-        excelShowFieldBorders: false,
-        excelRowHeight: 45,
-        defaultIgvRate: 0.18,
+      defaultCurrency: "USD",
+      currencyDecimals: 2,
+      dateFormat: "DD_MM",
+      defaultViewMode: "excel",
+      excelShowFieldBorders: false,
+      excelRowHeight: 45,
+      defaultIgvRate: 0.18,
       defaultGeneralExpensesRate: 0.12,
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: customSubBudgets,
       aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
   });
 
@@ -548,7 +807,282 @@ describe("user settings data", () => {
         defaultUtilityRate: 0.08,
         defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
         aiProviderPreference: "auto",
+        floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+        floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+        floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+        floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+        floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+        floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
       }),
     ).rejects.toThrow("Failed to persist user settings");
+  });
+
+  // ─── updateUserSettings: floating Khipu persistence ──────────
+
+  it("persists and returns custom floating Khipu values", async () => {
+    mockUserSettingsColumnSupport({
+      floatingKhipuProvider: true,
+      floatingKhipuWidth: true,
+      floatingKhipuHeight: true,
+      floatingKhipuFontSize: true,
+      floatingKhipuPosition: true,
+    });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        floatingKhipuProvider: "gemini",
+        floatingKhipuWidth: 700,
+        floatingKhipuHeight: 550,
+        floatingKhipuFontSize: "large",
+        floatingKhipuPosition: "top-right",
+      },
+    ]);
+
+    await expect(
+      updateUserSettings("float-write", {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: "gemini",
+        floatingKhipuWidth: 700,
+        floatingKhipuHeight: 550,
+        floatingKhipuFontSize: "large",
+        floatingKhipuPosition: "top-right",
+      }),
+    ).resolves.toEqual({
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      dateFormat: DEFAULT_DATE_FORMAT,
+      defaultViewMode: DEFAULT_VIEW_MODE,
+      excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+      excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      aiProviderPreference: "auto",
+      floatingKhipuProvider: "gemini",
+      floatingKhipuWidth: 700,
+      floatingKhipuHeight: 550,
+      floatingKhipuFontSize: "large",
+      floatingKhipuPosition: "top-right",
+      floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+    });
+  });
+
+  it("returns defaults for floating Khipu fields when write columns are missing", async () => {
+    mockUserSettingsColumnSupport({
+      floatingKhipuProvider: false,
+      floatingKhipuWidth: false,
+      floatingKhipuHeight: false,
+      floatingKhipuFontSize: false,
+      floatingKhipuPosition: false,
+    });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      },
+    ]);
+
+    await expect(
+      updateUserSettings("float-write-legacy", {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: "gemini",
+        floatingKhipuWidth: 700,
+        floatingKhipuHeight: 550,
+        floatingKhipuFontSize: "large",
+        floatingKhipuPosition: "top-right",
+        floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+      }),
+    ).resolves.toEqual({
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      dateFormat: DEFAULT_DATE_FORMAT,
+      defaultViewMode: DEFAULT_VIEW_MODE,
+      excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+      excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
+    });
+  });
+
+  // ─── floating Khipu theme tests ───────────────────────────────
+
+  it("returns default light theme when column is missing", async () => {
+    mockUserSettingsColumnSupport({ floatingKhipuTheme: false });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      },
+    ]);
+
+    await expect(getUserSettings("no-theme-col")).resolves.toEqual({
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      dateFormat: DEFAULT_DATE_FORMAT,
+      defaultViewMode: DEFAULT_VIEW_MODE,
+      excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+      excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      aiProviderPreference: "auto",
+      ...DEFAULT_FLOATING_KHIPU_FIELDS,
+    });
+  });
+
+  it("reads custom dark theme from database", async () => {
+    mockUserSettingsColumnSupport({ floatingKhipuTheme: true });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        floatingKhipuTheme: "dark",
+      },
+    ]);
+
+    await expect(getUserSettings("dark-theme")).resolves.toEqual({
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      dateFormat: DEFAULT_DATE_FORMAT,
+      defaultViewMode: DEFAULT_VIEW_MODE,
+      excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+      excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+      aiProviderPreference: "auto",
+      floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+      floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+      floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+      floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+      floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+      floatingKhipuTheme: "dark",
+    });
+  });
+
+  it("falls back to light theme for unrecognized value", async () => {
+    mockUserSettingsColumnSupport({ floatingKhipuTheme: true });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        floatingKhipuTheme: "blue",
+      },
+    ]);
+
+    await expect(getUserSettings("bad-theme")).resolves.toMatchObject({
+      floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+    });
+  });
+
+  it("persists dark theme via updateUserSettings", async () => {
+    mockUserSettingsColumnSupport({ floatingKhipuTheme: true });
+    queryRawMock.mockResolvedValueOnce([
+      {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        floatingKhipuTheme: "dark",
+      },
+    ]);
+
+    await expect(
+      updateUserSettings("theme-write", {
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: DEFAULT_DATE_FORMAT,
+        defaultViewMode: DEFAULT_VIEW_MODE,
+        excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
+        excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+        floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+        floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+        floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+        floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+        floatingKhipuTheme: "dark",
+      }),
+    ).resolves.toMatchObject({
+      floatingKhipuTheme: "dark",
+    });
   });
 });

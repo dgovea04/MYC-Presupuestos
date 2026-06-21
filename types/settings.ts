@@ -24,6 +24,24 @@ export const DEFAULT_EXCEL_ROW_HEIGHT = 52;
 export const AI_PROVIDER_OPTIONS = ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"] as const;
 export type AiProviderPreference = (typeof AI_PROVIDER_OPTIONS)[number];
 
+export const FLOATING_KHIPU_POSITIONS = ["bottom-right", "bottom-left", "top-right", "top-left"] as const;
+export type FloatingKhipuPosition = (typeof FLOATING_KHIPU_POSITIONS)[number];
+
+export const FLOATING_KHIPU_FONT_SIZES = ["compact", "normal", "large"] as const;
+export type FloatingKhipuFontSize = (typeof FLOATING_KHIPU_FONT_SIZES)[number];
+
+export const FLOATING_KHIPU_THEMES = ["light", "dark"] as const;
+export type FloatingKhipuTheme = (typeof FLOATING_KHIPU_THEMES)[number];
+
+export const FLOATING_KHIPU_DEFAULTS = {
+  provider: "ollama" as AiProviderPreference,
+  width: 600,
+  height: 500,
+  fontSize: "normal" as FloatingKhipuFontSize,
+  position: "bottom-right" as FloatingKhipuPosition,
+  theme: "light" as FloatingKhipuTheme,
+} as const;
+
 export type UserSettingsRecord = {
   defaultCurrency: "PEN" | "USD";
   currencyDecimals: number;
@@ -40,4 +58,10 @@ export type UserSettingsRecord = {
   aiProviderPreference: AiProviderPreference;
   openaiModel?: string;
   geminiModel?: string;
+  floatingKhipuProvider: AiProviderPreference;
+  floatingKhipuWidth: number;
+  floatingKhipuHeight: number;
+  floatingKhipuFontSize: FloatingKhipuFontSize;
+  floatingKhipuPosition: FloatingKhipuPosition;
+  floatingKhipuTheme: FloatingKhipuTheme;
 };

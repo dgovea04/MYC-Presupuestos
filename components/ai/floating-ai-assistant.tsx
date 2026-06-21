@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AiAssistantPanel } from "@/components/ai/ai-assistant-panel";
@@ -8,19 +8,113 @@ import { useActiveAiViewContext, type AiViewContextValue } from "@/components/ai
 import { useAiAssistantController } from "@/components/ai/use-ai-assistant-controller";
 import { KhipuChatPanel } from "@/components/khipu/KhipuChatPanel";
 import { KhipuFloatingButton } from "@/components/khipu/KhipuFloatingButton";
+import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useResizablePanel } from "@/hooks/use-resizable-panel";
+import { mergeKhipuFields } from "@/lib/settings/khipu-fields";
+import type { FloatingKhipuFontSize, FloatingKhipuPosition, FloatingKhipuTheme } from "@/types/settings";
 
 type FloatingAiAssistantProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
+const FONT_SIZE_MAP: Record<FloatingKhipuFontSize, string> = {
+  compact: "text-[11px]",
+  normal: "text-sm",
+  large: "text-base",
+};
+
+const THEME_STORAGE_KEY = "myc-khipu-theme";
+
+function readStoredTheme(): FloatingKhipuTheme | null {
+  if (typeof window === "undefined") return null;
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === "light" || stored === "dark") return stored;
+  return null;
+}
+
+const POSITION_STYLE: Record<FloatingKhipuPosition, React.CSSProperties> = {
+  "bottom-right": { right: "1.25rem", bottom: "1.25rem" },
+  "bottom-left": { left: "1.25rem", bottom: "1.25rem" },
+  "top-right": { right: "1.25rem", top: "1.25rem" },
+  "top-left": { left: "1.25rem", top: "1.25rem" },
+};
+
 export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantProps) {
   const viewContext = useActiveAiViewContext();
   const controllerKey = readViewContextIdentity(viewContext);
   const prefersReducedMotion = useReducedMotion();
-  const { size, onResizeStart } = useResizablePanel("myc-khipu-panel-size-v2");
+  const formatSettings = useFormattingSettings();
+  // Local state seeded from context, updated via CustomEvent from settings page.
+  // This is needed because FloatingAiAssistant renders outside FormattingSettingsProvider
+  // (as a sibling of page content in GlobalAiAssistantProvider), so useFormattingSettings()
+  // always returns the default context value.
+  const [khipuSettings, setKhipuSettings] = useState(formatSettings);
+  const { size, onResizeStart } = useResizablePanel("myc-khipu-panel-size-v2", {
+    width: khipuSettings.floatingKhipuWidth,
+    height: khipuSettings.floatingKhipuHeight,
+  });
   const [expanded, setExpanded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyCount, setHistoryCount] = useState(0);
+  const [theme, setTheme] = useState<FloatingKhipuTheme>(() => readStoredTheme() ?? khipuSettings.floatingKhipuTheme);
+
+  // Fetch real settings from the API on mount so the floating panel doesn't
+  // show factory defaults before the user opens the settings page.
+  // Best-effort: if the fetch fails (e.g. unauthenticated landing page),
+  // the component keeps the context-seeded defaults.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings")
+      .then((res) => {
+        if (!res.ok) throw new Error(`Settings fetch failed (${res.status})`);
+        return res.json();
+      })
+      .then((data: unknown) => {
+        if (cancelled || !data || typeof data !== "object") return;
+        setKhipuSettings((prev) => mergeKhipuFields(prev, data as Record<string, unknown>));
+      })
+      .catch(() => {
+        // Silently keep defaults — the user may not be authenticated yet
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Listen for settings changes broadcast from the settings page.
+  // The settings page dispatches a CustomEvent after saving Khipu settings
+  // (or general settings from UserSettingsForm), allowing this component to
+  // stay in sync even though it's outside FormattingSettingsProvider.
+  useEffect(() => {
+    const handleSettingsChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && typeof detail === "object") {
+        setKhipuSettings((prev) => mergeKhipuFields(prev, detail as Record<string, unknown>));
+      }
+    };
+    window.addEventListener("khipu-settings-changed", handleSettingsChange);
+    return () => window.removeEventListener("khipu-settings-changed", handleSettingsChange);
+  }, []);
+
+  // Sync local theme when settings change externally (e.g., from settings page).
+  // Skip the initial mount so localStorage persistence isn't wiped on page load.
+  // Clear localStorage so settings-driven changes take priority over stale toggle values on reload.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    setTheme(khipuSettings.floatingKhipuTheme);
+    window.localStorage.removeItem(THEME_STORAGE_KEY);
+  }, [khipuSettings.floatingKhipuTheme]);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme((t) => {
+      const next = t === "dark" ? "light" : "dark";
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
 
   const panelTransition = prefersReducedMotion
     ? { duration: 0 }
@@ -30,10 +124,13 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
     ? { duration: 0 }
     : { type: "spring" as const, stiffness: 400, damping: 25 };
 
-  // When expanded, the container spans the full viewport like a modal
+  // Apply position and size from settings; expanded spans full viewport
+  const positionStyle = POSITION_STYLE[khipuSettings.floatingKhipuPosition];
   const containerStyle = expanded
     ? { position: "fixed" as const, inset: "1rem" }
-    : { position: "fixed" as const, right: "1.25rem", bottom: "1.25rem" };
+    : { position: "fixed" as const, ...positionStyle };
+
+  const fontSizeClass = FONT_SIZE_MAP[khipuSettings.floatingKhipuFontSize];
 
   return (
     <div
@@ -56,7 +153,13 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
             <KhipuChatPanel
               className={cn("pointer-events-auto", expanded && "h-full w-full")}
               style={expanded ? undefined : { width: size.width, maxHeight: size.height }}
+              fontSizeClass={fontSizeClass}
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
               expanded={expanded}
+              showHistory={showHistory}
+              historyCount={historyCount}
+              onToggleHistory={() => setShowHistory(!showHistory)}
               onExpand={() => setExpanded(!expanded)}
               onClose={() => onOpenChange(false)}
             >
@@ -80,8 +183,8 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
               </div>
               ) : null}
               <div className="space-y-4 p-4">
-                <FloatingContextSummary viewContext={viewContext} />
-                <FloatingAiAssistantBody key={controllerKey} viewContext={viewContext} reducedMotion={prefersReducedMotion} />
+                {!showHistory ? <FloatingContextSummary viewContext={viewContext} theme={theme} /> : null}
+                <FloatingAiAssistantBody key={controllerKey} viewContext={viewContext} reducedMotion={prefersReducedMotion} showHistory={showHistory} onHistoryCountChange={setHistoryCount} initialProvider={khipuSettings.floatingKhipuProvider} />
               </div>
             </KhipuChatPanel>
           </motion.div>
@@ -102,24 +205,40 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
   );
 }
 
-function FloatingAiAssistantBody({ viewContext, reducedMotion }: { viewContext: ReturnType<typeof useActiveAiViewContext>; reducedMotion: boolean | null }) {
+function FloatingAiAssistantBody({ viewContext, reducedMotion, showHistory, onHistoryCountChange, initialProvider }: { viewContext: ReturnType<typeof useActiveAiViewContext>; reducedMotion: boolean | null; showHistory: boolean; onHistoryCountChange: (count: number) => void; initialProvider?: string }) {
   const controller = useAiAssistantController({
     projectId: viewContext.projectId,
     initialAction: "chat",
     initialContext: viewContext,
+    initialProvider,
   });
 
-  return <AiAssistantPanel controller={controller} layout="floating" reducedMotion={reducedMotion ?? false} />;
+  useEffect(() => {
+    onHistoryCountChange(controller.history.length);
+  }, [controller.history.length, onHistoryCountChange]);
+
+  return <AiAssistantPanel controller={controller} layout="floating" reducedMotion={reducedMotion ?? false} showHistory={showHistory} />;
 }
 
-function FloatingContextSummary({ viewContext }: { viewContext: AiViewContextValue }) {
+function FloatingContextSummary({ viewContext, theme }: { viewContext: AiViewContextValue; theme?: string }) {
   const moduleLabel = viewContext.module ?? "Contexto general";
   const detail = viewContext.selectedItem ?? viewContext.viewSummary ?? "Sin seleccion activa";
+  const isDark = theme === "dark";
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{moduleLabel}</p>
-      <p className="mt-1 text-sm font-medium text-slate-900">{detail}</p>
+    <div className={cn(
+      "relative rounded-2xl border px-4 py-3 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] transition-colors duration-300",
+      isDark ? "border-slate-700" : "border-slate-200",
+    )}>
+      {/* Dark gradient overlay — fades in/out via opacity */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 rounded-2xl bg-[linear-gradient(180deg,#1e293b_0%,#0f172a_100%)] transition-opacity duration-300",
+          isDark ? "opacity-100" : "opacity-0",
+        )}
+      />
+      <p className={cn("relative z-10 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-500")}>{moduleLabel}</p>
+      <p className={cn("relative z-10 mt-1 text-sm font-medium transition-colors duration-300", isDark ? "text-slate-100" : "text-slate-900")}>{detail}</p>
     </div>
   );
 }

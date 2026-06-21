@@ -12,15 +12,15 @@ import {
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     budget: {
-      findFirst: vi.fn(),
-      findMany: vi.fn(),
+      findFirst: vi.fn() as any,
+      findMany: vi.fn() as any,
     },
     riskVariable: {
-      findMany: vi.fn(),
+      findMany: vi.fn() as any,
     },
     riskSimulationRun: {
-      create: vi.fn(),
-      findFirst: vi.fn(),
+      create: vi.fn() as any,
+      findFirst: vi.fn() as any,
     },
   },
 }));
@@ -84,21 +84,21 @@ describe("risk analysis validation", () => {
       kind: "SUB_BUDGET",
       name: "Estructuras",
       items: [createBudgetItem({ id: "item-1", budgetId: "budget-1" })],
-    });
+    } as any);
     vi.mocked(prisma.riskVariable.findMany).mockResolvedValueOnce([
       createRiskVariable({ id: "risk-1", budgetItemId: "item-1" }),
     ]);
-    vi.mocked(prisma.riskSimulationRun.create).mockImplementationOnce(async (args) => ({
+    vi.mocked(prisma.riskSimulationRun.create).mockImplementationOnce(((args: any) => ({
       ...createRiskRun({ id: "run-1", budgetId: "budget-1" }),
       ...args.data,
       createdAt: baseDate,
-    }));
+    })) as any);
 
     const summary = await saveRiskSimulationRun("budget-1", "user-1", {
       ...validRunInput,
       baseTotal: 1,
       p95: 999_999_999,
-    });
+    } as any);
 
     expect(summary.baseTotal).toBe(250);
     expect(summary.p95).not.toBe(999_999_999);
@@ -148,7 +148,7 @@ describe("risk analysis validation", () => {
           items: [createBudgetItem({ id: "wrong-project-item", budgetId: "foreign-sub" })],
         },
       ],
-    });
+    } as any);
 
     expect(items.map((item) => item.itemId)).toEqual(["allowed-item"]);
     expect(items[0]).toMatchObject({
@@ -166,7 +166,7 @@ describe("risk analysis validation", () => {
       name: "Presupuesto general",
       items: [],
       childBudgets: [],
-    });
+    } as any);
     vi.mocked(prisma.budget.findMany).mockResolvedValueOnce([
       {
         ...baseBudget,
@@ -176,7 +176,7 @@ describe("risk analysis validation", () => {
         kind: "SUB_BUDGET",
         name: "Estructuras",
         items: [createBudgetItem({ id: "allowed-item", budgetId: "sub-1" })],
-      },
+      } as any,
     ]);
     vi.mocked(prisma.riskVariable.findMany).mockResolvedValueOnce([
       createRiskVariable({ id: "risk-allowed", budgetItemId: "allowed-item" }),
@@ -214,7 +214,7 @@ describe("risk analysis validation", () => {
       kind: "SUB_BUDGET",
       name: "Estructuras",
       items: [createBudgetItem({ id: "item-1", budgetId: "budget-1" })],
-    });
+    } as any);
     vi.mocked(prisma.riskVariable.findMany).mockResolvedValueOnce([
       {
         ...createRiskVariable({ id: "risk-1", budgetItemId: "item-1" }),
@@ -272,7 +272,7 @@ const baseDate = new Date("2026-05-26T00:00:00.000Z");
 const baseBudget = {
   id: "budget-1",
   projectId: "project-1",
-  parentBudgetId: null,
+  parentBudgetId: null as string | null,
   kind: "SUB_BUDGET" as const,
   name: "Base",
   currency: "PEN",
@@ -333,6 +333,7 @@ function createRiskRun({
   return {
     id,
     budgetId,
+    budget: null as any,
     iterations: MONTE_CARLO_ITERATIONS,
     baseTotal: new Prisma.Decimal(250),
     mean: new Prisma.Decimal(250),

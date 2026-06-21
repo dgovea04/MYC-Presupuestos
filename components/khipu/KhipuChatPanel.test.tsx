@@ -152,4 +152,175 @@ describe("KhipuChatPanel", () => {
     const closeButton = container.querySelector("[data-khipu-close]");
     expect(closeButton).toBeTruthy();
   });
+
+  // ─── Theme tests ────────────────────────────────────────────
+
+  describe("dark theme", () => {
+    it("applies dark container classes when theme=dark", async () => {
+      const container = await render({ children: null, theme: "dark" });
+      const outerDiv = container.firstElementChild as HTMLElement;
+      expect(outerDiv.className).toContain("bg-slate-900");
+      expect(outerDiv.className).toContain("border-slate-700");
+      expect(outerDiv.className).toContain("shadow-slate-950/40");
+    });
+
+    it("applies dark header border when theme=dark", async () => {
+      const container = await render({ children: null, theme: "dark" });
+      const header = container.querySelector("header") as HTMLElement;
+      expect(header).toBeTruthy();
+      expect(header.className).toContain("border-slate-800");
+    });
+
+    it("uses light text for title in dark theme", async () => {
+      const container = await render({ children: null, theme: "dark" });
+      // The title "Khipu IA" is a <p> inside the header
+      const titleEl = [...container.querySelectorAll("p")].find(
+        (el) => el.textContent === "Khipu IA",
+      ) as HTMLElement;
+      expect(titleEl).toBeTruthy();
+      expect(titleEl.className).toContain("text-slate-100");
+    });
+
+    it("uses muted text for subtitle in dark theme", async () => {
+      const container = await render({ children: null, theme: "dark" });
+      const subtitleEl = [...container.querySelectorAll("p")].find(
+        (el) => el.textContent === "Tu asistente en MC Presupuestos",
+      ) as HTMLElement;
+      expect(subtitleEl).toBeTruthy();
+      expect(subtitleEl.className).toContain("text-slate-400");
+    });
+
+    it("does NOT contain light container classes when theme=dark", async () => {
+      const container = await render({ children: null, theme: "dark" });
+      const outerDiv = container.firstElementChild as HTMLElement;
+      expect(outerDiv.className).not.toContain("bg-white");
+      expect(outerDiv.className).not.toContain("border-slate-200");
+    });
+
+    it("applies dark text to body when theme=dark", async () => {
+      const container = await render({ children: <p>Mensaje</p>, theme: "dark" });
+      const bodyDiv = container.querySelector('[class*="overflow-y-auto"]') as HTMLElement;
+      expect(bodyDiv).toBeTruthy();
+      expect(bodyDiv.className).toContain("text-slate-100");
+    });
+  });
+
+  describe("light theme (default)", () => {
+    it("applies light container classes by default (no theme prop)", async () => {
+      const container = await render({ children: null });
+      const outerDiv = container.firstElementChild as HTMLElement;
+      expect(outerDiv.className).toContain("bg-white");
+      expect(outerDiv.className).toContain("border-slate-200");
+      expect(outerDiv.className).toContain("shadow-slate-900/10");
+    });
+
+    it("applies light header border by default", async () => {
+      const container = await render({ children: null });
+      const header = container.querySelector("header") as HTMLElement;
+      expect(header).toBeTruthy();
+      expect(header.className).toContain("border-slate-100");
+    });
+
+    it("does NOT contain dark container classes when theme=light", async () => {
+      const container = await render({ children: null, theme: "light" });
+      const outerDiv = container.firstElementChild as HTMLElement;
+      expect(outerDiv.className).not.toContain("bg-slate-900");
+      expect(outerDiv.className).not.toContain("border-slate-700");
+    });
+  });
+
+  // ─── Theme toggle button tests ──────────────────────────────
+
+  describe("theme toggle button", () => {
+    it("does not render toggle when onToggleTheme is not provided", async () => {
+      const container = await render({ children: null });
+      const toggle = container.querySelector('[aria-label="Cambiar a tema oscuro"]');
+      expect(toggle).toBeNull();
+    });
+
+    it("renders toggle with Moon icon when onToggleTheme is provided and theme is light (default)", async () => {
+      const container = await render({ children: null, onToggleTheme: vi.fn() });
+      const toggle = container.querySelector('[aria-label="Cambiar a tema oscuro"]');
+      expect(toggle).toBeTruthy();
+      // Moon icon renders as SVG
+      expect(toggle!.querySelector("svg")).toBeTruthy();
+    });
+
+    it("calls onToggleTheme when toggle is clicked", async () => {
+      const onToggleTheme = vi.fn();
+      const container = await render({ children: null, onToggleTheme });
+
+      const toggle = container.querySelector('[aria-label="Cambiar a tema oscuro"]') as HTMLButtonElement;
+      await act(async () => toggle.click());
+
+      expect(onToggleTheme).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders toggle with Sun icon when theme is dark", async () => {
+      const container = await render({ children: null, theme: "dark", onToggleTheme: vi.fn() });
+      const toggle = container.querySelector('[aria-label="Cambiar a tema claro"]');
+      expect(toggle).toBeTruthy();
+      // Sun icon renders as SVG
+      expect(toggle!.querySelector("svg")).toBeTruthy();
+    });
+
+    it("uses dark aria-label when theme is dark", async () => {
+      const container = await render({ children: null, theme: "dark", onToggleTheme: vi.fn() });
+      // In dark mode, shows "Cambiar a tema claro" (switch to light)
+      const toggleLight = container.querySelector('[aria-label="Cambiar a tema claro"]');
+      expect(toggleLight).toBeTruthy();
+      // Should NOT show the light-mode label
+      const toggleDark = container.querySelector('[aria-label="Cambiar a tema oscuro"]');
+      expect(toggleDark).toBeNull();
+    });
+
+    it("calls onToggleTheme when dark toggle is clicked", async () => {
+      const onToggleTheme = vi.fn();
+      const container = await render({ children: null, theme: "dark", onToggleTheme });
+
+      const toggle = container.querySelector('[aria-label="Cambiar a tema claro"]') as HTMLButtonElement;
+      await act(async () => toggle.click());
+
+      expect(onToggleTheme).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders toggle alongside close and expand buttons", async () => {
+      const container = await render({
+        children: null,
+        onToggleTheme: vi.fn(),
+        onClose: vi.fn(),
+        onExpand: vi.fn(),
+      });
+      expect(container.querySelector('[aria-label="Cambiar a tema oscuro"]')).toBeTruthy();
+      expect(container.querySelector('[aria-label="Expandir"]')).toBeTruthy();
+      expect(container.querySelector('[aria-label="Cerrar Khipu"]')).toBeTruthy();
+    });
+  });
+
+  // ─── CSS transition tests ───────────────────────────────────
+
+  describe("CSS transitions", () => {
+    it("includes transition-all on the container for smooth theme switch", async () => {
+      const container = await render({ children: null });
+      const outerDiv = container.firstElementChild as HTMLElement;
+      expect(outerDiv.className).toContain("transition-all");
+      expect(outerDiv.className).toContain("duration-300");
+    });
+
+    it("includes transition-colors on the header", async () => {
+      const container = await render({ children: null });
+      const header = container.querySelector("header") as HTMLElement;
+      expect(header).toBeTruthy();
+      expect(header.className).toContain("transition-colors");
+      expect(header.className).toContain("duration-300");
+    });
+
+    it("includes transition-colors on the body", async () => {
+      const container = await render({ children: <p>test</p> });
+      const bodyDiv = container.querySelector('[class*="overflow-y-auto"]') as HTMLElement;
+      expect(bodyDiv).toBeTruthy();
+      expect(bodyDiv.className).toContain("transition-colors");
+      expect(bodyDiv.className).toContain("duration-300");
+    });
+  });
 });

@@ -44,6 +44,7 @@ function createEntry(overrides: Partial<AiHistoryEntry> = {}): AiHistoryEntry {
     result: {
       answer: "Respuesta simulada de Khipu con criterio tecnico.",
       model: "llama3.1",
+      requestedModel: "llama3.1",
       fallbackUsed: false,
       warnings: [],
     },
@@ -136,7 +137,7 @@ describe("ChatHistory", () => {
     it("renders Khipu response with answer text", async () => {
       const shortAnswer = "Respuesta breve de Khipu.";
       const container = await renderChatHistory({
-        history: [createEntry({ id: "e1", result: { answer: shortAnswer, model: "llama3.1", fallbackUsed: false, warnings: [] } })],
+        history: [createEntry({ id: "e1", result: { answer: shortAnswer, model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] } })],
       });
 
       // The answer appears inside an <article> rendered by AIMessage
@@ -145,7 +146,7 @@ describe("ChatHistory", () => {
     });
 
     it("calls onSelect with the clicked entry when a user bubble is clicked", async () => {
-      const entry = createEntry({ id: "click-1", summary: "Click me.", result: { answer: "Respuesta.", model: "llama3.1", fallbackUsed: false, warnings: [] } });
+      const entry = createEntry({ id: "click-1", summary: "Click me.", result: { answer: "Respuesta.", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] } });
       const onSelect = vi.fn();
 
       const container = await renderChatHistory({ history: [entry], onSelect });
@@ -161,7 +162,7 @@ describe("ChatHistory", () => {
     });
 
     it("calls onSelect when a Khipu response bubble is clicked", async () => {
-      const entry = createEntry({ id: "click-2", summary: "Pregunta.", result: { answer: "Respuesta Khipu.", model: "llama3.1", fallbackUsed: false, warnings: [] } });
+      const entry = createEntry({ id: "click-2", summary: "Pregunta.", result: { answer: "Respuesta Khipu.", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] } });
       const onSelect = vi.fn();
 
       const container = await renderChatHistory({ history: [entry], onSelect });
@@ -180,7 +181,7 @@ describe("ChatHistory", () => {
       const longAnswer = "A".repeat(500) + "B".repeat(100);
       const entry = createEntry({
         id: "trunc-1",
-        result: { answer: longAnswer, model: "llama3.1", fallbackUsed: false, warnings: [] },
+        result: { answer: longAnswer, model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] },
       });
 
       const container = await renderChatHistory({ history: [entry] });
@@ -201,7 +202,7 @@ describe("ChatHistory", () => {
       const entry = createEntry({
         id: "recent-1",
         timestamp: recentTimestamp,
-        result: { answer: "Respuesta reciente.", model: "llama3.1", fallbackUsed: false, warnings: [] },
+        result: { answer: "Respuesta reciente.", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] },
       });
 
       const container = await renderChatHistory({ history: [entry] });
@@ -214,7 +215,7 @@ describe("ChatHistory", () => {
       const entry = createEntry({
         id: "old-1",
         timestamp: oldTimestamp,
-        result: { answer: "Respuesta vieja.", model: "llama3.1", fallbackUsed: false, warnings: [] },
+        result: { answer: "Respuesta vieja.", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] },
       });
 
       const container = await renderChatHistory({ history: [entry] });
@@ -227,13 +228,13 @@ describe("ChatHistory", () => {
         id: "older",
         summary: "Primer mensaje",
         timestamp: "2026-01-01T10:00:00Z",
-        result: { answer: "Primera respuesta.", model: "llama3.1", fallbackUsed: false, warnings: [] },
+        result: { answer: "Primera respuesta.", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] },
       });
       const entry2 = createEntry({
         id: "newer",
         summary: "Segundo mensaje",
         timestamp: "2026-01-01T11:00:00Z",
-        result: { answer: "Segunda respuesta.", model: "llama3.1", fallbackUsed: false, warnings: [] },
+        result: { answer: "Segunda respuesta.", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] },
       });
 
       const container = await renderChatHistory({ history: [entry2, entry1] });

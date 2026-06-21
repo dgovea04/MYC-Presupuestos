@@ -145,63 +145,30 @@ async function renderPanel(props: Partial<React.ComponentProps<typeof AiAssistan
       }
       return element;
     },
-    getCollapseToggle: () => {
-      // Find the button that starts with "Historial" text in the floating layout
-      const buttons = container.querySelectorAll("button");
-      for (const button of buttons) {
-        const text = button.textContent?.trim() ?? "";
-        if (text.startsWith("Historial")) {
-          return button as HTMLButtonElement;
-        }
-      }
-      throw new Error("Missing collapse toggle button with text starting 'Historial'");
-    },
   };
 }
 
 describe("AiAssistantPanel history collapse", () => {
   describe("floating layout", () => {
-    it("shows ChatHistory by default (not collapsed)", async () => {
+    it("does not render inline ChatHistory in floating layout (history is accessed via header button)", async () => {
       const { container } = await renderPanel({ layout: "floating" });
 
-      // ChatHistory renders entries inside buttons
-      expect(container.textContent).toContain("Consulta e1");
-      expect(container.textContent).toContain("Respuesta uno.");
-      // History count badge should show "2"
-      expect(container.textContent).toContain("2");
-    });
-
-    it("hides ChatHistory when collapse toggle is clicked", async () => {
-      const { container, getCollapseToggle } = await renderPanel({ layout: "floating" });
-
-      await act(async () => {
-        getCollapseToggle().click();
-      });
-
-      // ChatHistory content should be hidden
+      // History entries should NOT appear inline — they're only in the header button overlay
       expect(container.textContent).not.toContain("Consulta e1");
       expect(container.textContent).not.toContain("Respuesta uno.");
-      // But the header row should still be visible
-      expect(container.textContent).toContain("Historial");
+      // The collapse toggle button "Historial" should not exist
+      expect(container.textContent).not.toContain("Historial");
     });
 
-    it("shows ChatHistory again when toggle is clicked twice", async () => {
-      const { container, getCollapseToggle } = await renderPanel({ layout: "floating" });
+    it("shows ChatHistory when showHistory prop is true", async () => {
+      const { container } = await renderPanel({ layout: "floating", showHistory: true });
 
-      // Collapse
-      await act(async () => {
-        getCollapseToggle().click();
-      });
-
-      expect(container.textContent).not.toContain("Consulta e1");
-
-      // Expand
-      await act(async () => {
-        getCollapseToggle().click();
-      });
-
+      // In history-only view, entries should appear
       expect(container.textContent).toContain("Consulta e1");
       expect(container.textContent).toContain("Respuesta uno.");
+      // Clear history button should be present (trash icon, confirm text only on click)
+      const clearButton = container.querySelector('button[aria-label="Limpiar historial"]');
+      expect(clearButton).toBeTruthy();
     });
   });
 
@@ -240,29 +207,29 @@ describe("AiAssistantPanel history collapse", () => {
   });
 
   describe("localStorage persistence", () => {
-    it("starts collapsed when localStorage has collapsed=true", async () => {
+    it("starts collapsed when localStorage has collapsed=true in page layout", async () => {
       window.localStorage.setItem(HISTORY_STORAGE_KEY, "true");
 
-      const { container } = await renderPanel({ layout: "floating" });
+      const { container } = await renderPanel({ layout: "page" });
 
-      // Header visible, chat hidden
-      expect(container.textContent).toContain("Historial");
+      // Heading visible, chat hidden
+      expect(container.textContent).toContain("Actividad reciente de Khipu");
       expect(container.textContent).not.toContain("Consulta e1");
     });
 
-    it("starts expanded when localStorage is empty or false", async () => {
+    it("starts expanded when localStorage is empty or false in page layout", async () => {
       window.localStorage.setItem(HISTORY_STORAGE_KEY, "false");
 
-      const { container } = await renderPanel({ layout: "floating" });
+      const { container } = await renderPanel({ layout: "page" });
 
       expect(container.textContent).toContain("Consulta e1");
     });
 
-    it("persists collapsed state to localStorage on toggle", async () => {
-      const { getCollapseToggle } = await renderPanel({ layout: "floating" });
+    it("persists collapsed state to localStorage on toggle in page layout", async () => {
+      const { getButtonByAriaLabel } = await renderPanel({ layout: "page" });
 
       await act(async () => {
-        getCollapseToggle().click();
+        getButtonByAriaLabel("Colapsar historial").click();
       });
 
       expect(window.localStorage.getItem(HISTORY_STORAGE_KEY)).toBe("true");
@@ -270,63 +237,6 @@ describe("AiAssistantPanel history collapse", () => {
   });
 
   describe("clear history confirmation", () => {
-    it("shows confirmation when Trash2 button is clicked in floating layout", async () => {
-      const { container, getButtonByAriaLabel } = await renderPanel({ layout: "floating" });
-
-      // Confirmation not visible initially
-      expect(container.textContent).not.toContain("¿Limpiar?");
-
-      await act(async () => {
-        getButtonByAriaLabel("Limpiar historial").click();
-      });
-
-      // Confirmation appears
-      expect(container.textContent).toContain("¿Limpiar?");
-      expect(container.textContent).toContain("Limpiar");
-      expect(container.textContent).toContain("Cancelar");
-    });
-
-    it("calls clearHistory when Limpiar is clicked in floating layout", async () => {
-      const clearHistory = vi.fn();
-      const controller = createMockController({ clearHistory });
-      const { getButtonByAriaLabel, getByText } = await renderPanel({
-        controller,
-        layout: "floating",
-      });
-
-      await act(async () => {
-        getButtonByAriaLabel("Limpiar historial").click();
-      });
-
-      await act(async () => {
-        getByText("Limpiar").click();
-      });
-
-      expect(clearHistory).toHaveBeenCalledTimes(1);
-    });
-
-    it("hides confirmation when Cancelar is clicked in floating layout", async () => {
-      const { container, getButtonByAriaLabel } = await renderPanel({ layout: "floating" });
-
-      await act(async () => {
-        getButtonByAriaLabel("Limpiar historial").click();
-      });
-
-      expect(container.textContent).toContain("¿Limpiar?");
-
-      // Find and click Cancelar
-      const cancelButton = [...container.querySelectorAll("button")].find(
-        (btn) => btn.textContent?.trim() === "Cancelar",
-      );
-      await act(async () => {
-        (cancelButton as HTMLButtonElement).click();
-      });
-
-      // Confirmation disappears, Trash2 button visible again
-      expect(container.textContent).not.toContain("¿Limpiar?");
-      expect(getButtonByAriaLabel("Limpiar historial")).toBeTruthy();
-    });
-
     it("shows confirmation when Trash2 button is clicked in page layout", async () => {
       const { container, getButtonByAriaLabel } = await renderPanel({ layout: "page" });
 

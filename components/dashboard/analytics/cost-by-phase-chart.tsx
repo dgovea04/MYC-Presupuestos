@@ -62,9 +62,11 @@ function buildChartData(items: CostByPhaseItem[]): ProjectChartDatum[] {
 function CustomTooltip({
   active,
   payload,
+  label,
 }: {
   active?: boolean;
   payload?: Array<{ name?: string; value?: number; fill?: string }>;
+  label?: string;
 }) {
   if (!active || !payload?.length) return null;
 

@@ -272,6 +272,7 @@ async function renderSheet(
 
 function createSettings(): UserSettingsRecord {
   return {
+    aiProviderPreference: "auto",
     defaultCurrency: "PEN",
     currencyDecimals: 2,
     dateFormat: "DD_MMM_YYYY",

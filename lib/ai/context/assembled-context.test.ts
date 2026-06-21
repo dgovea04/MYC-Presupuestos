@@ -39,7 +39,7 @@ describe("Khipu assembled context", () => {
           {
             id: "history-1",
             summary: "Revision previa",
-            result: { answer: "Validar rendimiento", model: "llama3.1" },
+            result: { answer: "Validar rendimiento", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] },
             timestamp: "2026-06-10T10:00:00.000Z",
           },
         ]),
@@ -96,7 +96,7 @@ describe("Khipu assembled context", () => {
         {
           id: "history-1",
           summary: "Revision previa",
-          result: { answer: "Validar rendimiento", model: "llama3.1" },
+          result: { answer: "Validar rendimiento", model: "llama3.1", requestedModel: "llama3.1", fallbackUsed: false, warnings: [] },
           timestamp: "2026-06-10T10:00:00.000Z",
         },
       ],

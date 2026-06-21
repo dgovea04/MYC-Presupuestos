@@ -74,7 +74,7 @@ const baseSettings = {
   defaultIgvRate: 0.18,
   defaultGeneralExpensesRate: 0.1,
   defaultUtilityRate: 0.08,
-  defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+  defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
 };
 
 describe("UserSettingsForm", () => {
@@ -357,7 +357,7 @@ describe("UserSettingsForm", () => {
         defaultIgvRate: 0.18,
         defaultGeneralExpensesRate: 0.1,
         defaultUtilityRate: 0.08,
-        defaultSubBudgetNames: DEFAULT_INITIAL_SUB_BUDGET_NAMES,
+        defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
       }),
     });
   });

@@ -170,14 +170,24 @@ type ProjectFeedbackSummaryState = {
 
 // ─── Hook ───────────────────────────────────────────────────────
 
+const VALID_PROVIDERS = new Set(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"]);
+
+function readInitialProvider(raw?: string): AssistantProvider {
+  if (typeof raw === "string" && VALID_PROVIDERS.has(raw)) return raw as AssistantProvider;
+  if (raw === "auto") return "ollama";
+  return "ollama";
+}
+
 export function useAiAssistantController({
   projectId,
   initialAction,
   initialContext,
+  initialProvider,
 }: {
   projectId?: string;
   initialAction: AssistantAction;
   initialContext: AiContext;
+  initialProvider?: string;
 }): AiAssistantControllerViewModel {
   const [activeAction, setActiveActionState] = useState<AssistantAction>(initialAction);
   const [context, setContext] = useState<AiContext>(initialContext);
@@ -189,7 +199,7 @@ export function useAiAssistantController({
   const [streaming, setStreaming] = useState(false);
   const [lastRequest, setLastRequest] = useState<AssistantRequest | null>(null);
   const [health, setHealth] = useState<AiHealth | null>(null);
-  const [provider, setProviderState] = useState<AssistantProvider>("ollama");
+  const [provider, setProviderState] = useState<AssistantProvider>(() => readInitialProvider(initialProvider));
   const [cloudConfigured, setCloudConfigured] = useState<{ openai: boolean; gemini: boolean; openrouter: boolean }>({
     openai: false,
     gemini: false,

@@ -8,6 +8,7 @@ import {
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   DEFAULT_VIEW_MODE,
+  FLOATING_KHIPU_DEFAULTS,
   type UserSettingsRecord,
 } from "@/types/settings";
 
@@ -23,6 +24,12 @@ const defaultFormattingSettings: UserSettingsRecord = {
   defaultUtilityRate: 0.08,
   defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
   aiProviderPreference: "auto",
+  floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+  floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+  floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+  floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+  floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+  floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
 };
 
 const FormattingSettingsContext = createContext<UserSettingsRecord>(defaultFormattingSettings);

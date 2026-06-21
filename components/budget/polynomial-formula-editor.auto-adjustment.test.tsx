@@ -99,6 +99,7 @@ function getButton(text: string) {
 
 function settings(): UserSettingsRecord {
   return {
+    aiProviderPreference: "auto",
     defaultCurrency: "PEN",
     currencyDecimals: 2,
     dateFormat: "DD_MMM_YYYY",

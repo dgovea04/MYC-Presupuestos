@@ -399,6 +399,12 @@ model UserSettings {
   aiProviderPreference       String   @default("auto")
   openaiModel                String?
   geminiModel                String?
+  floatingKhipuProvider      String   @default("ollama")
+  floatingKhipuWidth         Int      @default(600)
+  floatingKhipuHeight        Int      @default(500)
+  floatingKhipuFontSize      String   @default("normal")
+  floatingKhipuPosition      String   @default("bottom-right")
+  floatingKhipuTheme         String   @default("light")
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
   user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)

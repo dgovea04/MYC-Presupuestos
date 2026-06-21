@@ -19,9 +19,11 @@ const GRADIENT_BARS = ["#2563EB", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE"];
 function CustomTooltip({
   active,
   payload,
+  currencyDecimals = 2,
 }: {
   active?: boolean;
   payload?: Array<{ value?: number; payload?: BudgetComparisonItem }>;
+  currencyDecimals?: number;
 }) {
   if (!active || !payload?.length) return null;
 
@@ -35,13 +37,13 @@ function CustomTooltip({
         <div className="flex items-center justify-between gap-6">
           <span className="text-slate-500">Presupuesto total</span>
           <span className="font-medium text-slate-900">
-            {formatCurrency(item.totalAmount, item.currency, 2)}
+            {formatCurrency(item.totalAmount, item.currency, currencyDecimals)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-6">
           <span className="text-slate-500">Costo directo</span>
           <span className="font-medium text-slate-900">
-            {formatCurrency(item.totalDirectCost, item.currency, 2)}
+            {formatCurrency(item.totalDirectCost, item.currency, currencyDecimals)}
           </span>
         </div>
       </div>
@@ -51,8 +53,10 @@ function CustomTooltip({
 
 export function BudgetComparisonChart({
   data,
+  currencyDecimals = 2,
 }: {
   data: BudgetComparisonItem[];
+  currencyDecimals?: number;
 }) {
   if (data.length === 0) {
     return (
@@ -96,7 +100,7 @@ export function BudgetComparisonChart({
               tick={{ fontSize: 11 }}
               width={118}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip currencyDecimals={currencyDecimals} />} />
             <Bar dataKey="totalAmount" radius={[0, 6, 6, 0]} minPointSize={6}>
               {visibleData.map((_, index) => (
                 <Cell
