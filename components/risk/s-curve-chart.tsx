@@ -1,7 +1,8 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartTooltipContent, Tooltip } from "@/components/ui/chart";
 import { formatCurrency } from "@/lib/utils";
 import type { RiskSimulationSummary } from "@/types/risk";
 
@@ -15,26 +16,34 @@ export function SCurveChart({
   result: RiskSimulationSummary | null;
 }) {
   return (
-    <Card className="border-slate-200">
-      <CardHeader className="px-5 py-3">
-        <CardTitle className="text-base">Curva S acumulada</CardTitle>
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+      <CardHeader className="px-5 py-4">
+        <CardTitle className="text-base font-medium">Curva S acumulada</CardTitle>
       </CardHeader>
       <CardContent className="h-80 p-5">
         {result ? (
           <ResponsiveContainer height="100%" width="100%">
             <LineChart data={result.sCurvePoints}>
-              <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
-              <XAxis dataKey="cost" tick={{ fontSize: 11 }} tickFormatter={(value) => formatCurrency(Number(value), currency, currencyDecimals)} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(Number(value) * 100)}%`} />
+              <CartesianGrid stroke="var(--app-border-soft)" strokeDasharray="3 3" />
+              <XAxis dataKey="cost" tick={{ fontSize: 11, fill: "var(--app-text-muted)" }} tickFormatter={(value) => formatCurrency(Number(value), currency, currencyDecimals)} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "var(--app-text-muted)" }} tickFormatter={(value) => `${Math.round(Number(value) * 100)}%`} axisLine={false} tickLine={false} />
               <Tooltip
-                formatter={(value) => [`${Math.round(Number(value) * 100)}%`, "Probabilidad acumulada"]}
+                animationDuration={0}
+                content={({ active, payload, label }) => (
+                  <ChartTooltipContent active={active} payload={payload} label={label}>
+                    <span className="text-[var(--app-text-muted)]">Probabilidad acumulada: </span>
+                    <span className="font-medium tabular-nums text-[var(--app-text-strong)]">
+                      {payload?.[0]?.value != null ? `${Math.round(Number(payload[0].value) * 100)}%` : "-"}
+                    </span>
+                  </ChartTooltipContent>
+                )}
                 labelFormatter={(value) => formatCurrency(Number(value), currency, currencyDecimals)}
               />
-              <Line dataKey="cumulativeProbability" dot={false} stroke="#10B981" strokeWidth={2} type="monotone" />
+              <Line dataKey="cumulativeProbability" dot={false} stroke="var(--chart-2)" strokeWidth={2} type="monotone" isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+          <div className="flex h-full items-center justify-center text-sm text-[var(--app-text-muted)]">
             Ejecuta una simulacion para ver la curva S.
           </div>
         )}

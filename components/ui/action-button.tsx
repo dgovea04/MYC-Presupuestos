@@ -28,8 +28,15 @@ export function ActionButton({ action, label, iconOnly = false, className, child
       aria-label={label}
       className={cn(
         "gap-2 shadow-none",
-        props.variant === "ghost" ? "hover:bg-slate-100/90 focus-visible:bg-sky-50 focus-visible:text-sky-800" : undefined,
-        props.variant === "outline" ? "border-slate-300/90 bg-white/95 hover:border-slate-400 hover:bg-slate-50" : undefined,
+        props.variant === "ghost"
+          ? "hover:bg-[var(--app-surface-hover)] focus-visible:bg-[var(--app-primary-muted)] focus-visible:text-[var(--app-primary-soft)]"
+          : undefined,
+        props.variant === "outline"
+          ? "border-[var(--app-border)] bg-[var(--app-surface)] hover:border-[color:rgba(37,99,235,0.28)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-primary-soft)]"
+          : undefined,
+        props.variant === "secondary"
+          ? "bg-[var(--app-surface-strong)] text-[var(--app-text-strong)] hover:bg-[var(--app-surface-hover-strong)]"
+          : undefined,
         iconOnly ? "h-8 w-8 rounded-lg px-0" : undefined,
         className,
       )}

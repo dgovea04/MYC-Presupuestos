@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Clipboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
@@ -12,13 +12,16 @@ export function AIMessage({
   model,
   streaming = false,
   tone = "assistant",
+  theme = "light",
 }: {
   content: string;
   model?: string;
   streaming?: boolean;
   tone?: "assistant" | "user" | "error";
+  theme?: "light" | "dark";
 }) {
   const revealedText = useTypewriter(content, streaming);
+  const isDark = theme === "dark";
 
   const copyContent = async () => {
     await navigator.clipboard.writeText(content);
@@ -32,9 +35,9 @@ export function AIMessage({
       <article
         className={cn(
           "min-w-0 rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm",
-          tone === "assistant" && "border-sky-100 bg-sky-50/70 text-slate-800",
-          tone === "user" && "border-slate-200 bg-white text-slate-800",
-          tone === "error" && "border-rose-200 bg-rose-50 text-rose-800",
+          tone === "assistant" && (isDark ? "border-[var(--khipu-dark-hairline-strong)] bg-[var(--khipu-dark-surface)] text-[var(--khipu-dark-body)]" : "border-sky-100 bg-sky-50/70 text-slate-800"),
+          tone === "user" && (isDark ? "border-[var(--khipu-dark-hairline-strong)] bg-[var(--khipu-dark-surface-elevated)] text-[var(--khipu-dark-body-strong)]" : "border-slate-200 bg-white text-slate-800"),
+          tone === "error" && (isDark ? "border-rose-500/30 bg-[#2a1418] text-rose-200" : "border-rose-200 bg-rose-50 text-rose-800"),
         )}
       >
         <div className="flex items-start justify-between gap-3">
@@ -45,7 +48,7 @@ export function AIMessage({
             </Button>
           ) : null}
         </div>
-        {model ? <p className="mt-3 text-xs font-medium text-slate-500">Modelo local: {model}</p> : null}
+        {model ? <p className={cn("mt-3 text-xs font-medium", isDark ? "text-[var(--khipu-dark-muted)]" : "text-slate-500")}>Modelo local: {model}</p> : null}
       </article>
     </div>
   );
@@ -60,7 +63,7 @@ export function renderMarkdownLite(content: string) {
 
       if (trimmed.startsWith("### ")) {
         return (
-          <h4 key={`${trimmed}-${index}`} className="text-base font-semibold text-slate-950">
+          <h4 key={`${trimmed}-${index}`} className="text-base font-semibold text-[var(--app-text-strong)]">
             {renderInlineFormatting(trimmed.replace(/^###\s+/, ""))}
           </h4>
         );
@@ -68,7 +71,7 @@ export function renderMarkdownLite(content: string) {
 
       if (trimmed.startsWith("## ")) {
         return (
-          <h3 key={`${trimmed}-${index}`} className="text-lg font-semibold text-slate-950">
+          <h3 key={`${trimmed}-${index}`} className="text-lg font-semibold text-[var(--app-text-strong)]">
             {renderInlineFormatting(trimmed.replace(/^##\s+/, ""))}
           </h3>
         );
@@ -84,7 +87,7 @@ export function renderMarkdownLite(content: string) {
         return (
           <blockquote
             key={`${trimmed}-${index}`}
-            className="border-l-4 border-slate-300 pl-4 italic text-slate-600"
+            className="border-l-4 border-[var(--app-border-strong)] pl-4 italic text-[var(--app-text-muted)]"
           >
             {lines.map((line, lineIndex) => (
               <p key={lineIndex} className={lineIndex > 0 ? "mt-1" : ""}>
@@ -97,7 +100,7 @@ export function renderMarkdownLite(content: string) {
 
       // Horizontal rule: ---, ***, or ___ (3+ chars, optionally space-separated)
       if (lines.length === 1 && /^(\s*[-*_]\s*){3,}$/.test(trimmed)) {
-        return <hr key={`${trimmed}-${index}`} className="my-4 border-slate-200" />;
+        return <hr key={`${trimmed}-${index}`} className="my-4 border-[var(--app-border)]" />;
       }
 
       const isBulletList = lines.every((line) => /^[-*]\s+/.test(line.trim()));
@@ -152,8 +155,9 @@ function useTypewriter(text: string, enabled: boolean, speedMs = 18): string {
     prevTextRef.current = text;
   }, [text]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCursor(text.length);
       return;
     }
@@ -232,15 +236,15 @@ function renderMarkdownTable(lines: string[], blockIndex: number) {
   const { headers, alignments, rows } = parseMarkdownTable(lines);
 
   return (
-    <div key={`table-${blockIndex}`} className="overflow-x-auto rounded-xl border border-slate-200">
+    <div key={`table-${blockIndex}`} className="overflow-x-auto rounded-xl border border-[var(--app-border)]">
       <table className="min-w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-50/80">
+          <tr className="border-b border-[var(--app-border)] bg-[var(--app-surface-muted)]">
             {headers.map((header, colIndex) => (
               <th
                 key={colIndex}
                 className={cn(
-                  "px-3 py-2 font-semibold text-slate-900",
+                  "px-3 py-2 font-semibold text-[var(--app-text-strong)]",
                   TABLE_ALIGN_CLASS[alignments[colIndex] ?? "left"],
                 )}
               >
@@ -254,15 +258,15 @@ function renderMarkdownTable(lines: string[], blockIndex: number) {
             <tr
               key={rowIndex}
               className={cn(
-                "border-b border-slate-100 last:border-b-0",
-                rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40",
+                "border-b border-[var(--app-border-soft)] last:border-b-0",
+                rowIndex % 2 === 0 ? "bg-[var(--app-surface)]" : "bg-[var(--app-surface-muted)]",
               )}
             >
               {headers.map((_, colIndex) => (
                 <td
                   key={colIndex}
                   className={cn(
-                    "px-3 py-2 text-slate-700",
+                    "px-3 py-2 text-[var(--app-text)]",
                     TABLE_ALIGN_CLASS[alignments[colIndex] ?? "left"],
                   )}
                 >
@@ -309,7 +313,7 @@ function renderInlineFormatting(text: string): React.ReactNode {
     // `inline code`
     if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
       return (
-        <code key={index} className="rounded bg-slate-200/70 px-1 py-0.5 text-[0.9em] font-mono text-slate-800">
+        <code key={index} className="rounded bg-[var(--app-surface-muted)] px-1 py-0.5 text-[0.9em] font-mono text-[var(--app-text-strong)]">
           {part.slice(1, -1)}
         </code>
       );

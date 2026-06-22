@@ -60,12 +60,12 @@ export function MetradoExportActions({
         {busy ? "Guardando" : saveLabel}
       </Button>
 
-      <div className="flex items-center gap-1 rounded-full border border-slate-200/90 bg-white/90 px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
+      <div className="flex items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
         <button
           type="button"
           disabled={!canImport || busy}
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:pointer-events-none disabled:opacity-50"
         >
           <FileUp className="h-4 w-4" />
           Importar
@@ -74,7 +74,7 @@ export function MetradoExportActions({
           <a
             href={exportHref}
             aria-disabled={busy}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 aria-disabled:pointer-events-none aria-disabled:opacity-50"
           >
             <FileDown className="h-4 w-4" />
             Exportar
@@ -83,7 +83,7 @@ export function MetradoExportActions({
           <button
             type="button"
             disabled
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-slate-600 opacity-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] opacity-50"
           >
             <FileDown className="h-4 w-4" />
             Exportar
@@ -93,7 +93,7 @@ export function MetradoExportActions({
           type="button"
           onClick={onSendToPartida}
           disabled={!canSend || busy}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-sky-700 transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-primary-soft)] transition hover:bg-[var(--app-primary-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:pointer-events-none disabled:opacity-50"
         >
           <SendHorizontal className="h-4 w-4" />
           Enviar

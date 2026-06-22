@@ -222,14 +222,14 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
               <FileSpreadsheet className="h-4 w-4 text-sky-600" />
               {copy.fileLabel}
             </div>
-            <p className="text-sm text-slate-500">{copy.uploadDescription}</p>
+            <p className="text-sm text-[var(--app-text-muted)]">{copy.uploadDescription}</p>
           </div>
           <StatusBadge state={draftState} />
         </div>
@@ -248,7 +248,7 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
             }}
           />
           <select
-            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 disabled:bg-slate-50 disabled:text-slate-400"
+            className="h-10 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text-strong)] outline-none transition focus:border-sky-500 disabled:bg-[var(--app-surface-elevated)] disabled:text-[var(--app-text-subtle)]"
             disabled={companies.length === 0}
             value={companyId}
             onChange={(event) => {
@@ -290,14 +290,14 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
       </section>
 
       {draftPreview ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] p-5 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 {draftPreview.projectName}
               </div>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                 {copy.sourceCodeLabel} {draftPreview.sourceBudgetCode}
               </p>
             </div>
@@ -308,10 +308,10 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:flex-row md:items-center md:justify-between">
+          <div className="mt-5 flex flex-col gap-3 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] p-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-900">Crear proyecto MYC</p>
-              <p className="text-sm text-slate-500">Importa este archivo como un proyecto nuevo con presupuesto, APUs e insumos {copy.projectLabel}.</p>
+              <p className="text-sm font-medium text-[var(--app-text-strong)]">Crear proyecto MYC</p>
+              <p className="text-sm text-[var(--app-text-muted)]">Importa este archivo como un proyecto nuevo con presupuesto, APUs e insumos {copy.projectLabel}.</p>
             </div>
             <Button className="gap-2" disabled={importState === "loading" || !file || !companyId} onClick={importRw7File}>
               {importState === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
@@ -335,25 +335,25 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
             />
           ) : null}
           {importResult ? (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-[rgba(51,209,122,0.28)] dark:bg-[rgba(51,209,122,0.12)]">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-emerald-900">{importResult.projectName}</p>
-                  <p className="text-sm text-emerald-700">
+                  <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">{importResult.projectName}</p>
+                  <p className="text-sm text-emerald-700 dark:text-emerald-300">
                     1 presupuesto general, {formatCount(importResult.subBudgetIds.length, "subpresupuesto", "subpresupuestos")},{" "}
                     {formatCount(importResult.itemCount, "partida", "partidas")}, {importResult.apuCount} APUs
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <a
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 dark:border-[rgba(51,209,122,0.28)] dark:bg-[var(--app-surface)] dark:text-emerald-300 dark:hover:bg-[rgba(51,209,122,0.08)]"
                     href={`/projects/${importResult.projectId}`}
                   >
                     Proyecto
                     <ExternalLink className="h-4 w-4" />
                   </a>
                   <a
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 dark:border-[rgba(51,209,122,0.28)] dark:bg-[var(--app-surface)] dark:text-emerald-300 dark:hover:bg-[rgba(51,209,122,0.08)]"
                     href={`/budgets/${importResult.generalBudgetId}`}
                   >
                     Presupuesto
@@ -374,15 +374,15 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
 
           <ImportBudgetFooterPreview preview={draftPreview} selectedBudgetId={selectedBudget?.id} />
 
-          <div className="mt-6 overflow-hidden rounded-xl border border-slate-200">
-            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mt-6 overflow-hidden rounded-xl border border-[var(--app-border-soft)]">
+            <div className="flex flex-col gap-3 border-b border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <label className="text-xs font-medium uppercase text-slate-500" htmlFor="rw7-sub-budget-select">
+                <label className="text-xs font-medium uppercase text-[var(--app-text-muted)]" htmlFor="rw7-sub-budget-select">
                   Subpresupuesto
                 </label>
                 <select
                   id="rw7-sub-budget-select"
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500"
+                  className="h-10 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text-strong)] outline-none transition focus:border-sky-500"
                   value={selectedBudget?.id ?? ""}
                   onChange={(event) => setSelectedBudgetId(event.target.value)}
                 >
@@ -405,7 +405,7 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
             </div>
             <div className="overflow-auto">
               <table className="w-full min-w-[860px] text-left text-sm">
-                <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+                <thead className="sticky top-0 bg-[var(--app-surface-elevated)] text-xs uppercase text-[var(--app-text-muted)]">
                   <tr>
                     <th className="px-3 py-2 font-medium">Item</th>
                     <th className="px-3 py-2 font-medium">Partida</th>
@@ -417,10 +417,10 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
                     <th className="px-3 py-2 text-right font-medium">Diferencia</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
+                <tbody className="divide-y divide-[var(--app-border-soft)] bg-[var(--app-surface)]">
                   {visibleItems.map((row) =>
                     row.kind === "LEVEL" ? (
-                      <tr key={`${row.budgetName}-${row.kind}-${row.code}-${row.description}`} className="bg-slate-50 text-slate-900">
+                      <tr key={`${row.budgetName}-${row.kind}-${row.code}-${row.description}`} className="bg-[var(--app-surface-elevated)] text-[var(--app-text-strong)]">
                         <td className="whitespace-nowrap px-3 py-2 font-semibold">{row.code}</td>
                         <td className={`px-3 py-2 font-semibold ${levelIndentClassName(row.depth)}`} colSpan={7}>
                           {row.description}
@@ -428,7 +428,7 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
                       </tr>
                     ) : (
                       <tr key={`${row.budgetName}-${row.code}-${row.description}`} className="text-slate-700">
-                        <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-900">{row.code}</td>
+                        <td className="whitespace-nowrap px-3 py-2 font-medium text-[var(--app-text-strong)]">{row.code}</td>
                         <td className={`px-3 py-2 ${levelIndentClassName(row.depth)}`}>{row.description}</td>
                         <td className="whitespace-nowrap px-3 py-2">{row.unit}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right">{formatNumber(row.quantity)}</td>
@@ -443,7 +443,7 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
                               PU APU {formatMoney(row.calculatedApuUnitPrice ?? 0)} / dif. {formatMoney(row.unitPriceDifference ?? 0)}
                             </span>
                           ) : (
-                            <span className="text-slate-400">-</span>
+                            <span className="text-[var(--app-text-subtle)]">-</span>
                           )}
                         </td>
                       </tr>
@@ -461,15 +461,15 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
 
 function StatusBadge({ state }: { state: RequestState }) {
   if (state === "loading") {
-    return <Badge className="bg-sky-50 text-sky-700">Procesando</Badge>;
+    return <Badge className="bg-sky-50 text-sky-700 dark:border-[rgba(37,99,235,0.28)] dark:bg-[rgba(37,99,235,0.12)] dark:text-[var(--app-primary-soft)]">Procesando</Badge>;
   }
 
   if (state === "success") {
-    return <Badge className="bg-emerald-50 text-emerald-700">Listo</Badge>;
+    return <Badge className="bg-emerald-50 text-emerald-700 dark:border-[rgba(51,209,122,0.28)] dark:bg-[rgba(51,209,122,0.12)] dark:text-emerald-300">Listo</Badge>;
   }
 
   if (state === "error") {
-    return <Badge className="bg-rose-50 text-rose-700">Error</Badge>;
+    return <Badge className="bg-rose-50 text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300">Error</Badge>;
   }
 
   return <Badge>Pendiente</Badge>;
@@ -484,14 +484,14 @@ function ApuStatusBadge({ item }: { item: S10ImportDraftPreview["sampleItems"][n
     return <span className="text-amber-700">APU no cuadra</span>;
   }
 
-  return <span className="text-slate-500">Sin APU</span>;
+  return <span className="text-[var(--app-text-muted)]">Sin APU</span>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-slate-900">{value}</p>
+    <div className="rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] px-3 py-2">
+      <p className="text-xs font-medium text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }
@@ -504,7 +504,10 @@ function levelIndentClassName(depth: number) {
 }
 
 function InlineMessage({ message, tone }: { message: string; tone: "error" }) {
-  const className = tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-50 text-slate-700";
+  const className =
+    tone === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300"
+      : "border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] text-[var(--app-text-muted)]";
 
   return <div className={`mt-4 rounded-xl border px-3 py-2 text-sm ${className}`}>{message}</div>;
 }

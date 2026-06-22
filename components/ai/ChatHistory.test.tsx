@@ -192,8 +192,8 @@ describe("ChatHistory", () => {
       const answerText = answerParagraph?.textContent ?? "";
 
       expect(answerText.length).toBeLessThan(longAnswer.length);
-      // truncateText slices to 300 and appends "…"
-      expect(answerText).toMatch(/…$/);
+      // truncateText slices to 300 and appends "..."
+      expect(answerText).toMatch(/\.\.\.$/);
       expect(answerText.length).toBeLessThanOrEqual(305);
     });
 

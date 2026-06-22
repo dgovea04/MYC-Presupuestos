@@ -22,11 +22,11 @@ export function CompanyProfileCard({
   const [isEditing, setIsEditing] = useState(!company);
 
   return (
-    <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
-      <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+      <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-slate-900 p-2 text-white">
+            <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
               <Building2 className="h-5 w-5" />
             </div>
             <div>
@@ -37,7 +37,7 @@ export function CompanyProfileCard({
           <div className="flex justify-end">
             <Button
               variant="outline"
-              className="gap-2 bg-white"
+              className="gap-2"
               onClick={() => setIsEditing(true)}
             >
               <Pencil className="h-4 w-4" />
@@ -51,15 +51,15 @@ export function CompanyProfileCard({
         <div className="grid gap-4 md:grid-cols-3">
           <InfoCard label="Nombre" value={company?.name ?? "Sin empresa"} tone="slate" />
           <InfoCard label="RUC" value={company?.ruc ?? "No definido"} tone="sky" />
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.38)]">
-            <p className="text-sm text-slate-500">Logo</p>
+          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.38)]">
+            <p className="text-sm text-[var(--app-text-muted)]">Logo</p>
             <div className="mt-3 flex min-h-12 items-center">
               {company?.logoUrl ? (
-                <div className="flex h-12 w-20 items-center justify-center rounded-xl border border-amber-200 bg-white px-2">
+                <div className="flex h-12 w-20 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2">
                   <Image src={company.logoUrl} alt="Logo de empresa" width={64} height={32} className="max-h-8 w-auto object-contain" />
                 </div>
               ) : (
-                <p className="text-lg font-semibold tracking-tight text-slate-900">Pendiente</p>
+                <p className="text-lg font-semibold tracking-tight text-[var(--app-text-strong)]">Pendiente</p>
               )}
             </div>
           </div>

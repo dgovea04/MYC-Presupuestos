@@ -52,6 +52,7 @@ import type { KhipuAction } from "@/lib/ai/actions";
 import { useKhipuActionDispatcher } from "@/hooks/use-khipu-action-dispatcher";
 import { useKhipuActionRegistry } from "@/components/ai/khipu-action-registry";
 import { cn } from "@/lib/utils";
+import type { FloatingKhipuTheme } from "@/types/settings";
 
 type AiAssistantPanelLayout = "page" | "floating";
 
@@ -66,6 +67,7 @@ type AiAssistantPanelProps = {
   projectId?: string;
   reducedMotion?: boolean;
   showHistory?: boolean;
+  theme?: FloatingKhipuTheme;
 };
 
 const ACTIONS = [
@@ -132,6 +134,7 @@ export function AiAssistantPanel({
   projectId,
   reducedMotion = false,
   showHistory = false,
+  theme = "light",
 }: AiAssistantPanelProps) {
   const [chatMessage, setChatMessage] = useState(initialChatMessage);
   const [apuDescription, setApuDescription] = useState(initialApuDescription);
@@ -165,6 +168,7 @@ export function AiAssistantPanel({
 
 
   const dedupedHistory = useDedupedHistory(controller);
+  const isFloatingDark = layout === "floating" && theme === "dark";
 
   const actionRegistry = useKhipuActionRegistry();
   const { executeAction, executingActionId } = useKhipuActionDispatcher({
@@ -307,12 +311,13 @@ export function AiAssistantPanel({
     // History-only view: show just the ChatHistory with a clear button
     if (showHistory) {
       return (
-        <div className="space-y-3">
+        <div className={cn("space-y-3", isFloatingDark && "khipu-floating-dark")}>
           <ChatHistory
             history={controller.history}
             reducedMotion={reducedMotion}
             expandable
             truncateLength={200}
+            theme={theme}
           />
           <div className="flex justify-end">
             <ClearHistoryButton
@@ -346,7 +351,7 @@ export function AiAssistantPanel({
       : { context: 0, actions: 0.08, form: 0.16 };
 
     return (
-      <div className="space-y-3">
+      <div className={cn("space-y-3", isFloatingDark && "khipu-floating-dark")}>
         {/* Welcome greeting — compact */}
         {showGreeting ? (
           <motion.div
@@ -617,24 +622,24 @@ export function AiAssistantPanel({
   return (
     <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-5">
-        <Card className="border-slate-200 bg-white shadow-sm">
+        <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
           <CardContent className="p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl space-y-3">
                 <KhipuLogo size="sm" showSubtitle={false} />
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Asistente tecnico de obra</p>
-                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">Asistente tecnico de obra</p>
+                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--app-text-strong)] md:text-4xl">
                     Criterio tecnico para presupuestos de obra.
                   </h1>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--app-text-muted)] md:text-base">
                     Revisa APU, genera partidas y responde con contexto del presupuesto activo.
                   </p>
                 </div>
               </div>
-              <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+              <div className="grid gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 text-sm text-[var(--app-text-muted)]">
                 <div className="flex items-center justify-between gap-4">
-                  <span className="font-semibold text-slate-900">Proveedor activo</span>
+                  <span className="font-semibold text-[var(--app-text-strong)]">Proveedor activo</span>
                   <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", providerStatus.className)}>
                     {providerStatus.label}
                   </span>
@@ -649,28 +654,28 @@ export function AiAssistantPanel({
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 bg-white shadow-sm">
+        <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
           <CardContent className="space-y-3 p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900">Trabajo activo</p>
-                <p className="mt-1 text-sm text-slate-500">Contexto visible que Khipu usara en esta sesion.</p>
+                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Trabajo activo</p>
+                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Contexto visible que Khipu usara en esta sesion.</p>
               </div>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+              <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--app-text-muted)]">
                 Sesion actual
               </span>
             </div>
             {contextRows.length ? (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {contextRows.map((row) => (
-                  <div key={row.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{row.label}</p>
-                    <p className="mt-1 truncate text-sm font-medium text-slate-900">{row.value}</p>
+                  <div key={row.label} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">{row.label}</p>
+                    <p className="mt-1 truncate text-sm font-medium text-[var(--app-text-strong)]">{row.value}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              <p className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text-muted)]">
                 Selecciona un presupuesto, partida o APU para que Khipu pueda analizarlo con contexto.
               </p>
             )}
@@ -683,17 +688,17 @@ export function AiAssistantPanel({
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 bg-slate-50/60">
+        <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
           <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_260px_260px]">
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900">Preparacion</p>
-                <p className="mt-1 text-sm text-slate-500">Proveedor, modelos y latencia para ejecutar la accion activa.</p>
+                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Preparacion</p>
+                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Proveedor, modelos y latencia para ejecutar la accion activa.</p>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {(controller.health?.requiredModels ?? []).map((model) => (
-                  <div key={model.model} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <p className="text-xs font-semibold text-slate-900">{model.model}</p>
+                  <div key={model.model} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2">
+                    <p className="text-xs font-semibold text-[var(--app-text-strong)]">{model.model}</p>
                     <p className={cn("mt-1 text-[11px] font-medium", model.installed ? "text-emerald-700" : "text-amber-700")}>
                       {model.installed ? "Instalado" : "Pendiente"}
                     </p>
@@ -702,15 +707,15 @@ export function AiAssistantPanel({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-slate-900">Proveedor</p>
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"] as AssistantProvider[]).map((provider) => (
                   <button
                     key={provider}
                     className={cn(
                       "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-                      controller.provider === provider ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
+                      controller.provider === provider ? "border-blue-300 bg-[var(--app-primary-muted)] text-blue-800" : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)]",
                       (provider === "openai" || provider === "gemini" || provider === "openrouter") && !controller.cloudConfigured[provider] ? "opacity-60" : "",
                     )}
                     type="button"
@@ -734,16 +739,16 @@ export function AiAssistantPanel({
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-slate-900">Accion activa</p>
-              <p className="mt-1 text-sm text-slate-500">
-                Modelo solicitado: <span className="font-medium text-slate-700">{readActiveModelLabel(controller.provider, activeHealth)}</span>
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Accion activa</p>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">
+                Modelo solicitado: <span className="font-medium text-[var(--app-text-strong)]">{readActiveModelLabel(controller.provider, activeHealth)}</span>
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Modelo resuelto: <span className="font-medium text-slate-700">{readResolvedModelLabel(controller.provider, activeHealth)}</span>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">
+                Modelo resuelto: <span className="font-medium text-[var(--app-text-strong)]">{readResolvedModelLabel(controller.provider, activeHealth)}</span>
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Ultima latencia: <span className="font-medium text-slate-700">{readLatencyLabel(controller.provider, controller.health?.metrics[controller.activeAction]?.latencyMs)}</span>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">
+                Ultima latencia: <span className="font-medium text-[var(--app-text-strong)]">{readLatencyLabel(controller.provider, controller.health?.metrics[controller.activeAction]?.latencyMs)}</span>
               </p>
               {controller.provider === "ollama" && activeHealth?.fallbackUsed ? (
                 <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
@@ -759,11 +764,11 @@ export function AiAssistantPanel({
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 bg-white shadow-sm">
+        <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
           <CardContent className="space-y-3 p-5">
             <div>
-              <p className="text-sm font-semibold text-slate-900">Inicio rapido</p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Inicio rapido</p>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                 Acciones frecuentes para empezar a trabajar con Khipu.
               </p>
             </div>
@@ -783,7 +788,7 @@ export function AiAssistantPanel({
                 key={action.id}
                 className={cn(
                   "group flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left shadow-sm transition hover:border-cyan-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
-                  active ? "border-blue-300 bg-blue-50 text-slate-950" : "border-slate-200 bg-white text-slate-800",
+                  active ? "border-blue-300 bg-[var(--app-primary-muted)] text-[var(--app-text-strong)]" : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)]",
                 )}
                 type="button"
                 aria-pressed={active}
@@ -797,7 +802,7 @@ export function AiAssistantPanel({
                     <span className="text-sm font-semibold">{action.label}</span>
                     {active && action.id === "chat" ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">Recomendado</span> : null}
                   </span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-500">{action.description}</span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--app-text-muted)]">{action.description}</span>
                 </span>
               </button>
             );
@@ -864,7 +869,7 @@ export function AiAssistantPanel({
           </CardContent>
         </Card>
 
-        <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
+        <div className="grid gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm sm:grid-cols-3">
           <QualityMetric label="Aplicadas" value={controller.feedbackSummary.applied} />
           <QualityMetric label="Editadas" value={controller.feedbackSummary.edited} />
           <QualityMetric label="Descartadas" value={controller.feedbackSummary.dismissed} />
@@ -993,9 +998,9 @@ export function AiAssistantPanel({
 
 function QualityMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
+    <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }
@@ -1074,16 +1079,16 @@ function renderStructuredResult(result: AiResult) {
         <CardContent className="space-y-4 p-6">
           <div className="space-y-3">
             {structuredData.findings.map((finding, index) => (
-              <div key={`${finding.description}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div key={`${finding.description}-${index}`} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em]", readSeverityClass(finding.severity))}>
                     {finding.severity}
                   </span>
-                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{finding.type}</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--app-text-muted)]">{finding.type}</span>
                 </div>
-                <p className="mt-3 text-sm font-medium text-slate-900">{finding.description}</p>
-                <p className="mt-2 text-sm text-slate-600">{finding.impact}</p>
-                <p className="mt-2 text-sm text-slate-700">Accion recomendada: {finding.recommendedAction}</p>
+                <p className="mt-3 text-sm font-medium text-[var(--app-text-strong)]">{finding.description}</p>
+                <p className="mt-2 text-sm text-[var(--app-text-muted)]">{finding.impact}</p>
+                <p className="mt-2 text-sm text-[var(--app-text)]">Accion recomendada: {finding.recommendedAction}</p>
               </div>
             ))}
           </div>
@@ -1104,8 +1109,8 @@ function GenericStructuredResult({ data }: { data: Record<string, unknown> }) {
     <Card>
       <CardContent className="space-y-4 p-6">
         <div>
-          <h3 className="text-lg font-semibold text-slate-950">Detalles de la respuesta</h3>
-          <p className="mt-1 text-sm text-slate-500">
+          <h3 className="text-lg font-semibold text-[var(--app-text-strong)]">Detalles de la respuesta</h3>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">
             Informacion estructurada devuelta por ChatGPT Bridge para revisar el criterio tecnico completo.
           </p>
         </div>
@@ -1114,9 +1119,9 @@ function GenericStructuredResult({ data }: { data: Record<string, unknown> }) {
             <GenericStructuredField key={key} label={formatStructuredLabel(key)} value={value} />
           ))}
         </div>
-        <details className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-900">Ver respuesta completa</summary>
-          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-5 text-slate-700">
+        <details className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--app-text-strong)]">Ver respuesta completa</summary>
+          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl bg-[var(--app-surface)] p-3 text-xs leading-5 text-[var(--app-text)]">
             {JSON.stringify(data, null, 2)}
           </pre>
         </details>
@@ -1128,11 +1133,11 @@ function GenericStructuredResult({ data }: { data: Record<string, unknown> }) {
 function GenericStructuredField({ label, value }: { label: string; value: unknown }) {
   if (Array.isArray(value)) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <p className="text-sm font-semibold text-slate-900">{label}</p>
-        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+      <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+        <p className="text-sm font-semibold text-[var(--app-text-strong)]">{label}</p>
+        <ul className="mt-3 space-y-2 text-sm text-[var(--app-text)]">
           {value.map((item, index) => (
-            <li key={`${label}-${index}`} className="rounded-xl bg-slate-50/80 px-3 py-2">
+            <li key={`${label}-${index}`} className="rounded-xl bg-[var(--app-surface-muted)] px-3 py-2">
               {renderGenericValue(item)}
             </li>
           ))}
@@ -1143,8 +1148,8 @@ function GenericStructuredField({ label, value }: { label: string; value: unknow
 
   if (isRecord(value)) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 lg:col-span-2">
-        <p className="text-sm font-semibold text-slate-900">{label}</p>
+      <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 lg:col-span-2">
+        <p className="text-sm font-semibold text-[var(--app-text-strong)]">{label}</p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {Object.entries(value).map(([nestedKey, nestedValue]) => (
             <GenericStructuredField key={nestedKey} label={formatStructuredLabel(nestedKey)} value={nestedValue} />
@@ -1155,34 +1160,34 @@ function GenericStructuredField({ label, value }: { label: string; value: unknow
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-sm font-semibold text-slate-900">{label}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{renderGenericValue(value)}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+      <p className="text-sm font-semibold text-[var(--app-text-strong)]">{label}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--app-text)]">{renderGenericValue(value)}</p>
     </div>
   );
 }
 
 function StructuredMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-2 text-sm font-medium text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }
 
 function StructuredLineItems({ items, title }: { items: AiApuStructuredData["materials"]; title: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+      <p className="text-sm font-semibold text-[var(--app-text-strong)]">{title}</p>
       <div className="mt-3 space-y-3">
         {items.map((item, index) => (
-          <div key={`${item.description}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-            <p className="text-sm font-medium text-slate-900">{item.description}</p>
-            <p className="mt-1 text-xs text-slate-500">
+          <div key={`${item.description}-${index}`} className="rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] p-3">
+            <p className="text-sm font-medium text-[var(--app-text-strong)]">{item.description}</p>
+            <p className="mt-1 text-xs text-[var(--app-text-muted)]">
               {item.quantity} {item.unit}
             </p>
-            {item.notes ? <p className="mt-2 text-xs text-slate-600">{item.notes}</p> : null}
+            {item.notes ? <p className="mt-2 text-xs text-[var(--app-text)]">{item.notes}</p> : null}
           </div>
         ))}
       </div>
@@ -1192,11 +1197,11 @@ function StructuredLineItems({ items, title }: { items: AiApuStructuredData["mat
 
 function StructuredTextList({ items, title }: { items: string[]; title: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <ul className="mt-3 space-y-2 text-sm text-slate-700">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+      <p className="text-sm font-semibold text-[var(--app-text-strong)]">{title}</p>
+      <ul className="mt-3 space-y-2 text-sm text-[var(--app-text)]">
         {items.map((item) => (
-          <li key={item} className="rounded-xl bg-slate-50/80 px-3 py-2">
+          <li key={item} className="rounded-xl bg-[var(--app-surface-muted)] px-3 py-2">
             {item}
           </li>
         ))}

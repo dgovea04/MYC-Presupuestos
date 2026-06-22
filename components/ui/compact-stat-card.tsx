@@ -14,17 +14,24 @@ export function CompactStatCard({
 }) {
   const { isExcelMode } = useAppViewMode();
   const tones = {
-    sky: "border-sky-100 bg-white/80 text-sky-700",
-    slate: "border-slate-200 bg-white/80 text-slate-700",
-    violet: "border-violet-100 bg-white/80 text-violet-700",
-    rose: "border-rose-100 bg-white/80 text-rose-700",
-    amber: "border-amber-100 bg-white/80 text-amber-700",
-    emerald: "border-emerald-100 bg-white/80 text-emerald-700",
+    sky: "border-sky-100 bg-[var(--app-surface)] text-sky-700",
+    slate: "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)]",
+    violet: "border-violet-100 bg-[var(--app-surface)] text-violet-700",
+    rose: "border-rose-100 bg-[var(--app-surface)] text-rose-700",
+    amber: "border-amber-100 bg-[var(--app-surface)] text-amber-700",
+    emerald: "border-emerald-100 bg-[var(--app-surface)] text-emerald-700",
   } as const;
 
   return (
-    <div className={cn("border px-4 py-3", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl shadow-sm", tones[tone])}>
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
+    <div
+      className={cn(
+        "compact-stat-card border px-4 py-3",
+        `compact-stat-card-${tone}`,
+        isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl shadow-sm",
+        tones[tone],
+      )}
+    >
+      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--app-text-subtle)]">{label}</p>
       <p className="mt-2 text-sm font-semibold">{value}</p>
     </div>
   );

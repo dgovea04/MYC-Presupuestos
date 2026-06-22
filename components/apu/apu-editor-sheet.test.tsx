@@ -153,11 +153,21 @@ describe("ApuEditorSheet", () => {
       searchInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    // Poll with waitFor until the deferred value (useDeferredValue) settles
+    // Flush React's concurrent scheduler so useDeferredValue settles
+    // (useDeferredValue relies on React's scheduler, which uses setTimeout in jsdom)
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        vi.runAllTimers();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
     await waitFor(() => {
       const option = document.querySelector("[data-testid='apu-add-subpartida-option-catalog-subpartida-1']");
       expect(option).toBeInstanceOf(HTMLElement);
-    });
+    }, { timeout: 3000 });
 
     await act(async () => {
       getByTestId("apu-add-subpartida-option-catalog-subpartida-1").click();

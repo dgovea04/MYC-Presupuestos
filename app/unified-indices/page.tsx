@@ -13,8 +13,8 @@ export default async function UnifiedIndicesPage() {
 
   return (
     <AppShell>
-      <Card className="border-slate-200">
-        <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+      <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+        <CardHeader className="flex flex-col gap-4 rounded-2xl bg-[var(--app-surface-elevated)] md:flex-row md:items-start md:justify-between">
           <PageHeaderCard
             icon={<Network className="h-5 w-5" />}
             title="Relacion Indices Unificados (IU)"

@@ -20,6 +20,7 @@ import {
 } from "@/lib/settings/budget-rate-percentages";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
+  APP_THEME_OPTIONS,
   DATE_FORMAT_OPTIONS,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   EXCEL_ROW_HEIGHT_OPTIONS,
@@ -36,6 +37,10 @@ const DATE_FORMAT_LABELS: Record<(typeof DATE_FORMAT_OPTIONS)[number], string> =
   DD_MMM_YYYY: "dd MMM yyyy",
   DD_MM: "dd/MM",
 };
+const APP_THEME_LABELS: Record<(typeof APP_THEME_OPTIONS)[number], string> = {
+  light: "Claro",
+  dark: "Oscuro",
+};
 type DraggedSubBudgetIndex = number | null;
 
 export function UserSettingsForm({
@@ -49,6 +54,7 @@ export function UserSettingsForm({
   const [defaultCurrency, setDefaultCurrency] = useState<UserSettingsRecord["defaultCurrency"]>(initialSettings.defaultCurrency);
   const [currencyDecimals, setCurrencyDecimals] = useState(String(initialSettings.currencyDecimals));
   const [dateFormat, setDateFormat] = useState<UserSettingsRecord["dateFormat"]>(initialSettings.dateFormat);
+  const [appTheme, setAppTheme] = useState<UserSettingsRecord["appTheme"]>(initialSettings.appTheme ?? "light");
   const [defaultViewMode, setDefaultViewMode] = useState<UserSettingsRecord["defaultViewMode"]>(initialSettings.defaultViewMode);
   const [excelShowFieldBorders, setExcelShowFieldBorders] = useState(initialSettings.excelShowFieldBorders);
   const [excelRowHeight, setExcelRowHeight] = useState(String(initialSettings.excelRowHeight));
@@ -83,6 +89,7 @@ export function UserSettingsForm({
         defaultCurrency,
         currencyDecimals: Number(currencyDecimals),
         dateFormat,
+        appTheme,
         defaultViewMode,
         excelShowFieldBorders,
         excelRowHeight: Number(excelRowHeight),
@@ -139,7 +146,7 @@ export function UserSettingsForm({
               <option value="PEN">PEN - Sol peruano</option>
               <option value="USD">USD - Dolar estadounidense</option>
             </Select>
-            <p className="text-sm text-slate-500">Se usara como moneda inicial en nuevas vistas y presupuestos compatibles.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">Se usara como moneda inicial en nuevas vistas y presupuestos compatibles.</p>
           </div>
 
           <div className="space-y-2">
@@ -151,10 +158,22 @@ export function UserSettingsForm({
                 </option>
               ))}
             </Select>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-[var(--app-text-muted)]">
               Esto cambia solo la visualizacion. Los calculos monetarios internos mantienen su precision contable.
             </p>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="appTheme">Tema de la app</Label>
+          <Select id="appTheme" disabled={pending} value={appTheme} onChange={(event) => setAppTheme(event.target.value as UserSettingsRecord["appTheme"])}>
+            {APP_THEME_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {APP_THEME_LABELS[option]}
+              </option>
+            ))}
+          </Select>
+          <p className="text-sm text-[var(--app-text-muted)]">Aplica el look general de la webapp, incluyendo shell, cards, tablas y formularios compatibles.</p>
         </div>
 
         <div className="space-y-2">
@@ -166,7 +185,7 @@ export function UserSettingsForm({
               </option>
             ))}
           </Select>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-[var(--app-text-muted)]">
             El formato seleccionado se usara en tablas, tarjetas y vistas de seguimiento donde se muestren fechas.
           </p>
         </div>
@@ -193,7 +212,7 @@ export function UserSettingsForm({
               <option value="modern">Vista moderna</option>
               <option value="excel">Modo Excel</option>
             </Select>
-            <p className="text-sm text-slate-500">Se aplicara como vista inicial global y seguira siendo editable desde cada flujo.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">Se aplicara como vista inicial global y seguira siendo editable desde cada flujo.</p>
           </div>
 
           <div className="space-y-2">
@@ -205,13 +224,13 @@ export function UserSettingsForm({
                 </option>
               ))}
             </Select>
-            <p className="text-sm text-slate-500">Afecta la lectura de tablas compactas y listas virtualizadas compatibles con el modo Excel.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">Afecta la lectura de tablas compactas y listas virtualizadas compatibles con el modo Excel.</p>
           </div>
         </div>
 
         <label
           htmlFor="excelShowFieldBorders"
-          className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-sky-200 hover:bg-sky-50/40"
+          className="flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)]"
         >
           <input
             id="excelShowFieldBorders"
@@ -222,8 +241,8 @@ export function UserSettingsForm({
             onChange={(event) => setExcelShowFieldBorders(event.target.checked)}
           />
           <div className="space-y-1">
-            <p className="text-sm font-medium text-slate-900">Mostrar bordes en fields</p>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm font-medium text-[var(--app-text-strong)]">Mostrar bordes en fields</p>
+            <p className="text-sm text-[var(--app-text-muted)]">
               Mantiene visibles los bordes de inputs y selects en modo Excel para una lectura mas tecnica.
             </p>
           </div>
@@ -277,19 +296,25 @@ export function UserSettingsForm({
         title="Sub Presupuestos iniciales"
         description="Lista base de sub presupuestos que se crea automaticamente en cada proyecto nuevo."
       >
-        <div className={isExcelMode ? "rounded-md border border-slate-300 bg-white p-3 shadow-sm" : "rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm shadow-slate-100/70"}>
+        <div
+          className={
+            isExcelMode
+              ? "rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] p-3 shadow-sm"
+              : "rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm shadow-slate-950/10"
+          }
+        >
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Label htmlFor="defaultSubBudgetName-0">Sub presupuestos base</Label>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-text-muted)]">
                   {defaultSubBudgetNames.length} {defaultSubBudgetNames.length === 1 ? "Sub Presupuesto" : "Sub Presupuestos"}
                 </span>
               </div>
               {matchesDefaultSubBudgetNames ? (
                 <Badge className="bg-emerald-100 text-emerald-700">Usando lista base</Badge>
               ) : null}
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[var(--app-text-muted)]">
                 Usa una fila por Sub Presupuesto. Puedes agregar, editar o eliminar Sub Presupuestos iniciales antes de guardar.
               </p>
             </div>
@@ -297,7 +322,7 @@ export function UserSettingsForm({
               <Button
                 type="button"
                 variant="outline"
-                className="bg-white"
+                className=""
                 disabled={pending || matchesDefaultSubBudgetNames}
                 onClick={() => {
                   setError("");
@@ -310,7 +335,7 @@ export function UserSettingsForm({
               <Button
                 type="button"
                 variant="outline"
-                className="bg-white"
+                className=""
                 disabled={pending}
                 onClick={() => {
                   setError("");
@@ -326,7 +351,7 @@ export function UserSettingsForm({
           <StaticTableFrame className="mt-4">
             <Table>
               <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                   <TH className="w-12 text-center"></TH>
                   <TH className="w-16">#</TH>
                   <TH>Sub presupuesto inicial</TH>
@@ -355,14 +380,14 @@ export function UserSettingsForm({
                       setDraggedSubBudgetIndex(null);
                     }}
                     onDragEnd={() => setDraggedSubBudgetIndex(null)}
-                    className={draggedSubBudgetIndex === index ? "scale-[0.995] bg-sky-50/70 opacity-60 ring-2 ring-sky-300" : "hover:bg-slate-50/70"}
+                    className={draggedSubBudgetIndex === index ? "scale-[0.995] bg-[var(--app-primary-muted)] opacity-60 ring-2 ring-sky-300" : "hover:bg-[var(--app-surface-muted)]"}
                   >
-                    <TD className="text-center text-slate-400">
-                      <span className="inline-flex cursor-grab items-center justify-center rounded-lg p-1 transition hover:bg-slate-100">
+                    <TD className="text-center text-[var(--app-text-subtle)]">
+                      <span className="inline-flex cursor-grab items-center justify-center rounded-lg p-1 transition hover:bg-[var(--app-surface-muted)]">
                         <GripVertical className="h-4 w-4" />
                       </span>
                     </TD>
-                    <TD className="font-medium text-slate-500">{index + 1}</TD>
+                    <TD className="font-medium text-[var(--app-text-muted)]">{index + 1}</TD>
                     <TD>
                       <Input
                         id={`defaultSubBudgetName-${index}`}
@@ -419,9 +444,9 @@ export function UserSettingsForm({
 
 function PreviewInfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
+      <p className="text-sm text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }
@@ -535,3 +560,4 @@ function moveSubBudgetNameToTarget(names: readonly string[], sourceIndex: number
   nextNames.splice(targetIndex, 0, sourceName);
   return nextNames;
 }
+

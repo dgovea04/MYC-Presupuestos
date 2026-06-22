@@ -13,11 +13,14 @@ export const DATE_FORMAT_OPTIONS = [
 
 export const VIEW_MODE_OPTIONS = ["modern", "excel"] as const;
 export const EXCEL_ROW_HEIGHT_OPTIONS = [40, 45, 52, 60] as const;
+export const APP_THEME_OPTIONS = ["light", "dark"] as const;
 
 export type DateFormatOption = (typeof DATE_FORMAT_OPTIONS)[number];
 export const DEFAULT_DATE_FORMAT: DateFormatOption = "DD_MMM_YYYY";
 export type ViewModeOption = (typeof VIEW_MODE_OPTIONS)[number];
 export const DEFAULT_VIEW_MODE: ViewModeOption = "modern";
+export type AppThemeOption = (typeof APP_THEME_OPTIONS)[number];
+export const DEFAULT_APP_THEME: AppThemeOption = "light";
 export const DEFAULT_EXCEL_SHOW_FIELD_BORDERS = true;
 export const DEFAULT_EXCEL_ROW_HEIGHT = 52;
 
@@ -46,6 +49,7 @@ export type UserSettingsRecord = {
   defaultCurrency: "PEN" | "USD";
   currencyDecimals: number;
   dateFormat: DateFormatOption;
+  appTheme?: AppThemeOption;
   defaultViewMode: ViewModeOption;
   excelShowFieldBorders: boolean;
   excelRowHeight: number;

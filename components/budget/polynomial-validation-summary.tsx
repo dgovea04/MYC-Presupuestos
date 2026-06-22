@@ -38,19 +38,19 @@ export function PolynomialValidationSummary({
         />
 
         <div className="flex flex-wrap gap-2">
-          <Badge className={validation.isCoefficientSumValid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
+          <Badge className={validation.isCoefficientSumValid ? "border-emerald-500/25 bg-emerald-500/12 text-emerald-300" : "border-rose-500/25 bg-rose-500/12 text-rose-300"}>
             Suma coeficientes: {validation.coefficientSum}
           </Badge>
-          <Badge className={validation.hasMaximumTermsValid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
+          <Badge className={validation.hasMaximumTermsValid ? "border-emerald-500/25 bg-emerald-500/12 text-emerald-300" : "border-rose-500/25 bg-rose-500/12 text-rose-300"}>
             Monomios: {monomials.length}/{POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS}
           </Badge>
-          <Badge className={pendingBaseAssignments.length === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+          <Badge className={pendingBaseAssignments.length === 0 ? "border-emerald-500/25 bg-emerald-500/12 text-emerald-300" : "border-amber-500/25 bg-amber-500/12 text-amber-300"}>
             Indices base pendientes: {pendingBaseAssignments.length}
           </Badge>
         </div>
 
         {validation.compositionDiagnostics.length > 0 ? (
-          <div className={cn("border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          <div className={cn("border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200", isExcelMode ? "rounded-md" : "rounded-2xl")}>
             <ul className="space-y-1">
               {validation.compositionDiagnostics.map((diagnostic) => (
                 <li key={`${diagnostic.code}:${diagnostic.monomialName}:${diagnostic.message}`}>
@@ -62,13 +62,18 @@ export function PolynomialValidationSummary({
         ) : null}
 
         {!validation.isCoefficientSumValid ? (
-          <div className={cn("border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          <div className={cn("border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200", isExcelMode ? "rounded-md" : "rounded-2xl")}>
             La suma de coeficientes debe ser exactamente 1.000 al milesimo.
           </div>
         ) : null}
 
         {pendingBaseAssignments.length > 0 ? (
-          <div className={cn("border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+          <div
+            className={cn(
+              "border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-text-muted)]",
+              isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl",
+            )}
+          >
             Asigna indices INEI base a cada monomio antes de calcular K o registrar reajustes.
           </div>
         ) : null}

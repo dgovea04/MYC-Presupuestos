@@ -47,19 +47,19 @@ export function DeleteBudgetTemplateButton({ templateId, templateName }: { templ
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)]">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-base font-semibold text-slate-950">Eliminar plantilla</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-5 text-slate-500">
-                Esta accion elimina <span className="font-medium text-slate-700">{templateName}</span> de tu biblioteca. Los
+              <Dialog.Title className="text-base font-semibold text-[var(--app-text-strong)]">Eliminar plantilla</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">
+                Esta accion elimina <span className="font-medium text-[var(--app-text-strong)]">{templateName}</span> de tu biblioteca. Los
                 presupuestos ya creados no se modifican.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                 aria-label="Cerrar"
               >
                 <X className="h-4 w-4" />

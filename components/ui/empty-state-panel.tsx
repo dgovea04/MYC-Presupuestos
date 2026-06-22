@@ -17,7 +17,7 @@ export function EmptyStatePanel({
   return (
     <div
       className={cn(
-        "border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600",
+        "border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface-muted)] px-4 py-6 text-sm text-[var(--app-text-muted)]",
         isExcelMode ? "rounded-md" : "rounded-2xl",
         className,
       )}

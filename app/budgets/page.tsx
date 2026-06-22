@@ -20,8 +20,8 @@ export default async function BudgetsPage({
 
   return (
     <AppShell currentUser={session!.user}>
-      <Card className="border-slate-200">
-        <CardHeader className="flex flex-col gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] md:flex-row md:items-start md:justify-between">
+      <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+        <CardHeader className="flex flex-col gap-4 rounded-2xl bg-[var(--app-surface-elevated)] md:flex-row md:items-start md:justify-between">
           <PageHeaderCard
             className="w-full"
             icon={<FileSpreadsheet className="h-5 w-5" />}

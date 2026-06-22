@@ -18,7 +18,7 @@ export default async function DelphinImportsPage() {
           title="Importador Delphin Express"
           description="Convierte archivos .dprj de Delphin Express en proyectos MYC con presupuesto, partidas, APUs e insumos."
         />
-        <Card>
+        <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
           <CardHeader />
           <CardContent>
             <Rw7ImporterPageContent

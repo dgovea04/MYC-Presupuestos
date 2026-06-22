@@ -19,7 +19,9 @@ export function ToneBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2.5 py-1 text-xs font-medium transition-colors",
+        "ui-tone-badge inline-flex items-center px-2.5 py-1 text-xs font-medium transition-colors",
+        `ui-tone-badge-${tone}`,
+        bordered && "ui-tone-badge-bordered",
         isExcelMode ? "rounded-sm shadow-none" : "rounded-full shadow-[0_8px_18px_-16px_rgba(15,23,42,0.4)]",
         getToneBadgeClassName(tone, bordered),
         className,
@@ -57,24 +59,28 @@ function getToneBadgeClassName(
   bordered: boolean,
 ) {
   if (tone === "slate") {
-    return bordered ? "border border-slate-200 bg-slate-100 text-slate-700" : "bg-slate-100 text-slate-700";
+    return bordered
+      ? "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)]"
+      : "bg-[var(--app-surface-muted)] text-[var(--app-text-muted)]";
   }
 
   if (tone === "emerald") {
-    return bordered ? "border border-emerald-200 bg-emerald-100 text-emerald-700" : "bg-emerald-100 text-emerald-700";
+    return bordered ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "bg-emerald-100 text-emerald-700";
   }
 
   if (tone === "amber") {
-    return bordered ? "border border-amber-200 bg-amber-100 text-amber-700" : "bg-amber-100 text-amber-700";
+    return bordered ? "border border-amber-200 bg-amber-50 text-amber-700" : "bg-amber-100 text-amber-700";
   }
 
   if (tone === "rose") {
-    return bordered ? "border border-rose-200 bg-rose-100 text-rose-700" : "bg-rose-100 text-rose-700";
+    return bordered ? "border border-rose-200 bg-rose-50 text-rose-700" : "bg-rose-100 text-rose-700";
   }
 
   if (tone === "violet") {
-    return bordered ? "border border-violet-200 bg-violet-100 text-violet-700" : "bg-violet-100 text-violet-700";
+    return bordered ? "border border-violet-200 bg-violet-50 text-violet-700" : "bg-violet-100 text-violet-700";
   }
 
-  return bordered ? "border border-sky-200 bg-sky-100 text-sky-700" : "bg-sky-100 text-sky-700";
+  return bordered
+    ? "border border-sky-200 bg-sky-50 text-sky-700"
+    : "bg-sky-100 text-sky-700";
 }

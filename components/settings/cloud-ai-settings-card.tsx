@@ -256,11 +256,11 @@ export function CloudAiSettingsCard() {
   }
 
   return (
-    <Card className="border-violet-100 bg-[linear-gradient(135deg,#ffffff_0%,#faf5ff_48%,#f5f3ff_100%)]">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardHeader>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
-            <div className="rounded-2xl bg-violet-100 p-2 text-violet-700">
+            <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
@@ -288,16 +288,16 @@ export function CloudAiSettingsCard() {
 
         {loading ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--app-text-subtle)]" />
           </div>
         ) : (
           <>
             {/* Provider Preference */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-slate-900">Proveedor por defecto</p>
-              <p className="mt-1 text-sm text-slate-500">Define qué motor de IA prefieres usar por defecto en Khipu.</p>
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor por defecto</p>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">Define qué motor de IA prefieres usar por defecto en Khipu.</p>
               <select
-                className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                className="mt-3 w-full rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2.5 text-sm text-[var(--app-text)] focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
                 value={providerPreference}
                 onChange={(event) => setProviderPreference(event.target.value as AiProviderPreference)}
               >
@@ -307,18 +307,18 @@ export function CloudAiSettingsCard() {
                   </option>
                 ))}
               </select>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-[var(--app-text-muted)]">
                 {PROVIDER_OPTIONS.find((o) => o.value === providerPreference)?.description}
               </p>
             </div>
 
             <div className="grid gap-4 xl:grid-cols-2">
               {/* OpenAI */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">OpenAI (ChatGPT API)</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="text-sm font-semibold text-[var(--app-text-strong)]">OpenAI (ChatGPT API)</p>
+                    <p className="mt-1 text-xs text-[var(--app-text-muted)]">
                       {settings?.openaiConfigured ? "Configurado" : "Pendiente"}
                     </p>
                   </div>
@@ -327,7 +327,7 @@ export function CloudAiSettingsCard() {
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
                       settings?.openaiConfigured
                         ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-500",
+                        : "bg-[var(--app-surface)] text-[var(--app-text-muted)] border border-[var(--app-border)]",
                     )}
                   >
                     <Key className="h-3 w-3" />
@@ -336,10 +336,10 @@ export function CloudAiSettingsCard() {
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <label className="block text-xs font-medium text-slate-600">
+                  <label className="block text-xs font-medium text-[var(--app-text-muted)]">
                     API Key
                     {settings?.openaiConfigured && !showOpenaiKey ? (
-                      <span className="ml-1 text-slate-400">({settings.openaiApiKeyMasked})</span>
+                      <span className="ml-1 text-[var(--app-text-subtle)]">({settings.openaiApiKeyMasked})</span>
                     ) : null}
                   </label>
                   <div className="flex gap-2">
@@ -355,7 +355,7 @@ export function CloudAiSettingsCard() {
                       <button
                         type="button"
                         onClick={() => setShowOpenaiKey((current) => !current)}
-                        className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-[var(--app-text-subtle)] hover:text-[var(--app-text-muted)]"
                         tabIndex={-1}
                       >
                         {showOpenaiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -379,7 +379,7 @@ export function CloudAiSettingsCard() {
                   ) : null}
                 </div>
 
-                <label className="mt-3 block text-xs font-medium text-slate-600">
+                <label className="mt-3 block text-xs font-medium text-[var(--app-text-muted)]">
                   Modelo (opcional)
                 </label>
                 <div className="mt-1 flex gap-2">
@@ -414,7 +414,7 @@ export function CloudAiSettingsCard() {
                       size="sm"
                       variant="ghost"
                       onClick={() => setConfirmClearOpenai(false)}
-                      className="text-xs text-slate-600 hover:bg-white"
+                      className="text-xs text-[var(--app-text-muted)] hover:bg-[var(--app-surface)]"
                     >
                       Cancelar
                     </Button>
@@ -435,11 +435,11 @@ export function CloudAiSettingsCard() {
               </div>
 
               {/* Gemini */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Google Gemini API</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="text-sm font-semibold text-[var(--app-text-strong)]">Google Gemini API</p>
+                    <p className="mt-1 text-xs text-[var(--app-text-muted)]">
                       {settings?.geminiConfigured ? "Configurado" : "Pendiente"}
                     </p>
                   </div>
@@ -448,7 +448,7 @@ export function CloudAiSettingsCard() {
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
                       settings?.geminiConfigured
                         ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-500",
+                        : "bg-[var(--app-surface)] text-[var(--app-text-muted)] border border-[var(--app-border)]",
                     )}
                   >
                     <Key className="h-3 w-3" />
@@ -457,10 +457,10 @@ export function CloudAiSettingsCard() {
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <label className="block text-xs font-medium text-slate-600">
+                  <label className="block text-xs font-medium text-[var(--app-text-muted)]">
                     API Key
                     {settings?.geminiConfigured && !showGeminiKey ? (
-                      <span className="ml-1 text-slate-400">({settings.geminiApiKeyMasked})</span>
+                      <span className="ml-1 text-[var(--app-text-subtle)]">({settings.geminiApiKeyMasked})</span>
                     ) : null}
                   </label>
                   <div className="flex gap-2">
@@ -476,7 +476,7 @@ export function CloudAiSettingsCard() {
                       <button
                         type="button"
                         onClick={() => setShowGeminiKey((current) => !current)}
-                        className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-[var(--app-text-subtle)] hover:text-[var(--app-text-muted)]"
                         tabIndex={-1}
                       >
                         {showGeminiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -500,12 +500,12 @@ export function CloudAiSettingsCard() {
                   ) : null}
                 </div>
 
-                <label className="mt-3 block text-xs font-medium text-slate-600">
+                <label className="mt-3 block text-xs font-medium text-[var(--app-text-muted)]">
                   Modelo (opcional)
                 </label>
                 <div className="mt-1 flex gap-2">
                   <select
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                    className="flex-1 rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2.5 text-sm text-[var(--app-text)] focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
                     value={geminiModel || DEFAULT_GEMINI_MODEL}
                     onChange={(event) => setGeminiModel(event.target.value)}
                   >
@@ -539,7 +539,7 @@ export function CloudAiSettingsCard() {
                       size="sm"
                       variant="ghost"
                       onClick={() => setConfirmClearGemini(false)}
-                      className="text-xs text-slate-600 hover:bg-white"
+                      className="text-xs text-[var(--app-text-muted)] hover:bg-[var(--app-surface)]"
                     >
                       Cancelar
                     </Button>
@@ -561,11 +561,11 @@ export function CloudAiSettingsCard() {
             </div>
 
             {/* Safety notice */}
-            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
               <div>
-                <p className="text-sm font-medium text-slate-900">Seguridad de tus API keys</p>
-                <p className="mt-1 text-xs text-slate-600">
+                <p className="text-sm font-medium text-[var(--app-text-strong)]">Seguridad de tus API keys</p>
+                <p className="mt-1 text-xs text-[var(--app-text-muted)]">
                   Tus API keys se almacenan encriptadas (AES-256-GCM) en la base de datos y nunca se exponen al navegador sin encriptar.
                   Solo el servidor puede desencriptarlas para hacer llamadas a las APIs.
                 </p>
@@ -604,3 +604,4 @@ function readProviderPreference(value: unknown): AiProviderPreference {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+

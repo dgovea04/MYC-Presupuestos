@@ -15,9 +15,13 @@ import type {
 import { loadHealth, loadCloudStatus } from "@/components/ai/controller-health";
 import {
   readStoredHistory,
-  persistStoredHistory,
+  persistStoredHistoryAndSync,
+  KHIPU_HISTORY_SYNCED_EVENT,
+  KHIPU_FEEDBACK_SYNCED_EVENT,
+  type KhipuHistorySyncedDetail,
+  type KhipuFeedbackSyncedDetail,
   readStoredFeedback,
-  persistStoredFeedback,
+  persistStoredFeedbackAndSync,
   createEmptyFeedbackSummary,
   summarizeFeedbackState,
   updateFeedbackSummary,
@@ -178,6 +182,10 @@ function readInitialProvider(raw?: string): AssistantProvider {
   return "ollama";
 }
 
+function generateSyncSourceId() {
+  return `khipu-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export function useAiAssistantController({
   projectId,
   initialAction,
@@ -189,12 +197,13 @@ export function useAiAssistantController({
   initialContext: AiContext;
   initialProvider?: string;
 }): AiAssistantControllerViewModel {
+  const syncSourceId = useRef(generateSyncSourceId());
   const [activeAction, setActiveActionState] = useState<AssistantAction>(initialAction);
   const [context, setContext] = useState<AiContext>(initialContext);
   const [result, setResult] = useState<AiResultWithHistory | null>(null);
   const [error, setError] = useState("");
   const [feedbackError, setFeedbackError] = useState("");
-  const [history, setHistory] = useState<AiHistoryEntry[]>(() => (projectId ? [] : readStoredHistory()));
+  const [history, setHistory] = useState<AiHistoryEntry[]>(() => readStoredHistory(projectId));
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [lastRequest, setLastRequest] = useState<AssistantRequest | null>(null);
@@ -262,12 +271,60 @@ export function useAiAssistantController({
     void loadCloudStatus(setCloudConfigured);
   }, []);
 
+  // Sync history from other controller instances (floating ↔ page)
   useEffect(() => {
-    if (!projectId) persistStoredHistory(history);
-  }, [history, projectId]);
+    function handleSync(event: Event) {
+      const detail = (event as CustomEvent<KhipuHistorySyncedDetail>).detail;
+      if (!detail || detail.sourceId === syncSourceId.current) return;
+      // Only sync when both controllers share the same scope (both session or same project)
+      if (detail.projectId !== projectId) return;
+      // Use functional update with same-reference bailout to avoid infinite loops
+      setHistory((current) => {
+        if (
+          current.length === detail.history.length &&
+          current[0]?.id === detail.history[0]?.id &&
+          current[current.length - 1]?.id === detail.history[detail.history.length - 1]?.id
+        ) {
+          return current; // React bails out when returning same reference
+        }
+        return detail.history;
+      });
+    }
+
+    window.addEventListener(KHIPU_HISTORY_SYNCED_EVENT, handleSync);
+    return () => window.removeEventListener(KHIPU_HISTORY_SYNCED_EVENT, handleSync);
+  }, [projectId]);
 
   useEffect(() => {
-    if (!projectId) persistStoredFeedback(sessionFeedbackByHistoryId);
+    persistStoredHistoryAndSync(history, syncSourceId.current, projectId);
+  }, [history, projectId]);
+
+  // Sync feedback from other controller instances (floating ↔ page)
+  useEffect(() => {
+    function handleFeedbackSync(event: Event) {
+      const detail = (event as CustomEvent<KhipuFeedbackSyncedDetail>).detail;
+      if (!detail || detail.sourceId === syncSourceId.current) return;
+      if (projectId) return; // Project-scoped feedback doesn't use localStorage sync
+      setSessionFeedbackByHistoryId((current) => {
+        // Same-reference bailout to avoid infinite loops
+        const currentKeys = Object.keys(current);
+        const detailKeys = Object.keys(detail.feedback);
+        if (
+          currentKeys.length === detailKeys.length &&
+          currentKeys.every((key) => current[key] === detail.feedback[key])
+        ) {
+          return current;
+        }
+        return detail.feedback;
+      });
+    }
+
+    window.addEventListener(KHIPU_FEEDBACK_SYNCED_EVENT, handleFeedbackSync);
+    return () => window.removeEventListener(KHIPU_FEEDBACK_SYNCED_EVENT, handleFeedbackSync);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) persistStoredFeedbackAndSync(sessionFeedbackByHistoryId, syncSourceId.current);
   }, [projectId, sessionFeedbackByHistoryId]);
 
   useEffect(() => {
@@ -276,7 +333,11 @@ export function useAiAssistantController({
     void Promise.all([loadProjectHistory(projectId), loadProjectFeedbackSummary(projectId)]).then(async ([entries, summaryResult]) => {
       const feedback = await loadProjectLatestFeedback(projectId, entries.map((entry) => entry.id));
       if (!active) return;
-      setHistory(entries);
+      // Server is source of truth when it has entries; otherwise keep local cache
+      setHistory((current) => {
+        if (entries.length > 0) return entries;
+        return current;
+      });
       setProjectFeedbackByHistoryId({ projectId, feedback });
       setProjectFeedbackSummary({
         projectId,
@@ -524,7 +585,7 @@ export function useAiAssistantController({
     setProvider,
     clearHistory() {
       setHistory([]);
-      if (!projectId) persistStoredHistory([]);
+      persistStoredHistoryAndSync([], syncSourceId.current, projectId);
     },
     refreshHealth,
     retryLastRequest,

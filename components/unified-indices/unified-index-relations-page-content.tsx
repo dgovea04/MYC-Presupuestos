@@ -75,8 +75,8 @@ export function UnifiedIndexRelationsPageContent({ rows }: { rows: UnifiedIndexR
       <VirtualizedTableFrame scrollContainerRef={scrollContainerRef} onScroll={scrollProps.onScroll}>
         <Table className="table-fixed">
           <UnifiedIndexRelationsColGroup />
-          <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
-            <TR className="bg-slate-50 hover:bg-slate-50">
+          <THead className="sticky top-0 z-20 [&_tr]:border-b-[var(--app-border)]">
+            <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
               <TH>CODIGO IU</TH>
               <TH>NOMBRE OFICIAL</TH>
               <TH className="text-right">INSUMOS ASOCIADOS</TH>
@@ -86,7 +86,7 @@ export function UnifiedIndexRelationsPageContent({ rows }: { rows: UnifiedIndexR
             <VirtualizedTableSpacerRow colSpan={RELATION_TABLE_COLUMN_COUNT} height={virtualRange.topSpacerHeight} />
             {virtualRange.visibleRows.map((row) => (
               <TR key={`${row.code}-${row.name}`}>
-                <TD className="font-medium text-slate-900">{row.code}</TD>
+                <TD className="font-medium text-[var(--app-text-strong)]">{row.code}</TD>
                 <TD>{row.name}</TD>
                 <TD className="text-right tabular-nums">{row.resourceCount}</TD>
               </TR>

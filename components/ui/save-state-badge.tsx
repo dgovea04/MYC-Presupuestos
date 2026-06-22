@@ -22,11 +22,21 @@ export function SaveStateBadge({
 }) {
   const { isExcelMode } = useAppViewMode();
   const styles: Record<SaveStateBadgeStatus, string> = {
-    idle: bordered ? "border-slate-200 bg-slate-100/80 text-slate-600" : "bg-slate-100 text-slate-600",
-    dirty: bordered ? "border-amber-200 bg-amber-100/80 text-amber-700" : "bg-amber-100 text-amber-700",
-    saving: bordered ? "border-sky-200 bg-sky-100/80 text-sky-700" : "bg-sky-100 text-sky-700",
-    saved: bordered ? "border-emerald-200 bg-emerald-100/80 text-emerald-700" : "bg-emerald-100 text-emerald-700",
-    error: bordered ? "border-rose-200 bg-rose-100/80 text-rose-700" : "bg-rose-100 text-rose-700",
+    idle: bordered
+      ? "border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)]"
+      : "bg-[var(--app-surface-muted)] text-[var(--app-text-muted)]",
+    dirty: bordered
+      ? "border-[color:rgba(245,158,11,0.32)] bg-[color:rgba(245,158,11,0.14)] text-[var(--app-warning)]"
+      : "bg-[color:rgba(245,158,11,0.16)] text-[var(--app-warning)]",
+    saving: bordered
+      ? "border-[color:rgba(37,99,235,0.32)] bg-[color:rgba(37,99,235,0.14)] text-[var(--app-primary-soft)]"
+      : "bg-[color:rgba(37,99,235,0.16)] text-[var(--app-primary-soft)]",
+    saved: bordered
+      ? "border-[color:rgba(16,185,129,0.32)] bg-[color:rgba(16,185,129,0.14)] text-[var(--app-success)]"
+      : "bg-[color:rgba(16,185,129,0.16)] text-[var(--app-success)]",
+    error: bordered
+      ? "border-[color:rgba(239,68,68,0.32)] bg-[color:rgba(239,68,68,0.14)] text-[var(--app-danger)]"
+      : "bg-[color:rgba(239,68,68,0.16)] text-[var(--app-danger)]",
   };
 
   const labels: Record<SaveStateBadgeStatus, string> = {

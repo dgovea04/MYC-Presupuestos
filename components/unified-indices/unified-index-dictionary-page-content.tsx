@@ -70,8 +70,8 @@ export function UnifiedIndexDictionaryPageContent({ rows }: { rows: UnifiedIndex
       <VirtualizedTableFrame scrollContainerRef={scrollContainerRef} onScroll={scrollProps.onScroll}>
         <Table className="table-fixed">
           <UnifiedIndexDictionaryColGroup />
-          <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
-            <TR className="bg-slate-50 hover:bg-slate-50">
+          <THead className="sticky top-0 z-20 [&_tr]:border-b-[var(--app-border)]">
+            <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
               <TH>ELEMENTO</TH>
               <TH>NOTA</TH>
               <TH>CODIGO IU</TH>
@@ -81,7 +81,7 @@ export function UnifiedIndexDictionaryPageContent({ rows }: { rows: UnifiedIndex
             <VirtualizedTableSpacerRow colSpan={DICTIONARY_TABLE_COLUMN_COUNT} height={virtualRange.topSpacerHeight} />
             {virtualRange.visibleRows.map((row) => (
               <TR key={`${row.element}-${row.code}-${row.note ?? "sin-nota"}`}>
-                <TD className="font-medium text-slate-900">{row.element}</TD>
+                <TD className="font-medium text-[var(--app-text-strong)]">{row.element}</TD>
                 <TD>{row.note ?? "Sin nota"}</TD>
                 <TD className="tabular-nums">{row.code}</TD>
               </TR>

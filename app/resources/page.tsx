@@ -28,8 +28,8 @@ export default async function ResourcesPage() {
         viewSummary: "Catalogo general de insumos para buscar, reutilizar y ampliar recursos de obra.",
       }}
     >
-      <Card className="border-slate-200">
-        <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+      <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+        <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
           <PageHeaderCard
             icon={<Wrench className="h-5 w-5" />}
             title="Catalogo de insumos"

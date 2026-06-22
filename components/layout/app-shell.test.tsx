@@ -56,6 +56,14 @@ vi.mock("@/components/providers/formatting-settings-provider", () => ({
   FormattingSettingsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock("@/components/layout/app-theme-provider", () => ({
+  AppThemeProvider: ({ children, initialTheme }: { children: React.ReactNode; initialTheme: string }) => (
+    <div data-theme={initialTheme} className="theme-app">
+      {children}
+    </div>
+  ),
+}));
+
 vi.mock("@/components/view-mode/app-view-mode-provider", () => ({
   AppViewModeProvider: ({ children }: { children: React.ReactNode; initialViewMode?: string | null }) => <>{children}</>,
 }));
@@ -66,6 +74,10 @@ vi.mock("@/components/layout/app-back-button", () => ({
 
 vi.mock("@/components/budget/view-mode-toggle", () => ({
   ViewModeToggle: () => <div>Toggle</div>,
+}));
+
+vi.mock("@/components/layout/app-theme-toggle", () => ({
+  AppThemeToggle: () => <button>Tema</button>,
 }));
 
 vi.mock("@/components/notes/notes-drawer", () => ({
@@ -91,6 +103,7 @@ describe("AppShell", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: "DD_MMM_YYYY",
+      appTheme: "light",
       defaultViewMode: "modern",
       excelShowFieldBorders: true,
       excelRowHeight: 52,
@@ -99,6 +112,12 @@ describe("AppShell", () => {
       defaultUtilityRate: 0.08,
       defaultSubBudgetNames: ["Estructuras"],
       aiProviderPreference: "auto",
+      floatingKhipuProvider: "ollama",
+      floatingKhipuWidth: 600,
+      floatingKhipuHeight: 500,
+      floatingKhipuFontSize: "normal",
+      floatingKhipuPosition: "bottom-right",
+      floatingKhipuTheme: "light",
     });
     vi.mocked(getEffectiveUserLicense).mockResolvedValue({
       availableFeatures: ["exports.basic"],
@@ -151,6 +170,7 @@ describe("AppShell", () => {
           defaultCurrency: "PEN",
           currencyDecimals: 2,
           dateFormat: "DD_MMM_YYYY",
+          appTheme: "light",
           defaultViewMode: "modern",
           excelShowFieldBorders: true,
           excelRowHeight: 52,
@@ -159,6 +179,12 @@ describe("AppShell", () => {
           defaultUtilityRate: 0.08,
           defaultSubBudgetNames: ["Arquitectura"],
           aiProviderPreference: "auto",
+          floatingKhipuProvider: "ollama",
+          floatingKhipuWidth: 600,
+          floatingKhipuHeight: 500,
+          floatingKhipuFontSize: "normal",
+          floatingKhipuPosition: "bottom-right",
+          floatingKhipuTheme: "light",
         },
       }),
     );
@@ -170,5 +196,55 @@ describe("AppShell", () => {
     expect(getAuthSession).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
     expect(getEffectiveUserLicense).toHaveBeenCalledWith({ userId: "user-2" });
+  });
+
+  it("applies data-theme dark to the authenticated app shell when appTheme is dark", async () => {
+    vi.mocked(getAuthSession).mockReset();
+    vi.mocked(getUserSettings).mockReset();
+    vi.mocked(getEffectiveUserLicense).mockResolvedValue({
+      availableFeatures: ["exports.basic"],
+      budgetLimit: null,
+      budgetUsage: 0,
+      isInGracePeriod: false,
+      planName: "Pro",
+      planSlug: "pro",
+      projectLimit: null,
+      projectUsage: 0,
+    });
+
+    const markup = renderToStaticMarkup(
+      await AppShell({
+        children: <div>Contenido</div>,
+        currentUser: {
+          id: "user-3",
+          avatarUrl: "/uploads/avatars/user-3.webp",
+          email: "dark@example.com",
+          name: "Tema Dark",
+        },
+        settings: {
+          defaultCurrency: "PEN",
+          currencyDecimals: 2,
+          dateFormat: "DD_MMM_YYYY",
+          appTheme: "dark",
+          defaultViewMode: "modern",
+          excelShowFieldBorders: true,
+          excelRowHeight: 52,
+          defaultIgvRate: 0.18,
+          defaultGeneralExpensesRate: 0.1,
+          defaultUtilityRate: 0.08,
+          defaultSubBudgetNames: ["Arquitectura"],
+          aiProviderPreference: "auto",
+          floatingKhipuProvider: "ollama",
+          floatingKhipuWidth: 600,
+          floatingKhipuHeight: 500,
+          floatingKhipuFontSize: "normal",
+          floatingKhipuPosition: "bottom-right",
+          floatingKhipuTheme: "light",
+        },
+      }),
+    );
+
+    expect(markup).toContain('data-theme="dark"');
+    expect(markup).toContain("theme-app");
   });
 });

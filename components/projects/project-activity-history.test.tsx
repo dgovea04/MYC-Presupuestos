@@ -106,7 +106,7 @@ describe("ProjectActivityHistory", () => {
 
     expect(markup).toContain("Siguiente");
     expect(markup).toContain("Anterior");
-    expect(markup).toContain("Página 1 de 2");
+    expect(markup).toContain("Pagina 1 de 2");
   });
 
   it("hides pagination controls when there are 5 or fewer events", () => {

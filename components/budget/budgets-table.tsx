@@ -151,25 +151,29 @@ export function BudgetsTable({
       />
 
       {templateIntent ? (
-        <div className="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 md:flex-row md:items-center md:justify-between dark:border-[rgba(37,99,235,0.28)] dark:bg-[rgba(37,99,235,0.12)] dark:text-[var(--app-primary-soft)]">
           <div>
-            <p className="font-semibold text-sky-900">{templateIntent.label}</p>
-            <p className="mt-1 text-sky-700">{templateIntent.description}</p>
+            <p className="font-semibold text-sky-900 dark:text-[var(--app-text-strong)]">{templateIntent.label}</p>
+            <p className="mt-1 text-sky-700 dark:text-[var(--app-text-muted)]">{templateIntent.description}</p>
           </div>
           <Link
             href="/templates?module=GENERAL_EXPENSES&source=WORKBOOK"
-            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white px-3 py-2 font-medium text-sky-800 transition hover:border-sky-300 hover:bg-sky-100"
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white px-3 py-2 font-medium text-sky-800 transition hover:border-sky-300 hover:bg-sky-100 dark:border-[rgba(37,99,235,0.28)] dark:bg-[var(--app-surface)] dark:text-[var(--app-primary-soft)] dark:hover:bg-[var(--app-surface-hover)]"
           >
             Ver plantillas
           </Link>
         </div>
       ) : null}
 
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {error ? (
+        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300">
+          {error}
+        </p>
+      ) : null}
       <StaticTableFrame>
         <Table>
-          <THead className="[&_tr]:border-b-slate-200">
-            <TR className="bg-slate-50 hover:bg-slate-50">
+          <THead className="[&_tr]:border-b-[var(--app-border)]">
+            <TR className="bg-[var(--app-surface-elevated)] hover:bg-[var(--app-surface-elevated)]">
               <TH>Presupuesto</TH>
               <TH>Proyecto</TH>
               <TH>Total</TH>
@@ -194,8 +198,8 @@ export function BudgetsTable({
               <TR>
                 <TD colSpan={5} className="px-6 py-10 text-center">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-slate-900">No encontramos presupuestos con ese filtro</p>
-                    <p className="text-sm text-slate-500">Prueba otro termino de busqueda o crea un presupuesto nuevo para comenzar.</p>
+                    <p className="text-sm font-medium text-[var(--app-text-strong)]">No encontramos presupuestos con ese filtro</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">Prueba otro termino de busqueda o crea un presupuesto nuevo para comenzar.</p>
                   </div>
                 </TD>
               </TR>
@@ -227,8 +231,8 @@ const BudgetTableRow = memo(function BudgetTableRow({
     : `/budgets/${budget.id}`;
 
   return (
-    <TR className="hover:bg-slate-50/80">
-      <TD className="font-medium text-slate-900">{budget.name}</TD>
+    <TR className="hover:bg-[var(--app-surface-muted)]/80">
+      <TD className="font-medium text-[var(--app-text-strong)]">{budget.name}</TD>
       <TD>{budget.projectName}</TD>
       <TD>{formatCurrency(budget.totalAmount, budget.currency, currencyDecimals)}</TD>
       <TD>{formatDate(budget.updatedAt, dateFormat)}</TD>

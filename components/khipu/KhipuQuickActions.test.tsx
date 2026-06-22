@@ -141,7 +141,7 @@ describe("KhipuQuickActions", () => {
     const iconWrappers = container.querySelectorAll("button > span:first-child");
     iconWrappers.forEach((wrapper) => {
       expect(wrapper.className).toContain("rounded-xl");
-      expect(wrapper.className).toContain("bg-cyan-50");
+      expect(wrapper.className).toContain("bg-[var(--app-primary-muted)]");
       expect(wrapper.className).toContain("text-cyan-600");
     });
   });

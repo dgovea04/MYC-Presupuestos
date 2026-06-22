@@ -72,14 +72,14 @@ export function MetradoFormulaBar({ activeRow, formula, onExpressionChange }: Me
   const displayValue = formula ? `${formula.label}: ${formula.expression}` : "";
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 lg:flex-row lg:items-center">
-      <div className="flex min-w-0 items-center gap-2 text-sm text-slate-600 lg:w-72">
+    <div className="flex flex-col gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 lg:flex-row lg:items-center">
+      <div className="flex min-w-0 items-center gap-2 text-sm text-[var(--app-text-muted)] lg:w-72">
         <FunctionSquare className="h-4 w-4 shrink-0 text-sky-600" />
-        <span className="truncate font-medium text-slate-900">{rowLabel}</span>
+        <span className="truncate font-medium text-[var(--app-text-strong)]">{rowLabel}</span>
         {activeRow ? <Badge>{activeRow.unit}</Badge> : null}
       </div>
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="shrink-0 text-xs font-semibold uppercase tracking-normal text-slate-500">
+        <span className="shrink-0 text-xs font-semibold uppercase tracking-normal text-[var(--app-text-muted)]">
           fx
         </span>
         {isEditing ? (
@@ -109,7 +109,7 @@ export function MetradoFormulaBar({ activeRow, formula, onExpressionChange }: Me
             <Input
               readOnly
               value={displayValue}
-              className="h-9 rounded-lg bg-slate-50 font-mono text-xs"
+              className="h-9 rounded-lg border-[var(--app-border)] bg-[var(--app-surface-muted)] font-mono text-xs text-[var(--app-text-strong)]"
               aria-label="Formula activa"
             />
             {activeRow && formula ? (

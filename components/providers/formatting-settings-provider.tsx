@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import {
+  DEFAULT_APP_THEME,
   DEFAULT_DATE_FORMAT,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
@@ -16,6 +17,7 @@ const defaultFormattingSettings: UserSettingsRecord = {
   defaultCurrency: "PEN",
   currencyDecimals: 2,
   dateFormat: DEFAULT_DATE_FORMAT,
+  appTheme: DEFAULT_APP_THEME,
   defaultViewMode: DEFAULT_VIEW_MODE,
   excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
   excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,

@@ -1,6 +1,6 @@
-# MYC Presupuestos
+# MC Presupuestos
 
-MYC Presupuestos es una plataforma SaaS moderna para costos, presupuestos y control tecnico de obras en Peru, basada en Analisis de Precios Unitarios (APU), presupuestos jerarquicos, formula polinomica, metrados, cronograma, riesgo y exportaciones profesionales.
+MC Presupuestos es una plataforma SaaS moderna para costos, presupuestos y control tecnico de obras en Peru, basada en Analisis de Precios Unitarios (APU), presupuestos jerarquicos, formula polinomica, metrados, cronograma, riesgo y exportaciones profesionales.
 
 La aplicacion esta orientada a ingenieros, contratistas, oficinas tecnicas y empresas constructoras que necesitan preparar, revisar y controlar presupuestos de obra con precision financiera.
 
@@ -211,7 +211,7 @@ http://localhost:3000
 
 ## Importacion desde S10 local
 
-Si el usuario ya tiene S10 y SQL Server Express instalados, no es necesario restaurar un `.S2K` manualmente. Puedes leer una base S10 existente, listar sus presupuestos y exportar un snapshot JSON compatible con el importador MYC.
+Si el usuario ya tiene S10 y SQL Server Express instalados, no es necesario restaurar un `.S2K` manualmente. Puedes leer una base S10 existente, listar sus presupuestos y exportar un snapshot JSON compatible con el importador MC.
 
 ### 1. Detectar bases S10 candidatas
 
@@ -249,7 +249,7 @@ Esto muestra codigos como `0302044` junto con la descripcion del presupuesto.
 npm.cmd run s10:sqlserver -- --export --database S10_OBRA_MYC --budget 0302044 --out data-for-seed\s10-export-0302044.json
 ```
 
-Ese JSON se puede usar en `/imports/s10` para generar el draft y luego importar el proyecto, subpresupuestos, partidas, APUs e insumos a MYC.
+Ese JSON se puede usar en `/imports/s10` para generar el draft y luego importar el proyecto, subpresupuestos, partidas, APUs e insumos a MC.
 
 Si SQL Server no usa seguridad integrada:
 

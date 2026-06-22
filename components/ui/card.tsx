@@ -6,7 +6,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 }
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("ui-card-header border-b border-slate-100 px-6 py-4", className)} {...props} />;
+  return <div className={cn("ui-card-header border-b border-slate-100 bg-[var(--app-surface-elevated)] px-6 py-4", className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {

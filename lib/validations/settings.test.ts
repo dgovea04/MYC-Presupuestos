@@ -2,16 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import { userSettingsSchema } from "@/lib/validations/settings";
 import {
+  DEFAULT_APP_THEME,
   DEFAULT_DATE_FORMAT,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   DEFAULT_VIEW_MODE,
+  FLOATING_KHIPU_DEFAULTS,
 } from "@/types/settings";
 
 const validSettings = {
   defaultCurrency: "PEN" as const,
   currencyDecimals: 2,
   dateFormat: DEFAULT_DATE_FORMAT,
+  appTheme: DEFAULT_APP_THEME,
   defaultViewMode: DEFAULT_VIEW_MODE,
   excelShowFieldBorders: true,
   excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -20,6 +23,12 @@ const validSettings = {
   defaultUtilityRate: 0.08,
   defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
   aiProviderPreference: "auto" as const,
+  floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+  floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+  floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+  floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+  floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+  floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
 };
 
 describe("userSettingsSchema", () => {
@@ -115,6 +124,25 @@ describe("userSettingsSchema", () => {
       userSettingsSchema.parse({
         ...validSettings,
         dateFormat: "MM_DD_YYYY",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts supported app themes and rejects unsupported ones", () => {
+    expect(
+      userSettingsSchema.parse({
+        ...validSettings,
+        appTheme: "dark",
+      }),
+    ).toEqual({
+      ...validSettings,
+      appTheme: "dark",
+    });
+
+    expect(() =>
+      userSettingsSchema.parse({
+        ...validSettings,
+        appTheme: "midnight",
       }),
     ).toThrow();
   });

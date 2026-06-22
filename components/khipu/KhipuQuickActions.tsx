@@ -81,17 +81,17 @@ export function KhipuQuickActions({
           <button
             key={action.id}
             type="button"
-            className="group flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+            className="group flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-left shadow-sm transition hover:border-cyan-300 hover:bg-[var(--app-surface-hover)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
             onClick={action.onSelect}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 transition group-hover:scale-105 group-hover:bg-cyan-100">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--app-primary-muted)] text-cyan-600 transition group-hover:scale-105 group-hover:bg-cyan-100">
               <Icon className="h-5 w-5" />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-950">
+              <span className="block text-sm font-semibold text-[var(--app-text-strong)]">
                 {action.label}
               </span>
-              <span className="mt-1 block text-xs leading-5 text-slate-500">
+              <span className="mt-1 block text-xs leading-5 text-[var(--app-text-muted)]">
                 {action.description}
               </span>
             </span>

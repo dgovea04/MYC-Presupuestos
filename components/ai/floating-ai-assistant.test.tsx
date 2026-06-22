@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import React from "react";
-import { act } from "react";
+import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiViewContextProvider, type AiViewContextValue } from "@/components/ai/ai-view-context";
@@ -9,8 +9,6 @@ import { FloatingAiAssistant } from "@/components/ai/floating-ai-assistant";
 import { usePublishAiViewContext } from "@/hooks/use-ai-view-context";
 
 vi.mock("framer-motion", () => {
-  const React = require("react");
-
   return {
     AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
     motion: new Proxy(

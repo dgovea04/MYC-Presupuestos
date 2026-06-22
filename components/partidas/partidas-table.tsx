@@ -350,12 +350,12 @@ export function PartidasTable({
                 <option value="WITHOUT_APU">Sin APU</option>
               </Select>
             </div>
-            <div className={cn("flex flex-col gap-3 border bg-white/90 p-3 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200")}>
+            <div className={cn("flex flex-col gap-3 border bg-[var(--app-surface)] p-3 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl border-[var(--app-border)]")}>
               <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-[var(--app-text)]">
                   {getPartidasFilterSummary(filter, apuFilter, filteredRows.length)}
                 </p>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-muted)]">
                   <span>{getApuFilterLabel(apuFilter)}</span>
                   <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
                   <span>{dirtyRows.length > 0 ? `${dirtyRows.length} cambios por guardar` : "Sin cambios pendientes"}</span>
@@ -368,16 +368,16 @@ export function PartidasTable({
                   Nueva partida
                 </Button>
                 <Link href="/partidas/generar">
-                  <Button variant="outline" size="sm" className="gap-2 bg-white">
+                  <Button variant="outline" size="sm" className="gap-2 bg-[var(--app-surface)]">
                     <GitCompareArrows className="h-4 w-4" />
                     Generar por similitud
                   </Button>
                 </Link>
-                <Button variant="outline" size="sm" className="bg-white" onClick={() => fileInputRef.current?.click()}>
+                <Button variant="outline" size="sm" className="bg-[var(--app-surface)]" onClick={() => fileInputRef.current?.click()}>
                   Importar Excel
                 </Button>
                 {dirtyRows.length > 0 ? (
-                  <Button variant="outline" size="sm" className="bg-white" onClick={saveAllDirtyRows} disabled={pendingIds.length > 0}>
+                  <Button variant="outline" size="sm" className="bg-[var(--app-surface)]" onClick={saveAllDirtyRows} disabled={pendingIds.length > 0}>
                     {`Guardar cambios (${dirtyRows.length})`}
                   </Button>
                 ) : null}
@@ -711,12 +711,12 @@ function PartidaPastePreviewSheet({
 
   return (
     <div className={cn("fixed inset-0 z-50 bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
-      <div className={cn("mx-auto mt-10 w-[min(1100px,calc(100%-2rem))] overflow-hidden border bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl border-slate-200 shadow-2xl")}>
-        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+      <div className={cn("mx-auto mt-10 w-[min(1100px,calc(100%-2rem))] overflow-hidden border bg-[var(--app-surface)]", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl border-[var(--app-border)] shadow-2xl")}>
+        <div className="flex items-start justify-between border-b border-[var(--app-border)] px-6 py-5">
           <div>
-            <p className="text-sm text-slate-500">Previsualizacion de importacion</p>
-            <h3 className="text-2xl font-semibold text-slate-900">Revisa antes de aplicar</h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm text-[var(--app-text-muted)]">Previsualizacion de importacion</p>
+            <h3 className="text-2xl font-semibold text-[var(--app-text-strong)]">Revisa antes de aplicar</h3>
+            <p className="mt-1 text-sm text-[var(--app-text-muted)]">
               Se prepararan {pendingPaste.rows.length} {pendingPaste.rows.length === 1 ? "partida" : "partidas"} desde el archivo Excel.
             </p>
           </div>
@@ -752,8 +752,8 @@ function PartidaPastePreviewSheet({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <p className="text-sm text-slate-500">La importacion solo se aplicara al confirmar.</p>
+        <div className="flex items-center justify-between border-t border-[var(--app-border)] px-6 py-4">
+          <p className="text-sm text-[var(--app-text-muted)]">La importacion solo se aplicara al confirmar.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
               Cerrar

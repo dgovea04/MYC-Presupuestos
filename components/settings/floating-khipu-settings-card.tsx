@@ -60,6 +60,7 @@ type FloatingKhipuCardProps = {
     defaultCurrency: string;
     currencyDecimals: number;
     dateFormat: string;
+    appTheme?: "light" | "dark";
     defaultViewMode: string;
     excelShowFieldBorders: boolean;
     excelRowHeight: number;
@@ -112,6 +113,7 @@ export function FloatingKhipuSettingsCard({
           defaultCurrency: settings.defaultCurrency,
           currencyDecimals: settings.currencyDecimals,
           dateFormat: settings.dateFormat,
+          appTheme: settings.appTheme ?? "light",
           defaultViewMode: settings.defaultViewMode,
           excelShowFieldBorders: settings.excelShowFieldBorders,
           excelRowHeight: settings.excelRowHeight,
@@ -171,10 +173,10 @@ export function FloatingKhipuSettingsCard({
   }
 
   return (
-    <Card className="border-slate-200">
-      <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#f0f9ff_0%,#e0f2fe_100%)]">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+      <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
         <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-sky-100 p-2 text-sky-700">
+          <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
             <MonitorSmartphone className="h-5 w-5" />
           </div>
           <div>
@@ -188,8 +190,8 @@ export function FloatingKhipuSettingsCard({
       <CardContent className="space-y-5 pt-6">
         {/* Provider */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-900">Proveedor de IA</label>
-          <p className="text-xs text-slate-500">Elige qué motor de IA usará el panel flotante Khipu por defecto.</p>
+          <label className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor de IA</label>
+          <p className="text-xs text-[var(--app-text-muted)]">Elige qué motor de IA usará el panel flotante Khipu por defecto.</p>
           <Select value={provider} onChange={handleProviderChange}>
             {AI_PROVIDER_OPTIONS.map((option) => (
               <option key={option} value={option}>
@@ -201,14 +203,14 @@ export function FloatingKhipuSettingsCard({
 
         {/* Panel size */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-900">Tamaño del panel</label>
-          <p className="text-xs text-slate-500">Define el ancho y alto por defecto del panel flotante (en píxeles).</p>
+          <label className="text-sm font-semibold text-[var(--app-text-strong)]">Tamaño del panel</label>
+          <p className="text-xs text-[var(--app-text-muted)]">Define el ancho y alto por defecto del panel flotante (en píxeles).</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-500">Ancho ({MIN_W}-{MAX_W}px)</label>
+              <label className="text-[11px] font-medium text-[var(--app-text-subtle)]">Ancho ({MIN_W}-{MAX_W}px)</label>
               <input
                 type="number"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                className="w-full rounded-lg border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
                 value={width}
                 min={MIN_W}
                 max={MAX_W}
@@ -216,10 +218,10 @@ export function FloatingKhipuSettingsCard({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-500">Alto ({MIN_H}-{MAX_H}px)</label>
+              <label className="text-[11px] font-medium text-[var(--app-text-subtle)]">Alto ({MIN_H}-{MAX_H}px)</label>
               <input
                 type="number"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                className="w-full rounded-lg border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
                 value={height}
                 min={MIN_H}
                 max={MAX_H}
@@ -231,8 +233,8 @@ export function FloatingKhipuSettingsCard({
 
         {/* Font size */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-900">Tamaño de fuente</label>
-          <p className="text-xs text-slate-500">Controla la densidad del texto dentro del panel flotante.</p>
+          <label className="text-sm font-semibold text-[var(--app-text-strong)]">Tamaño de fuente</label>
+          <p className="text-xs text-[var(--app-text-muted)]">Controla la densidad del texto dentro del panel flotante.</p>
           <Select value={fontSize} onChange={handleFontSizeChange}>
             {FLOATING_KHIPU_FONT_SIZES.map((option) => (
               <option key={option} value={option}>
@@ -244,8 +246,8 @@ export function FloatingKhipuSettingsCard({
 
         {/* Position */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-900">Posición en pantalla</label>
-          <p className="text-xs text-slate-500">Elige en qué esquina aparecerá el botón y panel flotante.</p>
+          <label className="text-sm font-semibold text-[var(--app-text-strong)]">Posición en pantalla</label>
+          <p className="text-xs text-[var(--app-text-muted)]">Elige en qué esquina aparecerá el botón y panel flotante.</p>
           <Select value={position} onChange={handlePositionChange}>
             {FLOATING_KHIPU_POSITIONS.map((option) => (
               <option key={option} value={option}>
@@ -257,8 +259,8 @@ export function FloatingKhipuSettingsCard({
 
         {/* Theme */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-900">Tema</label>
-          <p className="text-xs text-slate-500">Elige entre tema claro u oscuro para el panel flotante.</p>
+          <label className="text-sm font-semibold text-[var(--app-text-strong)]">Tema</label>
+          <p className="text-xs text-[var(--app-text-muted)]">Elige entre tema claro u oscuro para el panel flotante.</p>
           <Select value={theme} onChange={handleThemeChange}>
             {FLOATING_KHIPU_THEMES.map((option) => (
               <option key={option} value={option}>
@@ -289,3 +291,4 @@ export function FloatingKhipuSettingsCard({
     </Card>
   );
 }
+

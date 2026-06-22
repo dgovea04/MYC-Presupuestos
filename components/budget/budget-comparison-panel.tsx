@@ -71,24 +71,24 @@ export function BudgetComparisonPanel({
   }
 
   return (
-    <div className={cn("border border-slate-200 bg-white px-4 py-4", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+    <div className={cn("border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-4", isExcelMode ? "rounded-md" : "rounded-2xl")}>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <GitCompareArrows className="h-4 w-4 text-sky-700" />
-            <p className="text-sm font-semibold text-slate-900">Comparador tecnico</p>
+            <p className="text-sm font-semibold text-[var(--app-text-strong)]">Comparador tecnico</p>
           </div>
-          <p className="text-xs leading-5 text-slate-500">
+          <p className="text-xs leading-5 text-[var(--app-text-muted)]">
             Compara dos Sub Presupuestos para revisar partidas nuevas, retiradas y variaciones de metrado o precio.
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_auto]">
-          <label className="space-y-1 text-xs font-medium text-slate-600">
+          <label className="space-y-1 text-xs font-medium text-[var(--app-text-muted)]">
             Base
             <select
               value={baseBudget?.id ?? ""}
               onChange={(event) => setBaseBudgetId(event.target.value)}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              className="h-10 w-full rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text)] outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
             >
               {budgets.map((budget) => (
                 <option key={budget.id} value={budget.id}>
@@ -97,12 +97,12 @@ export function BudgetComparisonPanel({
               ))}
             </select>
           </label>
-          <label className="space-y-1 text-xs font-medium text-slate-600">
+          <label className="space-y-1 text-xs font-medium text-[var(--app-text-muted)]">
             Revisado
             <select
               value={targetBudget?.id ?? ""}
               onChange={(event) => setTargetBudgetId(event.target.value)}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              className="h-10 w-full rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text)] outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
             >
               {budgets.map((budget) => (
                 <option key={budget.id} value={budget.id} disabled={budget.id === baseBudget?.id}>
@@ -135,7 +135,7 @@ export function BudgetComparisonPanel({
               "rounded-full border px-3 py-1.5 text-xs font-medium transition",
               activeFilter === filter.status
                 ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-200 bg-slate-50 text-slate-600 hover:border-sky-300 hover:bg-sky-50",
+                : "border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] hover:border-sky-300 hover:bg-[var(--app-primary-muted)]",
             )}
           >
             {filter.label}
@@ -146,7 +146,7 @@ export function BudgetComparisonPanel({
       <div className={cn("mt-4", getTableFrameClassName(isExcelMode))}>
         <Table>
           <THead>
-            <TR className="bg-slate-50 hover:bg-slate-50">
+            <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
               <TH>Estado</TH>
               <TH>Codigo</TH>
               <TH>Descripcion</TH>
@@ -164,7 +164,7 @@ export function BudgetComparisonPanel({
                   <TD>
                     <Badge className="bg-slate-100 text-slate-700">{formatComparisonStatus(item.status)}</Badge>
                   </TD>
-                  <TD className="font-medium text-slate-900">{item.code || "s/c"}</TD>
+                  <TD className="font-medium text-[var(--app-text-strong)]">{item.code || "s/c"}</TD>
                   <TD>{item.description}</TD>
                   <TD className="text-center">{item.unit}</TD>
                   <TD className="text-right tabular-nums">
@@ -183,7 +183,7 @@ export function BudgetComparisonPanel({
               ))
             ) : (
               <TR>
-                <TD colSpan={8} className="text-center text-sm text-slate-500">
+                <TD colSpan={8} className="text-center text-sm text-[var(--app-text-muted)]">
                   No hay partidas para el filtro seleccionado.
                 </TD>
               </TR>

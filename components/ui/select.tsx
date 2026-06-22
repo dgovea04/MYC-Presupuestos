@@ -224,7 +224,7 @@ export function Select({
       position={contentPosition}
       sideOffset={contentSideOffset}
       className={cn(
-        "ui-select-content z-50 max-h-96 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl",
+        "ui-select-content z-50 max-h-96 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-xl",
         contentClassName,
       )}
     >
@@ -299,7 +299,7 @@ export function Select({
           disabled={disabled}
           id={id}
           className={cn(
-            "ui-select-trigger flex h-10 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 outline-none transition focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 data-[placeholder]:text-slate-500",
+            "ui-select-trigger flex h-10 w-full items-center justify-between rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2 text-left text-sm text-[var(--app-text)] outline-none transition focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500/20 disabled:cursor-not-allowed disabled:bg-[var(--app-surface-muted)] disabled:text-[var(--app-text-subtle)] data-[placeholder]:text-[var(--app-text-muted)]",
             className,
           )}
           aria-required={required}
@@ -310,7 +310,7 @@ export function Select({
             {selectedOption?.label}
           </SelectPrimitive.Value>
           <SelectPrimitive.Icon asChild>
-            <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
           </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
         {portal ? <SelectPrimitive.Portal container={portalContainer ?? undefined}>{content}</SelectPrimitive.Portal> : content}

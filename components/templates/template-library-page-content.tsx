@@ -202,18 +202,18 @@ export function TemplateLibraryPageContent({
 
       <TemplateActivityPanel events={activityEvents} />
 
-      <Card className="border-slate-200">
+      <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
         <CardContent className="space-y-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--app-text)]">
               <SlidersHorizontal className="h-4 w-4 text-sky-700" />
               Filtros de biblioteca
               {activeFilterCount > 0 ? (
-                <Badge className="bg-sky-100 text-sky-700">{formatActiveFilterCount(activeFilterCount)}</Badge>
+                <Badge className="bg-[var(--app-primary-muted)] text-sky-700">{formatActiveFilterCount(activeFilterCount)}</Badge>
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-slate-100 text-slate-700">
+              <Badge>
                 {visibleItems.length} de {items.length} visibles
               </Badge>
               <Button className="h-8 gap-2 rounded-lg px-3 text-xs" variant="outline" onClick={() => void copyShareHref()}>
@@ -242,7 +242,7 @@ export function TemplateLibraryPageContent({
           </div>
           {tagSuggestions.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2" aria-label="Etiquetas sugeridas">
-              <span className="text-xs font-medium text-slate-500">Etiquetas</span>
+              <span className="text-xs font-medium text-[var(--app-text-muted)]">Etiquetas</span>
               {tagSuggestions.map((suggestion) => {
                 const isSelectedTag = query.trim().toLocaleLowerCase("es-PE") === suggestion.tag.toLocaleLowerCase("es-PE");
 
@@ -265,7 +265,7 @@ export function TemplateLibraryPageContent({
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_200px_190px_auto]">
             <label className="relative block">
               <span className="sr-only">Buscar plantillas</span>
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--app-text-subtle)]" />
               <Input
                 aria-label="Buscar plantillas"
                 className="pl-9 pr-10"
@@ -277,7 +277,7 @@ export function TemplateLibraryPageContent({
                 <button
                   type="button"
                   aria-label="Limpiar busqueda de plantillas"
-                  className="absolute right-2 top-1/2 rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30"
+                  className="absolute right-2 top-1/2 rounded-full p-1 text-[var(--app-text-subtle)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30"
                   onClick={() => applyFilters({ query: "" })}
                 >
                   <X className="h-4 w-4" />
@@ -360,20 +360,20 @@ export function TemplateLibraryPageContent({
           return (
             <Card
               key={module}
-              className={cn("border-slate-200 transition", isSelectedModule ? "border-sky-300 ring-2 ring-sky-100" : null)}
+              className={cn("border-[var(--app-border)] bg-[var(--app-surface)] transition", isSelectedModule ? "border-sky-300 ring-2 ring-sky-100" : null)}
             >
               <CardContent className="space-y-4 p-5">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 text-slate-700">
+                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-2 text-[var(--app-text)]">
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-900">{moduleLabels[module]}</p>
-                    <p className="mt-1 text-sm leading-5 text-slate-500">{moduleDescriptions[module]}</p>
+                    <p className="font-semibold text-[var(--app-text-strong)]">{moduleLabels[module]}</p>
+                    <p className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">{moduleDescriptions[module]}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Badge className="bg-sky-100 text-sky-700">{formatTemplateCount(moduleItems.length)}</Badge>
+                  <Badge className="bg-[var(--app-primary-muted)] text-sky-700">{formatTemplateCount(moduleItems.length)}</Badge>
                   <Button
                     aria-pressed={isSelectedModule}
                     className="h-8 rounded-lg px-3 text-xs"
@@ -447,14 +447,14 @@ export function TemplateLibraryPageContent({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-base font-semibold text-slate-900">{moduleLabels[module]}</p>
-                    <Badge className="bg-slate-100 text-slate-700">{formatVisibleTemplateCount(moduleItems.length)}</Badge>
+                    <p className="text-base font-semibold text-[var(--app-text-strong)]">{moduleLabels[module]}</p>
+                    <Badge>{formatVisibleTemplateCount(moduleItems.length)}</Badge>
                   </div>
-                  <p className="text-sm text-slate-500">{moduleDescriptions[module]}</p>
+                  <p className="text-sm text-[var(--app-text-muted)]">{moduleDescriptions[module]}</p>
                 </div>
                 <Link
                   href={moduleHrefs[module]}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:bg-sky-50"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm font-medium text-[var(--app-text)] transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)]"
                 >
                   Abrir modulo
                   <ArrowRight className="h-4 w-4" />
@@ -538,12 +538,12 @@ function formatActiveFilterCount(count: number) {
 
 function ActiveFilterChip({ label, clearLabel, onClear }: { label: string; clearLabel: string; onClear: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--app-text-muted)]">
       {label}
       <button
         type="button"
         aria-label={clearLabel}
-        className="rounded-full p-0.5 text-slate-400 transition hover:bg-white hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30"
+        className="rounded-full p-0.5 text-[var(--app-text-subtle)] transition hover:bg-[var(--app-surface)] hover:text-[var(--app-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30"
         onClick={onClear}
       >
         <X className="h-3.5 w-3.5" />
@@ -576,16 +576,16 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
   const summary = getTemplateActivitySummary(events);
 
   return (
-    <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardContent className="space-y-4 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="font-semibold text-slate-900">Actividad de plantillas</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="font-semibold text-[var(--app-text-strong)]">Actividad de plantillas</p>
+            <p className="mt-1 text-sm text-[var(--app-text-muted)]">
               Ultimos cambios y aplicaciones registrados en la biblioteca reutilizable.
             </p>
           </div>
-          <Badge className="bg-slate-100 text-slate-700">{events.length} recientes</Badge>
+          <Badge>{events.length} recientes</Badge>
         </div>
         <div className="grid gap-2 md:grid-cols-3">
           <TemplateActivityMetric
@@ -604,13 +604,13 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
               <Link
                 key={event.id}
                 href={event.href}
-                className="group flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:border-sky-200 hover:bg-sky-50/60"
+                className="group flex items-start justify-between gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm transition hover:border-sky-200 hover:bg-[var(--app-primary-muted)]"
               >
                 <span className="min-w-0">
-                  <span className="block font-medium text-slate-900">{event.title}</span>
-                  <span className="mt-1 block truncate text-slate-500">{event.detail}</span>
+                  <span className="block font-medium text-[var(--app-text-strong)]">{event.title}</span>
+                  <span className="mt-1 block truncate text-[var(--app-text-muted)]">{event.detail}</span>
                 </span>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 group-hover:bg-white">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--app-surface-muted)] px-2.5 py-1 text-xs font-medium text-[var(--app-text-muted)] group-hover:bg-[var(--app-surface)]">
                   <Clock3 className="h-3.5 w-3.5" />
                   {formatActivityDate(event.createdAt)}
                 </span>
@@ -618,7 +618,7 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-5 text-sm text-[var(--app-text-muted)]">
             Todavia no hay actividad registrada para plantillas guardadas o aplicadas.
           </div>
         )}
@@ -629,9 +629,9 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
 
 function TemplateActivityMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-xs font-medium uppercase text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
+      <p className="text-xs font-medium uppercase text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }
@@ -642,14 +642,14 @@ function TemplateCard({ item }: { item: TemplateLibraryItem }) {
   const hiddenTagLabel = formatHiddenTagLabel(hiddenTagCount);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-100/70">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm shadow-slate-100/70">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-semibold text-slate-900">{item.name}</p>
-          <p className="mt-2 text-sm leading-5 text-slate-500">{item.description}</p>
+          <p className="font-semibold text-[var(--app-text-strong)]">{item.name}</p>
+          <p className="mt-2 text-sm leading-5 text-[var(--app-text-muted)]">{item.description}</p>
           {updatedDateLabel ? (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
-              <Clock3 className="h-3.5 w-3.5 text-slate-400" />
+            <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--app-text-muted)]">
+              <Clock3 className="h-3.5 w-3.5 text-[var(--app-text-subtle)]" />
               Actualizada {updatedDateLabel}
             </p>
           ) : null}
@@ -666,18 +666,18 @@ function TemplateCard({ item }: { item: TemplateLibraryItem }) {
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         {item.tags.slice(0, 4).map((tag) => (
-          <Badge key={tag} className="bg-slate-100 text-slate-700">
+          <Badge key={tag}>
             {tag}
           </Badge>
         ))}
         {hiddenTagCount > 0 ? (
-          <Badge className="bg-slate-50 text-slate-500" aria-label={hiddenTagLabel} title={hiddenTagLabel}>
+          <Badge aria-label={hiddenTagLabel} title={hiddenTagLabel}>
             {formatHiddenTagCount(hiddenTagCount)}
           </Badge>
         ) : null}
       </div>
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
-        <span className="text-slate-500">{item.status === "AVAILABLE" ? "Disponible" : "Base operativa"}</span>
+      <div className="mt-4 flex items-center justify-between border-t border-[var(--app-border-soft)] pt-3 text-sm">
+        <span className="text-[var(--app-text-muted)]">{item.status === "AVAILABLE" ? "Disponible" : "Base operativa"}</span>
         <Link
           href={buildTemplateActionHref(item)}
           aria-label={`${item.actionLabel}: ${item.name}`}
@@ -761,9 +761,9 @@ function getSourceLabel(source: TemplateLibraryItem["source"]) {
 }
 
 function getSourceBadgeClass(source: TemplateLibraryItem["source"]) {
-  if (source === "WORKBOOK") return "bg-amber-100 text-amber-800";
-  if (source === "USER") return "bg-emerald-100 text-emerald-800";
-  return "bg-slate-100 text-slate-700";
+  if (source === "WORKBOOK") return "bg-[color:rgba(245,158,11,0.16)] text-amber-700";
+  if (source === "USER") return "bg-[color:rgba(16,185,129,0.16)] text-emerald-700";
+  return "bg-[var(--app-surface-muted)] text-[var(--app-text-muted)]";
 }
 
 function groupTemplatesByModule(items: TemplateLibraryItem[]) {

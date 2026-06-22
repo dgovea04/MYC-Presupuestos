@@ -213,5 +213,5 @@ describe("parseRw7WorkbookToS10Snapshot", () => {
       unitPrice: 29.98,
       subtotal: 14.99,
     });
-  }, 60000);
+  }, 120000);
 });

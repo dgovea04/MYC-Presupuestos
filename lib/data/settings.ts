@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { userSettingsSchema, type UserSettingsInput } from "@/lib/validations/settings";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "@/lib/ai/encryption";
 import {
+  DEFAULT_APP_THEME,
   DEFAULT_DATE_FORMAT,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
@@ -21,6 +22,7 @@ export const defaultUserSettings: UserSettingsRecord = {
   defaultCurrency: "PEN",
   currencyDecimals: 2,
   dateFormat: DEFAULT_DATE_FORMAT,
+  appTheme: DEFAULT_APP_THEME,
   defaultViewMode: DEFAULT_VIEW_MODE,
   excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
   excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -41,6 +43,7 @@ const userSettingsStoredRowSchema = z.object({
   defaultCurrency: userSettingsSchema.shape.defaultCurrency,
   currencyDecimals: userSettingsSchema.shape.currencyDecimals,
   dateFormat: userSettingsSchema.shape.dateFormat,
+  appTheme: userSettingsSchema.shape.appTheme,
   defaultViewMode: userSettingsSchema.shape.defaultViewMode,
   excelShowFieldBorders: userSettingsSchema.shape.excelShowFieldBorders,
   excelRowHeight: userSettingsSchema.shape.excelRowHeight,
@@ -84,6 +87,7 @@ function normalizeUserSettingsRateFields(row: Record<string, unknown>): Record<s
   return {
     ...row,
     dateFormat: row.dateFormat,
+    appTheme: row.appTheme,
     defaultViewMode: row.defaultViewMode,
     excelShowFieldBorders: row.excelShowFieldBorders,
     excelRowHeight: row.excelRowHeight,
@@ -129,6 +133,13 @@ function readFloatingKhipuTheme(value: unknown): FloatingKhipuTheme {
   return FLOATING_KHIPU_DEFAULTS.theme;
 }
 
+function readAppTheme(value: unknown): NonNullable<UserSettingsRecord["appTheme"]> {
+  if (value === "light" || value === "dark") {
+    return value;
+  }
+  return DEFAULT_APP_THEME;
+}
+
 function readFloatingKhipuDimension(value: unknown, fallback: number): number {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
@@ -146,6 +157,7 @@ function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
   const defaultCurrency = userSettingsSchema.shape.defaultCurrency.safeParse(rowRecord.defaultCurrency);
   const currencyDecimals = userSettingsSchema.shape.currencyDecimals.safeParse(rowRecord.currencyDecimals);
   const dateFormat = userSettingsSchema.shape.dateFormat.safeParse(rowRecord.dateFormat);
+  const appTheme = userSettingsSchema.shape.appTheme.safeParse(rowRecord.appTheme);
   const defaultViewMode = userSettingsSchema.shape.defaultViewMode.safeParse(rowRecord.defaultViewMode);
   const excelShowFieldBorders = userSettingsSchema.shape.excelShowFieldBorders.safeParse(rowRecord.excelShowFieldBorders);
   const excelRowHeight = userSettingsSchema.shape.excelRowHeight.safeParse(rowRecord.excelRowHeight);
@@ -160,6 +172,7 @@ function normalizeUserSettingsRow(row: unknown): UserSettingsRecord {
     defaultCurrency: defaultCurrency.success ? defaultCurrency.data : defaultUserSettings.defaultCurrency,
     currencyDecimals: currencyDecimals.success ? currencyDecimals.data : defaultUserSettings.currencyDecimals,
     dateFormat: dateFormat.success ? dateFormat.data : defaultUserSettings.dateFormat,
+    appTheme: appTheme.success ? appTheme.data : readAppTheme(rowRecord.appTheme),
     defaultViewMode: defaultViewMode.success ? defaultViewMode.data : defaultUserSettings.defaultViewMode,
     excelShowFieldBorders: excelShowFieldBorders.success ? excelShowFieldBorders.data : defaultUserSettings.excelShowFieldBorders,
     excelRowHeight: excelRowHeight.success ? excelRowHeight.data : defaultUserSettings.excelRowHeight,
@@ -411,13 +424,14 @@ export async function updateAiProviderSettings(
 
 export async function getUserSettings(userId: string): Promise<UserSettingsRecord> {
   const [
-    supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode,
+    supportsDefaultSubBudgetNames, supportsDateFormat, supportsAppTheme, supportsDefaultViewMode,
     supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference,
     supportsFloatingKhipuProvider, supportsFloatingKhipuWidth, supportsFloatingKhipuHeight,
     supportsFloatingKhipuFontSize,    supportsFloatingKhipuPosition, supportsFloatingKhipuTheme,
   ] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
+    hasUserSettingsColumn("appTheme"),
     hasUserSettingsColumn("defaultViewMode"),
     hasUserSettingsColumn("excelShowFieldBorders"),
     hasUserSettingsColumn("excelRowHeight"),
@@ -430,9 +444,9 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
     hasUserSettingsColumn("floatingKhipuTheme"),
   ]);
 
-  if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
+  if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsAppTheme && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
     const [settings] = await prisma.$queryRaw<Array<unknown>>`
-      SELECT "defaultCurrency", "currencyDecimals", "dateFormat", "defaultViewMode", "excelShowFieldBorders", "excelRowHeight", "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
+      SELECT "defaultCurrency", "currencyDecimals", "dateFormat", "appTheme", "defaultViewMode", "excelShowFieldBorders", "excelRowHeight", "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
       , "defaultSubBudgetNames"
       ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
       ${supportsFloatingKhipuProvider ? Prisma.sql`, "floatingKhipuProvider"` : Prisma.empty}
@@ -452,6 +466,7 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
   const [settings] = await prisma.$queryRaw<Array<unknown>>`
     SELECT "defaultCurrency", "currencyDecimals"
     ${supportsDateFormat ? Prisma.sql`, "dateFormat"` : Prisma.empty}
+    ${supportsAppTheme ? Prisma.sql`, "appTheme"` : Prisma.empty}
     ${supportsDefaultViewMode ? Prisma.sql`, "defaultViewMode"` : Prisma.empty}
     ${supportsExcelShowFieldBorders ? Prisma.sql`, "excelShowFieldBorders"` : Prisma.empty}
     ${supportsExcelRowHeight ? Prisma.sql`, "excelRowHeight"` : Prisma.empty}
@@ -480,6 +495,9 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
     dateFormat: supportsDateFormat && typeof (settings as Record<string, unknown>).dateFormat !== "undefined"
       ? (settings as Record<string, unknown>).dateFormat
       : DEFAULT_DATE_FORMAT,
+    appTheme: supportsAppTheme && typeof (settings as Record<string, unknown>).appTheme !== "undefined"
+      ? (settings as Record<string, unknown>).appTheme
+      : DEFAULT_APP_THEME,
     defaultViewMode: supportsDefaultViewMode && typeof (settings as Record<string, unknown>).defaultViewMode !== "undefined"
       ? (settings as Record<string, unknown>).defaultViewMode
       : DEFAULT_VIEW_MODE,
@@ -498,13 +516,14 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
 export async function updateUserSettings(userId: string, input: UserSettingsInput): Promise<UserSettingsRecord> {
   const data = userSettingsSchema.parse(input);
   const [
-    supportsDefaultSubBudgetNames, supportsDateFormat, supportsDefaultViewMode,
+    supportsDefaultSubBudgetNames, supportsDateFormat, supportsAppTheme, supportsDefaultViewMode,
     supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference,
     supportsFloatingKhipuProvider, supportsFloatingKhipuWidth, supportsFloatingKhipuHeight,
     supportsFloatingKhipuFontSize, supportsFloatingKhipuPosition, supportsFloatingKhipuTheme,
   ] = await Promise.all([
     hasUserSettingsColumn("defaultSubBudgetNames"),
     hasUserSettingsColumn("dateFormat"),
+    hasUserSettingsColumn("appTheme"),
     hasUserSettingsColumn("defaultViewMode"),
     hasUserSettingsColumn("excelShowFieldBorders"),
     hasUserSettingsColumn("excelRowHeight"),
@@ -517,7 +536,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
     hasUserSettingsColumn("floatingKhipuTheme"),
   ]);
 
-  if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
+  if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsAppTheme && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
     const [settings] = await prisma.$queryRaw<Array<unknown>>`
       INSERT INTO "UserSettings" (
         "id",
@@ -525,6 +544,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultCurrency",
         "currencyDecimals",
         "dateFormat",
+        "appTheme",
         "defaultViewMode",
         "excelShowFieldBorders",
         "excelRowHeight",
@@ -548,6 +568,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         ${data.defaultCurrency},
         ${data.currencyDecimals},
         ${data.dateFormat},
+        ${data.appTheme},
         ${data.defaultViewMode},
         ${data.excelShowFieldBorders},
         ${data.excelRowHeight},
@@ -570,6 +591,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultCurrency" = EXCLUDED."defaultCurrency",
         "currencyDecimals" = EXCLUDED."currencyDecimals",
         "dateFormat" = EXCLUDED."dateFormat",
+        "appTheme" = EXCLUDED."appTheme",
         "defaultViewMode" = EXCLUDED."defaultViewMode",
         "excelShowFieldBorders" = EXCLUDED."excelShowFieldBorders",
         "excelRowHeight" = EXCLUDED."excelRowHeight",
@@ -589,6 +611,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
         "defaultCurrency",
         "currencyDecimals",
         "dateFormat",
+        "appTheme",
         "defaultViewMode",
         "excelShowFieldBorders",
         "excelRowHeight",
@@ -615,6 +638,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultCurrency",
       "currencyDecimals",
       ${supportsDateFormat ? Prisma.sql`"dateFormat",` : Prisma.empty}
+      ${supportsAppTheme ? Prisma.sql`"appTheme",` : Prisma.empty}
       ${supportsDefaultViewMode ? Prisma.sql`"defaultViewMode",` : Prisma.empty}
       ${supportsExcelShowFieldBorders ? Prisma.sql`"excelShowFieldBorders",` : Prisma.empty}
       ${supportsExcelRowHeight ? Prisma.sql`"excelRowHeight",` : Prisma.empty}
@@ -637,6 +661,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       ${data.defaultCurrency},
       ${data.currencyDecimals},
       ${supportsDateFormat ? Prisma.sql`${data.dateFormat},` : Prisma.empty}
+      ${supportsAppTheme ? Prisma.sql`${data.appTheme},` : Prisma.empty}
       ${supportsDefaultViewMode ? Prisma.sql`${data.defaultViewMode},` : Prisma.empty}
       ${supportsExcelShowFieldBorders ? Prisma.sql`${data.excelShowFieldBorders},` : Prisma.empty}
       ${supportsExcelRowHeight ? Prisma.sql`${data.excelRowHeight},` : Prisma.empty}
@@ -658,6 +683,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultCurrency" = EXCLUDED."defaultCurrency",
       "currencyDecimals" = EXCLUDED."currencyDecimals",
       ${supportsDateFormat ? Prisma.sql`"dateFormat" = EXCLUDED."dateFormat",` : Prisma.empty}
+      ${supportsAppTheme ? Prisma.sql`"appTheme" = EXCLUDED."appTheme",` : Prisma.empty}
       ${supportsDefaultViewMode ? Prisma.sql`"defaultViewMode" = EXCLUDED."defaultViewMode",` : Prisma.empty}
       ${supportsExcelShowFieldBorders ? Prisma.sql`"excelShowFieldBorders" = EXCLUDED."excelShowFieldBorders",` : Prisma.empty}
       ${supportsExcelRowHeight ? Prisma.sql`"excelRowHeight" = EXCLUDED."excelRowHeight",` : Prisma.empty}
@@ -676,6 +702,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
       "defaultCurrency",
       "currencyDecimals",
       ${supportsDateFormat ? Prisma.sql`"dateFormat",` : Prisma.empty}
+      ${supportsAppTheme ? Prisma.sql`"appTheme",` : Prisma.empty}
       ${supportsDefaultViewMode ? Prisma.sql`"defaultViewMode",` : Prisma.empty}
       ${supportsExcelShowFieldBorders ? Prisma.sql`"excelShowFieldBorders",` : Prisma.empty}
       ${supportsExcelRowHeight ? Prisma.sql`"excelRowHeight",` : Prisma.empty}
@@ -696,6 +723,7 @@ export async function updateUserSettings(userId: string, input: UserSettingsInpu
   return parseStoredUserSettingsRow({
     ...storedSettings,
     dateFormat: supportsDateFormat && typeof storedSettings.dateFormat !== "undefined" ? storedSettings.dateFormat : data.dateFormat,
+    appTheme: supportsAppTheme && typeof storedSettings.appTheme !== "undefined" ? storedSettings.appTheme : data.appTheme,
     defaultViewMode: supportsDefaultViewMode && typeof storedSettings.defaultViewMode !== "undefined"
       ? storedSettings.defaultViewMode
       : data.defaultViewMode,

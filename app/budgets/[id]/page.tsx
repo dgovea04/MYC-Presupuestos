@@ -97,8 +97,8 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         }}
       >
         <div className="space-y-5">
-          <Card className="border-slate-200">
-            <CardHeader className="gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+            <CardHeader className="gap-4 rounded-2xl bg-[var(--app-surface-elevated)]">
               <PageHeaderCard
                 icon={<FileSpreadsheet className="h-5 w-5" />}
                 title={budget.name}
@@ -128,13 +128,13 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               <div className="flex flex-wrap gap-2">
                 <a
                   href="#subpresupuestos"
-                  className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+                  className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-2 text-sm text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)] hover:text-sky-800"
                 >
                   Sub Presupuestos
                 </a>
                 <a
                   href="#otras-secciones"
-                  className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+                  className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-2 text-sm text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)] hover:text-sky-800"
                 >
                   Otras secciones
                 </a>
@@ -143,7 +143,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           </Card>
 
           <section id="subpresupuestos" className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-            <Card className="border-slate-200">
+            <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
               <CardHeader>
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -165,11 +165,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-2">
                 {subBudgets.map((subBudget) => (
-                  <div key={subBudget.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/70">
+                  <div key={subBudget.id} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-sm shadow-slate-950/10">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-base font-semibold text-slate-900">{subBudget.name}</p>
-                        <p className="mt-1 text-sm text-slate-500">
+                        <p className="text-base font-semibold text-[var(--app-text-strong)]">{subBudget.name}</p>
+                        <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                           Total actual: {formatCurrency(decimalToNumber(subBudget.totalAmount), subBudget.currency, settings.currencyDecimals)}
                         </p>
                       </div>
@@ -187,7 +187,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
             </Card>
 
             <section id="otras-secciones">
-              <Card className="h-full border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+              <Card className="h-full border-[var(--app-border)] bg-[var(--app-surface)]">
                 <CardContent className="flex h-full flex-col gap-4 p-6">
                   <OperationalSectionHeader
                     title="Otras secciones del presupuesto"

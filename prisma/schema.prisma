@@ -198,6 +198,7 @@ model User {
   aiTokenAdjustments  AiTokenLedger[] @relation("AiTokenLedgerAdmin")
   aiProjectHistoryEntries AiProjectHistoryEntry[]
   aiSuggestionFeedbackEvents AiSuggestionFeedbackEvent[]
+  aiSessionFeedbackEvents   AiSessionFeedbackEvent[]
   billingSubscriptions BillingSubscription[]
   noteTasks           NoteTask[]
   generatedPartidas   GeneratedPartida[]
@@ -387,6 +388,7 @@ model UserSettings {
   currencyDecimals           Int      @default(2)
   defaultCurrency            String   @default("PEN")
   dateFormat                 String   @default("DD_MMM_YYYY")
+  appTheme                   String   @default("light")
   defaultViewMode            String   @default("modern")
   excelShowFieldBorders      Boolean  @default(true)
   excelRowHeight             Int      @default(52)
@@ -450,6 +452,28 @@ model Project {
   aiMemory AiProjectMemory[]
 
   @@index([companyId])
+}
+
+model AiSessionFeedbackEvent {
+  id             String                   @id @default(cuid())
+  userId         String
+  historyEntryId String
+  feedbackType   AiSuggestionFeedbackType
+  notes          String?
+  provider       String?
+  model          String?
+  task           String?
+  suggestionType String?
+  actionType     String?
+  promptHash     String?
+  responseHash   String?
+  createdAt      DateTime                 @default(now())
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([historyEntryId, createdAt(sort: Desc)])
+  @@index([feedbackType, createdAt(sort: Desc)])
+  @@map("ai_session_feedback_event")
 }
 
 model AiProjectMemory {

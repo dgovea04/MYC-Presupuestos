@@ -32,13 +32,13 @@ export function MetradoSummaryPanel({
   return (
     <Card
       className={cn(
-        "h-fit overflow-hidden border-slate-200/90 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
-        isExcelMode && "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
+        "h-fit overflow-hidden border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
+        isExcelMode && "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
       )}
     >
       <CardHeader
         className={cn(
-          "flex flex-row items-center border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)]",
+          "flex flex-row items-center border-b border-[var(--app-border)] bg-[var(--app-surface)]",
           collapsed ? "justify-center px-2 py-3" : "justify-between",
           isExcelMode && !collapsed && "px-3 py-2",
         )}
@@ -67,30 +67,30 @@ export function MetradoSummaryPanel({
       {!collapsed ? (
       <CardContent className={cn("space-y-4", isExcelMode && "space-y-3 px-3 py-3")}>
         <div>
-          <p className="text-xs font-medium uppercase tracking-normal text-slate-500">Total principal</p>
-          <p className="mt-1 text-3xl font-semibold text-slate-950">
-            {formatNumber(calculation.primaryTotal, 3)} <span className="text-base text-slate-500">{unit}</span>
+          <p className="text-xs font-medium uppercase tracking-normal text-[var(--app-text-muted)]">Total principal</p>
+          <p className="mt-1 text-3xl font-semibold text-[var(--app-text-strong)]">
+            {formatNumber(calculation.primaryTotal, 3)} <span className="text-base text-[var(--app-text-muted)]">{unit}</span>
           </p>
         </div>
         {visibleUnitTotals.length > 0 ? (
           <div className="grid grid-cols-2 gap-2">
             {visibleUnitTotals.map((entryUnit) => (
-              <div key={entryUnit} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">{entryUnit}</p>
-                <p className="font-semibold text-slate-900">{formatNumber(calculation.totalsByUnit[entryUnit], 3)}</p>
+              <div key={entryUnit} className="rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-3 py-2">
+                <p className="text-xs text-[var(--app-text-muted)]">{entryUnit}</p>
+                <p className="font-semibold text-[var(--app-text-strong)]">{formatNumber(calculation.totalsByUnit[entryUnit], 3)}</p>
               </div>
             ))}
           </div>
         ) : null}
-        <div className="rounded-xl border border-slate-200 px-3 py-3">
+        <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-3">
           {linkedPartida ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 {linkedPartida.budgetItemCode}
               </div>
-              <p className="line-clamp-2 text-sm text-slate-600">{linkedPartida.budgetItemDescription}</p>
-              <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+              <p className="line-clamp-2 text-sm text-[var(--app-text-muted)]">{linkedPartida.budgetItemDescription}</p>
+              <div className="flex items-center justify-between gap-3 text-xs text-[var(--app-text-muted)]">
                 <span>Unidad {linkedPartida.budgetItemUnit}</span>
                 <span>
                   Enviado{" "}
@@ -101,7 +101,7 @@ export function MetradoSummaryPanel({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
+            <div className="flex items-center gap-2 text-sm text-[var(--app-text-muted)]">
               <ArrowUpRight className="h-4 w-4" />
               Sin partida vinculada
             </div>

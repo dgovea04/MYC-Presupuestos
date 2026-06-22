@@ -3,10 +3,27 @@ import { isRecord, readHistoryEntry } from "@/components/ai/controller-parsers";
 
 const AI_HISTORY_STORAGE_KEY = "myc-ai-session-history";
 const AI_FEEDBACK_STORAGE_KEY = "myc-ai-session-feedback";
+export const KHIPU_HISTORY_SYNCED_EVENT = "khipu-history-synced";
+export const KHIPU_FEEDBACK_SYNCED_EVENT = "khipu-feedback-synced";
 
-export function readStoredHistory(): AiHistoryEntry[] {
+export type KhipuHistorySyncedDetail = {
+  history: AiHistoryEntry[];
+  sourceId: string;
+  projectId?: string;
+};
+
+export type KhipuFeedbackSyncedDetail = {
+  feedback: AiFeedbackState;
+  sourceId: string;
+};
+
+function historyStorageKey(projectId?: string) {
+  return projectId ? `myc-ai-history-${projectId}` : AI_HISTORY_STORAGE_KEY;
+}
+
+export function readStoredHistory(projectId?: string): AiHistoryEntry[] {
   if (typeof window === "undefined") return [];
-  const rawHistory = window.localStorage.getItem(AI_HISTORY_STORAGE_KEY);
+  const rawHistory = window.localStorage.getItem(historyStorageKey(projectId));
   if (!rawHistory) return [];
   try {
     const parsed = JSON.parse(rawHistory) as AiHistoryEntry[];
@@ -16,9 +33,22 @@ export function readStoredHistory(): AiHistoryEntry[] {
   }
 }
 
-export function persistStoredHistory(history: AiHistoryEntry[]) {
+export function persistStoredHistory(history: AiHistoryEntry[], projectId?: string) {
   try {
-    window.localStorage.setItem(AI_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 8)));
+    window.localStorage.setItem(historyStorageKey(projectId), JSON.stringify(history.slice(0, 8)));
+  } catch {
+    // Best effort only
+  }
+}
+
+export function persistStoredHistoryAndSync(history: AiHistoryEntry[], sourceId: string, projectId?: string) {
+  persistStoredHistory(history, projectId);
+  try {
+    window.dispatchEvent(
+      new CustomEvent<KhipuHistorySyncedDetail>(KHIPU_HISTORY_SYNCED_EVENT, {
+        detail: { history, sourceId, projectId },
+      }),
+    );
   } catch {
     // Best effort only
   }
@@ -40,6 +70,19 @@ export function readStoredFeedback(): AiFeedbackState {
 export function persistStoredFeedback(feedback: AiFeedbackState) {
   try {
     window.localStorage.setItem(AI_FEEDBACK_STORAGE_KEY, JSON.stringify(feedback));
+  } catch {
+    // Best effort only
+  }
+}
+
+export function persistStoredFeedbackAndSync(feedback: AiFeedbackState, sourceId: string) {
+  persistStoredFeedback(feedback);
+  try {
+    window.dispatchEvent(
+      new CustomEvent<KhipuFeedbackSyncedDetail>(KHIPU_FEEDBACK_SYNCED_EVENT, {
+        detail: { feedback, sourceId },
+      }),
+    );
   } catch {
     // Best effort only
   }

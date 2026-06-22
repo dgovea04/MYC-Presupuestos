@@ -2995,11 +2995,11 @@ function PastePreviewSheet({
       <div
         ref={handlePopupContainerRef}
         className={cn(
-          "relative mx-auto flex h-[calc(100vh-3rem)] w-full max-w-[960px] flex-col overflow-hidden border border-slate-200 bg-white",
-          isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl",
+          "relative mx-auto flex h-[calc(100vh-3rem)] w-full max-w-[960px] flex-col overflow-hidden border border-[var(--app-border)] bg-[var(--app-surface)]",
+          isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl",
         )}
       >
-        <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex shrink-0 flex-col gap-4 border-b border-[var(--app-border)] px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm text-slate-500">Previsualización de pegado</p>
             <h3 className="text-2xl font-semibold text-slate-900">Revisa antes de importar</h3>
@@ -3012,13 +3012,13 @@ function PastePreviewSheet({
           </Button>
         </div>
 
-        <div className="grid shrink-0 gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 md:grid-cols-3">
+        <div className="grid shrink-0 gap-4 border-b border-[var(--app-border)] bg-[var(--app-surface-muted)] px-6 py-4 md:grid-cols-3">
           <PreviewStat label="Modo detectado" value={pasteModeLabel[pendingPaste.guidedPaste.detectedMode]} />
           <PreviewStat label="Niveles" value={String(pendingPaste.guidedPaste.importedLevels)} />
           <PreviewStat label="Partidas" value={String(pendingPaste.guidedPaste.importedItems)} />
         </div>
 
-        <div className="grid shrink-0 gap-4 border-b border-slate-200 px-6 py-4 md:grid-cols-2">
+        <div className="grid shrink-0 gap-4 border-b border-[var(--app-border)] px-6 py-4 md:grid-cols-2">
           <label className="space-y-2">
             <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Modo de importación</span>
             <Select
@@ -3195,7 +3195,7 @@ function PastePreviewSheet({
           {previewRows.length === 0 ? <p className="text-sm text-slate-500">No hay filas para mostrar.</p> : null}
         </div>
 
-        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex shrink-0 flex-col gap-3 border-t border-[var(--app-border)] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">
             {pendingPaste.guidedPaste.hasErrors
               ? "Corrige los errores del bloque o cambia el modo antes de importar."
@@ -3219,7 +3219,7 @@ function PreviewStat({ label, value }: { label: string; value: string }) {
   const { isExcelMode } = useBudgetViewMode();
 
   return (
-    <div className={cn("border border-slate-200 bg-white px-4 py-3", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+    <div className={cn("border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
     </div>
@@ -3263,8 +3263,8 @@ function CatalogInsertSheet({
 
   return (
     <div className={cn("fixed inset-0 z-[95] bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
-      <div className={cn("mx-auto mt-10 w-[min(1080px,calc(100%-2rem))] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
-        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+      <div className={cn("mx-auto mt-10 w-[min(1080px,calc(100%-2rem))] overflow-hidden border border-[var(--app-border)] bg-[var(--app-surface)]", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
+        <div className="flex items-start justify-between border-b border-[var(--app-border)] px-6 py-5">
           <div>
             <p className="text-sm text-slate-500">Insertar desde catálogo</p>
             <h3 className="text-2xl font-semibold text-slate-900">Selecciona una partida base</h3>
@@ -3275,7 +3275,7 @@ function CatalogInsertSheet({
           </Button>
         </div>
 
-        <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
+        <div className="border-b border-[var(--app-border)] bg-[var(--app-surface-muted)] px-6 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <Input
               placeholder="Buscar por partida, unidad o rendimiento"
@@ -3383,8 +3383,8 @@ function ExcelImportSheet({
 
   return (
     <div className={cn("fixed inset-0 z-[95] overflow-y-auto bg-slate-950/30 px-4 py-6", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
-      <div className={cn("mx-auto w-full max-w-[980px] overflow-hidden border border-slate-200 bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
-        <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className={cn("mx-auto w-full max-w-[980px] overflow-hidden border border-[var(--app-border)] bg-[var(--app-surface)]", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
+        <div className="flex flex-col gap-4 border-b border-[var(--app-border)] px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm text-slate-500">Importación desde Excel</p>
             <h3 className="text-2xl font-semibold text-slate-900">Pega subpartidas y partidas</h3>
@@ -3398,7 +3398,7 @@ function ExcelImportSheet({
         </div>
 
         <div className="space-y-4 px-6 py-5">
-          <div className={cn("border border-dashed border-slate-300 bg-slate-50 px-4 py-4", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          <div className={cn("border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface-muted)] px-4 py-4", isExcelMode ? "rounded-md" : "rounded-2xl")}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-900">Cargar archivo Excel</p>
@@ -3433,12 +3433,12 @@ function ExcelImportSheet({
               isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl shadow-sm",
             )}
           />
-          <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+          <div className={cn("border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 text-sm text-[var(--app-text-muted)]", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
             El sistema detecta jerarquía cuando pegas códigos como <span className="font-medium text-slate-800">01</span>, <span className="font-medium text-slate-800">01.01</span>, <span className="font-medium text-slate-800">01.01.01</span> o cuando la descripción viene indentada.
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-[var(--app-border)] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">Se abrirá una previsualización antes de importar.</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>

@@ -41,7 +41,7 @@ export function AIWorkspace(props: AIWorkspaceProps) {
   return (
     <div className="space-y-5">
       {/* Tab bar */}
-      <div className="flex gap-1 rounded-2xl border border-slate-200 bg-slate-100/60 p-1 shadow-sm">
+      <div className="flex gap-1 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-1 shadow-sm">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const active = tab.id === activeTab;
@@ -53,8 +53,8 @@ export function AIWorkspace(props: AIWorkspaceProps) {
               className={cn(
                 "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 sm:flex-none",
                 active
-                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
-                  : "text-slate-500 hover:bg-white/60 hover:text-slate-800",
+                  ? "bg-[var(--app-surface)] text-[var(--app-text-strong)] shadow-sm ring-1 ring-[var(--app-border)]"
+                  : "text-[var(--app-text-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-text-strong)]",
               )}
               onClick={() => setActiveTab(tab.id)}
             >

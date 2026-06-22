@@ -1,0 +1,2 @@
+ALTER TABLE "UserSettings"
+ADD COLUMN IF NOT EXISTS "appTheme" TEXT NOT NULL DEFAULT 'light';

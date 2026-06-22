@@ -60,7 +60,7 @@ describe("HistoryCountBadge", () => {
     const span = container.querySelector("span");
     expect(span).toBeTruthy();
     expect(span!.className).toContain("rounded-full");
-    expect(span!.className).toContain("bg-slate-200");
+    expect(span!.className).toContain("bg-[var(--app-surface-muted)]");
     expect(span!.className).toContain("tabular-nums");
   });
 

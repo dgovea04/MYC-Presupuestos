@@ -147,7 +147,7 @@ export default async function DashboardPage({
       </section>
 
       {showOnboarding ? (
-        <Card className="border-sky-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4fbff_52%,#eff6ff_100%)]">
+        <Card className="dashboard-surface-card dashboard-surface-card-primary border-sky-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4fbff_52%,#eff6ff_100%)]">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader
               title="Primeros pasos"
@@ -163,7 +163,7 @@ export default async function DashboardPage({
       ) : null}
 
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="h-full border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)]">
+        <Card className="dashboard-surface-card dashboard-surface-card-soft h-full border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)]">
           <CardContent className="flex h-full flex-col gap-5 p-6">
             <OperationalSectionHeader
               title="Continua donde te quedaste"
@@ -174,16 +174,16 @@ export default async function DashboardPage({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-2xl font-semibold text-slate-900">{stats.recentProject.name}</p>
+                      <p className="text-2xl font-semibold text-[var(--app-text-strong)]">{stats.recentProject.name}</p>
                       <ProjectStatusBadge status={stats.recentProject.status} />
                     </div>
-                    <p className="text-sm text-slate-600">{stats.recentProject.companyName}</p>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-[var(--app-text-muted)]">{stats.recentProject.companyName}</p>
+                    <p className="text-sm text-[var(--app-text-subtle)]">
                       Ultima actualizacion {formatDate(stats.recentProject.updatedAt, settings.dateFormat)}
                     </p>
                   </div>
                   {stats.recentProject.generalBudget ? (
-                    <div className="min-w-[220px] rounded-2xl border border-sky-100 bg-white/85 px-4 py-3 text-right shadow-sm shadow-sky-100/40">
+                    <div className="dashboard-recent-budget-summary min-w-[220px] rounded-2xl border border-sky-100 bg-white/85 px-4 py-3 text-right shadow-sm shadow-sky-100/40">
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Presupuesto general</p>
                       <p className="mt-2 text-lg font-semibold text-slate-900">
                         {formatCurrency(
@@ -226,7 +226,7 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card className="h-full border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+        <Card className="dashboard-surface-card dashboard-surface-card-soft h-full border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
           <CardContent className="flex h-full flex-col gap-4 p-6">
             <OperationalSectionHeader title="Acciones rapidas" description="Atajos para entrar al flujo principal sin rodeos." />
             <ActionLink
@@ -267,7 +267,7 @@ export default async function DashboardPage({
               title="Pendientes por atender"
               description="Bandeja operativa para separar acciones automaticas y notas creadas por el equipo."
             />
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            <div className="flex flex-wrap gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-1">
               <PendingTabLink
                 href={buildDashboardHref({
                   pendingTab: "actions",
@@ -371,14 +371,14 @@ export default async function DashboardPage({
                 {groupedPendingItems.map((group) => (
                   <details
                     key={group.priority}
-                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60"
+                    className="group overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm"
                     open
                   >
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-[var(--app-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-primary)] marker:hidden">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <ToneBadge label={getPriorityLabel(group.priority)} tone={getPriorityTone(group.priority)} />
-                          <span className="text-sm font-medium text-slate-900">
+                          <span className="text-sm font-medium text-[var(--app-text-strong)]">
                             {group.items.length} {group.items.length === 1 ? "pendiente" : "pendientes"}
                           </span>
                         </div>
@@ -396,11 +396,11 @@ export default async function DashboardPage({
                           ))}
                         </div>
                       </div>
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition group-hover:bg-slate-100 group-open:rotate-90 group-open:bg-slate-100">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--app-text-muted)] transition group-hover:bg-[var(--app-surface-muted)] group-open:rotate-90 group-open:bg-[var(--app-surface-muted)]">
                         <ChevronRight className="h-4 w-4" />
                       </span>
                     </summary>
-                    <div className="space-y-3 border-t border-slate-100 px-4 py-4">
+                    <div className="space-y-3 border-t border-[var(--app-border-soft)] px-4 py-4">
                       {group.items.map((item) => (
                         <DashboardRecordLink
                           key={item.id}
@@ -411,12 +411,12 @@ export default async function DashboardPage({
                         >
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium text-slate-900">{item.projectName}</p>
+                              <p className="font-medium text-[var(--app-text-strong)]">{item.projectName}</p>
                               {item.type === "USER_NOTE_TASK" ? null : <ProjectStatusBadge status={item.status} />}
                               <ToneBadge label={getPendingTypeLabel(item.type)} tone={getPendingTypeTone(item.type)} />
                             </div>
-                            <p className="text-sm text-slate-600">{item.companyName}</p>
-                            <p className="text-sm text-slate-500">{item.observation}</p>
+                            <p className="text-sm text-[var(--app-text-muted)]">{item.companyName}</p>
+                            <p className="text-sm text-[var(--app-text-subtle)]">{item.observation}</p>
                           </div>
                         </DashboardRecordLink>
                       ))}
@@ -444,7 +444,7 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card className="min-h-full border-slate-200 bg-[linear-gradient(180deg,#f8fcff_0%,#f3f9ff_100%)]">
+        <Card className="dashboard-surface-card dashboard-surface-card-soft min-h-full border-slate-200 bg-[linear-gradient(180deg,#f8fcff_0%,#f3f9ff_100%)]">
           <CardContent className="space-y-3 p-6">
             <OperationalSectionHeader
               title="Actividad reciente"
@@ -454,7 +454,7 @@ export default async function DashboardPage({
               <div className="grid gap-3 sm:grid-cols-3">
                 <CompactStatCard label="Esta semana" value={String(recentActivitySummary.thisWeekCount)} tone="sky" />
                 <CompactStatCard label="Mas reciente" value={recentActivitySummary.latestLabel} tone="slate" />
-                <CompactStatCard label="Tipo dominante" value={recentActivitySummary.topTypeLabel} tone="violet" />
+                <CompactStatCard label="Tipo dominante" value={recentActivitySummary.topTypeLabel} tone="sky" />
               </div>
             ) : null}
             {stats.recentActivity.length === 0 ? (
@@ -480,8 +480,8 @@ export default async function DashboardPage({
                             <EventTypeBadge type={item.type} />
                             {item.projectName ? <ProjectActivityBadge projectName={item.projectName} /> : null}
                           </div>
-                          <p className="truncate font-medium text-slate-900">{item.title}</p>
-                          <p className="max-w-full truncate text-sm text-slate-600">{item.detail}</p>
+                          <p className="truncate font-medium text-[var(--app-text-strong)]">{item.title}</p>
+                          <p className="max-w-full truncate text-sm text-[var(--app-text-muted)]">{item.detail}</p>
                         </div>
                       </div>
                     </div>
@@ -509,7 +509,7 @@ export default async function DashboardPage({
         </Card>
       </section>
 
-      <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+      <Card className="dashboard-surface-card dashboard-surface-card-soft border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
         <CardContent className="space-y-4 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <OperationalSectionHeader
@@ -532,7 +532,7 @@ export default async function DashboardPage({
             <CompactStatCard
               label="Mantenimiento"
               value={String(stats.templateSummary.templateMaintenanceEventCount)}
-              tone="violet"
+              tone="sky"
             />
             <CompactStatCard
               label="Partidas capturadas"
@@ -553,12 +553,12 @@ export default async function DashboardPage({
               metaDetail={`Actualizada ${formatDate(stats.templateSummary.latestTemplate.updatedAt, settings.dateFormat)}`}
             >
               <div className="flex items-start gap-3">
-                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <span className="dashboard-template-icon inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
                   <BookOpenCheck className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 space-y-1">
-                  <p className="font-medium text-slate-900">{stats.templateSummary.latestTemplate.name}</p>
-                  <p className="text-sm text-slate-600">
+                  <p className="font-medium text-[var(--app-text-strong)]">{stats.templateSummary.latestTemplate.name}</p>
+                  <p className="text-sm text-[var(--app-text-muted)]">
                     Ultima plantilla guardada con {stats.templateSummary.latestTemplate.itemCount} partidas capturadas.
                   </p>
                 </div>
@@ -598,11 +598,11 @@ export default async function DashboardPage({
                 >
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-slate-900">{project.name}</p>
+                      <p className="font-medium text-[var(--app-text-strong)]">{project.name}</p>
                       <ProjectStatusBadge status={project.status} />
                     </div>
-                    <p className="text-sm text-slate-600">{project.companyName}</p>
-                    <p className="text-sm text-slate-500">{project.location || "Ubicacion pendiente"}</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{project.companyName}</p>
+                    <p className="text-sm text-[var(--app-text-subtle)]">{project.location || "Ubicacion pendiente"}</p>
                   </div>
                 </DashboardRecordLink>
               ))
@@ -632,11 +632,11 @@ export default async function DashboardPage({
                 >
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-slate-900">{budget.name}</p>
-                      <Badge className="bg-sky-100 text-sky-700">Presupuesto general</Badge>
+                      <p className="font-medium text-[var(--app-text-strong)]">{budget.name}</p>
+                      <Badge className="dashboard-budget-badge bg-sky-100 text-sky-700">Presupuesto general</Badge>
                     </div>
-                    <p className="text-sm text-slate-600">{budget.projectName}</p>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-[var(--app-text-muted)]">{budget.projectName}</p>
+                    <p className="text-sm text-[var(--app-text-subtle)]">
                       {formatCurrency(budget.totalAmount, budget.currency, settings.currencyDecimals)}
                     </p>
                   </div>
@@ -708,7 +708,7 @@ function StatCard({
   const palette = tones[tone];
 
   return (
-    <Card className={cn("overflow-hidden border-slate-200/90 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)] transition-colors", palette.card)}>
+    <Card className={cn(`dashboard-stat-card dashboard-stat-card-${tone}`, "overflow-hidden shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)] transition-colors", palette.card)}>
       <CardContent className="space-y-4 py-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -718,7 +718,7 @@ function StatCard({
           </div>
           <span
             className={cn(
-              "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-[0_14px_28px_-18px_rgba(15,23,42,0.24)]",
+              "dashboard-stat-card-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-[0_14px_28px_-18px_rgba(15,23,42,0.24)]",
               palette.iconWrap,
             )}
           >
@@ -726,7 +726,7 @@ function StatCard({
           </span>
         </div>
         {footer ? (
-          <div className={cn("rounded-xl border px-3 py-2 text-xs font-medium", palette.footer)}>{footer}</div>
+          <div className={cn("dashboard-stat-card-footer rounded-xl border px-3 py-2 text-xs font-medium", palette.footer)}>{footer}</div>
         ) : null}
       </CardContent>
     </Card>
@@ -767,7 +767,7 @@ function ActionLink({
     <Link
       href={href}
       className={cn(
-        "group flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.22)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_18px_38px_-26px_rgba(15,23,42,0.26)]",
+        `dashboard-action-link dashboard-action-link-${tone} group flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.22)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_18px_38px_-26px_rgba(15,23,42,0.26)]`,
         palette.link,
       )}
     >
@@ -797,7 +797,7 @@ function OnboardingStepCard({
   const content = (
     <div
       className={cn(
-        "group flex h-full flex-col justify-between rounded-2xl border px-4 py-4 transition",
+        `dashboard-onboarding-card ${completed ? "dashboard-onboarding-card-completed" : "dashboard-onboarding-card-pending"} group flex h-full flex-col justify-between rounded-2xl border px-4 py-4 transition`,
         completed
           ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
           : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50/50",
@@ -807,7 +807,9 @@ function OnboardingStepCard({
         <span
           className={cn(
             "inline-flex h-9 w-9 items-center justify-center rounded-xl",
-            completed ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600 group-hover:bg-sky-100 group-hover:text-sky-700",
+            completed
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-slate-100 text-slate-600 group-hover:bg-sky-100 group-hover:text-sky-700",
           )}
         >
           {completed ? <CheckCircle2 className="h-4 w-4" /> : <ListChecks className="h-4 w-4" />}
@@ -852,7 +854,7 @@ function DashboardRecordLink({
     <Link
       href={href}
       className={cn(
-        "flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition lg:flex-row lg:items-center lg:justify-between",
+        `dashboard-record-link dashboard-record-link-${tone} flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition lg:flex-row lg:items-center lg:justify-between`,
         tones[tone],
       )}
     >
@@ -864,8 +866,8 @@ function DashboardRecordLink({
 
 function DashboardRecordMeta({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="w-full min-w-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:w-44 lg:shrink-0 lg:text-right">
-      <p className="truncate font-medium text-slate-700">{title}</p>
+    <div className="dashboard-record-meta w-full min-w-0 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:w-44 lg:shrink-0 lg:text-right">
+      <p className="truncate font-medium text-slate-900">{title}</p>
       <p className="truncate">{detail}</p>
     </div>
   );
@@ -883,7 +885,7 @@ function EmptyState({
   action?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)] px-4 py-6 text-sm text-slate-600">
+    <div className="dashboard-empty-state rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
       <p className="font-medium text-slate-900">{title}</p>
       <p className="mt-2">{description}</p>
       {href && action ? (
@@ -899,7 +901,7 @@ function PrimaryLink({ href, children }: { href: string; children: ReactNode }) 
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white transition hover:bg-slate-800"
+      className="dashboard-primary-link inline-flex items-center rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium !text-white transition hover:bg-sky-700"
     >
       {children}
     </Link>
@@ -910,7 +912,7 @@ function SecondaryLink({ href, children }: { href: string; children: ReactNode }
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-700"
+      className="dashboard-secondary-link inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-700"
     >
       {children}
     </Link>
@@ -934,10 +936,10 @@ function PendingTabLink({
     <Link
       href={href}
       className={cn(
-        "inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition sm:flex-none",
+        "dashboard-pending-tab inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition sm:flex-none",
         active
-          ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
-          : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
+          ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+          : "text-slate-500 hover:bg-white/70 hover:text-slate-900",
       )}
       aria-current={active ? "page" : undefined}
     >
@@ -945,8 +947,8 @@ function PendingTabLink({
       <span>{label}</span>
       <span
         className={cn(
-          "rounded-full px-2 py-0.5 text-[11px]",
-          active ? "bg-sky-50 text-sky-700" : "bg-slate-200/70 text-slate-600",
+          "dashboard-pending-tab-count rounded-full px-2 py-0.5 text-[11px]",
+          active ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-500",
         )}
       >
         {count}
@@ -1052,7 +1054,7 @@ function EventTypeBadge({
 function ProjectActivityBadge({ projectName }: { projectName: string }) {
   return (
     <span
-      className="inline-flex max-w-[10rem] shrink-0 items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600"
+      className="dashboard-project-activity-badge inline-flex max-w-[10rem] shrink-0 items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600"
       title={projectName}
     >
       <span className="block min-w-0 truncate whitespace-nowrap">{projectName}</span>
@@ -1069,7 +1071,7 @@ function EventTypeIcon({
   const Icon = config.icon;
 
   return (
-    <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${config.className}`}>
+    <span className={`dashboard-event-icon inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${config.className}`}>
       <Icon className="h-4 w-4" />
     </span>
   );
@@ -1117,7 +1119,7 @@ function getEventTypeBadgeConfig(type: DashboardActivityItem["type"]) {
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
     return {
       label: "Formula",
-      tone: "violet" as const,
+      tone: "sky" as const,
     };
   }
 
@@ -1159,7 +1161,7 @@ function getEventTypeIconConfig(type: DashboardActivityItem["type"]) {
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
     return {
       icon: Sigma,
-      className: "bg-violet-100 text-violet-700",
+      className: "bg-sky-100 text-sky-700",
     };
   }
 
@@ -1203,15 +1205,15 @@ function getPendingTypeTone(type: DashboardPendingItem["type"]) {
   if (type === "MISSING_GENERAL_BUDGET") return "rose" as const;
   if (type === "MISSING_POLYNOMIAL_FORMULA") return "amber" as const;
   if (type === "MISSING_ADJUSTMENTS") return "sky" as const;
-  if (type === "USER_NOTE_TASK") return "violet" as const;
+  if (type === "USER_NOTE_TASK") return "slate" as const;
   return "slate" as const;
 }
 
 function getPendingSummaryBadgeClass(type: DashboardPendingItem["type"]) {
-  if (type === "MISSING_GENERAL_BUDGET") return "bg-rose-50 text-rose-700";
-  if (type === "MISSING_POLYNOMIAL_FORMULA") return "bg-amber-50 text-amber-700";
-  if (type === "MISSING_ADJUSTMENTS") return "bg-sky-50 text-sky-700";
-  if (type === "USER_NOTE_TASK") return "bg-violet-50 text-violet-700";
+  if (type === "MISSING_GENERAL_BUDGET") return "bg-rose-100 text-rose-700";
+  if (type === "MISSING_POLYNOMIAL_FORMULA") return "bg-amber-100 text-amber-700";
+  if (type === "MISSING_ADJUSTMENTS") return "bg-sky-100 text-sky-700";
+  if (type === "USER_NOTE_TASK") return "bg-slate-100 text-slate-700";
   return "bg-slate-100 text-slate-700";
 }
 

@@ -31,10 +31,10 @@ export function OperationalPanel({
     <div className={getOperationalPanelClassName(isExcelMode, className)}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
-          <p className="max-w-3xl text-sm leading-6 text-slate-500">{description}</p>
+          <p className="text-sm font-semibold text-[var(--app-text-strong)]">{title}</p>
+          <p className="max-w-3xl text-sm leading-6 text-[var(--app-text-muted)]">{description}</p>
         </div>
-        {metrics ? <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">{metrics}</div> : null}
+        {metrics ? <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--app-text-muted)]">{metrics}</div> : null}
       </div>
       {controls ? <div className="mt-4">{controls}</div> : null}
     </div>
@@ -52,8 +52,8 @@ export function OperationalSectionHeader({
 }) {
   return (
     <div className={cn("space-y-1", className)}>
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <p className="max-w-3xl text-sm leading-6 text-slate-500">{description}</p>
+      <p className="text-sm font-semibold text-[var(--app-text-strong)]">{title}</p>
+      <p className="max-w-3xl text-sm leading-6 text-[var(--app-text-muted)]">{description}</p>
     </div>
   );
 }
@@ -110,10 +110,10 @@ export function FormSectionPanel({
     <section className={getFormSectionPanelClassName(isExcelMode, className)}>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          {icon ? <span className="text-slate-500">{icon}</span> : null}
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
+          {icon ? <span className="text-[var(--app-text-muted)]">{icon}</span> : null}
+          <p className="text-sm font-semibold text-[var(--app-text-strong)]">{title}</p>
         </div>
-        <p className="max-w-3xl text-sm leading-6 text-slate-500">{description}</p>
+        <p className="max-w-3xl text-sm leading-6 text-[var(--app-text-muted)]">{description}</p>
       </div>
       {children}
     </section>

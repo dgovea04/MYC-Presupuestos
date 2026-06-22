@@ -191,10 +191,10 @@ export function CompanyProfileForm({
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
         <div className="mb-4 space-y-1">
-          <p className="text-sm font-medium text-slate-900">Datos principales</p>
-          <p className="text-sm text-slate-500">Información comercial base para proyectos, presupuestos y catálogos.</p>
+          <p className="text-sm font-medium text-[var(--app-text-strong)]">Datos principales</p>
+          <p className="text-sm text-[var(--app-text-muted)]">Información comercial base para proyectos, presupuestos y catálogos.</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -217,18 +217,18 @@ export function CompanyProfileForm({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
         <div className="mb-4 space-y-1">
-          <p className="text-sm font-medium text-slate-900">Logo de empresa</p>
-          <p className="text-sm text-slate-500">Usa PNG o JPG para que el logo pueda salir correctamente en PDF y Excel.</p>
+          <p className="text-sm font-medium text-[var(--app-text-strong)]">Logo de empresa</p>
+          <p className="text-sm text-[var(--app-text-muted)]">Usa PNG o JPG para que el logo pueda salir correctamente en PDF y Excel.</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
-          <div className="flex h-36 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white">
+          <div className="flex h-36 items-center justify-center rounded-2xl border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface)]">
             {logoPreviewUrl || logoUrl ? (
               <Image src={logoPreviewUrl ?? logoUrl ?? ""} alt="Logo de empresa" width={140} height={112} className="max-h-28 max-w-[140px] object-contain" />
             ) : (
-              <div className="flex flex-col items-center gap-2 text-slate-400">
+              <div className="flex flex-col items-center gap-2 text-[var(--app-text-subtle)]">
                 <ImageIcon className="h-8 w-8" />
                 <span className="text-xs font-medium uppercase tracking-[0.16em]">Sin logo</span>
               </div>
@@ -273,7 +273,7 @@ export function CompanyProfileForm({
       {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {success ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
 
-      <div className="flex items-center justify-end gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex items-center justify-end gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
         {onCancel ? (
           <Button type="button" variant="outline" disabled={pending || logoPending} onClick={onCancel}>
             Cancelar
@@ -307,3 +307,4 @@ async function getErrorMessage(response: Response) {
 
   return DEFAULT_SAVE_ERROR;
 }
+

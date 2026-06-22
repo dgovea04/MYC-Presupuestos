@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  DEFAULT_APP_THEME,
   DEFAULT_DATE_FORMAT,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
@@ -25,6 +26,7 @@ import { defaultUserSettings, getUserSettings, updateUserSettings } from "@/lib/
 type ColumnSupportFlags = {
   defaultSubBudgetNames?: boolean;
   dateFormat?: boolean;
+  appTheme?: boolean;
   defaultViewMode?: boolean;
   excelShowFieldBorders?: boolean;
   excelRowHeight?: boolean;
@@ -40,6 +42,7 @@ type ColumnSupportFlags = {
 function mockUserSettingsColumnSupport({
   defaultSubBudgetNames = true,
   dateFormat = true,
+  appTheme = true,
   defaultViewMode = true,
   excelShowFieldBorders = true,
   excelRowHeight = true,
@@ -54,6 +57,7 @@ function mockUserSettingsColumnSupport({
   queryRawMock
     .mockResolvedValueOnce([{ exists: defaultSubBudgetNames }])
     .mockResolvedValueOnce([{ exists: dateFormat }])
+    .mockResolvedValueOnce([{ exists: appTheme }])
     .mockResolvedValueOnce([{ exists: defaultViewMode }])
     .mockResolvedValueOnce([{ exists: excelShowFieldBorders }])
     .mockResolvedValueOnce([{ exists: excelRowHeight }])
@@ -92,6 +96,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -103,12 +108,13 @@ describe("user settings data", () => {
       ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
     expect(settings).not.toBe(defaultUserSettings);
-    expect(queryRawMock).toHaveBeenCalledTimes(13);
-    expect(queryRawMock.mock.calls[12]?.[8]).toBe("user-1");
+    expect(queryRawMock).toHaveBeenCalledTimes(14);
+    expect(queryRawMock.mock.calls[13]?.[8]).toBe("user-1");
     expect(defaultUserSettings).toEqual({
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -144,6 +150,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -180,6 +187,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: "DD_MM_YYYY",
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: "excel",
       excelShowFieldBorders: false,
       excelRowHeight: 60,
@@ -219,6 +227,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -229,7 +238,7 @@ describe("user settings data", () => {
       aiProviderPreference: "auto",
       ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
-    expect(queryRawMock).toHaveBeenCalledTimes(13);
+    expect(queryRawMock).toHaveBeenCalledTimes(14);
   });
 
   it("falls back to default date format when the legacy database has no dateFormat column", async () => {
@@ -257,6 +266,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -338,6 +348,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -353,6 +364,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -368,6 +380,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -383,6 +396,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -424,6 +438,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -473,6 +488,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -522,6 +538,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -566,6 +583,7 @@ describe("user settings data", () => {
         defaultCurrency: "USD",
         currencyDecimals: 2,
         dateFormat: "DD_MM_YYYY",
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -585,6 +603,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: "DD_MM_YYYY",
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -596,7 +615,7 @@ describe("user settings data", () => {
       ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
 
-    expect(queryRawMock).toHaveBeenCalledTimes(13);
+    expect(queryRawMock).toHaveBeenCalledTimes(14);
   });
 
   it("persists and returns all settings fields", async () => {
@@ -617,6 +636,7 @@ describe("user settings data", () => {
           defaultCurrency,
           currencyDecimals,
           dateFormat,
+          appTheme,
           defaultViewMode,
           excelShowFieldBorders,
           excelRowHeight,
@@ -672,6 +692,7 @@ describe("user settings data", () => {
           expect(defaultCurrency).toBe("USD");
           expect(currencyDecimals).toBe(2);
           expect(dateFormat).toBe("DD_MM_YYYY");
+          expect(appTheme).toBe(DEFAULT_APP_THEME);
           expect(defaultViewMode).toBe("excel");
           expect(excelShowFieldBorders).toBe(false);
           expect(excelRowHeight).toBe(60);
@@ -685,6 +706,7 @@ describe("user settings data", () => {
               defaultCurrency: "USD",
               currencyDecimals: 2,
               dateFormat: "DD_MM_YYYY",
+              appTheme: DEFAULT_APP_THEME,
               defaultViewMode: "excel",
               excelShowFieldBorders: false,
               excelRowHeight: 60,
@@ -702,6 +724,7 @@ describe("user settings data", () => {
         defaultCurrency: "USD",
         currencyDecimals: 2,
         dateFormat: "DD_MM_YYYY",
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: "excel",
         excelShowFieldBorders: false,
         excelRowHeight: 60,
@@ -721,6 +744,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: "DD_MM_YYYY",
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: "excel",
       excelShowFieldBorders: false,
       excelRowHeight: 60,
@@ -732,7 +756,7 @@ describe("user settings data", () => {
       ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
 
-    expect(queryRawMock).toHaveBeenCalledTimes(13);
+    expect(queryRawMock).toHaveBeenCalledTimes(14);
   });
 
   it("normalizes Prisma.Decimal-backed rate fields from write returns", async () => {
@@ -759,6 +783,7 @@ describe("user settings data", () => {
         defaultCurrency: "USD",
         currencyDecimals: 2,
         dateFormat: "DD_MM",
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: "excel",
         excelShowFieldBorders: false,
         excelRowHeight: 45,
@@ -778,6 +803,7 @@ describe("user settings data", () => {
       defaultCurrency: "USD",
       currencyDecimals: 2,
       dateFormat: "DD_MM",
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: "excel",
       excelShowFieldBorders: false,
       excelRowHeight: 45,
@@ -799,6 +825,7 @@ describe("user settings data", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: DEFAULT_DATE_FORMAT,
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -852,6 +879,7 @@ describe("user settings data", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: DEFAULT_DATE_FORMAT,
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -865,11 +893,13 @@ describe("user settings data", () => {
         floatingKhipuHeight: 550,
         floatingKhipuFontSize: "large",
         floatingKhipuPosition: "top-right",
+        floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
       }),
     ).resolves.toEqual({
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -915,6 +945,7 @@ describe("user settings data", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: DEFAULT_DATE_FORMAT,
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -934,6 +965,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -969,6 +1001,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -1003,6 +1036,7 @@ describe("user settings data", () => {
       defaultCurrency: "PEN",
       currencyDecimals: 2,
       dateFormat: DEFAULT_DATE_FORMAT,
+      appTheme: DEFAULT_APP_THEME,
       defaultViewMode: DEFAULT_VIEW_MODE,
       excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
       excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -1066,6 +1100,7 @@ describe("user settings data", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: DEFAULT_DATE_FORMAT,
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,

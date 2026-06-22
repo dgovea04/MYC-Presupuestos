@@ -53,7 +53,8 @@ import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { APP_VIEW_MODE_SETTINGS_UPDATED_EVENT } from "@/lib/budget/view-mode";
 import { formatBudgetRatePercentageInput, parseBudgetRatePercentageInput } from "@/lib/settings/budget-rate-percentages";
 import { formatCurrency } from "@/lib/utils";
-import { DEFAULT_EXCEL_ROW_HEIGHT, DEFAULT_INITIAL_SUB_BUDGET_NAMES, DEFAULT_VIEW_MODE } from "@/types/settings";
+import { DEFAULT_APP_THEME } from "@/types/settings";
+import { DEFAULT_EXCEL_ROW_HEIGHT, DEFAULT_INITIAL_SUB_BUDGET_NAMES, DEFAULT_VIEW_MODE, FLOATING_KHIPU_DEFAULTS } from "@/types/settings";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -68,6 +69,7 @@ const baseSettings = {
   defaultCurrency: "PEN" as const,
   currencyDecimals: 2,
   dateFormat: "DD_MMM_YYYY" as const,
+  appTheme: DEFAULT_APP_THEME,
   defaultViewMode: DEFAULT_VIEW_MODE,
   excelShowFieldBorders: true,
   excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -75,6 +77,12 @@ const baseSettings = {
   defaultGeneralExpensesRate: 0.1,
   defaultUtilityRate: 0.08,
   defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+  floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+  floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+  floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+  floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+  floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+  floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
 };
 
 describe("UserSettingsForm", () => {
@@ -126,6 +134,8 @@ describe("UserSettingsForm", () => {
       getSelect("currencyDecimals").dispatchEvent(new Event("change", { bubbles: true }));
       getSelect("dateFormat").value = "DD_MM_YYYY";
       getSelect("dateFormat").dispatchEvent(new Event("change", { bubbles: true }));
+      getSelect("appTheme").value = "dark";
+      getSelect("appTheme").dispatchEvent(new Event("change", { bubbles: true }));
       getSelect("defaultViewMode").value = "excel";
       getSelect("defaultViewMode").dispatchEvent(new Event("change", { bubbles: true }));
       getSelect("excelRowHeight").value = "60";
@@ -151,6 +161,7 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "USD",
         currencyDecimals: 3,
         dateFormat: "DD_MM_YYYY",
+        appTheme: "dark",
         defaultViewMode: "excel",
         excelShowFieldBorders: false,
         excelRowHeight: 60,
@@ -225,6 +236,7 @@ describe("UserSettingsForm", () => {
     expect(getSelect("defaultCurrency").disabled).toBe(true);
     expect(getSelect("currencyDecimals").disabled).toBe(true);
     expect(getSelect("dateFormat").disabled).toBe(true);
+    expect(getSelect("appTheme").disabled).toBe(true);
     expect(getSelect("defaultViewMode").disabled).toBe(true);
     expect(getSelect("excelRowHeight").disabled).toBe(true);
     expect(getInput("defaultIgvRate").disabled).toBe(true);
@@ -246,6 +258,7 @@ describe("UserSettingsForm", () => {
     expect(getSelect("defaultCurrency").disabled).toBe(false);
     expect(getSelect("currencyDecimals").disabled).toBe(false);
     expect(getSelect("dateFormat").disabled).toBe(false);
+    expect(getSelect("appTheme").disabled).toBe(false);
     expect(getSelect("defaultViewMode").disabled).toBe(false);
     expect(getSelect("excelRowHeight").disabled).toBe(false);
     expect(getInput("defaultIgvRate").disabled).toBe(false);
@@ -307,6 +320,7 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: "DD_MMM_YYYY",
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: true,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -351,6 +365,7 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: "DD_MMM_YYYY",
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: true,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -418,6 +433,7 @@ describe("UserSettingsForm", () => {
         defaultCurrency: "PEN",
         currencyDecimals: 2,
         dateFormat: "DD_MMM_YYYY",
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: DEFAULT_VIEW_MODE,
         excelShowFieldBorders: true,
         excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
@@ -434,6 +450,7 @@ describe("UserSettingsForm", () => {
       ok: true,
       json: async () => ({
         ...baseSettings,
+        appTheme: DEFAULT_APP_THEME,
         defaultViewMode: "excel",
         excelShowFieldBorders: false,
         excelRowHeight: 45,

@@ -13,18 +13,10 @@ type ChatHistoryProps = {
   onSelect?: (entry: AiHistoryEntry) => void;
   reducedMotion?: boolean;
   truncateLength?: number | false;
-  /** When true, entries are initially truncated with individual expand/collapse on click */
   expandable?: boolean;
+  theme?: "light" | "dark";
 };
 
-/**
- * Scrollable chat history showing past interactions as user + Khipu bubbles.
- * Newest entries appear at the bottom; the container auto-scrolls down on new entries.
- *
- * In expandable mode, each Khipu response is initially collapsed (showing only a portion)
- * and clicking the entry expands/collapses it individually. The container auto-scrolls
- * to the bottom on mount so the latest response is visible.
- */
 export function ChatHistory({
   history,
   maxHeight = "max-h-72",
@@ -32,30 +24,29 @@ export function ChatHistory({
   reducedMotion = false,
   truncateLength = 300,
   expandable = false,
+  theme = "light",
 }: ChatHistoryProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(history.length);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const isDark = theme === "dark";
 
-  // Auto-scroll to bottom when new entries are added
   useEffect(() => {
     if (history.length > prevLengthRef.current) {
-      const el = bottomRef.current;
-      if (el && typeof el.scrollIntoView === "function") {
-        el.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
+      const element = bottomRef.current;
+      if (element && typeof element.scrollIntoView === "function") {
+        element.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
       }
     }
     prevLengthRef.current = history.length;
   }, [history.length, reducedMotion]);
 
-  // In expandable mode, scroll to bottom on mount so the latest response is visible
   useEffect(() => {
     if (expandable && history.length > 0) {
-      const el = bottomRef.current;
-      if (el && typeof el.scrollIntoView === "function") {
-        // Use a microtask to ensure the DOM has rendered
+      const element = bottomRef.current;
+      if (element && typeof element.scrollIntoView === "function") {
         requestAnimationFrame(() => {
-          el.scrollIntoView({ behavior: "auto" });
+          element.scrollIntoView({ behavior: "auto" });
         });
       }
     }
@@ -65,12 +56,17 @@ export function ChatHistory({
     return null;
   }
 
-  // history is newest-first; reverse so newest appears at bottom
   const chronological = [...history].reverse();
 
   return (
     <div
-      className={cn("overflow-y-auto overscroll-contain rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/60 to-slate-50/20 p-3", maxHeight)}
+      className={cn(
+        "overflow-y-auto overscroll-contain rounded-2xl border p-3",
+        isDark
+          ? "border-[var(--khipu-dark-hairline-strong)] bg-[var(--khipu-dark-canvas-deep)]"
+          : "border-slate-100 bg-gradient-to-b from-slate-50/60 to-slate-50/20",
+        maxHeight,
+      )}
     >
       <div className="space-y-4">
         <AnimatePresence initial={false}>
@@ -93,12 +89,11 @@ export function ChatHistory({
                 transition={{ duration: 0.25, ease: "easeOut" }}
                 className="space-y-2"
               >
-                {/* User message bubble */}
                 <div className="flex justify-end">
                   <div
                     role="button"
                     tabIndex={0}
-                    className="max-w-[82%] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 rounded-2xl cursor-pointer"
+                    className="max-w-[82%] cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
                     onClick={() => {
                       if (expandable) {
                         setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
@@ -106,9 +101,9 @@ export function ChatHistory({
                         onSelect?.(entry);
                       }
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
                         if (expandable) {
                           setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
                         } else {
@@ -117,15 +112,14 @@ export function ChatHistory({
                       }
                     }}
                   >
-                    <AIMessage content={entry.summary} tone="user" />
+                    <AIMessage content={entry.summary} tone="user" theme={theme} />
                   </div>
                 </div>
 
-                {/* Khipu response bubble */}
                 <div
                   role="button"
                   tabIndex={0}
-                  className="max-w-[88%] text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 rounded-2xl cursor-pointer"
+                  className="w-full max-w-[88%] cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
                   onClick={() => {
                     if (expandable) {
                       setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
@@ -133,9 +127,9 @@ export function ChatHistory({
                       onSelect?.(entry);
                     }
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
                       if (expandable) {
                         setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
                       } else {
@@ -145,19 +139,15 @@ export function ChatHistory({
                   }}
                 >
                   <div className="space-y-1.5">
-                    <AIMessage
-                      content={displayText}
-                      model={entry.result.model}
-                      tone="assistant"
-                    />
+                    <AIMessage content={displayText} model={entry.result.model} tone="assistant" theme={theme} />
                     {expandable && needsTruncation && !isExpanded ? (
-                      <p className="flex items-center gap-1 px-4 pb-2 text-[11px] font-medium text-blue-600">
+                      <p className={cn("flex items-center gap-1 px-4 pb-2 text-[11px] font-medium", isDark ? "text-blue-300" : "text-blue-600")}>
                         <ChevronDown className="h-3 w-3" />
                         Ver más
                       </p>
                     ) : null}
                     {expandable && isExpanded ? (
-                      <p className="flex items-center gap-1 px-4 pb-2 text-[11px] font-medium text-slate-400">
+                      <p className={cn("flex items-center gap-1 px-4 pb-2 text-[11px] font-medium", isDark ? "text-[var(--khipu-dark-muted)]" : "text-slate-400")}>
                         <ChevronDown className="h-3 w-3 rotate-180" />
                         Ver menos
                       </p>
@@ -165,19 +155,18 @@ export function ChatHistory({
                   </div>
                 </div>
 
-                {/* Timestamp divider */}
-                <p className="text-center text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+                <p className={cn("text-center text-[10px] font-medium uppercase tracking-[0.14em]", isDark ? "text-[var(--khipu-dark-muted-soft)]" : "text-slate-400")}>
                   {isLast && isRecent(entry.timestamp) ? (
                     <span className="inline-flex items-center gap-2">
-                      <span className="h-px w-6 bg-slate-200" />
+                      <span className={cn("h-px w-6", isDark ? "bg-[var(--khipu-dark-hairline-strong)]" : "bg-slate-200")} />
                       Ahora
-                      <span className="h-px w-6 bg-slate-200" />
+                      <span className={cn("h-px w-6", isDark ? "bg-[var(--khipu-dark-hairline-strong)]" : "bg-slate-200")} />
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-2">
-                      <span className="h-px w-6 bg-slate-200" />
+                      <span className={cn("h-px w-6", isDark ? "bg-[var(--khipu-dark-hairline-strong)]" : "bg-slate-200")} />
                       {formatTime(entry.timestamp)}
-                      <span className="h-px w-6 bg-slate-200" />
+                      <span className={cn("h-px w-6", isDark ? "bg-[var(--khipu-dark-hairline-strong)]" : "bg-slate-200")} />
                     </span>
                   )}
                 </p>
@@ -196,7 +185,7 @@ function truncateText(text: string, maxLength: number): string {
     return text;
   }
 
-  return `${text.slice(0, maxLength).trimEnd()}…`;
+  return `${text.slice(0, maxLength).trimEnd()}...`;
 }
 
 function formatTime(timestamp: string): string {

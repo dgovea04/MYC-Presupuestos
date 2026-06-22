@@ -114,11 +114,15 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
         }
       />
 
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {error ? (
+        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300">
+          {error}
+        </p>
+      ) : null}
       <StaticTableFrame>
         <Table>
-          <THead className="[&_tr]:border-b-slate-200">
-            <TR className="bg-slate-50 hover:bg-slate-50">
+          <THead className="[&_tr]:border-b-[var(--app-border)]">
+            <TR className="bg-[var(--app-surface-elevated)] hover:bg-[var(--app-surface-elevated)]">
               <TH>Proyecto</TH>
               <TH>Cliente</TH>
               <TH>Ubicacion</TH>
@@ -144,8 +148,8 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
               <TR>
                 <TD colSpan={7} className="px-6 py-10 text-center">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-slate-900">No encontramos proyectos con ese filtro</p>
-                    <p className="text-sm text-slate-500">Prueba otro termino de busqueda o crea una obra nueva para comenzar.</p>
+                    <p className="text-sm font-medium text-[var(--app-text-strong)]">No encontramos proyectos con ese filtro</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">Prueba otro termino de busqueda o crea una obra nueva para comenzar.</p>
                   </div>
                 </TD>
               </TR>
@@ -171,8 +175,8 @@ const ProjectTableRow = memo(function ProjectTableRow({
   onRemoveProject: (id: string) => Promise<void>;
 }) {
   return (
-    <TR className="hover:bg-slate-50/80">
-      <TD className="font-medium text-slate-900">{project.name}</TD>
+    <TR className="hover:bg-[var(--app-surface-muted)]/80">
+      <TD className="font-medium text-[var(--app-text-strong)]">{project.name}</TD>
       <TD>{project.clientName || "Pendiente"}</TD>
       <TD>{project.location || "Pendiente"}</TD>
       <TD>

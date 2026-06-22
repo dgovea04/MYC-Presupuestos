@@ -742,21 +742,21 @@ export function MetradosDashboard({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)] px-4 py-4 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.28)] lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-6 text-[var(--app-text)]">
+      <div className="flex flex-col gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-4 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.28)] lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
+          <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--app-text-muted)]">
             <FileSpreadsheet className="h-4 w-4" />
             Metrados avanzados
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Hoja de metrados</h1>
-          <p className="text-xs leading-5 text-slate-500">Registro de cantidades con formulas, autosave y envio a partida.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text-strong)]">Hoja de metrados</h1>
+          <p className="text-xs leading-5 text-[var(--app-text-muted)]">Registro de cantidades con formulas, autosave y envio a partida.</p>
         </div>
         <div className="flex items-center gap-2">
           {projectId ? (
             <Link
               href={`/metrados-avanzados/resumen?projectId=${projectId}`}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-blue-600"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-muted)] shadow-sm transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-primary-soft)]"
               title="Ver resumen del proyecto"
             >
               <BarChart3 className="h-3.5 w-3.5" />
@@ -764,7 +764,7 @@ export function MetradosDashboard({
             </Link>
           ) : null}
           {selectedSheet ? (
-            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-1.5 py-1 shadow-sm">
+            <div className="flex items-center gap-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-1.5 py-1 shadow-sm">
               <button
                 type="button"
                 onClick={undo}
@@ -772,8 +772,8 @@ export function MetradosDashboard({
                 className={cn(
                   "inline-flex items-center justify-center rounded-lg p-1.5 text-sm transition",
                   canUndo
-                    ? "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                    : "text-slate-300 cursor-not-allowed",
+                    ? "text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]"
+                    : "cursor-not-allowed text-[var(--app-text-subtle)]",
                 )}
                 aria-label="Deshacer (Ctrl+Z)"
                 title="Deshacer (Ctrl+Z)"
@@ -787,8 +787,8 @@ export function MetradosDashboard({
                 className={cn(
                   "inline-flex items-center justify-center rounded-lg p-1.5 text-sm transition",
                   canRedo
-                    ? "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                    : "text-slate-300 cursor-not-allowed",
+                    ? "text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]"
+                    : "cursor-not-allowed text-[var(--app-text-subtle)]",
                 )}
                 aria-label="Rehacer (Ctrl+Y)"
                 title="Rehacer (Ctrl+Y)"
@@ -814,13 +814,13 @@ export function MetradosDashboard({
         </div>
       </div>
 
-      <details className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60" open>
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden">
+      <details className="group overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm shadow-slate-100/60" open>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <Calculator className="h-4 w-4 shrink-0 text-sky-600" />
             <div className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-900">Configuracion</span>
-              <span className="block truncate text-xs text-slate-500">
+              <span className="block text-sm font-semibold text-[var(--app-text-strong)]">Configuracion</span>
+              <span className="block truncate text-xs text-[var(--app-text-muted)]">
                 Proyecto, presupuesto, partida y formula de la hoja.
               </span>
             </div>
@@ -838,12 +838,12 @@ export function MetradosDashboard({
               <Plus className="mr-2 h-4 w-4" />
               Nueva hoja
             </Button>
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition group-hover:bg-slate-100 group-open:rotate-90 group-open:bg-slate-100">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--app-text-muted)] transition group-hover:bg-[var(--app-surface-hover-strong)] group-open:rotate-90 group-open:bg-[var(--app-surface-hover-strong)]">
               <ChevronRight className="h-4 w-4" />
             </span>
           </div>
         </summary>
-        <div className="space-y-4 border-t border-slate-100 px-4 py-4">
+        <div className="space-y-4 border-t border-[var(--app-border-soft)] px-4 py-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.2fr)_minmax(180px,0.9fr)_minmax(180px,0.9fr)]">
             <div className="space-y-2">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
@@ -894,27 +894,27 @@ export function MetradosDashboard({
               {/* Date filter */}
               <div className="flex items-center gap-2 pl-0.5">
                 <div className="flex items-center gap-1.5">
-                  <label className="text-[11px] font-medium text-slate-500">Desde</label>
+                  <label className="text-[11px] font-medium text-[var(--app-text-muted)]">Desde</label>
                   <input
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.currentTarget.value)}
-                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-sm transition hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="h-7 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-xs text-[var(--app-text)] shadow-sm transition hover:border-[var(--app-border-strong)] focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
                     aria-label="Filtrar desde fecha"
                   />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <label className="text-[11px] font-medium text-slate-500">Hasta</label>
+                  <label className="text-[11px] font-medium text-[var(--app-text-muted)]">Hasta</label>
                   <input
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.currentTarget.value)}
-                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-sm transition hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="h-7 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-xs text-[var(--app-text)] shadow-sm transition hover:border-[var(--app-border-strong)] focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
                     aria-label="Filtrar hasta fecha"
                   />
                 </div>
                 {(dateFrom || dateTo) && filteredSheets.length < sheets.length ? (
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-[var(--app-text-subtle)]">
                     {filteredSheets.length} de {sheets.length}
                   </span>
                 ) : null}
@@ -1039,7 +1039,7 @@ export function MetradosDashboard({
                 onChange={(event) => setSheetName(event.currentTarget.value)}
               />
             </Field>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            <div className="rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text-muted)]">
               <span className="block truncate font-medium text-slate-900">
                 {isCreatingSheet
                   ? "Creando nueva hoja"
@@ -1083,7 +1083,7 @@ export function MetradosDashboard({
             }}
           />
           {templateType === "CUSTOM" ? (
-            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900">Formula personalizada</p>
                 <p className="mt-1 text-xs text-slate-500">
@@ -1354,7 +1354,7 @@ function CustomFormulaSheet({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
         <Dialog.Content asChild>
-          <div className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl outline-none">
+          <div className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-2xl outline-none">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm text-slate-500">Configuracion</p>
@@ -1508,7 +1508,7 @@ function CustomFormulaBuilder({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className="space-y-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
       <div className="flex flex-col gap-1">
         <h3 className="text-sm font-semibold text-slate-900">Formula personalizada</h3>
         <p className="text-xs text-slate-500">
@@ -1600,7 +1600,7 @@ function CustomFormulaBuilder({
         />
       </Field>
 
-      <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
+      <label className="flex items-start gap-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-3 text-sm text-[var(--app-text)]">
         <input
           type="checkbox"
           className="mt-1"
@@ -1628,7 +1628,7 @@ function CustomFormulaBuilder({
         </div>
       </div>
 
-      {message ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{message}</p> : null}
+      {message ? <p className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text-muted)]">{message}</p> : null}
     </div>
   );
 }
@@ -1648,8 +1648,8 @@ function DeleteMetradoSheetDialog({
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[96] bg-slate-950/30 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[97] w-[min(520px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl outline-none">
-          <div className="border-b border-slate-200 px-6 py-5">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[97] w-[min(520px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-2xl outline-none">
+          <div className="border-b border-[var(--app-border)] px-6 py-5">
             <Dialog.Title asChild>
               <h3 className="text-xl font-semibold text-slate-900">Eliminar hoja de metrado</h3>
             </Dialog.Title>
@@ -1666,7 +1666,7 @@ function DeleteMetradoSheetDialog({
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-end gap-2 border-t border-[var(--app-border)] px-6 py-4">
             <Button variant="outline" onClick={onClose}>
               Cancelar
             </Button>

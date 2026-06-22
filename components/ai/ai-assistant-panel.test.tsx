@@ -7,8 +7,6 @@ import { AiAssistantPanel } from "@/components/ai/ai-assistant-panel";
 import type { AiAssistantControllerViewModel } from "@/components/ai/use-ai-assistant-controller";
 
 vi.mock("framer-motion", () => {
-  const React = require("react");
-
   return {
     AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
     motion: new Proxy(

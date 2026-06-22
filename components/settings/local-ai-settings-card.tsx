@@ -136,11 +136,11 @@ export function LocalAiSettingsCard() {
   }
 
   return (
-    <Card className="border-sky-100 bg-[linear-gradient(135deg,#ffffff_0%,#f4fbff_48%,#eff6ff_100%)]">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardHeader>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
-            <div className="rounded-2xl bg-sky-100 p-2 text-sky-700">
+            <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
               <BotMessageSquare className="h-5 w-5" />
             </div>
             <div>
@@ -172,10 +172,10 @@ export function LocalAiSettingsCard() {
           <Panel title="Modelos requeridos" description="Instala los modelos faltantes para evitar degradacion o errores funcionales.">
             <div className="space-y-2">
               {(health?.requiredModels ?? defaultRequiredModels()).map((model) => (
-                <div key={model.model} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <div key={model.model} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
                   <div>
-                    <p className="font-medium text-slate-900">{model.model}</p>
-                    <p className="text-xs text-slate-500">{model.actions.length ? model.actions.map(readActionLabel).join(" · ") : "Preparado para parsing/codigo"}</p>
+                    <p className="font-medium text-[var(--app-text-strong)]">{model.model}</p>
+                    <p className="text-xs text-[var(--app-text-muted)]">{model.actions.length ? model.actions.map(readActionLabel).join(" · ") : "Preparado para parsing/codigo"}</p>
                   </div>
                   <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium", model.installed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
                     {model.installed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
@@ -193,17 +193,17 @@ export function LocalAiSettingsCard() {
                 const metric = health?.metrics[action];
 
                 return (
-                  <div key={action} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div key={action} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="font-medium text-slate-900">{ACTION_LABELS[action]}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="font-medium text-[var(--app-text-strong)]">{ACTION_LABELS[action]}</p>
+                        <p className="text-xs text-[var(--app-text-muted)]">
                           Solicitado: {resolution?.requestedModel ?? "-"} · Usando: {resolution?.model ?? "-"}
                         </p>
                       </div>
                       {resolution?.fallbackUsed ? <StatusPill label="Fallback" tone="amber" /> : <StatusPill label="Directo" tone="emerald" />}
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">
+                    <p className="mt-2 text-xs text-[var(--app-text-muted)]">
                       Latencia: {typeof metric?.latencyMs === "number" ? `${metric.latencyMs} ms` : "sin ejecuciones"} · Ultimo error: {metric?.lastError ?? "ninguno"}
                     </p>
                     {resolution?.warnings.length ? <p className="mt-2 text-xs text-amber-700">{resolution.warnings.join(" ")}</p> : null}
@@ -227,9 +227,9 @@ export function LocalAiSettingsCard() {
                       : "Pendiente";
 
                 return (
-                  <div key={provider} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                    <p className="font-medium text-slate-900">{PROVIDER_LABELS[provider]}</p>
-                    <p className="mt-1 text-xs text-slate-500">{status}</p>
+                  <div key={provider} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
+                    <p className="font-medium text-[var(--app-text-strong)]">{PROVIDER_LABELS[provider]}</p>
+                    <p className="mt-1 text-xs text-[var(--app-text-muted)]">{status}</p>
                   </div>
                 );
               })}
@@ -239,9 +239,9 @@ export function LocalAiSettingsCard() {
           <Panel title="Rutas Khipu V2" description="Cadena de fallback usada cuando el proveedor esta en automatico.">
             <div className="grid gap-2 md:grid-cols-2">
               {(Object.keys(TASK_LABELS) as KhipuAiTask[]).map((task) => (
-                <div key={task} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="font-medium text-slate-900">{TASK_LABELS[task]}</p>
-                  <p className="mt-1 text-xs text-slate-500">{(health?.routing[task] ?? []).join(" -> ") || "Sin ruta"}</p>
+                <div key={task} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
+                  <p className="font-medium text-[var(--app-text-strong)]">{TASK_LABELS[task]}</p>
+                  <p className="mt-1 text-xs text-[var(--app-text-muted)]">{(health?.routing[task] ?? []).join(" -> ") || "Sin ruta"}</p>
                 </div>
               ))}
             </div>
@@ -250,7 +250,7 @@ export function LocalAiSettingsCard() {
 
         <section className="grid gap-4 lg:grid-cols-3">
           <Panel title="Seguridad" description="Reglas fijas de la integracion local.">
-            <div className="space-y-2 text-sm text-slate-600">
+            <div className="space-y-2 text-sm text-[var(--app-text-muted)]">
               <SafetyRow text="La IA nunca modifica presupuestos automaticamente." />
               <SafetyRow text="Toda sugerencia aplicada requiere confirmacion humana." />
               <SafetyRow text="No se envian datos a servicios externos en esta fase." />
@@ -260,7 +260,7 @@ export function LocalAiSettingsCard() {
           <Panel title="Contexto de Khipu" description="Datos que se comparten para mejorar respuestas.">
             <div className="flex flex-wrap gap-2">
               {CONTEXT_SOURCES.map((source) => (
-                <span key={source} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                <span key={source} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--app-text-muted)]">
                   {source}
                 </span>
               ))}
@@ -281,7 +281,7 @@ export function LocalAiSettingsCard() {
         <Panel title="Capacidades preparadas" description="Hoja de ruta tecnica para extender IA local sin enviar datos a servicios externos.">
           <div className="flex flex-wrap gap-2">
             {FUTURE_CAPABILITIES.map((capability) => (
-              <span key={capability} className="rounded-full border border-sky-100 bg-white px-3 py-1 text-xs font-medium text-sky-700">
+              <span key={capability} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--app-text-strong)]">
                 {capability}
               </span>
             ))}
@@ -294,20 +294,20 @@ export function LocalAiSettingsCard() {
 
 function AiInfoCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-slate-950">{value}</p>
-      <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-subtle)]">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-[var(--app-text-strong)]">{value}</p>
+      <p className="mt-1 truncate text-xs text-[var(--app-text-muted)]">{detail}</p>
     </div>
   );
 }
 
 function Panel({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/80 p-4">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
       <div className="mb-3">
-        <p className="font-semibold text-slate-950">{title}</p>
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
+        <p className="font-semibold text-[var(--app-text-strong)]">{title}</p>
+        <p className="mt-1 text-sm text-[var(--app-text-muted)]">{description}</p>
       </div>
       {children}
     </div>
@@ -316,7 +316,7 @@ function Panel({ title, description, children }: { title: string; description: s
 
 function SafetyRow({ text }: { text: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2">
+    <div className="flex items-start gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2">
       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
       <span>{text}</span>
     </div>
@@ -331,7 +331,7 @@ function StatusPill({ label, tone }: { label: string; tone: "slate" | "emerald" 
         ? "bg-amber-100 text-amber-700"
         : tone === "rose"
           ? "bg-rose-100 text-rose-700"
-          : "bg-slate-100 text-slate-600";
+          : "bg-slate-100 text-[var(--app-text-muted)]";
 
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold", toneClassName)}>
@@ -503,3 +503,4 @@ async function readResponsePayload(response: Response): Promise<unknown> {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
+

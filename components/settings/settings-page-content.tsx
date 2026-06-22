@@ -10,6 +10,7 @@ import { FloatingKhipuSettingsCard } from "@/components/settings/floating-khipu-
 import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
+import { APP_SETTINGS_UPDATED_EVENT } from "@/lib/settings/events";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import type { AccountRecord } from "@/types/account";
 import type { UserSettingsRecord } from "@/types/settings";
@@ -85,10 +86,10 @@ export function SettingsPageContent({
             }}
           />
 
-          <Card className="border-slate-200">
-            <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#fffdf8_0%,#fffaf0_100%)]">
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+            <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-amber-100 p-2 text-amber-700">
+                <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
                   <Settings2 className="h-5 w-5" />
                 </div>
                 <div>
@@ -129,11 +130,19 @@ export function SettingsPageContent({
                   previewLabel="Filas"
                   previewValue={`${settings.excelRowHeight}px`}
                 />
+                <InfoCard
+                  label="Tema app"
+                  value={settings.appTheme === "dark" ? "Oscuro" : "Claro"}
+                  tone={settings.appTheme === "dark" ? "slate" : "sky"}
+                  previewLabel="Aplicacion"
+                  previewValue="Shell, cards y tablas"
+                />
               </div>
               <UserSettingsForm
                 initialSettings={settings}
                 onSaved={(saved) => {
                   setSettings(saved);
+                  window.dispatchEvent(new CustomEvent(APP_SETTINGS_UPDATED_EVENT, { detail: saved }));
                   // Broadcast to the floating assistant so it picks up
                   // currency, decimals, date format, and other general settings.
                   window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: saved }));
@@ -144,7 +153,7 @@ export function SettingsPageContent({
         </div>
 
         <div className="space-y-6 xl:sticky xl:top-5">
-          <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
             <CardHeader>
               <CardTitle>Resumen rapido</CardTitle>
               <CardDescription>Lectura corta del estado actual de tus ajustes globales.</CardDescription>
@@ -155,28 +164,29 @@ export function SettingsPageContent({
               <InfoCard label="Moneda" value={settings.defaultCurrency} layout="inline" />
               <InfoCard label="Fecha" value={DATE_FORMAT_LABELS[settings.dateFormat]} layout="inline" />
               <InfoCard label="Vista" value={settings.defaultViewMode === "excel" ? "Modo Excel" : "Moderna"} layout="inline" />
+              <InfoCard label="Tema" value={settings.appTheme === "dark" ? "Oscuro" : "Claro"} layout="inline" />
               <InfoCard label="Filas Excel" value={`${settings.excelRowHeight}px`} layout="inline" />
               <InfoCard label="Sub Presupuestos" value={`${settings.defaultSubBudgetNames.length} base`} layout="inline" />
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
             <CardHeader>
               <CardTitle>Previsualizacion documental</CardTitle>
               <CardDescription>Lectura rapida de como se vera la firma base en PDF y Excel.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-100/70">
+              <div className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm shadow-slate-950/10">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Firma documental</p>
-                    <p className="mt-2 text-sm text-slate-600">Responsable, empresa y firma visual que acompanaran los exportes.</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--app-text-subtle)]">Firma documental</p>
+                    <p className="mt-2 text-sm text-[var(--app-text-muted)]">Responsable, empresa y firma visual que acompanaran los exportes.</p>
                   </div>
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)]">
                     {companyState?.logoUrl ? (
                       <Image src={companyState.logoUrl} alt="Logo de empresa" width={42} height={42} className="max-h-10 w-auto object-contain" />
                     ) : (
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Logo</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--app-text-subtle)]">Logo</span>
                     )}
                   </div>
                 </div>
@@ -204,16 +214,16 @@ export function SettingsPageContent({
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200">
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
             <CardHeader>
               <CardTitle>Proximos ajustes recomendados</CardTitle>
               <CardDescription>Pequenas mejoras con bastante impacto en la operacion diaria.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {recommendations.map((item) => (
-                <div key={item.title} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                  <p className="font-medium text-slate-900">{item.title}</p>
-                  <p className="mt-1.5 text-sm text-slate-600">{item.detail}</p>
+                <div key={item.title} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4">
+                  <p className="font-medium text-[var(--app-text-strong)]">{item.title}</p>
+                  <p className="mt-1.5 text-sm text-[var(--app-text-muted)]">{item.detail}</p>
                 </div>
               ))}
             </CardContent>
@@ -226,9 +236,9 @@ export function SettingsPageContent({
 
 function PreviewRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className="text-right text-sm font-medium text-slate-900">{value}</span>
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3">
+      <span className="text-sm text-[var(--app-text-muted)]">{label}</span>
+      <span className="text-right text-sm font-medium text-[var(--app-text-strong)]">{value}</span>
     </div>
   );
 }
@@ -243,11 +253,11 @@ function SignaturePreview({
   secondary: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</p>
-      <div className="mt-8 border-t border-slate-300 pt-3">
-        <p className="text-sm font-semibold text-slate-900">{primary}</p>
-        <p className="mt-1 text-sm text-slate-500">{secondary}</p>
+    <div className="rounded-2xl border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface)] px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--app-text-subtle)]">{title}</p>
+      <div className="mt-8 border-t border-[var(--app-border)] pt-3">
+        <p className="text-sm font-semibold text-[var(--app-text-strong)]">{primary}</p>
+        <p className="mt-1 text-sm text-[var(--app-text-muted)]">{secondary}</p>
       </div>
     </div>
   );

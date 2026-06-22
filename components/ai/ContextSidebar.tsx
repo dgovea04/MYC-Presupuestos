@@ -19,10 +19,10 @@ export function ContextSidebar({
   shortcuts?: ContextShortcut[];
 }) {
   return (
-    <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <aside className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-sm">
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-slate-900">Contexto de trabajo</p>
-        <p className="text-sm leading-6 text-slate-500">Estos datos guian la respuesta de Khipu para el modulo actual.</p>
+        <p className="text-sm font-semibold text-[var(--app-text-strong)]">Contexto de trabajo</p>
+        <p className="text-sm leading-6 text-[var(--app-text-muted)]">Estos datos guian la respuesta de Khipu para el modulo actual.</p>
       </div>
       <div className="mt-5 grid gap-3">
         <ContextInput label="Proyecto" value={context.project ?? ""} onChange={(project) => onChange({ ...context, project })} />
@@ -42,22 +42,22 @@ export function ContextSidebar({
         <ContextInput label="Tabla activa" value={context.activeTable ?? ""} onChange={(activeTable) => onChange({ ...context, activeTable })} />
       </div>
       {shortcuts.length ? (
-        <div className="mt-6 border-t border-slate-200 pt-5">
+        <div className="mt-6 border-t border-[var(--app-border)] pt-5">
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-900">Siguientes acciones</p>
-            <p className="text-sm leading-6 text-slate-500">Cambia de comando sin perder el contexto actual.</p>
+            <p className="text-sm font-semibold text-[var(--app-text-strong)]">Siguientes acciones</p>
+            <p className="text-sm leading-6 text-[var(--app-text-muted)]">Cambia de comando sin perder el contexto actual.</p>
           </div>
           <div className="mt-3 grid gap-2">
             {shortcuts.map((shortcut) => (
               <button
                 key={shortcut.label}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-left transition hover:border-blue-300 hover:bg-[var(--app-primary-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 type="button"
                 aria-label={shortcut.label}
                 onClick={shortcut.onSelect}
               >
-                <span className="block text-sm font-semibold text-slate-900">{shortcut.label}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">{shortcut.description}</span>
+                <span className="block text-sm font-semibold text-[var(--app-text-strong)]">{shortcut.label}</span>
+                <span className="mt-1 block text-xs leading-5 text-[var(--app-text-muted)]">{shortcut.description}</span>
               </button>
             ))}
           </div>
@@ -79,7 +79,7 @@ function ContextInput({
   value: string;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-[var(--app-text)]">
       {label}
       <Input className="h-9" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>

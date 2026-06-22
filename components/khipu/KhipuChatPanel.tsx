@@ -57,6 +57,7 @@ export function KhipuChatPanel({
   const isDark = theme === "dark";
   return (
     <div
+      data-khipu-theme={theme}
       className={cn(
         "flex flex-col rounded-3xl border shadow-2xl transition-all duration-300",
         isDark ? "border-slate-700 bg-slate-900 shadow-slate-950/40" : "border-slate-200 bg-white shadow-slate-900/10",

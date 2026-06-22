@@ -18,7 +18,7 @@ export default async function Rw7ImportsPage() {
           title="Importador RW7"
           description="Convierte archivos Excel de Sistemas RW7 en proyectos MYC con presupuesto, partidas, APUs e insumos."
         />
-        <Card>
+        <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
           <CardHeader />
           <CardContent>
             <Rw7ImporterPageContent companies={companies.map((company) => ({ id: company.id, name: company.name }))} />

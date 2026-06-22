@@ -21,7 +21,7 @@ export function QualityMetricsHeader({ total }: { total: number }) {
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--khipu-blue)] text-white">
+          <span className="dashboard-khipu-header-icon inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--khipu-blue)] text-white">
             <BotMessageSquare className="h-4 w-4" />
           </span>
           <p className="text-lg font-semibold text-slate-900">Calidad de Khipu</p>
@@ -30,7 +30,7 @@ export function QualityMetricsHeader({ total }: { total: number }) {
           Metricas de calidad basadas en feedback de sugerencias de IA.
         </p>
       </div>
-      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+      <div className="dashboard-khipu-header-pill flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
         <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
         {total} sugerencias evaluadas
       </div>
@@ -89,7 +89,7 @@ export function QualityMetricCard({
   };
 
   return (
-    <div className={cn("rounded-2xl border px-4 py-3", tones[tone].bg)}>
+    <div className={cn(`dashboard-khipu-metric dashboard-khipu-metric-${tone} rounded-2xl border px-4 py-3`, tones[tone].bg)}>
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</p>
       <p className={cn("mt-1 text-2xl font-semibold tracking-tight", tones[tone].value)}>{value}</p>
       <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
@@ -99,7 +99,7 @@ export function QualityMetricCard({
 
 export function AcceptanceBar({ summary }: { summary: FeedbackSummary }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="dashboard-khipu-acceptance overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="grid gap-0 sm:grid-cols-3">
         <AcceptanceBarSegment
           label="Aplicadas"
@@ -163,7 +163,7 @@ export function AcceptanceBarSegment({
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
 
   return (
-    <div className={cn("border-r border-slate-100 px-4 py-3 last:border-r-0", barClassName)}>
+    <div className={cn("dashboard-khipu-acceptance-segment border-r border-slate-100 px-4 py-3 last:border-r-0", barClassName)}>
       <p className="text-xs font-medium text-slate-600">{label}</p>
       <p className="mt-1 flex items-baseline gap-1.5">
         <span className={cn("text-lg font-semibold", className.replace("bg-", "text-"))}>{pct}%</span>
@@ -175,7 +175,7 @@ export function AcceptanceBarSegment({
 
 export function QualityMetricsEmpty() {
   return (
-    <Card className="border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)]">
+    <Card className="dashboard-khipu-empty border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)]">
       <CardContent className="px-4 py-6 text-center text-sm text-slate-500">
         <BotMessageSquare className="mx-auto h-8 w-8 text-slate-300" />
         <p className="mt-2 font-medium text-slate-900">Sin datos de calidad</p>
@@ -190,7 +190,7 @@ export function QualityMetricsEmpty() {
 
 export function ProviderQualityTable({ providers }: { providers: AiSuggestionFeedbackProviderQuality[] }) {
   return (
-    <Card className="border-slate-200 bg-white shadow-sm">
+    <Card className="dashboard-khipu-provider-table border-slate-200 bg-white shadow-sm">
       <CardContent className="space-y-4 p-5">
         <div>
           <p className="text-sm font-semibold text-slate-900">Calidad por proveedor</p>

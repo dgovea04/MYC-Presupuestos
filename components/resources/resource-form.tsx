@@ -90,7 +90,7 @@ export function ResourceForm({
           </div>
         </div>
 
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text-muted)]">
           El código se genera automáticamente según la categoría.
         </div>
       </FormSectionPanel>
@@ -113,3 +113,4 @@ export function ResourceForm({
     </form>
   );
 }
+

@@ -6,20 +6,13 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
+import { ChartTooltipContent, Tooltip } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
 import type { FeedbackTrendPoint } from "@/lib/ai/suggestion-feedback";
-
-const TREND_COLORS = {
-  acceptanceRate: "#10B981",
-  applied: "#10B981",
-  edited: "#0EA5E9",
-  dismissed: "#F43F5E",
-} as const;
 
 type RangeDays = 7 | 30 | 90;
 
@@ -29,49 +22,12 @@ const RANGE_OPTIONS: Array<{ label: string; days: RangeDays }> = [
   { label: "90d", days: 90 },
 ];
 
-function CustomTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{ dataKey?: string; value?: number; color?: string }>;
-  label?: string;
-}) {
-  if (!active || !payload?.length) return null;
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm">
-      <p className="mb-2 text-xs font-medium text-slate-500">{label}</p>
-      <div className="space-y-1">
-        {payload
-          .filter((entry) => entry.value !== undefined && entry.value !== null)
-          .map((entry, i) => {
-            const labelMap: Record<string, string> = {
-              acceptanceRate: "Aceptacion",
-              applied: "Aplicadas",
-              edited: "Editadas",
-              dismissed: "Descartadas",
-            };
-            return (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: entry.color }}
-                />
-                <span className="text-slate-600">{labelMap[entry.dataKey ?? ""] ?? entry.dataKey}:</span>
-                <span className="font-mono font-medium text-slate-900">
-                  {entry.dataKey === "acceptanceRate"
-                    ? `${((entry.value ?? 0) * 100).toFixed(0)}%`
-                    : String(entry.value)}
-                </span>
-              </div>
-            );
-          })}
-      </div>
-    </div>
-  );
-}
+const LABEL_MAP: Record<string, string> = {
+  acceptanceRate: "Aceptacion",
+  applied: "Aplicadas",
+  edited: "Editadas",
+  dismissed: "Descartadas",
+};
 
 export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] }) {
   const [rangeDays, setRangeDays] = useState<RangeDays>(90);
@@ -117,16 +73,16 @@ export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] })
   if (trends.length === 0) return null;
 
   return (
-    <Card className="border-slate-200 bg-white shadow-sm">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardContent className="space-y-3 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-slate-900">Tendencia semanal</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm font-semibold text-[var(--app-text-strong)]">Tendencia semanal</p>
+            <p className="mt-1 text-sm text-[var(--app-text-muted)]">
               Evolucion de la tasa de aceptacion de sugerencias semana a semana.
             </p>
           </div>
-          <div className="flex gap-1 rounded-xl border border-slate-200 bg-slate-100/60 p-0.5">
+          <div className="flex gap-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-0.5">
             {RANGE_OPTIONS.map((option) => {
               const active = option.days === rangeDays;
               return (
@@ -137,8 +93,8 @@ export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] })
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150",
                     active
-                      ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
-                      : "text-slate-500 hover:bg-white/60 hover:text-slate-800",
+                      ? "bg-[var(--app-surface)] text-[var(--app-text-strong)] shadow-sm ring-1 ring-[var(--app-border)]"
+                      : "text-[var(--app-text-muted)] hover:bg-[var(--app-surface)]/60 hover:text-[var(--app-text)]",
                   )}
                   onClick={() => setRangeDays(option.days)}
                 >
@@ -153,27 +109,66 @@ export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] })
           <>
             <ResponsiveContainer height={220} width="100%">
               <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+                <CartesianGrid stroke="var(--app-border-soft)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="weekLabel"
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 10, fill: "var(--app-text-muted)" }}
                   interval="preserveStartEnd"
+                  axisLine={false}
+                  tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: "var(--app-text-muted)" }}
                   tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
                   domain={[0, 1]}
+                  axisLine={false}
+                  tickLine={false}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip
+                  animationDuration={0}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    return (
+                      <ChartTooltipContent
+                        active={active}
+                        payload={payload}
+                        label={label}
+                        labelClassName="mb-1.5 text-xs font-medium text-[var(--app-text-muted)]"
+                      >
+                        <div className="space-y-0.5">
+                          {payload
+                            .filter((entry) => entry.value !== undefined && entry.value !== null)
+                            .map((entry, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <span
+                                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                                  style={{ backgroundColor: entry.color }}
+                                />
+                                <span className="text-[var(--app-text-muted)]">
+                                  {LABEL_MAP[entry.dataKey as string] ?? entry.dataKey}:
+                                </span>
+                                <span className="font-mono font-medium tabular-nums text-[var(--app-text-strong)]">
+                                  {entry.dataKey === "acceptanceRate"
+                                    ? `${(Number(entry.value ?? 0) * 100).toFixed(0)}%`
+                                    : String(entry.value)}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </ChartTooltipContent>
+                    );
+                  }}
+                />
                 <Line
                   dataKey="acceptanceRate"
                   name="acceptanceRate"
-                  stroke={TREND_COLORS.acceptanceRate}
+                  stroke="var(--chart-2)"
                   strokeWidth={2.5}
-                  dot={{ r: 4, strokeWidth: 2, fill: "#fff" }}
-                  activeDot={{ r: 6, strokeWidth: 2 }}
+                  dot={{ r: 4, strokeWidth: 0, fill: "var(--chart-2)" }}
+                  activeDot={{ r: 5, strokeWidth: 0 }}
                   type="monotone"
                   connectNulls
+                  isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -182,19 +177,19 @@ export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] })
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-100 text-left font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  <tr className="border-b border-[var(--app-border-soft)] text-left font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">
                     <th className="pb-1.5 pr-3">Semana</th>
                     <th className="pb-1.5 pr-3 text-right">Total</th>
                     <th className="pb-1.5 pr-3 text-right">
-                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" />{" "}
+                      <span className="inline-block h-2 w-2 rounded-full bg-[var(--chart-2)] align-middle" />{" "}
                       Aplicadas
                     </th>
                     <th className="pb-1.5 pr-3 text-right">
-                      <span className="inline-block h-2 w-2 rounded-full bg-sky-500 align-middle" />{" "}
+                      <span className="inline-block h-2 w-2 rounded-full bg-[var(--chart-6)] align-middle" />{" "}
                       Editadas
                     </th>
                     <th className="pb-1.5 text-right">
-                      <span className="inline-block h-2 w-2 rounded-full bg-rose-400 align-middle" />{" "}
+                      <span className="inline-block h-2 w-2 rounded-full bg-[var(--chart-7)] align-middle" />{" "}
                       Descartadas
                     </th>
                   </tr>
@@ -203,12 +198,12 @@ export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] })
                   {filteredTrends
                     .filter((t) => t.total > 0)
                     .map((week) => (
-                      <tr key={week.weekKey} className="border-b border-slate-50 last:border-b-0">
-                        <td className="py-1.5 pr-3 font-medium text-slate-700">{week.weekLabel}</td>
-                        <td className="py-1.5 pr-3 text-right text-slate-600">{week.total}</td>
-                        <td className="py-1.5 pr-3 text-right text-emerald-700">{week.applied}</td>
-                        <td className="py-1.5 pr-3 text-right text-sky-700">{week.edited}</td>
-                        <td className="py-1.5 text-right text-rose-600">{week.dismissed}</td>
+                      <tr key={week.weekKey} className="border-b border-[var(--app-border-soft)] last:border-b-0">
+                        <td className="py-1.5 pr-3 font-medium text-[var(--app-text)]">{week.weekLabel}</td>
+                        <td className="py-1.5 pr-3 text-right text-[var(--app-text-muted)]">{week.total}</td>
+                        <td className="py-1.5 pr-3 text-right font-medium text-[var(--chart-2)]">{week.applied}</td>
+                        <td className="py-1.5 pr-3 text-right font-medium text-[var(--chart-6)]">{week.edited}</td>
+                        <td className="py-1.5 text-right font-medium text-[var(--chart-7)]">{week.dismissed}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -216,7 +211,7 @@ export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] })
             </div>
           </>
         ) : (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-6 text-center text-sm text-[var(--app-text-muted)]">
             No hay suficientes datos en los ultimos {rangeDays} dias para mostrar una tendencia.
           </div>
         )}

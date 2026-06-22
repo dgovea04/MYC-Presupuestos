@@ -1,11 +1,11 @@
-# MYC Presupuestos — Design System
+# MC Presupuestos — Design System
 
 ## 1. Product Identity
 
-**Product name:** MYC Presupuestos  
+**Product name:** MC Presupuestos  
 **Tagline:** Plataforma moderna de costos y presupuestos de obra.
 
-MYC Presupuestos is a modern SaaS platform for construction budgeting, APU, cost control, formula polinómica, material catalogs, project scheduling, and professional reports.
+MC Presupuestos is a modern SaaS platform for construction budgeting, APU, cost control, formula polinómica, material catalogs, project scheduling, and professional reports.
 
 The product should feel modern, technical, reliable, and efficient.
 
@@ -79,6 +79,27 @@ The interface should be professional enough for engineers but simple enough for 
 | Warning Amber | `#F59E0B` | Partial states, warnings |
 | Danger Red | `#EF4444` | Errors, negative states |
 
+### Dark Theme Foundation
+
+Use this palette as the base for Khipu floating dark mode and for the future full-app dark theme.
+
+| Name | Hex | Usage |
+|---|---:|---|
+| Canvas | `#0F0F0F` | Main dark page floor |
+| Canvas Deep | `#000000` | Code blocks, dense terminal zones |
+| Surface Card | `#181818` | Default dark cards and panels |
+| Surface Card Elevated | `#222222` | Inputs, pills, secondary containers |
+| Surface Strong | `#2A2A2A` | Dropdowns, stronger states, overlays |
+| Hairline | `#222222` | Default dividers |
+| Hairline Soft | `#1A1A1A` | Soft separators |
+| Hairline Strong | `#333333` | Strong borders and outlines |
+| Ink | `#FFFFFF` | Headlines and high-emphasis text |
+| Body | `#A8A8A8` | Default running text |
+| Body Strong | `#FFFFFF` | Primary content text |
+| Muted | `#888888` | Labels and secondary metadata |
+| Muted Soft | `#666666` | Disabled states and placeholders |
+| On Primary | `#FFFFFF` | Text on primary blue actions |
+
 ---
 
 ## 5. Gradients
@@ -100,6 +121,26 @@ background: linear-gradient(180deg, #FFFFFF 0%, #EFF6FF 100%);
 ```css
 background: linear-gradient(135deg, #020617 0%, #0F172A 100%);
 ```
+
+### Dark Theme Rule
+
+For dark UI surfaces, avoid decorative gradients by default.
+
+Use:
+
+- Flat fills with contrast steps between `Canvas`, `Surface Card`, `Surface Card Elevated`, and `Surface Strong`
+- Depth through spacing, border contrast, and shadow restraint
+- Blue only as an action or focus accent
+
+Avoid:
+
+- White-to-blue panel gradients inside the dark theme
+- Cyan/purple decorative fills inside forms, pills, cards, and chat surfaces
+- Mixing light landing gradients with dark product UI
+
+Exception:
+
+- A focused marketing hero or spotlight area may use a controlled glow, but product UI surfaces should stay flat.
 
 ---
 
@@ -144,6 +185,9 @@ Rules:
 - Keep line-height comfortable.
 - Avoid excessive font sizes in dashboards.
 - Use muted color for secondary text.
+- In dark mode, keep the same font system but increase perceived hierarchy through contrast, not larger sizes.
+- Prefer `Plus Jakarta Sans` for Khipu headings, widget titles, and premium product moments.
+- Keep inputs, pills, tables, and dense technical UI in `Inter` for readability.
 
 ---
 
@@ -163,7 +207,7 @@ Symbol:
 Wordmark:
 
 ```txt
-MYC
+MC
 Presupuestos
 ```
 
@@ -194,6 +238,9 @@ Every UI decision should follow these principles:
 
 5. **Reusable patterns**  
    Buttons, cards, tables, badges, and layouts should be consistent.
+
+6. **Dark mode is a system, not an inversion**  
+   Dark UI should be designed with dedicated surfaces, borders, and text roles. Do not simply swap white for black.
 
 ---
 
@@ -269,6 +316,13 @@ Use for low-priority navigation.
 inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900
 ```
 
+### Dark Button Rules
+
+- Primary actions stay blue, but use a flat blue fill instead of blue gradients.
+- Secondary actions use `Surface Card Elevated` with `Hairline Strong`.
+- Ghost buttons should never disappear into the canvas; keep a visible hover surface.
+- Avoid pure white buttons inside dark UI.
+
 ---
 
 ## 11. Cards
@@ -297,6 +351,16 @@ Use cards for:
 - Report previews
 - Project summaries
 
+### Dark Card Rules
+
+- Dark cards should use flat backgrounds only.
+- Base card: `Surface Card`
+- Interactive card or nested block: `Surface Card Elevated`
+- Strong utility/menu surfaces: `Surface Strong`
+- Borders should be visible but subtle, using `Hairline` or `Hairline Strong`
+- Shadows in dark mode should be softer and less spread than in light mode
+- Never place white cards inside the dark Khipu experience
+
 ---
 
 ## 12. Badges
@@ -316,11 +380,18 @@ Status badges:
 - Error: red
 - Neutral: slate
 
+### Dark Badge Rules
+
+- In dark mode, pills and badges should use `Surface Card Elevated`
+- Default text should be `Body Strong` or `Muted`, depending on importance
+- Keep uppercase helper badges compact and restrained
+- Reserve bright fills for status signaling only, not decorative emphasis
+
 ---
 
 ## 13. Tables
 
-Tables are core to MYC Presupuestos.
+Tables are core to MC Presupuestos.
 
 They should feel like a modern Excel-inspired interface.
 
@@ -372,6 +443,64 @@ APU table:
 - Cantidad
 - Precio
 - Parcial
+
+### Dark Table Rules
+
+- Background ladder should remain flat: canvas below, panel above, row states above that
+- Header rows should use `Surface Card Elevated`
+- Dense technical tables must preserve readable separators using `Hairline`
+- Numeric content should keep strong contrast without using bright white everywhere
+- Hover, selected, and active row states should move one surface step up, not introduce gradients
+
+---
+
+## 13.1. Khipu Floating Dark Theme
+
+The floating Khipu assistant is the reference implementation for product dark mode quality.
+
+### Visual Goals
+
+- Near-black canvas
+- No white surfaces
+- No surface gradients
+- Strong but controlled contrast
+- Premium technical feel
+- Clear hierarchy between shell, context, messages, pills, and fields
+
+### Surface Hierarchy
+
+| Layer | Token |
+|---|---|
+| Widget backdrop | `Canvas` |
+| Main panel shell | `Surface Card` |
+| Nested context block | `Surface Card Elevated` |
+| Pills, chips, secondary actions | `Surface Card Elevated` |
+| Menus / stronger overlays | `Surface Strong` |
+| Code / deep history area | `Canvas Deep` |
+
+### Text Hierarchy
+
+| Element | Color |
+|---|---|
+| Main titles | `Ink` |
+| Main message text | `Body Strong` or `Body` |
+| Labels / helper copy | `Muted` |
+| Placeholders / disabled | `Muted Soft` |
+
+### Fields and Pills
+
+- Inputs and textareas should sit on `Surface Card`
+- Their borders should use `Hairline Strong`
+- Placeholder text should use `Muted Soft`
+- Quick-action pills should use flat elevated surfaces
+- Active pills may use a tinted blue-dark fill, but still without gradients
+
+### Khipu Floating Interaction Rules
+
+- Primary send buttons use flat `Primary Blue`
+- Warning panels use dark amber-tinted surfaces, not pale light-mode warning boxes
+- Error states should use dark red-tinted surfaces with readable text
+- History, messages, and context cards should all stay within the same dark surface ladder
 
 ---
 
@@ -463,7 +592,7 @@ Presupuestos de obra más rápidos, precisos y profesionales.
 Subheadline:
 
 ```txt
-MYC Presupuestos te ayuda a crear presupuestos, APU, metrados y reportes profesionales para proyectos de construcción, edificación e infraestructura.
+MC Presupuestos te ayuda a crear presupuestos, APU, metrados y reportes profesionales para proyectos de construcción, edificación e infraestructura.
 ```
 
 Primary CTA:
@@ -576,7 +705,7 @@ Comparison columns:
 
 - Excel
 - Software tradicional
-- MYC Presupuestos
+- MC Presupuestos
 
 Rows:
 
@@ -753,6 +882,14 @@ Avoid:
 - Low contrast text
 - Icons without labels when meaning is important
 
+### Dark Theme Accessibility
+
+- Do not rely on color alone to signal state
+- Preserve clear border visibility between stacked dark surfaces
+- Placeholder text must remain readable against dark fields
+- Blue interactive elements must keep accessible contrast on dark backgrounds
+- Dense technical widgets should remain legible in low-light conditions and on lower-quality displays
+
 ---
 
 ## 20. Implementation Notes for Codex
@@ -768,6 +905,64 @@ When implementing UI:
 - Do not create huge `page.tsx` files.
 - Build mockups with code instead of external images.
 - Verify TypeScript and responsive behavior.
+- When implementing dark mode, use semantic tokens first and component overrides second.
+- Extend the Khipu floating dark palette into reusable app-level tokens before rolling out page-by-page dark mode.
+- Do not mix legacy light gradients into dark product components.
+
+---
+
+## 20.1. Future Full-App Dark Theme Strategy
+
+The future dark theme for the whole webapp should reuse the same criteria already validated in Khipu floating mode.
+
+### Rollout Principles
+
+1. Define semantic dark tokens first:
+   - app background
+   - panel background
+   - elevated panel background
+   - strong surface
+   - border soft/default/strong
+   - text primary/secondary/muted/disabled
+
+2. Apply dark mode by component family:
+   - shell and navigation
+   - cards and filters
+   - forms and dialogs
+   - tables and spreadsheet-like views
+   - charts and status surfaces
+   - AI and assistant surfaces
+
+3. Preserve product behavior:
+   - financial density
+   - table readability
+   - form clarity
+   - technical professionalism
+
+### Global Dark Theme Rules
+
+- No white cards on dark pages
+- No light-mode blue gradients reused in dark UI
+- Elevation should come from surface steps, not brighter glows
+- Tables, APU popups, and spreadsheet-style modules must inherit the same density, borders, and decimal clarity they already use in light mode
+- Dialogs, dropdowns, and side panels should use the same dark ladder as Khipu floating
+- Blue remains the main action accent; do not introduce new accent families without a product reason
+
+### Preferred App-Level Mapping
+
+| Semantic role | Dark token |
+|---|---|
+| App background | `Canvas` |
+| Main card | `Surface Card` |
+| Nested card / field / chip | `Surface Card Elevated` |
+| Menu / active elevated region | `Surface Strong` |
+| Default border | `Hairline` |
+| Strong border | `Hairline Strong` |
+| Heading text | `Ink` |
+| Body text | `Body` |
+| High-emphasis text | `Body Strong` |
+| Secondary metadata | `Muted` |
+| Disabled text | `Muted Soft` |
 
 ---
 

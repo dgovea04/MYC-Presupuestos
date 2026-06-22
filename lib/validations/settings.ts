@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   AI_PROVIDER_OPTIONS,
+  APP_THEME_OPTIONS,
+  DEFAULT_APP_THEME,
   DATE_FORMAT_OPTIONS,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
@@ -42,6 +44,7 @@ export const userSettingsSchema = z.object({
   defaultCurrency: z.enum(["PEN", "USD"]),
   currencyDecimals: numericInputSchema.pipe(z.number().int().min(0).max(4)),
   dateFormat: z.enum(DATE_FORMAT_OPTIONS).default("DD_MMM_YYYY"),
+  appTheme: z.enum(APP_THEME_OPTIONS).default(DEFAULT_APP_THEME),
   defaultViewMode: z.enum(VIEW_MODE_OPTIONS).default(DEFAULT_VIEW_MODE),
   excelShowFieldBorders: z.boolean().default(true),
   excelRowHeight: numericInputSchema.pipe(z.number().int().refine((value) => EXCEL_ROW_HEIGHT_OPTIONS.includes(value as 40 | 45 | 52 | 60), {

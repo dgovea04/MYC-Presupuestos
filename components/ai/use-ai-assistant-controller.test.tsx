@@ -4,22 +4,21 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAiAssistantController } from "@/components/ai/use-ai-assistant-controller";
+import type { AiHistoryEntry } from "@/components/ai/use-ai-assistant-controller";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-let activeContainer: HTMLDivElement | null = null;
-let activeRoot: Root | null = null;
+let activeRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
 
 describe("useAiAssistantController", () => {
   afterEach(async () => {
-    if (activeRoot) {
+    for (const entry of [...activeRoots].reverse()) {
       await act(async () => {
-        activeRoot?.unmount();
+        entry.root.unmount();
       });
+      entry.container.remove();
     }
-    activeRoot = null;
-    activeContainer?.remove();
-    activeContainer = null;
+    activeRoots = [];
     window.localStorage.clear();
     vi.restoreAllMocks();
   });
@@ -316,6 +315,461 @@ describe("useAiAssistantController", () => {
     });
   });
 
+  describe("cross-controller history sync (floating ↔ page)", () => {
+    function createSyncFetchMock(calls: Array<{ answer: string; model: string }>) {
+      let callIndex = 0;
+      return vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/ai/health") {
+          return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+        }
+
+        if (String(input) === "/api/settings/ai-provider") {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
+
+        if (String(input) === "/api/ai/chat/stream") {
+          const entry = calls[callIndex];
+          callIndex += 1;
+          return new Response(
+            `event: delta\ndata: {\"text\":\"${entry.answer.slice(0, 4)}\"}\n\n` +
+              `event: final\ndata: {\"answer\":\"${entry.answer}\",\"model\":\"${entry.model}\",\"requestedModel\":\"${entry.model}\",\"fallbackUsed\":false,\"warnings\":[]}\n\n`,
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        }
+
+        throw new Error(`Unexpected fetch ${String(input)}`);
+      });
+    }
+
+    it("syncs new history entries from floating to page", async () => {
+      vi.stubGlobal("fetch", createSyncFetchMock([
+        { answer: "Respuesta desde flotante", model: "llama3" },
+      ]));
+
+      const floating = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Flotante" },
+      });
+
+      const page = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Pagina AI" },
+      });
+
+      await act(async () => {
+        await floating.current?.submit({
+          action: "chat",
+          payload: { message: "Consulta desde el flotante", context: { module: "Flotante" } },
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(floating.current?.history).toHaveLength(1);
+      expect(page.current?.history).toHaveLength(1);
+      expect(page.current?.history[0]?.summary).toBe("Consulta desde el flotante");
+      expect(page.current?.history[0]?.result.answer).toBe("Respuesta desde flotante");
+    });
+
+    it("syncs new history entries from page to floating", async () => {
+      vi.stubGlobal("fetch", createSyncFetchMock([
+        { answer: "Respuesta desde pagina", model: "llama3" },
+      ]));
+
+      const floating = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Flotante" },
+      });
+
+      const page = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Pagina AI" },
+      });
+
+      await act(async () => {
+        await page.current?.submit({
+          action: "chat",
+          payload: { message: "Consulta desde la pagina", context: { module: "Pagina AI" } },
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(page.current?.history).toHaveLength(1);
+      expect(floating.current?.history).toHaveLength(1);
+      expect(floating.current?.history[0]?.summary).toBe("Consulta desde la pagina");
+      expect(floating.current?.history[0]?.result.answer).toBe("Respuesta desde pagina");
+    });
+
+    it("syncs clearHistory across controllers", async () => {
+      vi.stubGlobal("fetch", createSyncFetchMock([
+        { answer: "Respuesta antes de limpiar", model: "llama3" },
+      ]));
+
+      const floating = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Flotante" },
+      });
+
+      const page = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Pagina AI" },
+      });
+
+      // Submit from floating to populate history
+      await act(async () => {
+        await floating.current?.submit({
+          action: "chat",
+          payload: { message: "Mensaje antes de limpiar", context: { module: "Flotante" } },
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(floating.current?.history).toHaveLength(1);
+      expect(page.current?.history).toHaveLength(1);
+
+      // Clear from the page controller
+      await act(async () => {
+        page.current?.clearHistory();
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(page.current?.history).toHaveLength(0);
+      expect(floating.current?.history).toHaveLength(0);
+    });
+
+    it("syncs multiple entries bidirectionally", async () => {
+      vi.stubGlobal("fetch", createSyncFetchMock([
+        { answer: "Primera desde flotante", model: "llama3" },
+        { answer: "Segunda desde pagina", model: "llama3" },
+        { answer: "Tercera desde flotante", model: "llama3" },
+      ]));
+
+      const floating = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Flotante" },
+      });
+
+      const page = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Pagina AI" },
+      });
+
+      // 1. Floating submits
+      await act(async () => {
+        await floating.current?.submit({
+          action: "chat",
+          payload: { message: "Mensaje 1", context: { module: "Flotante" } },
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(floating.current?.history).toHaveLength(1);
+      expect(page.current?.history).toHaveLength(1);
+      expect(page.current?.history[0]?.summary).toBe("Mensaje 1");
+
+      // 2. Page submits
+      await act(async () => {
+        await page.current?.submit({
+          action: "chat",
+          payload: { message: "Mensaje 2", context: { module: "Pagina AI" } },
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(page.current?.history).toHaveLength(2);
+      expect(floating.current?.history).toHaveLength(2);
+      expect(floating.current?.history[0]?.summary).toBe("Mensaje 2");
+      expect(floating.current?.history[1]?.summary).toBe("Mensaje 1");
+
+      // 3. Floating submits again
+      await act(async () => {
+        await floating.current?.submit({
+          action: "chat",
+          payload: { message: "Mensaje 3", context: { module: "Flotante" } },
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(floating.current?.history).toHaveLength(3);
+      expect(page.current?.history).toHaveLength(3);
+      expect(page.current?.history[0]?.summary).toBe("Mensaje 3");
+    });
+
+    it("does not sync session-scoped history into project-scoped controllers", async () => {
+      vi.stubGlobal("fetch", createSyncFetchMock([
+        { answer: "Respuesta de sesion", model: "llama3" },
+      ]));
+
+      const projectController = await renderController({
+        projectId: "project-1",
+        initialAction: "chat",
+        initialContext: { module: "Presupuesto", projectId: "project-1" },
+      });
+
+      const sessionController = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Sesion" },
+      });
+
+      // Submit from session controller
+      await act(async () => {
+        await sessionController.current?.submit({
+          action: "chat",
+          payload: { message: "Mensaje de sesion", context: { module: "Sesion" } },
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Session controller receives its own entry
+      expect(sessionController.current?.history).toHaveLength(1);
+
+      // Project-scoped controller should NOT receive the session entry via sync
+      expect(projectController.current?.history).toHaveLength(0);
+    });
+  });
+
+  describe("cross-controller feedback sync (floating ↔ page)", () => {
+    function createSyncHistoryEntry(overrides: Partial<AiHistoryEntry> = {}): AiHistoryEntry {
+      return {
+        id: `test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        action: "chat",
+        summary: "Consulta de prueba",
+        context: { module: "Test" },
+        result: {
+          answer: "Respuesta de prueba",
+          model: "llama3",
+          requestedModel: "llama3",
+          fallbackUsed: false,
+          warnings: [],
+        },
+        timestamp: new Date().toISOString(),
+        ...overrides,
+      };
+    }
+
+    it("syncs feedback from floating to page", async () => {
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/ai/health") {
+          return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+        }
+        if (String(input) === "/api/settings/ai-provider") {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
+        throw new Error(`Unexpected fetch ${String(input)}`);
+      }));
+
+      const floating = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Flotante" },
+      });
+
+      const page = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Pagina AI" },
+      });
+
+      const entry = createSyncHistoryEntry();
+
+      // Submit feedback from floating
+      await act(async () => {
+        await floating.current?.submitFeedback(entry, "APPLIED");
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Both controllers should reflect the feedback
+      expect(floating.current?.feedbackByHistoryId[entry.id]).toBe("APPLIED");
+      expect(page.current?.feedbackByHistoryId[entry.id]).toBe("APPLIED");
+      expect(page.current?.feedbackSummary.applied).toBe(1);
+      expect(floating.current?.feedbackSummary.applied).toBe(1);
+    });
+
+    it("syncs feedback from page to floating", async () => {
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/ai/health") {
+          return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+        }
+        if (String(input) === "/api/settings/ai-provider") {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
+        throw new Error(`Unexpected fetch ${String(input)}`);
+      }));
+
+      const floating = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Flotante" },
+      });
+
+      const page = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Pagina AI" },
+      });
+
+      const entry = createSyncHistoryEntry();
+
+      // Submit feedback from page
+      await act(async () => {
+        await page.current?.submitFeedback(entry, "EDITED");
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Both controllers should reflect the feedback
+      expect(page.current?.feedbackByHistoryId[entry.id]).toBe("EDITED");
+      expect(floating.current?.feedbackByHistoryId[entry.id]).toBe("EDITED");
+      expect(floating.current?.feedbackSummary.edited).toBe(1);
+      expect(page.current?.feedbackSummary.edited).toBe(1);
+    });
+
+    it("syncs multiple feedback entries bidirectionally", async () => {
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/ai/health") {
+          return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+        }
+        if (String(input) === "/api/settings/ai-provider") {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
+        throw new Error(`Unexpected fetch ${String(input)}`);
+      }));
+
+      const floating = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Flotante" },
+      });
+
+      const page = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Pagina AI" },
+      });
+
+      const entry1 = createSyncHistoryEntry();
+      const entry2 = createSyncHistoryEntry();
+      const entry3 = createSyncHistoryEntry();
+
+      // 1. Floating applies entry1
+      await act(async () => {
+        await floating.current?.submitFeedback(entry1, "APPLIED");
+      });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(floating.current?.feedbackByHistoryId[entry1.id]).toBe("APPLIED");
+      expect(page.current?.feedbackByHistoryId[entry1.id]).toBe("APPLIED");
+
+      // 2. Page dismisses entry2
+      await act(async () => {
+        await page.current?.submitFeedback(entry2, "DISMISSED");
+      });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(page.current?.feedbackByHistoryId[entry2.id]).toBe("DISMISSED");
+      expect(floating.current?.feedbackByHistoryId[entry2.id]).toBe("DISMISSED");
+
+      // 3. Floating edits entry3
+      await act(async () => {
+        await floating.current?.submitFeedback(entry3, "EDITED");
+      });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(floating.current?.feedbackByHistoryId[entry3.id]).toBe("EDITED");
+      expect(page.current?.feedbackByHistoryId[entry3.id]).toBe("EDITED");
+
+      // Both controllers should have all 3 entries
+      expect(Object.keys(floating.current?.feedbackByHistoryId ?? {})).toHaveLength(3);
+      expect(Object.keys(page.current?.feedbackByHistoryId ?? {})).toHaveLength(3);
+
+      // Verify feedback summary on both
+      expect(floating.current?.feedbackSummary).toEqual(
+        expect.objectContaining({ applied: 1, edited: 1, dismissed: 1 }),
+      );
+      expect(page.current?.feedbackSummary).toEqual(
+        expect.objectContaining({ applied: 1, edited: 1, dismissed: 1 }),
+      );
+    });
+
+    it("does not sync session feedback into project-scoped controllers", async () => {
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/ai/health") {
+          return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+        }
+        if (String(input) === "/api/settings/ai-provider") {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
+        throw new Error(`Unexpected fetch ${String(input)}`);
+      }));
+
+      const projectController = await renderController({
+        projectId: "project-1",
+        initialAction: "chat",
+        initialContext: { module: "Presupuesto", projectId: "project-1" },
+      });
+
+      const sessionController = await renderController({
+        projectId: undefined,
+        initialAction: "chat",
+        initialContext: { module: "Sesion" },
+      });
+
+      const entry = createSyncHistoryEntry();
+
+      // Submit feedback from session controller
+      await act(async () => {
+        await sessionController.current?.submitFeedback(entry, "APPLIED");
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Session controller has the feedback
+      expect(sessionController.current?.feedbackByHistoryId[entry.id]).toBe("APPLIED");
+
+      // Project-scoped controller should NOT receive it
+      expect(projectController.current?.feedbackByHistoryId[entry.id]).toBeUndefined();
+    });
+  });
+
   it("preserves Task 3 context fields when reading session history entries", async () => {
     window.localStorage.setItem(
       "myc-ai-session-history",
@@ -394,8 +848,7 @@ async function renderController(
   const root = createRoot(container);
   let current: ReturnType<typeof useAiAssistantController> | null = null;
 
-  activeContainer = container;
-  activeRoot = root;
+  activeRoots.push({ root, container });
 
   await act(async () => {
     root.render(<TestHarness props={props} onChange={(value) => { current = value; }} />);

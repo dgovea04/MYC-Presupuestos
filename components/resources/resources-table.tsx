@@ -522,18 +522,23 @@ export function ResourcesTable({
                 <option value="MANUAL_ASSIGNED">Adjudicados manualmente</option>
               </Select>
             </div>
-            <div className={cn("flex flex-col gap-3 border bg-white/90 p-3 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200")}>
+            <div
+              className={cn(
+                "flex flex-col gap-3 border bg-[var(--app-surface-elevated)] p-3 lg:flex-row lg:items-center lg:justify-between",
+                isExcelMode ? "rounded-md border-[var(--app-border)]" : "rounded-2xl border-[var(--app-border-soft)]",
+              )}
+            >
               <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-[var(--app-text-strong)]">
                   {filter.trim() ? `Mostrando ${filtered.length} coincidencias para "${filter}"` : "Vista general del catalogo de insumos"}
                 </p>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-muted)]">
                   <span>{category === "ALL" ? "Todas las categorias" : getCategoryLabel(category)}</span>
-                  <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                  <span className="hidden h-1 w-1 rounded-full bg-[var(--app-border-strong)] md:inline-flex" />
                   <span>{sourceFilter === "ALL" ? "Todas las fuentes" : sourceFilter}</span>
-                  <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                  <span className="hidden h-1 w-1 rounded-full bg-[var(--app-border-strong)] md:inline-flex" />
                   <span>{getIuCurrentFilterLabel(iuCurrentFilter)}</span>
-                  <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                  <span className="hidden h-1 w-1 rounded-full bg-[var(--app-border-strong)] md:inline-flex" />
                   <span>{dirtyCount > 0 ? `${dirtyCount} cambios por guardar` : "Sin cambios pendientes"}</span>
                 </div>
               </div>
@@ -550,7 +555,7 @@ export function ResourcesTable({
                   <Plus className="h-4 w-4" />
                   Crear insumo
                 </Button>
-                <Button variant="outline" size="sm" className="bg-white" onClick={() => fileInputRef.current?.click()}>
+                <Button variant="outline" size="sm" className="bg-[var(--app-surface)]" onClick={() => fileInputRef.current?.click()}>
                   Importar Excel
                 </Button>
               </div>
@@ -561,14 +566,22 @@ export function ResourcesTable({
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => void handleImportFile(event)} />
 
-      {error ? <p className={cn("border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700", isExcelMode ? "rounded-md" : "rounded-2xl")}>{error}</p> : null}
-      {feedback ? <p className={cn("border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700", isExcelMode ? "rounded-md" : "rounded-2xl")}>{feedback}</p> : null}
+      {error ? (
+        <p className={cn("border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          {error}
+        </p>
+      ) : null}
+      {feedback ? (
+        <p className={cn("border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-[rgba(51,209,122,0.28)] dark:bg-[rgba(51,209,122,0.12)] dark:text-emerald-300", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          {feedback}
+        </p>
+      ) : null}
 
       <VirtualizedTableFrame scrollContainerRef={scrollContainerRef} onScroll={scrollProps.onScroll}>
           <Table className="table-fixed">
             <ResourceTableColGroup />
-            <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
-              <TR className="bg-slate-50 hover:bg-slate-50">
+            <THead className="sticky top-0 z-20 [&_tr]:border-b-[var(--app-border)]">
+              <TR className="bg-[var(--app-surface-elevated)] hover:bg-[var(--app-surface-elevated)]">
                 <TH>CODIGO</TH>
                 <TH>INSUMO</TH>
                 <TH>UNIDAD</TH>
@@ -584,7 +597,7 @@ export function ResourcesTable({
               <VirtualizedTableSpacerRow colSpan={RESOURCE_TABLE_COLUMN_COUNT} height={virtualRange.topSpacerHeight} />
               {filtered.length === 0 ? (
                 <TR>
-                  <TD colSpan={RESOURCE_TABLE_COLUMN_COUNT} className="py-10 text-center text-sm text-slate-500">
+                  <TD colSpan={RESOURCE_TABLE_COLUMN_COUNT} className="py-10 text-center text-sm text-[var(--app-text-muted)]">
                     No encontramos insumos con los filtros actuales.
                   </TD>
                 </TR>
@@ -679,7 +692,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           value={resource.code || "Auto"}
           readOnly
           onPaste={(event) => onPaste(event, resource.id, "code")}
-          className="border-transparent bg-slate-50 px-2 font-medium tabular-nums text-slate-700 shadow-none"
+          className="border-transparent bg-[var(--app-surface-elevated)] px-2 font-medium tabular-nums text-[var(--app-text-strong)] shadow-none"
         />
       </TD>
       <TD>
@@ -828,14 +841,14 @@ function PastePreviewSheet({
 
   return (
     <div className={cn("fixed inset-0 z-50 bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
-      <div className={cn("mx-auto mt-10 w-[min(1100px,calc(100%-2rem))] overflow-hidden border bg-white", isExcelMode ? "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl border-slate-200 shadow-2xl")}>
-        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+      <div className={cn("mx-auto mt-10 w-[min(1100px,calc(100%-2rem))] overflow-hidden border bg-[var(--app-surface)]", isExcelMode ? "rounded-md border-[var(--app-border)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl border-[var(--app-border-soft)] shadow-2xl")}>
+        <div className="flex items-start justify-between border-b border-[var(--app-border-soft)] px-6 py-5">
           <div>
-            <p className="text-sm text-slate-500">Previsualizacion de pegado</p>
-            <h3 className="text-2xl font-semibold text-slate-900">Revisa antes de aplicar</h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm text-[var(--app-text-muted)]">Previsualizacion de pegado</p>
+            <h3 className="text-2xl font-semibold text-[var(--app-text-strong)]">Revisa antes de aplicar</h3>
+            <p className="mt-1 text-sm text-[var(--app-text-muted)]">
               Se prepararan {pendingPaste.rows.length} {pendingPaste.rows.length === 1 ? "insumo" : "insumos"} desde la columna{" "}
-              <span className="font-medium text-slate-700">{pendingPaste.startColumn}</span>.
+              <span className="font-medium text-[var(--app-text-strong)]">{pendingPaste.startColumn}</span>.
             </p>
           </div>
           <Button variant="outline" onClick={onClose}>
@@ -848,7 +861,7 @@ function PastePreviewSheet({
             <Table className="table-fixed">
               <ResourceTableColGroup includeActions={false} />
               <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className="bg-[var(--app-surface-elevated)] hover:bg-[var(--app-surface-elevated)]">
                   <TH>CODIGO</TH>
                   <TH>INSUMO</TH>
                   <TH>UNIDAD</TH>
@@ -877,8 +890,8 @@ function PastePreviewSheet({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <p className="text-sm text-slate-500">El pegado solo se aplicara al confirmar.</p>
+        <div className="flex items-center justify-between border-t border-[var(--app-border-soft)] px-6 py-4">
+          <p className="text-sm text-[var(--app-text-muted)]">El pegado solo se aplicara al confirmar.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
               Cerrar
