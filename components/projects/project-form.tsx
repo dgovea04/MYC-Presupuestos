@@ -79,10 +79,10 @@ export function ProjectForm({ companies, project, selectedTemplate }: ProjectFor
       ) : null}
 
       {!project && selectedTemplate ? (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+        <div className="theme-status-info rounded-2xl border p-4">
           <input name="templateId" type="hidden" value={selectedTemplate.id} />
-          <p className="text-sm font-semibold text-sky-950">Plantilla seleccionada: {selectedTemplate.name}</p>
-          <p className="mt-1 text-sm leading-6 text-sky-800">
+          <p className="theme-status-info-strong text-sm font-semibold">Plantilla seleccionada: {selectedTemplate.name}</p>
+          <p className="mt-1 text-sm leading-6">
             Se creara el presupuesto general y los Sub Presupuestos iniciales configurados para tu cuenta. La plantilla queda como origen del flujo de creacion.
           </p>
         </div>
@@ -139,7 +139,7 @@ export function ProjectForm({ companies, project, selectedTemplate }: ProjectFor
         </div>
       </FormSectionPanel>
 
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {error ? <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
 
       <FormActionBar>
         <Button type="submit" disabled={loading} className="gap-2 shadow-sm shadow-sky-950/10">
@@ -179,9 +179,9 @@ function Field({
 
 function ProjectInfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="theme-muted-panel rounded-2xl border px-4 py-3">
+      <p className="theme-muted-text text-sm">{label}</p>
+      <p className="theme-strong-text mt-1 text-sm font-semibold">{value}</p>
     </div>
   );
 }

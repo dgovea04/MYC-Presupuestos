@@ -244,6 +244,156 @@ Every UI decision should follow these principles:
 
 ---
 
+## 8.1 Dark Mode Implementation Rules
+
+These rules are mandatory for all new internal product views, sheets, dialogs, popups, tables, editors, and side panels.
+
+### Theme activation
+
+- Dark mode is driven by `data-theme="dark"`.
+- Portaled UI must inherit the theme from both `document.documentElement` and `document.body`.
+- Do not rely on raw `@media (prefers-color-scheme: dark)` for product view styling.
+
+### Semantic surface classes
+
+Prefer semantic classes from `app/globals.css` instead of raw Tailwind light tokens:
+
+- `theme-surface-card`: default card, sheet, modal, panel
+- `theme-surface-card-gradient`: light header/card gradient with safe dark fallback
+- `theme-surface-card-warm`: warm informational card with safe dark fallback
+- `theme-muted-panel`: secondary panel, grouped controls, table header wrapper
+- `theme-muted-panel-strong`: emphasized neutral panel
+- `theme-surface-panel`: standard neutral surface
+- `theme-dashed-panel`: empty state or placeholder container
+
+Avoid in product UI:
+
+- `bg-white`
+- `bg-slate-50`
+- `bg-slate-100`
+- `border-slate-200`
+- `border-slate-300`
+- `text-slate-900`
+- `text-slate-800`
+- `text-slate-700`
+- `text-slate-600`
+- `text-slate-500`
+
+### Semantic text classes
+
+Use:
+
+- `theme-strong-text`: primary content and headings
+- `theme-muted-text`: secondary copy and support text
+- `theme-subtle-text`: tertiary metadata, placeholders, quiet labels
+
+Do not hardcode light-mode text colors for app content inside dialogs, sheets, tables, or badges.
+
+### Status and informational states
+
+Use semantic state classes for banners, notices, badges, and alerts:
+
+- `theme-status-info`
+- `theme-status-info-strong`
+- `theme-status-success`
+- `theme-status-success-strong`
+- `theme-status-warning`
+- `theme-status-warning-strong`
+- `theme-status-error`
+- `theme-badge-slate`
+
+Light mode keeps the original light palette.
+Dark mode automatically moves those states to higher-contrast translucent surfaces with readable text.
+
+### Buttons, active pills, and badges
+
+Use:
+
+- `theme-filter-button-active`
+- `theme-filter-button-inactive`
+- `theme-filter-button-active-count`
+- `theme-filter-button-inactive-count`
+- `theme-quick-action-primary`
+- `theme-quick-action-primary-icon`
+
+Rules:
+
+- Active tabs, active pills, and selected badges must never stay white in dark mode.
+- Informational badges inside tables and editors must avoid raw `bg-white`.
+- Outline buttons inside dialogs and popups should sit on `var(--app-surface)` and use visible borders in dark mode.
+
+### Tables and Excel-inspired grids
+
+Dark-mode table borders must use the global token system:
+
+- `--table-border-soft: #1a1a1a`
+- `--table-border-strong: #333333`
+- `--excel-border-soft: var(--table-border-soft)`
+- `--excel-border-strong: var(--table-border-strong)`
+
+Rules:
+
+- Strong visible cell borders should use `border: 1px solid var(--excel-border-strong)`.
+- Soft separators can use `var(--table-border-soft)`.
+- Do not reintroduce `#1a1a1a` where the table needs primary visible grid contrast.
+- Excel-mode sheets and popups must preserve density, row height, decimal behavior, and border visibility.
+
+### Dialogs, sheets, popovers, and off-canvas editors
+
+All overlays and floating UI must be dark-safe:
+
+- sheets
+- Radix dialogs
+- menus
+- listboxes
+- command popups
+- off-canvas APU editor
+- catalog insertion popups
+
+Rules:
+
+- Base container should use `theme-surface-card` or `theme-muted-panel`.
+- Inner grouped areas should use `theme-muted-panel`.
+- Empty states should use `theme-dashed-panel`.
+- Do not leave white backgrounds in popup headers, bodies, or footers.
+
+### Checkboxes and radios
+
+Dark mode form controls use:
+
+- `accent-color: var(--control-accent, var(--app-primary))`
+- `background-color: var(--app-surface)`
+- `border-color: var(--app-border-strong)`
+
+Rules:
+
+- If a specific screen needs a different accent, define `--control-accent` on the container.
+- Do not depend on one-off utility classes that lose by CSS specificity.
+- Unchecked controls must not appear with white fill in dark mode.
+
+### Scrollbars
+
+Internal scroll areas must inherit the global dark scrollbar tokens.
+
+Rules:
+
+- Prefer app-level scrollbar styling over per-component one-off scrollbar colors.
+- Ensure internal panels, sheets, tables, and popups preserve visible thumb/track contrast in dark mode.
+
+### Implementation checklist for new views
+
+Before closing any new view or feature, verify:
+
+1. No visible `bg-white` remains in dark mode.
+2. No active tab, badge, or selected pill stays white in dark mode.
+3. No popup or sheet header/footer remains light.
+4. Table borders are readable and use the shared border tokens.
+5. Checkbox and radio controls have dark-safe unchecked and checked states.
+6. Informational amber/emerald/sky banners keep readable contrast in both themes.
+7. Internal scroll containers have visible scrollbar contrast.
+
+---
+
 ## 9. Layout System
 
 ### Containers

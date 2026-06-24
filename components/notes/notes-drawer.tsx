@@ -198,15 +198,15 @@ export function NotesDrawer() {
         >
           <aside
             className={cn(
-              "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-xl flex-col border-l p-5 outline-none",
-              isExcelMode ? "border-slate-300 bg-white shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]" : "border-slate-200 bg-slate-50 shadow-2xl",
+              "theme-surface-card fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-xl flex-col border-l p-5 outline-none",
+              isExcelMode ? "border-[var(--table-border-strong)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]" : "border-[var(--app-border)] shadow-2xl",
             )}
           >
             <header className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-slate-500">Pendientes operativos</p>
-                <Dialog.Title className="text-2xl font-semibold text-slate-900">Sticky notes</Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-slate-500">
+                <p className="theme-muted-text text-sm">Pendientes operativos</p>
+                <Dialog.Title className="theme-strong-text text-2xl font-semibold">Sticky notes</Dialog.Title>
+                <Dialog.Description className="theme-muted-text mt-1 text-sm">
                   Crea notas rapidas y conviertelas en pendientes visibles en el dashboard.
                 </Dialog.Description>
               </div>
@@ -218,15 +218,15 @@ export function NotesDrawer() {
               </Dialog.Close>
             </header>
 
-            <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-100/70">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <section className="theme-surface-card mt-5 rounded-2xl border p-4 shadow-sm shadow-slate-100/70">
+              <div className="theme-strong-text flex items-center gap-2 text-sm font-semibold">
                 <MessageSquarePlus className="h-4 w-4 text-sky-600" />
                 Nueva nota
               </div>
               {draftContext.budgetItemId ? (
-                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <div className="theme-status-warning theme-status-warning-strong mt-3 rounded-xl border px-3 py-2 text-sm">
                   <p className="font-medium">{draftContext.budgetItemCode ?? "Partida seleccionada"}</p>
-                  {draftContext.budgetItemDescription ? <p className="mt-1 text-amber-700">{draftContext.budgetItemDescription}</p> : null}
+                  {draftContext.budgetItemDescription ? <p className="mt-1">{draftContext.budgetItemDescription}</p> : null}
                 </div>
               ) : null}
               <div className="mt-3 space-y-3">
@@ -250,17 +250,17 @@ export function NotesDrawer() {
               </div>
             </section>
 
-            {error ? <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+            {error ? <p className="theme-status-error mt-4 rounded-xl border px-3 py-2 text-sm">{error}</p> : null}
 
             <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
               {loading ? (
-                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                <div className="theme-surface-card theme-muted-text flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Cargando notas...
                 </div>
               ) : notes.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
-                  <p className="font-medium text-slate-900">Sin notas abiertas</p>
+                <div className="theme-dashed-panel theme-muted-text rounded-2xl border border-dashed px-4 py-6 text-sm">
+                  <p className="theme-strong-text font-medium">Sin notas abiertas</p>
                   <p className="mt-1">Crea una nota para verla en pendientes por atender.</p>
                 </div>
               ) : (
@@ -294,13 +294,13 @@ function NoteList({
 
   return (
     <section className="space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      <p className="theme-muted-text text-xs font-semibold uppercase tracking-wide">{title}</p>
       {notes.map((note) => (
-        <article key={note.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-100/70">
+        <article key={note.id} className="theme-surface-card rounded-2xl border p-4 shadow-sm shadow-slate-100/70">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="whitespace-pre-wrap text-sm font-medium text-slate-900">{note.body}</p>
-              <p className="mt-2 text-xs text-slate-500">{getNoteContextLabel(note)}</p>
+              <p className="theme-strong-text whitespace-pre-wrap text-sm font-medium">{note.body}</p>
+              <p className="theme-muted-text mt-2 text-xs">{getNoteContextLabel(note)}</p>
             </div>
             <span className={cn("rounded-full px-2 py-1 text-[11px] font-semibold", getPriorityClassName(note.priority))}>
               {getPriorityLabel(note.priority)}
@@ -311,7 +311,7 @@ function NoteList({
               <Check className="h-4 w-4" />
               Resolver
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="gap-2 text-rose-700 hover:bg-rose-50" onClick={() => void onDelete(note)}>
+            <Button type="button" variant="ghost" size="sm" className="gap-2 text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10" onClick={() => void onDelete(note)}>
               <Trash2 className="h-4 w-4" />
               Eliminar
             </Button>
@@ -337,7 +337,7 @@ function getPriorityLabel(priority: NoteTaskPriority) {
 }
 
 function getPriorityClassName(priority: NoteTaskPriority) {
-  if (priority === "HIGH") return "bg-rose-50 text-rose-700";
-  if (priority === "MEDIUM") return "bg-amber-50 text-amber-700";
-  return "bg-slate-100 text-slate-700";
+  if (priority === "HIGH") return "theme-status-error";
+  if (priority === "MEDIUM") return "theme-status-warning";
+  return "theme-badge-slate";
 }

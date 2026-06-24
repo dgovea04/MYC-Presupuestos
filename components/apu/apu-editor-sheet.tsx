@@ -477,7 +477,7 @@ export function ApuEditorSheet({
         >
           <div
             className={cn(
-              "fixed inset-y-0 right-0 z-50 ml-auto h-full w-full overflow-y-auto bg-white shadow-2xl outline-none",
+              "theme-surface-card fixed inset-y-0 right-0 z-50 ml-auto h-full w-full overflow-y-auto shadow-2xl outline-none",
               isExcelMode ? "max-w-6xl p-5 shadow-none" : "max-w-6xl p-5",
             )}
             data-excel-field-border-scope="apu-editor"
@@ -488,12 +488,12 @@ export function ApuEditorSheet({
           >
             <div className={cn("flex items-start justify-between gap-4", isExcelMode ? "mb-3" : "mb-5")}>
               <div>
-                <p className={cn("text-slate-500", isExcelMode ? "text-xs uppercase tracking-wide" : "text-sm")}>Editor APU</p>
+                <p className={cn("theme-muted-text", isExcelMode ? "text-xs uppercase tracking-wide" : "text-sm")}>Editor APU</p>
                 <Dialog.Title asChild>
-                  <h3 className={cn("font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>{currentItemRecord.description}</h3>
+                  <h3 className={cn("theme-strong-text font-semibold", isExcelMode ? "text-xl" : "text-2xl")}>{currentItemRecord.description}</h3>
                 </Dialog.Title>
                 <Dialog.Description asChild>
-                  <p className={cn("mt-1 text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItemRecord.unit}</p>
+                  <p className={cn("theme-muted-text mt-1", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItemRecord.unit}</p>
                 </Dialog.Description>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
@@ -533,7 +533,7 @@ export function ApuEditorSheet({
             </div>
 
             {aiApuError ? (
-              <div className={cn("mb-4 border border-rose-200 bg-rose-50 text-rose-700", isExcelMode ? "rounded-md px-3 py-2 text-xs" : "rounded-2xl px-4 py-3 text-sm")}>
+              <div className={cn("theme-status-error border", isExcelMode ? "rounded-md px-3 py-2 text-xs" : "rounded-2xl px-4 py-3 text-sm")}>
                 {aiApuError}
               </div>
             ) : null}
@@ -551,8 +551,8 @@ export function ApuEditorSheet({
 
             <div className={cn("grid", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-4")}>
               <div className={cn("grid md:grid-cols-2", isExcelMode ? "gap-2" : "gap-4")}>
-                <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                  <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({performanceLabel})</p>
+                <div className={cn("theme-muted-panel border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] p-2" : "rounded-2xl p-4")}>
+                  <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({performanceLabel})</p>
                   <BufferedInput
                     type="number"
                     step="0.01"
@@ -570,9 +570,9 @@ export function ApuEditorSheet({
                     }
                   />
                 </div>
-                <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                  <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
-                  <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
+                <div className={cn("theme-muted-panel border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] p-2" : "rounded-2xl p-4")}>
+                  <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
+                  <p className={cn("theme-strong-text mt-2 font-semibold", isExcelMode ? "text-xl" : "text-2xl")}>
                     {formatCurrency(calculatedUnitCost, "PEN", currencyDecimals)}
                   </p>
                 </div>
@@ -693,7 +693,7 @@ export function ApuEditorSheet({
         </div>
         {addResourceMenuOpen && addResourceSuggestions.length > 0 && addResourceMenuPosition ? (
           <div
-            className="fixed z-[90] overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl"
+            className="theme-surface-card fixed z-[90] overflow-hidden rounded-md border shadow-2xl"
             style={{
               top: addResourceMenuPosition.top,
               left: addResourceMenuPosition.left,
@@ -707,7 +707,7 @@ export function ApuEditorSheet({
                   type="button"
                   className={cn(
                     "flex w-full items-start justify-between gap-3 px-3 py-2 text-left",
-                    index === addResourceHighlightedIndex ? "bg-sky-100" : "hover:bg-sky-50",
+                    index === addResourceHighlightedIndex ? "theme-status-info" : "hover:bg-[var(--app-surface-hover)]",
                   )}
                   onMouseDown={(event) => {
                     event.preventDefault();
@@ -716,8 +716,8 @@ export function ApuEditorSheet({
                   onMouseEnter={() => setAddResourceHighlightedIndex(index)}
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-900">{resource.code} - {resource.description}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{resource.unit}</p>
+                    <p className="theme-strong-text truncate text-sm font-medium">{resource.code} - {resource.description}</p>
+                    <p className="theme-muted-text mt-0.5 text-xs">{resource.unit}</p>
                   </div>
                 </button>
               ))}
@@ -737,8 +737,8 @@ export function ApuEditorSheet({
               <col className="w-[104px]" />
               <col className="w-[84px]" />
             </colgroup>
-            <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
-              <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90 hover:bg-slate-100/90" : "bg-slate-50")}>
+            <THead className={cn(isExcelMode && "[&_th]:theme-muted-panel [&_th]:text-[11px] [&_th]:font-semibold")}>
+              <TR className={cn("theme-muted-panel hover:theme-muted-panel", isExcelMode ? "theme-muted-panel hover:theme-muted-panel" : "")}>
                 <TH className={getHeaderCellClass(isExcelMode, "w-[36px]")} />
                 <TH className={getHeaderCellClass(isExcelMode)}>Insumo</TH>
                 <TH className={getHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
@@ -863,9 +863,9 @@ export function ApuEditorSheet({
                           data-excel-field-trigger="true"
                           data-testid={`apu-resource-picker-${resource.id}`}
                           className={cn(
-                            "flex min-w-0 flex-1 items-center rounded-sm border border-slate-300 bg-white px-2 text-left text-xs text-slate-900 shadow-none transition hover:border-sky-400 hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/20",
+                            "theme-surface-card theme-strong-text flex min-w-0 flex-1 items-center rounded-sm border px-2 text-left text-xs shadow-none transition hover:border-sky-400 hover:bg-[var(--app-primary-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/20",
                             effectiveDensityMode === "compact" ? "h-8" : "h-9 text-sm",
-                            !resource.resourceId && "text-slate-500",
+                            !resource.resourceId && "theme-muted-text",
                           )}
                           onMouseDown={(event) => {
                             event.preventDefault();
@@ -923,7 +923,7 @@ export function ApuEditorSheet({
                     ) : (
                       <span
                         className={cn(
-                          "block text-right tabular-nums text-slate-400",
+                      "theme-subtle-text block text-right tabular-nums",
                           effectiveDensityMode === "compact" ? "py-1.5 text-xs" : "py-2 text-sm",
                         )}
                       >
@@ -980,7 +980,7 @@ export function ApuEditorSheet({
                   <TD
                     className={cn(
                       getCellPadding(effectiveDensityMode, isExcelMode),
-                      "text-right text-xs font-semibold tabular-nums text-slate-900",
+                      "theme-strong-text text-right text-xs font-semibold tabular-nums",
                     )}
                   >
                     {formatCurrency(calculatedResource.subtotal, "PEN", currencyDecimals)}
@@ -1040,7 +1040,7 @@ export function ApuEditorSheet({
         />
         {editingResourceRowId && resourceSuggestions.length > 0 && resourceMenu?.rowId === editingResourceRowId ? (
           <div
-            className="fixed z-[90] overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl"
+            className="theme-surface-card fixed z-[90] overflow-hidden rounded-md border shadow-2xl"
             style={{
               top: resourceMenu.top,
               left: resourceMenu.left,
@@ -1054,7 +1054,7 @@ export function ApuEditorSheet({
                   type="button"
                   className={cn(
                     "flex w-full items-start justify-between gap-3 px-3 py-2 text-left",
-                    suggestionIndex === resourceHighlightedIndex ? "bg-sky-100" : "hover:bg-sky-50",
+                    suggestionIndex === resourceHighlightedIndex ? "theme-status-info" : "hover:bg-[var(--app-surface-hover)]",
                   )}
                   onMouseDown={(event) => {
                     event.preventDefault();
@@ -1066,8 +1066,8 @@ export function ApuEditorSheet({
                   onMouseEnter={() => setResourceHighlightedIndex(suggestionIndex)}
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-900">{candidate.code} - {candidate.description}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{candidate.unit}</p>
+                    <p className="theme-strong-text truncate text-sm font-medium">{candidate.code} - {candidate.description}</p>
+                    <p className="theme-muted-text mt-0.5 text-xs">{candidate.unit}</p>
                   </div>
                 </button>
               ))}
@@ -1084,7 +1084,7 @@ export function ApuEditorSheet({
 function getHeaderCellClass(isExcelMode: boolean, className?: string) {
   return cn(
     "budget-sticky-header sticky top-0 h-10 text-xs uppercase tracking-wide",
-    isExcelMode ? "z-30 border-b border-slate-300 bg-slate-100 text-[11px] font-semibold text-slate-700" : "z-20 bg-slate-50",
+    isExcelMode ? "z-30 theme-muted-panel border-b border-[var(--app-border-strong)] text-[11px] font-semibold text-[var(--app-text)]" : "z-20 theme-muted-panel",
     className,
   );
 }
@@ -1092,18 +1092,18 @@ function getHeaderCellClass(isExcelMode: boolean, className?: string) {
 function getSubpartidaPreviewHeaderCellClass(isExcelMode: boolean, className?: string) {
   return cn(
     "budget-sticky-header h-10 text-xs uppercase tracking-wide",
-    isExcelMode ? "border-b border-slate-300 bg-slate-100 text-[11px] font-semibold text-slate-700" : "bg-slate-50",
+    isExcelMode ? "theme-muted-panel border-b border-[var(--app-border-strong)] text-[11px] font-semibold text-[var(--app-text)]" : "theme-muted-panel",
     className,
   );
 }
 
 function getInputDensityClass(mode: "compact" | "comfortable", isExcelMode = false) {
-  if (isExcelMode) return "h-8 rounded-sm border-slate-300 px-2 text-xs shadow-none";
+  if (isExcelMode) return "h-8 rounded-sm border-[var(--app-border-strong)] px-2 text-xs shadow-none";
   return mode === "compact" ? "h-8 rounded-lg px-2 text-xs" : "h-9 rounded-xl px-3 text-sm";
 }
 
 function getCellPadding(mode: "compact" | "comfortable", isExcelMode = false) {
-  return cn(mode === "compact" ? "py-2" : "py-3", isExcelMode && "border-b border-slate-200 text-xs");
+  return cn(mode === "compact" ? "py-2" : "py-3", isExcelMode && "border-b border-[var(--table-border-soft)] text-xs");
 }
 
 function moveEntityToTarget<T extends { id: string }>(items: T[], sourceId: string, targetId: string) {
@@ -1230,16 +1230,16 @@ function AddSubpartidaDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[120] bg-slate-950/35 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[130] max-h-[88vh] w-[min(1180px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          className="theme-surface-card fixed left-1/2 top-1/2 z-[130] max-h-[88vh] w-[min(1180px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border shadow-2xl"
           data-excel-field-border-scope="apu-editor"
           data-view-mode={isExcelMode ? "excel" : "modern"}
           data-density-mode={densityMode}
           style={excelCssVariables}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div className="theme-border-top flex items-start justify-between gap-4 border-b px-5 py-4">
             <div>
-              <Dialog.Title className="text-base font-semibold text-slate-950">Agregar subpartida</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-slate-500">
+              <Dialog.Title className="theme-strong-text text-base font-semibold">Agregar subpartida</Dialog.Title>
+              <Dialog.Description className="theme-muted-text mt-1 text-sm">
                 Busca una partida del catalogo global y revisa su APU antes de insertarla.
               </Dialog.Description>
             </div>
@@ -1248,7 +1248,7 @@ function AddSubpartidaDialog({
             </Dialog.Close>
           </div>
           <div className="flex max-h-[76vh] min-h-0 flex-col gap-4 overflow-hidden p-4">
-            <div className="relative z-10 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center">
+            <div className="theme-surface-card relative z-10 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1">
                 <Input
                   autoFocus
@@ -1296,7 +1296,7 @@ function AddSubpartidaDialog({
                   }}
                 />
                 {showSuggestions ? (
-                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] max-h-72 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-2xl">
+                  <div className="theme-surface-card absolute left-0 right-0 top-[calc(100%+6px)] max-h-72 overflow-auto rounded-md border py-1 shadow-2xl">
                     {suggestions.map((partida, index) => (
                       <button
                         key={partida.id}
@@ -1304,7 +1304,7 @@ function AddSubpartidaDialog({
                         data-testid={`apu-add-subpartida-option-${partida.id}`}
                         className={cn(
                           "flex w-full items-start justify-between gap-3 px-3 py-2 text-left",
-                          index === highlightedSuggestionIndex ? "bg-sky-100" : "hover:bg-sky-50",
+                          index === highlightedSuggestionIndex ? "theme-status-info" : "hover:bg-[var(--app-surface-hover)]",
                         )}
                         onMouseDown={(event) => {
                           event.preventDefault();
@@ -1313,8 +1313,8 @@ function AddSubpartidaDialog({
                         onMouseEnter={() => setHighlightedSuggestionIndex(index)}
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium text-slate-900">{partida.description}</span>
-                          <span className="mt-0.5 block text-xs text-slate-500">
+                          <span className="theme-strong-text block truncate text-sm font-medium">{partida.description}</span>
+                          <span className="theme-muted-text mt-0.5 block text-xs">
                             Unidad: {partida.unit} - PU: {formatCurrency(partida.unitPrice, partida.currency, currencyDecimals)}
                           </span>
                         </span>
@@ -1324,7 +1324,7 @@ function AddSubpartidaDialog({
                 ) : null}
               </div>
               {isSearchFocused && suggestions.length === 0 ? (
-                <p className="text-sm text-slate-500 sm:px-2">No se encontraron partidas.</p>
+                <p className="theme-muted-text text-sm sm:px-2">No se encontraron partidas.</p>
               ) : null}
             </div>
             <div className="min-h-0 overflow-auto">
@@ -1332,8 +1332,8 @@ function AddSubpartidaDialog({
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-950">{selectedPartida.description}</p>
-                      <p className="mt-1 text-sm text-slate-500">Unidad: {selectedPartida.unit}</p>
+                      <p className="theme-strong-text text-sm font-semibold">{selectedPartida.description}</p>
+                      <p className="theme-muted-text mt-1 text-sm">Unidad: {selectedPartida.unit}</p>
                     </div>
                     <Button
                       type="button"
@@ -1344,13 +1344,13 @@ function AddSubpartidaDialog({
                     </Button>
                   </div>
                   <div className={cn("grid md:grid-cols-2", isExcelMode ? "gap-2" : "gap-4")}>
-                    <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                      <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({selectedPartida.unit}/Dia)</p>
+                    <div className={cn("theme-muted-panel border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] p-2" : "rounded-2xl p-4")}>
+                      <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({selectedPartida.unit}/Dia)</p>
                       <Input value={selectedPartida.performance.toFixed(4)} readOnly className={cn(readonlyInputClassName, "tabular-nums")} />
                     </div>
-                    <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                      <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
-                      <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
+                    <div className={cn("theme-muted-panel border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] p-2" : "rounded-2xl p-4")}>
+                      <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
+                      <p className={cn("theme-strong-text mt-2 font-semibold", isExcelMode ? "text-xl" : "text-2xl")}>
                         {formatCurrency(previewUnitPrice, selectedPartida.currency, currencyDecimals)}
                       </p>
                     </div>
@@ -1364,13 +1364,13 @@ function AddSubpartidaDialog({
                       isExcelMode={isExcelMode}
                     />
                   ) : (
-                    <div className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+                    <div className="theme-dashed-panel theme-muted-text rounded-xl border p-5 text-sm">
                       Esta subpartida no tiene APU detallado en el catalogo global. Se agregara como subpartida sin filas internas.
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Selecciona una partida para previsualizarla.</div>
+                <div className="theme-dashed-panel theme-muted-text rounded-xl border p-5 text-sm">Selecciona una partida para previsualizarla.</div>
               )}
             </div>
           </div>
@@ -1411,8 +1411,8 @@ function SubpartidaPreviewRowsTable({
           <col className="w-[128px]" />
           <col className="w-[104px]" />
         </colgroup>
-        <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
-          <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90 hover:bg-slate-100/90" : "bg-slate-50")}>
+        <THead className={cn(isExcelMode && "[&_th]:theme-muted-panel [&_th]:text-[11px] [&_th]:font-semibold")}>
+          <TR className={cn("hover:bg-[var(--app-surface-hover)]", isExcelMode ? "theme-muted-panel hover:theme-muted-panel" : "theme-muted-panel")}>
             <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "w-[36px]")} />
             <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode)}>Insumo</TH>
             <TH className={getSubpartidaPreviewHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
@@ -1440,7 +1440,7 @@ function SubpartidaPreviewRowsTable({
                 <Input value={row.unit} readOnly className={cn(readonlyInputClassName, "text-center")} />
               </TD>
               <TD className={getCellPadding(densityMode, isExcelMode)}>
-                <span className={cn("block text-right tabular-nums text-slate-400", densityMode === "compact" ? "py-1.5 text-xs" : "py-2 text-sm")}>-</span>
+                <span className={cn("theme-subtle-text block text-right tabular-nums", densityMode === "compact" ? "py-1.5 text-xs" : "py-2 text-sm")}>-</span>
               </TD>
               <TD className={getCellPadding(densityMode, isExcelMode)}>
                 <Input value={row.quantity} readOnly className={cn(readonlyInputClassName, "text-right tabular-nums")} />
@@ -1448,7 +1448,7 @@ function SubpartidaPreviewRowsTable({
               <TD className={getCellPadding(densityMode, isExcelMode)}>
                 <Input value={row.unitPrice} readOnly className={cn(readonlyInputClassName, "text-right tabular-nums")} />
               </TD>
-              <TD className={cn(getCellPadding(densityMode, isExcelMode), "text-right text-xs font-semibold tabular-nums text-slate-900")}>
+              <TD className={cn(getCellPadding(densityMode, isExcelMode), "theme-strong-text text-right text-xs font-semibold tabular-nums")}>
                 {formatCurrency(row.subtotal, currency, currencyDecimals)}
               </TD>
             </TR>
@@ -1495,17 +1495,17 @@ function EditableSubpartidaApuDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[120] bg-slate-950/35 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[130] max-h-[82vh] w-[min(940px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          className="theme-surface-card fixed left-1/2 top-1/2 z-[130] max-h-[82vh] w-[min(940px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border shadow-2xl"
           data-excel-field-border-scope="apu-editor"
           data-view-mode={isExcelMode ? "excel" : "modern"}
           data-density-mode={densityMode}
           style={excelCssVariables}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div className="theme-border-top flex items-start justify-between gap-4 border-b px-5 py-4">
             <div>
-              <Dialog.Title className="text-base font-semibold text-slate-950">APU de subpartida</Dialog.Title>
-              <p className="mt-1 text-sm text-slate-500">{preview?.title}</p>
-              <p className="mt-1 text-sm text-slate-500">Unidad: {preview?.unit ?? ""}</p>
+              <Dialog.Title className="theme-strong-text text-base font-semibold">APU de subpartida</Dialog.Title>
+              <p className="theme-muted-text mt-1 text-sm">{preview?.title}</p>
+              <p className="theme-muted-text mt-1 text-sm">Unidad: {preview?.unit ?? ""}</p>
             </div>
             <Dialog.Close asChild>
               <Button variant="ghost" size="sm">Cerrar</Button>
@@ -1513,17 +1513,17 @@ function EditableSubpartidaApuDialog({
           </div>
           <div className="max-h-[64vh] overflow-auto p-4">
             <div className={cn("grid md:grid-cols-2", isExcelMode ? "mb-3 gap-2" : "mb-5 gap-4")}>
-              <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({preview?.unit ?? ""}/Día)</p>
+              <div className={cn("theme-muted-panel border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] p-2" : "rounded-2xl p-4")}>
+                <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Rendimiento ({preview?.unit ?? ""}/Día)</p>
                 <Input
                   value={preview?.performance.toFixed(4) ?? ""}
                   readOnly
                   className={cn(readonlyInputClassName, "tabular-nums")}
                 />
               </div>
-              <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>
-                <p className={cn("text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
-                <p className={cn("mt-2 font-semibold text-slate-900", isExcelMode ? "text-xl" : "text-2xl")}>
+              <div className={cn("theme-muted-panel border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] p-2" : "rounded-2xl p-4")}>
+                <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Costo unitario</p>
+                <p className={cn("theme-strong-text mt-2 font-semibold", isExcelMode ? "text-xl" : "text-2xl")}>
                   {formatCurrency(summary?.totalUnitCost ?? 0, "PEN", currencyDecimals)}
                 </p>
               </div>
@@ -1539,8 +1539,8 @@ function EditableSubpartidaApuDialog({
                   <col className="w-[128px]" />
                   <col className="w-[104px]" />
                 </colgroup>
-                <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
-                  <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90 hover:bg-slate-100/90" : "bg-slate-50")}>
+                <THead className={cn(isExcelMode && "[&_th]:theme-muted-panel [&_th]:text-[11px] [&_th]:font-semibold")}>
+                  <TR className={cn("hover:bg-[var(--app-surface-hover)]", isExcelMode ? "theme-muted-panel hover:theme-muted-panel" : "theme-muted-panel")}>
                     <TH className={getHeaderCellClass(isExcelMode, "w-[36px]")} />
                     <TH className={getHeaderCellClass(isExcelMode)}>Insumo</TH>
                     <TH className={getHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
@@ -1568,7 +1568,7 @@ function EditableSubpartidaApuDialog({
                       <Input value={row.unit} readOnly className={cn(readonlyInputClassName, "text-center")} />
                     </TD>
                     <TD className={getCellPadding(densityMode, isExcelMode)}>
-                      <span className={cn("block text-right tabular-nums text-slate-400", densityMode === "compact" ? "py-1.5 text-xs" : "py-2 text-sm")}>-</span>
+                      <span className={cn("theme-subtle-text block text-right tabular-nums", densityMode === "compact" ? "py-1.5 text-xs" : "py-2 text-sm")}>-</span>
                     </TD>
                     <TD className={getCellPadding(densityMode, isExcelMode)}>
                       <BufferedInput
@@ -1592,7 +1592,7 @@ function EditableSubpartidaApuDialog({
                         }}
                       />
                     </TD>
-                    <TD className={cn(getCellPadding(densityMode, isExcelMode), "text-right text-xs font-semibold tabular-nums text-slate-900")}>
+                    <TD className={cn(getCellPadding(densityMode, isExcelMode), "theme-strong-text text-right text-xs font-semibold tabular-nums")}>
                       {formatCurrency(row.subtotal, "PEN", currencyDecimals)}
                     </TD>
                   </TR>
@@ -1634,21 +1634,21 @@ function AiApuPreview({
   return (
     <section
       className={cn(
-        "mb-4 border border-sky-200 bg-sky-50/70 shadow-[0_16px_30px_-28px_rgba(2,132,199,0.35)]",
+        "theme-status-info border shadow-[0_16px_30px_-28px_rgba(2,132,199,0.35)]",
         isExcelMode ? "rounded-md p-3 text-xs" : "rounded-2xl p-4 text-sm",
       )}
       aria-label="Vista previa IA"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Vista previa IA</p>
-          <h4 className={cn("font-semibold text-slate-950", isExcelMode ? "text-base" : "text-lg")}>Propuesta APU pendiente de aplicar</h4>
-          <p className="mt-1 text-xs text-slate-600">
+          <p className="theme-status-info-strong text-xs font-semibold uppercase tracking-wide">Vista previa IA</p>
+          <h4 className={cn("theme-strong-text font-semibold", isExcelMode ? "text-base" : "text-lg")}>Propuesta APU pendiente de aplicar</h4>
+          <p className="theme-muted-text mt-1 text-xs">
             Modelo usado: {result.model} · Solicitado: {result.requestedModel}
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          {result.fallbackUsed ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">Fallback activo</span> : null}
+          {result.fallbackUsed ? <span className="theme-status-warning rounded-full border px-2.5 py-1 text-xs font-medium">Fallback activo</span> : null}
           <Link href={khipuHref}>
             <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>Abrir en Khipu</Button>
           </Link>
@@ -1656,7 +1656,7 @@ function AiApuPreview({
       </div>
 
       {result.warnings.length > 0 ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{result.warnings.join(" ")}</div>
+        <div className="theme-status-warning theme-status-warning-strong mt-3 rounded-xl border px-3 py-2 text-xs">{result.warnings.join(" ")}</div>
       ) : null}
 
       {catalogData ? (
@@ -1690,7 +1690,7 @@ function AiApuPreview({
           <PreviewDebugPanel debug={result.debug} />
         </div>
       ) : (
-        <p className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
+        <p className="theme-status-warning theme-status-warning-strong mt-3 rounded-xl border px-3 py-2 text-xs">
           La IA devolvio texto libre. Puedes revisarlo en Khipu antes de aplicar cambios manuales.
         </p>
       )}
@@ -1709,9 +1709,9 @@ function AiApuPreview({
 
 function PreviewMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-sky-100 bg-white px-3 py-2">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 font-semibold text-slate-900">{value}</p>
+    <div className="theme-surface-card rounded-xl border px-3 py-2">
+      <p className="theme-muted-text text-[11px] font-medium uppercase tracking-wide">{label}</p>
+      <p className="theme-strong-text mt-1 font-semibold">{value}</p>
     </div>
   );
 }
@@ -1728,9 +1728,9 @@ function PreviewSimilarPartidas({
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Partidas similares</div>
-      <div className="divide-y divide-slate-100">
+    <div className="theme-surface-card rounded-xl border">
+      <div className="theme-border-top theme-muted-text border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide">Partidas similares</div>
+      <div className="divide-y divide-[var(--app-border)]">
         {items.map((item) => {
           const isSelected = item.id === selectedId;
           const hasItems = item.items.length > 0;
@@ -1743,14 +1743,14 @@ function PreviewSimilarPartidas({
               disabled={!hasItems}
               className={cn(
                 "grid w-full gap-2 px-3 py-2 text-left transition sm:grid-cols-[1fr_64px_72px_76px]",
-                isSelected ? "bg-sky-50" : "hover:bg-slate-50",
+                isSelected ? "theme-status-info" : "hover:bg-[var(--app-surface-hover)]",
                 !hasItems && "cursor-not-allowed opacity-60",
               )}
             >
-              <span className="font-medium text-slate-900">{item.description}</span>
-              <span className="text-slate-600">{item.unit}</span>
-              <span className="text-right tabular-nums text-slate-700">{Math.round(item.similarity * 100)}%</span>
-              <span className={cn("text-right text-xs font-semibold", isSelected ? "text-sky-700" : "text-slate-500")}>
+              <span className="theme-strong-text font-medium">{item.description}</span>
+              <span className="theme-muted-text">{item.unit}</span>
+              <span className="text-right tabular-nums text-[var(--app-text)]">{Math.round(item.similarity * 100)}%</span>
+              <span className={cn("text-right text-xs font-semibold", isSelected ? "theme-status-info-strong" : "theme-muted-text")}>
                 {isSelected ? "Base" : hasItems ? "Usar" : "Sin APU"}
               </span>
             </button>
@@ -1763,20 +1763,20 @@ function PreviewSimilarPartidas({
 
 function PreviewCatalogItems({ items }: { items: AiApuCatalogGenerationResult["proposal"]["items"] }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Insumos del catalogo</div>
+    <div className="theme-surface-card rounded-xl border">
+      <div className="theme-border-top theme-muted-text border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide">Insumos del catalogo</div>
       {items.length > 0 ? (
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-[var(--app-border)]">
           {items.map((item) => (
             <div key={item.resource_id} className="grid gap-2 px-3 py-2 sm:grid-cols-[1fr_72px_96px]">
-              <span className="font-medium text-slate-900">{item.name}</span>
-              <span className="text-slate-600">{item.unit}</span>
-              <span className="text-right tabular-nums text-slate-700">{item.quantity}</span>
+              <span className="theme-strong-text font-medium">{item.name}</span>
+              <span className="theme-muted-text">{item.unit}</span>
+              <span className="text-right tabular-nums text-[var(--app-text)]">{item.quantity}</span>
             </div>
           ))}
         </div>
       ) : (
-        <p className="px-3 py-2 text-xs text-slate-500">Sin insumos validos sugeridos.</p>
+        <p className="theme-muted-text px-3 py-2 text-xs">Sin insumos validos sugeridos.</p>
       )}
     </div>
   );
@@ -1786,9 +1786,9 @@ function PreviewSuggestedResources({ items }: { items: AiApuCatalogGenerationRes
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Insumos faltantes</p>
-      <ul className="mt-2 space-y-1 text-xs text-amber-800">
+    <div className="theme-status-warning theme-status-warning-strong rounded-xl border px-3 py-2">
+      <p className="text-xs font-semibold uppercase tracking-wide">Insumos faltantes</p>
+      <ul className="mt-2 space-y-1 text-xs">
         {items.map((item, index) => (
           <li key={`${item.based_on}-${index}`}>{item.based_on}: {item.reason}</li>
         ))}
@@ -1799,20 +1799,20 @@ function PreviewSuggestedResources({ items }: { items: AiApuCatalogGenerationRes
 
 function PreviewResourceGroup({ title, items }: { title: string; items: AiApuStructuredData["materials"] }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</div>
+    <div className="theme-surface-card rounded-xl border">
+      <div className="theme-border-top theme-muted-text border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide">{title}</div>
       {items.length > 0 ? (
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-[var(--app-border)]">
           {items.map((item, index) => (
             <div key={`${title}-${index}-${item.description}`} className="grid gap-2 px-3 py-2 sm:grid-cols-[1fr_72px_96px]">
-              <span className="font-medium text-slate-900">{item.description || "Recurso sugerido sin descripcion"}</span>
-              <span className="text-slate-600">{item.unit || "s/u"}</span>
-              <span className="text-right tabular-nums text-slate-700">{item.quantity || "0"}</span>
+              <span className="theme-strong-text font-medium">{item.description || "Recurso sugerido sin descripcion"}</span>
+              <span className="theme-muted-text">{item.unit || "s/u"}</span>
+              <span className="text-right tabular-nums text-[var(--app-text)]">{item.quantity || "0"}</span>
             </div>
           ))}
         </div>
       ) : (
-        <p className="px-3 py-2 text-xs text-slate-500">Sin recursos sugeridos.</p>
+        <p className="theme-muted-text px-3 py-2 text-xs">Sin recursos sugeridos.</p>
       )}
     </div>
   );
@@ -1822,9 +1822,9 @@ function PreviewTextList({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</p>
-      <ul className="mt-2 space-y-1 text-xs text-slate-600">
+    <div className="theme-surface-card rounded-xl border px-3 py-2">
+      <p className="theme-muted-text text-xs font-semibold uppercase tracking-wide">{title}</p>
+      <ul className="theme-muted-text mt-2 space-y-1 text-xs">
         {items.map((item, index) => (
           <li key={`${title}-${index}`}>{item}</li>
         ))}

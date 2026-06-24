@@ -90,13 +90,13 @@ export function ProjectSummaryClient({ sheets }: { sheets: SheetRow[] }) {
   }
 
   if (sheets.length === 0) {
-    return <p className="text-sm text-slate-500">No hay hojas de metrado en este proyecto.</p>;
+    return <p className="theme-muted-text text-sm">No hay hojas de metrado en este proyecto.</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="theme-subtle-text absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
         <Input
           placeholder="Buscar por nombre, plantilla o partida..."
           value={query}
@@ -105,9 +105,9 @@ export function ProjectSummaryClient({ sheets }: { sheets: SheetRow[] }) {
         />
       </div>
 
-      <div className="max-h-[50vh] overflow-auto rounded-xl border border-slate-200">
+      <div className="theme-surface-card max-h-[50vh] overflow-auto rounded-xl border">
         <Table className="min-w-[600px] w-full text-xs">
-          <THead className="sticky top-0 z-10 bg-slate-50">
+          <THead className="theme-muted-panel sticky top-0 z-10">
             <TR>
               <SortableHeader sortKey="templateName" label="Plantilla" currentSortKey={sortKey} onToggle={toggleSort} />
               <SortableHeader sortKey="name" label="Nombre" currentSortKey={sortKey} onToggle={toggleSort} />
@@ -119,25 +119,25 @@ export function ProjectSummaryClient({ sheets }: { sheets: SheetRow[] }) {
           </THead>
           <TBody>
             {sorted.map((sheet) => (
-              <TR key={sheet.id} className="hover:bg-slate-50">
-                <TD className="font-medium text-slate-900">{sheet.templateName}</TD>
-                <TD className="text-slate-700">{sheet.name}</TD>
+              <TR key={sheet.id} className="hover:bg-[var(--app-surface-hover)]">
+                <TD className="theme-strong-text font-medium">{sheet.templateName}</TD>
+                <TD className="theme-muted-text">{sheet.name}</TD>
                 <TD>
-                  <span className="text-slate-500">{sheet.partidaCode}</span>
-                  <span className="ml-1 text-slate-400">{sheet.partidaDescription}</span>
+                  <span className="theme-muted-text">{sheet.partidaCode}</span>
+                  <span className="theme-subtle-text ml-1">{sheet.partidaDescription}</span>
                 </TD>
                 <TD>
-                  <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                  <span className="theme-badge-slate rounded-md border px-1.5 py-0.5 text-[10px] font-medium">
                     {sheet.unit}
                   </span>
                 </TD>
-                <TD className="text-right font-semibold tabular-nums text-slate-900">
+                <TD className="theme-strong-text text-right font-semibold tabular-nums">
                   {formatNumber(sheet.totalQuantity, 3)}
                 </TD>
                 <TD>
                   <a
                     href={`/metrados-avanzados?sheetId=${sheet.id}`}
-                    className="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"
+                    className="theme-subtle-text hover:theme-muted-panel inline-flex items-center justify-center rounded-lg border border-transparent p-1.5 transition hover:text-blue-600"
                     title="Abrir hoja"
                     aria-label={`Abrir ${sheet.name}`}
                   >
@@ -150,7 +150,7 @@ export function ProjectSummaryClient({ sheets }: { sheets: SheetRow[] }) {
         </Table>
       </div>
 
-      <p className="text-xs text-slate-400">
+      <p className="theme-subtle-text text-xs">
         {sorted.length} de {sheets.length} hojas
       </p>
     </div>

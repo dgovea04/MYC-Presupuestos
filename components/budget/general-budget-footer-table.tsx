@@ -238,7 +238,7 @@ export function GeneralBudgetFooterTable({
         metrics={<SaveStateBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />}
         controls={
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">Usa variables como `CD + PGG + UTI` para armar totales y líneas finales del presupuesto.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">Usa variables como `CD + PGG + UTI` para armar totales y líneas finales del presupuesto.</p>
             <div className="flex items-center gap-2">
               {error ? <p className="text-sm text-rose-600">{error}</p> : null}
               {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
@@ -287,7 +287,7 @@ export function GeneralBudgetFooterTable({
               <col className="w-[150px]" />
             </colgroup>
             <THead>
-                <TR className={cn("bg-slate-50 hover:bg-slate-50", isExcelMode && "bg-slate-100/90 hover:bg-slate-100/90")}>
+                <TR className={cn("bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]", isExcelMode && "bg-[var(--app-surface-strong)]/90 hover:bg-[var(--app-surface-strong)]/90")}>
                 <TH>Variable</TH>
                 <TH>Descripción</TH>
                 <TH>Fórmula</TH>
@@ -313,13 +313,13 @@ export function GeneralBudgetFooterTable({
                   }}
                   onDragEnd={() => setDragState(null)}
                   className={cn(
-                    row.highlight ? "bg-slate-50/80" : undefined,
+                    row.highlight ? "bg-[var(--app-surface-muted)]/80" : undefined,
                     dragState?.id === row.id ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : undefined,
                   )}
                 >
                   <TD className="align-top">
                     <div className="flex items-center gap-2">
-                      <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
+                      <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
                       <Input
                         value={row.variable}
                         onChange={(event) => updateRow(row.id, { variable: event.target.value })}
@@ -343,7 +343,7 @@ export function GeneralBudgetFooterTable({
                     {isSystemFormulaRow(row.variable) ? (
                       <div
                         className={cn(
-                          "flex items-center px-2 text-xs text-slate-400",
+                          "flex items-center px-2 text-xs text-[var(--app-text-subtle)]",
                           isExcelMode ? "h-[var(--excel-control-height)]" : "h-8",
                         )}
                       >
@@ -363,7 +363,7 @@ export function GeneralBudgetFooterTable({
                         {row.error ? (
                           <p className="mt-1 text-xs text-rose-600">{row.error}</p>
                         ) : !isExcelMode ? (
-                          <p className="mt-1 text-xs text-slate-400">Usa variables como `CD + PGG + UTI`</p>
+                          <p className="mt-1 text-xs text-[var(--app-text-subtle)]">Usa variables como `CD + PGG + UTI`</p>
                         ) : null}
                       </>
                     )}
@@ -371,9 +371,9 @@ export function GeneralBudgetFooterTable({
                   <TD className="align-top">
                     <div
                       className={cn(
-                        "flex items-center justify-end px-2 text-xs font-medium tabular-nums text-slate-800",
+                        "flex items-center justify-end px-2 text-xs font-medium tabular-nums text-[var(--app-text-strong)]",
                         isExcelMode ? "h-[var(--excel-control-height)] rounded-none" : "h-8 rounded-lg",
-                        row.highlight ? "font-semibold text-slate-950" : undefined,
+                        row.highlight ? "font-semibold text-[var(--app-text-strong)]" : undefined,
                       )}
                     >
                       {formatCurrency(row.value, currency, currencyDecimals)}
@@ -391,8 +391,9 @@ export function GeneralBudgetFooterTable({
                       type="checkbox"
                       checked={row.highlight}
                       onChange={(event) => updateRow(row.id, { highlight: event.target.checked })}
+                      style={{ "--control-accent": "#333" } as CSSProperties}
                       className={cn(
-                        "h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400",
+                        "h-4 w-4 rounded border-[var(--app-border-strong)] bg-[var(--app-surface)] focus:ring-[var(--app-border-strong)] focus:ring-offset-0",
                         isExcelMode ? "mt-[calc((var(--excel-control-height)-1rem)/2)]" : "mt-2",
                       )}
                     />
@@ -416,9 +417,9 @@ export function GeneralBudgetFooterTable({
           </Table>
         </div>
 
-        <div className={cn("border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] px-4 py-3", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]")}>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Importe en letras</p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">{structure.amountInWords}</p>
+        <div className={cn("theme-surface-card-gradient border px-4 py-3", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]")}>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--app-text-muted)]">Importe en letras</p>
+          <p className="mt-2 text-sm font-semibold text-[var(--app-text-strong)]">{structure.amountInWords}</p>
         </div>
       </div>
     </div>
@@ -445,7 +446,7 @@ function ToolbarIconButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100"
+      className="h-8 w-8 rounded-lg px-0 text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]"
     >
       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0">
         {children}
@@ -455,7 +456,7 @@ function ToolbarIconButton({
 }
 
 function getInputDensityClass(isExcelMode = false) {
-  if (isExcelMode) return "h-8 rounded-sm border-slate-300 px-2 text-xs shadow-none";
+  if (isExcelMode) return "h-8 rounded-sm border-[var(--app-border-strong)] px-2 text-xs shadow-none";
   return "h-8 rounded-lg px-2 text-xs";
 }
 

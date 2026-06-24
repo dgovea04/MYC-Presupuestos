@@ -1925,34 +1925,34 @@ export function BudgetEditor({
         }, 0);
       }}
     >
-      <Card className={cn("overflow-hidden border-slate-200/90 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.28)]", isExcelMode && "rounded-md shadow-[0_10px_24px_-20px_rgba(15,23,42,0.18)]")}>
-        <CardHeader className="flex flex-col gap-3 border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)]">
+      <Card className={cn("overflow-hidden border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_18px_44px_-34px_rgba(15,23,42,0.28)]", isExcelMode && "rounded-md border-[var(--app-border-strong)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.18)]")}>
+        <CardHeader className="flex flex-col gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface-elevated)]">
           <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              {projectName ? <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">{projectName}</p> : null}
-              <CardTitle className="tracking-tight text-slate-950">{budget.name}</CardTitle>
+              {projectName ? <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--app-text-muted)]">{projectName}</p> : null}
+              <CardTitle className="tracking-tight text-[var(--app-text-strong)]">{budget.name}</CardTitle>
               {templateTraceability ? <TemplateTraceabilityBanner traceability={templateTraceability} /> : null}
-              <p className="text-xs leading-5 text-slate-500">Edición jerárquica con autosave y guardado manual.</p>
+              <p className="theme-muted-text text-xs leading-5">Edición jerárquica con autosave y guardado manual.</p>
             </div>
             <div className="flex flex-col gap-1.5 xl:min-w-0 xl:items-end">
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <Link
                   href={`/budgets/${budget.id}/risk-analysis`}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 text-[11px] font-semibold tracking-[0.08em] text-sky-700 shadow-[0_12px_24px_-22px_rgba(37,99,235,0.32)] transition hover:border-sky-300 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  className="theme-status-info theme-status-info-strong inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-22px_rgba(37,99,235,0.32)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                 >
                   <Activity className="h-4 w-4" />
                   Riesgos
                 </Link>
-                <div className="inline-flex flex-wrap items-center gap-2 self-end rounded-2xl border border-slate-200/90 bg-white/90 px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-slate-300 hover:bg-white focus-within:border-slate-300 focus-within:bg-white">
-                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">Densidad</p>
-                      <div className="inline-flex rounded-xl border border-slate-200/90 bg-white p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
+                <div className="inline-flex flex-wrap items-center gap-2 self-end rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)] focus-within:border-[var(--app-border-strong)] focus-within:bg-[var(--app-surface-hover)]">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--app-text-muted)]">Densidad</p>
+                      <div className="inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-elevated)] p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
                         <button
                           type="button"
                           onClick={() => setDensityMode("compact")}
                           aria-pressed={effectiveDensityMode === "compact"}
                           className={cn(
                             "rounded-lg px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
-                            effectiveDensityMode === "compact" ? "bg-slate-900 text-white" : "text-slate-500",
+                            effectiveDensityMode === "compact" ? "theme-filter-button-active" : "text-[var(--app-text-muted)] hover:text-[var(--app-text-strong)]",
                           )}
                         >
                           Compacto
@@ -1963,7 +1963,7 @@ export function BudgetEditor({
                           aria-pressed={!isDensityLockedToCompact && effectiveDensityMode === "comfortable"}
                           className={cn(
                             "rounded-lg px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
-                            !isDensityLockedToCompact && effectiveDensityMode === "comfortable" ? "bg-slate-900 text-white" : "text-slate-500",
+                            !isDensityLockedToCompact && effectiveDensityMode === "comfortable" ? "theme-filter-button-active" : "text-[var(--app-text-muted)] hover:text-[var(--app-text-strong)]",
                           )}
                         >
                           Cómodo
@@ -1984,7 +1984,7 @@ export function BudgetEditor({
                 >
                   {saving ? "Guardando..." : "Guardar"}
                 </Button>
-                <div className="inline-flex items-center rounded-full border border-slate-200/90 bg-white/90 p-0.5 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
+                <div className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] p-0.5 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
                   {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"] as AiProvider[]).map((p) => (
                     <button
                       key={p}
@@ -1993,7 +1993,7 @@ export function BudgetEditor({
                       aria-pressed={provider === p}
                       className={cn(
                         "rounded-full px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
-                        provider === p ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700",
+                        provider === p ? "theme-filter-button-active" : "text-[var(--app-text-muted)] hover:text-[var(--app-text-strong)]",
                       )}
                     >
                       {getBudgetProviderLabel(p)}
@@ -2009,11 +2009,11 @@ export function BudgetEditor({
                   <BotMessageSquare className="mr-2 h-4 w-4" />
                   Revisar Presupuesto
                 </Button>
-                <div className="flex items-center gap-1 rounded-full border border-slate-200/90 bg-white/90 px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
+                <div className="flex items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
                   <button
                     type="button"
                     data-header-action-trigger
-                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                     onClick={(event) => toggleHeaderActionMenu("add", event.currentTarget)}
                     title="Agregar partida, título, subtítulo o subpartida"
                     aria-label="Agregar partida, título, subtítulo o subpartida"
@@ -2134,14 +2134,14 @@ export function BudgetEditor({
 
       {isCatalogMenuOpen && catalogMenu?.rowId === catalogSelectorRowId ? (
         <div
-          className="fixed z-[90] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+          className="fixed z-[90] overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-2xl"
           style={{
             top: catalogMenu.top,
             left: catalogMenu.left,
             width: catalogMenu.width,
           }}
         >
-          <div className="border-b border-slate-100 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+          <div className="border-b border-[var(--app-border-soft)] px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-[var(--app-text-muted)]">
             Catalogo de partidas
           </div>
           <div className="max-h-72 overflow-auto py-1">
@@ -2161,17 +2161,17 @@ export function BudgetEditor({
                 onMouseEnter={() => setCatalogHighlightedIndex(index)}
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{partida.description}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="truncate text-sm font-medium text-[var(--app-text-strong)]">{partida.description}</p>
+                  <p className="mt-0.5 text-xs text-[var(--app-text-muted)]">
                     {partida.unit} · {partida.apuRows.length} insumos · {partida.performanceRate ?? `${partida.performance} ${partida.unit}/DIA`}
                   </p>
                 </div>
-                <span className="whitespace-nowrap text-xs font-semibold text-slate-700">
+                <span className="whitespace-nowrap text-xs font-semibold text-[var(--app-text)]">
                   {formatCurrency(partida.unitPrice, budget.currency, currencyDecimals)}
                 </span>
               </button>
             )) : (
-              <p className="px-3 py-3 text-sm text-slate-500">No se encontro ninguna partida similar.</p>
+              <p className="px-3 py-3 text-sm text-[var(--app-text-muted)]">No se encontro ninguna partida similar.</p>
             )}
           </div>
         </div>
@@ -2184,7 +2184,7 @@ export function BudgetEditor({
           data-level-action-menu
           role="menu"
           aria-label={levelActionMenu.kind === "add" ? "Agregar contenido al nivel" : "Acciones del nivel"}
-          className="fixed z-[92] w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+          className="fixed z-[92] w-48 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
           style={{
             top: levelActionMenu.top,
             left: levelActionMenu.left,
@@ -2238,7 +2238,7 @@ export function BudgetEditor({
                   closeLevelActionMenu(true);
                 }}
               />
-              <div className="my-1 border-t border-slate-100" />
+              <div className="my-1 border-t border-[var(--app-border-soft)]" />
               <LevelActionMenuButton
                 label="Cambiar a título"
                 onClick={() => {
@@ -2260,7 +2260,7 @@ export function BudgetEditor({
                   closeLevelActionMenu(true);
                 }}
               />
-              <div className="my-1 border-t border-slate-100" />
+              <div className="my-1 border-t border-[var(--app-border-soft)]" />
               <LevelActionMenuButton
                 label="Insertar desde catálogo"
                 onClick={() => {
@@ -2275,7 +2275,7 @@ export function BudgetEditor({
                   closeLevelActionMenu(true);
                 }}
               />
-              <div className="my-1 border-t border-slate-100" />
+              <div className="my-1 border-t border-[var(--app-border-soft)]" />
               <LevelActionMenuButton
                 label="Eliminar nivel"
                 onClick={() => {
@@ -2295,7 +2295,7 @@ export function BudgetEditor({
           data-item-action-menu
           role="menu"
           aria-label="Acciones de la partida"
-          className="fixed z-[92] w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+          className="fixed z-[92] w-48 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
           style={{
             top: itemActionMenu.top,
             left: itemActionMenu.left,
@@ -2315,7 +2315,7 @@ export function BudgetEditor({
               closeItemActionMenu(true);
             }}
           />
-          <div className="my-1 border-t border-slate-100" />
+          <div className="my-1 border-t border-[var(--app-border-soft)]" />
           <LevelActionMenuButton
             label="Explicar partida con IA"
             icon={<BotMessageSquare className="h-4 w-4" />}
@@ -2361,7 +2361,7 @@ export function BudgetEditor({
               closeItemActionMenu(true);
             }}
           />
-          <div className="my-1 border-t border-slate-100" />
+          <div className="my-1 border-t border-[var(--app-border-soft)]" />
           <LevelActionMenuButton
             label="Duplicar partida"
             onClick={() => {
@@ -2386,7 +2386,7 @@ export function BudgetEditor({
           data-header-action-menu
           role="menu"
           aria-label={headerActionMenu.kind === "add" ? "Agregar contenido al sub presupuesto" : "Acciones globales del sub presupuesto"}
-          className="fixed z-[92] w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+          className="fixed z-[92] w-52 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
           style={{
             top: headerActionMenu.top,
             left: headerActionMenu.left,
@@ -2397,13 +2397,13 @@ export function BudgetEditor({
               <LevelActionMenuButton
                 label="Agregar partida"
                 icon={<Plus className="h-4 w-4" />}
-                className="bg-slate-50 font-semibold text-slate-900 hover:bg-slate-100"
+                className="bg-[var(--app-surface-muted)] font-semibold text-[var(--app-text-strong)] hover:bg-[var(--app-surface-hover-strong)]"
                 onClick={() => {
                   addItem();
                   closeHeaderActionMenu(true);
                 }}
               />
-              <div className="my-1 border-t border-slate-100" />
+              <div className="my-1 border-t border-[var(--app-border-soft)]" />
               <LevelActionMenuButton
                 label="Agregar título"
                 icon={<Type className="h-4 w-4" />}
@@ -2440,7 +2440,7 @@ export function BudgetEditor({
                   closeHeaderActionMenu();
                 }}
               />
-              <div className="my-1 border-t border-slate-100" />
+              <div className="my-1 border-t border-[var(--app-border-soft)]" />
               <LevelActionMenuButton
                 label="Insertar desde catálogo"
                 onClick={() => {
@@ -2463,7 +2463,7 @@ export function BudgetEditor({
                   closeHeaderActionMenu(true);
                 }}
               />
-              <div className="my-1 border-t border-slate-100" />
+              <div className="my-1 border-t border-[var(--app-border-soft)]" />
               <LevelActionMenuButton
                 label="Limpiar sub presupuesto"
                 className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
@@ -2699,7 +2699,7 @@ function IconButton({
       aria-controls={ariaControls}
       data-level-action-trigger={dataActionTrigger ? "true" : undefined}
       data-header-action-trigger={dataHeaderActionTrigger ? "true" : undefined}
-      className={cn("h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2", className)}
+      className={cn("h-8 w-8 rounded-lg px-0 text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2", className)}
     >
       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0">
         {children}
@@ -2746,12 +2746,12 @@ function AiBudgetActionDialog({
     <Dialog.Root open onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[96] bg-slate-950/30 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[97] flex max-h-[min(86vh,760px)] w-[min(92vw,680px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[97] flex max-h-[min(86vh,760px)] w-[min(92vw,680px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-2xl">
           <div className="flex shrink-0 items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Sugerencia IA</p>
-              <Dialog.Title className="mt-1 text-xl font-semibold text-slate-950">{panel.title}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-slate-500">
+              <p className="theme-status-info-strong text-xs font-semibold uppercase tracking-wide">Sugerencia IA</p>
+              <Dialog.Title className="mt-1 text-xl font-semibold text-[var(--app-text-strong)]">{panel.title}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-[var(--app-text-muted)]">
                 La IA no modifica el presupuesto automaticamente. Revisa y confirma cualquier cambio.
               </Dialog.Description>
             </div>
@@ -2762,51 +2762,51 @@ function AiBudgetActionDialog({
             </Dialog.Close>
           </div>
 
-          {panel.loading ? <p className="mt-4 shrink-0 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-700">{readBudgetAiLoadingLabel(provider)}</p> : null}
-          {panel.error ? <p className="mt-4 shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{panel.error}</p> : null}
+          {panel.loading ? <p className="theme-status-info theme-status-info-strong mt-4 shrink-0 rounded-xl border px-3 py-2 text-sm">{readBudgetAiLoadingLabel(provider)}</p> : null}
+          {panel.error ? <p className="theme-status-error mt-4 shrink-0 rounded-xl border px-3 py-2 text-sm">{panel.error}</p> : null}
 
           {panel.result ? (
             <div className="mt-4 flex min-h-0 flex-1 flex-col">
               <div data-testid="ai-budget-review-scroll-area" className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-muted)]">
                   <span>Modelo: {panel.result.model}</span>
                   <span>Solicitado: {panel.result.requestedModel}</span>
-                  {panel.result.fallbackUsed ? <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">Fallback activo</span> : null}
+                  {panel.result.fallbackUsed ? <span className="theme-status-warning rounded-full border px-2 py-0.5 font-medium">Fallback activo</span> : null}
                 </div>
                 {panel.result.warnings.length > 0 ? (
-                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{panel.result.warnings.join(" ")}</p>
+                  <p className="theme-status-warning theme-status-warning-strong rounded-xl border px-3 py-2 text-xs">{panel.result.warnings.join(" ")}</p>
                 ) : null}
                 {reviewData ? (
                   <div className="space-y-3">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumen</p>
-                      <div className="mt-2 text-sm leading-6 text-slate-700">
+                    <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">Resumen</p>
+                      <div className="mt-2 text-sm leading-6 text-[var(--app-text)]">
                         {renderMarkdownLite(formatAiText(reviewData.answer))}
                       </div>
                     </div>
                     {reviewData.findings.length > 0 ? (
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hallazgos</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">Hallazgos</p>
                         {reviewData.findings.map((finding, index) => (
-                          <div key={`${finding.type}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                          <div key={`${finding.type}-${index}`} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{finding.severity}</span>
-                              <span className="text-sm font-semibold text-slate-900">{finding.type}</span>
+                              <span className="rounded-full bg-[var(--app-surface)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">{finding.severity}</span>
+                              <span className="text-sm font-semibold text-[var(--app-text-strong)]">{finding.type}</span>
                             </div>
-                            <p className="mt-2 text-sm text-slate-700">{finding.description}</p>
-                            <p className="mt-1 text-xs text-slate-500">Impacto: {finding.impact}</p>
-                            <p className="mt-1 text-xs text-slate-500">Accion recomendada: {finding.recommendedAction}</p>
+                            <p className="mt-2 text-sm text-[var(--app-text)]">{finding.description}</p>
+                            <p className="mt-1 text-xs text-[var(--app-text-muted)]">Impacto: {finding.impact}</p>
+                            <p className="mt-1 text-xs text-[var(--app-text-muted)]">Accion recomendada: {finding.recommendedAction}</p>
                           </div>
                         ))}
                       </div>
                     ) : null}
                     {reviewData.assumptions.length > 0 ? (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supuestos</p>
-                        <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                      <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">Supuestos</p>
+                        <ul className="mt-2 space-y-2 text-sm text-[var(--app-text)]">
                           {reviewData.assumptions.map((assumption, index) => (
                             <li key={`${assumption}-${index}`} className="flex gap-2">
-                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--app-text-subtle)]" />
                               <span>{assumption}</span>
                             </li>
                           ))}
@@ -2815,13 +2815,13 @@ function AiBudgetActionDialog({
                     ) : null}
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+                  <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm leading-6 text-[var(--app-text)]">
                     {renderMarkdownLite(formatAiText(panel.result.answer))}
                   </div>
                 )}
                 {panel.result.debug ? <PreviewDebugPanel debug={panel.result.debug} /> : null}
               </div>
-              <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-slate-100 pt-3">
+              <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-[var(--app-border-soft)] pt-3">
                 <Button type="button" variant="outline" onClick={onClose}>
                   Descartar
                 </Button>
@@ -2855,9 +2855,9 @@ function LevelActionMenuButton({
       type="button"
       onClick={onClick}
       role="menuitem"
-      className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1", className)}
+      className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--app-text)] transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1", className)}
     >
-      {icon ? <span className="shrink-0 text-slate-400">{icon}</span> : null}
+      {icon ? <span className="shrink-0 text-[var(--app-text-subtle)]">{icon}</span> : null}
       {label}
     </button>
   );
@@ -2921,16 +2921,16 @@ function SummaryRow({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("flex items-center justify-between bg-slate-50", compact ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
+    <div className={cn("flex items-center justify-between bg-[var(--app-surface-muted)]", compact ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
       <div className="flex min-w-0 items-center gap-2">
-        <p className={cn("text-slate-500", compact ? "text-xs" : "text-sm")}>{label}</p>
+        <p className={cn("text-[var(--app-text-muted)]", compact ? "text-xs" : "text-sm")}>{label}</p>
         {rate !== undefined ? (
-          <span className={cn("font-medium tabular-nums text-slate-700", compact ? "text-xs" : "text-sm")}>
+          <span className={cn("font-medium tabular-nums text-[var(--app-text)]", compact ? "text-xs" : "text-sm")}>
             {formatNumber(rate * 100, 2)}%
           </span>
         ) : null}
       </div>
-      <AnimatedCurrencyValue value={value} currency={currency} className="justify-end px-0 py-0 font-semibold text-slate-900" />
+      <AnimatedCurrencyValue value={value} currency={currency} className="justify-end px-0 py-0 font-semibold text-[var(--app-text-strong)]" />
     </div>
   );
 }
@@ -3220,8 +3220,8 @@ function PreviewStat({ label, value }: { label: string; value: string }) {
 
   return (
     <div className={cn("border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
+      <p className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }
@@ -3263,19 +3263,26 @@ function CatalogInsertSheet({
 
   return (
     <div className={cn("fixed inset-0 z-[95] bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}>
-      <div className={cn("mx-auto mt-10 w-[min(1080px,calc(100%-2rem))] overflow-hidden border border-[var(--app-border)] bg-[var(--app-surface)]", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl")}>
-        <div className="flex items-start justify-between border-b border-[var(--app-border)] px-6 py-5">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={cn(
+          "theme-surface-card mx-auto mt-10 w-[min(1080px,calc(100%-2rem))] overflow-hidden border",
+          isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]" : "rounded-3xl shadow-2xl",
+        )}
+      >
+        <div className="theme-border-top flex items-start justify-between border-b px-6 py-5">
           <div>
             <p className="text-sm text-slate-500">Insertar desde catálogo</p>
-            <h3 className="text-2xl font-semibold text-slate-900">Selecciona una partida base</h3>
-            <p className="mt-1 text-sm text-slate-500">Destino: {target.kind === "level" ? "nivel" : "partida"}.</p>
+            <h3 className="theme-strong-text text-2xl font-semibold">Selecciona una partida base</h3>
+            <p className="theme-muted-text mt-1 text-sm">Destino: {target.kind === "level" ? "nivel" : "partida"}.</p>
           </div>
           <Button variant="outline" onClick={onClose}>
             Cerrar
           </Button>
         </div>
 
-        <div className="border-b border-[var(--app-border)] bg-[var(--app-surface-muted)] px-6 py-4">
+        <div className="theme-muted-panel border-b px-6 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <Input
               placeholder="Buscar por partida, unidad o rendimiento"
@@ -3284,7 +3291,7 @@ function CatalogInsertSheet({
               className="max-w-2xl"
             />
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500">{selectedIds.length} seleccionadas</span>
+              <span className="theme-muted-text text-sm">{selectedIds.length} seleccionadas</span>
               <Button variant="outline" onClick={() => onQueryChange("")}>
                 Limpiar filtro
               </Button>
@@ -3307,7 +3314,7 @@ function CatalogInsertSheet({
                 <col className="w-[84px]" />
               </colgroup>
               <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className="theme-muted-panel hover:theme-muted-panel">
                   <TH className="text-center">Sel.</TH>
                   <TH>Partida</TH>
                   <TH className="text-center">Unidad</TH>
@@ -3324,17 +3331,17 @@ function CatalogInsertSheet({
                         type="checkbox"
                         checked={selectedIds.includes(partida.id)}
                         onChange={() => onToggleSelect(partida.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        className="h-4 w-4 rounded border-[var(--app-border-strong)] [--control-accent:var(--app-primary)] focus:ring-sky-500"
                       />
                     </TD>
                     <TD className="py-2">
                       <div>
-                        <p className="text-sm font-medium text-slate-900">{partida.description}</p>
-                        <p className="mt-0.5 text-xs text-slate-500">{partida.apuRows.length} insumos en APU</p>
+                        <p className="theme-strong-text text-sm font-medium">{partida.description}</p>
+                        <p className="theme-muted-text mt-0.5 text-xs">{partida.apuRows.length} insumos en APU</p>
                       </div>
                     </TD>
-                    <TD className="py-2 text-center text-sm text-slate-700">{partida.unit}</TD>
-                    <TD className="py-2 text-right text-sm font-medium tabular-nums text-slate-900">
+                    <TD className="py-2 text-center text-sm text-[var(--app-text)]">{partida.unit}</TD>
+                    <TD className="theme-strong-text py-2 text-right text-sm font-medium tabular-nums">
                       {formatNumber(partida.unitPrice, currencyDecimals)}
                     </TD>
                     <TD className="py-2 text-sm text-slate-600">{partida.performanceRate ?? `${partida.performance} ${partida.unit}/DÍA`}</TD>
@@ -3660,19 +3667,19 @@ function collectDescendantLevelIds(levels: BudgetLevelRecord[], parentId: string
 }
 
 function getLevelRowTone(type: BudgetLevelType, isExcelMode = false) {
-  if (type === "TITLE") return "bg-slate-50";
+  if (type === "TITLE") return "bg-[var(--app-surface-muted)]";
   if (type === "SUBTITLE") return isExcelMode ? "bg-sky-50/50" : "bg-sky-50/60";
   return isExcelMode ? "bg-amber-50/50" : "bg-amber-50/70";
 }
 
 function getStickyActionTone(type: BudgetLevelType, isExcelMode = false) {
-  if (type === "TITLE") return "bg-slate-50";
+  if (type === "TITLE") return "bg-[var(--app-surface-muted)]";
   if (type === "SUBTITLE") return isExcelMode ? "bg-sky-50/50" : "bg-sky-50/60";
   return isExcelMode ? "bg-amber-50/50" : "bg-amber-50/70";
 }
 
 function getInputDensityClass(mode: DensityMode, isExcelMode = false) {
-  if (isExcelMode) return "h-8 rounded-sm border-slate-300 px-2 text-xs shadow-none";
+  if (isExcelMode) return "h-8 rounded-sm border-[var(--app-border-strong)] px-2 text-xs shadow-none";
   return mode === "compact" ? "h-8 rounded-lg px-2 text-xs" : "h-9 rounded-xl px-3 text-sm";
 }
 
@@ -3872,7 +3879,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
         <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
-          <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
+          <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
           <BufferedInput
             value={row.level.code}
             onCommit={(value) => onUpdateLevel(row.level.id, { code: value })}
@@ -3898,8 +3905,8 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
           />
           <span
             className={cn(
-              "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
-              isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
+              "shrink-0 bg-[var(--app-surface)]/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]",
+              isExcelMode ? "rounded-sm border border-[var(--app-border)]" : "rounded-full",
             )}
           >
             {levelTypeLabel[row.level.type]}
@@ -3917,7 +3924,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
           <button
             type="button"
             data-level-action-trigger
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
             onClick={(event) => onToggleLevelActionMenu(row.level.id, "add", event.currentTarget)}
             title="Agregar contenido debajo de este nivel"
             aria-label="Agregar contenido debajo de este nivel"
@@ -4054,20 +4061,20 @@ function BudgetItemIssueNoteBadge({
         {label}
       </button>
       {isPreviewOpen ? (
-        <span className="absolute left-0 top-full z-[80] mt-2 block w-72 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-xs text-slate-700 shadow-xl shadow-slate-900/12">
+        <span className="absolute left-0 top-full z-[80] mt-2 block w-72 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-xs text-[var(--app-text)] shadow-xl shadow-slate-900/12">
           <span className="mb-2 flex items-center gap-2 font-semibold text-amber-900">
             <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
             Notas de la partida
           </span>
-          {previewState.loading ? <span className="block text-slate-500">Cargando notas...</span> : null}
+          {previewState.loading ? <span className="block text-[var(--app-text-muted)]">Cargando notas...</span> : null}
           {!previewState.loading && previewState.error ? <span className="block text-rose-700">{previewState.error}</span> : null}
           {!previewState.loading && !previewState.error && previewState.notes.length === 0 ? (
-            <span className="block text-slate-500">Sin notas abiertas para esta partida.</span>
+            <span className="block text-[var(--app-text-muted)]">Sin notas abiertas para esta partida.</span>
           ) : null}
           {!previewState.loading && !previewState.error && previewState.notes.length > 0 ? (
             <span className="block space-y-2">
               {previewState.notes.slice(0, 3).map((note) => (
-                <span key={note.id} className="block rounded-lg border border-amber-200/80 bg-white/80 px-2 py-1.5 text-slate-700">
+                <span key={note.id} className="block rounded-lg border border-amber-200/80 bg-[var(--app-surface)]/80 px-2 py-1.5 text-[var(--app-text)]">
                   {note.body}
                 </span>
               ))}
@@ -4142,7 +4149,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
       onFocusCapture={() => onRowFocus(row.item.id)}
       className={cn(
         "group",
-        isExcelMode && "bg-white",
+        isExcelMode && "bg-[var(--app-surface)]",
         isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
         itemWarningTone,
         activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
@@ -4150,7 +4157,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
         <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
-          <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
+          <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
           <BufferedInput
             value={row.item.code}
             onCommit={(value) => onUpdateItem(row.item.id, { code: value })}
@@ -4269,7 +4276,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         className={getBodyCellClass(
           "unitPrice",
           activeColumn,
-          "align-[initial] whitespace-nowrap text-right text-xs font-medium tabular-nums text-slate-800",
+          "align-[initial] whitespace-nowrap text-right text-xs font-medium tabular-nums text-[var(--app-text)]",
           densityMode,
           isExcelMode,
         )}
@@ -4280,7 +4287,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         className={getBodyCellClass(
           "partial",
           activeColumn,
-          "align-[initial] whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-900",
+          "align-[initial] whitespace-nowrap text-right text-xs font-semibold tabular-nums text-[var(--app-text-strong)]",
           densityMode,
           isExcelMode,
         )}
@@ -4291,7 +4298,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         className={getBodyCellClass(
           "actions",
           activeColumn,
-          cn("sticky right-0 align-[initial]", isExcelMode ? "bg-white/95" : "bg-white"),
+          cn("sticky right-0 align-[initial]", isExcelMode ? "bg-[var(--app-surface)]/95" : "bg-[var(--app-surface)]"),
           densityMode,
           isExcelMode,
         )}
@@ -4301,7 +4308,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             size="sm"
             variant="ghost"
             onClick={() => onRunAiItemAction("chat", row.item.id)}
-            className="h-7 gap-1 rounded-full border border-sky-100 bg-sky-50/80 px-2 text-[10px] font-medium tracking-[0.08em] text-sky-700 hover:border-sky-200 hover:bg-sky-100"
+            className="theme-status-info theme-status-info-strong h-7 gap-1 rounded-full border px-2 text-[10px] font-medium tracking-[0.08em]"
             title="Explicar esta partida con IA"
             aria-label="Explicar esta partida con IA"
           >
@@ -4312,7 +4319,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             size="sm"
             variant="ghost"
             onClick={() => onOpenApuSheet(row.item)}
-            className="h-7 gap-1.5 rounded-full border border-slate-200 bg-white/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-slate-600 shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-slate-300 hover:bg-white"
+            className="h-7 gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)]/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-[var(--app-text-muted)] shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface)]"
             title="Abrir editor APU de esta partida"
             aria-label="Abrir editor APU de esta partida"
           >
@@ -4367,12 +4374,12 @@ function QualityStatCard({
 }) {
   const toneClassName =
     tone === "danger"
-      ? "border-rose-200 bg-rose-50 text-rose-700"
+      ? "theme-status-error"
       : tone === "warning"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
+        ? "theme-status-warning"
         : tone === "info"
-          ? "border-sky-200 bg-sky-50 text-sky-700"
-          : "border-slate-200 bg-slate-50 text-slate-700";
+          ? "theme-status-info"
+          : "border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text)]";
 
   return (
     <div className={cn("rounded-2xl border px-3 py-2", toneClassName)}>
@@ -4487,7 +4494,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
         <Table
           className={cn(
             "table-fixed w-full",
-            isExcelMode && "[&_td]:px-2 [&_th]:px-2 [&_tr]:border-b [&_tr]:border-slate-200",
+            isExcelMode && "[&_td]:px-2 [&_th]:px-2 [&_tr]:border-b [&_tr]:border-[var(--app-border)]",
           )}
           style={{ minWidth: Math.max(1100, codeColumnWidth + 1030) }}
         >
@@ -4500,8 +4507,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
             <col className="w-[96px]" />
             <col className="w-[170px]" />
           </colgroup>
-          <THead className={cn(isExcelMode && "[&_th]:bg-slate-100 [&_th]:text-[11px] [&_th]:font-semibold")}>
-            <TR className={cn("hover:bg-slate-50", isExcelMode ? "bg-slate-100/90" : "bg-slate-50")}>
+          <THead className={cn(isExcelMode && "[&_th]:bg-[var(--app-surface-strong)] [&_th]:text-[11px] [&_th]:font-semibold")}>
+            <TR className={cn("hover:bg-[var(--app-surface-muted)]", isExcelMode ? "bg-[var(--app-surface-strong)]/90" : "bg-[var(--app-surface-muted)]")}>
               <TH className={getHeaderCellClass("code", activeColumn, isExcelMode)}>Código</TH>
               <TH className={getHeaderCellClass("description", activeColumn, isExcelMode)}>Descripción</TH>
               <TH className={getHeaderCellClass("unit", activeColumn, isExcelMode, "text-center")}>Unidad</TH>
@@ -4510,7 +4517,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
               <TH className={getHeaderCellClass("partial", activeColumn, isExcelMode, "text-right")}>Parcial</TH>
               <TH className={getHeaderCellClass("actions", activeColumn, isExcelMode, "right-0 text-right")}>
                 <span className="inline-flex w-full items-center justify-end">
-                  <MoreHorizontal className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                  <MoreHorizontal className="h-4 w-4 text-[var(--app-text-subtle)]" aria-hidden="true" />
                   <span className="sr-only">Acciones</span>
                 </span>
               </TH>
@@ -4593,15 +4600,15 @@ const BudgetTableSection = memo(function BudgetTableSection({
 
       <div
         className={cn(
-          "flex flex-wrap items-center justify-between border border-sky-100 bg-[linear-gradient(180deg,rgba(240,249,255,0.98)_0%,rgba(224,242,254,0.9)_100%)] shadow-[0_14px_30px_-26px_rgba(2,132,199,0.28)]",
+          "theme-status-info flex flex-wrap items-center justify-between border shadow-[0_14px_30px_-26px_rgba(2,132,199,0.28)]",
           isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3",
         )}
       >
-        <p className={cn("font-medium text-sky-900", isExcelMode && "text-sm")}>Total visible y actualizado automáticamente</p>
+        <p className={cn("theme-status-info-strong font-medium", isExcelMode && "text-sm")}>Total visible y actualizado automáticamente</p>
         <AnimatedCurrencyValue
           value={totalAmount}
           currency={currency}
-          className={cn("px-0 py-0 font-semibold text-sky-700", isExcelMode ? "text-xl" : "text-2xl")}
+          className={cn("theme-strong-text px-0 py-0 font-semibold", isExcelMode ? "text-xl" : "text-2xl")}
         />
       </div>
     </CardContent>
@@ -4638,13 +4645,13 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
       data-testid="budget-summary-panel"
       data-density-mode={densityMode}
       className={cn(
-        "h-fit overflow-hidden border-slate-200/90 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
-        isExcelMode && "rounded-md border-slate-300 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
+        "h-fit overflow-hidden border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
+        isExcelMode && "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
       )}
     >
       <CardHeader
         className={cn(
-          "flex flex-row items-center border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)]",
+          "flex flex-row items-center border-b border-[var(--app-border)] bg-[var(--app-surface-elevated)]",
           summaryCollapsed ? "justify-center px-2 py-3" : "justify-between",
           isExcelMode && !summaryCollapsed && "px-3 py-2",
         )}
@@ -4674,12 +4681,12 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
           <SummaryRow label="Gastos generales" rate={generalExpensesRate} value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
           <SummaryRow label="Utilidad" rate={utilityRate} value={totals.totalUtility} currency={currency} compact={isExcelMode} />
           <SummaryRow label="IGV" rate={igvRate} value={totals.totalTax} currency={currency} compact={isExcelMode} />
-          <div className={cn("bg-slate-900 text-white shadow-[0_18px_36px_-26px_rgba(15,23,42,0.45)]", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
-            <p className={cn("text-slate-300", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
+          <div className={cn("theme-filter-button-active shadow-[0_18px_36px_-26px_rgba(15,23,42,0.45)]", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
+            <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
             <AnimatedCurrencyValue
               value={totals.totalAmount}
               currency={currency}
-              className={cn("mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
+              className={cn("theme-strong-text mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
             />
           </div>
           <div className="grid gap-2">
@@ -4698,8 +4705,8 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
               targetId={budgetId}
             />
           </div>
-          <div className={cn("border border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.92)_100%)] text-xs text-slate-500", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
-            Atajos: <span className="font-medium text-slate-700">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-slate-700">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-slate-700">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-slate-700">Pegar</span> importa filas desde Excel.
+          <div className={cn("border border-[var(--app-border)] bg-[var(--app-surface-muted)] text-xs text-[var(--app-text-muted)]", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
+            Atajos: <span className="font-medium text-[var(--app-text)]">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-[var(--app-text)]">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-[var(--app-text)]">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-[var(--app-text)]">Pegar</span> importa filas desde Excel.
           </div>
         </CardContent>
       ) : null}

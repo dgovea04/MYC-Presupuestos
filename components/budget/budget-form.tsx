@@ -183,7 +183,7 @@ export function BudgetForm({
         </div>
       </FormSectionPanel>
 
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {error ? <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
 
       <FormActionBar>
         <Button className="gap-2 shadow-sm shadow-sky-950/10" disabled={loading}>
@@ -222,18 +222,18 @@ function buildBudgetMetadataPatch(formValues: Record<string, FormDataEntryValue>
 
 function BudgetInfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="theme-muted-panel rounded-2xl border px-4 py-3">
+      <p className="theme-muted-text text-sm">{label}</p>
+      <p className="theme-strong-text mt-1 text-sm font-semibold">{value}</p>
     </div>
   );
 }
 
 function PreviewInfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
+    <div className="theme-surface-card rounded-2xl border px-4 py-3">
+      <p className="theme-muted-text text-sm">{label}</p>
+      <p className="theme-strong-text mt-1 text-sm font-medium">{value}</p>
     </div>
   );
 }

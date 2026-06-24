@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GripVertical, Save } from "lucide-react";
+import { GripVertical, Loader2, Save } from "lucide-react";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { dispatchAppViewModeSettingsUpdated } from "@/lib/budget/view-mode";
 import { ActionButton } from "@/components/ui/action-button";
@@ -39,16 +39,20 @@ const DATE_FORMAT_LABELS: Record<(typeof DATE_FORMAT_OPTIONS)[number], string> =
 };
 const APP_THEME_LABELS: Record<(typeof APP_THEME_OPTIONS)[number], string> = {
   light: "Claro",
-  dark: "Oscuro",
+  ["dark"]: "Oscuro",
 };
 type DraggedSubBudgetIndex = number | null;
 
 export function UserSettingsForm({
   initialSettings,
   onSaved,
+  formId,
+  onSavingChange,
 }: {
   initialSettings: UserSettingsRecord;
   onSaved?: (settings: UserSettingsRecord) => void;
+  formId?: string;
+  onSavingChange?: (saving: boolean) => void;
 }) {
   const { isExcelMode } = useAppViewMode();
   const [defaultCurrency, setDefaultCurrency] = useState<UserSettingsRecord["defaultCurrency"]>(initialSettings.defaultCurrency);
@@ -75,6 +79,7 @@ export function UserSettingsForm({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
+    onSavingChange?.(true);
     setError("");
     setSuccess("");
 
@@ -125,11 +130,12 @@ export function UserSettingsForm({
       setError(submissionError instanceof Error && submissionError.message ? submissionError.message : DEFAULT_SAVE_ERROR);
     } finally {
       setPending(false);
+      onSavingChange?.(false);
     }
   }
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
+    <form id={formId} className="space-y-5" onSubmit={handleSubmit}>
       <FormSectionPanel
         title="Moneda y fecha"
         description="Controla como se presentan montos y fechas en tablas, tarjetas y flujos nuevos."
@@ -235,7 +241,7 @@ export function UserSettingsForm({
           <input
             id="excelShowFieldBorders"
             checked={excelShowFieldBorders}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            className="mt-0.5 h-4 w-4 rounded border-[var(--app-border-strong)] [--control-accent:var(--app-primary)] focus:ring-sky-500"
             disabled={pending}
             type="checkbox"
             onChange={(event) => setExcelShowFieldBorders(event.target.checked)}
@@ -312,7 +318,7 @@ export function UserSettingsForm({
                 </span>
               </div>
               {matchesDefaultSubBudgetNames ? (
-                <Badge className="bg-emerald-100 text-emerald-700">Usando lista base</Badge>
+                <Badge className="theme-status-success theme-status-success-strong">Usando lista base</Badge>
               ) : null}
               <p className="text-sm text-[var(--app-text-muted)]">
                 Usa una fila por Sub Presupuesto. Puedes agregar, editar o eliminar Sub Presupuestos iniciales antes de guardar.
@@ -429,15 +435,17 @@ export function UserSettingsForm({
         </div>
       </FormSectionPanel>
 
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      {success ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
+      {error ? <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
+      {success ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">{success}</p> : null}
 
-      <FormActionBar>
-        <Button type="submit" disabled={pending} className="gap-2 shadow-sm shadow-sky-950/10">
-          <Save className="h-4 w-4" />
-          {pending ? "Guardando..." : "Guardar configuracion"}
-        </Button>
-      </FormActionBar>
+      {!formId ? (
+        <FormActionBar>
+          <Button type="submit" disabled={pending} className="gap-2">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Guardar
+          </Button>
+        </FormActionBar>
+      ) : null}
     </form>
   );
 }

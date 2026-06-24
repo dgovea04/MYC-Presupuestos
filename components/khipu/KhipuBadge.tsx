@@ -10,15 +10,21 @@ type KhipuBadgeProps = {
   variant?: "light" | "dark";
 };
 
-const VARIANT_CLASSES = {
-  light: "border-cyan-200 bg-cyan-50 text-slate-900",
-  dark: "border-cyan-400/30 bg-white/10 text-cyan-200",
-} as const;
+function getVariantClassName(variant: KhipuBadgeProps["variant"]) {
+  if (variant === "dark") {
+    return "border-cyan-400/30 bg-white/10 text-cyan-200";
+  }
 
-const ICON_CLASSES = {
-  light: "text-cyan-600",
-  dark: "text-cyan-400",
-} as const;
+  return "border-cyan-200 bg-cyan-50 text-slate-900";
+}
+
+function getIconClassName(variant: KhipuBadgeProps["variant"]) {
+  if (variant === "dark") {
+    return "text-cyan-400";
+  }
+
+  return "text-cyan-600";
+}
 
 export function KhipuBadge({ className, compact = false, variant = "light" }: KhipuBadgeProps) {
   const isDark = variant === "dark";
@@ -27,12 +33,12 @@ export function KhipuBadge({ className, compact = false, variant = "light" }: Kh
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
-        VARIANT_CLASSES[variant],
+        getVariantClassName(variant),
         className,
       )}
     >
       {compact ? (
-        <Sparkles className={cn("h-3 w-3", ICON_CLASSES[variant])} />
+        <Sparkles className={cn("h-3 w-3", getIconClassName(variant))} />
       ) : (
         <KhipuSymbol className="h-4 w-4" variant={isDark ? "dark" : undefined} />
       )}

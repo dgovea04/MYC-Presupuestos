@@ -18,7 +18,7 @@ export function ManualPaymentRequests({ requests }: { requests: ManualPaymentReq
 
   if (requests.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+      <p className="theme-dashed-panel theme-muted-text rounded-2xl border px-4 py-6 text-sm">
         No hay solicitudes Yape pendientes por validar.
       </p>
     );
@@ -37,22 +37,22 @@ export function ManualPaymentRequests({ requests }: { requests: ManualPaymentReq
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200">
+    <div className="theme-surface-card overflow-x-auto rounded-2xl border">
       <div className="min-w-[760px]">
-        <div className="grid grid-cols-[1fr_0.9fr_0.9fr_0.8fr] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <div className="theme-muted-panel theme-muted-text grid grid-cols-[1fr_0.9fr_0.9fr_0.8fr] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]">
           <span>Usuario</span>
           <span>Solicitud</span>
           <span>Fecha</span>
           <span>Accion</span>
         </div>
         {requests.map((request) => (
-          <div key={request.id} className="grid grid-cols-[1fr_0.9fr_0.9fr_0.8fr] items-center border-t border-slate-100 px-4 py-3 text-sm text-slate-700">
+          <div key={request.id} className="grid grid-cols-[1fr_0.9fr_0.9fr_0.8fr] items-center border-t border-[var(--app-border-soft)] px-4 py-3 text-sm text-[var(--app-text)]">
             <div className="min-w-0">
-              <p className="truncate font-medium text-slate-900">{request.userName}</p>
-              <p className="truncate text-xs text-slate-500">{request.userEmail}</p>
-              <p className="truncate text-xs text-slate-400">Plan actual: {request.currentPlanName}</p>
+              <p className="theme-strong-text truncate font-medium">{request.userName}</p>
+              <p className="theme-muted-text truncate text-xs">{request.userEmail}</p>
+              <p className="theme-subtle-text truncate text-xs">Plan actual: {request.currentPlanName}</p>
             </div>
-            <span className="truncate font-mono text-xs text-slate-500">{request.id}</span>
+            <span className="theme-muted-text truncate font-mono text-xs">{request.id}</span>
             <span>{formatDateLabel(request.createdAt)}</span>
             <Button className="w-fit gap-2" disabled={isPending} size="sm" type="button" onClick={() => activateRequest(request.id)}>
               <CheckCircle2 className="h-4 w-4" />

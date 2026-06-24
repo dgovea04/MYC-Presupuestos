@@ -295,34 +295,34 @@ export function AdminCloudAiSettings() {
       </CardHeader>
       <CardContent className="space-y-5">
         {error ? (
-          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
+          <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p>
         ) : null}
         {successMessage ? (
-          <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">
             {successMessage}
           </p>
         ) : null}
 
         {loading ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <Loader2 className="theme-subtle-text h-6 w-6 animate-spin" />
           </div>
         ) : (
           <>
             <div className="grid gap-4 xl:grid-cols-2">
               {/* OpenAI */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="theme-surface-card rounded-2xl border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">OpenAI (ChatGPT API)</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="theme-strong-text text-sm font-semibold">OpenAI (ChatGPT API)</p>
+                    <p className="theme-muted-text mt-1 text-xs">
                       {settings?.openaiConfigured ? "Configurado" : "Pendiente"}
                     </p>
                   </div>
                   <span
                     className={cn(
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-                      settings?.openaiConfigured ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500",
+                      settings?.openaiConfigured ? "theme-status-success theme-status-success-strong" : "theme-muted-panel theme-muted-text",
                     )}
                   >
                     <Key className="h-3 w-3" />
@@ -331,10 +331,10 @@ export function AdminCloudAiSettings() {
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <label className="block text-xs font-medium text-slate-600">
+                  <label className="theme-muted-text block text-xs font-medium">
                     API Key
                     {settings?.openaiConfigured && !showOpenaiKey ? (
-                      <span className="ml-1 text-slate-400">({settings.openaiApiKeyMasked})</span>
+                      <span className="theme-subtle-text ml-1">({settings.openaiApiKeyMasked})</span>
                     ) : null}
                   </label>
                   <div className="flex gap-2">
@@ -350,7 +350,7 @@ export function AdminCloudAiSettings() {
                       <button
                         type="button"
                         onClick={() => setShowOpenaiKey((current) => !current)}
-                        className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                        className="theme-subtle-text absolute inset-y-0 right-0 flex items-center px-3 hover:text-[var(--app-text)]"
                         tabIndex={-1}
                       >
                         {showOpenaiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -373,7 +373,7 @@ export function AdminCloudAiSettings() {
                         size="sm"
                         onClick={() => setConfirmClearOpenai(true)}
                         disabled={clearingOpenai}
-                        className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-200"
                       >
                         {clearingOpenai ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
@@ -384,7 +384,7 @@ export function AdminCloudAiSettings() {
                   ) : openaiTestResult === "fail" ? (
                     <p className="text-xs text-rose-600">No se pudo conectar. Verifica la API key.</p>
                   ) : null}
-                </div>                  <label className="mt-3 block text-xs font-medium text-slate-600">Modelo (opcional)</label>
+                </div>                  <label className="theme-muted-text mt-3 block text-xs font-medium">Modelo (opcional)</label>
                 <div className="mt-1 flex gap-2">
                   <Input
                     className="flex-1"
@@ -400,7 +400,7 @@ export function AdminCloudAiSettings() {
                       size="sm"
                       onClick={() => setConfirmClearOpenai(true)}
                       disabled={clearingOpenai}
-                      className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                      className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-200"
                       title="Eliminar API key del sistema"
                     >
                       {clearingOpenai ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -408,7 +408,7 @@ export function AdminCloudAiSettings() {
                   ) : null}
                 </div>
                 {confirmClearOpenai ? (
-                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+                  <div className="theme-status-error mt-2 flex items-center gap-2 rounded-xl border px-3 py-2">
                     <p className="flex-1 text-xs font-medium text-rose-800">
                       ¿Eliminar la API key del sistema de OpenAI? Esta acción no se puede deshacer.
                     </p>
@@ -417,7 +417,7 @@ export function AdminCloudAiSettings() {
                       size="sm"
                       variant="ghost"
                       onClick={() => setConfirmClearOpenai(false)}
-                      className="text-xs text-slate-600 hover:bg-white"
+                      className="theme-muted-text text-xs hover:bg-[var(--app-surface)]"
                     >
                       Cancelar
                     </Button>
@@ -438,18 +438,18 @@ export function AdminCloudAiSettings() {
               </div>
 
               {/* Gemini */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="theme-surface-card rounded-2xl border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Google Gemini API</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="theme-strong-text text-sm font-semibold">Google Gemini API</p>
+                    <p className="theme-muted-text mt-1 text-xs">
                       {settings?.geminiConfigured ? "Configurado" : "Pendiente"}
                     </p>
                   </div>
                   <span
                     className={cn(
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-                      settings?.geminiConfigured ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500",
+                      settings?.geminiConfigured ? "theme-status-success theme-status-success-strong" : "theme-muted-panel theme-muted-text",
                     )}
                   >
                     <Key className="h-3 w-3" />
@@ -458,10 +458,10 @@ export function AdminCloudAiSettings() {
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <label className="block text-xs font-medium text-slate-600">
+                  <label className="theme-muted-text block text-xs font-medium">
                     API Key
                     {settings?.geminiConfigured && !showGeminiKey ? (
-                      <span className="ml-1 text-slate-400">({settings.geminiApiKeyMasked})</span>
+                      <span className="theme-subtle-text ml-1">({settings.geminiApiKeyMasked})</span>
                     ) : null}
                   </label>
                   <div className="flex gap-2">
@@ -477,7 +477,7 @@ export function AdminCloudAiSettings() {
                       <button
                         type="button"
                         onClick={() => setShowGeminiKey((current) => !current)}
-                        className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                        className="theme-subtle-text absolute inset-y-0 right-0 flex items-center px-3 hover:text-[var(--app-text)]"
                         tabIndex={-1}
                       >
                         {showGeminiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -500,7 +500,7 @@ export function AdminCloudAiSettings() {
                         size="sm"
                         onClick={() => setConfirmClearGemini(true)}
                         disabled={clearingGemini}
-                        className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-200"
                       >
                         {clearingGemini ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
@@ -513,10 +513,10 @@ export function AdminCloudAiSettings() {
                   ) : null}
                 </div>
 
-                <label className="mt-3 block text-xs font-medium text-slate-600">Modelo (opcional)</label>
+                <label className="theme-muted-text mt-3 block text-xs font-medium">Modelo (opcional)</label>
                 <div className="mt-1 flex gap-2">
                   <select
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                    className="theme-muted-panel theme-strong-text flex-1 rounded-xl border px-3 py-2.5 text-sm focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200"
                     value={geminiModel || DEFAULT_GEMINI_MODEL}
                     onChange={(event) => setGeminiModel(event.target.value)}
                   >
@@ -533,7 +533,7 @@ export function AdminCloudAiSettings() {
                       size="sm"
                       onClick={() => setConfirmClearGemini(true)}
                       disabled={clearingGemini}
-                      className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                      className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-200"
                       title="Eliminar API key del sistema"
                     >
                       {clearingGemini ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -541,7 +541,7 @@ export function AdminCloudAiSettings() {
                   ) : null}
                 </div>
                 {confirmClearGemini ? (
-                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+                  <div className="theme-status-error mt-2 flex items-center gap-2 rounded-xl border px-3 py-2">
                     <p className="flex-1 text-xs font-medium text-rose-800">
                       ¿Eliminar la API key del sistema de Gemini? Esta acción no se puede deshacer.
                     </p>
@@ -550,7 +550,7 @@ export function AdminCloudAiSettings() {
                       size="sm"
                       variant="ghost"
                       onClick={() => setConfirmClearGemini(false)}
-                      className="text-xs text-slate-600 hover:bg-white"
+                      className="theme-muted-text text-xs hover:bg-[var(--app-surface)]"
                     >
                       Cancelar
                     </Button>
@@ -572,11 +572,11 @@ export function AdminCloudAiSettings() {
             </div>
 
             {/* Safety notice */}
-            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <div className="theme-muted-panel flex items-start gap-3 rounded-2xl border px-4 py-3">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
               <div>
-                <p className="text-sm font-medium text-slate-900">Seguridad de las API keys del sistema</p>
-                <p className="mt-1 text-xs text-slate-600">
+                <p className="theme-strong-text text-sm font-medium">Seguridad de las API keys del sistema</p>
+                <p className="theme-muted-text mt-1 text-xs">
                   Las API keys del sistema se almacenan encriptadas (AES-256-GCM) en la base de datos. Solo los
                   administradores pueden configurarlas y el servidor las desencripta exclusivamente para hacer llamadas
                   a las APIs cuando un usuario no tiene su propia key configurada.

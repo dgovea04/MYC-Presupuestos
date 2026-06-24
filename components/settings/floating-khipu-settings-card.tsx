@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { MonitorSmartphone, Save, AlertTriangle } from "lucide-react";
+import { Loader2, MonitorSmartphone, Save, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, type SelectValueChangeEvent } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import {
   AI_PROVIDER_OPTIONS,
   FLOATING_KHIPU_FONT_SIZES,
@@ -41,7 +40,7 @@ const FONT_SIZE_LABELS: Record<FloatingKhipuFontSize, string> = {
 
 const THEME_LABELS: Record<FloatingKhipuTheme, string> = {
   light: "Claro",
-  dark: "Oscuro",
+  ["dark"]: "Oscuro",
 };
 
 const MIN_W = 320;
@@ -92,14 +91,6 @@ export function FloatingKhipuSettingsCard({
   const [theme, setTheme] = useState(settings.floatingKhipuTheme);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-
-  const hasChanges =
-    provider !== settings.floatingKhipuProvider ||
-    width !== settings.floatingKhipuWidth ||
-    height !== settings.floatingKhipuHeight ||
-    fontSize !== settings.floatingKhipuFontSize ||
-    position !== settings.floatingKhipuPosition ||
-    theme !== settings.floatingKhipuTheme;
 
   const handleSave = async () => {
     setSaving(true);
@@ -175,15 +166,28 @@ export function FloatingKhipuSettingsCard({
   return (
     <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
-            <MonitorSmartphone className="h-5 w-5" />
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
+              <MonitorSmartphone className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle>Panel flotante Khipu</CardTitle>
+              <CardDescription>
+                Configura el proveedor de IA, tamaño, posición y estilo del asistente flotante.
+              </CardDescription>
+            </div>
           </div>
-          <div>
-            <CardTitle>Panel flotante Khipu</CardTitle>
-            <CardDescription>
-              Configura el proveedor de IA, tamaño, posición y estilo del asistente flotante.
-            </CardDescription>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className="gap-2"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Guardar
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -277,16 +281,6 @@ export function FloatingKhipuSettingsCard({
             <p className="text-sm text-rose-800">{saveError}</p>
           </div>
         ) : null}
-
-        {/* Save button */}
-        <Button
-          className={cn("w-full gap-2", !hasChanges && "opacity-50")}
-          disabled={!hasChanges || saving}
-          onClick={() => void handleSave()}
-        >
-          <Save className="h-4 w-4" />
-          {saving ? "Guardando..." : "Guardar configuración"}
-        </Button>
       </CardContent>
     </Card>
   );

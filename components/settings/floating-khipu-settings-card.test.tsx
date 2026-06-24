@@ -243,11 +243,11 @@ describe("FloatingKhipuSettingsCard", () => {
       expect(select.value).toBe("light");
     });
 
-    it("renders the save button disabled when no changes", async () => {
+    it("renders the save button enabled even when no changes", async () => {
       const { getButton } = await renderCard();
 
-      const saveBtn = getButton(/Guardar configuración/);
-      expect(saveBtn.disabled).toBe(true);
+      const saveBtn = getButton(/^Guardar$/);
+      expect(saveBtn.disabled).toBe(false);
     });
 
     it("does not show error message initially", async () => {
@@ -269,7 +269,7 @@ describe("FloatingKhipuSettingsCard", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
 
-      expect(getButton(/Guardar configuración/).disabled).toBe(false);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
 
     it("enables save button when width changes", async () => {
@@ -281,7 +281,7 @@ describe("FloatingKhipuSettingsCard", () => {
         updateInputValue(getInputByAriaLabel("width"), "700");
       });
 
-      expect(getButton(/Guardar configuración/).disabled).toBe(false);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
 
     it("enables save button when height changes", async () => {
@@ -293,7 +293,7 @@ describe("FloatingKhipuSettingsCard", () => {
         updateInputValue(getInputByAriaLabel("height"), "350");
       });
 
-      expect(getButton(/Guardar configuración/).disabled).toBe(false);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
 
     it("enables save button when font size changes", async () => {
@@ -307,7 +307,7 @@ describe("FloatingKhipuSettingsCard", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
 
-      expect(getButton(/Guardar configuración/).disabled).toBe(false);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
 
     it("enables save button when position changes", async () => {
@@ -321,7 +321,7 @@ describe("FloatingKhipuSettingsCard", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
 
-      expect(getButton(/Guardar configuración/).disabled).toBe(false);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
 
     it("enables save button when theme changes", async () => {
@@ -335,10 +335,10 @@ describe("FloatingKhipuSettingsCard", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
 
-      expect(getButton(/Guardar configuración/).disabled).toBe(false);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
 
-    it("keeps save button disabled when value changes back to initial", async () => {
+    it("keeps save button enabled when value changes back to initial", async () => {
       const { getSelect, getButton } = await renderCard({
         floatingKhipuProvider: "ollama",
       });
@@ -349,15 +349,15 @@ describe("FloatingKhipuSettingsCard", () => {
         select.value = "openai";
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
-      expect(getButton(/Guardar configuración/).disabled).toBe(false);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
 
-      // Change back
+      // Change back - button stays enabled (unified style)
       await act(async () => {
         const select = getSelect("openai");
         select.value = "ollama";
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
-      expect(getButton(/Guardar configuración/).disabled).toBe(true);
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
   });
 
@@ -382,7 +382,7 @@ describe("FloatingKhipuSettingsCard", () => {
 
       // Click save
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
 
       await act(async () => {
@@ -447,12 +447,11 @@ describe("FloatingKhipuSettingsCard", () => {
 
       // Click save
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
 
-      // Should show saving state
-      expect(getButton(/Guardando\.\.\./)).toBeTruthy();
-      expect(getButton(/Guardando\.\.\./).disabled).toBe(true);
+      // Should show saving state (button disabled, still says Guardar with spinner)
+      expect(getButton(/^Guardar$/).disabled).toBe(true);
 
       // Resolve
       await act(async () => {
@@ -460,7 +459,7 @@ describe("FloatingKhipuSettingsCard", () => {
       });
 
       // Should be back to normal
-      expect(getButton(/Guardar configuración/)).toBeTruthy();
+      expect(getButton(/^Guardar$/).disabled).toBe(false);
     });
 
     it("shows error message on failed response", async () => {
@@ -482,7 +481,7 @@ describe("FloatingKhipuSettingsCard", () => {
       });
 
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
 
       await act(async () => {
@@ -510,7 +509,7 @@ describe("FloatingKhipuSettingsCard", () => {
       });
 
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
 
       await act(async () => {
@@ -537,7 +536,7 @@ describe("FloatingKhipuSettingsCard", () => {
       });
 
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
 
       await act(async () => {
@@ -565,7 +564,7 @@ describe("FloatingKhipuSettingsCard", () => {
       });
 
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
 
       await act(async () => {
@@ -597,7 +596,7 @@ describe("FloatingKhipuSettingsCard", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
       await act(async () => {
         await Promise.resolve();
@@ -611,7 +610,7 @@ describe("FloatingKhipuSettingsCard", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
       await act(async () => {
-        getButton(/Guardar configuración/).click();
+        getButton(/^Guardar$/).click();
       });
       await act(async () => {
         await Promise.resolve();

@@ -47,7 +47,7 @@ export function GeneralBudgetSectionShell({
   return (
     <AppShell currentUser={currentUser} settings={settings}>
       <div className="space-y-5">
-        <Card>
+        <Card className="theme-surface-card rounded-2xl">
           <CardContent className="space-y-4 p-6">
             <OperationalPanel
               title={title}
@@ -55,12 +55,12 @@ export function GeneralBudgetSectionShell({
               metrics={
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge>Presupuesto General</Badge>
-                  <Badge className="bg-sky-100 text-sky-700">{projectName}</Badge>
+                  <Badge className="theme-status-info">{projectName}</Badge>
                 </div>
               }
               controls={
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
+                  <span className="theme-filter-button-inactive rounded-full border px-4 py-2 text-sm font-medium">
                     {budgetName}
                   </span>
                   <div className="flex flex-wrap gap-2">

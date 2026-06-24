@@ -21,7 +21,7 @@ export function PageHeaderCard({
       <div className="space-y-3">
         {badges ? <div className="flex flex-wrap items-center gap-2">{badges}</div> : null}
         <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-[var(--app-surface-strong)] p-2 text-[var(--app-text-strong)] shadow-[0_14px_34px_-22px_rgba(15,23,42,0.22)]">
+          <div className="theme-header-icon rounded-2xl p-2">
             {icon}
           </div>
           <div className="space-y-1">

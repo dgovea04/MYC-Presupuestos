@@ -115,18 +115,18 @@ function RiskVariableModalContent({
     <Dialog.Root open onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <Dialog.Content className="theme-surface-card fixed left-1/2 top-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-5 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <Dialog.Title className="text-lg font-semibold text-slate-950">Variable de riesgo</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-slate-500">
+              <Dialog.Title className="theme-strong-text text-lg font-semibold">Variable de riesgo</Dialog.Title>
+              <Dialog.Description className="theme-muted-text mt-1 text-sm">
                 {item.code || "Sin codigo"} · {item.description}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
               <button
                 aria-label="Cerrar"
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="theme-muted-text rounded-xl p-2 hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)]"
                 type="button"
               >
                 <X className="h-4 w-4" />
@@ -140,12 +140,12 @@ function RiskVariableModalContent({
             <Field id={`risk-maximum-${item.itemId}`} label="Max" onChange={setMaximum} value={maximum} />
           </div>
 
-          <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
-            <input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />
+          <label className="theme-strong-text mt-4 flex items-center gap-2 text-sm">
+            <input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" className="[--control-accent:var(--app-primary)]" />
             Variable activa
           </label>
 
-          {error ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+          {error ? <p className="theme-status-error mt-4 rounded-xl border px-3 py-2 text-sm">{error}</p> : null}
 
           <div className="mt-5 flex justify-between gap-3">
             <Button disabled={saving || !onDelete} onClick={deleteCurrent} type="button" variant="outline">

@@ -6,7 +6,7 @@ export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTab
 }
 
 export function THead({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn("ui-table-head [&_tr]:border-b [&_tr]:border-[var(--app-border)]", className)} {...props} />;
+  return <thead className={cn("ui-table-head [&_tr]:border-b [&_tr]:border-[var(--table-border-strong)]", className)} {...props} />;
 }
 
 export const TBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
@@ -23,7 +23,7 @@ export const TR = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTM
     <tr
       ref={ref}
       className={cn(
-        "ui-table-row border-b border-[var(--app-border-soft)] transition-[background-color,box-shadow] duration-150 hover:bg-[var(--app-surface-muted)]/90 focus-within:bg-[var(--app-primary-muted)]",
+        "ui-table-row border-b border-[var(--table-border-soft)] transition-[background-color,box-shadow] duration-150 hover:bg-[var(--app-surface-muted)]/90 focus-within:bg-[var(--app-primary-muted)]",
         className,
       )}
       {...props}

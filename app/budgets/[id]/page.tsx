@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Activity, ArrowRight, Calculator, FileSpreadsheet, ListTree, ReceiptText, Sigma } from "lucide-react";
+import { Activity, ArrowRight, Calculator, FileSpreadsheet, ReceiptText, Sigma, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { BudgetFlow } from "@/components/budget/budget-flow";
 import { AppShell } from "@/components/layout/app-shell";
@@ -97,8 +97,8 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         }}
       >
         <div className="space-y-5">
-          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
-            <CardHeader className="gap-4 rounded-2xl bg-[var(--app-surface-elevated)]">
+          <Card className="theme-surface-card rounded-2xl">
+            <CardHeader className="theme-surface-card-gradient gap-4 rounded-2xl">
               <PageHeaderCard
                 icon={<FileSpreadsheet className="h-5 w-5" />}
                 title={budget.name}
@@ -128,13 +128,13 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               <div className="flex flex-wrap gap-2">
                 <a
                   href="#subpresupuestos"
-                  className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-2 text-sm text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)] hover:text-sky-800"
+                  className="theme-filter-button-inactive rounded-full border px-4 py-2 text-sm transition"
                 >
                   Sub Presupuestos
                 </a>
                 <a
                   href="#otras-secciones"
-                  className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-2 text-sm text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)] hover:text-sky-800"
+                  className="theme-filter-button-inactive rounded-full border px-4 py-2 text-sm transition"
                 >
                   Otras secciones
                 </a>
@@ -143,7 +143,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           </Card>
 
           <section id="subpresupuestos" className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-            <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+            <Card className="theme-surface-card rounded-2xl">
               <CardHeader>
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -198,7 +198,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                       href={`/budgets/${budget.id}/resources`}
                       title="Lista de insumos"
                       description="Base para volver a trabajar el listado de insumos asociado al presupuesto."
-                      icon={<ListTree className="h-5 w-5" />}
+                      icon={<Wrench className="h-5 w-5" />}
                       tone="primary"
                     />
                     <BudgetQuickActionLink
@@ -306,9 +306,9 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
 
 function BudgetTemplateTraceabilityNotice({ detail }: { detail: string }) {
   return (
-    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    <div className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">
       <span className="font-medium">Presupuesto creado desde plantilla.</span>{" "}
-      <span className="text-emerald-700">{detail}</span>
+      <span>{detail}</span>
     </div>
   );
 }
@@ -328,16 +328,16 @@ function BudgetQuickActionLink({
 }) {
   const tones = {
     default: {
-      link: "border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/50",
-      iconWrap: "bg-slate-100 text-slate-700",
-      title: "text-slate-900",
-      arrow: "text-slate-400 group-hover:text-sky-700",
+      link: "border-[var(--app-border)] bg-[var(--app-surface)] hover:border-sky-300 hover:bg-[var(--app-primary-muted)]/60",
+      iconWrap: "bg-[var(--app-surface-strong)] text-[var(--app-text)]",
+      title: "text-[var(--app-text-strong)]",
+      arrow: "text-[var(--app-text-subtle)] group-hover:text-sky-700",
     },
     primary: {
-      link: "border-sky-200 bg-[linear-gradient(135deg,#f5fbff_0%,#edf7ff_100%)] hover:border-sky-300 hover:bg-sky-50",
-      iconWrap: "bg-sky-600 text-white",
-      title: "text-slate-950",
-      arrow: "text-sky-600 group-hover:translate-x-0.5",
+      link: "theme-quick-action-primary",
+      iconWrap: "theme-quick-action-primary-icon",
+      title: "text-[var(--app-text-strong)]",
+      arrow: "theme-quick-action-primary-arrow group-hover:translate-x-0.5",
     },
   } as const;
 
@@ -358,7 +358,7 @@ function BudgetQuickActionLink({
       </span>
       <span className="min-w-0 flex-1">
         <span className={cn("block font-medium", palette.title)}>{title}</span>
-        <span className="mt-1 block text-sm text-slate-500">{description}</span>
+        <span className="mt-1 block text-sm text-[var(--app-text-muted)]">{description}</span>
       </span>
       <span className={cn("mt-1 inline-flex shrink-0 transition", palette.arrow)}>
         <ArrowRight className="h-4 w-4" />

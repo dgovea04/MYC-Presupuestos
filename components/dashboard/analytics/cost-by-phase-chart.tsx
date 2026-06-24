@@ -116,10 +116,14 @@ export function CostByPhaseChart({
           </span>
         </div>
 
-        <ResponsiveContainer height={Math.max(200, selected.subBudgets.length * 48)} width="100%">
+        <ResponsiveContainer
+          height={Math.max(200, selected.subBudgets.length * 44 + 40)}
+          width="100%"
+        >
           <BarChart
             data={selected.subBudgets}
             layout="vertical"
+            barCategoryGap={20}
             margin={{ top: 4, right: 8, bottom: 4, left: 100 }}
           >
             <CartesianGrid stroke="var(--app-border-soft)" strokeDasharray="3 3" horizontal={false} />
@@ -161,7 +165,7 @@ export function CostByPhaseChart({
                 );
               }}
             />
-            <Bar dataKey="total" radius={[0, 4, 4, 0]} minPointSize={4} isAnimationActive={false}>
+            <Bar dataKey="total" radius={[0, 4, 4, 0]} barSize={24} isAnimationActive={false}>
               {selected.subBudgets.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />
               ))}

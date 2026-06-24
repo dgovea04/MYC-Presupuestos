@@ -96,8 +96,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       }}
     >
       <div className="space-y-5">
-        <Card className="border-slate-200">
-          <CardHeader className="gap-4 rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+        <Card className="theme-surface-card rounded-2xl">
+          <CardHeader className="theme-surface-card-gradient gap-4 rounded-2xl">
             <PageHeaderCard
               icon={<FolderKanban className="h-5 w-5" />}
               title={project.name}
@@ -135,7 +135,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <a
                   key={section.id}
                   href={`#${section.id}`}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+                  className="theme-filter-button-inactive rounded-full border px-4 py-2 text-sm transition"
                 >
                   {section.title}
                 </a>
@@ -173,7 +173,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         />
 
         <section id="otras-secciones">
-          <Card className="border-slate-200">
+          <Card className="theme-surface-card rounded-2xl">
             <CardHeader>
               <CardTitle>Otras secciones del proyecto</CardTitle>
               <CardDescription>
@@ -186,9 +186,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   <SectionCard key={section.href} title={section.title} detail={section.detail} href={section.href} />
                 ))
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 md:col-span-2 xl:col-span-4">
-                  <p className="font-medium text-slate-900">Presupuesto general pendiente</p>
-                  <p className="mt-2 text-sm text-slate-600">
+                <div className="theme-dashed-panel rounded-2xl border border-dashed p-4 md:col-span-2 xl:col-span-4">
+                  <p className="theme-strong-text font-medium">Presupuesto general pendiente</p>
+                  <p className="theme-muted-text mt-2 text-sm">
                     Esta sección se habilitará cuando el proyecto tenga un presupuesto general disponible.
                   </p>
                 </div>
@@ -207,10 +207,10 @@ function SectionCard({ title, detail, href }: { title: string; detail: string; h
   return (
     <Link
       href={href}
-      className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 transition hover:border-sky-300 hover:bg-sky-50"
+      className="theme-dashed-panel rounded-2xl border border-dashed p-4 transition hover:border-sky-300 hover:bg-sky-50"
     >
-      <p className="font-medium text-slate-900">{title}</p>
-      <p className="mt-2 text-sm text-slate-600">{detail}</p>
+      <p className="theme-strong-text font-medium">{title}</p>
+      <p className="theme-muted-text mt-2 text-sm">{detail}</p>
     </Link>
   );
 }

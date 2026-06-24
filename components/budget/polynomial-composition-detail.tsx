@@ -274,40 +274,40 @@ export function PolynomialCompositionDetail({
   const componentCount = monomials.reduce((total, monomial) => total + monomial.composition.length, 0);
 
   return (
-    <details className={cn("group overflow-hidden border border-slate-200 bg-white shadow-sm shadow-slate-100/60", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
-      <summary className={cn("flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+    <details className={cn("theme-surface-card theme-soft-shadow group overflow-hidden border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl")}>
+      <summary className={cn("flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden", isExcelMode ? "rounded-md" : "rounded-2xl")}>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-slate-900">Detalle de composicion</span>
-            <span className={cn("border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700", isExcelMode ? "rounded-sm" : "rounded-full")}>
+            <span className="theme-strong-text text-sm font-semibold">Detalle de composicion</span>
+            <span className={cn("theme-status-info px-2 py-1 text-xs font-medium", isExcelMode ? "rounded-sm" : "rounded-full")}>
               DEV
             </span>
           </div>
-          <p className="mt-1 truncate text-sm text-slate-500">
+          <p className="theme-muted-text mt-1 truncate text-sm">
             Trazabilidad DEV de los insumos agrupados para formar cada monomio.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2 text-sm text-slate-500">
+        <div className="theme-muted-text flex shrink-0 items-center gap-2 text-sm">
           <span>{componentCount} componentes</span>
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition group-hover:bg-slate-100 group-open:rotate-90 group-open:bg-slate-100">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition group-hover:bg-[var(--app-surface-hover-strong)] group-open:rotate-90 group-open:bg-[var(--app-surface-hover-strong)]">
             <ChevronRight className="h-4 w-4" />
           </span>
         </div>
       </summary>
 
-      <div className="space-y-4 border-t border-slate-100 p-6">
+      <div className="theme-border-top space-y-4 border-t p-6">
         {compositionGroups.length === 0 ? (
-          <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+          <div className={cn("theme-muted-panel border px-4 py-3 text-sm theme-muted-text", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
             Sin monomios disponibles para inspeccionar.
           </div>
         ) : (
           <>
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">Monomios iniciales</p>
+              <p className="theme-strong-text text-sm font-semibold">Monomios iniciales</p>
               <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
                 <Table className="min-w-[820px] table-fixed text-xs">
                   <THead>
-                    <TR className="bg-slate-50 hover:bg-slate-50">
+                    <TR className="theme-muted-panel hover:theme-muted-panel">
                       <TH className="w-[90px]">Codigo</TH>
                       <TH className="w-[260px]">Nombre</TH>
                       <TH className="w-[190px]">Grupo</TH>
@@ -318,16 +318,16 @@ export function PolynomialCompositionDetail({
                   <TBody>
                     {initialRows.map((row) => (
                       <TR key={row.key}>
-                        <TD className="font-semibold text-slate-900">{row.code}</TD>
+                        <TD className="theme-strong-text font-semibold">{row.code}</TD>
                         <TD className="truncate" title={row.name}>{row.name}</TD>
-                        <TD className="truncate text-xs text-slate-600" title={row.group}>{row.group}</TD>
+                        <TD className="theme-muted-text truncate text-xs" title={row.group}>{row.group}</TD>
                         <TD className="text-right tabular-nums">{formatDecimal(row.amount, 2)}</TD>
-                        <TD className="text-right font-medium tabular-nums text-slate-900">
+                        <TD className="theme-strong-text text-right font-medium tabular-nums">
                           {formatDecimal(row.coefficient, 3)}
                         </TD>
                       </TR>
                     ))}
-                    <TR className="bg-slate-50 font-semibold hover:bg-slate-50">
+                    <TR className="theme-muted-panel theme-strong-text font-semibold hover:theme-muted-panel">
                       <TD colSpan={3}>Total</TD>
                       <TD className="text-right tabular-nums">{formatDecimal(initialTotalAmount, 2)}</TD>
                       <TD className="text-right tabular-nums">{formatDecimal(initialTotalCoefficient, 3)}</TD>
@@ -342,18 +342,18 @@ export function PolynomialCompositionDetail({
                 <div key={group.monomialId} className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{group.monomialName}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="theme-strong-text text-sm font-semibold">{group.monomialName}</p>
+                      <p className="theme-muted-text text-xs">
                         Codigo {group.monomialCode} · Coef. {formatDecimalString(group.monomialCoefficient, 3)}
                       </p>
                     </div>
-                    <span className="text-xs text-slate-500">{group.rows.length} componentes</span>
+                    <span className="theme-muted-text text-xs">{group.rows.length} componentes</span>
                   </div>
 
                   <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
                     <Table className="min-w-[1180px] table-fixed text-xs">
                       <THead>
-                        <TR className="bg-slate-50 hover:bg-slate-50">
+                        <TR className="theme-muted-panel hover:theme-muted-panel">
                           <TH className="w-[260px]">Indice unificado</TH>
                           <TH className="w-[240px]">Insumo</TH>
                           <TH className="w-[130px]">Grupo inicial</TH>
@@ -366,40 +366,40 @@ export function PolynomialCompositionDetail({
                       </THead>
                       <TBody>
                         {group.rows.map((row) => (
-                          <TR key={row.id} className={row.hasComposition ? undefined : "bg-slate-50/60"}>
+                          <TR key={row.id} className={row.hasComposition ? undefined : "bg-[var(--app-surface-hover)]"}>
                             <TD className="align-middle">
                               {row.unifiedIndexCode || row.unifiedIndexName ? (
-                                <p className="truncate text-xs text-slate-700" title={formatUnifiedIndexLabel(row)}>
+                                <p className="truncate text-xs text-[var(--app-text)]" title={formatUnifiedIndexLabel(row)}>
                                   {formatUnifiedIndexLabel(row)}
                                 </p>
                                 ) : (
-                                <span className="text-xs text-slate-400">Sin indice</span>
+                                <span className="theme-subtle-text text-xs">Sin indice</span>
                               )}
                             </TD>
                             <TD className="align-middle">
-                              <p className="truncate text-xs text-slate-700" title={row.resourceName ?? "Sin insumo"}>
+                              <p className="truncate text-xs text-[var(--app-text)]" title={row.resourceName ?? "Sin insumo"}>
                                 {row.resourceName ?? "Sin insumo"}
                               </p>
                             </TD>
-                            <TD className="align-middle text-xs text-slate-700">
+                            <TD className="align-middle text-xs text-[var(--app-text)]">
                               <span className="block truncate" title={row.initialGroup}>{row.initialGroup}</span>
                             </TD>
-                            <TD className="align-middle text-xs text-slate-700">
+                            <TD className="align-middle text-xs text-[var(--app-text)]">
                               <span className="block truncate" title={row.iuFamily ?? "Sin familia"}>{row.iuFamily ?? "Sin familia"}</span>
                             </TD>
                             <TD className="text-right align-middle tabular-nums">{formatDecimalString(row.amount, 2)}</TD>
                             <TD className="text-right align-middle tabular-nums">{formatPercentage(row.participationPercentage)}</TD>
-                            <TD className="text-right align-middle font-medium tabular-nums text-slate-900">
+                            <TD className="theme-strong-text text-right align-middle font-medium tabular-nums">
                               {formatDecimalString(row.coefficientContribution, 3)}
                             </TD>
                             <TD className="align-middle">
-                              <p className="truncate text-xs text-slate-600" title={formatSourceLabel(row.sourceIds)}>
+                              <p className="theme-muted-text truncate text-xs" title={formatSourceLabel(row.sourceIds)}>
                                 {formatSourceLabel(row.sourceIds)}
                               </p>
                             </TD>
                           </TR>
                         ))}
-                        <TR className="bg-slate-50 font-semibold hover:bg-slate-50">
+                        <TR className="theme-muted-panel theme-strong-text font-semibold hover:theme-muted-panel">
                           <TD colSpan={4}>Total</TD>
                           <TD className="text-right tabular-nums">{formatDecimal(group.totalAmount, 2)}</TD>
                           <TD className="text-right tabular-nums">{formatPercentage(group.totalParticipation.toString())}</TD>

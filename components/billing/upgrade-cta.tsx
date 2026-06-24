@@ -22,23 +22,23 @@ export function UpgradeCTA({
   title?: string;
 }) {
   return (
-    <div className={cn("rounded-2xl border border-amber-200 bg-amber-50/80 p-4", className)}>
+    <div className={cn("theme-status-warning theme-status-warning-strong rounded-2xl border p-4", className)}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-700 shadow-sm">
+          <div className="theme-surface-card flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-amber-700 shadow-sm dark:text-amber-300">
             <Lock className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-950">{title}</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+            <p className="theme-strong-text text-sm font-semibold">{title}</p>
+            <p className="theme-muted-text mt-1 text-sm leading-6">{description}</p>
             {benefits.length ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {benefits.map((benefit) => (
                   <span
                     key={benefit}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-medium text-amber-800"
+                    className="theme-surface-card inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-amber-800 dark:text-amber-200"
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
                     {benefit}
                   </span>
                 ))}
@@ -47,7 +47,7 @@ export function UpgradeCTA({
           </div>
         </div>
         <Link
-          className="inline-flex h-10 min-w-[10.75rem] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          className="theme-filter-button-active inline-flex h-10 min-w-[10.75rem] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-bg)]"
           href="/account"
         >
           <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />

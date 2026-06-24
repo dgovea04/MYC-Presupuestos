@@ -205,7 +205,7 @@ export function RiskAnalysisDashboard({
       <RiskKPICards currency={payload.budget.currency} currencyDecimals={currencyDecimals} result={latestRun} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <Card className="overflow-hidden border-slate-200">
+        <Card className="theme-surface-card overflow-hidden">
           <CardContent className="p-0">
             <RiskVariablesTable
               currency={payload.budget.currency}

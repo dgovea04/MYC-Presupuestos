@@ -23,14 +23,14 @@ export function PercentilesTable({
   result: RiskSimulationSummary | null;
 }) {
   return (
-    <Card className="border-slate-200">
+    <Card className="theme-surface-card">
       <CardHeader className="px-5 py-3">
         <CardTitle className="text-base">Percentiles y contingencia</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
-          <THead className="bg-slate-100">
-            <TR className="hover:bg-slate-100">
+          <THead className="theme-muted-panel">
+            <TR className="theme-muted-panel hover:theme-muted-panel">
               <TH className="px-4 py-2 text-xs uppercase tracking-wide">Percentil</TH>
               <TH className="px-4 py-2 text-xs uppercase tracking-wide">Monto</TH>
               <TH className="px-4 py-2 text-xs uppercase tracking-wide">Delta vs base</TH>
@@ -45,7 +45,7 @@ export function PercentilesTable({
 
               return (
                 <TR key={row.key}>
-                  <TD className="px-4 py-2 font-medium text-slate-900">{row.label}</TD>
+                  <TD className="theme-strong-text px-4 py-2 font-medium">{row.label}</TD>
                   <TD className="px-4 py-2">{result ? formatCurrency(value, currency, currencyDecimals) : "-"}</TD>
                   <TD className="px-4 py-2">{result ? formatCurrency(delta, currency, currencyDecimals) : "-"}</TD>
                   <TD className="px-4 py-2">{result ? `${formatNumber(contingency * 100, 2)}%` : "-"}</TD>

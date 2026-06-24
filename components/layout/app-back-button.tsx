@@ -21,11 +21,11 @@ export function AppBackButton() {
       type="button"
       onClick={handleBack}
       className={cn(
-        "inline-flex h-10 items-center gap-2 rounded-full px-1 text-sm font-medium text-slate-500 transition",
-        "hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+        "theme-back-button inline-flex h-10 items-center gap-2 rounded-full px-1 text-sm font-medium transition",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
       )}
     >
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+      <span className="theme-back-button-icon inline-flex h-8 w-8 items-center justify-center rounded-full">
         <ArrowLeft className="h-4 w-4" />
       </span>
       <span>Ir atras</span>

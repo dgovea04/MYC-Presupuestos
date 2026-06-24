@@ -15,13 +15,13 @@ export function PolynomialFormulaMath({
   const { isExcelMode } = useAppViewMode();
 
   if (!monomials.length) {
-    return <p className="text-sm text-slate-500">La expresion matematica aparecera cuando exista una formula generada.</p>;
+    return <p className="theme-muted-text text-sm">La expresion matematica aparecera cuando exista una formula generada.</p>;
   }
 
   return (
-    <div className={cn("border border-slate-200 bg-slate-50 px-4 py-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Expresion</p>
-      <p className="mt-3 break-words font-mono text-sm text-slate-900">
+    <div className={cn("theme-muted-panel border px-4 py-4", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
+      <p className="theme-muted-text text-xs uppercase tracking-[0.2em]">Expresion</p>
+      <p className="theme-strong-text mt-3 break-words font-mono text-sm">
         K ={" "}
         {monomials
           .map(

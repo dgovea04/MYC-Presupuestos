@@ -46,7 +46,7 @@ export function VirtualizedTableFrame({
     <StaticTableFrame data-testid="virtualized-table-frame">
       <div
         ref={scrollContainerRef}
-        className={getTableViewportClassName(isExcelMode, cn("max-h-[68vh]", className))}
+        className={getTableViewportClassName(isExcelMode, cn("relative max-h-[68vh]", className))}
         onScroll={onScroll}
       >
         {children}

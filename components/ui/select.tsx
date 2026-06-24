@@ -236,8 +236,8 @@ export function Select({
             value={option.radixValue}
             disabled={option.disabled}
             className={cn(
-              "ui-select-item relative flex min-h-9 cursor-default select-none items-center rounded-lg py-2 pl-8 pr-3 text-sm text-slate-700 outline-none",
-              "data-[highlighted]:bg-slate-900 data-[highlighted]:text-white",
+              "ui-select-item relative flex min-h-9 cursor-default select-none items-center rounded-lg py-2 pl-8 pr-3 text-sm text-[var(--app-text)] outline-none",
+              "data-[highlighted]:bg-[var(--app-surface-inverse)] data-[highlighted]:text-[var(--app-on-primary)]",
               "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
               option.tone === "warning" &&
                 "bg-amber-50 font-medium text-amber-800 data-[highlighted]:bg-amber-500 data-[highlighted]:text-white",

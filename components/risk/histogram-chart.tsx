@@ -29,6 +29,7 @@ export function HistogramChart({
               <YAxis tick={{ fontSize: 11, fill: "var(--app-text-muted)" }} axisLine={false} tickLine={false} />
               <Tooltip
                 animationDuration={0}
+                cursor={{ fill: "var(--app-surface-muted)", radius: 4 }}
                 content={({ active, payload, label }) => (
                   <ChartTooltipContent active={active} payload={payload} label={label}>
                     <span className="text-[var(--app-text-muted)]">Frecuencia: </span>
@@ -37,7 +38,19 @@ export function HistogramChart({
                 )}
                 labelFormatter={(value) => formatCurrency(Number(value), currency, currencyDecimals)}
               />
-              <Bar dataKey="frequency" fill="var(--chart-1)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              <Bar
+                dataKey="frequency"
+                fill="var(--chart-1)"
+                fillOpacity={0.92}
+                activeBar={{
+                  fill: "var(--chart-1)",
+                  fillOpacity: 1,
+                  stroke: "var(--app-primary-soft)",
+                  strokeWidth: 1.5,
+                }}
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
             </BarChart>
           </ResponsiveContainer>
         ) : (

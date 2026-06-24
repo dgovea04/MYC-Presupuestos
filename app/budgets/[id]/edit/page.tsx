@@ -23,8 +23,8 @@ export default async function EditBudgetPage({ params }: { params: Promise<{ id:
 
   return (
     <AppShell>
-      <Card className="border-slate-200">
-        <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+      <Card className="theme-surface-card">
+        <CardHeader className="theme-surface-card-gradient rounded-2xl">
           <PageHeaderCard
             icon={<FileSpreadsheet className="h-5 w-5" />}
             title="Editar presupuesto"

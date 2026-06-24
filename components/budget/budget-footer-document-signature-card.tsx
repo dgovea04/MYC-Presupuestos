@@ -34,8 +34,8 @@ export function BudgetFooterDocumentSignatureCard({
   ];
 
   return (
-    <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
-      <CardHeader className="space-y-4 rounded-t-3xl border-b border-slate-200/80 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.08),transparent_40%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+    <Card className="theme-surface-card rounded-3xl">
+      <CardHeader className="theme-surface-card-gradient space-y-4 rounded-t-3xl border-b border-[var(--app-border)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <CardTitle>Firma documental</CardTitle>
@@ -45,18 +45,18 @@ export function BudgetFooterDocumentSignatureCard({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge className="bg-sky-100 text-sky-700">Lista para portada</Badge>
-            <Badge className="border border-slate-200 bg-white text-slate-700">Metadatos sincronizados</Badge>
+            <Badge className="theme-status-info">Lista para portada</Badge>
+            <Badge className="theme-filter-button-inactive">Metadatos sincronizados</Badge>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-6 p-6">
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <section className="space-y-4 rounded-3xl border border-slate-200/90 bg-white/90 p-5 shadow-sm shadow-slate-100/70">
+          <section className="theme-surface-card space-y-4 rounded-3xl border p-5 theme-soft-shadow">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Resumen documental</p>
-              <p className="max-w-2xl text-sm leading-6 text-slate-600">
+              <p className="theme-muted-text text-xs font-semibold uppercase tracking-[0.22em]">Resumen documental</p>
+              <p className="theme-muted-text max-w-2xl text-sm leading-6">
                 Este bloque alinea la firma visible del documento final y el responsable que aparecera en la portada,
                 pie o version exportada del presupuesto general.
               </p>
@@ -64,27 +64,27 @@ export function BudgetFooterDocumentSignatureCard({
 
             <div className="grid gap-3 md:grid-cols-2">
               {documentSummary.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.value}</p>
+                <div key={item.label} className="theme-muted-panel rounded-2xl border px-4 py-3">
+                  <p className="theme-muted-text text-xs uppercase tracking-[0.18em]">{item.label}</p>
+                  <p className="theme-strong-text mt-1 text-sm font-semibold">{item.value}</p>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="space-y-4 rounded-3xl border border-slate-200/90 bg-white/90 p-5 shadow-sm shadow-slate-100/70">
+          <section className="theme-surface-card space-y-4 rounded-3xl border p-5 theme-soft-shadow">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Responsable tecnico</p>
-              <p className="text-sm leading-6 text-slate-600">
+              <p className="theme-muted-text text-xs font-semibold uppercase tracking-[0.22em]">Responsable tecnico</p>
+              <p className="theme-muted-text text-sm leading-6">
                 Datos personales y profesionales listos para reutilizar en portada, firma y aprobaciones.
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               {responsibleSummary.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.value}</p>
+                <div key={item.label} className="theme-muted-panel rounded-2xl border px-4 py-3">
+                  <p className="theme-muted-text text-xs uppercase tracking-[0.18em]">{item.label}</p>
+                  <p className="theme-strong-text mt-1 text-sm font-semibold">{item.value}</p>
                 </div>
               ))}
             </div>
@@ -118,11 +118,11 @@ function SignatureBox({
   detail: string;
 }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-5 py-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{title}</p>
-      <div className="mt-10 border-t border-slate-300 pt-3">
-        <p className="text-sm font-semibold text-slate-900">{subtitle}</p>
-        <p className="mt-1 text-sm text-slate-500">{detail}</p>
+    <div className="theme-surface-card rounded-3xl border border-dashed border-[var(--app-border-strong)] px-5 py-6">
+      <p className="theme-muted-text text-xs font-semibold uppercase tracking-[0.2em]">{title}</p>
+      <div className="mt-10 border-t border-[var(--app-border-strong)] pt-3">
+        <p className="theme-strong-text text-sm font-semibold">{subtitle}</p>
+        <p className="theme-muted-text mt-1 text-sm">{detail}</p>
       </div>
     </div>
   );

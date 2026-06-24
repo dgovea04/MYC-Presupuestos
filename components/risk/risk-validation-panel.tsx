@@ -16,13 +16,13 @@ export function RiskValidationPanel({ items, variables }: { items: RiskBudgetIte
   ];
 
   return (
-    <Card className="border-slate-200">
+    <Card className="theme-surface-card">
       <CardHeader className="px-5 py-3">
         <CardTitle className="text-base">Control de calidad</CardTitle>
       </CardHeader>
       <CardContent className="p-5">
         {issues.length === 0 ? (
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="theme-status-success theme-status-success-strong flex items-center gap-2 rounded-xl border px-4 py-3 text-sm">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Variables listas para simulacion.
           </div>
@@ -31,7 +31,7 @@ export function RiskValidationPanel({ items, variables }: { items: RiskBudgetIte
             {issues.map((issue, index) => (
               <div
                 key={`${issue}-${index}`}
-                className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"
+                className="theme-status-warning theme-status-warning-strong flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
               >
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>{issue}</span>

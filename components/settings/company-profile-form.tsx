@@ -270,8 +270,8 @@ export function CompanyProfileForm({
         </div>
       </div>
 
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      {success ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
+      {error ? <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
+      {success ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">{success}</p> : null}
 
       <div className="flex items-center justify-end gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
         {onCancel ? (

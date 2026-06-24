@@ -29,7 +29,16 @@ describe("GET /api/ai/health", () => {
 
   it("returns Ollama diagnostics with model availability", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
-    vi.mocked(assertFeatureAccess).mockResolvedValue(undefined);
+    vi.mocked(assertFeatureAccess).mockResolvedValue({
+      availableFeatures: ["exports.basic", "polynomial_formula"],
+      budgetLimit: 5,
+      budgetUsage: 1,
+      isInGracePeriod: false,
+      planName: "Starter",
+      planSlug: "starter",
+      projectLimit: 3,
+      projectUsage: 1,
+    });
     vi.mocked(getAiHealth).mockResolvedValue({
       status: "degraded",
       ollamaReachable: true,
@@ -64,12 +73,38 @@ describe("GET /api/ai/health", () => {
           fallbackUsed: true,
           warnings: ["Falta instalar mistral en Ollama para autocomplete. Se usa llama3.1 como fallback local."],
         },
+        json: {
+          requestedModel: "qwen2.5-coder:7b",
+          model: "llama3.1",
+          fallbackUsed: true,
+          warnings: ["Falta instalar qwen2.5-coder:7b en Ollama para json. Se usa llama3.1 como fallback local."],
+        },
       },
       metrics: {
         chat: { latencyMs: 1200, lastError: null },
         apu: { latencyMs: 1800, lastError: "Falta instalar mistral en Ollama para apu. Se usa llama3.1 como fallback local." },
         review: { latencyMs: null, lastError: null },
         autocomplete: { latencyMs: null, lastError: null },
+        json: { latencyMs: null, lastError: null },
+      },
+      providers: {
+        ollama: { configured: true, reachable: true },
+        openai: { configured: false, reachable: null },
+        gemini: { configured: false, reachable: null },
+        openrouter: { configured: false, reachable: null },
+        chatgpt_bridge: { configured: true, reachable: null },
+      },
+      routing: {
+        review_apu: ["ollama"],
+        generate_apu: ["ollama"],
+        suggest_insumos: ["ollama"],
+        review_budget: ["ollama"],
+        generate_partida: ["ollama"],
+        review_formula_polinomica: ["ollama"],
+        review_quantity_takeoff: ["ollama"],
+        montecarlo_risk_analysis: ["ollama"],
+        chat: ["ollama"],
+        autocomplete: ["ollama"],
       },
     });
 

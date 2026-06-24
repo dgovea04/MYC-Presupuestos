@@ -50,7 +50,7 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
     >
       <div className="space-y-6">
         {sectionsData.hasSubBudgetSections ? (
-          <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-3 text-sm text-sky-900">
+          <div className="theme-status-info theme-status-info-strong rounded-2xl border px-4 py-3 text-sm leading-6">
             {sectionsData.notes.join(" ")}
           </div>
         ) : null}

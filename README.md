@@ -249,7 +249,7 @@ Esto muestra codigos como `0302044` junto con la descripcion del presupuesto.
 npm.cmd run s10:sqlserver -- --export --database S10_OBRA_MYC --budget 0302044 --out data-for-seed\s10-export-0302044.json
 ```
 
-Ese JSON se puede usar en `/imports/s10` para generar el draft y luego importar el proyecto, subpresupuestos, partidas, APUs e insumos a MC.
+Ese JSON se puede usar en `/imports/s10` para generar el draft y luego importar el proyecto, subpresupuestos, partidas, APUs e insumos a MYbpresupuesto activoC.
 
 Si SQL Server no usa seguridad integrada:
 

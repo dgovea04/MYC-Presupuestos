@@ -52,6 +52,9 @@ describe("account avatar route", () => {
       name: "Maria",
       email: "maria@example.com",
       avatarUrl: null,
+      phone: "999888777",
+      jobTitle: "Ingeniero",
+      bio: "",
       createdAt: "2026-05-18T10:00:00.000Z",
     });
     vi.mocked(storeAvatarFile).mockResolvedValue("/uploads/avatars/user-1.png");
@@ -60,6 +63,9 @@ describe("account avatar route", () => {
       name: "Maria",
       email: "maria@example.com",
       avatarUrl: "/uploads/avatars/user-1.png",
+      phone: "999888777",
+      jobTitle: "Ingeniero",
+      bio: "",
       createdAt: "2026-05-18T10:00:00.000Z",
     });
 
@@ -123,6 +129,9 @@ describe("account avatar route", () => {
       name: "Maria",
       email: "maria@example.com",
       avatarUrl: "/uploads/avatars/user-1.webp",
+      phone: "999888777",
+      jobTitle: "Ingeniero",
+      bio: "",
       createdAt: "2026-05-18T10:00:00.000Z",
     });
     vi.mocked(clearUserAvatar).mockResolvedValue({
@@ -130,6 +139,9 @@ describe("account avatar route", () => {
       name: "Maria",
       email: "maria@example.com",
       avatarUrl: null,
+      phone: "999888777",
+      jobTitle: "Ingeniero",
+      bio: "",
       createdAt: "2026-05-18T10:00:00.000Z",
     });
 

@@ -66,6 +66,10 @@ function isManuallyAssignedIu(resource: Pick<ResourceRecord, "source" | "iuCurre
   return isAutocreatedApuResource(resource) && Boolean(resource.iuCurrent?.trim()) && resource.iuCurrentReviewStatus === "MANUAL_ASSIGNED";
 }
 
+function formatIuSuggestionTitle(suggestions: Array<{ code: string; label: string }>) {
+  return suggestions.map((suggestion) => `${suggestion.code}: ${suggestion.label}`).join("\n");
+}
+
 export function ResourcesTable({
   resources,
   companyId,
@@ -96,6 +100,8 @@ export function ResourcesTable({
   const baseRowsRef = useRef(new Map(resources.map((resource) => [resource.id, resource])));
   const [persistedRowsById, setPersistedRowsById] = useState(() => new Map(resources.map((resource) => [resource.id, resource])));
   const deferredFilter = useDeferredValue(filter);
+  const [measuredRowHeight, setMeasuredRowHeight] = useState<number | null>(null);
+  const activeRowHeight = isExcelMode ? excelRowHeight : measuredRowHeight ?? RESOURCE_ROW_HEIGHT;
 
   const filtered = useMemo(
     () =>
@@ -157,13 +163,42 @@ export function ResourcesTable({
     const interval = setInterval(() => setSaveClock(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [lastSavedAt]);
+  const measuredRowObserverRef = useRef<ResizeObserver | null>(null);
   const { scrollContainerRef, scrollProps, virtualRange } = useVirtualTableWindow({
     items: filtered,
-    rowHeight: isExcelMode ? excelRowHeight : RESOURCE_ROW_HEIGHT,
+    rowHeight: activeRowHeight,
     overscan: RESOURCE_ROW_OVERSCAN,
     fallbackVisibleRows: 10,
-    resetKey: `${category}:${deferredFilter}`,
+    resetKey: `${category}:${deferredFilter}:${sourceFilter}:${iuCurrentFilter}`,
   });
+  const measureVisibleRow = useCallback((node: HTMLTableRowElement | null) => {
+    measuredRowObserverRef.current?.disconnect();
+    measuredRowObserverRef.current = null;
+
+    if (!node || isExcelMode) {
+      return;
+    }
+
+    const commitHeight = () => {
+      const nextHeight = Math.round(node.getBoundingClientRect().height);
+      if (nextHeight > 0) {
+        setMeasuredRowHeight((current) => (current === nextHeight ? current : nextHeight));
+      }
+    };
+
+    commitHeight();
+
+    const ResizeObserverConstructor = globalThis.ResizeObserver;
+    if (!ResizeObserverConstructor) {
+      return;
+    }
+
+    const observer = new ResizeObserverConstructor(() => commitHeight());
+    observer.observe(node);
+    measuredRowObserverRef.current = observer;
+  }, [isExcelMode]);
+
+  useEffect(() => () => measuredRowObserverRef.current?.disconnect(), []);
 
   const updateDraft = useCallback((id: string, patch: Partial<EditableResource>) => {
     setRows((current) =>
@@ -497,8 +532,15 @@ export function ResourcesTable({
         controls={
             <div className="flex flex-col gap-3">
               <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_180px_220px_160px]">
-                <Input placeholder="Buscar por codigo, insumo o IU" value={filter} onChange={(event) => setFilter(event.target.value)} />
-                <Select value={category} onChange={(event) => setCategory(event.target.value as "ALL" | ResourceCategory)}>
+                <Input
+                  placeholder="Buscar por codigo, insumo o IU"
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                />
+                <Select
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value as "ALL" | ResourceCategory)}
+                >
                 <option value="ALL">Todas las categorias</option>
                 <option value="MATERIAL">Materiales</option>
                 <option value="LABOR">Mano de obra</option>
@@ -506,7 +548,10 @@ export function ResourcesTable({
                 <option value="TOOLS">Herramientas</option>
                 <option value="SUBCONTRACT">Sub contratos</option>
               </Select>
-              <Select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+              <Select
+                value={sourceFilter}
+                onChange={(event) => setSourceFilter(event.target.value)}
+              >
                 <option value="ALL">Todas las fuentes</option>
                 {sourceOptions.map((source) => (
                   <option key={source} value={source}>
@@ -514,7 +559,10 @@ export function ResourcesTable({
                   </option>
                 ))}
               </Select>
-              <Select value={iuCurrentFilter} onChange={(event) => setIuCurrentFilter(event.target.value as IuCurrentFilter)}>
+              <Select
+                value={iuCurrentFilter}
+                onChange={(event) => setIuCurrentFilter(event.target.value as IuCurrentFilter)}
+              >
                 <option value="ALL">IU 2026: todos</option>
                 <option value="WITH_IU">Con IU 2026</option>
                 <option value="WITHOUT_IU">Sin IU 2026</option>
@@ -567,12 +615,12 @@ export function ResourcesTable({
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => void handleImportFile(event)} />
 
       {error ? (
-        <p className={cn("border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+        <p className={cn("theme-status-error border px-4 py-3 text-sm", isExcelMode ? "rounded-md" : "rounded-2xl")}>
           {error}
         </p>
       ) : null}
       {feedback ? (
-        <p className={cn("border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-[rgba(51,209,122,0.28)] dark:bg-[rgba(51,209,122,0.12)] dark:text-emerald-300", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+        <p className={cn("theme-status-success border px-4 py-3 text-sm", isExcelMode ? "rounded-md" : "rounded-2xl")}>
           {feedback}
         </p>
       ) : null}
@@ -605,6 +653,7 @@ export function ResourcesTable({
               {virtualRange.visibleRows.map((resource) => (
                 <ResourceTableRow
                   key={resource.id}
+                  rowRef={virtualRange.visibleRows[0]?.id === resource.id ? measureVisibleRow : undefined}
                   resource={resource}
                   isExcelMode={isExcelMode}
                   excelRowHeight={excelRowHeight}
@@ -631,6 +680,7 @@ export function ResourcesTable({
 }
 
 const ResourceTableRow = memo(function ResourceTableRow({
+  rowRef,
   resource,
   isExcelMode,
   excelRowHeight,
@@ -645,6 +695,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
   unifiedIndexDictionaryRows,
   unifiedIndexRows,
 }: {
+  rowRef?: (node: HTMLTableRowElement | null) => void;
   resource: EditableResource;
   isExcelMode: boolean;
   excelRowHeight: number;
@@ -676,9 +727,12 @@ const ResourceTableRow = memo(function ResourceTableRow({
         : [],
     [canEditIuCurrent, resource.description, resource.isEditing, resource.iuCurrent, unifiedIndexDictionaryRows, unifiedIndexRows],
   );
+  const primaryIuSuggestion = iuSuggestions[0] ?? null;
+  const remainingIuSuggestionsCount = Math.max(0, iuSuggestions.length - 1);
 
   return (
     <TR
+      ref={rowRef}
       className={cn(
         resource.isNew && "bg-emerald-50/60",
         resource.isDirty && "bg-amber-50/50",
@@ -687,7 +741,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
       )}
       style={{ height: isExcelMode ? excelRowHeight : RESOURCE_ROW_HEIGHT }}
     >
-      <TD>
+      <TD className="align-middle">
         <Input
           value={resource.code || "Auto"}
           readOnly
@@ -695,7 +749,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           className="border-transparent bg-[var(--app-surface-elevated)] px-2 font-medium tabular-nums text-[var(--app-text-strong)] shadow-none"
         />
       </TD>
-      <TD>
+      <TD className="align-middle">
         <Input
           value={resource.description}
           disabled={!resource.isEditing || !canEditCatalogFields}
@@ -704,7 +758,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
         />
       </TD>
-      <TD>
+      <TD className="align-middle">
         <Input
           value={resource.unit}
           disabled={!resource.isEditing || !canEditCatalogFields}
@@ -713,7 +767,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
         />
       </TD>
-      <TD>
+      <TD className="align-middle">
         <Input
           type="number"
           step="0.01"
@@ -724,7 +778,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
         />
       </TD>
-      <TD>
+      <TD className="align-middle">
         <Select
           value={resource.category}
           disabled={!resource.isEditing || !canEditCatalogFields}
@@ -739,7 +793,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           <option value="SUBCONTRACT">Sub contratos</option>
         </Select>
       </TD>
-      <TD>
+      <TD className="align-middle">
         <Input
           value={resource.iu ?? ""}
           disabled={!resource.isEditing || !canEditCatalogFields}
@@ -748,9 +802,8 @@ const ResourceTableRow = memo(function ResourceTableRow({
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
         />
       </TD>
-      <TD>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+      <TD className="align-middle">
+        <div className="flex items-center gap-2">
             <Input
               value={resource.iuCurrent ?? ""}
               disabled={!resource.isEditing || !canEditIuCurrent}
@@ -764,7 +817,19 @@ const ResourceTableRow = memo(function ResourceTableRow({
                 shouldReviewIu && "border-rose-300 bg-rose-50 text-rose-700 placeholder:text-rose-300",
               )}
             />
-            {shouldReviewIu ? (
+            {primaryIuSuggestion ? (
+              <button
+                type="button"
+                className="inline-flex max-w-[132px] shrink-0 items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+                title={formatIuSuggestionTitle(iuSuggestions)}
+                onClick={() => onUpdateDraft(resource.id, { iuCurrent: primaryIuSuggestion.code })}
+              >
+                <span className="tabular-nums">{primaryIuSuggestion.code}</span>
+                {remainingIuSuggestionsCount > 0 ? (
+                  <span className="ml-1 shrink-0 text-[9px] font-semibold text-blue-500">+{remainingIuSuggestionsCount}</span>
+                ) : null}
+              </button>
+            ) : shouldReviewIu ? (
               <span className="ml-auto inline-flex shrink-0 rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">
                 Revisar IU
               </span>
@@ -778,25 +843,8 @@ const ResourceTableRow = memo(function ResourceTableRow({
               </span>
             ) : null}
           </div>
-          {iuSuggestions.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {iuSuggestions.map((suggestion) => (
-                <button
-                  key={`${resource.id}-${suggestion.code}`}
-                  type="button"
-                  className="inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
-                  title={`${suggestion.code} : ${suggestion.label}`}
-                  onClick={() => onUpdateDraft(resource.id, { iuCurrent: suggestion.code })}
-                >
-                  <span className="tabular-nums">{suggestion.code}</span>
-                  <span className="ml-1 max-w-[120px] truncate">{suggestion.label}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
       </TD>
-      <TD>
+      <TD className="align-middle">
         <Input
           value={resource.source ?? ""}
           disabled={!resource.isEditing || !canEditCatalogFields}
@@ -805,7 +853,7 @@ const ResourceTableRow = memo(function ResourceTableRow({
           className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
         />
       </TD>
-      <TD>
+      <TD className="align-middle">
         <div className="flex flex-nowrap justify-end gap-1">
           {resource.isEditing ? (
             <>

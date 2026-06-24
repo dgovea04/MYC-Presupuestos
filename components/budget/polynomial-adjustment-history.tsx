@@ -26,7 +26,7 @@ export function PolynomialAdjustmentHistory({
   const { isExcelMode } = useAppViewMode();
 
   return (
-    <Card>
+    <Card className="theme-surface-card">
       <CardContent className="space-y-4 p-6">
         <OperationalPanel
           title="Historial de reajustes"
@@ -40,7 +40,7 @@ export function PolynomialAdjustmentHistory({
           <div className={getTableFrameClassName(isExcelMode)}>
             <Table>
               <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className="theme-muted-panel hover:theme-muted-panel">
                   <TH>Periodo</TH>
                   <TH className="text-right">Monto original</TH>
                   <TH className="text-right">K</TH>

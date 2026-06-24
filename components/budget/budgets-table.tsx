@@ -151,14 +151,14 @@ export function BudgetsTable({
       />
 
       {templateIntent ? (
-        <div className="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 md:flex-row md:items-center md:justify-between dark:border-[rgba(37,99,235,0.28)] dark:bg-[rgba(37,99,235,0.12)] dark:text-[var(--app-primary-soft)]">
+        <div className="theme-status-info flex flex-col gap-3 rounded-2xl border px-4 py-3 text-sm md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="font-semibold text-sky-900 dark:text-[var(--app-text-strong)]">{templateIntent.label}</p>
-            <p className="mt-1 text-sky-700 dark:text-[var(--app-text-muted)]">{templateIntent.description}</p>
+            <p className="theme-status-info-strong font-semibold">{templateIntent.label}</p>
+            <p className="mt-1">{templateIntent.description}</p>
           </div>
           <Link
             href="/templates?module=GENERAL_EXPENSES&source=WORKBOOK"
-            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white px-3 py-2 font-medium text-sky-800 transition hover:border-sky-300 hover:bg-sky-100 dark:border-[rgba(37,99,235,0.28)] dark:bg-[var(--app-surface)] dark:text-[var(--app-primary-soft)] dark:hover:bg-[var(--app-surface-hover)]"
+            className="theme-status-link-info inline-flex shrink-0 items-center justify-center rounded-xl border px-3 py-2 font-medium transition"
           >
             Ver plantillas
           </Link>
@@ -166,7 +166,7 @@ export function BudgetsTable({
       ) : null}
 
       {error ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300">
+        <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">
           {error}
         </p>
       ) : null}

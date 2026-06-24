@@ -81,10 +81,10 @@ function cloneFormula(formula: PolynomialFormulaRecord | null): PolynomialFormul
 }
 
 function getStatusBadgeClass(status: FormulaStatus) {
-  if (status === "VALID") return "bg-emerald-100 text-emerald-700";
-  if (status === "DRAFT") return "bg-amber-100 text-amber-700";
-  if (status === "ARCHIVED") return "bg-slate-200 text-slate-700";
-  return "bg-slate-100 text-slate-700";
+  if (status === "VALID") return "theme-status-success";
+  if (status === "DRAFT") return "theme-status-warning";
+  if (status === "ARCHIVED") return "theme-badge-slate";
+  return "theme-badge-slate";
 }
 
 function createFormulaSummary(formula: PolynomialFormulaRecord | null) {
@@ -607,14 +607,14 @@ export function PolynomialFormulaEditor({
   return (
     <div className="space-y-5">
       {!formula ? (
-          <Card className={cn(isExcelMode ? "rounded-md border-slate-300 shadow-none" : "border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
+          <Card className={cn("theme-surface-card", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border theme-soft-shadow")}>
             <CardContent className="space-y-5 p-6">
             <OperationalPanel
               title={section.title}
               description="Genera la fórmula polinómica desde este presupuesto y luego asigna los índices INEI correspondientes a cada monomio."
               controls={
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-slate-500">
+                  <p className="theme-muted-text text-sm">
                     La generación inicial toma los coeficientes de este presupuesto y prepara el editor para la asignación de índices.
                   </p>
                   {section.budgetId ? (
@@ -631,8 +631,8 @@ export function PolynomialFormulaEditor({
             />
 
             <div className="grid gap-4 md:grid-cols-3">
-                <div className={cn("border bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200/90")}>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes base</p>
+                <div className={cn("theme-surface-card-gradient border p-4", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
+                <p className="theme-muted-text text-xs uppercase tracking-[0.2em]">Mes base</p>
                 <Input
                   type="number"
                   min={1}
@@ -642,8 +642,8 @@ export function PolynomialFormulaEditor({
                   className="mt-3"
                 />
               </div>
-                <div className={cn("border bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200/90")}>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Año base</p>
+                <div className={cn("theme-surface-card-gradient border p-4", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
+                <p className="theme-muted-text text-xs uppercase tracking-[0.2em]">Año base</p>
                 <Input
                   type="number"
                   min={1979}
@@ -652,8 +652,8 @@ export function PolynomialFormulaEditor({
                   className="mt-3"
                 />
               </div>
-                <div className={cn("border border-sky-200/80 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] p-4", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_14px_30px_-26px_rgba(2,132,199,0.22)]")}>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Accion</p>
+                <div className={cn("theme-status-info border p-4", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_14px_30px_-26px_rgba(2,132,199,0.22)]")}>
+                <p className="theme-muted-text text-xs uppercase tracking-[0.2em]">Accion</p>
                 <Button
                   type="button"
                   onClick={() => void generateFormula()}
@@ -668,11 +668,11 @@ export function PolynomialFormulaEditor({
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {section.coefficients.map((coefficient) => (
-                <div key={coefficient.symbol} className={cn("border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md" : "rounded-2xl")}>
-                  <p className="font-medium text-slate-900">
+                <div key={coefficient.symbol} className={cn("theme-dashed-panel border p-4", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
+                  <p className="theme-strong-text font-medium">
                     {coefficient.symbol} - {coefficient.label}
                   </p>
-                  <p className="mt-2 text-sm text-slate-600">{coefficient.detail}</p>
+                  <p className="theme-muted-text mt-2 text-sm">{coefficient.detail}</p>
                 </div>
               ))}
             </div>
@@ -680,7 +680,7 @@ export function PolynomialFormulaEditor({
         </Card>
       ) : (
         <>
-          <Card className={cn(isExcelMode ? "rounded-md border-slate-300 shadow-none" : "border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
+          <Card className={cn("theme-surface-card", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border theme-soft-shadow")}>
             <CardContent className="space-y-4 p-6">
               <OperationalPanel
                 title={formula.name}
@@ -695,12 +695,12 @@ export function PolynomialFormulaEditor({
                 }
                 controls={
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-slate-500">
+                    <p className="theme-muted-text text-sm">
                       Guarda la fórmula antes de registrar reajustes para mantener consistente el historial de este presupuesto.
                     </p>
                     <div className="flex items-center gap-2">
                       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-                      {!error && feedback ? <p className="text-sm text-emerald-700">{feedback}</p> : null}
+                      {!error && feedback ? <p className="theme-status-success-strong text-sm">{feedback}</p> : null}
                       {section.budgetId ? (
                         <ExportPanel
                           buttonLabel="Exportar"
@@ -730,7 +730,7 @@ export function PolynomialFormulaEditor({
 
               <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_160px_160px_auto]">
                 <div>
-                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Nombre</label>
+                  <label className="theme-muted-text text-xs uppercase tracking-[0.2em]">Nombre</label>
                   <Input
                     value={formula.name}
                     onChange={(event) => updateFormula({ name: event.target.value })}
@@ -738,7 +738,7 @@ export function PolynomialFormulaEditor({
                   />
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes base</label>
+                  <label className="theme-muted-text text-xs uppercase tracking-[0.2em]">Mes base</label>
                   <Input
                     type="number"
                     min={1}
@@ -749,7 +749,7 @@ export function PolynomialFormulaEditor({
                   />
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Año base</label>
+                  <label className="theme-muted-text text-xs uppercase tracking-[0.2em]">Año base</label>
                   <Input
                     type="number"
                     min={1979}
@@ -838,7 +838,7 @@ export function PolynomialFormulaEditor({
       )}
 
       {canUsePolynomialAdjustments && history.length > 0 ? (
-        <p className="text-xs text-slate-500">
+        <p className="theme-muted-text text-xs">
           Último reajuste registrado: {formatDate(history[0]?.createdAt ?? null, dateFormat)}
         </p>
       ) : null}

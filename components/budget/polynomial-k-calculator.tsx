@@ -76,7 +76,7 @@ export function PolynomialKCalculator({
   const { isExcelMode } = useAppViewMode();
 
   return (
-    <Card>
+    <Card className="theme-surface-card">
       <CardContent className="space-y-4 p-6">
         <OperationalPanel
           title="Cálculo de K y valorización"
@@ -86,7 +86,7 @@ export function PolynomialKCalculator({
 
         <div className="grid gap-4 lg:grid-cols-[140px_160px_minmax(220px,1fr)_auto]">
           <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Mes reajuste</label>
+            <label className="theme-muted-text text-xs uppercase tracking-[0.2em]">Mes reajuste</label>
             <Input
               type="number"
               min={1}
@@ -97,7 +97,7 @@ export function PolynomialKCalculator({
             />
           </div>
           <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Año reajuste</label>
+            <label className="theme-muted-text text-xs uppercase tracking-[0.2em]">Año reajuste</label>
             <Input
               type="number"
               min={1979}
@@ -107,7 +107,7 @@ export function PolynomialKCalculator({
             />
           </div>
           <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Valorización original</label>
+            <label className="theme-muted-text text-xs uppercase tracking-[0.2em]">Valorización original</label>
             <Input
               type="number"
               step="0.01"
@@ -124,7 +124,7 @@ export function PolynomialKCalculator({
           </div>
         </div>
 
-        {isLoading ? <p className="text-sm text-slate-500">Calculando K...</p> : null}
+        {isLoading ? <p className="theme-muted-text text-sm">Calculando K...</p> : null}
         {resultError ? <p className="text-sm text-rose-600">{resultError}</p> : null}
 
         {result ? (
@@ -160,7 +160,7 @@ export function PolynomialKCalculator({
             <div className={getTableFrameClassName(isExcelMode)}>
               <Table>
                 <THead>
-                  <TR className="bg-slate-50 hover:bg-slate-50">
+                  <TR className="theme-muted-panel hover:theme-muted-panel">
                     <TH>Monomio</TH>
                     <TH className="text-right">Coeficiente</TH>
                     <TH className="text-right">Indice base</TH>

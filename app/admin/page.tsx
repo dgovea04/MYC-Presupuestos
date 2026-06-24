@@ -54,7 +54,7 @@ export default async function AdminPage({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card>
+        <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Membresias" description="Distribucion de usuarios y cupos mensuales por plan." />
             <div className="grid gap-3">
@@ -62,14 +62,14 @@ export default async function AdminPage({
                 <Link
                   key={plan.slug}
                   href={`/admin?plan=${plan.slug}`}
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-sky-300 hover:bg-sky-50/40"
+                  className="theme-surface-card rounded-2xl border px-4 py-3 transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)]"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-medium text-slate-900">{plan.name}</p>
-                      <p className="text-sm text-slate-500">{formatTokenCount(plan.monthlyTokenLimit)} tokens/mes</p>
+                      <p className="theme-strong-text font-medium">{plan.name}</p>
+                      <p className="theme-muted-text text-sm">{formatTokenCount(plan.monthlyTokenLimit)} tokens/mes</p>
                     </div>
-                    <Badge className="bg-sky-100 text-sky-700">{plan.usersCount} usuarios</Badge>
+                    <Badge className="theme-status-info theme-status-info-strong">{plan.usersCount} usuarios</Badge>
                   </div>
                 </Link>
               ))}
@@ -77,11 +77,11 @@ export default async function AdminPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Uso IA por accion" description="Consumo mensual del ledger para chat, APU, revision y JSON." />
             {stats.actionUsage.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+              <p className="theme-dashed-panel theme-muted-text rounded-2xl border px-4 py-6 text-sm">
                 Aun no hay consumo IA registrado en este periodo.
               </p>
             ) : (
@@ -101,7 +101,7 @@ export default async function AdminPage({
       </section>
 
       <section>
-        <Card>
+        <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader
               title="Solicitudes Yape pendientes"
@@ -117,7 +117,7 @@ export default async function AdminPage({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
-        <Card>
+        <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalPanel title="Usuarios" description="Control operativo de rol, estado, plan y cupo extra mensual." />
             <div className="flex flex-wrap gap-2">
@@ -126,9 +126,9 @@ export default async function AdminPage({
               <FilterLink href="/admin?status=SUSPENDED" label="Suspendidos" active={filters.status === "SUSPENDED"} />
               <FilterLink href="/admin?role=ADMIN" label="Admins" active={filters.role === "ADMIN"} />
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <div className="theme-surface-card overflow-x-auto rounded-2xl border">
               <div className="min-w-[760px]">
-                <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <div className="theme-muted-panel theme-muted-text grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]">
                   <span>Usuario</span>
                   <span>Plan</span>
                   <span>Licencia</span>
@@ -139,12 +139,12 @@ export default async function AdminPage({
                 {stats.users.map((user) => (
                   <div
                     key={user.id}
-                    className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] border-t border-slate-100 px-4 py-3 text-sm text-slate-700"
+                    className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] border-t border-[var(--app-border-soft)] px-4 py-3 text-sm text-[var(--app-text)]"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-900">{user.name}</p>
-                      <p className="truncate text-xs text-slate-500">{user.email}</p>
-                      <p className="truncate text-xs text-slate-400">{user.companyName}</p>
+                      <p className="theme-strong-text truncate font-medium">{user.name}</p>
+                      <p className="theme-muted-text truncate text-xs">{user.email}</p>
+                      <p className="theme-subtle-text truncate text-xs">{user.companyName}</p>
                     </div>
                     <span>{user.planName}</span>
                     <span>{formatBillingState(user.billingMode, user.billingStatus)}</span>
@@ -158,7 +158,7 @@ export default async function AdminPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Gestion de acceso" description="Edita plan, rol, estado y tokens extra por usuario." />
             <AdminUserAccessForm plans={stats.plans} users={stats.users} />
@@ -187,14 +187,14 @@ function AdminStatCard({
   value: string;
 }) {
   return (
-    <Card className="border-slate-200 bg-white shadow-[0_18px_40px_-30px_rgba(15,23,42,0.35)]">
+    <Card className="theme-surface-card shadow-[0_18px_40px_-30px_rgba(15,23,42,0.35)]">
       <CardContent className="flex items-start justify-between gap-4 p-6">
         <div>
-          <p className="text-sm text-slate-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-950">{value}</p>
-          <p className="mt-2 text-sm text-slate-600">{description}</p>
+          <p className="theme-muted-text text-sm">{title}</p>
+          <p className="theme-strong-text mt-2 text-3xl font-semibold">{value}</p>
+          <p className="theme-muted-text mt-2 text-sm">{description}</p>
         </div>
-        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white">
+        <span className="theme-filter-button-active inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
           {icon}
         </span>
       </CardContent>
@@ -207,7 +207,7 @@ function FilterLink({ active, href, label }: { active: boolean; href: string; la
     <Link
       href={href}
       className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-        active ? "border-sky-200 bg-sky-100 text-sky-800" : "border-slate-200 bg-white text-slate-600 hover:border-sky-300"
+        active ? "theme-status-info theme-status-info-strong" : "theme-surface-card theme-muted-text hover:border-sky-300 hover:bg-[var(--app-primary-muted)]"
       }`}
     >
       {label}

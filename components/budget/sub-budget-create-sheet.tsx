@@ -103,19 +103,19 @@ export function SubBudgetCreateSheet({
           <div
             className={cn(
               "fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l p-5 outline-none",
-              isExcelMode ? "border-slate-300 bg-white shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]" : "border-slate-200 bg-slate-50 shadow-2xl",
+              isExcelMode ? "border-[var(--app-border-strong)] bg-[var(--app-surface)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]" : "border-[var(--app-border)] bg-[var(--app-surface-muted)] shadow-2xl",
             )}
             data-view-mode={isExcelMode ? "excel" : "modern"}
             style={excelCssVariables}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-slate-500">Presupuesto General</p>
+                <p className="text-sm text-[var(--app-text-muted)]">Presupuesto General</p>
                 <Dialog.Title asChild>
-                  <h3 className="text-2xl font-semibold text-slate-900">Nuevo Sub Presupuesto</h3>
+                  <h3 className="text-2xl font-semibold text-[var(--app-text-strong)]">Nuevo Sub Presupuesto</h3>
                 </Dialog.Title>
                 <Dialog.Description asChild>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                     Crea una nueva rama tecnica del presupuesto sin salir del consolidado.
                   </p>
                 </Dialog.Description>
@@ -181,9 +181,9 @@ export function SubBudgetCreateSheet({
 
 function ContextInfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
+      <p className="text-sm text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }

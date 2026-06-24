@@ -38,19 +38,19 @@ export function PolynomialValidationSummary({
         />
 
         <div className="flex flex-wrap gap-2">
-          <Badge className={validation.isCoefficientSumValid ? "border-emerald-500/25 bg-emerald-500/12 text-emerald-300" : "border-rose-500/25 bg-rose-500/12 text-rose-300"}>
+          <Badge className={validation.isCoefficientSumValid ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/12 dark:text-emerald-300" : "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/12 dark:text-rose-300"}>
             Suma coeficientes: {validation.coefficientSum}
           </Badge>
-          <Badge className={validation.hasMaximumTermsValid ? "border-emerald-500/25 bg-emerald-500/12 text-emerald-300" : "border-rose-500/25 bg-rose-500/12 text-rose-300"}>
+          <Badge className={validation.hasMaximumTermsValid ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/12 dark:text-emerald-300" : "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/12 dark:text-rose-300"}>
             Monomios: {monomials.length}/{POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS}
           </Badge>
-          <Badge className={pendingBaseAssignments.length === 0 ? "border-emerald-500/25 bg-emerald-500/12 text-emerald-300" : "border-amber-500/25 bg-amber-500/12 text-amber-300"}>
+          <Badge className={pendingBaseAssignments.length === 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/12 dark:text-emerald-300" : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/12 dark:text-amber-300"}>
             Indices base pendientes: {pendingBaseAssignments.length}
           </Badge>
         </div>
 
         {validation.compositionDiagnostics.length > 0 ? (
-          <div className={cn("border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          <div className={cn("border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200", isExcelMode ? "rounded-md" : "rounded-2xl")}>
             <ul className="space-y-1">
               {validation.compositionDiagnostics.map((diagnostic) => (
                 <li key={`${diagnostic.code}:${diagnostic.monomialName}:${diagnostic.message}`}>
@@ -62,7 +62,7 @@ export function PolynomialValidationSummary({
         ) : null}
 
         {!validation.isCoefficientSumValid ? (
-          <div className={cn("border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          <div className={cn("border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-200", isExcelMode ? "rounded-md" : "rounded-2xl")}>
             La suma de coeficientes debe ser exactamente 1.000 al milesimo.
           </div>
         ) : null}

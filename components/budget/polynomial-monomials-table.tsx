@@ -44,20 +44,20 @@ function getCoefficientStatus(value: string) {
   if (!Number.isFinite(coefficient) || coefficient <= 0) {
     return {
       label: "Sin aporte",
-      className: "border-slate-200 bg-slate-50 text-slate-500",
+      className: "theme-badge-slate",
     };
   }
 
   if (coefficient < 0.05) {
     return {
       label: "< 0.050",
-      className: "border-amber-200 bg-amber-50 text-amber-700",
+      className: "theme-status-warning",
     };
   }
 
   return {
     label: "Cumple",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    className: "theme-status-success",
   };
 }
 
@@ -134,7 +134,7 @@ export function PolynomialMonomialsTable({
   }
 
   return (
-    <Card>
+    <Card className="theme-surface-card">
       <CardContent className="space-y-4 p-6">
         <OperationalPanel
           title="Monomios"
@@ -143,10 +143,10 @@ export function PolynomialMonomialsTable({
         />
 
         {onMergeMonomials ? (
-          <div className={cn("flex flex-wrap items-center justify-between gap-3 border border-slate-200 bg-slate-50 px-4 py-3", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+          <div className={cn("theme-muted-panel flex flex-wrap items-center justify-between gap-3 border px-4 py-3", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-slate-900">Juntar monomios</p>
-              <p className="text-xs text-slate-500">
+              <p className="theme-strong-text text-sm font-medium">Juntar monomios</p>
+              <p className="theme-muted-text text-xs">
                 Destino: {selectedTarget?.code ?? "sin seleccionar"} - Origenes: {selectedSourceCount}
               </p>
             </div>
@@ -166,7 +166,7 @@ export function PolynomialMonomialsTable({
         ) : null}
 
         {baseIndicesLoading ? (
-          <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl")}>
+          <div className={cn("theme-muted-panel border px-4 py-3 text-sm theme-muted-text", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
             Cargando indices INEI del mes base...
           </div>
         ) : null}
@@ -174,7 +174,7 @@ export function PolynomialMonomialsTable({
         <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
           <Table className="min-w-[1180px] table-fixed">
             <THead>
-              <TR className="bg-slate-50 hover:bg-slate-50">
+              <TR className="theme-muted-panel hover:theme-muted-panel">
                 {onMergeMonomials ? (
                   <>
                     <TH className="w-[72px] text-center">Destino</TH>
@@ -206,7 +206,7 @@ export function PolynomialMonomialsTable({
                           onChange={() => selectTarget(monomial.id)}
                           aria-label={`Usar ${monomial.code} como destino`}
                           title="Monomio destino"
-                          className="mt-2 h-4 w-4 accent-sky-600"
+                          className="mt-2 h-4 w-4"
                         />
                       </TD>
                       <TD className="text-center align-top">
@@ -217,7 +217,7 @@ export function PolynomialMonomialsTable({
                           onChange={(event) => toggleSource(monomial.id, event.target.checked)}
                           aria-label={`Juntar ${monomial.code} en destino`}
                           title="Monomio origen"
-                          className="mt-2 h-4 w-4 rounded border-slate-300 accent-sky-600"
+                          className="mt-2 h-4 w-4 rounded border-[var(--app-border-strong)]"
                         />
                       </TD>
                     </>
@@ -244,22 +244,22 @@ export function PolynomialMonomialsTable({
                         })
                       }
                       title={monomial.name}
-                      className="h-8 w-full border-0 bg-transparent px-0 text-xs text-slate-900 outline-none ring-0 transition-colors placeholder:text-slate-400 focus:text-sky-700"
+                      className="theme-strong-text h-8 w-full border-0 bg-transparent px-0 text-xs outline-none ring-0 transition-colors placeholder:text-[var(--app-text-subtle)] focus:text-sky-700"
                     />
                   </TD>
-                  <TD className="align-top text-xs text-slate-600">
+                  <TD className="theme-muted-text align-top text-xs">
                     <span className="block truncate pt-2" title={monomial.costGroupKey}>
                       {monomial.costGroupKey}
                     </span>
                   </TD>
                   <TD className="align-top text-right">
-                    <span className="block pt-2 text-xs tabular-nums text-slate-900">
+                    <span className="theme-strong-text block pt-2 text-xs tabular-nums">
                       {formatReadonlyDecimal(monomial.amount, currencyDecimals)}
                     </span>
                   </TD>
                   <TD className="align-top text-right">
                     <div className="flex items-center justify-end gap-2 pt-2">
-                      <span className="text-xs font-medium tabular-nums text-slate-900">
+                      <span className="theme-strong-text text-xs font-medium tabular-nums">
                         {formatReadonlyDecimal(monomial.coefficient, 3)}
                       </span>
                       <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none", coefficientStatus.className)}>

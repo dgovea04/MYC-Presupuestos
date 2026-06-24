@@ -42,26 +42,26 @@ export function SubBudgetDeleteButton({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <Button variant="ghost" className="gap-2 text-slate-600 hover:bg-rose-50 hover:text-rose-700" disabled={isDeleting}>
+        <Button variant="ghost" className="gap-2 text-[var(--app-text-muted)] hover:bg-rose-50 hover:text-rose-700" disabled={isDeleting}>
           <Trash2 className="h-4 w-4" />
           Eliminar
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-base font-semibold text-slate-950">Eliminar Sub Presupuesto</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-5 text-slate-500">
-                Esta accion elimina <span className="font-medium text-slate-700">{subBudgetName}</span>, incluyendo sus partidas,
+              <Dialog.Title className="text-base font-semibold text-[var(--app-text-strong)]">Eliminar Sub Presupuesto</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">
+                Esta accion elimina <span className="font-medium text-[var(--app-text)]">{subBudgetName}</span>, incluyendo sus partidas,
                 APU y datos asociados. El presupuesto general se recalculara automaticamente.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                 aria-label="Cerrar"
               >
                 <X className="h-4 w-4" />

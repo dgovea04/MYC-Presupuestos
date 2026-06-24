@@ -26,11 +26,11 @@ export function PolynomialAutoAdjustmentPreviewDialog({
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[120] bg-slate-950/35 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[130] flex max-h-[min(86vh,820px)] w-[min(92vw,860px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <Dialog.Content className="theme-surface-card fixed left-1/2 top-1/2 z-[130] flex max-h-[min(86vh,820px)] w-[min(92vw,860px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
+          <div className="theme-border-top flex items-start justify-between gap-4 border-b px-5 py-4">
             <div>
-              <Dialog.Title className="text-base font-semibold text-slate-950">Ajuste automatico de formula</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-slate-500">
+              <Dialog.Title className="theme-strong-text text-base font-semibold">Ajuste automatico de formula</Dialog.Title>
+              <Dialog.Description className="theme-muted-text mt-1 text-sm">
                 Revisa la propuesta final antes de reemplazar los monomios editables.
               </Dialog.Description>
             </div>
@@ -45,21 +45,21 @@ export function PolynomialAutoAdjustmentPreviewDialog({
             <>
               <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Antes</p>
-                    <p className="mt-2 text-lg font-semibold text-slate-950">{preview.originalMonomials.length} actuales</p>
+                  <section className="theme-muted-panel rounded-2xl border p-4">
+                    <p className="theme-muted-text text-xs uppercase tracking-[0.18em]">Antes</p>
+                    <p className="theme-strong-text mt-2 text-lg font-semibold">{preview.originalMonomials.length} actuales</p>
                   </section>
-                  <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-sky-700">Despues</p>
-                    <p className="mt-2 text-lg font-semibold text-slate-950">{preview.finalMonomials.length} propuestos</p>
+                  <section className="theme-status-info rounded-2xl border p-4">
+                    <p className="theme-status-info-strong text-xs uppercase tracking-[0.18em]">Despues</p>
+                    <p className="theme-strong-text mt-2 text-lg font-semibold">{preview.finalMonomials.length} propuestos</p>
                   </section>
                 </div>
 
                 <section className="space-y-3">
-                  <h2 className="text-sm font-semibold text-slate-950">Monomios finales</h2>
-                  <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <h2 className="theme-strong-text text-sm font-semibold">Monomios finales</h2>
+                  <div className="overflow-hidden rounded-2xl border border-[var(--table-border-strong)]">
                     <table className="w-full border-collapse text-sm">
-                      <thead className="bg-slate-50 text-slate-600">
+                      <thead className="theme-muted-panel theme-muted-text">
                         <tr>
                           <th className="px-4 py-3 text-left font-medium">Codigo</th>
                           <th className="px-4 py-3 text-left font-medium">Nombre</th>
@@ -68,10 +68,10 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                       </thead>
                       <tbody>
                         {preview.finalMonomials.map((monomial) => (
-                          <tr key={monomial.id} className="border-t border-slate-200">
-                            <td className="px-4 py-3 font-medium text-slate-900">{monomial.code}</td>
-                            <td className="px-4 py-3 text-slate-600">{monomial.name}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-slate-900">{monomial.coefficient}</td>
+                          <tr key={monomial.id} className="border-t border-[var(--table-border-soft)]">
+                            <td className="theme-strong-text px-4 py-3 font-medium">{monomial.code}</td>
+                            <td className="theme-muted-text px-4 py-3">{monomial.name}</td>
+                            <td className="theme-strong-text px-4 py-3 text-right tabular-nums">{monomial.coefficient}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -80,10 +80,10 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                 </section>
 
                 <section className="space-y-3">
-                  <h2 className="text-sm font-semibold text-slate-950">Agrupamiento propuesto</h2>
-                  <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <h2 className="theme-strong-text text-sm font-semibold">Agrupamiento propuesto</h2>
+                  <div className="overflow-hidden rounded-2xl border border-[var(--table-border-strong)]">
                     <table className="w-full border-collapse text-sm">
-                      <thead className="bg-slate-50 text-slate-600">
+                      <thead className="theme-muted-panel theme-muted-text">
                         <tr>
                           <th className="px-4 py-3 text-left font-medium">Monomio final</th>
                           <th className="px-4 py-3 text-right font-medium">Coef. final</th>
@@ -94,11 +94,11 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                       </thead>
                       <tbody>
                         {groupingRows.map((row) => (
-                          <tr key={row.finalMonomial.id} className="border-t border-slate-200 align-top">
-                            <td className="px-4 py-3 font-medium text-slate-900">
+                          <tr key={row.finalMonomial.id} className="border-t border-[var(--table-border-soft)] align-top">
+                            <td className="theme-strong-text px-4 py-3 font-medium">
                               {row.finalMonomial.code} - {row.finalMonomial.name}
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-slate-900">
+                            <td className="theme-strong-text px-4 py-3 text-right tabular-nums">
                               {row.finalMonomial.coefficient}
                             </td>
                             <td className="px-4 py-3">
@@ -106,15 +106,15 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                                 {row.groupedMonomials.map((monomial) => (
                                   <span
                                     key={monomial.id}
-                                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+                                    className="theme-surface-panel rounded-lg border px-2.5 py-1 text-xs text-[var(--app-text)]"
                                   >
                                     {monomial.code} - {monomial.name} - Coef. {monomial.coefficient}
                                   </span>
                                 ))}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-slate-900">{row.originalSum}</td>
-                            <td className="px-4 py-3 text-slate-600">{row.reason}</td>
+                            <td className="theme-strong-text px-4 py-3 text-right tabular-nums">{row.originalSum}</td>
+                            <td className="theme-muted-text px-4 py-3">{row.reason}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -123,27 +123,27 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                 </section>
 
                 <section className="space-y-3">
-                  <h2 className="text-sm font-semibold text-slate-950">Fusiones propuestas</h2>
+                  <h2 className="theme-strong-text text-sm font-semibold">Fusiones propuestas</h2>
                   {preview.mergePlan.length > 0 ? (
                     <ul className="space-y-2">
                       {preview.mergePlan.map((entry, index) => (
                         <li
                           key={`${entry.targetMonomialId}-${index}`}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+                          className="theme-muted-panel rounded-2xl border px-4 py-3 text-sm text-[var(--app-text)]"
                         >
                           {entry.explanation}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                    <p className="theme-muted-panel theme-muted-text rounded-2xl border px-4 py-3 text-sm">
                       La propuesta no requiere fusiones adicionales.
                     </p>
                   )}
                 </section>
 
                 <section className="space-y-3">
-                  <h2 className="text-sm font-semibold text-slate-950">Diagnosticos</h2>
+                  <h2 className="theme-strong-text text-sm font-semibold">Diagnosticos</h2>
                   {preview.diagnostics.length > 0 ? (
                     <ul className="space-y-2">
                       {preview.diagnostics.map((diagnostic, index) => (
@@ -152,7 +152,7 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                           className={
                             diagnostic.severity === "ERROR"
                               ? "rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
-                              : "rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+                              : "theme-muted-panel theme-muted-text rounded-2xl border px-4 py-3 text-sm"
                           }
                         >
                           {diagnostic.message}
@@ -160,14 +160,14 @@ export function PolynomialAutoAdjustmentPreviewDialog({
                       ))}
                     </ul>
                   ) : (
-                    <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">
                       Sin observaciones para esta propuesta.
                     </p>
                   )}
                 </section>
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+              <div className="theme-border-top flex justify-end gap-2 border-t px-5 py-4">
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancelar
                 </Button>

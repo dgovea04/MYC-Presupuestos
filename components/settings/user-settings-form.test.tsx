@@ -232,7 +232,7 @@ describe("UserSettingsForm", () => {
       form.requestSubmit();
     });
 
-    expect(getButton(/Guardando/)).toBeTruthy();
+    expect(getButton(/^Guardar$/).disabled).toBe(true);
     expect(getSelect("defaultCurrency").disabled).toBe(true);
     expect(getSelect("currencyDecimals").disabled).toBe(true);
     expect(getSelect("dateFormat").disabled).toBe(true);
@@ -266,7 +266,7 @@ describe("UserSettingsForm", () => {
     expect(getInput("defaultGeneralExpensesRate").disabled).toBe(false);
     expect(getInput("defaultUtilityRate").disabled).toBe(false);
     expect(getInput("defaultSubBudgetName-0").disabled).toBe(false);
-    expect(getButton(/Guardar configuracion/)).toBeTruthy();
+    expect(getButton(/^Guardar$/)).toBeTruthy();
   });
 
   it("shows a fallback error when a successful settings response is not JSON", async () => {

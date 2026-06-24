@@ -33,14 +33,14 @@ export function RiskKPICards({
         const Icon = item.icon;
 
         return (
-          <div key={item.label} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div key={item.label} className="theme-surface-card rounded-2xl border px-4 py-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+              <p className="theme-muted-text text-xs font-medium uppercase tracking-wide">{item.label}</p>
+              <span className="theme-muted-panel theme-muted-text inline-flex h-7 w-7 items-center justify-center rounded-lg">
                 <Icon className="h-3.5 w-3.5" />
               </span>
             </div>
-            <p className="mt-2 truncate text-lg font-semibold text-slate-950">{item.value}</p>
+            <p className="theme-strong-text mt-2 truncate text-lg font-semibold">{item.value}</p>
           </div>
         );
       })}

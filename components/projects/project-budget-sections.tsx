@@ -95,7 +95,7 @@ export function ProjectBudgetSections({
   return (
     <>
       <section id="presupuesto-general">
-        <Card className="border-slate-200">
+        <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalPanel
               title="Presupuesto general"
@@ -103,13 +103,13 @@ export function ProjectBudgetSections({
             />
 
             {general ? (
-              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="theme-muted-panel-strong flex flex-col gap-4 rounded-2xl border p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-2">
-                  <p className="text-lg font-semibold text-slate-900">Presupuesto General</p>
-                  <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                  <p className="theme-strong-text text-lg font-semibold">Presupuesto General</p>
+                  <div className="theme-muted-text flex flex-wrap gap-4 text-sm">
                     <span className="flex items-center gap-2">
                       Total consolidado:
-                      <AnimatedCurrencyValue value={consolidatedTotal} currency={budgetCurrency} className="px-0 py-0 font-semibold text-slate-900" />
+                      <AnimatedCurrencyValue value={consolidatedTotal} currency={budgetCurrency} className="theme-strong-text px-0 py-0 font-semibold" />
                     </span>
                     <span>Sub Presupuestos: {orderedSubBudgets.length}</span>
                     <span>Ultima actualizacion: {formatDate(generalBudgetUpdatedAt, dateFormat)}</span>
@@ -127,7 +127,7 @@ export function ProjectBudgetSections({
       </section>
 
       <section id="subpresupuestos">
-        <Card className="border-slate-200">
+        <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalPanel
               title="Sub Presupuestos"
@@ -138,16 +138,16 @@ export function ProjectBudgetSections({
             <div className="grid gap-4 lg:grid-cols-2">
               {orderedSubBudgets.length ? (
                 orderedSubBudgets.map((budget) => (
-                  <div key={budget.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/70">
+                  <div key={budget.id} className="theme-surface-panel theme-soft-shadow rounded-2xl border p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-base font-semibold text-slate-900">{budget.name}</p>
-                        <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                        <p className="theme-strong-text text-base font-semibold">{budget.name}</p>
+                        <p className="theme-muted-text mt-1 flex items-center gap-2 text-sm">
                           Total actual:
-                          <AnimatedCurrencyValue value={budget.totalAmount} currency={budget.currency} className="px-0 py-0 font-medium text-slate-700" />
+                          <AnimatedCurrencyValue value={budget.totalAmount} currency={budget.currency} className="theme-muted-text px-0 py-0 font-medium" />
                         </p>
                       </div>
-                      <Badge className="bg-slate-200 text-slate-700">Sub Presupuesto</Badge>
+                      <Badge className="theme-badge-slate">Sub Presupuesto</Badge>
                     </div>
                     <div className="mt-4">
                       <Link href={`/budgets/${budget.id}`}>

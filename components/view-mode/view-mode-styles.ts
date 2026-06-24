@@ -5,7 +5,7 @@ export function getTableFrameClassName(isExcelMode: boolean, className?: string)
     "overflow-hidden border bg-[var(--app-surface)]",
     isExcelMode
       ? "border-transparent rounded-none shadow-none"
-      : "rounded-2xl border-[var(--app-border-soft)] shadow-none",
+      : "rounded-2xl border-[var(--table-border-soft)] shadow-none",
     className,
   );
 }

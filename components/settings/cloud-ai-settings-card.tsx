@@ -284,7 +284,7 @@ export function CloudAiSettingsCard() {
       </CardHeader>
       <CardContent className="space-y-5">
         {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-        {successMessage ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</p> : null}
+        {successMessage ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">{successMessage}</p> : null}
 
         {loading ? (
           <div className="flex items-center justify-center py-10">
@@ -326,7 +326,7 @@ export function CloudAiSettingsCard() {
                     className={cn(
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
                       settings?.openaiConfigured
-                        ? "bg-emerald-100 text-emerald-700"
+                        ? "theme-status-success theme-status-success-strong"
                         : "bg-[var(--app-surface)] text-[var(--app-text-muted)] border border-[var(--app-border)]",
                     )}
                   >
@@ -373,7 +373,7 @@ export function CloudAiSettingsCard() {
                     </Button>
                   </div>
                   {openaiTestResult === "ok" ? (
-                    <p className="text-xs text-emerald-600">Conexión exitosa con OpenAI.</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-300">Conexión exitosa con OpenAI.</p>
                   ) : openaiTestResult === "fail" ? (
                     <p className="text-xs text-rose-600">No se pudo conectar. Verifica la API key.</p>
                   ) : null}
@@ -447,7 +447,7 @@ export function CloudAiSettingsCard() {
                     className={cn(
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
                       settings?.geminiConfigured
-                        ? "bg-emerald-100 text-emerald-700"
+                        ? "theme-status-success theme-status-success-strong"
                         : "bg-[var(--app-surface)] text-[var(--app-text-muted)] border border-[var(--app-border)]",
                     )}
                   >
@@ -494,7 +494,7 @@ export function CloudAiSettingsCard() {
                     </Button>
                   </div>
                   {geminiTestResult === "ok" ? (
-                    <p className="text-xs text-emerald-600">Conexión exitosa con Gemini.</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-300">Conexión exitosa con Gemini.</p>
                   ) : geminiTestResult === "fail" ? (
                     <p className="text-xs text-rose-600">No se pudo conectar. Verifica la API key.</p>
                   ) : null}
@@ -562,7 +562,7 @@ export function CloudAiSettingsCard() {
 
             {/* Safety notice */}
             <div className="flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
               <div>
                 <p className="text-sm font-medium text-[var(--app-text-strong)]">Seguridad de tus API keys</p>
                 <p className="mt-1 text-xs text-[var(--app-text-muted)]">

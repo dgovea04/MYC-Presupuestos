@@ -630,27 +630,27 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
   return (
     <div className="space-y-5">
-      <Card className="border-slate-200">
+      <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
         <CardContent className="space-y-5 p-6">
           <OperationalPanel
             title="Programacion de obra"
             description="Cronograma consolidado del proyecto, valorizacion mensual derivada, calendario de insumos y curva S basica."
             metrics={
               <>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--app-text-muted)]">
                   {summary.programmedItems} partidas programadas
                 </span>
                 {showCriticalPath && data.criticalPath ? (
-                  <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
+                  <span className="theme-status-error rounded-full border px-3 py-1 text-xs font-medium dark:text-rose-200">
                     {data.criticalPath.criticalItemCount} partidas criticas
                   </span>
                 ) : null}
                 {showCriticalPath && data.criticalPath?.status === "calculated" ? (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                  <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--app-text-muted)]">
                     {data.criticalPath.projectDurationDays} dias CPM
                   </span>
                 ) : null}
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--app-text-muted)]">
                   {summary.periods} periodos valorizados
                 </span>
               </>
@@ -704,7 +704,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                 definition={getExportDefinition("work_schedule")}
                 targetId={data.budgetId}
               />
-              <div ref={exportMenuRef} className="relative flex h-10 items-center gap-1 rounded-full border border-slate-200/90 bg-white/90 px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-slate-300 hover:bg-white">
+              <div ref={exportMenuRef} className="relative flex h-10 items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
                 <button
                   type="button"
                   aria-label="Abrir acciones de exportacion"
@@ -712,7 +712,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                   aria-expanded={isExportMenuOpen}
                   aria-controls="work-schedule-export-menu"
                   onClick={() => setIsExportMenuOpen((current) => !current)}
-                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                 >
                   Exportar
                   <MoreHorizontal className="h-4 w-4" />
@@ -722,7 +722,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                     id="work-schedule-export-menu"
                     role="menu"
                     aria-label="Acciones de exportacion del cronograma"
-                    className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-2xl"
+                    className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-64 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
                     onKeyDown={(event) => {
                       if (event.key === "Escape") {
                         setIsExportMenuOpen(false);
@@ -747,7 +747,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                     ) : null}
                     {activeView === "overview" ? (
                       <>
-                        <div className="my-1 border-t border-slate-100" />
+                        <div className="my-1 border-t border-[var(--app-border-soft)]" />
                         <WorkScheduleExportMenuButton
                           label="Exportar resumen CSV"
                           onClick={() => {
@@ -785,11 +785,11 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           </div>
 
           {activeView === "overview" || activeView === "valuation" || activeView === "resources" || activeView === "curve" ? (
-            <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="space-y-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-slate-600">Preferencias de exportacion XLSX:</span>
-                <span className="text-xs text-slate-500">{getWorkbookExportTargetLabel(activeView)}</span>
-                <span className="text-xs font-medium text-slate-500">Perfiles:</span>
+                <span className="text-xs font-medium text-[var(--app-text)]">Preferencias de exportacion XLSX:</span>
+                <span className="text-xs text-[var(--app-text-muted)]">{getWorkbookExportTargetLabel(activeView)}</span>
+                <span className="text-xs font-medium text-[var(--app-text-muted)]">Perfiles:</span>
                 {getSupportedWorkbookProfiles(activeView).map((profile) => (
                   <ExportPreferenceButton
                     key={profile}
@@ -824,7 +824,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                     {getWorkbookExportProfileLabel(profile)}
                   </ExportPreferenceButton>
                 ))}
-                <span className="text-xs font-medium text-slate-500">Alcance:</span>
+                <span className="text-xs font-medium text-[var(--app-text-muted)]">Alcance:</span>
                 {activeView === "overview" ? (
                   <>
                     <ExportPreferenceButton active={executiveWorkbookScope === "detail_only"} onClick={() => setExecutiveWorkbookScope("detail_only")}>
@@ -884,7 +884,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                   </>
                 ) : null}
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--app-text-muted)]">
                 {describeWorkbookExportPreview(activeView, {
                   executiveWorkbookScope,
                   valuationWorkbookScope,
@@ -904,7 +904,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                 ).map((badge) => (
                   <span
                     key={badge}
-                    className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600"
+                    className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-text-muted)]"
                   >
                     {badge}
                   </span>
@@ -915,7 +915,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
           {overviewFilter !== "all" ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+              <span className="theme-status-info theme-status-info-strong rounded-full border px-3 py-1 text-xs font-medium">
                 {`Filtro activo: ${formatOverviewFilterLabel(overviewFilter)}`}
               </span>
               <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setOverviewFilter("all")}>
@@ -925,16 +925,16 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           ) : null}
 
           {data.generationSummary ? (
-            <div className="space-y-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2 text-sm text-sky-900">
+            <div className="theme-status-info theme-status-info-strong space-y-2 rounded-2xl border px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-semibold">Cronograma inteligente generado</span>
                 <span>{data.generationSummary.generatedCount} partidas programadas</span>
                 <span>{data.generationSummary.pendingCount} pendientes</span>
               </div>
               {data.generationSummary.issues.length > 0 ? (
-                <div className="flex flex-wrap gap-2 text-xs text-sky-800">
+                <div className="flex flex-wrap gap-2 text-xs">
                   {data.generationSummary.issues.slice(0, 4).map((issue) => (
-                    <span key={issue.budgetItemId} className="rounded-full border border-sky-200 bg-white px-2.5 py-1">
+                    <span key={issue.budgetItemId} className="theme-surface-panel theme-muted-text rounded-full border px-2.5 py-1">
                       {issue.itemCode}: {issue.reason}
                     </span>
                   ))}
@@ -1893,13 +1893,13 @@ function WorkScheduleOverview({
   }
 
   return (
-    <Card className="border-slate-200">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardContent className="space-y-4 p-0">
-        <div className="border-b border-slate-100 px-6 py-4">
+        <div className="border-b border-[var(--app-border-soft)] px-6 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-900">Cronograma basico</p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Cronograma basico</p>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                 Referencia visual basada en la hoja de programacion: tabla valorizada a la izquierda y banda temporal semanal con detalle diario.
               </p>
             </div>
@@ -1943,7 +1943,7 @@ function WorkScheduleOverview({
               <Button variant="outline" size="sm" onClick={() => setShowCostColumns((current) => !current)}>
                 {showCostColumns ? "Ocultar PU y Parcial" : "Mostrar PU y Parcial"}
               </Button>
-              <label className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700">
+              <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-text)]">
                 <span>Zoom</span>
                 <Input
                   type="number"
@@ -1960,16 +1960,16 @@ function WorkScheduleOverview({
           </div>
         </div>
 
-        <div className="border-b border-slate-100 px-6 py-4">
+        <div className="border-b border-[var(--app-border-soft)] px-6 py-4">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-semibold text-slate-900">Resumen rapido</span>
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+            <span className="font-semibold text-[var(--app-text-strong)]">Resumen rapido</span>
+            <span className="theme-status-warning theme-status-warning-strong rounded-full border px-3 py-1 text-xs font-medium">
               {`Pendientes: ${pendingCount}`}
             </span>
-            <span className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-800">
+            <span className="theme-status-info theme-status-info-strong rounded-full border px-3 py-1 text-xs font-medium">
               {`Distribucion incompleta: ${incompleteDistributionCount}`}
             </span>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+            <span className="theme-status-success theme-status-success-strong rounded-full border px-3 py-1 text-xs font-medium">
               {`Programadas: ${scheduledCount}`}
             </span>
           </div>
@@ -1986,8 +1986,8 @@ function WorkScheduleOverview({
               ref={leftPanelRef}
               data-testid="work-schedule-left-panel"
               className={cn(
-                "overflow-hidden border bg-white pt-[32px]",
-                isExcelMode ? "rounded-none border-slate-300" : "rounded-2xl border-slate-200",
+                "overflow-hidden border bg-[var(--app-surface)] pt-[32px]",
+                isExcelMode ? "rounded-none border-[var(--app-border-strong)]" : "rounded-2xl border-[var(--app-border)]",
               )}
             >
               <div
@@ -2004,9 +2004,9 @@ function WorkScheduleOverview({
                         <col key={`work-schedule-left-col-${index}`} style={{ width: `${width}px` }} />
                       ))}
                     </colgroup>
-                    <THead className="bg-slate-50">
+                    <THead className="bg-[var(--app-surface-muted)]">
                       <TR className={OVERVIEW_HEADER_HEIGHT_CLASS}>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "bg-slate-100 px-1 py-0 text-center align-middle !text-[10px] text-slate-600")}>#</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "bg-[var(--app-surface-strong)] px-1 py-0 text-center align-middle !text-[10px] text-[var(--app-text-muted)]")}>#</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Item</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Partida</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Duracion</TH>
@@ -2035,12 +2035,12 @@ function WorkScheduleOverview({
                             ref={(element) => setGroupRowRef(item.group.subBudgetId, element)}
                             data-testid={`work-schedule-table-group-row-${item.group.subBudgetId}`}
                             data-group-row-id={item.group.subBudgetId}
-                            className={cn("bg-slate-50/90 hover:bg-slate-50/90", OVERVIEW_GROUP_ROW_HEIGHT_CLASS)}
+                            className={cn("bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]", OVERVIEW_GROUP_ROW_HEIGHT_CLASS)}
                           >
-                            <TD className="bg-slate-100 px-1 text-center align-middle !text-[10px] font-medium text-slate-500">
+                            <TD className="bg-[var(--app-surface-strong)] px-1 text-center align-middle !text-[10px] font-medium text-[var(--app-text-muted)]">
                               {overviewRowNumbers[`group:${item.group.subBudgetId}`] ?? ""}
                             </TD>
-                            <TD colSpan={showCostColumns ? 11 : 10} className="align-middle font-semibold text-slate-900">
+                            <TD colSpan={showCostColumns ? 11 : 10} className="align-middle font-semibold text-[var(--app-text-strong)]">
                               <div className="flex items-center justify-between gap-3">
                                 <span>SP: {item.group.subBudgetName}</span>
                                 <Button
@@ -2054,11 +2054,11 @@ function WorkScheduleOverview({
                               </div>
                             </TD>
                             {showCostColumns ? (
-                              <TD className="align-middle font-semibold text-slate-900">
+                              <TD className="align-middle font-semibold text-[var(--app-text-strong)]">
                                 {formatCurrency(item.group.totalAmount, data.currency, currencyDecimals)}
                               </TD>
                             ) : null}
-                            <TD className="bg-slate-50/95" />
+                            <TD className="bg-[var(--app-surface-muted)]" />
                           </TR>
                         ) : item.row.kind === "line" ? (
                           <WorkScheduleLineTableRow
@@ -2106,9 +2106,9 @@ function WorkScheduleOverview({
                   <div
                     data-testid="work-schedule-left-footer-spacer"
                     className={cn(
-                      "border-t bg-slate-50 px-2.5",
+                      "border-t bg-[var(--app-surface-muted)] px-2.5",
                       OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS,
-                      isExcelMode ? "border-slate-300" : "border-slate-200",
+                      isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]",
                     )}
                   />
                 </div>
@@ -2120,20 +2120,20 @@ function WorkScheduleOverview({
               data-testid="work-schedule-timeline-panel"
               suppressHydrationWarning
               className={cn(
-                "absolute right-0 top-0 bottom-0 z-30 overflow-hidden border bg-white",
-                isExcelMode ? "rounded-none border-slate-300 shadow-none" : "rounded-2xl border-slate-200 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)]",
+                "absolute right-0 top-0 bottom-0 z-30 overflow-hidden border bg-[var(--app-surface)]",
+                isExcelMode ? "rounded-none border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border-[var(--app-border)] shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)]",
               )}
               style={{ width: `var(${OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR}, ${timelinePanelWidth}px)` }}
             >
               <div
                 data-testid="work-schedule-timeline-resize-handle"
                 className={cn(
-                  "absolute inset-y-0 left-0 z-40 flex cursor-col-resize items-center justify-center bg-slate-100/80 backdrop-blur-sm transition hover:bg-slate-200/90",
+                  "absolute inset-y-0 left-0 z-40 flex cursor-col-resize items-center justify-center bg-[var(--app-surface-strong)]/80 backdrop-blur-sm transition hover:bg-[var(--app-surface-hover-strong)]/90",
                   isExcelMode ? "w-2" : "w-3",
                 )}
                 onMouseDown={handleTimelineResizeStart}
               >
-                <span className={cn("bg-slate-300", isExcelMode ? "h-8 w-px rounded-sm" : "h-10 w-1 rounded-full")} />
+                <span className={cn("bg-[var(--app-border-strong)]", isExcelMode ? "h-8 w-px rounded-sm" : "h-10 w-1 rounded-full")} />
               </div>
 
               <div
@@ -2182,7 +2182,7 @@ function WorkScheduleOverview({
                           key={item.key}
                           data-testid={`work-schedule-timeline-group-row-${item.group.subBudgetId}`}
                           className={cn(
-                            "flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-900",
+                            "flex items-center justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-muted)] px-2.5 text-xs font-semibold text-[var(--app-text-strong)]",
                             OVERVIEW_GROUP_ROW_HEIGHT_CLASS,
                           )}
                           style={{
@@ -2225,11 +2225,11 @@ function WorkScheduleOverview({
                       <div aria-hidden="true" style={{ height: overviewVirtualWindow.bottomSpacerHeight }} />
                     ) : null}
                   </div>
-                  <div className={cn("border-t bg-slate-50 px-2.5", OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS, isExcelMode ? "border-slate-300" : "border-slate-200")}>
-                    <div className="flex h-full flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                      <span className="font-semibold text-slate-900">Leyenda de segmentos</span>
+                  <div className={cn("border-t bg-[var(--app-surface-muted)] px-2.5", OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")}>
+                    <div className="flex h-full flex-wrap items-center gap-2 text-[11px] text-[var(--app-text-muted)]">
+                      <span className="font-semibold text-[var(--app-text-strong)]">Leyenda de segmentos</span>
                       {segmentLegend.map((item) => (
-                        <span key={item.label} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1">
+                        <span key={item.label} className="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1">
                           <span className={cn("h-2.5 w-2.5 rounded-full", item.colorClassName)} />
                           {item.label}
                         </span>
@@ -2245,8 +2245,8 @@ function WorkScheduleOverview({
           <div className="relative">
             <div
               className={cn(
-                "overflow-hidden border bg-white",
-                isExcelMode ? "rounded-none border-slate-300 shadow-none" : "rounded-bl-2xl border-slate-200 shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
+                "overflow-hidden border bg-[var(--app-surface)]",
+                isExcelMode ? "rounded-none border-[var(--app-border-strong)] shadow-none" : "rounded-bl-2xl border-[var(--app-border)] shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
               )}
               style={leftTableViewportWidth ? { width: `${leftTableViewportWidth}px`, maxWidth: "100%" } : undefined}
             >
@@ -2265,8 +2265,8 @@ function WorkScheduleOverview({
             >
               <div
                 className={cn(
-                  "overflow-hidden border bg-white",
-                  isExcelMode ? "rounded-none border-slate-300 shadow-none" : "rounded-br-2xl border-slate-200 shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
+                  "overflow-hidden border bg-[var(--app-surface)]",
+                  isExcelMode ? "rounded-none border-[var(--app-border-strong)] shadow-none" : "rounded-br-2xl border-[var(--app-border)] shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
                 )}
               >
                 <div
@@ -2364,24 +2364,24 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       data-highlighted={highlighted ? "true" : "false"}
       data-critical={showCriticalPath && line.criticalPath?.isCritical ? "true" : "false"}
       className={cn(
-        showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-50/80" : "",
-        highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200" : "",
+        showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-50/80 dark:bg-rose-500/10" : "",
+        highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/12 dark:ring-amber-500/30" : "",
       )}
       onBlur={handleInlineBlur}
     >
-      <TD className="bg-slate-100 px-1 text-center align-middle !text-[10px] font-medium text-slate-500">{rowNumber ?? ""}</TD>
+      <TD className="bg-[var(--app-surface-strong)] px-1 text-center align-middle !text-[10px] font-medium text-[var(--app-text-muted)]">{rowNumber ?? ""}</TD>
       <TD className="align-middle">{line.itemCode}</TD>
       <TD className="align-middle">
         <div className="space-y-1 overflow-hidden">
           <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-              <p className="min-w-0 truncate whitespace-nowrap text-xs font-medium text-slate-900" title={line.description}>
+              <p className="min-w-0 truncate whitespace-nowrap text-xs font-medium text-[var(--app-text-strong)]" title={line.description}>
                 {line.description}
               </p>
               {highlighted ? (
                 <span
                   data-testid={`work-schedule-active-badge-${line.budgetItemId}`}
-                  className="shrink-0 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+                  className="theme-status-warning theme-status-warning-strong shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold"
                 >
                   Partida activa
                 </span>
@@ -2389,7 +2389,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
               {showCriticalPath && line.criticalPath?.isCritical ? (
                 <span
                   data-testid={`work-schedule-critical-badge-${line.budgetItemId}`}
-                  className="shrink-0 rounded-full border border-rose-300 bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800"
+                  className="theme-status-error shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold dark:text-rose-200"
                   title={`Holgura total: ${line.criticalPath.totalSlackDays} dias`}
                 >
                   Critica
@@ -2399,7 +2399,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
             <Button
               variant="ghost"
               size="sm"
-              className="h-4 w-4 shrink-0 p-0 text-slate-600 hover:text-slate-900"
+              className="h-4 w-4 shrink-0 p-0 text-[var(--app-text-muted)] hover:text-[var(--app-text-strong)]"
               style={{ height: "16px", width: "16px", padding: 0 }}
               title="Editar"
               aria-label={`Editar ${line.description}`}
@@ -2408,7 +2408,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
               <PenSquare className="h-[13px] w-[13px]" style={{ height: "13px", width: "13px" }} />
             </Button>
           </div>
-          <p className="truncate whitespace-nowrap pt-0.5 text-[11px] text-slate-500">
+          <p className="truncate whitespace-nowrap pt-0.5 text-[11px] text-[var(--app-text-muted)]">
             {line.monthlyDistributions.length || 0} periodos
           </p>
           {inlineError ? <p className="truncate whitespace-nowrap text-[11px] text-rose-600">{inlineError}</p> : null}
@@ -2484,12 +2484,12 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       <TD className="align-middle">{formatNumber(line.quantity, 2)}</TD>
       {showCostColumns ? <TD className="align-middle">{formatCurrency(line.unitPrice, currency, currencyDecimals)}</TD> : null}
       {showCostColumns ? <TD className="align-middle">{formatCurrency(line.partial, currency, currencyDecimals)}</TD> : null}
-      <TD className="align-middle bg-white">
+      <TD className="align-middle bg-[var(--app-surface)]">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => onEditLine(line)}>
             Editar
           </Button>
-          {inlineSaveState === "saving" ? <span className="text-[11px] text-slate-500">Guardando...</span> : null}
+          {inlineSaveState === "saving" ? <span className="text-[11px] text-[var(--app-text-muted)]">Guardando...</span> : null}
         </div>
       </TD>
     </TR>
@@ -2517,16 +2517,16 @@ const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
 }: WorkScheduleLevelTableRowProps) {
   const toneClassName =
     row.levelType === "TITLE"
-      ? "bg-slate-200/90 font-semibold text-slate-900"
-      : "bg-slate-100/90 font-medium text-slate-800";
+      ? "bg-[var(--app-surface-strong)] font-semibold text-[var(--app-text-strong)]"
+      : "bg-[var(--app-surface-muted)] font-medium text-[var(--app-text)]";
 
   return (
     <TR ref={(element) => onRegisterRow(row.rowId, element)} data-testid={`work-schedule-table-row-${row.rowId}`} data-table-row-id={row.rowId} className={cn(toneClassName)}>
-      <TD className="bg-slate-100 px-1 text-center align-middle !text-[10px] font-medium text-slate-500">{rowNumber ?? ""}</TD>
+      <TD className="bg-[var(--app-surface-strong)] px-1 text-center align-middle !text-[10px] font-medium text-[var(--app-text-muted)]">{rowNumber ?? ""}</TD>
       <TD className="align-middle">{row.itemCode}</TD>
       <TD className="align-middle">
         <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
-          <span className="shrink-0 rounded-full border border-slate-300 bg-white/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+          <span className="shrink-0 rounded-full border border-[var(--app-border-strong)] bg-[var(--app-surface)]/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--app-text-muted)]">
             {row.levelType === "TITLE" ? "Titulo" : "Subtitulo"}
           </span>
           <p className="min-w-0 truncate whitespace-nowrap text-xs" title={row.description}>
@@ -2563,8 +2563,8 @@ function TimelineHeader({
   const gridTemplateColumns = `repeat(${timelineDays.length || 1}, minmax(${timelineDayWidth}px, 1fr))`;
 
   return (
-    <div className="border-b border-slate-200 bg-white">
-      <div className="grid gap-px bg-slate-200" style={{ gridTemplateColumns }}>
+    <div className="border-b border-[var(--app-border)] bg-[var(--app-surface)]">
+      <div className="grid gap-px bg-[var(--app-border)]" style={{ gridTemplateColumns }}>
         {months.map((month, index) => (
           <div
             key={month.key}
@@ -2573,11 +2573,11 @@ function TimelineHeader({
               "flex h-5 items-center justify-center px-1.5 text-center text-[11px] font-semibold",
               isExcelMode
                 ? index % 2 === 0
-                  ? "bg-[--color-slate-50] text-slate-700"
-                  : "bg-slate-300 text-slate-900"
+                  ? "bg-[var(--app-surface-muted)] text-[var(--app-text)]"
+                  : "bg-[var(--app-surface-strong)] text-[var(--app-text-strong)]"
                 : index % 2 === 0
-                  ? "bg-slate-900 text-white"
-                  : "bg-slate-700 text-slate-100",
+                  ? "bg-[var(--app-surface-inverse)] text-[var(--app-on-primary)]"
+                  : "bg-[var(--app-surface-strong)] text-[var(--app-text-strong)]",
             )}
             style={{ gridColumn: `span ${month.length}` }}
           >
@@ -2585,23 +2585,23 @@ function TimelineHeader({
           </div>
         ))}
       </div>
-      <div className="grid gap-px bg-slate-200" style={{ gridTemplateColumns }}>
+      <div className="grid gap-px bg-[var(--app-border)]" style={{ gridTemplateColumns }}>
         {weeks.map((week) => (
           <div
             key={week.key}
-            className="flex h-5 items-center justify-center bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-600"
+            className="flex h-5 items-center justify-center bg-[var(--app-surface-muted)] px-1.5 text-center text-[11px] font-semibold text-[var(--app-text-muted)]"
             style={{ gridColumn: `span ${week.length}` }}
           >
             {week.label}
           </div>
         ))}
       </div>
-      <div className="grid gap-px bg-slate-100" style={{ gridTemplateColumns }}>
+      <div className="grid gap-px bg-[var(--app-surface-strong)]" style={{ gridTemplateColumns }}>
         {timelineDays.map((day) => (
           <div
             key={day.iso}
             data-testid="work-schedule-timeline-day-header"
-            className="flex h-8 items-center justify-center bg-white text-[9px] uppercase tracking-wide text-slate-500"
+            className="flex h-8 items-center justify-center bg-[var(--app-surface)] text-[9px] uppercase tracking-wide text-[var(--app-text-muted)]"
           >
             {dayFormatter.format(day.date).slice(0, 1)}
           </div>
@@ -2649,12 +2649,12 @@ const TimelineRow = memo(function TimelineRow({
   const hasActiveRange = span > 0;
   const timelineColumnWidth = timelineDayWidth + timelineDayGap;
   const segmentColors = [
-    "bg-sky-600",
-    "bg-cyan-500",
-    "bg-indigo-500",
-    "bg-emerald-500",
-    "bg-amber-500",
-    "bg-rose-500",
+    "bg-sky-600 dark:bg-sky-500",
+    "bg-cyan-500 dark:bg-cyan-400",
+    "bg-indigo-500 dark:bg-indigo-400",
+    "bg-emerald-500 dark:bg-emerald-400",
+    "bg-amber-500 dark:bg-amber-400",
+    "bg-rose-500 dark:bg-rose-400",
   ] as const;
   const timelineBarStyle = hasActiveRange
     ? {
@@ -2663,13 +2663,13 @@ const TimelineRow = memo(function TimelineRow({
       }
     : null;
   const timelineRowBackgroundStyle = {
-    backgroundColor: highlighted ? "rgb(253 230 138 / 0.8)" : "rgb(241 245 249)",
+    backgroundColor: highlighted ? "var(--app-surface-hover-strong)" : "var(--app-surface-muted)",
     backgroundImage: `repeating-linear-gradient(
       to right,
-      rgb(255 255 255) 0,
-      rgb(255 255 255) calc((100% / ${timelineDayCount}) - 1px),
-      rgb(241 245 249) calc((100% / ${timelineDayCount}) - 1px),
-      rgb(241 245 249) calc(100% / ${timelineDayCount})
+      var(--app-surface) 0,
+      var(--app-surface) calc((100% / ${timelineDayCount}) - 1px),
+      var(--app-surface-hover-strong) calc((100% / ${timelineDayCount}) - 1px),
+      var(--app-surface-hover-strong) calc(100% / ${timelineDayCount})
     )`,
   } as const;
 
@@ -2679,7 +2679,7 @@ const TimelineRow = memo(function TimelineRow({
       data-line-id={row.rowId}
       data-highlighted={highlighted ? "true" : "false"}
       data-critical={showCriticalPath && line?.criticalPath?.isCritical ? "true" : "false"}
-      className="relative overflow-visible border-b border-slate-100 px-0.5 py-1"
+      className="relative overflow-visible border-b border-[var(--app-border-soft)] px-0.5 py-1"
       style={{
         height: rowHeight ? `${rowHeight}px` : undefined,
         ...timelineRowBackgroundStyle,
@@ -2690,10 +2690,10 @@ const TimelineRow = memo(function TimelineRow({
           className={cn(
             "absolute inset-y-2 z-20 overflow-visible rounded-full",
             showCriticalPath && line?.criticalPath?.isCritical
-              ? "shadow-[0_10px_20px_-16px_rgba(225,29,72,0.9)] ring-1 ring-rose-300"
+              ? "shadow-[0_10px_20px_-16px_rgba(225,29,72,0.9)] ring-1 ring-rose-300 dark:ring-rose-500/40"
               : row.kind === "line"
-              ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)]"
-              : "bg-slate-500/90",
+              ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)] ring-1 ring-black/5 dark:ring-white/6"
+              : "bg-[var(--app-text-subtle)]/90",
           )}
           style={timelineBarStyle}
           title={description}
@@ -2705,17 +2705,17 @@ const TimelineRow = memo(function TimelineRow({
                   key={`${row.rowId}-${distribution.year}-${distribution.month}`}
                   data-testid={`work-schedule-bar-segment-${row.rowId}`}
                   className={cn(
-                    "h-full border-r border-white/40 last:border-r-0",
-                    showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600" : segmentColors[distributionIndex % segmentColors.length],
+                    "h-full border-r border-white/35 dark:border-black/20 last:border-r-0",
+                    showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : segmentColors[distributionIndex % segmentColors.length],
                   )}
                   style={{ width: `${distribution.percentage}%` }}
                   title={formatDistributionTooltip(distribution, partial, currency, currencyDecimals)}
                 />
               ))
             ) : line ? (
-              <div className={cn("h-full w-full", showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600" : "bg-sky-600")} />
+              <div className={cn("h-full w-full", showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : "bg-sky-600 dark:bg-sky-500")} />
             ) : (
-              <div className="h-full w-full bg-slate-500" />
+              <div className="h-full w-full bg-[var(--app-text-subtle)]" />
             )}
           </div>
           <div className="absolute inset-0 px-1 text-[9px] font-semibold text-white">
@@ -2725,7 +2725,7 @@ const TimelineRow = memo(function TimelineRow({
             <div className="absolute -top-5 left-0">
               <span
                 data-testid={`work-schedule-active-timeline-badge-${row.rowId}`}
-                className="rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800 shadow-sm"
+                className="theme-status-warning theme-status-warning-strong rounded-full border px-1.5 py-0.5 text-[9px] font-semibold shadow-sm"
               >
                 Partida activa
               </span>
@@ -2915,14 +2915,14 @@ function ValuationCalendarView({
       description="Vista mensual valorizada inspirada en el archivo Calendario_Valorizado.xlsx."
       activeFilterLabel={activeFilterLabel}
     >
-      <div data-testid="valuation-calendar-table-scroll" className="overflow-x-auto rounded-2xl border border-slate-200">
+      <div data-testid="valuation-calendar-table-scroll" className="overflow-x-auto rounded-2xl border border-[var(--app-border)]">
         <Table
           className="min-w-max text-[11px]"
           style={{
             minWidth: `${760 + periods.length * 112}px`,
           }}
         >
-          <THead className="bg-slate-50">
+          <THead className="bg-[var(--app-surface-muted)]">
             <TR className="whitespace-nowrap">
               <TH className="w-24 whitespace-nowrap px-2 py-2 text-[11px]">Item</TH>
               <TH className="w-80 whitespace-nowrap px-2 py-2 text-[11px]">Partida</TH>
@@ -2988,7 +2988,7 @@ function ResourceCalendarView({
       activeFilterLabel={activeFilterLabel}
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-1">
           <Button
             variant={mode === "amounts" ? "default" : "ghost"}
             size="sm"
@@ -3006,18 +3006,18 @@ function ResourceCalendarView({
             Cantidades
           </Button>
         </div>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-[var(--app-text-muted)]">
           {mode === "amounts" ? "Mostrando importes mensuales valorizados." : "Mostrando cantidades mensuales programadas."}
         </span>
       </div>
-      <div data-testid="resource-calendar-table-scroll" className="overflow-x-auto rounded-2xl border border-slate-200">
+      <div data-testid="resource-calendar-table-scroll" className="overflow-x-auto rounded-2xl border border-[var(--app-border)]">
         <Table
           className="min-w-max text-[11px]"
           style={{
             minWidth: `${760 + periods.length * 132}px`,
           }}
         >
-          <THead className="bg-slate-50">
+          <THead className="bg-[var(--app-surface-muted)]">
             <TR className="whitespace-nowrap">
               <TH className="w-16 whitespace-nowrap px-2 py-2 text-[11px]">Item</TH>
               <TH className="w-80 whitespace-nowrap px-2 py-2 text-[11px]">Insumo</TH>
@@ -3103,40 +3103,40 @@ function CurveSView({
   });
 
   return (
-    <Card className="border-slate-200">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardContent className="space-y-5 p-6">
         <div>
-          <p className="text-sm font-semibold text-slate-900">Curva S basica</p>
-          <p className="mt-1 text-sm text-slate-500">Programado mensual y acumulado del proyecto consolidado.</p>
+          <p className="text-sm font-semibold text-[var(--app-text-strong)]">Curva S basica</p>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">Programado mensual y acumulado del proyecto consolidado.</p>
           {activeFilterLabel ? (
             <div className="mt-3">
-              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+              <span className="theme-status-info theme-status-info-strong rounded-full border px-3 py-1 text-xs font-medium">
                 {`Filtro aplicado: ${activeFilterLabel}`}
               </span>
             </div>
           ) : null}
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
           <div data-testid="work-schedule-curve-chart" className="min-w-[980px]">
             <span data-testid="work-schedule-curve-line" data-d={curvePath} className="sr-only" />
             <span className="sr-only">Monto acumulado</span>
             <span className="sr-only">Tiempo</span>
             <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Curva S acumulada de montos contra tiempo" className="h-[420px] w-full">
-              <rect x={chartPadding.left} y={chartPadding.top} width={plotWidth} height={plotHeight} fill="#ffffff" stroke="#e2e8f0" />
+              <rect x={chartPadding.left} y={chartPadding.top} width={plotWidth} height={plotHeight} fill="var(--app-surface)" stroke="var(--app-border-soft)" />
               {yTicks.map((tick) => (
                 <g key={tick.y}>
-                  <line x1={chartPadding.left} x2={chartPadding.left + plotWidth} y1={tick.y} y2={tick.y} stroke="#e2e8f0" strokeDasharray="4 4" />
-                  <text x={chartPadding.left - 12} y={tick.y + 3} textAnchor="end" className="fill-slate-500 text-[9px]">
+                  <line x1={chartPadding.left} x2={chartPadding.left + plotWidth} y1={tick.y} y2={tick.y} stroke="var(--app-border-soft)" strokeDasharray="4 4" />
+                  <text x={chartPadding.left - 12} y={tick.y + 3} textAnchor="end" className="fill-[var(--app-text-muted)] text-[9px]">
                     {formatCurrency(tick.value, currency, currencyDecimals)}
                   </text>
                 </g>
               ))}
               {curvePoints.map(({ point, x }) => (
-                <line key={`x-${point.key}`} x1={x} x2={x} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="#f1f5f9" />
+                <line key={`x-${point.key}`} x1={x} x2={x} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="var(--app-surface-hover-strong)" />
               ))}
-              <line x1={chartPadding.left} x2={chartPadding.left} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="#334155" strokeWidth="1.5" />
-              <line x1={chartPadding.left} x2={chartPadding.left + plotWidth} y1={chartPadding.top + plotHeight} y2={chartPadding.top + plotHeight} stroke="#334155" strokeWidth="1.5" />
+              <line x1={chartPadding.left} x2={chartPadding.left} y1={chartPadding.top} y2={chartPadding.top + plotHeight} stroke="var(--app-text-muted)" strokeWidth="1.5" />
+              <line x1={chartPadding.left} x2={chartPadding.left + plotWidth} y1={chartPadding.top + plotHeight} y2={chartPadding.top + plotHeight} stroke="var(--app-text-muted)" strokeWidth="1.5" />
               {curvePath ? (
                 <path d={curvePath} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
               ) : null}
@@ -3179,7 +3179,7 @@ function CurveSView({
         </div>
 
         <Table>
-          <THead className="bg-slate-50">
+          <THead className="bg-[var(--app-surface-muted)]">
             <TR>
               <TH>Periodo</TH>
               <TH>Programado mensual</TH>
@@ -3239,21 +3239,21 @@ function WorkScheduleEditorSheet({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
         <Dialog.Content asChild>
           <div
-            className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl outline-none"
+            className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-[var(--app-border)] bg-[var(--app-surface-muted)] p-5 shadow-2xl outline-none"
             data-testid="work-schedule-editor-panel"
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <Dialog.Title asChild>
-                  <h3 className="text-2xl font-semibold text-slate-900">Programar partida</h3>
+                  <h3 className="text-2xl font-semibold text-[var(--app-text-strong)]">Programar partida</h3>
                 </Dialog.Title>
                 <Dialog.Description asChild>
-                  <div className="mt-1 space-y-2 text-sm text-slate-500">
+                  <div className="mt-1 space-y-2 text-sm text-[var(--app-text-muted)]">
                     <p>{line?.description ?? "Selecciona una partida para programarla."}</p>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                      <span className="font-semibold text-slate-700">Atajos</span>
-                      <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5">Alt + Left: anterior</span>
-                      <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5">Alt + Right: siguiente</span>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-muted)]">
+                      <span className="font-semibold text-[var(--app-text)]">Atajos</span>
+                      <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5">Alt + Left: anterior</span>
+                      <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5">Alt + Right: siguiente</span>
                     </div>
                   </div>
                 </Dialog.Description>
@@ -3277,7 +3277,7 @@ function WorkScheduleEditorSheet({
 
             {line ? (
               <div className="space-y-5">
-                <Card className="border-slate-200">
+                <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
                   <CardContent className="grid gap-4 p-5 md:grid-cols-2">
                     <Field label="Inicio">
                       <Input
@@ -3308,12 +3308,12 @@ function WorkScheduleEditorSheet({
                   </CardContent>
                 </Card>
 
-                <Card className="border-slate-200">
+                <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
                   <CardContent className="space-y-4 p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">Distribucion mensual</p>
-                        <p className="mt-1 text-sm text-slate-500">La suma debe cerrar exactamente al 100%.</p>
+                        <p className="text-sm font-semibold text-[var(--app-text-strong)]">Distribucion mensual</p>
+                        <p className="mt-1 text-sm text-[var(--app-text-muted)]">La suma debe cerrar exactamente al 100%.</p>
                       </div>
                       <Button
                         variant="outline"
@@ -3336,7 +3336,7 @@ function WorkScheduleEditorSheet({
                       {line.monthlyDistributions.map((distribution, index) => (
                         <div
                           key={`${distribution.year}-${distribution.month}-${index}`}
-                          className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
+                          className="grid gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
                           data-testid="work-schedule-distribution-row"
                         >
                           <Field label="Ano">
@@ -3377,8 +3377,8 @@ function WorkScheduleEditorSheet({
                       ))}
                     </div>
 
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      <span className="font-medium text-slate-900">Total:</span> {formatNumber(totalPercentage, 4)}%{" "}
+                    <div className="rounded-2xl border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface-muted)] px-4 py-3 text-sm text-[var(--app-text-muted)]">
+                      <span className="font-medium text-[var(--app-text-strong)]">Total:</span> {formatNumber(totalPercentage, 4)}%{" "}
                       <span className={cn("ml-2 font-medium", percentageDifference === 0 ? "text-emerald-600" : "text-amber-600")}>
                         Diferencia: {formatNumber(percentageDifference, 4)}%
                       </span>
@@ -3430,14 +3430,14 @@ function WorkScheduleGenerationDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
         <Dialog.Content asChild>
-          <div className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl outline-none">
+          <div className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-[var(--app-border)] bg-[var(--app-surface-muted)] p-5 shadow-2xl outline-none">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <Dialog.Title asChild>
-                  <h3 className="text-2xl font-semibold text-slate-900">Cronograma inteligente</h3>
+                  <h3 className="text-2xl font-semibold text-[var(--app-text-strong)]">Cronograma inteligente</h3>
                 </Dialog.Title>
                 <Dialog.Description asChild>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                     Genera el gantt base usando metrado, rendimiento y cuadrilla, con secuencia por sub presupuesto.
                   </p>
                 </Dialog.Description>
@@ -3448,14 +3448,14 @@ function WorkScheduleGenerationDialog({
             </div>
 
             <div className="space-y-5">
-              <Card className="border-slate-200">
+              <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
                 <CardContent className="space-y-4 p-5">
                   <Field label="Fecha base">
                     <Input type="date" value={baseStartDate} onChange={(event) => onBaseStartDateChange(event.target.value)} />
                   </Field>
 
                   {hasExistingSchedule ? (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div className="theme-status-warning theme-status-warning-strong rounded-2xl border px-4 py-3 text-sm">
                       Se reemplazara la programacion actual de las partidas ya programadas.
                     </div>
                   ) : null}
@@ -3492,14 +3492,14 @@ function DerivedTableCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="border-slate-200">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardContent className="space-y-4 p-6">
         <div>
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
-          <p className="mt-1 text-sm text-slate-500">{description}</p>
+          <p className="text-sm font-semibold text-[var(--app-text-strong)]">{title}</p>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">{description}</p>
           {activeFilterLabel ? (
             <div className="mt-3">
-              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+              <span className="theme-status-info theme-status-info-strong rounded-full border px-3 py-1 text-xs font-medium">
                 {`Filtro aplicado: ${activeFilterLabel}`}
               </span>
             </div>
@@ -3513,9 +3513,9 @@ function DerivedTableCard({
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3">
+      <p className="text-xs uppercase tracking-[0.18em] text-[var(--app-text-muted)]">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
   );
 }
@@ -3537,7 +3537,9 @@ function ViewButton({
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition",
-        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50",
+        active
+          ? "theme-filter-button-active border text-[var(--app-text-strong)]"
+          : "theme-filter-button-inactive border text-[var(--app-text)]",
       )}
     >
       {icon}
@@ -3561,7 +3563,9 @@ function ExportPreferenceButton({
       onClick={onClick}
       className={cn(
         "rounded-full border px-3 py-1 text-xs transition",
-        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50",
+        active
+          ? "theme-filter-button-active border text-[var(--app-text-strong)]"
+          : "theme-filter-button-inactive border text-[var(--app-text)]",
       )}
     >
       {children}
@@ -3581,7 +3585,7 @@ function WorkScheduleExportMenuButton({
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
+      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-[var(--app-text)] transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
     >
       {label}
     </button>
@@ -3591,7 +3595,7 @@ function WorkScheduleExportMenuButton({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-2 text-sm">
-      <span className="font-medium text-slate-700">{label}</span>
+      <span className="font-medium text-[var(--app-text)]">{label}</span>
       {children}
     </label>
   );

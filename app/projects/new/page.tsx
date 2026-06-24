@@ -24,8 +24,8 @@ export default async function NewProjectPage({
 
   return (
     <AppShell>
-      <Card className="border-slate-200">
-        <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+      <Card className="theme-surface-card">
+        <CardHeader className="theme-surface-card-gradient rounded-2xl">
           <PageHeaderCard
             icon={<FolderKanban className="h-5 w-5" />}
             title="Crear proyecto"
@@ -40,9 +40,9 @@ export default async function NewProjectPage({
           {companies.length > 0 ? (
             <ProjectForm companies={companies} selectedTemplate={selectedTemplate?.module === "BUDGET" ? selectedTemplate : null} />
           ) : (
-            <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <p className="font-medium text-amber-900">Primero necesitas una empresa o perfil profesional.</p>
-              <p className="text-sm text-amber-800">
+            <div className="theme-status-warning theme-status-warning-strong space-y-4 rounded-2xl border p-5">
+              <p className="font-medium">Primero necesitas una empresa o perfil profesional.</p>
+              <p className="text-sm">
                 Los proyectos se crean dentro de una empresa. Configura esa base en la seccion de configuracion y luego vuelve aqui para generar tus Sub Presupuestos iniciales.
               </p>
               <Link href="/settings">

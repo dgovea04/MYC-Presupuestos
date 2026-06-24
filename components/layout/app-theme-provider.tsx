@@ -23,6 +23,16 @@ export function AppThemeProvider({
   const [theme, setTheme] = useState<AppThemeOption>(initialTheme);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.body.dataset.theme = theme;
+
+    return () => {
+      delete document.documentElement.dataset.theme;
+      delete document.body.dataset.theme;
+    };
+  }, [theme]);
+
+  useEffect(() => {
     const handleSettingsUpdated = (event: Event) => {
       const detail = (event as CustomEvent).detail;
       if (!detail || typeof detail !== "object") return;
@@ -50,4 +60,3 @@ export function AppThemeProvider({
 export function useAppTheme() {
   return useContext(AppThemeContext);
 }
-

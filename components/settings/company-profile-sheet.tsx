@@ -45,8 +45,8 @@ export function CompanyProfileSheet({
         >
           <div
             className={cn(
-              "fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l p-5 outline-none",
-              isExcelMode ? "border-slate-300 bg-white shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]" : "border-[var(--app-border)] bg-[var(--app-surface)] shadow-2xl",
+              "theme-surface-card fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l p-5 outline-none",
+              isExcelMode ? "border-[var(--table-border-strong)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]" : "border-[var(--app-border)] shadow-2xl",
             )}
             data-view-mode={isExcelMode ? "excel" : "modern"}
             style={excelCssVariables}

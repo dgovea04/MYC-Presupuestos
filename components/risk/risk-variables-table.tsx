@@ -62,7 +62,7 @@ function RiskVariablesTableGrid({
       }),
       columnHelper.accessor("description", {
         header: "Partida",
-        cell: (info) => <span className="font-medium text-slate-800">{info.getValue()}</span>,
+        cell: (info) => <span className="theme-strong-text font-medium">{info.getValue()}</span>,
       }),
       columnHelper.accessor("sourceBudgetName", {
         header: "Presupuesto origen",
@@ -114,11 +114,11 @@ function RiskVariablesTableGrid({
   return (
     <div className="max-h-[560px] overflow-auto">
       <Table className="min-w-[1120px] text-xs">
-        <THead className="sticky top-0 z-10 bg-slate-100">
+        <THead className="theme-muted-panel sticky top-0 z-10">
           {table.getHeaderGroups().map((headerGroup) => (
-            <TR key={headerGroup.id} className="hover:bg-slate-100">
+            <TR key={headerGroup.id} className="theme-muted-panel hover:theme-muted-panel">
               {headerGroup.headers.map((header) => (
-                <TH key={header.id} className="border-r border-slate-200 px-3 py-2 text-[11px] uppercase tracking-wide">
+                <TH key={header.id} className="border-r border-[var(--app-border)] px-3 py-2 text-[11px] uppercase tracking-wide">
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </TH>
               ))}
@@ -129,7 +129,7 @@ function RiskVariablesTableGrid({
           {table.getRowModel().rows.map((row) => (
             <TR key={row.id} className="h-10">
               {row.getVisibleCells().map((cell) => (
-                <TD key={cell.id} className="border-r border-slate-100 px-3 py-2">
+                <TD key={cell.id} className="border-r border-[var(--app-border-soft)] px-3 py-2">
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TD>
               ))}
@@ -143,11 +143,11 @@ function RiskVariablesTableGrid({
 
 function VariableState({ variable }: { variable: RiskVariableRecord | null }) {
   if (!variable) {
-    return <span className="text-slate-400">Sin variable</span>;
+    return <span className="theme-subtle-text">Sin variable</span>;
   }
 
   return (
-    <span className={variable.enabled ? "font-medium text-emerald-700" : "font-medium text-slate-500"}>
+    <span className={variable.enabled ? "font-medium text-emerald-700 dark:text-emerald-300" : "theme-muted-text font-medium"}>
       {variable.enabled ? "Activa" : "Inactiva"}
     </span>
   );

@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Settings2 } from "lucide-react";
+import { Loader2, Save, Settings2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { CompanyProfileCard } from "@/components/settings/company-profile-card";
 import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
 import { CloudAiSettingsCard } from "@/components/settings/cloud-ai-settings-card";
@@ -44,6 +45,8 @@ const recommendations = [
   },
 ] as const;
 
+const FORMAT_FORM_ID = "format-settings-form";
+
 export function SettingsPageContent({
   company,
   account,
@@ -59,6 +62,7 @@ export function SettingsPageContent({
 }) {
   const [companyState, setCompanyState] = useState(company);
   const [settings, setSettings] = useState(initialSettings);
+  const [formatSaving, setFormatSaving] = useState(false);
   const currencyPreview = useMemo(
     () => formatCurrency(7723.48, settings.defaultCurrency, settings.currencyDecimals),
     [settings.currencyDecimals, settings.defaultCurrency],
@@ -86,17 +90,30 @@ export function SettingsPageContent({
             }}
           />
 
-          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
-            <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-[var(--app-primary-muted)] p-2 text-[var(--app-text-strong)]">
-                  <Settings2 className="h-5 w-5" />
+          <Card className="theme-surface-card-warm">
+            <CardHeader className="rounded-2xl">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="theme-status-warning theme-status-warning-strong rounded-2xl p-2">
+                    <Settings2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle>Formato y visualizacion</CardTitle>
+                    <CardDescription>
+                      Define como quieres ver montos y los porcentajes base que usas al crear presupuestos.
+                    </CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle>Formato y visualizacion</CardTitle>
-                  <CardDescription>
-                    Define como quieres ver montos y los porcentajes base que usas al crear presupuestos.
-                  </CardDescription>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="submit"
+                    form={FORMAT_FORM_ID}
+                    disabled={formatSaving}
+                    className="gap-2"
+                  >
+                    {formatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Guardar
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -140,6 +157,8 @@ export function SettingsPageContent({
               </div>
               <UserSettingsForm
                 initialSettings={settings}
+                formId={FORMAT_FORM_ID}
+                onSavingChange={setFormatSaving}
                 onSaved={(saved) => {
                   setSettings(saved);
                   window.dispatchEvent(new CustomEvent(APP_SETTINGS_UPDATED_EVENT, { detail: saved }));
@@ -153,7 +172,7 @@ export function SettingsPageContent({
         </div>
 
         <div className="space-y-6 xl:sticky xl:top-5">
-          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+          <Card className="theme-surface-card-gradient">
             <CardHeader>
               <CardTitle>Resumen rapido</CardTitle>
               <CardDescription>Lectura corta del estado actual de tus ajustes globales.</CardDescription>
@@ -170,23 +189,23 @@ export function SettingsPageContent({
             </CardContent>
           </Card>
 
-          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+          <Card className="theme-surface-card-gradient">
             <CardHeader>
               <CardTitle>Previsualizacion documental</CardTitle>
               <CardDescription>Lectura rapida de como se vera la firma base en PDF y Excel.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm shadow-slate-950/10">
+              <div className="theme-surface-panel theme-soft-shadow rounded-3xl p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--app-text-subtle)]">Firma documental</p>
-                    <p className="mt-2 text-sm text-[var(--app-text-muted)]">Responsable, empresa y firma visual que acompanaran los exportes.</p>
+                    <p className="theme-subtle-text text-xs font-semibold uppercase tracking-[0.22em]">Firma documental</p>
+                    <p className="theme-muted-text mt-2 text-sm">Responsable, empresa y firma visual que acompanaran los exportes.</p>
                   </div>
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)]">
+                  <div className="theme-muted-panel flex h-14 w-14 items-center justify-center rounded-2xl">
                     {companyState?.logoUrl ? (
                       <Image src={companyState.logoUrl} alt="Logo de empresa" width={42} height={42} className="max-h-10 w-auto object-contain" />
                     ) : (
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--app-text-subtle)]">Logo</span>
+                      <span className="theme-subtle-text text-[10px] font-semibold uppercase tracking-[0.18em]">Logo</span>
                     )}
                   </div>
                 </div>
@@ -214,16 +233,16 @@ export function SettingsPageContent({
             </CardContent>
           </Card>
 
-          <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+          <Card className="theme-surface-card">
             <CardHeader>
               <CardTitle>Proximos ajustes recomendados</CardTitle>
               <CardDescription>Pequenas mejoras con bastante impacto en la operacion diaria.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {recommendations.map((item) => (
-                <div key={item.title} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4">
-                  <p className="font-medium text-[var(--app-text-strong)]">{item.title}</p>
-                  <p className="mt-1.5 text-sm text-[var(--app-text-muted)]">{item.detail}</p>
+                <div key={item.title} className="theme-muted-panel rounded-2xl px-4 py-4">
+                  <p className="theme-strong-text font-medium">{item.title}</p>
+                  <p className="theme-muted-text mt-1.5 text-sm">{item.detail}</p>
                 </div>
               ))}
             </CardContent>
@@ -236,9 +255,9 @@ export function SettingsPageContent({
 
 function PreviewRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3">
-      <span className="text-sm text-[var(--app-text-muted)]">{label}</span>
-      <span className="text-right text-sm font-medium text-[var(--app-text-strong)]">{value}</span>
+    <div className="theme-muted-panel flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+      <span className="theme-muted-text text-sm">{label}</span>
+      <span className="theme-strong-text text-right text-sm font-medium">{value}</span>
     </div>
   );
 }
@@ -253,11 +272,11 @@ function SignaturePreview({
   secondary: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface)] px-4 py-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--app-text-subtle)]">{title}</p>
-      <div className="mt-8 border-t border-[var(--app-border)] pt-3">
-        <p className="text-sm font-semibold text-[var(--app-text-strong)]">{primary}</p>
-        <p className="mt-1 text-sm text-[var(--app-text-muted)]">{secondary}</p>
+    <div className="theme-dashed-panel rounded-2xl border border-dashed px-4 py-4">
+      <p className="theme-subtle-text text-xs font-semibold uppercase tracking-[0.18em]">{title}</p>
+      <div className="theme-border-top mt-8 border-t pt-3">
+        <p className="theme-strong-text text-sm font-semibold">{primary}</p>
+        <p className="theme-muted-text mt-1 text-sm">{secondary}</p>
       </div>
     </div>
   );

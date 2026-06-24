@@ -1,12 +1,9 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
-const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
 import { ResourceCreateSheet } from "@/components/resources/resource-create-sheet";
 import { ResourcesTable } from "@/components/resources/resources-table";
-import { getExportDefinition } from "@/lib/exports/definitions";
 import type { ResourceCategory, ResourceRecord } from "@/types/resource";
 import type { UnifiedIndexDictionaryRow, UnifiedIndexRelationRow } from "@/types/unified-index";
 
@@ -54,16 +51,7 @@ export function ResourcesPageContent({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-end">
-        <ExportPanel
-          buttonLabel="Exportar catalogo"
-          defaultPreset="catalogo_insumos"
-          definition={getExportDefinition("resources")}
-          targetId="catalog"
-        />
-      </div>
-
+    <>
       <ResourceCreateSheet
         open={isCreateFormOpen}
         companyId={companyId}
@@ -79,7 +67,7 @@ export function ResourcesPageContent({
         unifiedIndexRows={unifiedIndexRows}
         onRequestCreate={() => setIsCreateFormOpen(true)}
       />
-    </div>
+    </>
   );
 }
 

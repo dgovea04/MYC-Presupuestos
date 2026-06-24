@@ -262,7 +262,7 @@ export function GeneralBudgetOverview({
   }
   return (
     <div className="space-y-5">
-      <Card className="border-slate-200">
+      <Card className="theme-surface-card rounded-2xl">
         <CardContent className="space-y-4 p-6">
           <OperationalPanel
             title="Resumen por Sub Presupuesto"
@@ -285,19 +285,19 @@ export function GeneralBudgetOverview({
             />
           </div>
 
-          <div className={cn("border border-slate-200 bg-slate-50 px-4 py-3", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+          <div className={cn("theme-muted-panel border px-4 py-3", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-sm font-semibold text-slate-900">Trazabilidad del consolidado</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p className="theme-strong-text text-sm font-semibold">Trazabilidad del consolidado</p>
+                <p className="theme-muted-text mt-1 text-xs leading-5">
                   Origen: {traceability.sourceLabel}. Motor: {traceability.calculationLabel}.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                <span className="theme-surface-panel theme-muted-text rounded-full border px-2.5 py-1 text-xs font-medium">
                   {traceability.coverageLabel}
                 </span>
-                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                <span className="theme-surface-panel theme-muted-text rounded-full border px-2.5 py-1 text-xs font-medium">
                   Actualizado: {traceability.latestUpdatedAt ? formatDate(traceability.latestUpdatedAt, dateFormat) : "Sin fecha"}
                 </span>
               </div>
@@ -322,14 +322,14 @@ export function GeneralBudgetOverview({
                 <div
                   key={budget.id}
                   className={cn(
-                    "border bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 transition hover:border-sky-300",
-                    isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-3xl border-slate-200 shadow-sm",
+                    "theme-surface-card-gradient p-5 transition hover:border-sky-300",
+                    isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-3xl theme-soft-shadow",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-base font-semibold text-slate-900">{budget.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <p className="theme-strong-text text-base font-semibold">{budget.name}</p>
+                      <p className="theme-muted-text mt-1 text-sm">
                         Actualizado {formatDate(budget.updatedAt, dateFormat)}
                       </p>
                     </div>
@@ -340,9 +340,9 @@ export function GeneralBudgetOverview({
                     <AnimatedCurrencyValue
                       value={budget.totalAmount}
                       currency={budget.currency}
-                      className="px-0 py-0 text-2xl font-semibold text-slate-900"
+                      className="theme-strong-text px-0 py-0 text-2xl font-semibold"
                     />
-                    <p className="mt-2 text-sm text-slate-500">
+                    <p className="theme-muted-text mt-2 text-sm">
                       {budget.itemsCount} partidas activas | {budget.levelsCount} niveles estructurados
                     </p>
                   </div>
@@ -359,7 +359,7 @@ export function GeneralBudgetOverview({
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200">
+      <Card className="theme-surface-card rounded-2xl">
         <CardContent className="space-y-4 p-6">
           <OperationalPanel
             title="Tabla consolidada"
@@ -367,9 +367,9 @@ export function GeneralBudgetOverview({
             metrics={
               <>
                 <span>Sub Presupuestos: {orderedSubBudgets.length}</span>
-                <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                <span className="hidden h-1 w-1 rounded-full bg-[var(--app-border-strong)] md:inline-flex" />
                 <span>Partidas: {consolidatedTotals.itemsCount}</span>
-                <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                <span className="hidden h-1 w-1 rounded-full bg-[var(--app-border-strong)] md:inline-flex" />
                 <span>
                   Última actualización: {latestUpdatedAt ? formatDate(latestUpdatedAt, dateFormat) : "Sin fecha"}
                 </span>
@@ -377,10 +377,10 @@ export function GeneralBudgetOverview({
             }
           />
 
-          <div className={getTableFrameClassName(isExcelMode)}>
+          <div className={getTableFrameClassName(isExcelMode, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")}>
             <Table>
               <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                   <TH>Sub Presupuesto</TH>
                   <TH className="text-right">Niveles</TH>
                   <TH className="text-right">Partidas</TH>
@@ -395,7 +395,7 @@ export function GeneralBudgetOverview({
               <TBody>
                 {orderedSubBudgets.map((budget) => (
                   <TR key={budget.id}>
-                    <TD className="font-medium text-slate-900">{budget.name}</TD>
+                    <TD className="font-medium text-[var(--app-text-strong)]">{budget.name}</TD>
                     <TD className="text-right tabular-nums">{budget.levelsCount}</TD>
                     <TD className="text-right tabular-nums">{budget.itemsCount}</TD>
                     <TD className="text-right tabular-nums">
@@ -414,7 +414,7 @@ export function GeneralBudgetOverview({
                       <AnimatedCurrencyValue
                         value={budget.totalAmount}
                         currency={budget.currency}
-                        className="justify-end px-0 py-0 text-sm font-semibold text-slate-900"
+                        className="justify-end px-0 py-0 text-sm font-semibold text-[var(--app-text-strong)]"
                       />
                     </TD>
                     <TD>
@@ -426,8 +426,8 @@ export function GeneralBudgetOverview({
                     </TD>
                   </TR>
                 ))}
-                <TR className="bg-slate-50/70">
-                  <TD className="font-semibold text-slate-900">Total consolidado</TD>
+                <TR className="bg-[var(--app-surface-muted)]/70">
+                  <TD className="font-semibold text-[var(--app-text-strong)]">Total consolidado</TD>
                   <TD className="text-right font-semibold tabular-nums">{consolidatedTotals.levelsCount}</TD>
                   <TD className="text-right font-semibold tabular-nums">{consolidatedTotals.itemsCount}</TD>
                   <TD className="text-right font-semibold tabular-nums">
@@ -446,7 +446,7 @@ export function GeneralBudgetOverview({
                     <AnimatedCurrencyValue
                       value={consolidatedTotals.totalAmount}
                       currency={currency}
-                      className="justify-end px-0 py-0 text-sm font-semibold text-slate-900"
+                      className="justify-end px-0 py-0 text-sm font-semibold text-[var(--app-text-strong)]"
                     />
                   </TD>
                   <TD>
@@ -469,7 +469,7 @@ export function GeneralBudgetOverview({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
         <CardContent className="space-y-4 p-6">
           <OperationalPanel
             title="Sub presupuesto conectado al consolidado"
@@ -478,7 +478,7 @@ export function GeneralBudgetOverview({
 
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase tracking-[0.2em] text-slate-500">Sub Presupuestos</span>
+              <span className="text-xs uppercase tracking-[0.2em] text-[var(--app-text-muted)]">Sub Presupuestos</span>
               {budgetTabs.map((budgetTab) => (
                 <button
                   key={budgetTab.id}
@@ -486,8 +486,8 @@ export function GeneralBudgetOverview({
                   onClick={() => setActiveBudgetId(budgetTab.id)}
                   className={
                     budgetTab.id === resolvedActiveBudgetId
-                      ? cn("inline-flex border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm text-white transition", isExcelMode ? "rounded-sm" : "rounded-full")
-                      : cn("inline-flex border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-sky-300 hover:bg-sky-50", isExcelMode ? "rounded-sm border-slate-300" : "rounded-full")
+                      ? cn("theme-filter-button-active inline-flex border px-3 py-1.5 text-sm transition", isExcelMode ? "rounded-sm" : "rounded-full")
+                      : cn("theme-filter-button-inactive inline-flex border px-3 py-1.5 text-sm transition", isExcelMode ? "rounded-sm border-[var(--app-border-strong)]" : "rounded-full")
                   }
                 >
                   {budgetTab.label}
@@ -495,9 +495,9 @@ export function GeneralBudgetOverview({
               ))}
             </div>
             {!isGeneralTabActive ? (
-              <div className={cn("flex flex-wrap items-center justify-between gap-3 border border-slate-200 bg-slate-50 px-3 py-2", isExcelMode ? "rounded-sm" : "rounded-xl")}>
+              <div className={cn("theme-muted-panel flex flex-wrap items-center justify-between gap-3 border px-3 py-2", isExcelMode ? "rounded-sm border-[var(--app-border-strong)]" : "rounded-xl")}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Vista</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--app-text-muted)]">Vista</span>
                   <Button
                     type="button"
                     size="sm"
@@ -516,20 +516,20 @@ export function GeneralBudgetOverview({
                   </Button>
                 </div>
                 {activeSubBudgetDetailView === "subpartidas" ? (
-                  <span className="text-sm text-slate-500">{activeBudgetSubpartidas.length} subpartidas</span>
+                  <span className="text-sm text-[var(--app-text-muted)]">{activeBudgetSubpartidas.length} subpartidas</span>
                 ) : null}
               </div>
             ) : null}
 
             {isGeneralTabActive ? (
               <>
-                <div className={cn("flex flex-col gap-3 border border-sky-100 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl")}>
+                <div className={cn("theme-muted-panel flex flex-col gap-3 border px-4 py-4 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border-[var(--app-border-strong)]")}>
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-slate-900">Presupuesto general</p>
-                      <Badge className="bg-sky-100 text-sky-700">Consolidado activo</Badge>
+                      <p className="text-sm font-medium text-[var(--app-text-strong)]">Presupuesto general</p>
+                      <Badge className="theme-status-info">Consolidado activo</Badge>
                     </div>
-                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+                    <p className="mt-1 flex items-center gap-2 text-sm text-[var(--app-text-muted)]">
                       <Sparkles className="h-4 w-4 text-sky-600" />
                       Integra {orderedSubBudgets.length} subpresupuestos, {consolidatedTotals.itemsCount} partidas y {consolidatedTotals.levelsCount} niveles dentro del presupuesto general.
                     </p>
@@ -538,7 +538,7 @@ export function GeneralBudgetOverview({
                     <AnimatedCurrencyValue
                       value={consolidatedTotals.totalAmount}
                       currency={currency}
-                      className="px-0 py-0 text-xl font-semibold text-slate-900"
+                      className="px-0 py-0 text-xl font-semibold text-[var(--app-text-strong)]"
                     />
                     <Link
                       href={buildBudgetReviewHref({
@@ -553,15 +553,20 @@ export function GeneralBudgetOverview({
                       </Button>
                     </Link>
                     <Link href={`/budgets/${generalBudgetId}`}>
-                      <ActionButton action="open" label="Abrir presupuesto general" variant="outline" />
+                      <ActionButton
+                        action="open"
+                        label="Abrir presupuesto general"
+                        variant="outline"
+                        className="border-[var(--app-border-strong)] bg-[var(--app-surface-muted)] text-[var(--app-text-strong)] hover:bg-[var(--app-surface-hover)]"
+                      />
                     </Link>
                   </div>
                 </div>
 
-                <div className={getTableFrameClassName(isExcelMode)} data-testid="general-budget-tab-table">
-                  <Table>
+                <div className={getTableFrameClassName(isExcelMode, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")} data-testid="general-budget-tab-table">
+                  <Table className="[&_thead_tr]:border-b-[color:var(--app-border-strong)] [&_tbody_tr]:border-b-[color:var(--app-border-strong)] [&_thead_th]:border-r [&_thead_th]:border-[var(--app-border)] [&_thead_th:last-child]:border-r-0 [&_tbody_td]:border-r [&_tbody_td]:border-[var(--app-border)] [&_tbody_td:last-child]:border-r-0">
                     <THead>
-                      <TR className="bg-slate-50 hover:bg-slate-50">
+                      <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                         <TH>Código</TH>
                         <TH>Descripción</TH>
                         <TH className="text-center">Unidad</TH>
@@ -573,25 +578,25 @@ export function GeneralBudgetOverview({
                     <TBody>
                       {calculatedSubBudgetDetails.map((budgetDetail) => (
                         [
-                          <TR key={`${budgetDetail.id}-group`} className="bg-slate-100/80 hover:bg-slate-100/80">
-                            <TD colSpan={6} className="font-semibold text-slate-900">
+                          <TR key={`${budgetDetail.id}-group`} className="bg-[var(--app-surface-strong)]/80 hover:bg-[var(--app-surface-strong)]/80">
+                            <TD colSpan={6} className="font-semibold text-[var(--app-text-strong)]">
                               {budgetDetail.name}
                             </TD>
                           </TR>,
                           ...budgetDetail.displayRows.map((row) =>
                           row.kind === "level" ? (
                             <TR key={row.level.id} className={getLevelRowClass(row.level.type)}>
-                              <TD className="font-medium text-slate-800">{row.level.code}</TD>
+                              <TD className="font-medium text-[var(--app-text)]">{row.level.code}</TD>
                               <TD>
                                 <div
                                   className="flex items-center gap-3"
                                   style={{ paddingLeft: `${row.depth * 18}px` }}
                                 >
-                                  <span className="min-w-0 font-medium text-slate-900">{row.level.name}</span>
+                                  <span className="min-w-0 font-medium text-[var(--app-text-strong)]">{row.level.name}</span>
                                   <span
                                     className={cn(
-                                      "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
-                                      isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
+                                      "shrink-0 bg-[var(--app-surface)]/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]",
+                                      isExcelMode ? "rounded-sm border border-[var(--app-border)]" : "rounded-full",
                                     )}
                                   >
                                     {getLevelTypeLabel(row.level.type)}
@@ -602,10 +607,10 @@ export function GeneralBudgetOverview({
                             </TR>
                           ) : (
                             <TR key={row.item.id}>
-                              <TD className="font-medium text-slate-800">{row.item.code}</TD>
+                              <TD className="font-medium text-[var(--app-text)]">{row.item.code}</TD>
                               <TD>
                                 <div style={{ paddingLeft: `${row.depth * 18}px` }}>
-                                  <span className="text-slate-900">{row.item.description}</span>
+                                  <span className="text-[var(--app-text-strong)]">{row.item.description}</span>
                                 </div>
                               </TD>
                               <TD className="text-center">{row.item.unit}</TD>
@@ -619,7 +624,7 @@ export function GeneralBudgetOverview({
                                 <AnimatedCurrencyValue
                                   value={row.item.partial}
                                   currency={budgetDetail.currency}
-                                  className="justify-end px-0 py-0 text-sm text-slate-900"
+                                  className="justify-end px-0 py-0 text-sm text-[var(--app-text-strong)]"
                                 />
                               </TD>
                             </TR>
@@ -650,13 +655,13 @@ export function GeneralBudgetOverview({
               </>
             ) : activeBudget ? (
               <>
-                <div className={cn("flex flex-col gap-3 border border-sky-100 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7ff_100%)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl")}>
+                <div className={cn("flex flex-col gap-3 border border-[var(--app-border)] bg-[var(--app-surface-elevated)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl")}>
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-slate-900">{activeBudget.name}</p>
-                      <Badge className="bg-sky-100 text-sky-700">Sub Presupuesto activo</Badge>
+                      <p className="text-sm font-medium text-[var(--app-text-strong)]">{activeBudget.name}</p>
+                      <Badge className="theme-status-info">Sub Presupuesto activo</Badge>
                     </div>
-                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+                    <p className="mt-1 flex items-center gap-2 text-sm text-[var(--app-text-muted)]">
                       <Sparkles className="h-4 w-4 text-sky-600" />
                       Integra {activeBudget.itemsCount} partidas y {activeBudget.levelsCount} niveles dentro del presupuesto general.
                     </p>
@@ -665,7 +670,7 @@ export function GeneralBudgetOverview({
                     <AnimatedCurrencyValue
                       value={activeBudget.totalAmount}
                       currency={activeBudget.currency}
-                      className="px-0 py-0 text-xl font-semibold text-slate-900"
+                      className="px-0 py-0 text-xl font-semibold text-[var(--app-text-strong)]"
                     />
                     <Link
                       href={buildBudgetReviewHref({
@@ -686,12 +691,12 @@ export function GeneralBudgetOverview({
                 </div>
 
                 <div
-                  className={cn(getTableFrameClassName(isExcelMode), activeSubBudgetDetailView === "subpartidas" && "hidden")}
+                  className={cn(getTableFrameClassName(isExcelMode, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]"), activeSubBudgetDetailView === "subpartidas" && "hidden")}
                   data-testid="active-sub-budget-table"
                 >
-                  <Table>
+                  <Table className="[&_thead_tr]:border-b-[color:var(--app-border-strong)] [&_tbody_tr]:border-b-[color:var(--app-border-strong)] [&_thead_th]:border-r [&_thead_th]:border-[var(--app-border)] [&_thead_th:last-child]:border-r-0 [&_tbody_td]:border-r [&_tbody_td]:border-[var(--app-border)] [&_tbody_td:last-child]:border-r-0">
                     <THead>
-                      <TR className="bg-slate-50 hover:bg-slate-50">
+                      <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                         <TH>Código</TH>
                         <TH>Descripción</TH>
                         <TH className="text-center">Unidad</TH>
@@ -704,17 +709,17 @@ export function GeneralBudgetOverview({
                       {activeBudgetRows.map((row) =>
                         row.kind === "level" ? (
                           <TR key={row.level.id} className={getLevelRowClass(row.level.type)}>
-                            <TD className="font-medium text-slate-800">{row.level.code}</TD>
+                            <TD className="font-medium text-[var(--app-text)]">{row.level.code}</TD>
                             <TD>
                               <div
                                 className="flex items-center gap-3"
                                 style={{ paddingLeft: `${row.depth * 18}px` }}
                               >
-                                <span className="min-w-0 font-medium text-slate-900">{row.level.name}</span>
+                                <span className="min-w-0 font-medium text-[var(--app-text-strong)]">{row.level.name}</span>
                                 <span
                                   className={cn(
-                                    "shrink-0 bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600",
-                                    isExcelMode ? "rounded-sm border border-slate-200" : "rounded-full",
+                                    "shrink-0 bg-[var(--app-surface)]/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]",
+                                    isExcelMode ? "rounded-sm border border-[var(--app-border)]" : "rounded-full",
                                   )}
                                 >
                                   {getLevelTypeLabel(row.level.type)}
@@ -725,10 +730,10 @@ export function GeneralBudgetOverview({
                           </TR>
                         ) : (
                           <TR key={row.item.id}>
-                            <TD className="font-medium text-slate-800">{row.item.code}</TD>
+                            <TD className="font-medium text-[var(--app-text)]">{row.item.code}</TD>
                             <TD>
                               <div style={{ paddingLeft: `${row.depth * 18}px` }}>
-                                <span className="text-slate-900">{row.item.description}</span>
+                                <span className="text-[var(--app-text-strong)]">{row.item.description}</span>
                               </div>
                             </TD>
                             <TD className="text-center">{row.item.unit}</TD>
@@ -742,7 +747,7 @@ export function GeneralBudgetOverview({
                               <AnimatedCurrencyValue
                                 value={row.item.partial}
                                 currency={activeBudget.currency}
-                                className="justify-end px-0 py-0 text-sm text-slate-900"
+                                className="justify-end px-0 py-0 text-sm text-[var(--app-text-strong)]"
                               />
                             </TD>
                           </TR>
@@ -753,10 +758,10 @@ export function GeneralBudgetOverview({
                 </div>
 
                 {activeSubBudgetDetailView === "subpartidas" ? (
-                  <div className={getTableFrameClassName(isExcelMode)} data-testid="active-sub-budget-subpartidas-table">
-                    <Table>
+                  <div className={getTableFrameClassName(isExcelMode, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")} data-testid="active-sub-budget-subpartidas-table">
+                    <Table className="[&_thead_tr]:border-b-[color:var(--app-border-strong)] [&_tbody_tr]:border-b-[color:var(--app-border-strong)] [&_thead_th]:border-r [&_thead_th]:border-[var(--app-border)] [&_thead_th:last-child]:border-r-0 [&_tbody_td]:border-r [&_tbody_td]:border-[var(--app-border)] [&_tbody_td:last-child]:border-r-0">
                       <THead>
-                        <TR className="bg-slate-50 hover:bg-slate-50">
+                        <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                           <TH>Nombre</TH>
                           <TH className="text-center">Unidad</TH>
                           <TH className="text-right">P. unitario</TH>
@@ -768,7 +773,7 @@ export function GeneralBudgetOverview({
                         {activeBudgetSubpartidas.length > 0 ? (
                           activeBudgetSubpartidas.map((subpartida) => (
                             <TR key={subpartida.key}>
-                              <TD className="font-medium text-slate-900">{subpartida.name}</TD>
+                              <TD className="font-medium text-[var(--app-text-strong)]">{subpartida.name}</TD>
                               <TD className="text-center">{subpartida.unit}</TD>
                               <TD className="text-right tabular-nums">
                                 {formatCurrencyCell(subpartida.unitPrice, subpartida.currency, currencyDecimals)}
@@ -780,7 +785,7 @@ export function GeneralBudgetOverview({
                                       ? "bg-emerald-100 text-emerald-700"
                                       : subpartida.hasCatalogPartida
                                       ? "bg-amber-100 text-amber-700"
-                                      : "bg-slate-100 text-slate-600"
+                                      : "bg-[var(--app-surface-strong)] text-[var(--app-text-muted)]"
                                   }
                                 >
                                   {subpartida.hasApu ? "Con APU" : subpartida.hasCatalogPartida ? "APU vacio" : "Sin partida"}
@@ -811,7 +816,7 @@ export function GeneralBudgetOverview({
                           ))
                         ) : (
                           <TR>
-                            <TD colSpan={5} className="py-8 text-center text-sm text-slate-500">
+                            <TD colSpan={5} className="py-8 text-center text-sm text-[var(--app-text-muted)]">
                               Este Sub Presupuesto no tiene subpartidas en sus APU.
                             </TD>
                           </TR>
@@ -935,7 +940,7 @@ function getLevelTypeLabel(type: BudgetRecord["levels"][number]["type"]) {
 }
 
 function getLevelRowClass(type: BudgetRecord["levels"][number]["type"]) {
-  if (type === "TITLE") return "bg-slate-50";
+  if (type === "TITLE") return "bg-[var(--app-surface-muted)]";
   if (type === "SUBTITLE") return "bg-sky-50/60";
   return "bg-amber-50/60";
 }

@@ -30,8 +30,8 @@ export function GeneralBudgetSectionTabs({
           className={cn(
             "inline-flex rounded-full border px-3 py-1.5 text-sm transition",
             section.id === activeSection
-              ? "border-slate-900 bg-slate-900 text-white"
-              : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50",
+              ? "theme-filter-button-active"
+              : "theme-filter-button-inactive",
           )}
         >
           {section.label}

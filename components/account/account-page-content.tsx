@@ -28,10 +28,10 @@ export function AccountPageContent({
   return (
     <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
       <div className="space-y-6">
-        <Card className="border-slate-200">
-          <CardHeader className="rounded-2xl bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+        <Card className="theme-surface-card">
+          <CardHeader className="theme-surface-card-gradient rounded-2xl">
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-slate-900 p-2 text-white">
+              <div className="theme-filter-button-active rounded-2xl p-2">
                 <UserRound className="h-5 w-5" />
               </div>
               <div>
@@ -50,13 +50,13 @@ export function AccountPageContent({
 
       <div className="space-y-6 xl:sticky xl:top-5">
         {membership ? <AccountMembershipCard membership={membership} /> : null}
-        <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+        <Card className="theme-surface-card-gradient border">
           <CardHeader>
             <CardTitle>Resumen de cuenta</CardTitle>
             <CardDescription>Vista rapida del estado actual de tu cuenta de acceso.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="theme-muted-panel flex items-center gap-4 rounded-2xl border p-4">
               {account.avatarUrl ? (
                 <Image
                   alt={`Avatar de ${account.name}`}
@@ -66,13 +66,13 @@ export function AccountPageContent({
                   width={64}
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-100 text-lg font-semibold text-sky-700">
+                <div className="theme-status-info theme-status-info-strong flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold">
                   {getInitials(account.name, account.email)}
                 </div>
               )}
               <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-slate-900">{account.name}</p>
-                <p className="truncate text-sm text-slate-500">{account.email}</p>
+                <p className="theme-strong-text truncate text-base font-semibold">{account.name}</p>
+                <p className="theme-muted-text truncate text-sm">{account.email}</p>
               </div>
             </div>
 
@@ -98,10 +98,10 @@ function AccountMembershipCard({
   const usagePercent = membership.allowance > 0 ? Math.min(100, Math.round((membership.consumedTokens / membership.allowance) * 100)) : 0;
 
   return (
-    <Card className="border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+    <Card className="theme-surface-card-gradient border">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-sky-600 p-2 text-white">
+          <div className="theme-quick-action-primary-icon rounded-2xl p-2">
             <Bot className="h-5 w-5" />
           </div>
           <div>
@@ -111,14 +111,14 @@ function AccountMembershipCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+        <div className="theme-status-info rounded-2xl border p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Plan actual</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950">{membership.planName}</p>
-              <p className="mt-1 text-sm text-slate-500">Acceso efectivo: {formatPlanSlug(membership.effectivePlanSlug)}</p>
+              <p className="theme-status-info-strong text-xs font-semibold uppercase tracking-[0.16em]">Plan actual</p>
+              <p className="theme-strong-text mt-2 text-2xl font-semibold">{membership.planName}</p>
+              <p className="theme-muted-text mt-1 text-sm">Acceso efectivo: {formatPlanSlug(membership.effectivePlanSlug)}</p>
             </div>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm">
+            <span className="theme-surface-card theme-status-info-strong rounded-full px-3 py-1 text-xs font-semibold shadow-sm">
               {membership.planSlug || "sin-plan"}
             </span>
           </div>
@@ -130,7 +130,7 @@ function AccountMembershipCard({
           <TokenMetric icon={<Bot className="h-4 w-4" />} label="Consumidos" value={formatTokenNumber(membership.consumedTokens)} />
         </div>
 
-        <div className="space-y-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+        <div className="theme-surface-card space-y-2 rounded-2xl border px-4 py-3 text-sm">
           <SummaryRow label="Facturacion" value={membership.billingProvider ?? "Sin proveedor"} />
           <SummaryRow label="Estado" value={formatBillingStatus(membership.billingStatus)} />
           <SummaryRow label="Periodo" value={membership.currentPeriodEnd ? formatDate(membership.currentPeriodEnd, "DD_MMM_YYYY") : "No aplica"} />
@@ -138,13 +138,13 @@ function AccountMembershipCard({
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+          <div className="theme-muted-text flex items-center justify-between text-xs">
             <span>Uso del periodo</span>
             <span>{usagePercent}%</span>
           </div>
           <progress
             aria-label="Uso de tokens IA del periodo"
-            className="h-2 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-sky-600 [&::-webkit-progress-bar]:bg-slate-100 [&::-webkit-progress-value]:bg-sky-600"
+            className="h-2 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-sky-600 [&::-webkit-progress-bar]:bg-[var(--app-surface-muted)] [&::-webkit-progress-value]:bg-sky-600"
             max={100}
             value={usagePercent}
           />
@@ -158,12 +158,12 @@ function AccountMembershipCard({
 
 function TokenMetric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <span className="flex items-center gap-2 text-sm text-slate-500">
-        <span className="text-sky-600">{icon}</span>
+    <div className="theme-surface-card flex items-center justify-between gap-3 rounded-2xl border px-4 py-3">
+      <span className="theme-muted-text flex items-center gap-2 text-sm">
+        <span className="text-sky-600 dark:text-sky-300">{icon}</span>
         {label}
       </span>
-      <span className="text-sm font-semibold text-slate-950">{value}</span>
+      <span className="theme-strong-text text-sm font-semibold">{value}</span>
     </div>
   );
 }
@@ -224,10 +224,10 @@ function AccountProfileForm({ account, onSaved }: { account: AccountRecord; onSa
   }
 
   return (
-    <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5" onSubmit={handleSubmit}>
+    <form className="theme-surface-card space-y-4 rounded-2xl border p-5" onSubmit={handleSubmit}>
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-slate-900">Perfil personal</p>
-        <p className="text-sm text-slate-500">Tu correo identifica el acceso y solo puede cambiarlo un administrador.</p>
+        <p className="theme-strong-text text-sm font-semibold">Perfil personal</p>
+        <p className="theme-muted-text text-sm">Tu correo identifica el acceso y solo puede cambiarlo un administrador.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -238,7 +238,7 @@ function AccountProfileForm({ account, onSaved }: { account: AccountRecord; onSa
         <div className="space-y-2">
           <Label htmlFor="accountEmail">Correo</Label>
           <div className="relative">
-            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Mail className="theme-subtle-text pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
             <Input id="accountEmail" className="pl-9" disabled value={account.email} />
           </div>
         </div>
@@ -262,7 +262,7 @@ function AccountProfileForm({ account, onSaved }: { account: AccountRecord; onSa
         <Label htmlFor="accountBio">Descripcion profesional</Label>
         <textarea
           id="accountBio"
-          className="min-h-28 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 disabled:pointer-events-none disabled:opacity-50"
+          className="theme-surface-card theme-strong-text min-h-28 w-full rounded-xl border px-3 py-2 text-sm outline-none transition focus:border-sky-500 disabled:pointer-events-none disabled:opacity-50"
           disabled={pending}
           maxLength={320}
           placeholder="Especialista en costos, presupuestos y control de obra."
@@ -360,10 +360,10 @@ function AccountAvatarForm({ account, onSaved }: { account: AccountRecord; onSav
   }
 
   return (
-    <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5" onSubmit={handleUpload}>
+    <form className="theme-surface-card space-y-4 rounded-2xl border p-5" onSubmit={handleUpload}>
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-slate-900">Foto de perfil</p>
-        <p className="text-sm text-slate-500">Acepta JPG o PNG de hasta 2 MB. Asi tu foto tambien podra salir en PDF y Excel.</p>
+        <p className="theme-strong-text text-sm font-semibold">Foto de perfil</p>
+        <p className="theme-muted-text text-sm">Acepta JPG o PNG de hasta 2 MB. Asi tu foto tambien podra salir en PDF y Excel.</p>
       </div>
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -376,7 +376,7 @@ function AccountAvatarForm({ account, onSaved }: { account: AccountRecord; onSav
             width={80}
           />
         ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 text-xl font-semibold text-sky-700">
+          <div className="theme-status-info theme-status-info-strong flex h-20 w-20 items-center justify-center rounded-full text-xl font-semibold">
             {getInitials(account.name, account.email)}
           </div>
         )}
@@ -392,7 +392,7 @@ function AccountAvatarForm({ account, onSaved }: { account: AccountRecord; onSav
             type="file"
             onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
           />
-          <p className="text-sm text-slate-500">
+          <p className="theme-muted-text text-sm">
             {selectedFile
               ? selectedFile.name
               : account.avatarUrl?.toLowerCase().endsWith(".webp")
@@ -460,13 +460,13 @@ function AccountPasswordForm() {
   }
 
   return (
-    <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5" onSubmit={handleSubmit}>
+    <form className="theme-surface-card space-y-4 rounded-2xl border p-5" onSubmit={handleSubmit}>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-slate-500" />
-          <p className="text-sm font-semibold text-slate-900">Seguridad</p>
+          <Shield className="theme-muted-text h-4 w-4" />
+          <p className="theme-strong-text text-sm font-semibold">Seguridad</p>
         </div>
-        <p className="text-sm text-slate-500">Cambia tu contrasena validando primero tu clave actual.</p>
+        <p className="theme-muted-text text-sm">Cambia tu contrasena validando primero tu clave actual.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -528,9 +528,9 @@ function PasswordField({
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className="text-right text-sm font-medium text-slate-900">{value}</span>
+    <div className="theme-surface-card flex items-center justify-between gap-4 rounded-2xl border px-4 py-3">
+      <span className="theme-muted-text text-sm">{label}</span>
+      <span className="theme-strong-text text-right text-sm font-medium">{value}</span>
     </div>
   );
 }
@@ -538,8 +538,8 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 function InlineFeedback({ error, success }: { error: string; success: string }) {
   return (
     <>
-      {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      {success ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
+      {error ? <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
+      {success ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">{success}</p> : null}
     </>
   );
 }

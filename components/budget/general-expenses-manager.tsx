@@ -390,7 +390,7 @@ export function GeneralExpensesManager({
         metrics={<SaveStateBadge state={saveState} lastSavedLabel={formatLastSavedLabel(lastSavedAt, saveClock)} />}
         controls={
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-[var(--app-text-muted)]">
               Reglas: `Parcial = Cant. desc. x Cantidad x PU` o `Cant. desc. x Cantidad x % Part x Costo Directo`, segun categoria.
             </p>
             <div className="flex items-center gap-2">
@@ -426,15 +426,15 @@ export function GeneralExpensesManager({
         }
       />
 
-      <div className={cn("border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.98)_0%,rgba(254,243,199,0.92)_100%)] px-4 py-3 text-sm text-amber-800", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_14px_30px_-26px_rgba(217,119,6,0.22)]")}>
+      <div className={cn("theme-status-warning theme-status-warning-strong border px-4 py-3 text-sm leading-6", isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_14px_30px_-26px_rgba(217,119,6,0.22)]")}>
         La tasa oficial sincronizada desde este desagregado es {formatPercentageValue(getDirectCostPercentage(preview.total, totalDirectCost))}.
         Esta sección trabaja con la plantilla base y actualiza los Sub Presupuestos.
       </div>
 
       {initialTemplateFocus ? (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          <p className="font-semibold text-sky-900">{getTemplateFocusTitle(initialTemplateFocus)}</p>
-          <p className="mt-1 text-sky-700">
+        <div className="theme-status-info rounded-2xl border px-4 py-3 text-sm">
+          <p className="theme-status-info-strong font-semibold">{getTemplateFocusTitle(initialTemplateFocus)}</p>
+          <p className="mt-1">
             La biblioteca te trajo a este desagregado. El grupo correspondiente queda resaltado para revisar sus
             titulos, partidas operativas y porcentajes.
           </p>
@@ -454,12 +454,12 @@ export function GeneralExpensesManager({
 
       <div className="space-y-5">
         {!hasGeneratedTemplate ? (
-          <section className={cn("border bg-white p-6", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
+          <section className={cn("theme-surface-card border p-6", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl theme-soft-shadow")}>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="max-w-2xl">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Plantilla opcional</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-900">No hay tablas de gastos generales generadas</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--app-text-muted)]">Plantilla opcional</p>
+                <h3 className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">No hay tablas de gastos generales generadas</h3>
+                <p className="mt-2 text-sm leading-6 text-[var(--app-text-muted)]">
                   El presupuesto puede conservar el gasto general importado en el pie sin crear el desagregado de gastos fijos y variables. Genera las tablas solo cuando necesites trabajar el detalle.
                 </p>
               </div>
@@ -480,22 +480,22 @@ export function GeneralExpensesManager({
           <section
             key={group.id}
             className={cn(
-              "space-y-4 border bg-white p-4",
+              "theme-surface-card space-y-4 border p-4",
               isExcelMode
-                ? "rounded-md border-slate-300 shadow-none"
-                : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]",
+                ? "rounded-md border-[var(--app-border-strong)] shadow-none"
+                : "rounded-2xl theme-soft-shadow",
               initialTemplateFocus === group.kind ? "border-sky-300 ring-2 ring-sky-100" : null,
             )}
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--app-text-muted)]">
                   {group.kind === "FIXED" ? "Gastos Generales Fijo" : "Gastos Generales Variables"}
                 </p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-900">{group.name}</h3>
+                <h3 className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">{group.name}</h3>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-slate-700">
+                <span className="text-sm font-medium text-[var(--app-text-muted)]">
                   Subtotal: {formatCurrency(group.subtotal, currency, currencyDecimals)}
                 </span>
                 <ToolbarIconButton
@@ -509,7 +509,7 @@ export function GeneralExpensesManager({
             </div>
 
             {group.titles.map((title) => (
-              <div key={title.id} className={cn("space-y-3 border bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.9)_100%)] p-4", isExcelMode ? "rounded-md border-slate-300" : "rounded-2xl border-slate-200/80")}>
+              <div key={title.id} className={cn("theme-surface-card-gradient space-y-3 border p-4", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="grid flex-1 gap-3 md:grid-cols-[minmax(110px,140px)_minmax(240px,1fr)_minmax(220px,260px)]">
                     <Input
@@ -540,7 +540,7 @@ export function GeneralExpensesManager({
                     </Select>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-[var(--app-text-muted)]">
                       Subtotal del título: {formatCurrency(title.subtotal, currency, currencyDecimals)}
                     </p>
                     <ToolbarIconButton
@@ -563,7 +563,7 @@ export function GeneralExpensesManager({
                 <div className={getTableFrameClassName(isExcelMode, !isExcelMode ? "shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]" : undefined)}>
                   <Table className="min-w-[980px]">
                     <THead>
-                      <TR className="bg-slate-50 hover:bg-slate-50">
+                      <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                         <TH>Codigo</TH>
                         <TH>Descripción</TH>
                         <TH>Unidad</TH>
@@ -640,7 +640,7 @@ export function GeneralExpensesManager({
                                 className={cn(getInputDensityClass(), "text-right tabular-nums")}
                               />
                             </TD>
-                            <TD className="whitespace-nowrap text-right text-sm font-medium tabular-nums text-slate-800">
+                            <TD className="whitespace-nowrap text-right text-sm font-medium tabular-nums text-[var(--app-text-strong)]">
                               {formatCurrency(item.partial, currency, currencyDecimals)}
                             </TD>
                             <TD className="align-top">
@@ -665,13 +665,13 @@ export function GeneralExpensesManager({
           </section>
         ))}
 
-        <section className={cn("space-y-4 border bg-white p-4", isExcelMode ? "rounded-md border-slate-300 shadow-none" : "rounded-2xl border-slate-200/90 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.18)]")}>
+        <section className={cn("theme-surface-card space-y-4 border p-4", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl theme-soft-shadow")}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Resumen final</p>
-              <h3 className="mt-1 text-lg font-semibold text-slate-900">DESCOMPOSICIÓN DE LOS GASTOS GENERALES</h3>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--app-text-muted)]">Resumen final</p>
+              <h3 className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">DESCOMPOSICIÓN DE LOS GASTOS GENERALES</h3>
             </div>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-[var(--app-text-muted)]">
               Porcentajes calculados sobre el costo directo actual: {formatCurrency(totalDirectCost, currency, currencyDecimals)}
             </p>
           </div>
@@ -679,7 +679,7 @@ export function GeneralExpensesManager({
           <div className={getTableFrameClassName(isExcelMode, !isExcelMode ? "shadow-[0_14px_30px_-28px_rgba(15,23,42,0.16)]" : undefined)}>
             <Table>
               <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                   <TH>Descripción</TH>
                   <TH className="text-right">Porcentaje</TH>
                   <TH className="text-right">Monto</TH>
@@ -690,12 +690,12 @@ export function GeneralExpensesManager({
                   const isTotal = index === breakdownRows.length - 1;
 
                   return (
-                    <TR key={row.label} className={isTotal ? "bg-slate-50/70" : undefined}>
-                      <TD className={cn("text-sm text-slate-900", isTotal ? "font-semibold" : "font-medium")}>{row.label}</TD>
-                      <TD className={cn("text-right tabular-nums text-slate-700", isTotal ? "font-semibold" : "font-medium")}>
+                    <TR key={row.label} className={isTotal ? "bg-[var(--app-surface-muted)]/70" : undefined}>
+                      <TD className={cn("text-sm text-[var(--app-text-strong)]", isTotal ? "font-semibold" : "font-medium")}>{row.label}</TD>
+                      <TD className={cn("text-right tabular-nums text-[var(--app-text-muted)]", isTotal ? "font-semibold" : "font-medium")}>
                         {formatPercentageValue(row.percentage)}
                       </TD>
-                      <TD className={cn("text-right tabular-nums text-slate-900", isTotal ? "font-semibold" : "font-medium")}>
+                      <TD className={cn("text-right tabular-nums text-[var(--app-text-strong)]", isTotal ? "font-semibold" : "font-medium")}>
                         {formatCurrency(row.amount, currency, currencyDecimals)}
                       </TD>
                     </TR>
@@ -730,7 +730,7 @@ function ToolbarIconButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="h-8 w-8 rounded-lg px-0 text-slate-600 hover:bg-slate-100"
+      className="h-8 w-8 rounded-lg px-0 text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]"
     >
       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0">
         {children}

@@ -36,7 +36,7 @@ export function ImportProgressPanel({
     <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] shadow-sm">
       <div className="flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 text-sky-700 shadow-sm dark:border-[rgba(37,99,235,0.28)] dark:bg-[rgba(37,99,235,0.12)] dark:text-[var(--app-primary-soft)]">
+          <div className="theme-status-info flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border shadow-sm">
             {status === "success" ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             ) : isRunning ? (
@@ -56,7 +56,7 @@ export function ImportProgressPanel({
             ) : null}
           </div>
         </div>
-        <div className="shrink-0 rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm dark:border-[rgba(37,99,235,0.28)] dark:bg-[rgba(37,99,235,0.12)] dark:text-[var(--app-primary-soft)]">
+        <div className="theme-status-info shrink-0 rounded-full border px-3 py-1 text-xs font-semibold shadow-sm">
           {normalizedProgress}%
         </div>
       </div>
@@ -79,9 +79,9 @@ export function ImportProgressPanel({
                 key={step.label}
                 className={`rounded-xl border px-3 py-2 text-xs ${
                   isComplete
-                    ? "border-emerald-100 bg-white text-emerald-700 dark:border-[rgba(51,209,122,0.28)] dark:bg-[rgba(51,209,122,0.12)] dark:text-emerald-300"
+                    ? "theme-status-success border"
                     : isActive
-                      ? "border-sky-200 bg-white text-sky-700 dark:border-[rgba(37,99,235,0.28)] dark:bg-[rgba(37,99,235,0.12)] dark:text-[var(--app-primary-soft)]"
+                      ? "theme-status-info border"
                       : "border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] text-[var(--app-text-muted)]"
                 }`}
               >

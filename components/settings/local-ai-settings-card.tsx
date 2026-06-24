@@ -177,7 +177,7 @@ export function LocalAiSettingsCard() {
                     <p className="font-medium text-[var(--app-text-strong)]">{model.model}</p>
                     <p className="text-xs text-[var(--app-text-muted)]">{model.actions.length ? model.actions.map(readActionLabel).join(" · ") : "Preparado para parsing/codigo"}</p>
                   </div>
-                  <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium", model.installed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                  <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium", model.installed ? "theme-status-success theme-status-success-strong" : "theme-status-warning theme-status-warning-strong")}>
                     {model.installed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                     {model.installed ? "Instalado" : `ollama pull ${model.model}`}
                   </span>
@@ -206,7 +206,7 @@ export function LocalAiSettingsCard() {
                     <p className="mt-2 text-xs text-[var(--app-text-muted)]">
                       Latencia: {typeof metric?.latencyMs === "number" ? `${metric.latencyMs} ms` : "sin ejecuciones"} · Ultimo error: {metric?.lastError ?? "ninguno"}
                     </p>
-                    {resolution?.warnings.length ? <p className="mt-2 text-xs text-amber-700">{resolution.warnings.join(" ")}</p> : null}
+                    {resolution?.warnings.length ? <p className="theme-status-warning-strong mt-2 text-xs">{resolution.warnings.join(" ")}</p> : null}
                   </div>
                 );
               })}
@@ -273,7 +273,7 @@ export function LocalAiSettingsCard() {
                 <Trash2 className="h-4 w-4" />
                 Limpiar historial IA
               </Button>
-              {historyCleared ? <p className="text-sm text-emerald-700">Historial local eliminado.</p> : null}
+              {historyCleared ? <p className="text-sm text-emerald-700 dark:text-emerald-300">Historial local eliminado.</p> : null}
             </div>
           </Panel>
         </section>
@@ -317,7 +317,7 @@ function Panel({ title, description, children }: { title: string; description: s
 function SafetyRow({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2">
-      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
       <span>{text}</span>
     </div>
   );
@@ -326,12 +326,12 @@ function SafetyRow({ text }: { text: string }) {
 function StatusPill({ label, tone }: { label: string; tone: "slate" | "emerald" | "amber" | "rose" }) {
   const toneClassName =
     tone === "emerald"
-      ? "bg-emerald-100 text-emerald-700"
+      ? "theme-status-success theme-status-success-strong"
       : tone === "amber"
-        ? "bg-amber-100 text-amber-700"
+        ? "theme-status-warning theme-status-warning-strong"
         : tone === "rose"
           ? "bg-rose-100 text-rose-700"
-          : "bg-slate-100 text-[var(--app-text-muted)]";
+          : "theme-muted-panel theme-muted-text";
 
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold", toneClassName)}>

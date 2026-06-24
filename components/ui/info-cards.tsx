@@ -21,34 +21,34 @@ export function InfoCard({
   const { isExcelMode } = useAppViewMode();
   const toneClass =
     tone === "sky"
-      ? "border-[color:rgba(37,99,235,0.24)] bg-[color:rgba(37,99,235,0.10)] text-sky-700"
+      ? "theme-info-card-sky"
       : tone === "amber"
-        ? "border-[color:rgba(245,158,11,0.24)] bg-[color:rgba(245,158,11,0.10)] text-amber-700"
+        ? "theme-info-card-amber"
         : tone === "emerald"
-          ? "border-[color:rgba(16,185,129,0.24)] bg-[color:rgba(16,185,129,0.10)] text-emerald-700"
-          : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)]";
+          ? "theme-info-card-emerald"
+          : "theme-info-card-slate";
 
   return (
     <div
       className={cn(
-        "border px-4 py-3 transition-colors",
+        "theme-info-card px-4 py-3 transition-colors",
         isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_10px_24px_-22px_rgba(15,23,42,0.38)]",
         toneClass,
         layout === "inline" ? "flex items-center justify-between gap-3" : "space-y-1",
       )}
     >
-      <p className="text-sm text-[var(--app-text-muted)]">{label}</p>
-      <p className={cn("font-semibold tracking-tight text-[var(--app-text-strong)]", layout === "inline" ? "text-sm" : "text-lg")}>{value}</p>
+      <p className="theme-info-card-label text-sm">{label}</p>
+      <p className={cn("theme-info-card-value font-semibold tracking-tight", layout === "inline" ? "text-sm" : "text-lg")}>{value}</p>
       {layout === "stacked" && previewLabel && previewValue ? (
         <>
-          <p className="mt-3 text-xs uppercase tracking-[0.16em] text-[var(--app-text-subtle)]">{previewLabel}</p>
+          <p className="theme-info-card-preview-label mt-3 text-xs uppercase tracking-[0.16em]">{previewLabel}</p>
           <div
             className={cn(
-              "mt-1 border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2",
+              "theme-info-card-preview-box mt-1 px-3 py-2",
               isExcelMode ? "rounded-sm" : "rounded-xl",
             )}
           >
-            <p className="text-sm font-medium text-[var(--app-text-strong)]">{previewValue}</p>
+            <p className="theme-info-card-preview-value text-sm font-medium">{previewValue}</p>
           </div>
         </>
       ) : null}

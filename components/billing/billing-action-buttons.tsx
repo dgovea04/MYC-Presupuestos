@@ -82,7 +82,7 @@ export function BillingActionButtons({ canManageBilling, canUpgrade }: BillingAc
               {pendingAction === "checkout" ? "Abriendo..." : "Pagar con tarjeta"}
             </Button>
             <Button
-              className="gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
+              className="theme-filter-button-inactive gap-2 border"
               disabled={pendingAction !== null}
               type="button"
               variant="outline"
@@ -107,7 +107,7 @@ export function BillingActionButtons({ canManageBilling, canUpgrade }: BillingAc
         ) : null}
       </div>
       {yapeRequest ? <YapeRequestPanel request={yapeRequest} /> : null}
-      {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+      {error ? <p className="theme-status-error rounded-xl border px-3 py-2 text-sm">{error}</p> : null}
     </div>
   );
 }
@@ -130,38 +130,38 @@ function isBillingErrorPayload(payload: YapeRequest | BillingErrorPayload): payl
 
 function YapeRequestPanel({ request }: { request: YapeRequest }) {
   return (
-    <div className="space-y-3 rounded-2xl border border-purple-200 bg-purple-50/70 p-4">
+    <div className="theme-muted-panel space-y-3 rounded-2xl border p-4">
       <div>
-        <p className="text-sm font-semibold text-slate-950">Pago manual con Yape</p>
-        <p className="mt-1 text-sm leading-6 text-slate-600">
+        <p className="theme-strong-text text-sm font-semibold">Pago manual con Yape</p>
+        <p className="theme-muted-text mt-1 text-sm leading-6">
           Escanea el QR, realiza el pago y envia el comprobante al equipo. La activacion Pro se valida manualmente desde admin.
         </p>
       </div>
       <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="relative flex h-40 w-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-purple-100 bg-white">
+        <div className="theme-surface-card relative flex h-40 w-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl border">
           {request.yape.qrImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- QR can be an arbitrary operator-provided URL.
             <img alt="Codigo QR de Yape para MYC Presupuestos" src={request.yape.qrImageUrl} className="h-full w-full object-contain p-2" />
           ) : (
-            <span className="px-4 text-center text-xs leading-5 text-slate-500">Configura el QR de Yape en el entorno</span>
+            <span className="theme-muted-text px-4 text-center text-xs leading-5">Configura el QR de Yape en el entorno</span>
           )}
         </div>
-        <div className="min-w-0 space-y-2 text-sm text-slate-700">
+        <div className="theme-muted-text min-w-0 space-y-2 text-sm">
           <p>
-            <span className="font-medium text-slate-950">Titular:</span> {request.yape.accountName}
+            <span className="theme-strong-text font-medium">Titular:</span> {request.yape.accountName}
           </p>
           {request.yape.phone ? (
             <p>
-              <span className="font-medium text-slate-950">Yape:</span> {request.yape.phone}
+              <span className="theme-strong-text font-medium">Yape:</span> {request.yape.phone}
             </p>
           ) : null}
           {request.yape.amount ? (
             <p>
-              <span className="font-medium text-slate-950">Monto:</span> {request.yape.amount}
+              <span className="theme-strong-text font-medium">Monto:</span> {request.yape.amount}
             </p>
           ) : null}
           <p>
-            <span className="font-medium text-slate-950">Solicitud:</span> {request.requestId}
+            <span className="theme-strong-text font-medium">Solicitud:</span> {request.requestId}
           </p>
         </div>
       </div>

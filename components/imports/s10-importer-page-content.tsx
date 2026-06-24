@@ -927,25 +927,25 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
             />
           ) : null}
           {importResult ? (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-[rgba(51,209,122,0.28)] dark:bg-[rgba(51,209,122,0.12)]">
+            <div className="theme-status-success mt-4 rounded-xl border p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">{importResult.projectName}</p>
-                  <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                  <p className="theme-status-success-strong text-sm font-semibold">{importResult.projectName}</p>
+                  <p className="text-sm">
                     1 presupuesto general, {formatCount(importResult.subBudgetIds.length, "subpresupuesto", "subpresupuestos")},{" "}
                     {formatCount(importResult.itemCount, "partida", "partidas")}, {importResult.apuCount} APUs
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <a
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 dark:border-[rgba(51,209,122,0.28)] dark:bg-[var(--app-surface)] dark:text-emerald-300 dark:hover:bg-[rgba(51,209,122,0.08)]"
+                    className="theme-status-link-success inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
                     href={`/projects/${importResult.projectId}`}
                   >
                     Proyecto
                     <ExternalLink className="h-4 w-4" />
                   </a>
                   <a
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 dark:border-[rgba(51,209,122,0.28)] dark:bg-[var(--app-surface)] dark:text-emerald-300 dark:hover:bg-[rgba(51,209,122,0.08)]"
+                    className="theme-status-link-success inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
                     href={`/budgets/${importResult.generalBudgetId}`}
                   >
                     Presupuesto
@@ -1049,15 +1049,15 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
 
 function StatusBadge({ state }: { state: RequestState }) {
   if (state === "loading") {
-    return <Badge className="bg-sky-50 text-sky-700 dark:border-[rgba(37,99,235,0.28)] dark:bg-[rgba(37,99,235,0.12)] dark:text-[var(--app-primary-soft)]">Procesando</Badge>;
+    return <Badge className="theme-status-info">Procesando</Badge>;
   }
 
   if (state === "success") {
-    return <Badge className="bg-emerald-50 text-emerald-700 dark:border-[rgba(51,209,122,0.28)] dark:bg-[rgba(51,209,122,0.12)] dark:text-emerald-300">Listo</Badge>;
+    return <Badge className="theme-status-success">Listo</Badge>;
   }
 
   if (state === "error") {
-    return <Badge className="bg-rose-50 text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300">Error</Badge>;
+    return <Badge className="theme-status-error">Error</Badge>;
   }
 
   return <Badge>Pendiente</Badge>;
@@ -1087,7 +1087,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function InlineMessage({ message, tone }: { message: string; tone: "error" }) {
   const className =
     tone === "error"
-      ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300"
+      ? "theme-status-error"
       : "border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] text-[var(--app-text-muted)]";
 
   return <div className={`mt-4 rounded-xl border px-3 py-2 text-sm ${className}`}>{message}</div>;

@@ -43,7 +43,7 @@ export function AdminUserAccessForm({
   const [isPending, startTransition] = useTransition();
 
   if (!selectedUser) {
-    return <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">No hay usuarios para administrar.</p>;
+    return <p className="theme-dashed-panel theme-muted-text rounded-2xl border px-4 py-6 text-sm">No hay usuarios para administrar.</p>;
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -137,8 +137,8 @@ export function AdminUserAccessForm({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-        <p className="font-medium text-slate-900">Licencia efectiva</p>
+      <div className="theme-muted-panel theme-muted-text rounded-2xl border px-4 py-3 text-sm">
+        <p className="theme-strong-text font-medium">Licencia efectiva</p>
         <p className="mt-1">
           {selectedUser.billingMode ?? "FREE"} · {selectedUser.billingProvider ?? "Manual/app"} · {selectedUser.billingStatus ?? "sin suscripcion"}
         </p>
@@ -151,7 +151,7 @@ export function AdminUserAccessForm({
         {isPending ? "Guardando..." : "Guardar acceso"}
       </Button>
 
-      {message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{message}</p> : null}
+      {message ? <p className="theme-muted-panel theme-muted-text rounded-xl px-3 py-2 text-sm">{message}</p> : null}
     </form>
   );
 }

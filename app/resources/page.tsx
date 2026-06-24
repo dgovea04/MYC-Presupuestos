@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { ExportPanel } from "@/components/exports/export-panel";
 import { Wrench } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getAuthSession } from "@/lib/auth/session";
@@ -8,6 +9,7 @@ import { ResourcesPageContent } from "@/components/resources/resources-page-cont
 import { getUserCompanies } from "@/lib/data/projects";
 import { getUnifiedIndexDictionaryRows, getUnifiedIndexRelationRows } from "@/lib/data/unified-indices";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
+import { getExportDefinition } from "@/lib/exports/definitions";
 
 export default async function ResourcesPage() {
   const session = await getAuthSession();
@@ -28,12 +30,18 @@ export default async function ResourcesPage() {
         viewSummary: "Catalogo general de insumos para buscar, reutilizar y ampliar recursos de obra.",
       }}
     >
-      <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
-        <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
+      <Card className="theme-surface-card rounded-2xl">
+        <CardHeader className="theme-surface-card-gradient flex flex-col gap-4 rounded-2xl md:flex-row md:items-start md:justify-between">
           <PageHeaderCard
             icon={<Wrench className="h-5 w-5" />}
             title="Catalogo de insumos"
             description="Catalogo general precargado para buscar, reutilizar y ampliar insumos de obra."
+          />
+          <ExportPanel
+            buttonLabel="Exportar catalogo"
+            defaultPreset="catalogo_insumos"
+            definition={getExportDefinition("resources")}
+            targetId="catalog"
           />
         </CardHeader>
         <CardContent className="space-y-6 pt-6">

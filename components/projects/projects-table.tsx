@@ -115,7 +115,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
       />
 
       {error ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-[rgba(255,77,77,0.28)] dark:bg-[rgba(255,77,77,0.12)] dark:text-rose-300">
+        <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">
           {error}
         </p>
       ) : null}
