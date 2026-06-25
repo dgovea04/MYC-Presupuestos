@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { getProjectHeaderById } from "@/lib/data/projects";
@@ -52,6 +52,9 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
 function revalidateProjectPaths(projectId: string) {
   revalidatePath("/dashboard");
+  revalidateTag("dashboard-stats", "max");
+  revalidateTag("dashboard-analytics");
+  revalidateTag("projects-list");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/budgets");

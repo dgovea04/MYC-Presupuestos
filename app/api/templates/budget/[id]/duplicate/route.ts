@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -18,6 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await safelyRecordTemplateDuplicateActivity(session.user.id, template);
     revalidatePath("/templates");
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
     revalidatePath(`/templates/budget/${template.id}`);
     return NextResponse.json(template, { status: 201 });
   } catch (error) {

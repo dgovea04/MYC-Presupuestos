@@ -1960,6 +1960,12 @@ body,
   transition: none;
 }
 
+/* Override all input borders inside tables to transparent */
+[data-theme="dark"] .ui-table .ui-table-cell .ui-input {
+  border-color: transparent !important;
+  background: transparent;
+}
+
 [data-view-mode="excel"] [data-excel-field-border-opt-out="true"] {
   border-color: #cbd5e1 !important;
 }

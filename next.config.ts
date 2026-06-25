@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: workspaceRoot,
   },
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     localPatterns: [

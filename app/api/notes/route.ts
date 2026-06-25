@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
 
 function revalidateNotePaths(sourcePath?: string) {
   revalidatePath("/dashboard");
+  revalidateTag("dashboard-stats", "max");
   if (sourcePath) {
     revalidatePath(sourcePath);
   }

@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
@@ -29,6 +29,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
 
 function revalidateProjectPaths(projectId: string) {
   revalidatePath("/dashboard");
+  revalidateTag("dashboard-stats", "max");
+  revalidateTag("dashboard-analytics");
+  revalidateTag("projects-list");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/budgets");

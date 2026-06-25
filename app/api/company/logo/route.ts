@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { clearPrimaryCompanyLogo, getPrimaryCompany, updatePrimaryCompanyLogo } from "@/lib/data/company";
@@ -11,6 +11,7 @@ const COMPANY_LOGO_SAVE_ERROR = "No se pudo guardar el logo de la empresa.";
 
 function revalidateCompanyPaths() {
   revalidatePath("/dashboard");
+  revalidateTag("dashboard-stats", "max");
   revalidatePath("/projects");
   revalidatePath("/budgets");
   revalidatePath("/resources");

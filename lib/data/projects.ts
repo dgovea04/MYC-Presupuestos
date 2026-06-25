@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getUserSettings } from "@/lib/data/settings";
 import { projectSchema, type ProjectInput } from "@/lib/validations/project";
@@ -5,6 +7,9 @@ import { Prisma } from "@prisma/client";
 import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { getTemplateLibraryItem } from "@/lib/templates/template-library";
+import { ensureDate } from "@/lib/utils";
+
+export const PROJECTS_LIST_CACHE_TAG = "projects-list";
 
 const defaultBudgetTotals = {
   totalDirectCost: 0,
@@ -174,7 +179,7 @@ export async function getProjectsByUser(userId: string) {
   });
 }
 
-export async function getProjectsListByUser(userId: string) {
+const _getProjectsListByUser = async (userId: string) => {
   return prisma.project.findMany({
     where: {
       company: {
@@ -208,6 +213,35 @@ export async function getProjectsListByUser(userId: string) {
     },
   });
 }
+
+function normalizeProjectsListDates(
+  projects: Awaited<ReturnType<typeof _getProjectsListByUser>>,
+) {
+  return projects.map((project) => ({
+    ...project,
+    startDate: project.startDate ? ensureDate(project.startDate) : null,
+    endDate: project.endDate ? ensureDate(project.endDate) : null,
+    createdAt: ensureDate(project.createdAt),
+    updatedAt: ensureDate(project.updatedAt),
+  }));
+}
+
+const isTestEnvironment = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+
+export const getProjectsListByUser = cache(
+  async (userId: string) => {
+    if (isTestEnvironment) {
+      return normalizeProjectsListDates(await _getProjectsListByUser(userId));
+    }
+
+    const result = await unstable_cache(
+      async (uid: string) => _getProjectsListByUser(uid),
+      [PROJECTS_LIST_CACHE_TAG],
+      { tags: [PROJECTS_LIST_CACHE_TAG] },
+    )(userId);
+    return normalizeProjectsListDates(result);
+  },
+);
 
 export async function getProjectById(id: string, userId: string) {
   const settings = await getUserSettings(userId);

@@ -1,4 +1,7 @@
+import { ensureDate } from "@/lib/utils";
+import { cache } from "react";
 import type { ActivityEventType } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { listNoteTasks } from "@/lib/data/notes";
@@ -66,7 +69,7 @@ type DashboardBudgetTemplateRow = {
   payload: unknown;
 };
 
-export async function getDashboardStats(userId: string) {
+async function _getDashboardStats(userId: string) {
   const [
     companiesCount,
     projects,
@@ -262,6 +265,46 @@ export async function getDashboardStats(userId: string) {
         }))
       : getRecentActivity(projectsWithCompany, generalBudgets, formulas, adjustments, polynomialFormulaRouteBudgetIdByBudgetId)
     ).slice(0, 25),
+  };
+}
+
+const getCachedDashboardStats = cache(
+  async (userId: string) => {
+    const result = await unstable_cache(
+      async (uid: string) => _getDashboardStats(uid),
+      ["dashboard-stats"],
+      { revalidate: 30, tags: ["dashboard-stats"] },
+    )(userId);
+    return normalizeDashboardDates(result);
+  },
+);
+
+export { getCachedDashboardStats as getDashboardStats };
+
+export function normalizeDashboardDates(
+  stats: Awaited<ReturnType<typeof _getDashboardStats>>,
+): Awaited<ReturnType<typeof _getDashboardStats>> {
+  return {
+    ...stats,
+    recentProject: stats.recentProject
+      ? {
+          ...stats.recentProject,
+          updatedAt: ensureDate(stats.recentProject.updatedAt),
+        }
+      : null,
+    projects: stats.projects.map((p) => ({ ...p, updatedAt: ensureDate(p.updatedAt) })),
+    budgets: stats.budgets.map((b) => ({ ...b, updatedAt: ensureDate(b.updatedAt) })),
+    pendingItems: stats.pendingItems.map((i) => ({ ...i, updatedAt: ensureDate(i.updatedAt) })),
+    templateSummary: stats.templateSummary.latestTemplate
+      ? {
+          ...stats.templateSummary,
+          latestTemplate: {
+            ...stats.templateSummary.latestTemplate,
+            updatedAt: ensureDate(stats.templateSummary.latestTemplate.updatedAt),
+          },
+        }
+      : stats.templateSummary,
+    recentActivity: stats.recentActivity.map((a) => ({ ...a, createdAt: ensureDate(a.createdAt) })),
   };
 }
 

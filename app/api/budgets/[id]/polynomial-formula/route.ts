@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -68,6 +69,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       detail: formula.name,
       href: activityHref,
     });
+    revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics");
     return NextResponse.json(formula, { status: 201 });
   } catch (error) {
     return NextResponse.json(
@@ -100,6 +104,9 @@ export async function PATCH(request: Request) {
       detail: formula.name,
       href: activityHref,
     });
+    revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics");
     return NextResponse.json(formula);
   } catch (error) {
     return NextResponse.json(

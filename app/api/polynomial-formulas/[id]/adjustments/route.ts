@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
@@ -77,6 +78,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
     }
 
+    revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics");
     return NextResponse.json(adjustment, { status: 201 });
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);

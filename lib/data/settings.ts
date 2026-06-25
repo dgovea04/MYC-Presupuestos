@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { userSettingsSchema, type UserSettingsInput } from "@/lib/validations/settings";
@@ -17,6 +19,10 @@ import {
   type UserSettingsRecord,
 } from "@/types/settings";
 import { z } from "zod";
+
+export const USER_SETTINGS_CACHE_TAG = "user-settings";
+
+const isTestEnvironment = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
 
 export const defaultUserSettings: UserSettingsRecord = {
   defaultCurrency: "PEN",
@@ -422,7 +428,7 @@ export async function updateAiProviderSettings(
   };
 }
 
-export async function getUserSettings(userId: string): Promise<UserSettingsRecord> {
+const _getUserSettings = async (userId: string): Promise<UserSettingsRecord> => {
   const [
     supportsDefaultSubBudgetNames, supportsDateFormat, supportsAppTheme, supportsDefaultViewMode,
     supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference,
@@ -511,7 +517,21 @@ export async function getUserSettings(userId: string): Promise<UserSettingsRecor
       ? (settings as Record<string, unknown>).defaultSubBudgetNames
       : DEFAULT_INITIAL_SUB_BUDGET_NAMES,
   });
-}
+};
+
+export const getUserSettings = cache(
+  async (userId: string): Promise<UserSettingsRecord> => {
+    if (isTestEnvironment) {
+      return _getUserSettings(userId);
+    }
+
+    return unstable_cache(
+      async (uid: string) => _getUserSettings(uid),
+      [USER_SETTINGS_CACHE_TAG],
+      { tags: [USER_SETTINGS_CACHE_TAG] },
+    )(userId);
+  },
+);
 
 export async function updateUserSettings(userId: string, input: UserSettingsInput): Promise<UserSettingsRecord> {
   const data = userSettingsSchema.parse(input);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import { getAuthSession } from "@/lib/auth/session";
 import { parseDelphinDprjToS10Snapshot } from "@/lib/delphin/dprj-import";
@@ -38,6 +39,15 @@ export async function POST(request: Request) {
       companyId,
       sourceSystem: "DELPHIN",
     });
+
+    revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics");
+    revalidateTag("projects-list");
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${result.projectId}`);
+    revalidatePath("/budgets");
+    revalidatePath(`/budgets/${result.generalBudgetId}`);
 
     return NextResponse.json(result);
   } catch (error) {

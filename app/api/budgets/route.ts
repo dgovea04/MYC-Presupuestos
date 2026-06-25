@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
@@ -22,6 +22,8 @@ export async function POST(request: Request) {
       href: `/budgets/${budget.id}`,
     });
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics");
     revalidatePath("/budgets");
     revalidatePath("/projects");
     revalidatePath(`/projects/${budget.projectId}`);

@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -28,6 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     await safelyRecordMetradoDuplicateActivity(session.user.id, sheet.name);
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
     revalidatePath("/metrados-avanzados");
 
     return NextResponse.json({ sheet }, { status: 201 });

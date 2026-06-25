@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -42,6 +42,9 @@ export async function POST(request: Request) {
     });
 
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics");
+    revalidateTag("projects-list");
     revalidatePath("/projects");
     revalidatePath(`/projects/${result.projectId}`);
     revalidatePath("/budgets");

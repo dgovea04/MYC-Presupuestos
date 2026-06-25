@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -39,6 +39,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
 function revalidateNotePaths(sourcePath?: string) {
   revalidatePath("/dashboard");
+  revalidateTag("dashboard-stats", "max");
   if (sourcePath) {
     revalidatePath(sourcePath);
   }

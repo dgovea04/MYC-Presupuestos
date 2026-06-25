@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
     await safelyRecordTemplateCreatedActivity(session.user.id, template);
     revalidatePath("/templates");
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
     return NextResponse.json(template, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo crear la plantilla" }, { status: 400 });

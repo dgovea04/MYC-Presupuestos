@@ -1,9 +1,9 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Activity, ArrowRight, Calculator, FileSpreadsheet, ReceiptText, Sigma, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
-import { BudgetFlow } from "@/components/budget/budget-flow";
 import { AppShell } from "@/components/layout/app-shell";
 import { GeneralBudgetOverview } from "@/components/budget/general-budget-overview";
 import { SubBudgetCreateSheet } from "@/components/budget/sub-budget-create-sheet";
@@ -17,6 +17,10 @@ import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
 import { getBudgetById, getProjectSubBudgetDetails, getProjectSubBudgetSummaries } from "@/lib/data/budgets";
+
+const BudgetFlowDynamic = dynamic(() =>
+  import("@/components/budget/budget-flow").then((mod) => ({ default: mod.BudgetFlow })),
+);
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getProjectOverviewById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
@@ -280,7 +284,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         viewSummary: `Sub presupuesto ${budget.name} del proyecto ${project.name}.`,
       }}
     >
-      <BudgetFlow
+      <BudgetFlowDynamic
         budget={budget}
         projectName={project.name}
         templateTraceability={templateTraceability}

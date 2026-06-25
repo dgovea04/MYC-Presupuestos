@@ -513,7 +513,7 @@ const PartidaTableRow = memo(function PartidaTableRow({
       </TD>
       <TD className="align-middle">
         {isReadonly ? (
-          <span className={cn("text-slate-600", textSizeClass)}>{row.performanceRate ?? buildPerformanceRate(row.performance, row.performanceUnit ?? row.unit)}</span>
+          <span className={cn(textSizeClass)}>{row.performanceRate ?? buildPerformanceRate(row.performance, row.performanceUnit ?? row.unit)}</span>
         ) : (
           <Input
             type="number"

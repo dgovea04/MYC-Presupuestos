@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { upsertPrimaryCompany } from "@/lib/data/company";
@@ -21,6 +21,7 @@ export async function PATCH(request: Request) {
     const company = await upsertPrimaryCompany(session.user.id, payload);
 
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
     revalidatePath("/projects");
     revalidatePath("/budgets");
     revalidatePath("/resources");

@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -19,6 +19,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await safelyRecordTemplateUpdatedActivity(session.user.id, template);
     revalidatePath("/templates");
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
     revalidatePath(`/templates/budget/${id}`);
     return NextResponse.json(template);
   } catch (error) {
@@ -39,6 +40,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     await safelyRecordTemplateDeletedActivity(session.user.id, template);
     revalidatePath("/templates");
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
     revalidatePath(`/templates/budget/${id}`);
     return NextResponse.json({ ok: true });
   } catch (error) {

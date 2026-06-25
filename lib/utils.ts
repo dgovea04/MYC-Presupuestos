@@ -6,6 +6,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function ensureDate(value: Date | string | undefined | null): Date {
+  if (!value) return new Date();
+  return value instanceof Date ? value : new Date(value);
+}
+
 const currencySymbols: Record<string, string> = {
   PEN: "S/",
   USD: "$",

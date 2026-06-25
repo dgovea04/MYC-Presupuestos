@@ -7,7 +7,7 @@ import { RiskAnalysisDashboard } from "@/components/risk/risk-analysis-dashboard
 import { getAuthSession } from "@/lib/auth/session";
 import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
-import { getBudgetById } from "@/lib/data/budgets";
+import { getBudgetHeaderById } from "@/lib/data/budgets";
 import { getRiskAnalysisPayload, RiskBudgetAccessError } from "@/lib/risk/data";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const session = await getAuthSession();
   if (!session) return { title: "Riesgos | MYC Presupuestos" };
 
-  const budget = await getBudgetById(id, session.user.id);
+  const budget = await getBudgetHeaderById(id, session.user.id);
 
   return {
     title: budget ? `Riesgos — ${budget.name} | MYC Presupuestos` : "Riesgos | MYC Presupuestos",

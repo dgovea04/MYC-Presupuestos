@@ -1,5 +1,10 @@
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { prisma } from "@/lib/db/prisma";
+import { ensureDate } from "@/lib/utils";
+
+export const DASHBOARD_ANALYTICS_CACHE_TAG = "dashboard-analytics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,7 +58,7 @@ export type DeviationAlert = {
 
 // ─── Analytics queries ────────────────────────────────────────────────────────
 
-export async function getCostByPhaseAnalytics(userId: string): Promise<CostByPhaseItem[]> {
+const _getCostByPhaseAnalytics = async (userId: string): Promise<CostByPhaseItem[]> => {
   const projects = await prisma.project.findMany({
     where: {
       company: { userId },
@@ -105,7 +110,7 @@ export async function getCostByPhaseAnalytics(userId: string): Promise<CostByPha
     });
 }
 
-export async function getBudgetComparison(userId: string): Promise<BudgetComparisonItem[]> {
+const _getBudgetComparison = async (userId: string): Promise<BudgetComparisonItem[]> => {
   const budgets = await prisma.budget.findMany({
     where: {
       kind: "GENERAL",
@@ -139,7 +144,7 @@ export async function getBudgetComparison(userId: string): Promise<BudgetCompari
   }));
 }
 
-export async function getCostTrends(userId: string): Promise<CostTrendPoint[]> {
+const _getCostTrends = async (userId: string): Promise<CostTrendPoint[]> => {
   const formulas = await prisma.polynomialFormula.findMany({
     where: {
       project: {
@@ -184,7 +189,7 @@ export async function getCostTrends(userId: string): Promise<CostTrendPoint[]> {
   return points.sort((a, b) => a.period.localeCompare(b.period));
 }
 
-export async function getDeviationAlerts(userId: string): Promise<DeviationAlert[]> {
+const _getDeviationAlerts = async (userId: string): Promise<DeviationAlert[]> => {
   const formulas = await prisma.polynomialFormula.findMany({
     where: {
       project: {
@@ -250,3 +255,53 @@ export async function getDeviationAlerts(userId: string): Promise<DeviationAlert
 
   return alerts.sort((a, b) => b.deviationPercent - a.deviationPercent);
 }
+
+// ─── Cached exports ──────────────────────────────────────────────────────────
+
+function normalizeBudgetComparisonDates(items: BudgetComparisonItem[]): BudgetComparisonItem[] {
+  return items.map((item) => ({
+    ...item,
+    updatedAt: ensureDate(item.updatedAt),
+  }));
+}
+
+export const getCostByPhaseAnalytics = cache(
+  async (userId: string) => {
+    return unstable_cache(
+      async (uid: string) => _getCostByPhaseAnalytics(uid),
+      ["dashboard-analytics-cost-by-phase"],
+      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
+    )(userId);
+  },
+);
+
+export const getBudgetComparison = cache(
+  async (userId: string) => {
+    const result = await unstable_cache(
+      async (uid: string) => _getBudgetComparison(uid),
+      ["dashboard-analytics-budget-comparison"],
+      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
+    )(userId);
+    return normalizeBudgetComparisonDates(result);
+  },
+);
+
+export const getCostTrends = cache(
+  async (userId: string) => {
+    return unstable_cache(
+      async (uid: string) => _getCostTrends(uid),
+      ["dashboard-analytics-cost-trends"],
+      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
+    )(userId);
+  },
+);
+
+export const getDeviationAlerts = cache(
+  async (userId: string) => {
+    return unstable_cache(
+      async (uid: string) => _getDeviationAlerts(uid),
+      ["dashboard-analytics-deviation-alerts"],
+      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
+    )(userId);
+  },
+);

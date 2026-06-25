@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
@@ -17,6 +17,9 @@ export async function POST(request: Request) {
     const project = await createProject(session.user.id, body);
     await safelyRecordProjectCreatedActivity(project.id, project.name, session.user.id, getRequestTemplateId(body));
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics");
+    revalidateTag("projects-list");
     revalidatePath("/projects");
     revalidatePath(`/projects/${project.id}`);
     revalidatePath("/budgets");

@@ -1,14 +1,35 @@
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { serializeCatalogPartida } from "@/lib/db/serializers";
+import { ensureDate } from "@/lib/utils";
 import { calculateApuRows, calculateApuTotalUnitCost } from "@/lib/calculations/apu";
 import { catalogPartidaStatePatchSchema, catalogPartidaSchema, type CatalogPartidaApuRowInput, type CatalogPartidaInput } from "@/lib/validations/partida";
 import type { CatalogPartidaPatchResult, CatalogPartidaRecord, CatalogPartidaStatePatch } from "@/types/partida";
 
 export const CATALOG_PARTIDAS_CACHE_TAG = "catalog-partidas";
 
-export async function getCatalogPartidas() {
-  return getCatalogPartidasFromDatabase();
+function normalizeCatalogPartidasDates<T extends { createdAt?: Date | string | null; updatedAt?: Date | string | null }>(items: T[]): T[] {
+  return items.map((item) => ({
+    ...item,
+    createdAt: ensureDate(item.createdAt),
+    updatedAt: ensureDate(item.updatedAt),
+  }));
 }
+
+export const getCatalogPartidas = cache(
+  async () => {
+    const result = await unstable_cache(
+      async () => {
+        return getCatalogPartidasFromDatabase();
+      },
+      [CATALOG_PARTIDAS_CACHE_TAG],
+      { revalidate: 60, tags: [CATALOG_PARTIDAS_CACHE_TAG] },
+    )();
+
+    return normalizeCatalogPartidasDates(result);
+  },
+);
 
 async function getCatalogPartidasFromDatabase() {
   const partidas = await prisma.catalogPartida.findMany({

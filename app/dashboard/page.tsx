@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
@@ -38,20 +39,13 @@ import {
   type DashboardActivityItem,
   type DashboardPendingItem,
 } from "@/lib/data/dashboard";
-import {
-  getCostByPhaseAnalytics,
-  getBudgetComparison,
-  getCostTrends,
-  getDeviationAlerts,
-} from "@/lib/dashboard/analytics";
+import { DashboardAnalyticsSection } from "@/components/dashboard/dashboard-analytics-section";
+import { DashboardAnalyticsSectionSkeleton } from "@/components/dashboard/dashboard-analytics-section-skeleton";
 import { getProjectStatusLabel } from "@/lib/project-status";
 import { getUserSettings } from "@/lib/data/settings";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { CostByPhaseChart } from "@/components/dashboard/analytics/cost-by-phase-chart";
-import { BudgetComparisonChart } from "@/components/dashboard/analytics/budget-comparison-chart";
-import { CostTrendsChart } from "@/components/dashboard/analytics/cost-trends-chart";
-import { DeviationAlertPanel } from "@/components/dashboard/analytics/deviation-alert-panel";
 import { KhipuQualityMetrics } from "@/components/dashboard/khipu-quality-metrics";
+import { KhipuQualityMetricsSkeleton } from "@/components/dashboard/khipu-quality-metrics-skeleton";
 
 export default async function DashboardPage({
   searchParams,
@@ -64,13 +58,9 @@ export default async function DashboardPage({
   }
 
   const resolvedSearchParams = (await searchParams) ?? {};
-  const [stats, settings, costByPhase, budgetComparison, costTrends, deviationAlerts] = await Promise.all([
+  const [stats, settings] = await Promise.all([
     getDashboardStats(session.user.id),
     getUserSettings(session.user.id),
-    getCostByPhaseAnalytics(session.user.id),
-    getBudgetComparison(session.user.id),
-    getCostTrends(session.user.id),
-    getDeviationAlerts(session.user.id),
   ]);
   const selectedPriority = resolvePendingPriorityFilter(resolvedSearchParams.priority);
   const selectedPendingTab = resolvePendingTab(resolvedSearchParams.pendingTab);
@@ -647,22 +637,13 @@ export default async function DashboardPage({
         </Card>
       </section>
 
-      <section className="space-y-4">
-        <OperationalSectionHeader
-          title="Analitica y KPIs"
-          description="Metricas avanzadas de presupuestos, tendencias y alertas de desviacion para la toma de decisiones."
-        />
-        <div className="grid gap-6 xl:grid-cols-2">
-          <CostByPhaseChart data={costByPhase} currencyDecimals={settings.currencyDecimals} />
-          <BudgetComparisonChart data={budgetComparison} currencyDecimals={settings.currencyDecimals} />
-        </div>
-        <div className="grid gap-6 xl:grid-cols-2">
-          <CostTrendsChart data={costTrends} />
-          <DeviationAlertPanel data={deviationAlerts} currencyDecimals={settings.currencyDecimals} />
-        </div>
-      </section>
+      <Suspense fallback={<DashboardAnalyticsSectionSkeleton />}>
+        <DashboardAnalyticsSection />
+      </Suspense>
 
-      <KhipuQualityMetrics />
+      <Suspense fallback={<KhipuQualityMetricsSkeleton />}>
+        <KhipuQualityMetrics />
+      </Suspense>
     </AppShell>
   );
 }
@@ -694,7 +675,7 @@ function StatCard({
     attention: {
       card: "border-amber-200 bg-[linear-gradient(180deg,#fffaf0_0%,#fff1df_100%)] shadow-amber-100/70",
       iconWrap: "bg-amber-500 text-white",
-      value: "text-amber-950",
+      value: "text-slate-900",
       footer: "border-amber-200/80 text-amber-800",
     },
     primary: {

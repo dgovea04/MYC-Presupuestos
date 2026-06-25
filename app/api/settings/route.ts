@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { getUserSettings, updateUserSettings } from "@/lib/data/settings";
@@ -33,6 +33,8 @@ export async function PATCH(request: Request) {
     const settings = await updateUserSettings(session.user.id, payload);
 
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("user-settings");
     revalidatePath("/projects");
     revalidatePath("/budgets");
     revalidatePath("/resources");

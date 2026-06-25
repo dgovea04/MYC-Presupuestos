@@ -1,6 +1,8 @@
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { serializeResource } from "@/lib/db/serializers";
+import { ensureDate } from "@/lib/utils";
 import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { resourceSchema, resourceStatePatchSchema, type ResourceInput } from "@/lib/validations/resource";
 import type {
@@ -21,11 +23,28 @@ const resourceCodePrefixes: Record<ResourceCategory, string> = {
 };
 export const GLOBAL_RESOURCES_CACHE_TAG = "global-resources-v2";
 
-export async function getResourcesByUser(userId: string) {
-  const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(userId)]);
-
-  return mergeVisibleResourcesForCatalog(globalResources, userResources).sort(compareResourcesForCatalog);
+function normalizeResourcesDates<T extends { createdAt?: Date | string | null; updatedAt?: Date | string | null }>(items: T[]): T[] {
+  return items.map((item) => ({
+    ...item,
+    createdAt: ensureDate(item.createdAt),
+    updatedAt: ensureDate(item.updatedAt),
+  }));
 }
+
+export const getResourcesByUser = cache(
+  async (userId: string) => {
+    const result = await unstable_cache(
+      async (userId: string) => {
+        const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(userId)]);
+        return mergeVisibleResourcesForCatalog(globalResources, userResources).sort(compareResourcesForCatalog);
+      },
+      ["resources-by-user"],
+      { revalidate: 60, tags: ["resources-by-user"] },
+    )(userId);
+
+    return normalizeResourcesDates(result);
+  },
+);
 
 async function getGlobalResources() {
   return prisma.resource.findMany({

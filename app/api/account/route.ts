@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { getUserAccount, updateUserAccountProfile } from "@/lib/data/account";
@@ -11,6 +11,7 @@ const PROFILE_SAVE_ERROR = "No se pudo guardar tu perfil.";
 function revalidateAccountPaths() {
   revalidatePath("/account");
   revalidatePath("/dashboard");
+  revalidateTag("dashboard-stats", "max");
   revalidatePath("/projects");
   revalidatePath("/budgets");
   revalidatePath("/resources");

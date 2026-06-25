@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
@@ -21,6 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     revalidatePath(`/budgets/${budget.id}`);
     revalidatePath(`/projects/${input.projectId}`);
     revalidatePath("/dashboard");
+    revalidateTag("dashboard-stats", "max");
     return NextResponse.json(budget, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo aplicar la plantilla" }, { status: 400 });
