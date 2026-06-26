@@ -4,7 +4,7 @@ import { SectionHeading } from "@/components/landing/section-heading";
 
 export function TestimonialsSection() {
   return (
-    <section className="mx-auto max-w-[1440px] px-4 py-20 sm:px-6 md:py-28 lg:px-8 xl:px-12">
+    <section id="testimonios" className="mx-auto max-w-[1440px] scroll-mt-28 px-4 py-20 sm:px-6 md:py-28 lg:px-8 xl:px-12">
       <SectionHeading
         badge="Testimonios"
         title="Profesionales que buscan menos hojas sueltas y más control técnico."

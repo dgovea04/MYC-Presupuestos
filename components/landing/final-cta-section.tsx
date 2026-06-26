@@ -19,7 +19,7 @@ export function FinalCTASection() {
               Crear cuenta gratis
             </LandingLinkButton>
             <LandingLinkButton href="/login" variant="secondary">
-              Solicitar demostración
+              Iniciar sesion
             </LandingLinkButton>
           </div>
         </div>

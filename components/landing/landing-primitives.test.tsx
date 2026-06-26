@@ -2,17 +2,17 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
-import { ComparisonSection } from "@/components/landing/comparison-section";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BenefitsSection } from "@/components/landing/benefits-section";
+import { ComparisonSection } from "@/components/landing/comparison-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { FinalCTASection } from "@/components/landing/final-cta-section";
 import { HeroSection } from "@/components/landing/hero-section";
-import { LandingLinkButton } from "@/components/landing/landing-link-button";
 import { LandingFooter } from "@/components/landing/landing-footer";
+import { LandingLinkButton } from "@/components/landing/landing-link-button";
 import { LandingNavbar } from "@/components/landing/landing-navbar";
-import { ProductPreviewSection } from "@/components/landing/product-preview-section";
 import { PricingSection } from "@/components/landing/pricing-section";
+import { ProductPreviewSection } from "@/components/landing/product-preview-section";
 import { SectionHeading } from "@/components/landing/section-heading";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
 
@@ -24,8 +24,19 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 let activeContainer: HTMLDivElement | null = null;
 
+beforeEach(() => {
+  class MockIntersectionObserver {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  }
+
+  vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+});
+
 afterEach(async () => {
   if (!activeContainer) {
+    vi.unstubAllGlobals();
     return;
   }
 
@@ -39,6 +50,7 @@ afterEach(async () => {
 
   activeContainer.remove();
   activeContainer = null;
+  vi.unstubAllGlobals();
 });
 
 describe("landing primitives", () => {
@@ -135,7 +147,7 @@ describe("landing primitives", () => {
     expect(heroSurface).not.toBeNull();
     expect(previewSurface).not.toBeNull();
     expect(comparisonSurface).not.toBeNull();
-    expect(container.textContent).toContain("Presupuesta obras con más control");
+    expect(container.textContent).toContain("Presupuesta obras con mÃ¡s control");
     expect(container.textContent).toContain("Presupuesto de estructuras");
     expect(container.textContent).toContain("Comparativo de experiencia operativa");
   });
@@ -178,6 +190,7 @@ describe("landing primitives", () => {
     expect(finalCtaSection?.querySelector(".landing-surface-contrast")).not.toBeNull();
     expect(container.textContent).toContain("Beneficios");
     expect(container.textContent).toContain("Crear cuenta gratis");
+    expect(container.textContent).toContain("Iniciar sesion");
   });
 
   it("keeps the navbar login action on the shared secondary CTA treatment", async () => {
@@ -188,6 +201,66 @@ describe("landing primitives", () => {
     expect(loginLink?.className).toContain("border-slate-200/90");
     expect(loginLink?.className).toContain("bg-white/90");
     expect(navbarInner?.className).toContain("landing-shell");
+  });
+
+  it("keeps footer navigation aligned with real landing sections and auth routes", async () => {
+    const container = await renderNode(<LandingFooter />);
+    const links = Array.from(container.querySelectorAll("a")).map((link) => ({
+      text: link.textContent,
+      href: link.getAttribute("href"),
+    }));
+
+    expect(links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: "Diferenciales", href: "#features" }),
+        expect.objectContaining({ text: "Khipu IA", href: "#khipu" }),
+        expect.objectContaining({ text: "Flujo conectado", href: "#flows" }),
+        expect.objectContaining({ text: "Vista del producto", href: "#preview" }),
+        expect.objectContaining({ text: "Comparacion", href: "#comparison" }),
+        expect.objectContaining({ text: "Beneficios", href: "#benefits" }),
+        expect.objectContaining({ text: "Testimonios", href: "#testimonios" }),
+        expect.objectContaining({ text: "Preguntas frecuentes", href: "#faq" }),
+        expect.objectContaining({ text: "Precios", href: "#pricing" }),
+        expect.objectContaining({ text: "Crear cuenta", href: "/register" }),
+        expect.objectContaining({ text: "Iniciar sesion", href: "/login" }),
+      ]),
+    );
+  });
+
+  it("moves focus into the mobile dialog, traps tabbing, and restores focus to the trigger", async () => {
+    const container = await renderNode(<LandingNavbar />);
+    const openButton = container.querySelector('button[aria-label="Abrir menu"]') as HTMLButtonElement | null;
+
+    expect(openButton).not.toBeNull();
+    openButton?.focus();
+
+    await act(async () => {
+      openButton?.click();
+    });
+
+    const closeButton = container.querySelector('button[aria-label="Cerrar menu"]') as HTMLButtonElement | null;
+    const dialog = container.querySelector("#landing-mobile-navigation");
+    const lastLink = dialog?.querySelector('a[href="/register"]') as HTMLAnchorElement | null;
+
+    expect(document.activeElement).toBe(closeButton);
+    expect(dialog?.getAttribute("role")).toBe("dialog");
+
+    lastLink?.focus();
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(closeButton);
+
+    closeButton?.focus();
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
+    });
+    expect(document.activeElement).toBe(lastLink);
+
+    await act(async () => {
+      closeButton?.click();
+    });
+    expect(document.activeElement).toBe(openButton);
   });
 });
 

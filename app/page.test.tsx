@@ -179,7 +179,7 @@ describe("MC landing page sections", () => {
       "Moderniza la forma en que tu oficina tecnica prepara, revisa y entrega presupuestos de obra sin volver al flujo fragmentado.",
     );
     expect(container.textContent).toContain("Crear cuenta gratis");
-    expect(container.textContent).toContain("Solicitar demostración");
+    expect(container.textContent).toContain("Iniciar sesion");
   });
 
   it("redirects authenticated sessions before rendering the landing page", async () => {

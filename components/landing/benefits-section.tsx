@@ -3,7 +3,7 @@ import { SectionHeading } from "@/components/landing/section-heading";
 
 export function BenefitsSection() {
   return (
-    <section className="landing-section-contrast bg-slate-950 text-white">
+    <section id="benefits" className="landing-section-contrast scroll-mt-28 bg-slate-950 text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           badge="Beneficios"

@@ -1,34 +1,36 @@
 import Link from "next/link";
-import { footerLinks } from "@/components/landing/landing-content";
 import { LandingLogo } from "@/components/landing/landing-logo";
 
-const footerLinkMap: Record<string, string> = {
-  "Presupuesto y APU": "#features",
-  "IA local": "#features",
-  Cronograma: "#flows",
-  Exportaciones: "#preview",
-  Nosotros: "#comparison",
-  Clientes: "#comparison",
-  Seguridad: "#pricing",
-  Contacto: "#contacto",
-  Demo: "#preview",
-  "Guía de inicio": "/register",
-  "Casos de uso": "#comparison",
-  Soporte: "#contacto",
+const footerColumns = {
+  producto: [
+    { label: "Diferenciales", href: "#features" },
+    { label: "Khipu IA", href: "#khipu" },
+    { label: "Flujo conectado", href: "#flows" },
+    { label: "Vista del producto", href: "#preview" },
+  ],
+  empresa: [
+    { label: "Comparacion", href: "#comparison" },
+    { label: "Beneficios", href: "#benefits" },
+    { label: "Testimonios", href: "#testimonios" },
+    { label: "Contacto", href: "#contacto" },
+  ],
+  recursos: [
+    { label: "Preguntas frecuentes", href: "#faq" },
+    { label: "Precios", href: "#pricing" },
+    { label: "Crear cuenta", href: "/register" },
+    { label: "Iniciar sesion", href: "/login" },
+  ],
 };
 
-function FooterColumn({ title, items }: { title: string; items: string[] }) {
+function FooterColumn({ title, items }: { title: string; items: Array<{ label: string; href: string }> }) {
   return (
     <div>
       <p className="font-display text-sm font-semibold text-slate-950">{title}</p>
       <ul className="mt-4 space-y-3">
         {items.map((item) => (
-          <li key={item}>
-            <Link
-              href={footerLinkMap[item] ?? "/"}
-              className="text-sm text-slate-500 transition hover:text-slate-900"
-            >
-              {item}
+          <li key={item.label}>
+            <Link href={item.href} className="text-sm text-slate-500 transition hover:text-slate-900">
+              {item.label}
             </Link>
           </li>
         ))}
@@ -48,9 +50,9 @@ export function LandingFooter() {
           </p>
           <p className="mt-6 text-sm text-slate-400">&copy; 2026 MC Presupuestos. Todos los derechos reservados.</p>
         </div>
-        <FooterColumn title="Producto" items={footerLinks.producto} />
-        <FooterColumn title="Empresa" items={footerLinks.empresa} />
-        <FooterColumn title="Recursos" items={footerLinks.recursos} />
+        <FooterColumn title="Producto" items={footerColumns.producto} />
+        <FooterColumn title="Empresa" items={footerColumns.empresa} />
+        <FooterColumn title="Recursos" items={footerColumns.recursos} />
       </div>
     </footer>
   );
