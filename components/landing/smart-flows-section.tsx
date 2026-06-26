@@ -6,7 +6,7 @@ export function SmartFlowsSection() {
   return (
     <section id="flows" className="landing-section-tight landing-shell scroll-mt-28">
       <SectionHeading
-        badge={"Flujo\u00a0conectado"}
+        badge="Flujo conectado"
         title="Del presupuesto al entregable sin cambiar de forma de trabajo."
         description="La operacion se mantiene conectada desde la carga inicial hasta la revision con Khipu y la salida final."
         align="center"

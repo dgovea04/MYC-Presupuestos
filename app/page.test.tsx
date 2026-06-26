@@ -75,12 +75,15 @@ describe("MC landing page sections", () => {
     const cards = section?.querySelectorAll(".landing-surface-elevated");
     expect(cards?.length).toBe(6);
 
-    expect(container.textContent).toContain("Presupuesto y APU conectado");
-    expect(container.textContent).toContain("Reutiliza insumos y partidas sin duplicar información");
-    expect(container.textContent).toContain("Generador de partidas por similitud");
-    expect(container.textContent).toContain("IA local para revisión y APU");
-    expect(container.textContent).toContain("Convierte tu presupuesto en cronograma valorizado");
-    expect(container.textContent).toContain("Entrega reportes listos para cliente, obra o licitación");
+    expect(container.textContent).toContain("Diferenciales");
+    expect(container.textContent).toContain("Una plataforma conectada rinde mejor que un flujo fragmentado.");
+    expect(container.textContent).toContain("Presupuesto conectado");
+    expect(container.textContent).toContain("APU con trazabilidad");
+    expect(container.textContent).toContain("Formula y cronograma dentro del flujo");
+    expect(container.textContent).toContain("Exportables listos para oficina tecnica");
+    expect(container.textContent).toContain("Khipu IA con contexto visible");
+    expect(container.textContent).toContain("Operacion preparada para crecer");
+    expect(container.textContent).not.toContain("Presupuesto y APU conectado");
   });
 
   it("renders ProductPreviewSection with table, notes sidebar, and export formats", async () => {
@@ -185,9 +188,11 @@ describe("MC landing page sections", () => {
   });
 
   it("locks the future MC landing contract across sections and homepage", async () => {
+    const featuresContainer = await renderNode(<FeaturesSection />);
     const heroContainer = await renderNode(<HeroSection />);
     const smartFlowsContainer = await renderNode(<SmartFlowsSection />);
     const comparisonContainer = await renderNode(<ComparisonSection />);
+    const featuresText = featuresContainer.textContent ?? "";
     const comparisonSection = comparisonContainer.querySelector("#comparison");
     const comparisonText = comparisonSection?.textContent ?? "";
 
@@ -197,6 +202,12 @@ describe("MC landing page sections", () => {
     );
     expect(heroContainer.textContent).toContain("Khipu IA integrada");
 
+    expect(featuresText).toContain("Diferenciales");
+    expect(featuresText).toContain("Presupuesto conectado");
+    expect(featuresText).toContain("APU con trazabilidad");
+    expect(featuresText).toContain("Formula y cronograma dentro del flujo");
+
+    expect(smartFlowsContainer.textContent).toContain("Flujo conectado");
     expect(smartFlowsContainer.textContent).toContain("Importa o construye");
     expect(smartFlowsContainer.textContent).toContain("Estructura y conecta");
     expect(smartFlowsContainer.textContent).toContain("Revisa con Khipu");
@@ -222,8 +233,9 @@ describe("MC landing page sections", () => {
       text.includes("Khipu IA revisa el presupuesto con contexto visible."),
     );
     const smartFlowsIndex = sectionText.findIndex((text) => text.includes("Importa o construye"));
-    const comparisonIndex = sectionText.findIndex((text) => text.includes("Flujo fragmentado"));
-    const connectedComparisonIndex = sectionText.findIndex((text) => text.includes("Flujo conectado"));
+    const comparisonIndex = sectionText.findIndex(
+      (text) => text.includes("Flujo fragmentado") && text.includes("Flujo conectado"),
+    );
 
     expect(main).not.toBeNull();
     expect(main?.textContent).toContain("MC Presupuestos");
@@ -232,7 +244,6 @@ describe("MC landing page sections", () => {
     expect(khipuIndex).toBeGreaterThan(legacyPainIndex);
     expect(smartFlowsIndex).toBeGreaterThan(khipuIndex);
     expect(comparisonIndex).toBeGreaterThan(smartFlowsIndex);
-    expect(connectedComparisonIndex).toBeGreaterThanOrEqual(comparisonIndex);
     expect(container.querySelector("footer")?.textContent).toContain("MC Presupuestos");
     expect(navigationMocks.redirect).not.toHaveBeenCalled();
   });

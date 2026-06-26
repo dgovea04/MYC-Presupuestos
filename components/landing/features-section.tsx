@@ -5,14 +5,6 @@ import { Card } from "@/components/ui/card";
 export function FeaturesSection() {
   return (
     <section id="features" className="landing-section landing-shell scroll-mt-28">
-      <div className="sr-only">
-        Presupuesto y APU conectado
-        Reutiliza insumos y partidas sin duplicar información
-        Generador de partidas por similitud
-        IA local para revisión y APU
-        Convierte tu presupuesto en cronograma valorizado
-        Entrega reportes listos para cliente, obra o licitación
-      </div>
       <SectionHeading
         badge="Diferenciales"
         title="Una plataforma conectada rinde mejor que un flujo fragmentado."
@@ -40,8 +32,8 @@ export function FeaturesSection() {
             </div>
             <div className="relative mt-6 h-px bg-[linear-gradient(90deg,rgba(37,99,235,0.18),rgba(226,232,240,0.6),transparent)]" />
             <div className="relative mt-5 flex items-center justify-between text-sm">
-              <span className="font-medium text-slate-500">Módulo operativo</span>
-              <span className="text-blue-700 transition group-hover:translate-x-0.5">Ver flujo</span>
+              <span className="font-medium text-slate-500">Ventaja operativa</span>
+              <span className="text-blue-700 transition group-hover:translate-x-0.5">Ver diferencial</span>
             </div>
           </Card>
         ))}
