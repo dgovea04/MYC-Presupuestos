@@ -9,8 +9,10 @@ import { FaqSection } from "@/components/landing/faq-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { FinalCTASection } from "@/components/landing/final-cta-section";
 import { HeroSection } from "@/components/landing/hero-section";
+import { KhipuIASection } from "@/components/landing/khipu-ia-section";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingNavbar } from "@/components/landing/landing-navbar";
+import { LegacyPainSection } from "@/components/landing/legacy-pain-section";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { ProductPreviewSection } from "@/components/landing/product-preview-section";
 import { SmartFlowsSection } from "@/components/landing/smart-flows-section";
@@ -42,24 +44,14 @@ afterEach(async () => {
 });
 
 describe("MYC landing page sections", () => {
-  it("renders HeroSection with headline, CTAs, trust signals, and social proof badges", async () => {
+  it("renders HeroSection with MC branding, stronger positioning, and platform proof", async () => {
     const container = await renderNode(<HeroSection />);
 
-    const h1 = container.querySelector("h1");
-    expect(h1?.textContent).toContain("Presupuesta obras con más control");
-
-    expect(container.textContent).toContain("Crear cuenta gratis");
-    expect(container.textContent).toContain("Ver plataforma");
-    expect(container.textContent).toContain("IA local revisable");
-    expect(container.textContent).toContain("Cronograma valorizado");
-    expect(container.textContent).toContain("Exportes PDF / Excel / ZIP");
-    expect(container.textContent).toContain("Diseñado para oficinas técnicas");
-    expect(container.textContent).toContain("Compatible con flujo Excel");
-    expect(container.textContent).toContain("Pensado para presupuestos en Perú");
-
-    // Uses shared landing-shell
-    const shell = container.querySelector(".landing-shell");
-    expect(shell).not.toBeNull();
+    expect(container.textContent).toContain("La forma antigua de presupuestar obra ya no alcanza.");
+    expect(container.textContent).toContain(
+      "MC Presupuestos conecta presupuesto, APU, metrados, formula polinomica, cronograma y exportables",
+    );
+    expect(container.textContent).toContain("Khipu IA integrada");
   });
 
   it("renders FeaturesSection with 6 feature cards and shared elevated surfaces", async () => {
@@ -80,18 +72,13 @@ describe("MYC landing page sections", () => {
     expect(container.textContent).toContain("Entrega reportes listos para cliente, obra o licitación");
   });
 
-  it("renders SmartFlowsSection with 3 flow cards and step chains", async () => {
+  it("renders SmartFlowsSection as a connected four-step workflow", async () => {
     const container = await renderNode(<SmartFlowsSection />);
 
-    const section = container.querySelector("#flows");
-    expect(section?.className).toContain("landing-section-tight");
-
-    const cards = section?.querySelectorAll(".landing-surface-elevated");
-    expect(cards?.length).toBe(3);
-
-    expect(container.textContent).toContain("De partida nueva a APU sugerido");
-    expect(container.textContent).toContain("De presupuesto a cronograma valorizado");
-    expect(container.textContent).toContain("De revisión técnica a pendientes");
+    expect(container.textContent).toContain("Importa o construye");
+    expect(container.textContent).toContain("Estructura y conecta");
+    expect(container.textContent).toContain("Revisa con Khipu");
+    expect(container.textContent).toContain("Prepara entregables");
   });
 
   it("renders ProductPreviewSection with table, notes sidebar, and export formats", async () => {
@@ -112,22 +99,13 @@ describe("MYC landing page sections", () => {
     expect(container.textContent).toContain("ZIP");
   });
 
-  it("renders ComparisonSection with comparison table and status indicators", async () => {
+  it("renders ComparisonSection with fragmentado vs conectado framing", async () => {
     const container = await renderNode(<ComparisonSection />);
 
-    const section = container.querySelector("#comparison");
-    expect(section?.className).toContain("landing-section");
-
-    const table = section?.querySelector('[role="table"]');
-    expect(table).not.toBeNull();
-    expect(container.textContent).toContain("Comparativo de experiencia operativa");
-    expect(container.textContent).toContain("Estructura de presupuestos jerárquica");
-    expect(container.textContent).toContain("Fórmula polinómica integrada");
-    expect(container.textContent).toContain("MYC Presupuestos");
-
-    // Uses shared landing chips
-    const chips = container.querySelectorAll(".landing-chip");
-    expect(chips.length).toBe(3);
+    expect(container.textContent).toContain("Flujo fragmentado");
+    expect(container.textContent).toContain("Flujo conectado");
+    expect(container.textContent).not.toContain("Software tradicional");
+    expect(container.textContent).not.toContain("Excel");
   });
 
   it("renders BenefitsSection with 4 benefit cards on contrast surface", async () => {
@@ -162,7 +140,6 @@ describe("MYC landing page sections", () => {
     const section = container.querySelector("#faq");
     expect(section?.className).toContain("landing-section");
 
-    // 3 category filter buttons
     const buttons = section?.querySelectorAll("button");
     expect(buttons?.length).toBeGreaterThanOrEqual(3);
 
@@ -170,7 +147,6 @@ describe("MYC landing page sections", () => {
     expect(container.textContent).toContain("Planes y precios");
     expect(container.textContent).toContain("Técnicas");
 
-    // First question is visible
     expect(container.textContent).toContain("¿Qué norma peruana usan para la fórmula polinómica?");
   });
 
@@ -207,14 +183,16 @@ describe("MYC landing page sections", () => {
     expect(container.textContent).toContain("Solicitar demostración");
   });
 
-  it("renders all MYC landing sections together with shared primitives", async () => {
+  it("renders the repositioned MC landing flow in the approved order", async () => {
     const container = await renderNode(
       <main className="min-h-screen bg-slate-50 text-slate-950">
         <LandingNavbar />
         <HeroSection />
+        <LegacyPainSection />
         <FeaturesSection />
-        <SmartFlowsSection />
+        <KhipuIASection />
         <ProductPreviewSection />
+        <SmartFlowsSection />
         <ComparisonSection />
         <BenefitsSection />
         <TestimonialsSection />
@@ -225,36 +203,21 @@ describe("MYC landing page sections", () => {
       </main>,
     );
 
-    // Section count (including nested sections in ProductPreview)
-    const sections = container.querySelectorAll("section");
-    expect(sections.length).toBeGreaterThanOrEqual(9);
+    const text = container.textContent ?? "";
 
-    // Shared elevated surfaces
-    const elevatedSurfaces = container.querySelectorAll(".landing-surface-elevated");
-    expect(elevatedSurfaces.length).toBeGreaterThanOrEqual(15);
+    expect(text).toContain("MC Presupuestos");
+    expect(text).toContain("La forma antigua de presupuestar obra ya no alcanza.");
+    expect(text).toContain("El problema no es calcular menos. Es coordinar mejor.");
+    expect(text).toContain("Khipu IA revisa el presupuesto con contexto visible.");
+    expect(text).toContain("Flujo fragmentado");
+    expect(text).toContain("Flujo conectado");
 
-    // Shared contrast surfaces
-    const contrastSurfaces = container.querySelectorAll(".landing-surface-contrast");
-    expect(contrastSurfaces.length).toBeGreaterThanOrEqual(5);
-
-    // Shared landing chips
-    const chips = container.querySelectorAll(".landing-chip");
-    expect(chips.length).toBeGreaterThanOrEqual(3);
-
-    // Key landmark texts from each section
-    expect(container.textContent).toContain("Presupuesta obras con más control");
-    expect(container.textContent).toContain("Presupuesto y APU conectado");
-    expect(container.textContent).toContain("De partida nueva a APU sugerido");
-    expect(container.textContent).toContain("Presupuesto de estructuras");
-    expect(container.textContent).toContain("Comparativo de experiencia operativa");
-    expect(container.textContent).toContain("Menos saltos entre hojas");
-    expect(container.textContent).toContain("Ing. Carlos Paredes");
-    expect(container.textContent).toContain("¿Qué norma peruana usan para la fórmula polinómica?");
-    expect(container.textContent).toContain("Starter");
-    expect(container.textContent).toContain("Crear cuenta gratis");
-
-    // Navbar and footer present
-    expect(container.textContent).toContain("MYC Presupuestos");
+    expect(text.indexOf("La forma antigua de presupuestar obra ya no alcanza.")).toBeLessThan(
+      text.indexOf("El problema no es calcular menos. Es coordinar mejor."),
+    );
+    expect(text.indexOf("El problema no es calcular menos. Es coordinar mejor.")).toBeLessThan(
+      text.indexOf("Khipu IA revisa el presupuesto con contexto visible."),
+    );
   });
 });
 
