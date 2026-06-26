@@ -65,16 +65,6 @@ afterEach(async () => {
 });
 
 describe("MC landing page sections", () => {
-  it.fails("expects HeroSection to adopt the MC repositioning copy", async () => {
-    const container = await renderNode(<HeroSection />);
-
-    expect(container.textContent).toContain("La forma antigua de presupuestar obra ya no alcanza.");
-    expect(container.textContent).toContain(
-      "MC Presupuestos conecta presupuesto, APU, metrados, formula polinomica, cronograma y exportables",
-    );
-    expect(container.textContent).toContain("Khipu IA integrada");
-  });
-
   it("renders FeaturesSection with 6 feature cards and shared elevated surfaces", async () => {
     const container = await renderNode(<FeaturesSection />);
 
@@ -93,15 +83,6 @@ describe("MC landing page sections", () => {
     expect(container.textContent).toContain("Entrega reportes listos para cliente, obra o licitación");
   });
 
-  it.fails("expects SmartFlowsSection to become a connected four-step workflow", async () => {
-    const container = await renderNode(<SmartFlowsSection />);
-
-    expect(container.textContent).toContain("Importa o construye");
-    expect(container.textContent).toContain("Estructura y conecta");
-    expect(container.textContent).toContain("Revisa con Khipu");
-    expect(container.textContent).toContain("Prepara entregables");
-  });
-
   it("renders ProductPreviewSection with table, notes sidebar, and export formats", async () => {
     const container = await renderNode(<ProductPreviewSection />);
 
@@ -118,17 +99,6 @@ describe("MC landing page sections", () => {
     expect(container.textContent).toContain("Excel");
     expect(container.textContent).toContain("CSV");
     expect(container.textContent).toContain("ZIP");
-  });
-
-  it.fails("expects ComparisonSection to adopt fragmentado vs conectado framing", async () => {
-    const container = await renderNode(<ComparisonSection />);
-    const section = container.querySelector("#comparison");
-    const sectionText = section?.textContent ?? "";
-
-    expect(sectionText).toContain("Flujo fragmentado");
-    expect(sectionText).toContain("Flujo conectado");
-    expect(sectionText).not.toContain("Software tradicional");
-    expect(sectionText).not.toContain("Excel");
   });
 
   it("renders BenefitsSection with 4 benefit cards on contrast surface", async () => {
@@ -214,7 +184,29 @@ describe("MC landing page sections", () => {
     expect(navigationMocks.redirect).toHaveBeenCalledWith("/dashboard");
   });
 
-  it("renders the homepage with the approved MC landing contract", async () => {
+  it("locks the future MC landing contract across sections and homepage", async () => {
+    const heroContainer = await renderNode(<HeroSection />);
+    const smartFlowsContainer = await renderNode(<SmartFlowsSection />);
+    const comparisonContainer = await renderNode(<ComparisonSection />);
+    const comparisonSection = comparisonContainer.querySelector("#comparison");
+    const comparisonText = comparisonSection?.textContent ?? "";
+
+    expect(heroContainer.textContent).toContain("La forma antigua de presupuestar obra ya no alcanza.");
+    expect(heroContainer.textContent).toContain(
+      "MC Presupuestos conecta presupuesto, APU, metrados, formula polinomica, cronograma y exportables",
+    );
+    expect(heroContainer.textContent).toContain("Khipu IA integrada");
+
+    expect(smartFlowsContainer.textContent).toContain("Importa o construye");
+    expect(smartFlowsContainer.textContent).toContain("Estructura y conecta");
+    expect(smartFlowsContainer.textContent).toContain("Revisa con Khipu");
+    expect(smartFlowsContainer.textContent).toContain("Prepara entregables");
+
+    expect(comparisonText).toContain("Flujo fragmentado");
+    expect(comparisonText).toContain("Flujo conectado");
+    expect(comparisonText).not.toContain("Software tradicional");
+    expect(comparisonText).not.toContain("Excel");
+
     authMocks.getAuthSession.mockResolvedValue(null);
 
     const container = await renderHomePage();
@@ -229,11 +221,18 @@ describe("MC landing page sections", () => {
     const khipuIndex = sectionText.findIndex((text) =>
       text.includes("Khipu IA revisa el presupuesto con contexto visible."),
     );
+    const smartFlowsIndex = sectionText.findIndex((text) => text.includes("Importa o construye"));
+    const comparisonIndex = sectionText.findIndex((text) => text.includes("Flujo fragmentado"));
+    const connectedComparisonIndex = sectionText.findIndex((text) => text.includes("Flujo conectado"));
 
     expect(main).not.toBeNull();
+    expect(main?.textContent).toContain("MC Presupuestos");
     expect(heroIndex).toBeGreaterThanOrEqual(0);
     expect(legacyPainIndex).toBeGreaterThan(heroIndex);
     expect(khipuIndex).toBeGreaterThan(legacyPainIndex);
+    expect(smartFlowsIndex).toBeGreaterThan(khipuIndex);
+    expect(comparisonIndex).toBeGreaterThan(smartFlowsIndex);
+    expect(connectedComparisonIndex).toBeGreaterThanOrEqual(comparisonIndex);
     expect(container.querySelector("footer")?.textContent).toContain("MC Presupuestos");
     expect(navigationMocks.redirect).not.toHaveBeenCalled();
   });
