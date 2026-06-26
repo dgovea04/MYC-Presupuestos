@@ -174,6 +174,10 @@ describe("MC landing page sections", () => {
     const contrast = section?.querySelector(".landing-surface-contrast");
     expect(contrast).not.toBeNull();
 
+    expect(container.textContent).toContain("MC Presupuestos conecta la operacion. Khipu IA acelera la revision.");
+    expect(container.textContent).toContain(
+      "Moderniza la forma en que tu oficina tecnica prepara, revisa y entrega presupuestos de obra sin volver al flujo fragmentado.",
+    );
     expect(container.textContent).toContain("Crear cuenta gratis");
     expect(container.textContent).toContain("Solicitar demostración");
   });
