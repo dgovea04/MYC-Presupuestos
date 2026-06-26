@@ -8,7 +8,8 @@ import { LandingLogo } from "@/components/landing/landing-logo";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { label: "Producto", href: "#features" },
+  { label: "Diferenciales", href: "#features" },
+  { label: "Khipu IA", href: "#khipu" },
   { label: "Vista", href: "#preview" },
   { label: "Comparacion", href: "#comparison" },
   { label: "Precios", href: "#pricing" },
@@ -99,11 +100,10 @@ export function LandingNavbar() {
       )}
     >
       <div className="landing-shell flex items-center justify-between gap-8 py-5">
-        <Link href="/" aria-label="MYC Presupuestos">
+        <Link href="/" aria-label="MC Presupuestos">
           <LandingLogo />
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden items-center gap-10 md:flex lg:gap-14 xl:gap-16">
           {navItems.map((item) => (
             <Link
@@ -116,7 +116,6 @@ export function LandingNavbar() {
           ))}
         </nav>
 
-        {/* Desktop auth buttons */}
         <div className="hidden items-center gap-4 md:flex lg:gap-5">
           <LandingLinkButton href="/login" variant="secondary">
             Iniciar sesión
@@ -124,7 +123,6 @@ export function LandingNavbar() {
           <LandingLinkButton href="/register">Crear cuenta gratis</LandingLinkButton>
         </div>
 
-        {/* Mobile hamburger */}
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
@@ -136,7 +134,6 @@ export function LandingNavbar() {
         </button>
       </div>
 
-      {/* Mobile overlay */}
       <div
         className={cn(
           "fixed inset-0 z-40 md:hidden",
@@ -144,7 +141,6 @@ export function LandingNavbar() {
         )}
         aria-hidden={!mobileMenuOpen}
       >
-        {/* Backdrop */}
         <div
           className={cn(
             "absolute inset-0 h-screen bg-slate-950/40 backdrop-blur-sm transition-opacity duration-300",
@@ -153,10 +149,9 @@ export function LandingNavbar() {
           onClick={closeMobileMenu}
         />
 
-        {/* Slide-in panel */}
         <div
           className={cn(
-            "absolute inset-y-0 right-0 h-screen flex w-full max-w-xs flex-col bg-white px-6 py-6 shadow-2xl transition-transform duration-300 ease-in-out",
+            "absolute inset-y-0 right-0 flex h-screen w-full max-w-xs flex-col bg-white px-6 py-6 shadow-2xl transition-transform duration-300 ease-in-out",
             mobileMenuOpen ? "translate-x-0" : "translate-x-full",
           )}
           role="dialog"

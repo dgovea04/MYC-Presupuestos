@@ -24,7 +24,10 @@ function FooterColumn({ title, items }: { title: string; items: string[] }) {
       <ul className="mt-4 space-y-3">
         {items.map((item) => (
           <li key={item}>
-            <Link href={footerLinkMap[item] ?? "/"} className="text-sm text-slate-500 transition hover:text-slate-900">
+            <Link
+              href={footerLinkMap[item] ?? "/"}
+              className="text-sm text-slate-500 transition hover:text-slate-900"
+            >
               {item}
             </Link>
           </li>
@@ -41,9 +44,9 @@ export function LandingFooter() {
         <div>
           <LandingLogo />
           <p className="mt-5 max-w-sm text-sm leading-7 text-slate-500">
-            Plataforma moderna de costos y presupuestos de obra para ingenieros, contratistas y oficinas técnicas.
+            Plataforma moderna de costos y presupuestos de obra para oficinas tecnicas, constructoras e ingenieros que necesitan un flujo mas conectado.
           </p>
-          <p className="mt-6 text-sm text-slate-400">&copy; 2026 MYC Presupuestos. Todos los derechos reservados.</p>
+          <p className="mt-6 text-sm text-slate-400">&copy; 2026 MC Presupuestos. Todos los derechos reservados.</p>
         </div>
         <FooterColumn title="Producto" items={footerLinks.producto} />
         <FooterColumn title="Empresa" items={footerLinks.empresa} />

@@ -7,7 +7,7 @@ export function LandingLogo({ className }: { className?: string }) {
       <div className="relative h-13 w-[132px] sm:h-14 sm:w-[148px]">
         <Image
           src="/nuevo-logo-300-v3.png"
-          alt="MYC Presupuestos"
+          alt="MC Presupuestos"
           fill
           priority
           sizes="148px"

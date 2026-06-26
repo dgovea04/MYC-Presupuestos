@@ -3,15 +3,19 @@
 import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { LandingLinkButton } from "@/components/landing/landing-link-button";
+import { Badge } from "@/components/ui/badge";
 
-const trustSignals = ["IA local revisable", "Cronograma valorizado", "Exportes PDF / Excel / ZIP"];
+const trustSignals = [
+  "Khipu IA integrada",
+  "Trazabilidad entre presupuesto y APU",
+  "Exportables listos para oficina tecnica",
+];
 
 const socialProof = [
-  "Diseñado para oficinas técnicas",
-  "Compatible con flujo Excel",
-  "Pensado para presupuestos en Perú",
+  "Presupuesto, formula y cronograma en un solo flujo",
+  "Revision asistida sin perder criterio tecnico",
+  "Disenado para oficinas tecnicas que necesitan mas control",
 ];
 
 export function HeroSection() {
@@ -23,13 +27,13 @@ export function HeroSection() {
       <div className="landing-shell relative flex w-full flex-col gap-12 pb-14 pt-28 md:pb-20 md:pt-32">
         <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
           <Badge className="w-fit border border-blue-100 bg-blue-50 px-3 py-1 text-[11px] font-semibold tracking-[0.22em] text-blue-700 uppercase">
-            Plataforma operativa para oficinas técnicas
+            Plataforma conectada para presupuestos de obra
           </Badge>
           <h1 className="font-display mt-6 max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-[3.6rem]">
-            Presupuesta obras con más control, menos retrabajo y reportes listos.
+            La forma antigua de presupuestar obra ya no alcanza.
           </h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
-            Centraliza presupuestos, APUs, metrados, fórmula polinómica, cronograma y exportaciones en una plataforma moderna para construcción en Perú.
+            MC Presupuestos conecta presupuesto, APU, metrados, formula polinomica, cronograma y exportables en un solo flujo tecnico. Khipu IA revisa, detecta y acelera decisiones con contexto real.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <LandingLinkButton href="/register" className="gap-2">
@@ -49,10 +53,12 @@ export function HeroSection() {
             ))}
           </div>
 
-          {/* Social proof badges replacing inflated metrics */}
           <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm">
             {socialProof.map((signal) => (
-              <span key={signal} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-3 py-1.5 text-slate-600 shadow-sm shadow-slate-200/60">
+              <span
+                key={signal}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-3 py-1.5 text-slate-600 shadow-sm shadow-slate-200/60"
+              >
                 <CheckCircle2 className="h-4 w-4 text-blue-600" />
                 {signal}
               </span>
@@ -60,7 +66,6 @@ export function HeroSection() {
           </div>
         </div>
 
-        {/* Animated mockup */}
         <motion.div
           initial={prefersReduced ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 48, scale: 0.97 }}
           whileInView={{ opacity: 1, y: 0, scale: 1 }}
