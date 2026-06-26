@@ -76,7 +76,7 @@ export function HeroSection() {
           <div className="landing-surface-elevated relative overflow-hidden rounded-[1.75rem] bg-white p-2">
             <Image
               src="/hero-1.webp"
-              alt="Dashboard de MYC Presupuestos con resumen de proyectos, presupuesto total y acciones rápidas"
+              alt="Dashboard de MC Presupuestos con resumen de proyectos, presupuesto total y acciones rápidas"
               width={1200}
               height={575}
               priority
