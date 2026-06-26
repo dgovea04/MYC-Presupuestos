@@ -2,21 +2,33 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BenefitsSection } from "@/components/landing/benefits-section";
 import { ComparisonSection } from "@/components/landing/comparison-section";
 import { FaqSection } from "@/components/landing/faq-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { FinalCTASection } from "@/components/landing/final-cta-section";
 import { HeroSection } from "@/components/landing/hero-section";
-import { KhipuIASection } from "@/components/landing/khipu-ia-section";
-import { LandingFooter } from "@/components/landing/landing-footer";
-import { LandingNavbar } from "@/components/landing/landing-navbar";
-import { LegacyPainSection } from "@/components/landing/legacy-pain-section";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { ProductPreviewSection } from "@/components/landing/product-preview-section";
 import { SmartFlowsSection } from "@/components/landing/smart-flows-section";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
+
+const navigationMocks = vi.hoisted(() => ({
+  redirect: vi.fn(),
+}));
+
+const authMocks = vi.hoisted(() => ({
+  getAuthSession: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  redirect: navigationMocks.redirect,
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  getAuthSession: authMocks.getAuthSession,
+}));
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -27,23 +39,24 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let activeContainer: HTMLDivElement | null = null;
 
 afterEach(async () => {
-  if (!activeContainer) {
-    return;
+  if (activeContainer) {
+    const root = (activeContainer as HTMLDivElement & { __root?: ReturnType<typeof createRoot> }).__root;
+
+    if (root) {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+
+    activeContainer.remove();
+    activeContainer = null;
   }
 
-  const root = (activeContainer as HTMLDivElement & { __root?: ReturnType<typeof createRoot> }).__root;
-
-  if (root) {
-    await act(async () => {
-      root.unmount();
-    });
-  }
-
-  activeContainer.remove();
-  activeContainer = null;
+  authMocks.getAuthSession.mockReset();
+  navigationMocks.redirect.mockReset();
 });
 
-describe("MYC landing page sections", () => {
+describe("MC landing page sections", () => {
   it("renders HeroSection with MC branding, stronger positioning, and platform proof", async () => {
     const container = await renderNode(<HeroSection />);
 
@@ -146,7 +159,6 @@ describe("MYC landing page sections", () => {
     expect(container.textContent).toContain("Generales");
     expect(container.textContent).toContain("Planes y precios");
     expect(container.textContent).toContain("Técnicas");
-
     expect(container.textContent).toContain("¿Qué norma peruana usan para la fórmula polinómica?");
   });
 
@@ -183,26 +195,10 @@ describe("MYC landing page sections", () => {
     expect(container.textContent).toContain("Solicitar demostración");
   });
 
-  it("renders the repositioned MC landing flow in the approved order", async () => {
-    const container = await renderNode(
-      <main className="min-h-screen bg-slate-50 text-slate-950">
-        <LandingNavbar />
-        <HeroSection />
-        <LegacyPainSection />
-        <FeaturesSection />
-        <KhipuIASection />
-        <ProductPreviewSection />
-        <SmartFlowsSection />
-        <ComparisonSection />
-        <BenefitsSection />
-        <TestimonialsSection />
-        <FaqSection />
-        <PricingSection />
-        <FinalCTASection />
-        <LandingFooter />
-      </main>,
-    );
+  it("renders the repositioned MC landing flow in the approved order on the homepage module", async () => {
+    authMocks.getAuthSession.mockResolvedValue(null);
 
+    const container = await renderHomePage();
     const text = container.textContent ?? "";
 
     expect(text).toContain("MC Presupuestos");
@@ -218,8 +214,16 @@ describe("MYC landing page sections", () => {
     expect(text.indexOf("El problema no es calcular menos. Es coordinar mejor.")).toBeLessThan(
       text.indexOf("Khipu IA revisa el presupuesto con contexto visible."),
     );
+
+    expect(navigationMocks.redirect).not.toHaveBeenCalled();
   });
 });
+
+async function renderHomePage() {
+  const { default: Home } = await import("./page");
+  const node = await Home();
+  return renderNode(node);
+}
 
 async function renderNode(node: React.ReactNode) {
   activeContainer = document.createElement("div");
