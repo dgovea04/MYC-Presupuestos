@@ -122,13 +122,13 @@ describe("MC landing page sections", () => {
 
   it.fails("expects ComparisonSection to adopt fragmentado vs conectado framing", async () => {
     const container = await renderNode(<ComparisonSection />);
-    const heading = container.querySelector("h2");
-    const intro = container.querySelector("p");
+    const section = container.querySelector("#comparison");
+    const sectionText = section?.textContent ?? "";
 
-    expect(heading?.textContent).toContain("Flujo fragmentado");
-    expect(heading?.textContent).toContain("Flujo conectado");
-    expect(intro?.textContent).not.toContain("Software tradicional");
-    expect(intro?.textContent).not.toContain("Excel");
+    expect(sectionText).toContain("Flujo fragmentado");
+    expect(sectionText).toContain("Flujo conectado");
+    expect(sectionText).not.toContain("Software tradicional");
+    expect(sectionText).not.toContain("Excel");
   });
 
   it("renders BenefitsSection with 4 benefit cards on contrast surface", async () => {
