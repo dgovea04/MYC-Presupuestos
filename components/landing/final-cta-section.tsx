@@ -8,10 +8,10 @@ export function FinalCTASection() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-300">Empieza con un flujo de obra conectado</p>
             <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              Menos tiempo organizando hojas. Más tiempo gestionando proyectos.
+              MC Presupuestos conecta la operacion. Khipu IA acelera la revision.
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-              Prueba MYC Presupuestos y centraliza tu flujo técnico en una sola plataforma.
+              Moderniza la forma en que tu oficina tecnica prepara, revisa y entrega presupuestos de obra sin volver al flujo fragmentado.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">

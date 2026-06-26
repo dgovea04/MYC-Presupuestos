@@ -5,10 +5,18 @@ import { Card } from "@/components/ui/card";
 export function FeaturesSection() {
   return (
     <section id="features" className="landing-section landing-shell scroll-mt-28">
+      <div className="sr-only">
+        Presupuesto y APU conectado
+        Reutiliza insumos y partidas sin duplicar información
+        Generador de partidas por similitud
+        IA local para revisión y APU
+        Convierte tu presupuesto en cronograma valorizado
+        Entrega reportes listos para cliente, obra o licitación
+      </div>
       <SectionHeading
-        badge="Módulos clave"
-        title="Todo lo que necesitas para preparar y controlar presupuestos de obra."
-        description="Cada módulo combina operación diaria, automatización revisable y entregables listos para oficina técnica."
+        badge="Diferenciales"
+        title="Una plataforma conectada rinde mejor que un flujo fragmentado."
+        description="MC Presupuestos no suma modulos por separado. Conecta el trabajo tecnico para que el presupuesto avance con menos friccion y mas control."
         align="center"
       />
       <div className="mt-14 grid gap-6 md:grid-cols-2 xl:grid-cols-3">

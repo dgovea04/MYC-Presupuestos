@@ -52,55 +52,61 @@ export type PricingPlan = {
 
 export const featureItems: FeatureItem[] = [
   {
-    title: "Presupuesto y APU conectado",
-    description: "Arma partidas, metrados y análisis unitarios en el mismo flujo, con totales siempre trazables.",
+    title: "Presupuesto conectado",
+    description: "La estructura tecnica no se rompe al pasar de partidas a revision, exportacion o seguimiento.",
     icon: FileSpreadsheet,
   },
   {
-    title: "Reutiliza insumos y partidas sin duplicar información",
-    description: "Búsqueda por descripción, unidad, código o familia para evitar duplicar datos entre presupuestos.",
+    title: "APU con trazabilidad",
+    description: "Relaciona analisis unitarios, insumos y decisiones sin perder contexto entre vistas.",
     icon: Search,
   },
   {
-    title: "Generador de partidas por similitud",
-    description: "Compara partidas existentes, sugiere insumos y conserva fuentes, scores y criterios antes de guardar.",
-    icon: GitCompareArrows,
-  },
-  {
-    title: "IA local para revisión y APU",
-    description: "Usa Khipu con Ollama para chat técnico, generación de APU, revisión de costos y autocompletado.",
-    icon: BotMessageSquare,
-  },
-  {
-    title: "Convierte tu presupuesto en cronograma valorizado",
-    description: "Genera programación, calendario valorizado, calendario de insumos, ruta crítica visual y Curva S.",
+    title: "Formula y cronograma dentro del flujo",
+    description: "No cierres el presupuesto en una herramienta para terminar la operacion en otra.",
     icon: FolderKanban,
   },
   {
-    title: "Entrega reportes listos para cliente, obra o licitación",
-    description: "Genera PDF, Excel, CSV o paquetes ZIP con presets, logo, firma, vista previa y decimales configurables.",
+    title: "Exportables listos para oficina tecnica",
+    description: "Prepara PDF, Excel, CSV o ZIP desde una base consistente y revisable.",
     icon: FileArchive,
+  },
+  {
+    title: "Khipu IA con contexto visible",
+    description: "Acelera revision tecnica, observaciones y analisis sin convertir la IA en una caja negra.",
+    icon: BotMessageSquare,
+  },
+  {
+    title: "Operacion preparada para crecer",
+    description: "Trabaja con una base moderna para equipos que necesitan menos friccion y mas continuidad.",
+    icon: HardHat,
   },
 ];
 
 export const smartFlowItems: SmartFlowItem[] = [
   {
-    title: "De partida nueva a APU sugerido",
-    description: "Busca partidas similares, agrega insumos recomendados y revisa cantidades antes de convertirlas en catálogo.",
-    steps: ["Buscar similitud", "Comparar fuentes", "Guardar APU revisado"],
+    title: "Importa o construye",
+    description: "Empieza desde carga existente o arma el presupuesto en una base moderna desde el primer dia.",
+    steps: ["Importar datos", "Normalizar estructura", "Abrir presupuesto activo"],
     icon: GitCompareArrows,
   },
   {
-    title: "De presupuesto a cronograma valorizado",
-    description: "Parte de las partidas del presupuesto, genera programación y revisa valorización, recursos y Curva S.",
-    steps: ["Generar cronograma", "Ajustar fechas", "Exportar paquete"],
+    title: "Estructura y conecta",
+    description: "Relaciona partidas, APU, metrados y entregables sin cortar el flujo entre modulos.",
+    steps: ["Conectar partidas", "Revisar APU", "Preparar resumen tecnico"],
     icon: BarChart3,
   },
   {
-    title: "De revisión técnica a pendientes",
-    description: "Convierte observaciones en notas contextuales vinculadas a proyecto, presupuesto o partida.",
-    steps: ["Detectar alerta", "Crear nota", "Resolver pendiente"],
+    title: "Revisa con Khipu",
+    description: "Usa IA contextual para detectar alertas visibles y acelerar el analisis antes del cierre.",
+    steps: ["Detectar inconsistencias", "Registrar observacion", "Tomar decision tecnica"],
     icon: StickyNote,
+  },
+  {
+    title: "Prepara entregables",
+    description: "Cierra el flujo con exportables, cronograma y paquetes tecnicos listos para compartir.",
+    steps: ["Elegir preset", "Validar salida", "Exportar paquete"],
+    icon: FileArchive,
   },
 ];
 

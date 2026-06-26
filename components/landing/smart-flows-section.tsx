@@ -6,12 +6,12 @@ export function SmartFlowsSection() {
   return (
     <section id="flows" className="landing-section-tight landing-shell scroll-mt-28">
       <SectionHeading
-        badge="Flujos inteligentes"
-        title="Automatiza tareas repetitivas sin perder revisión técnica."
-        description="MYC ayuda a avanzar más rápido, pero mantiene las decisiones técnicas en manos del equipo."
+        badge={"Flujo\u00a0conectado"}
+        title="Del presupuesto al entregable sin cambiar de forma de trabajo."
+        description="La operacion se mantiene conectada desde la carga inicial hasta la revision con Khipu y la salida final."
         align="center"
       />
-      <div className="mt-12 grid gap-6 lg:grid-cols-3">
+      <div className="mt-12 grid gap-6 xl:grid-cols-4">
         {smartFlowItems.map((flow) => (
           <article
             key={flow.title}
