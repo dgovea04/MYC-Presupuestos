@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,20 @@ const mocks = vi.hoisted(() => ({
   getResourcesByUser: vi.fn(),
   getUserSettings: vi.fn(),
   notFound: vi.fn(),
+}));
+
+// Mock next/dynamic to bypass ssr:false and render the loaded component synchronously in tests
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<{ default: React.ComponentType<unknown> }>) => {
+    let Component: React.ComponentType<unknown> | null = null;
+    const promise = loader().then((mod) => {
+      Component = mod.default;
+    });
+    return (props: Record<string, unknown>) => {
+      if (!Component) throw promise;
+      return createElement(Component, props);
+    };
+  },
 }));
 
 vi.mock("next/navigation", () => ({

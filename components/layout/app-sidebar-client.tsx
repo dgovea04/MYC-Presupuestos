@@ -46,7 +46,15 @@ type AppSidebarClientProps = {
 const NAV_ITEMS: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
-  { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
+  {
+    id: "presupuestos",
+    label: "Presupuestos",
+    icon: FileSpreadsheet,
+    children: [
+      { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
+      { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
+    ],
+  },
   {
     id: "importaciones",
     label: "Importaciones",
@@ -57,7 +65,6 @@ const NAV_ITEMS: SidebarNavItem[] = [
       { href: "/imports/delphin", label: "Delphin Express", icon: FileSpreadsheet },
     ],
   },
-  { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
   {
     href: "/ai",
     label: "Khipu",
@@ -203,6 +210,11 @@ export function AppSidebarClient({ initialMode, unlockedFeatures, userAvatarUrl,
     () => getStoredSidebarMode() ?? initialMode ?? getViewportMode(),
     () => getSidebarModeServerSnapshot(initialMode),
   );
+  const transitionsEnabled = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const isMini = mode === "mini";
   const initials = getInitials(userName, userEmail);
   const displayName = userName?.trim() || "Equipo tecnico";
@@ -234,7 +246,8 @@ export function AppSidebarClient({ initialMode, unlockedFeatures, userAvatarUrl,
   return (
     <aside
       className={cn(
-        "flex min-h-full flex-col overflow-visible rounded-3xl border border-white/70 bg-slate-900 p-4 text-white shadow-xl shadow-slate-900/10 transition-[width,padding] duration-200 lg:h-[calc(100vh-2rem)] lg:min-h-[calc(100vh-2rem)]",
+        "flex min-h-full flex-col overflow-visible rounded-3xl border border-white/70 bg-slate-900 p-4 text-white shadow-xl shadow-slate-900/10 lg:h-[calc(100vh-2rem)] lg:min-h-[calc(100vh-2rem)]",
+        transitionsEnabled ? "transition-[width,padding] duration-200" : "transition-none",
         isMini ? "items-center" : "",
       )}
       data-sidebar-mode={mode}
