@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectsListByUser } from "@/lib/data/projects";
+import { ensureDate } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Proyectos | MYC Presupuestos",
@@ -50,11 +51,11 @@ export default async function ProjectsPage() {
               clientName: project.clientName,
               location: project.location,
               projectType: project.projectType,
-              startDate: project.startDate?.toISOString(),
-              endDate: project.endDate?.toISOString(),
+              startDate: project.startDate ? ensureDate(project.startDate).toISOString() : undefined,
+              endDate: project.endDate ? ensureDate(project.endDate).toISOString() : undefined,
               status: project.status,
-              createdAt: project.createdAt.toISOString(),
-              updatedAt: project.updatedAt.toISOString(),
+              createdAt: ensureDate(project.createdAt).toISOString(),
+              updatedAt: ensureDate(project.updatedAt).toISOString(),
               budgetsCount: project._count.budgets,
             }))}
           />

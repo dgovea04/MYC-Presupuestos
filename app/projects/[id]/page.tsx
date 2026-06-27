@@ -16,7 +16,7 @@ import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectActivityHistory } from "@/components/projects/project-activity-history";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
 import { getProjectOtherSections } from "@/lib/projects/other-sections";
-import { formatDate } from "@/lib/utils";
+import { ensureDate, formatDate } from "@/lib/utils";
 
 const projectSections = [
   {
@@ -156,7 +156,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   kind: generalBudget.kind,
                   currency: generalBudget.currency,
                   totalAmount: decimalToNumber(generalBudget.totalAmount),
-                  updatedAt: generalBudget.updatedAt.toISOString(),
+                  updatedAt: ensureDate(generalBudget.updatedAt).toISOString(),
                 }
               : null
           }
@@ -168,7 +168,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             kind: budget.kind,
             currency: budget.currency,
             totalAmount: decimalToNumber(budget.totalAmount),
-            updatedAt: budget.updatedAt.toISOString(),
+            updatedAt: ensureDate(budget.updatedAt).toISOString(),
           }))}
         />
 

@@ -1100,7 +1100,7 @@ function getEventTypeBadgeConfig(type: DashboardActivityItem["type"]) {
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
     return {
       label: "Formula",
-      tone: "sky" as const,
+      tone: "violet" as const,
     };
   }
 
@@ -1142,7 +1142,7 @@ function getEventTypeIconConfig(type: DashboardActivityItem["type"]) {
   if (type === "POLYNOMIAL_FORMULA_UPDATED" || type === "POLYNOMIAL_FORMULA_GENERATED") {
     return {
       icon: Sigma,
-      className: "bg-sky-100 text-sky-700",
+      className: "bg-violet-100 text-violet-700",
     };
   }
 

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Activity, ArrowRight, Calculator, FileSpreadsheet, ReceiptText, Sigma, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
@@ -17,17 +16,14 @@ import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
 import { getBudgetById, getProjectSubBudgetDetails, getProjectSubBudgetSummaries } from "@/lib/data/budgets";
-
-const BudgetFlowDynamic = dynamic(() =>
-  import("@/components/budget/budget-flow").then((mod) => ({ default: mod.BudgetFlow })),
-);
+import { BudgetFlowWrapper } from "@/components/budget/budget-flow-wrapper";
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getProjectOverviewById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { getUserSettings } from "@/lib/data/settings";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { decimalToNumber } from "@/lib/db/serializers";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, ensureDate, formatCurrency, formatDate } from "@/lib/utils";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -255,7 +251,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               totalUtility: decimalToNumber(subBudget.totalUtility),
               totalTax: decimalToNumber(subBudget.totalTax),
               totalAmount: decimalToNumber(subBudget.totalAmount),
-              updatedAt: subBudget.updatedAt.toISOString(),
+              updatedAt: ensureDate(subBudget.updatedAt).toISOString(),
               levelsCount: subBudget._count.levels,
               itemsCount: subBudget._count.items,
             }))}
@@ -284,7 +280,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         viewSummary: `Sub presupuesto ${budget.name} del proyecto ${project.name}.`,
       }}
     >
-      <BudgetFlowDynamic
+      <BudgetFlowWrapper
         budget={budget}
         projectName={project.name}
         templateTraceability={templateTraceability}

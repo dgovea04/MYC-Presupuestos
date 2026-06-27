@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetsByUser } from "@/lib/data/budgets";
+import { ensureDate } from "@/lib/utils";
 
 export default async function BudgetsPage({
   searchParams,
@@ -45,7 +46,7 @@ export default async function BudgetsPage({
               name: budget.name,
               currency: budget.currency,
               totalAmount: Number(budget.totalAmount),
-              updatedAt: budget.updatedAt.toISOString(),
+              updatedAt: ensureDate(budget.updatedAt).toISOString(),
               projectName: budget.project.name,
             }))}
           />
