@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAppTheme } from "@/components/layout/app-theme-provider";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { APP_SETTINGS_UPDATED_EVENT } from "@/lib/settings/events";
+import { persistAppTheme } from "@/lib/theme/app-theme";
 import type { UserSettingsRecord } from "@/types/settings";
 
 export function AppThemeToggle() {
@@ -42,6 +43,7 @@ export function AppThemeToggle() {
 
       const savedSettings = (await saveResponse.json()) as UserSettingsRecord;
       setTheme(savedSettings.appTheme ?? nextTheme);
+      persistAppTheme(savedSettings.appTheme ?? nextTheme);
       window.dispatchEvent(new CustomEvent(APP_SETTINGS_UPDATED_EVENT, { detail: savedSettings }));
     } catch {
       setTheme(settings.appTheme ?? theme);

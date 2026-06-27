@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronDown, Lock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import type { FeatureKey } from "@/lib/billing/entitlements";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,14 @@ export function SidebarNav({
   const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>(() => getActiveGroupIds(items, pathname));
   const [floatingGroup, setFloatingGroup] = useState<{ id: string; pathname: string } | null>(null);
   const floatingGroupId = isMini && floatingGroup?.pathname === pathname ? floatingGroup.id : null;
+  const router = useRouter();
+
+  const prefetchRoute = useCallback(
+    (href: string) => {
+      router.prefetch(href);
+    },
+    [router],
+  );
 
   useEffect(() => {
     if (!floatingGroupId) {
@@ -160,6 +169,8 @@ export function SidebarNav({
                           )}
                           href={child.href}
                           key={child.href}
+                          onMouseEnter={() => prefetchRoute(child.href)}
+                          prefetch={false}
                           title={childLocked ? `${child.label} disponible en Pro` : undefined}
                         >
                           <ChildIcon className="h-4 w-4 shrink-0" />
@@ -190,6 +201,8 @@ export function SidebarNav({
                             )}
                             href={child.href}
                             key={child.href}
+                            onMouseEnter={() => prefetchRoute(child.href)}
+                            prefetch={false}
                             title={childLocked ? `${child.label} disponible en Pro` : undefined}
                           >
                             <ChildIcon className="h-4 w-4 shrink-0" />
@@ -221,6 +234,8 @@ export function SidebarNav({
               isMini ? "w-14 justify-center px-0" : "gap-3.5",
             )}
             href={item.href}
+            onMouseEnter={() => prefetchRoute(item.href)}
+            prefetch={false}
             title={locked ? `${item.label} disponible en Pro` : isMini ? item.label : undefined}
           >
             <Icon className="h-5 w-5 shrink-0" />

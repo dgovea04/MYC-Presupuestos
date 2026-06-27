@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { APP_SETTINGS_UPDATED_EVENT } from "@/lib/settings/events";
+import { applyAppThemeToDocument, persistAppTheme, readStoredAppTheme } from "@/lib/theme/app-theme";
 import { DEFAULT_APP_THEME, type AppThemeOption } from "@/types/settings";
 
 const AppThemeContext = createContext<{
@@ -20,11 +21,11 @@ export function AppThemeProvider({
   children: ReactNode;
   initialTheme: AppThemeOption;
 }) {
-  const [theme, setTheme] = useState<AppThemeOption>(initialTheme);
+  const [theme, setTheme] = useState<AppThemeOption>(() => readStoredAppTheme() ?? initialTheme);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.body.dataset.theme = theme;
+    applyAppThemeToDocument(theme);
+    persistAppTheme(theme);
 
     return () => {
       delete document.documentElement.dataset.theme;

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useCallback } from "react";
 import { CircleUserRound } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn } from "@/lib/utils";
@@ -17,6 +19,10 @@ export function SidebarUserCard({
   };
 }) {
   const isMini = mode === "mini";
+  const router = useRouter();
+  const prefetchAccount = useCallback(() => {
+    router.prefetch("/account");
+  }, [router]);
 
   return (
     <div className={cn("mt-auto w-full rounded-2xl bg-white/10 text-slate-200", isMini ? "p-3" : "p-4")}>
@@ -57,6 +63,8 @@ export function SidebarUserCard({
             isMini ? "h-10 w-10" : "w-full gap-2 px-3 py-2.5",
           )}
           href="/account"
+          onMouseEnter={prefetchAccount}
+          prefetch={true}
           title={isMini ? "Mi perfil" : undefined}
         >
           <CircleUserRound className="h-4 w-4 shrink-0" />

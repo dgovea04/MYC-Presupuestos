@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { queryRawMock } = vi.hoisted(() => ({
@@ -25,6 +27,14 @@ describe("authOptions callbacks", () => {
 
   it("uses an app-scoped session cookie to avoid stale default NextAuth JWTs", () => {
     expect(authOptions.cookies?.sessionToken?.name).toContain("myc-presupuestos.session-token");
+  });
+
+  it("keeps the NextAuth route handler in the non-optional catch-all segment", () => {
+    const nonOptionalCatchAllRoute = path.join(process.cwd(), "app", "api", "auth", "[...nextauth]", "route.ts");
+    const optionalCatchAllRoute = path.join(process.cwd(), "app", "api", "auth", "[[...nextauth]]", "route.ts");
+
+    expect(existsSync(nonOptionalCatchAllRoute)).toBe(true);
+    expect(existsSync(optionalCatchAllRoute)).toBe(false);
   });
 
   it("hydrates session user fields from the latest database snapshot", async () => {

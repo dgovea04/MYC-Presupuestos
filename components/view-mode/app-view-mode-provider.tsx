@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { getExcelViewCssVariables } from "@/lib/budget/excel-view-css";
 import {
@@ -36,14 +36,7 @@ function getLocalStorageSafely(): Storage | undefined {
 }
 
 function resolveInitialViewMode(defaultViewMode: ViewMode, initialViewMode?: ViewMode): ViewMode {
-  const fallbackMode = coerceViewMode(initialViewMode ?? defaultViewMode);
-
-  if (typeof window === "undefined") {
-    return fallbackMode;
-  }
-
-  const storage = getLocalStorageSafely();
-  return hasStoredViewMode(storage) ? readStoredViewMode(storage) : fallbackMode;
+  return coerceViewMode(initialViewMode ?? defaultViewMode);
 }
 
 export function AppViewModeProvider({
@@ -73,14 +66,22 @@ export function AppViewModeProvider({
 
   useEffect(() => {
     const storage = getLocalStorageSafely();
-    const nextMode = hasStoredViewMode(storage) ? readStoredViewMode(storage) : viewMode;
+    const storedModeExists = hasStoredViewMode(storage);
+    const fallbackMode = coerceViewMode(initialViewMode ?? defaultViewMode);
+    const nextMode = storedModeExists ? readStoredViewMode(storage) : fallbackMode;
 
-    if (hasStoredViewMode(storage)) {
+    if (viewMode !== nextMode) {
+      startTransition(() => {
+        setViewModeState(nextMode);
+      });
+    }
+
+    if (storedModeExists) {
       writeStoredViewMode(storage, nextMode);
       return;
     }
 
-    applyViewModeToDocument(coerceViewMode(initialViewMode ?? defaultViewMode));
+    applyViewModeToDocument(fallbackMode);
   }, [defaultViewMode, initialViewMode, viewMode]);
 
   useEffect(() => {

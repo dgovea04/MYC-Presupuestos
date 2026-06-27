@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 import { Plus } from "lucide-react";
 import { AiViewContextBridge } from "@/hooks/use-ai-view-context";
 import { getAuthSession } from "@/lib/auth/session";
-import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode } from "@/lib/budget/view-mode";
 import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
+import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode, type ViewMode } from "@/lib/budget/view-mode";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppBackButton } from "@/components/layout/app-back-button";
 import { AppSidebarClient } from "@/components/layout/app-sidebar-client";
@@ -74,16 +74,20 @@ export async function AppShell({
     floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
   };
   const userId = session?.user?.id ?? currentUser?.id;
-  const settings = initialSettings ?? (userId ? await getUserSettings(userId) : fallbackSettings);
-  const appTheme = settings.appTheme ?? DEFAULT_APP_THEME;
-  const license = userId ? await getEffectiveUserLicense({ userId }) : null;
+  const [settings, license] = await Promise.all([
+    initialSettings ? Promise.resolve(initialSettings) : userId ? getUserSettings(userId) : Promise.resolve(fallbackSettings),
+    userId ? getEffectiveUserLicense({ userId }) : Promise.resolve(null),
+  ]);
   const cookieStore = await cookies();
-  const initialViewMode = coerceViewMode(cookieStore.get(APP_VIEW_MODE_COOKIE_NAME)?.value);
-  const initialSidebarMode = (() => {
-    const rawValue = cookieStore.get(SIDEBAR_MODE_COOKIE_NAME)?.value;
-    return isSidebarMode(rawValue) ? rawValue : null;
-  })();
-  const initialSidebarWidth = getSidebarWidthCssValue(initialSidebarMode ?? "expanded");
+  const storedViewModeCookie = cookieStore.get(APP_VIEW_MODE_COOKIE_NAME)?.value;
+  const storedSidebarModeCookie = cookieStore.get(SIDEBAR_MODE_COOKIE_NAME)?.value;
+  const initialViewMode: ViewMode =
+    storedViewModeCookie === "excel" || storedViewModeCookie === "modern"
+      ? coerceViewMode(storedViewModeCookie)
+      : settings.defaultViewMode;
+  const initialSidebarMode = isSidebarMode(storedSidebarModeCookie) ? storedSidebarModeCookie : null;
+  const appTheme = settings.appTheme ?? DEFAULT_APP_THEME;
+  const initialSidebarWidth = getSidebarWidthCssValue("expanded");
 
   return (
     <FormattingSettingsProvider settings={settings}>

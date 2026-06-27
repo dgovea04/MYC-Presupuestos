@@ -1,14 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
-}));
-
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({
-    get: vi.fn(() => undefined),
+    get: () => undefined,
   })),
+}));
+
+vi.mock("next/link", () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -28,11 +28,13 @@ vi.mock("@/components/layout/app-sidebar-client", () => ({
   SIDEBAR_MINI_WIDTH: 80,
   SIDEBAR_MODE_COOKIE_NAME: "myc_sidebar_mode",
   AppSidebarClient: ({
+    initialMode,
     unlockedFeatures,
     userAvatarUrl,
     userEmail,
     userName,
   }: {
+    initialMode?: "expanded" | "mini" | null;
     unlockedFeatures?: string[];
     userAvatarUrl?: string | null;
     userEmail?: string | null;
@@ -42,6 +44,7 @@ vi.mock("@/components/layout/app-sidebar-client", () => ({
       data-avatar={userAvatarUrl ?? ""}
       data-email={userEmail ?? ""}
       data-features={unlockedFeatures?.join(",") ?? ""}
+      data-initial-mode={initialMode ?? ""}
       data-name={userName ?? ""}
       data-testid="sidebar-user"
     />
@@ -88,6 +91,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppShell } from "@/components/layout/app-shell";
+import { cookies } from "next/headers";
 
 describe("AppShell", () => {
   it("uses the hydrated session user fields for the sidebar when currentUser is not passed", async () => {
@@ -246,5 +250,98 @@ describe("AppShell", () => {
 
     expect(markup).toContain('data-theme="dark"');
     expect(markup).toContain("theme-app");
+  });
+
+  it("prefers the stored app view mode cookie over the settings default", async () => {
+    vi.mocked(getAuthSession).mockReset();
+    vi.mocked(getUserSettings).mockReset();
+    vi.mocked(getEffectiveUserLicense).mockResolvedValue(null);
+    vi.mocked(cookies).mockResolvedValue({
+      get: (name: string) => (name === "app_view_mode" ? { name, value: "excel" } : undefined),
+    } as Awaited<ReturnType<typeof cookies>>);
+
+    const markup = renderToStaticMarkup(
+      await AppShell({
+        children: <div>Contenido</div>,
+        currentUser: {
+          id: "user-4",
+          avatarUrl: "/uploads/avatars/user-4.webp",
+          email: "excel@example.com",
+          name: "Modo Excel",
+        },
+        settings: {
+          defaultCurrency: "PEN",
+          currencyDecimals: 2,
+          dateFormat: "DD_MMM_YYYY",
+          appTheme: "light",
+          defaultViewMode: "modern",
+          excelShowFieldBorders: true,
+          excelRowHeight: 52,
+          defaultIgvRate: 0.18,
+          defaultGeneralExpensesRate: 0.1,
+          defaultUtilityRate: 0.08,
+          defaultSubBudgetNames: ["Arquitectura"],
+          aiProviderPreference: "auto",
+          floatingKhipuProvider: "ollama",
+          floatingKhipuWidth: 600,
+          floatingKhipuHeight: 500,
+          floatingKhipuFontSize: "normal",
+          floatingKhipuPosition: "bottom-right",
+          floatingKhipuTheme: "light",
+        },
+      }),
+    );
+
+    expect(markup).toContain("Contenido");
+    expect(cookies).toHaveBeenCalled();
+  });
+
+  it("passes the stored sidebar mode cookie to the client sidebar to avoid refresh jumps", async () => {
+    vi.mocked(getAuthSession).mockReset();
+    vi.mocked(getUserSettings).mockReset();
+    vi.mocked(getEffectiveUserLicense).mockResolvedValue(null);
+    vi.mocked(cookies).mockResolvedValue({
+      get: (name: string) => {
+        if (name === "myc_sidebar_mode") {
+          return { name, value: "mini" };
+        }
+
+        return undefined;
+      },
+    } as Awaited<ReturnType<typeof cookies>>);
+
+    const markup = renderToStaticMarkup(
+      await AppShell({
+        children: <div>Contenido</div>,
+        currentUser: {
+          id: "user-5",
+          avatarUrl: "/uploads/avatars/user-5.webp",
+          email: "mini@example.com",
+          name: "Modo Mini",
+        },
+        settings: {
+          defaultCurrency: "PEN",
+          currencyDecimals: 2,
+          dateFormat: "DD_MMM_YYYY",
+          appTheme: "light",
+          defaultViewMode: "modern",
+          excelShowFieldBorders: true,
+          excelRowHeight: 52,
+          defaultIgvRate: 0.18,
+          defaultGeneralExpensesRate: 0.1,
+          defaultUtilityRate: 0.08,
+          defaultSubBudgetNames: ["Arquitectura"],
+          aiProviderPreference: "auto",
+          floatingKhipuProvider: "ollama",
+          floatingKhipuWidth: 600,
+          floatingKhipuHeight: 500,
+          floatingKhipuFontSize: "normal",
+          floatingKhipuPosition: "bottom-right",
+          floatingKhipuTheme: "light",
+        },
+      }),
+    );
+
+    expect(markup).toContain('data-initial-mode="mini"');
   });
 });

@@ -9,11 +9,20 @@ let mockPathname = "/dashboard";
 const mockSignOut = vi.fn();
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  ),
+  default: ({
+    children,
+    href,
+    prefetch,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; prefetch?: boolean }) => {
+    void prefetch;
+
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 vi.mock("next/image", () => ({
@@ -31,6 +40,7 @@ vi.mock("next/image", () => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname,
+  useRouter: () => ({ prefetch: vi.fn() }),
 }));
 
 vi.mock("next-auth/react", () => ({
@@ -131,10 +141,10 @@ describe("AppSidebarClient", () => {
       "/dashboard",
       "/projects",
       "/budgets",
+      "/metrados-avanzados",
       "/imports/s10",
       "/imports/rw7",
       "/imports/delphin",
-      "/metrados-avanzados",
       "/ai",
       "/resources",
       "/partidas",
