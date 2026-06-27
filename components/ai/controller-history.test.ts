@@ -17,7 +17,7 @@ import {
   loadProjectFeedbackSummary,
   loadProjectLatestFeedback,
 } from "@/components/ai/controller-history";
-import type { AiFeedbackType, AiHistoryEntry, AiResultWithHistory } from "@/components/ai/use-ai-assistant-controller";
+import type { AiHistoryEntry, AiResultWithHistory } from "@/components/ai/use-ai-assistant-controller";
 
 function createResponse(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), { status }));
@@ -236,7 +236,6 @@ describe("readFeedbackEntryForResult", () => {
 
   it("finds entry in history by result reference", () => {
     const entry = createValidHistoryEntry();
-    const result = entry.result;
     expect(readFeedbackEntryForResult(createValidResult({ answer: entry.result.answer }), [entry])).toBeNull(); // not same reference
   });
 

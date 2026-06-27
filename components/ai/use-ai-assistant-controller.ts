@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch, MutableRefObject, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MYCBridgeState } from "@/lib/ai/myc-bridge-client";
 import type {
@@ -39,7 +39,6 @@ import {
   submitBridgeRequest,
   subscribeBridgeEvents,
   toBackendProvider,
-  mapActionToKhipuTask,
   submitCloudRequest,
 } from "@/components/ai/controller-providers";
 import {

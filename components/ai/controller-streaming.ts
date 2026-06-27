@@ -4,7 +4,6 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import {
   isRecord,
   readAiResult,
-  readHistoryEntry,
   summarizeRequest,
 } from "@/components/ai/controller-parsers";
 

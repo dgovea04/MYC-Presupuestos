@@ -1,6 +1,5 @@
 import { AiSuggestionFeedbackType } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { prisma } from "@/lib/db/prisma";
 
 const mocks = vi.hoisted(() => ({
   aiSuggestionFeedbackEvent: {

@@ -187,8 +187,8 @@ describe("readHistoryEntry", () => {
   });
 
   it("returns null when id is missing", () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { id: _, ...noId } = validEntry as any;
+    const noId: Record<string, unknown> = { ...validEntry };
+    delete noId.id;
     expect(readHistoryEntry(noId)).toBeNull();
   });
 

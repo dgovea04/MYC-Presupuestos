@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 type KhipuSymbolProps = {
@@ -21,22 +22,28 @@ export function KhipuSymbol({ className, variant = "default" }: KhipuSymbolProps
   if (isDark) {
     return (
       <span className={cn("inline-flex items-center justify-center rounded-xl bg-[#0D134D]", className)}>
-        <img
+        <Image
           src="/khipu-1.svg"
           alt=""
+          width={64}
+          height={64}
           className="h-full w-full brightness-[1.6] contrast-[1.15]"
           aria-hidden="true"
+          unoptimized
         />
       </span>
     );
   }
 
   return (
-    <img
+    <Image
       src="/khipu-1.svg"
       alt=""
+      width={64}
+      height={64}
       className={cn("h-auto w-auto", isMono && "grayscale", className)}
       aria-hidden="true"
+      unoptimized
     />
   );
 }

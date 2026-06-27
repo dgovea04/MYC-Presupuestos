@@ -629,7 +629,6 @@ describe("user settings data", () => {
           _floatingKhipuHeightColumn,
           _floatingKhipuFontSizeColumn,
           _floatingKhipuPositionColumn,
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           _floatingKhipuThemeColumn,
           id,
           userId,

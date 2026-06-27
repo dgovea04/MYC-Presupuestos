@@ -9,18 +9,18 @@ export function DashboardAnalyticsSectionSkeleton() {
         description="Cargando metricas avanzadas de presupuestos, tendencias y alertas..."
       />
       <div className="grid gap-6 xl:grid-cols-2">
-        <AnalyticsChartSkeleton title="Costo por fase / subpresupuesto" height="h-64" />
-        <AnalyticsChartSkeleton title="Comparativa de presupuestos" height="h-64" />
+        <AnalyticsChartSkeleton height="h-64" />
+        <AnalyticsChartSkeleton height="h-64" />
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
-        <AnalyticsChartSkeleton title="Tendencias de K historicas" height="h-64" />
-        <AnalyticsChartSkeleton title="Alertas de desviacion" height="h-64" />
+        <AnalyticsChartSkeleton height="h-64" />
+        <AnalyticsChartSkeleton height="h-64" />
       </div>
     </section>
   );
 }
 
-function AnalyticsChartSkeleton({ title, height }: { title: string; height: string }) {
+function AnalyticsChartSkeleton({ height }: { height: string }) {
   return (
     <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardHeader className="px-5 py-4">

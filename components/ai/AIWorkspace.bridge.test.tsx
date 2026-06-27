@@ -248,7 +248,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const bridgeListener = vi.fn<(event: Event) => void>();
     window.addEventListener("MYCBridgeSendPrompt", bridgeListener);
 
-    const { getButtonByText, getByText } = await renderWorkspace();
+    const { getByText } = await renderWorkspace();
     await act(async () => {
       getButtonByText("Bridge").click();
     });
@@ -318,7 +318,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
       ]),
     );
 
-    const { getButtonByText, getByText } = await renderWorkspace();
+    const { getByText } = await renderWorkspace();
 
     expect(getByText("Actividad reciente de Khipu")).toBeTruthy();
 
@@ -388,7 +388,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { getButtonByText, getByText, getTextContaining, queryByText } = await renderWorkspace({ projectId: "project-1" });
+    const { getByText, getTextContaining, queryByText } = await renderWorkspace({ projectId: "project-1" });
 
     expect(getByText("Consulta persistida")).toBeTruthy();
     expect(queryByText("Consulta corrupta")).toBeNull();

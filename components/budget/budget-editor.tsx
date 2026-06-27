@@ -1889,7 +1889,7 @@ export function BudgetEditor({
     }
   }
 
-  const openApuEditorById = useCallback((partidaId: string, _budgetId: string) => {
+  const openApuEditorById = useCallback((partidaId: string) => {
     const item = summary.items.find((i) => i.id === partidaId);
     if (item) openApuSheet(item);
   }, [openApuSheet, summary.items]);
@@ -1938,7 +1938,7 @@ export function BudgetEditor({
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <Link
                   href={`/budgets/${budget.id}/risk-analysis`}
-                  className="theme-status-info theme-status-info-strong inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-22px_rgba(37,99,235,0.32)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  className="theme-budget-risk-link inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                 >
                   <Activity className="h-4 w-4" />
                   Riesgos
@@ -4308,7 +4308,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             size="sm"
             variant="ghost"
             onClick={() => onRunAiItemAction("chat", row.item.id)}
-            className="theme-status-info theme-status-info-strong h-7 gap-1 rounded-full border px-2 text-[10px] font-medium tracking-[0.08em]"
+            className="theme-budget-ai-pill h-7 gap-1 rounded-full border px-2 text-[10px] font-medium tracking-[0.08em]"
             title="Explicar esta partida con IA"
             aria-label="Explicar esta partida con IA"
           >
@@ -4600,15 +4600,15 @@ const BudgetTableSection = memo(function BudgetTableSection({
 
       <div
         className={cn(
-          "theme-status-info flex flex-wrap items-center justify-between border shadow-[0_14px_30px_-26px_rgba(2,132,199,0.28)]",
+          "theme-budget-total-surface flex flex-wrap items-center justify-between border shadow-[0_14px_30px_-26px_rgba(15,23,42,0.16)]",
           isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3",
         )}
       >
-        <p className={cn("theme-status-info-strong font-medium", isExcelMode && "text-sm")}>Total visible y actualizado automáticamente</p>
+        <p className={cn("theme-budget-total-surface-label font-medium", isExcelMode && "text-sm")}>Total visible y actualizado automáticamente</p>
         <AnimatedCurrencyValue
           value={totalAmount}
           currency={currency}
-          className={cn("theme-strong-text px-0 py-0 font-semibold", isExcelMode ? "text-xl" : "text-2xl")}
+          className={cn("theme-budget-total-surface-value px-0 py-0 font-semibold", isExcelMode ? "text-xl" : "text-2xl")}
         />
       </div>
     </CardContent>
@@ -4681,12 +4681,12 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
           <SummaryRow label="Gastos generales" rate={generalExpensesRate} value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
           <SummaryRow label="Utilidad" rate={utilityRate} value={totals.totalUtility} currency={currency} compact={isExcelMode} />
           <SummaryRow label="IGV" rate={igvRate} value={totals.totalTax} currency={currency} compact={isExcelMode} />
-          <div className={cn("theme-filter-button-active shadow-[0_18px_36px_-26px_rgba(15,23,42,0.45)]", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
-            <p className={cn("theme-muted-text", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
+          <div className={cn("theme-budget-summary-total", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
+            <p className={cn("theme-budget-summary-total-label", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
             <AnimatedCurrencyValue
               value={totals.totalAmount}
               currency={currency}
-              className={cn("theme-strong-text mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
+              className={cn("theme-budget-summary-total-value mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
             />
           </div>
           <div className="grid gap-2">

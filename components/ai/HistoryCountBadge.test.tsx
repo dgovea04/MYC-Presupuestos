@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HistoryCountBadge } from "@/components/ai/HistoryCountBadge";
 
 declare global {
-  // eslint-disable-next-line no-var
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
