@@ -1,5 +1,4 @@
 import { cache } from "react";
-import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { serializeCatalogPartida } from "@/lib/db/serializers";
 import { ensureDate } from "@/lib/utils";
@@ -19,14 +18,9 @@ function normalizeCatalogPartidasDates<T extends { createdAt?: Date | string | n
 
 export const getCatalogPartidas = cache(
   async () => {
-    const result = await unstable_cache(
-      async () => {
-        return getCatalogPartidasFromDatabase();
-      },
-      [CATALOG_PARTIDAS_CACHE_TAG],
-      { revalidate: 60, tags: [CATALOG_PARTIDAS_CACHE_TAG] },
-    )();
-
+    // This catalog exceeds Next's 2 MB data-cache item limit, so we only memoize
+    // within the current render/request and avoid unstable_cache here.
+    const result = await getCatalogPartidasFromDatabase();
     return normalizeCatalogPartidasDates(result);
   },
 );

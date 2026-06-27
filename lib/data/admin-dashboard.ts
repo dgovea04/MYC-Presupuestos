@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentAiUsagePeriod } from "@/lib/ai/usage";
+import { ensureDate } from "@/lib/utils";
 
 type AdminDashboardFilters = {
   plan?: string;
@@ -146,10 +147,10 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       billingMode: user.membershipPlan?.billingMode ?? "FREE",
       billingProvider: billingSubscription?.provider ?? null,
       billingStatus: billingSubscription?.status ?? null,
-      currentPeriodEnd: billingSubscription?.currentPeriodEnd?.toISOString() ?? null,
+      currentPeriodEnd: billingSubscription?.currentPeriodEnd ? ensureDate(billingSubscription.currentPeriodEnd).toISOString() : null,
       graceEndsAt:
         billingSubscription?.status === "PAST_DUE" && billingSubscription.pastDueStartedAt
-          ? new Date(billingSubscription.pastDueStartedAt.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+          ? new Date(ensureDate(billingSubscription.pastDueStartedAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
           : null,
       monthlyTokenLimit: baseLimit,
       aiTokenExtraMonthly: user.aiTokenExtraMonthly,
@@ -195,7 +196,7 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
     users: userRows,
     manualPaymentRequests: manualPaymentRequests.map((request) => ({
       id: request.id,
-      createdAt: request.createdAt.toISOString(),
+      createdAt: ensureDate(request.createdAt).toISOString(),
       userId: request.user.id,
       userName: request.user.name,
       userEmail: request.user.email,

@@ -2,7 +2,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { duplicateProject } from "@/lib/data/projects";
+import { duplicateProject, PROJECT_OVERVIEW_CACHE_TAG, PROJECTS_LIST_CACHE_TAG, USER_COMPANIES_CACHE_TAG } from "@/lib/data/projects";
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -31,7 +31,9 @@ function revalidateProjectPaths(projectId: string) {
   revalidatePath("/dashboard");
   revalidateTag("dashboard-stats", "max");
   revalidateTag("dashboard-analytics");
-  revalidateTag("projects-list");
+  revalidateTag(PROJECTS_LIST_CACHE_TAG);
+  revalidateTag(PROJECT_OVERVIEW_CACHE_TAG);
+  revalidateTag(USER_COMPANIES_CACHE_TAG);
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/budgets");

@@ -3,6 +3,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { upsertPrimaryCompany } from "@/lib/data/company";
+import { USER_COMPANIES_CACHE_TAG } from "@/lib/data/projects";
 import { companySchema } from "@/lib/validations/company";
 
 const VALIDATION_ERROR_MESSAGE = "Revisa los datos de la empresa e intenta nuevamente.";
@@ -22,6 +23,7 @@ export async function PATCH(request: Request) {
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
+    revalidateTag(USER_COMPANIES_CACHE_TAG);
     revalidatePath("/projects");
     revalidatePath("/budgets");
     revalidatePath("/resources");

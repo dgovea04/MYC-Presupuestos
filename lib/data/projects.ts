@@ -10,6 +10,8 @@ import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 import { ensureDate } from "@/lib/utils";
 
 export const PROJECTS_LIST_CACHE_TAG = "projects-list";
+export const PROJECT_OVERVIEW_CACHE_TAG = "project-overview";
+export const USER_COMPANIES_CACHE_TAG = "user-companies";
 
 const defaultBudgetTotals = {
   totalDirectCost: 0,
@@ -136,15 +138,31 @@ function getFallbackSubBudgetNames(defaultSubBudgetNames: readonly string[]) {
   return [...DEFAULT_INITIAL_SUB_BUDGET_NAMES];
 }
 
-export async function getUserCompanies(userId: string) {
+const _getUserCompanies = async (userId: string) => {
   return prisma.company.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" },
   });
 }
 
+export const getUserCompanies = cache(
+  async (userId: string) => {
+    if (isTestEnvironment) {
+      return _getUserCompanies(userId);
+    }
+
+    return unstable_cache(
+      async (uid: string) => _getUserCompanies(uid),
+      [USER_COMPANIES_CACHE_TAG],
+      { tags: [USER_COMPANIES_CACHE_TAG] },
+    )(userId);
+  },
+);
+
 export async function getProjectsByUser(userId: string) {
   const settings = await getUserSettings(userId);
+  const defaultBudgetContext = createDefaultBudgetContext(settings);
+  const defaultSubBudgetNames = getFallbackSubBudgetNames(settings.defaultSubBudgetNames);
 
   return prisma.$transaction(async (tx) => {
     const projects = await tx.project.findMany({
@@ -161,14 +179,34 @@ export async function getProjectsByUser(userId: string) {
       },
     });
 
+    if (projects.length === 0) {
+      return [];
+    }
+
+    // Batch-read all budgets for all projects in a single query — eliminates N+1
+    const projectIds = projects.map((project) => project.id);
+    const allBudgets = await tx.budget.findMany({
+      where: { projectId: { in: projectIds } },
+      orderBy: [{ kind: "asc" }, { createdAt: "asc" }],
+    });
+    const budgetsByProjectId = groupBudgetsByProjectId(allBudgets);
+
     const hydratedProjects = [];
     for (const project of projects) {
-      const budgets = await ensureProjectBudgetStructure(
-        tx,
-        project.id,
-        createDefaultBudgetContext(settings),
-        settings.defaultSubBudgetNames,
-      );
+      const projectBudgets = budgetsByProjectId.get(project.id) ?? [];
+      const generalBudget = findGeneralBudget(projectBudgets);
+      const structureComplete =
+        generalBudget !== null &&
+        generalBudget.name === "Presupuesto General" &&
+        defaultSubBudgetNames.every((name) => {
+          const sub = projectBudgets.find((b) => b.name === name);
+          return sub && sub.parentBudgetId === generalBudget.id && sub.kind === "SUB_BUDGET";
+        });
+
+      const budgets = structureComplete
+        ? projectBudgets
+        : await ensureProjectBudgetStructure(tx, project.id, defaultBudgetContext, settings.defaultSubBudgetNames);
+
       hydratedProjects.push({
         ...project,
         budgets,
@@ -177,6 +215,29 @@ export async function getProjectsByUser(userId: string) {
 
     return hydratedProjects;
   });
+}
+
+function groupBudgetsByProjectId(budgets: Awaited<ReturnType<typeof prisma.budget.findMany>>) {
+  const budgetsByProjectId = new Map<string, typeof budgets>();
+
+  for (const budget of budgets) {
+    const list = budgetsByProjectId.get(budget.projectId);
+    if (list) {
+      list.push(budget);
+    } else {
+      budgetsByProjectId.set(budget.projectId, [budget]);
+    }
+  }
+
+  return budgetsByProjectId;
+}
+
+function findGeneralBudget(budgets: Awaited<ReturnType<typeof prisma.budget.findMany>>) {
+  return (
+    budgets.find((budget) => budget.kind === "GENERAL" && budget.name === "Presupuesto General") ??
+    budgets.find((budget) => budget.kind === "GENERAL") ??
+    null
+  );
 }
 
 const _getProjectsListByUser = async (userId: string) => {
@@ -277,7 +338,7 @@ export async function getProjectById(id: string, userId: string) {
   });
 }
 
-export async function getProjectOverviewById(id: string, userId: string) {
+const _getProjectOverviewById = async (id: string, userId: string) => {
   return prisma.project.findFirst({
     where: {
       id,
@@ -320,6 +381,39 @@ export async function getProjectOverviewById(id: string, userId: string) {
     },
   });
 }
+
+function normalizeProjectOverviewDates(
+  project: Awaited<ReturnType<typeof _getProjectOverviewById>>,
+) {
+  if (!project) return null;
+
+  return {
+    ...project,
+    startDate: project.startDate ? ensureDate(project.startDate) : null,
+    endDate: project.endDate ? ensureDate(project.endDate) : null,
+    createdAt: ensureDate(project.createdAt),
+    updatedAt: ensureDate(project.updatedAt),
+    budgets: project.budgets.map((budget) => ({
+      ...budget,
+      updatedAt: ensureDate(budget.updatedAt),
+    })),
+  };
+}
+
+export const getProjectOverviewById = cache(
+  async (id: string, userId: string) => {
+    if (isTestEnvironment) {
+      return normalizeProjectOverviewDates(await _getProjectOverviewById(id, userId));
+    }
+
+    const result = await unstable_cache(
+      async (projectId: string, uid: string) => _getProjectOverviewById(projectId, uid),
+      [PROJECT_OVERVIEW_CACHE_TAG],
+      { tags: [PROJECT_OVERVIEW_CACHE_TAG] },
+    )(id, userId);
+    return normalizeProjectOverviewDates(result);
+  },
+);
 
 export async function getProjectHeaderById(id: string, userId: string) {
   return prisma.project.findFirst({
@@ -418,8 +512,8 @@ export async function updateProject(id: string, userId: string, input: Partial<P
     clientName: input.clientName ?? current.clientName ?? "",
     location: input.location ?? current.location ?? "",
     projectType: input.projectType ?? current.projectType ?? "",
-    startDate: input.startDate ?? current.startDate?.toISOString().slice(0, 10) ?? "",
-    endDate: input.endDate ?? current.endDate?.toISOString().slice(0, 10) ?? "",
+    startDate: input.startDate ?? (current.startDate ? ensureDate(current.startDate).toISOString().slice(0, 10) : ""),
+    endDate: input.endDate ?? (current.endDate ? ensureDate(current.endDate).toISOString().slice(0, 10) : ""),
     status: input.status ?? current.status,
   };
   const data = projectSchema.parse(merged);

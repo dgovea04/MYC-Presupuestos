@@ -1,6 +1,9 @@
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import Decimal from "decimal.js";
 import { decimalToNumber, serializeBudget, serializeCatalogPartida } from "@/lib/db/serializers";
+import { ensureDate } from "@/lib/utils";
 import { budgetSchema, budgetStatePatchSchema, type BudgetInput } from "@/lib/validations/budget";
 import { aggregateGeneralBudgetResources } from "@/lib/calculations/general-budget-sections";
 import { calculateBudgetFooterBuilder } from "@/lib/calculations/budget-footer-builder";
@@ -33,8 +36,26 @@ import type { BudgetLiveUpdateSummary } from "@/lib/client/live-updates";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 
-export async function getBudgetsByUser(userId: string) {
-  return prisma.budget.findMany({
+export const BUDGETS_LIST_CACHE_TAG = "budgets-list";
+export const BUDGET_DETAIL_CACHE_TAG = "budget-detail";
+
+const isTestEnvironment = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+
+function normalizeBudgetListEntry<T extends Awaited<ReturnType<typeof prisma.budget.findMany>>[number]>(budget: T): T {
+  return {
+    ...budget,
+    createdAt: ensureDate(budget.createdAt),
+    updatedAt: ensureDate(budget.updatedAt),
+    project: {
+      ...budget.project,
+      createdAt: ensureDate(budget.project.createdAt),
+      updatedAt: ensureDate(budget.project.updatedAt),
+    },
+  };
+}
+
+const _getBudgetsByUser = async (userId: string) => {
+  const budgets = await prisma.budget.findMany({
     where: {
       kind: "GENERAL",
       project: {
@@ -50,7 +71,23 @@ export async function getBudgetsByUser(userId: string) {
       updatedAt: "desc",
     },
   });
-}
+
+  return budgets.map(normalizeBudgetListEntry);
+};
+
+export const getBudgetsByUser = cache(
+  async (userId: string) => {
+    if (isTestEnvironment) {
+      return _getBudgetsByUser(userId);
+    }
+
+    return unstable_cache(
+      async (uid: string) => _getBudgetsByUser(uid),
+      [BUDGETS_LIST_CACHE_TAG],
+      { tags: [BUDGETS_LIST_CACHE_TAG] },
+    )(userId);
+  },
+);
 
 export async function getProjectSubBudgetSummaries(projectId: string, userId: string) {
   return prisma.budget.findMany({
@@ -133,7 +170,7 @@ export async function getProjectSubBudgetDetails(projectId: string, userId: stri
   return Promise.all(budgets.map((budget) => enrichBudgetSubpartidaCatalogLinks(serializeBudget(budget))));
 }
 
-export async function getBudgetById(id: string, userId: string) {
+const _getBudgetById = async (id: string, userId: string) => {
   const budget = await prisma.budget.findFirst({
     where: {
       id,
@@ -179,6 +216,20 @@ export async function getBudgetById(id: string, userId: string) {
     project: budget.project,
   };
 }
+
+export const getBudgetById = cache(
+  async (id: string, userId: string) => {
+    if (isTestEnvironment) {
+      return _getBudgetById(id, userId);
+    }
+
+    return unstable_cache(
+      async (budgetId: string, uid: string) => _getBudgetById(budgetId, uid),
+      [BUDGET_DETAIL_CACHE_TAG],
+      { tags: [BUDGET_DETAIL_CACHE_TAG] },
+    )(id, userId);
+  },
+);
 
 export async function getBudgetHeaderById(id: string, userId: string) {
   return prisma.budget.findFirst({
@@ -831,7 +882,7 @@ export async function getBudgetLiveUpdateSummaries(id: string, userId: string): 
     kind: item.kind,
     currency: item.currency,
     totalAmount: Number(item.totalAmount),
-    updatedAt: item.updatedAt.toISOString(),
+    updatedAt: ensureDate(item.updatedAt).toISOString(),
   }));
 }
 
@@ -1171,7 +1222,7 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
 
 export async function saveBudgetPatch(id: string, userId: string, patchInput: BudgetStatePatch) {
   const patch = budgetStatePatchSchema.parse(patchInput);
-  const existingBudget = await getBudgetById(id, userId);
+  const existingBudget = await _getBudgetById(id, userId);
 
   if (!existingBudget) {
     throw new Error("No tienes permisos para modificar este presupuesto");
@@ -1630,8 +1681,8 @@ async function loadBudgetGeneralExpenseGroups(budgetId: string) {
     name: group.name,
     kind: group.kind,
     sortOrder: group.sortOrder,
-    createdAt: group.createdAt.toISOString(),
-    updatedAt: group.updatedAt.toISOString(),
+    createdAt: ensureDate(group.createdAt).toISOString(),
+    updatedAt: ensureDate(group.updatedAt).toISOString(),
     titles: group.titles.map((title) => ({
       id: title.id,
       groupId: title.groupId,
@@ -1639,8 +1690,8 @@ async function loadBudgetGeneralExpenseGroups(budgetId: string) {
       name: title.name,
       category: title.category,
       sortOrder: title.sortOrder,
-      createdAt: title.createdAt.toISOString(),
-      updatedAt: title.updatedAt.toISOString(),
+      createdAt: ensureDate(title.createdAt).toISOString(),
+      updatedAt: ensureDate(title.updatedAt).toISOString(),
       items: title.items.map((item) => ({
         id: item.id,
         titleId: item.titleId,
@@ -1653,8 +1704,8 @@ async function loadBudgetGeneralExpenseGroups(budgetId: string) {
         participationPercentage: decimalToNumber(item.participationPercentage),
         unitPrice: decimalToNumber(item.unitPrice),
         sortOrder: item.sortOrder,
-        createdAt: item.createdAt.toISOString(),
-        updatedAt: item.updatedAt.toISOString(),
+        createdAt: ensureDate(item.createdAt).toISOString(),
+        updatedAt: ensureDate(item.updatedAt).toISOString(),
       })),
     })),
   }));
@@ -1676,8 +1727,8 @@ async function loadBudgetFooterRows(budgetId: string) {
     iu: row.iu,
     highlight: row.highlight,
     sortOrder: row.sortOrder,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: ensureDate(row.createdAt).toISOString(),
+    updatedAt: ensureDate(row.updatedAt).toISOString(),
   }));
 }
 

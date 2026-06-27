@@ -12,6 +12,7 @@ import {
   type BudgetTemplateApuResource,
   type BudgetTemplateResource,
 } from "@/lib/templates/budget-template-snapshot";
+import { ensureDate } from "@/lib/utils";
 import type { ResourceCategory } from "@/types/resource";
 
 type BudgetTemplateRow = {
@@ -464,11 +465,11 @@ function serializeBudgetTemplateRow(row: BudgetTemplateRow): UserBudgetTemplateR
     description: row.description,
     snapshot,
     libraryItem: buildBudgetSnapshotTemplateLibraryItem(snapshot, row.id, {
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
+      createdAt: ensureDate(row.createdAt).toISOString(),
+      updatedAt: ensureDate(row.updatedAt).toISOString(),
     }),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: ensureDate(row.createdAt).toISOString(),
+    updatedAt: ensureDate(row.updatedAt).toISOString(),
   };
 }
 

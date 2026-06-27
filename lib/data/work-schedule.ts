@@ -4,6 +4,7 @@ import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { buildWorkScheduleView, validateWorkScheduleInput } from "@/lib/calculations/work-schedule";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { ensureDate } from "@/lib/utils";
 import { validateWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import { buildIntelligentWorkScheduleBase } from "@/lib/work-schedule/intelligent-schedule";
 import {
@@ -84,8 +85,8 @@ export async function getWorkScheduleSection(budgetId: string, userId: string): 
           partial: decimalToNumber(item.partial),
           subBudgetId: subBudget.id,
           subBudgetName: subBudget.name,
-          startDate: persisted?.startDate.toISOString().slice(0, 10) ?? null,
-          endDate: persisted?.endDate.toISOString().slice(0, 10) ?? null,
+          startDate: persisted?.startDate ? ensureDate(persisted.startDate).toISOString().slice(0, 10) : null,
+          endDate: persisted?.endDate ? ensureDate(persisted.endDate).toISOString().slice(0, 10) : null,
           durationDays: persisted?.durationDays ?? null,
           predecessor: persisted?.predecessor ?? null,
           crew: persisted?.crew == null ? defaultCrew : decimalToNumber(persisted.crew),
@@ -413,8 +414,8 @@ async function getWorkScheduleLinesForBudget(
           partial: decimalToNumber(item.partial),
           subBudgetId: subBudget.id,
           subBudgetName: subBudget.name,
-          startDate: persisted?.startDate.toISOString().slice(0, 10) ?? null,
-          endDate: persisted?.endDate.toISOString().slice(0, 10) ?? null,
+          startDate: persisted?.startDate ? ensureDate(persisted.startDate).toISOString().slice(0, 10) : null,
+          endDate: persisted?.endDate ? ensureDate(persisted.endDate).toISOString().slice(0, 10) : null,
           durationDays: persisted?.durationDays ?? null,
           predecessor: persisted?.predecessor ?? null,
           crew: persisted?.crew == null ? defaultCrew : decimalToNumber(persisted.crew),

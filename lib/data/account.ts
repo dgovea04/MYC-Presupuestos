@@ -5,6 +5,7 @@ import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { accountPasswordSchema, accountProfileSchema, type AccountPasswordInput, type AccountProfileInput } from "@/lib/validations/account";
 import { getCurrentAiUsagePeriod } from "@/lib/ai/usage";
 import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
+import { ensureDate } from "@/lib/utils";
 import type { AccountMembershipRecord, AccountRecord } from "@/types/account";
 import { z } from "zod";
 
@@ -32,7 +33,7 @@ function toAccountRecord(account: {
     phone: account.phone ?? "",
     jobTitle: account.jobTitle ?? "",
     bio: account.bio ?? "",
-    createdAt: account.createdAt.toISOString(),
+    createdAt: ensureDate(account.createdAt).toISOString(),
   };
 }
 
@@ -145,7 +146,7 @@ export async function getUserAccountMembership(userId: string): Promise<AccountM
   const billingSubscription = user.billingSubscriptions[0] ?? null;
   const graceEndsAt =
     billingSubscription?.status === "PAST_DUE" && billingSubscription.pastDueStartedAt
-      ? new Date(billingSubscription.pastDueStartedAt.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+      ? new Date(ensureDate(billingSubscription.pastDueStartedAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
       : null;
 
   return {
@@ -154,7 +155,7 @@ export async function getUserAccountMembership(userId: string): Promise<AccountM
     effectivePlanSlug: license.planSlug,
     billingProvider: billingSubscription?.provider ?? null,
     billingStatus: billingSubscription?.status ?? null,
-    currentPeriodEnd: billingSubscription?.currentPeriodEnd?.toISOString() ?? null,
+    currentPeriodEnd: billingSubscription?.currentPeriodEnd ? ensureDate(billingSubscription.currentPeriodEnd).toISOString() : null,
     graceEndsAt,
     canManageBilling: Boolean(billingSubscription?.stripeCustomerId),
     canUpgrade: license.planSlug === "starter",

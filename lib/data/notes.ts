@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { ensureDate } from "@/lib/utils";
 import { noteTaskCreateSchema, noteTaskUpdateSchema, type NoteTaskCreateInput, type NoteTaskUpdateInput } from "@/lib/validations/notes";
 import type { NoteTaskPriority, NoteTaskRecord, NoteTaskStatus } from "@/types/notes";
 
@@ -163,8 +164,8 @@ function serializeNoteTask(note: NoteTaskWithContext): NoteTaskRecord {
     budgetItemCode: note.budgetItem?.code,
     budgetItemDescription: note.budgetItem?.description,
     sourcePath: note.sourcePath,
-    createdAt: note.createdAt.toISOString(),
-    updatedAt: note.updatedAt.toISOString(),
-    resolvedAt: note.resolvedAt?.toISOString(),
+    createdAt: ensureDate(note.createdAt).toISOString(),
+    updatedAt: ensureDate(note.updatedAt).toISOString(),
+    resolvedAt: note.resolvedAt ? ensureDate(note.resolvedAt).toISOString() : undefined,
   };
 }

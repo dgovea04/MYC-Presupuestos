@@ -23,6 +23,7 @@ import {
   IU_MONOMIAL_METADATA,
   resolvePolynomialMonomialDisplayMetadata,
 } from "@/lib/polynomial-formula/monomial-metadata";
+import { ensureDate } from "@/lib/utils";
 import { createSmartPolynomialMonomialProposal } from "@/lib/polynomial-formula/smart-monomial-engine";
 import type {
   SmartMonomialBroadGroup,
@@ -1488,8 +1489,8 @@ async function upsertFormulaValuation(
         month: linked.month,
         year: linked.year,
         amount: decimalToString(linked.amount),
-        createdAt: linked.createdAt.toISOString(),
-        updatedAt: linked.updatedAt.toISOString(),
+        createdAt: ensureDate(linked.createdAt).toISOString(),
+        updatedAt: ensureDate(linked.updatedAt).toISOString(),
       };
     }
 
@@ -1499,8 +1500,8 @@ async function upsertFormulaValuation(
       month: valuation.month,
       year: valuation.year,
       amount: decimalToString(valuation.amount),
-      createdAt: valuation.createdAt.toISOString(),
-      updatedAt: valuation.updatedAt.toISOString(),
+      createdAt: ensureDate(valuation.createdAt).toISOString(),
+      updatedAt: ensureDate(valuation.updatedAt).toISOString(),
     };
   }
 
@@ -1535,8 +1536,8 @@ async function upsertFormulaValuation(
     month: valuation.month,
     year: valuation.year,
     amount: decimalToString(valuation.amount),
-    createdAt: valuation.createdAt.toISOString(),
-    updatedAt: valuation.updatedAt.toISOString(),
+    createdAt: ensureDate(valuation.createdAt).toISOString(),
+    updatedAt: ensureDate(valuation.updatedAt).toISOString(),
   };
 }
 
@@ -1576,8 +1577,8 @@ async function loadUnifiedIndicesForFormula(
       year: index.year,
       value: decimalToString(index.value),
       source: index.source ?? undefined,
-      createdAt: index.createdAt.toISOString(),
-      updatedAt: index.updatedAt.toISOString(),
+      createdAt: ensureDate(index.createdAt).toISOString(),
+      updatedAt: ensureDate(index.updatedAt).toISOString(),
     } satisfies UnifiedIndexRecord;
     const existing = indicesByCode.get(index.code) ?? [];
 

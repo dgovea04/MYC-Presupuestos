@@ -3,7 +3,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { createBudget } from "@/lib/data/budgets";
+import { BUDGETS_LIST_CACHE_TAG, createBudget } from "@/lib/data/budgets";
+import { PROJECT_OVERVIEW_CACHE_TAG } from "@/lib/data/projects";
 
 export async function POST(request: Request) {
   const session = await getAuthSession();
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag("dashboard-analytics");
+    revalidateTag(BUDGETS_LIST_CACHE_TAG);
+    revalidateTag(PROJECT_OVERVIEW_CACHE_TAG);
     revalidatePath("/budgets");
     revalidatePath("/projects");
     revalidatePath(`/projects/${budget.projectId}`);

@@ -55,6 +55,9 @@ vi.mock("@/lib/billing/entitlements", () => ({
 }));
 
 import { defaultUserSettings } from "@/lib/data/settings";
+
+const defaultSubBudgetNames = [...DEFAULT_INITIAL_SUB_BUDGET_NAMES];
+const TEST_USER_ID = "user-1";
 import * as projectData from "@/lib/data/projects";
 
 const { createProject, duplicateProject, getProjectById } = projectData;
@@ -1252,6 +1255,233 @@ describe("project data", () => {
           status: "PLANNING",
         }),
       });
+    });
+  });
+
+  describe("getProjectsByUser batch-read optimization", () => {
+    function buildCompleteBudgetStructure(projectId: string, generalBudgetId: string) {
+      return defaultSubBudgetNames.map((name, index) => ({
+        id: `budget-sub-${projectId}-${index}`,
+        projectId,
+        parentBudgetId: generalBudgetId,
+        kind: "SUB_BUDGET" as const,
+        name,
+        currency: "PEN",
+        igvRate: new Prisma.Decimal("0.18"),
+        generalExpensesRate: new Prisma.Decimal("0.10"),
+        utilityRate: new Prisma.Decimal("0.08"),
+        totalDirectCost: new Prisma.Decimal("0"),
+        totalGeneralExpenses: new Prisma.Decimal("0"),
+        totalUtility: new Prisma.Decimal("0"),
+        totalTax: new Prisma.Decimal("0"),
+        totalAmount: new Prisma.Decimal("0"),
+      }));
+    }
+
+    function buildGeneralBudget(projectId: string) {
+      return {
+        id: `budget-general-${projectId}`,
+        projectId,
+        parentBudgetId: null,
+        kind: "GENERAL" as const,
+        name: "Presupuesto General",
+        currency: "PEN",
+        igvRate: new Prisma.Decimal("0.18"),
+        generalExpensesRate: new Prisma.Decimal("0.10"),
+        utilityRate: new Prisma.Decimal("0.08"),
+        totalDirectCost: new Prisma.Decimal("0"),
+        totalGeneralExpenses: new Prisma.Decimal("0"),
+        totalUtility: new Prisma.Decimal("0"),
+        totalTax: new Prisma.Decimal("0"),
+        totalAmount: new Prisma.Decimal("0"),
+      };
+    }
+
+    function wireGetProjectsByUserTransaction(options: {
+      projects: Array<{ id: string; name: string; companyId: string }>;
+    }) {
+      mocks.transaction.mockImplementation(async (callback: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        const tx = {
+          project: {
+            findMany: mocks.projectFindMany,
+            findFirst: mocks.projectFindFirst,
+            create: mocks.projectCreate,
+          },
+          budget: {
+            findMany: mocks.budgetFindMany,
+            findUnique: mocks.budgetFindUnique,
+            create: mocks.budgetCreate,
+            createMany: mocks.budgetCreateMany,
+            update: mocks.budgetUpdate,
+          },
+        };
+
+        const processedProjects = options.projects.map((project) => ({
+          ...project,
+          company: { name: "Test Co" },
+          status: "PLANNING",
+          updatedAt: new Date(),
+        }));
+
+        mocks.projectFindMany.mockResolvedValueOnce(processedProjects);
+
+        return callback(tx);
+      });
+    }
+
+    it("batch-reads budgets in one query and returns projects with pre-fetched budgets on the fast path", async () => {
+      const project1Id = "proj-1";
+      const project2Id = "proj-2";
+      const general1 = buildGeneralBudget(project1Id);
+      const subs1 = buildCompleteBudgetStructure(project1Id, general1.id);
+      const general2 = buildGeneralBudget(project2Id);
+      const subs2 = buildCompleteBudgetStructure(project2Id, general2.id);
+      const allBudgets = [general1, ...subs1, general2, ...subs2];
+
+      mocks.getUserSettings.mockResolvedValue(defaultUserSettings);
+
+      wireGetProjectsByUserTransaction({
+        projects: [
+          { id: project1Id, name: "Proyecto 1", companyId: "company-1" },
+          { id: project2Id, name: "Proyecto 2", companyId: "company-1" },
+        ],
+      });
+
+      mocks.budgetFindMany.mockResolvedValueOnce(allBudgets);
+
+      const result = await projectData.getProjectsByUser(TEST_USER_ID);
+
+      // Batch query was called once with all project IDs
+      expect(mocks.budgetFindMany).toHaveBeenCalledTimes(1);
+      expect(mocks.budgetFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { projectId: { in: [project1Id, project2Id] } },
+        }),
+      );
+
+      // No writes occurred — fast path was taken
+      expect(mocks.budgetCreate).not.toHaveBeenCalled();
+      expect(mocks.budgetUpdate).not.toHaveBeenCalled();
+
+      // Both projects returned with their budgets
+      expect(result).toHaveLength(2);
+      expect(result[0]!.id).toBe(project1Id);
+      expect(result[0]!.budgets).toHaveLength(defaultSubBudgetNames.length + 1); // general + subs
+      expect(result[1]!.id).toBe(project2Id);
+      expect(result[1]!.budgets).toHaveLength(defaultSubBudgetNames.length + 1);
+    });
+
+    it("falls back to ensureProjectBudgetStructure when a project lacks a general budget", async () => {
+      const project1Id = "proj-complete";
+      const project2Id = "proj-missing";
+      const general1 = buildGeneralBudget(project1Id);
+      const subs1 = buildCompleteBudgetStructure(project1Id, general1.id);
+      // Project 2 has sub-budgets but no general budget
+      const orphanSubs = buildCompleteBudgetStructure(project2Id, "budget-general-proj-missing");
+      const allBudgets = [general1, ...subs1, ...orphanSubs];
+
+      mocks.getUserSettings.mockResolvedValue(defaultUserSettings);
+
+      wireGetProjectsByUserTransaction({
+        projects: [
+          { id: project1Id, name: "Proyecto Completo", companyId: "company-1" },
+          { id: project2Id, name: "Proyecto Incompleto", companyId: "company-1" },
+        ],
+      });
+
+      mocks.budgetFindMany.mockResolvedValueOnce(allBudgets); // batch read
+
+      // prepare mocks for the slow-path repair (ensureProjectBudgetStructure for project 2)
+      const repairedGeneral = buildGeneralBudget(project2Id);
+      const repairedSubs = buildCompleteBudgetStructure(project2Id, repairedGeneral.id);
+      const repairedAll = [repairedGeneral, ...repairedSubs];
+
+      mocks.budgetCreate.mockResolvedValue(repairedGeneral);
+      mocks.budgetFindMany.mockResolvedValueOnce(orphanSubs); // ensureProjectBudgetStructure: initial read (still missing general)
+      mocks.budgetFindMany.mockResolvedValueOnce(repairedAll); // ensureProjectBudgetStructure: final re-read (after repair)
+      mocks.budgetFindUnique.mockResolvedValue({
+        id: repairedGeneral.id,
+        childBudgets: repairedSubs.map((sub) => ({
+          totalDirectCost: sub.totalDirectCost,
+          totalGeneralExpenses: sub.totalGeneralExpenses,
+          totalUtility: sub.totalUtility,
+          totalTax: sub.totalTax,
+          totalAmount: sub.totalAmount,
+        })),
+      });
+
+      const result = await projectData.getProjectsByUser(TEST_USER_ID);
+
+      // Batch query was called
+      expect(mocks.budgetFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { projectId: { in: [project1Id, project2Id] } },
+        }),
+      );
+
+      // Slow path creates the missing general budget
+      expect(mocks.budgetCreate).toHaveBeenCalled();
+
+      // Both projects returned with budgets
+      expect(result).toHaveLength(2);
+    });
+
+    it("returns empty array when user has no projects", async () => {
+      mocks.getUserSettings.mockResolvedValue(defaultUserSettings);
+
+      mocks.transaction.mockImplementation(async (callback: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        mocks.projectFindMany.mockResolvedValueOnce([]);
+        return callback({
+          project: { findMany: mocks.projectFindMany },
+          budget: { findMany: mocks.budgetFindMany },
+        });
+      });
+
+      const result = await projectData.getProjectsByUser(TEST_USER_ID);
+
+      expect(result).toEqual([]);
+      // Batch budget query is never called when there are no projects
+      expect(mocks.budgetFindMany).not.toHaveBeenCalled();
+    });
+
+    it("falls back when a sub-budget has wrong parentBudgetId", async () => {
+      const projectId = "proj-mislinked";
+      const general = buildGeneralBudget(projectId);
+      const subs = buildCompleteBudgetStructure(projectId, general.id);
+      // Corrupt the first sub-budget's parentBudgetId
+      subs[0] = { ...subs[0]!, parentBudgetId: "wrong-parent-id" };
+      const allBudgets = [general, ...subs];
+
+      mocks.getUserSettings.mockResolvedValue(defaultUserSettings);
+
+      wireGetProjectsByUserTransaction({
+        projects: [{ id: projectId, name: "Proyecto Mal Linkeado", companyId: "company-1" }],
+      });
+
+      mocks.budgetFindMany.mockResolvedValueOnce(allBudgets); // batch read
+
+      // Repair mocks
+      const repairedSubs = buildCompleteBudgetStructure(projectId, general.id);
+      const repairedAll = [general, ...repairedSubs];
+      mocks.budgetUpdate.mockResolvedValue(repairedSubs[0]);
+      mocks.budgetFindMany.mockResolvedValueOnce(allBudgets); // ensureProjectBudgetStructure: initial read (still has wrong parent)
+      mocks.budgetFindMany.mockResolvedValueOnce(repairedAll); // ensureProjectBudgetStructure: final re-read (after repair)
+      mocks.budgetFindUnique.mockResolvedValue({
+        id: general.id,
+        childBudgets: repairedSubs.map((sub) => ({
+          totalDirectCost: sub.totalDirectCost,
+          totalGeneralExpenses: sub.totalGeneralExpenses,
+          totalUtility: sub.totalUtility,
+          totalTax: sub.totalTax,
+          totalAmount: sub.totalAmount,
+        })),
+      });
+
+      const result = await projectData.getProjectsByUser(TEST_USER_ID);
+
+      // Budget update was called to fix the parent linkage
+      expect(mocks.budgetUpdate).toHaveBeenCalled();
+      expect(result).toHaveLength(1);
     });
   });
 });

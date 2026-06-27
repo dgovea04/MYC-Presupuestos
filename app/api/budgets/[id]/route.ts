@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { deleteBudget, getBudgetHeaderById, getBudgetLiveUpdateSummaries, saveBudgetPatch } from "@/lib/data/budgets";
+import { BUDGETS_LIST_CACHE_TAG, BUDGET_DETAIL_CACHE_TAG, deleteBudget, getBudgetHeaderById, getBudgetLiveUpdateSummaries, saveBudgetPatch } from "@/lib/data/budgets";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -58,6 +58,8 @@ function revalidateBudgetPaths(projectId: string, budgetId: string) {
   revalidatePath("/dashboard");
   revalidateTag("dashboard-stats", "max");
   revalidateTag("dashboard-analytics");
+  revalidateTag(BUDGETS_LIST_CACHE_TAG);
+  revalidateTag(BUDGET_DETAIL_CACHE_TAG);
   revalidatePath("/budgets");
   revalidatePath(`/budgets/${budgetId}`);
   revalidatePath("/projects");

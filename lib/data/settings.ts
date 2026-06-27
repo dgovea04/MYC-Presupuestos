@@ -229,7 +229,7 @@ const columnExistsRowSchema = z.object({
   exists: z.boolean(),
 });
 
-async function hasUserSettingsColumn(columnName: string) {
+const _hasUserSettingsColumn = async (columnName: string) => {
   const [result] = await prisma.$queryRaw<Array<unknown>>`
     SELECT EXISTS (
       SELECT 1
@@ -244,6 +244,16 @@ async function hasUserSettingsColumn(columnName: string) {
 
   return parsedResult.success ? parsedResult.data.exists : false;
 }
+
+// Memoize column existence checks — column structure doesn't change during the server's lifetime
+const hasUserSettingsColumn = cache(async (columnName: string) => {
+  return process.env.NODE_ENV === "test" || process.env.VITEST === "true"
+    ? _hasUserSettingsColumn(columnName)
+    : unstable_cache(
+        async (col: string) => _hasUserSettingsColumn(col),
+        ["user-settings-columns", columnName],
+      )(columnName);
+});
 
 const aiProviderColumns = [
   "openaiApiKey",
