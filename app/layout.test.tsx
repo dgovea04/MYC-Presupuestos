@@ -15,10 +15,6 @@ vi.mock("next/font/google", () => ({
   Plus_Jakarta_Sans: () => ({ variable: "font-plus-jakarta-sans" }),
 }));
 
-vi.mock("next/script", () => ({
-  default: ({ children, id }: { children?: React.ReactNode; id?: string }) => <script id={id}>{children}</script>,
-}));
-
 vi.mock("@/components/ai/global-ai-assistant-provider", () => ({
   GlobalAiAssistantProvider: ({ children }: { children: ReactNode }) => {
     globalAiAssistantProviderSpy(children);
@@ -31,6 +27,10 @@ import { cookies } from "next/headers";
 
 describe("RootLayout", () => {
   it("renders the default expanded sidebar width on the initial html", async () => {
+    vi.mocked(cookies).mockResolvedValue({
+      get: () => undefined,
+    } as Awaited<ReturnType<typeof cookies>>);
+
     const markup = renderToStaticMarkup(
       await RootLayout({
         children: <div>Contenido</div>,
@@ -42,6 +42,9 @@ describe("RootLayout", () => {
 
   it("mounts the global AI assistant provider around layout children", async () => {
     globalAiAssistantProviderSpy.mockClear();
+    vi.mocked(cookies).mockResolvedValue({
+      get: () => undefined,
+    } as Awaited<ReturnType<typeof cookies>>);
 
     const markup = renderToStaticMarkup(
       await RootLayout({
@@ -66,5 +69,30 @@ describe("RootLayout", () => {
     );
 
     expect(markup).toContain('--app-sidebar-initial-width:80px');
+  });
+
+  it("renders stored theme and view mode from cookies on the initial html", async () => {
+    vi.mocked(cookies).mockResolvedValue({
+      get: (name: string) => {
+        if (name === "myc_app_theme") {
+          return { name, value: "dark" };
+        }
+
+        if (name === "app_view_mode") {
+          return { name, value: "excel" };
+        }
+
+        return undefined;
+      },
+    } as Awaited<ReturnType<typeof cookies>>);
+
+    const markup = renderToStaticMarkup(
+      await RootLayout({
+        children: <div>Contenido</div>,
+      }),
+    );
+
+    expect(markup).toContain('data-theme="dark"');
+    expect(markup).toContain('data-view-mode="excel"');
   });
 });

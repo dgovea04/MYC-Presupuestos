@@ -46,7 +46,7 @@ export const userSettingsSchema = z.object({
   dateFormat: z.enum(DATE_FORMAT_OPTIONS).default("DD_MMM_YYYY"),
   appTheme: z.enum(APP_THEME_OPTIONS).default(DEFAULT_APP_THEME),
   defaultViewMode: z.enum(VIEW_MODE_OPTIONS).default(DEFAULT_VIEW_MODE),
-  excelShowFieldBorders: z.boolean().default(true),
+  excelShowFieldBorders: z.boolean().default(false),
   excelRowHeight: numericInputSchema.pipe(z.number().int().refine((value) => EXCEL_ROW_HEIGHT_OPTIONS.includes(value as 40 | 45 | 52 | 60), {
     message: "Expected a valid excel row height",
   })).default(DEFAULT_EXCEL_ROW_HEIGHT),

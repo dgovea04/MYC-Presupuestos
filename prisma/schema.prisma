@@ -186,7 +186,7 @@ model User {
   status              UserStatus @default(ACTIVE)
   membershipPlanId    String?
   aiTokenExtraMonthly Int       @default(0)
-  passwordHash        String
+  passwordHash        String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   companies           Company[]
@@ -390,8 +390,8 @@ model UserSettings {
   dateFormat                 String   @default("DD_MMM_YYYY")
   appTheme                   String   @default("light")
   defaultViewMode            String   @default("modern")
-  excelShowFieldBorders      Boolean  @default(true)
-  excelRowHeight             Int      @default(52)
+  excelShowFieldBorders      Boolean  @default(false)
+  excelRowHeight             Int      @default(40)
   defaultIgvRate             Decimal  @default(0.18) @db.Decimal(10, 4)
   defaultGeneralExpensesRate Decimal  @default(0.10) @db.Decimal(10, 4)
   defaultUtilityRate         Decimal  @default(0.08) @db.Decimal(10, 4)

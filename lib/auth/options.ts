@@ -1,9 +1,11 @@
 import { Prisma } from "@prisma/client";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
+import { registerUserWithCompany } from "@/lib/auth/registration";
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { loginSchema } from "@/lib/validations/auth";
 
@@ -18,7 +20,7 @@ const authUserSchema = z.object({
   id: z.string(),
   name: z.string(),
   email: z.string(),
-  passwordHash: z.string().optional(),
+  passwordHash: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   jobTitle: z.string().nullable().optional(),
@@ -42,6 +44,7 @@ function normalizeAuthUser(row: unknown): AuthUserRecord | null {
     phone: parsedUser.data.phone ?? null,
     jobTitle: parsedUser.data.jobTitle ?? null,
     bio: parsedUser.data.bio ?? null,
+    passwordHash: parsedUser.data.passwordHash ?? null,
     role: parsedUser.data.role,
     status: parsedUser.data.status,
   };
@@ -141,19 +144,101 @@ export const authOptions: NextAuthOptions = {
         return toSessionProfile(user);
       },
     }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+    }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ account, profile }) {
+      if (account?.provider === "google") {
+        const googleProfile = profile as {
+          email?: string;
+          email_verified?: boolean;
+          name?: string;
+          picture?: string;
+        };
+
+        if (!googleProfile.email) {
+          return false;
+        }
+
+        if (googleProfile.email_verified === false) {
+          return false;
+        }
+
+        const existingUser = await getAuthUserByEmail(googleProfile.email);
+
+        if (existingUser) {
+          if (existingUser.status === "SUSPENDED") {
+            return false;
+          }
+          return true;
+        }
+
+        try {
+          await registerUserWithCompany({
+            name: googleProfile.name ?? googleProfile.email.split("@")[0],
+            email: googleProfile.email,
+            avatarUrl: googleProfile.picture,
+          });
+        } catch {
+          return false;
+        }
+
+        return true;
+      }
+
+      return true;
+    },
+    async jwt({ token, user, account }) {
       if (user) {
-        token.id = user.id;
-        token.name = user.name;
-        token.email = user.email;
-        token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | null | undefined) ?? null : null;
-        token.phone = "phone" in user ? (user.phone as string | null | undefined) ?? null : null;
-        token.jobTitle = "jobTitle" in user ? (user.jobTitle as string | null | undefined) ?? null : null;
-        token.bio = "bio" in user ? (user.bio as string | null | undefined) ?? null : null;
-        token.role = "role" in user ? (user.role as "ADMIN" | "USER" | undefined) ?? "USER" : "USER";
-        token.status = "status" in user ? (user.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE" : "ACTIVE";
+        const isGoogle = account?.provider === "google";
+
+        if (isGoogle) {
+          const dbUser = await getAuthUserByEmail(user.email!);
+
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.name = dbUser.name;
+            token.email = dbUser.email;
+            token.avatarUrl = dbUser.avatarUrl ?? null;
+            token.phone = dbUser.phone ?? null;
+            token.jobTitle = dbUser.jobTitle ?? null;
+            token.bio = dbUser.bio ?? null;
+            token.role = dbUser.role;
+            token.status = dbUser.status;
+          }
+        } else {
+          token.id = user.id;
+          token.name = user.name;
+          token.email = user.email;
+          token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | null | undefined) ?? null : null;
+          token.phone = "phone" in user ? (user.phone as string | null | undefined) ?? null : null;
+          token.jobTitle = "jobTitle" in user ? (user.jobTitle as string | null | undefined) ?? null : null;
+          token.bio = "bio" in user ? (user.bio as string | null | undefined) ?? null : null;
+          token.role = "role" in user ? (user.role as "ADMIN" | "USER" | undefined) ?? "USER" : "USER";
+          token.status = "status" in user ? (user.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE" : "ACTIVE";
+        }
+
+        const userId = token.id as string | undefined;
+
+        if (userId) {
+          const [company, membershipUser] = await Promise.all([
+            prisma.company.findFirst({
+              where: { userId },
+              orderBy: { createdAt: "asc" },
+              select: { id: true },
+            }),
+            prisma.user.findUnique({
+              where: { id: userId },
+              select: { membershipPlan: { select: { slug: true } } },
+            }),
+          ]);
+
+          token.companyId = company?.id ?? null;
+          token.plan = membershipUser?.membershipPlan?.slug ?? null;
+        }
       }
 
       return token;
@@ -171,6 +256,8 @@ export const authOptions: NextAuthOptions = {
         session.user.bio = currentUser?.bio ?? (token.bio as string | null | undefined) ?? null;
         session.user.role = currentUser?.role ?? (token.role as "ADMIN" | "USER" | undefined) ?? "USER";
         session.user.status = currentUser?.status ?? (token.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE";
+        session.user.companyId = token.companyId ?? null;
+        session.user.plan = token.plan ?? null;
       }
 
       return session;

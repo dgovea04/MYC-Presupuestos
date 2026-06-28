@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+import { IMAGE_REMOTE_PATTERNS } from "@/lib/image-allowlist";
 
 const projectRoot = process.cwd();
 const workspaceRoot = projectRoot.includes(`${path.sep}.worktrees${path.sep}`)
@@ -18,6 +19,7 @@ const nextConfig: NextConfig = {
   },
   images: {
     formats: ["image/avif", "image/webp"],
+    remotePatterns: IMAGE_REMOTE_PATTERNS.map((pattern) => ({ ...pattern })),
     localPatterns: [
       {
         pathname: "/**",

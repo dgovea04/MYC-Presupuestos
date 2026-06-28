@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { registerSchema } from "@/lib/validations/auth";
 import { hashPassword } from "@/lib/auth/password";
+import { registerUserWithCompany } from "@/lib/auth/registration";
 
 export async function POST(request: Request) {
   try {
@@ -10,36 +11,29 @@ export async function POST(request: Request) {
 
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
+      select: { email: true, passwordHash: true },
     });
 
     if (existingUser) {
-      return NextResponse.json({ error: "Ese correo ya está registrado" }, { status: 409 });
+      if (!existingUser.passwordHash) {
+        return NextResponse.json(
+          {
+            error:
+              "Este correo ya esta registrado mediante Google. Continua con Google para iniciar sesion.",
+          },
+          { status: 409 },
+        );
+      }
+
+      return NextResponse.json({ error: "Ese correo ya esta registrado" }, { status: 409 });
     }
 
-    const user = await prisma.user.create({
-      data: {
-        name: data.name,
-        email: data.email,
-        passwordHash: await hashPassword(data.password),
-        membershipPlan: {
-          connectOrCreate: {
-            where: { slug: "starter" },
-            create: {
-              name: "Starter",
-              slug: "starter",
-              monthlyTokenLimit: 100000,
-            },
-          },
-        },
-      },
-    });
-
-    await prisma.company.create({
-      data: {
-        userId: user.id,
-        name: data.companyName,
-        ruc: data.ruc || null,
-      },
+    await registerUserWithCompany({
+      name: data.name,
+      email: data.email,
+      passwordHash: await hashPassword(data.password),
+      companyName: data.companyName,
+      ruc: data.ruc || undefined,
     });
 
     return NextResponse.json({ ok: true }, { status: 201 });
