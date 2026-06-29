@@ -2,10 +2,11 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryRawMock, companyFindFirstMock, userFindUniqueMock } = vi.hoisted(() => ({
+const { queryRawMock, companyFindFirstMock, userFindUniqueMock, verifyPasswordMock } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
   companyFindFirstMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
+  verifyPasswordMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -16,14 +17,42 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth/password", () => ({
+  verifyPassword: verifyPasswordMock,
+}));
+
 import { authOptions } from "@/lib/auth/options";
 import { resetUserProfileColumnSupportCacheForTests } from "@/lib/data/user-profile-columns";
+
+type AuthCallbacks = NonNullable<typeof authOptions.callbacks>;
+type SessionCallback = NonNullable<AuthCallbacks["session"]>;
+type SignInCallback = NonNullable<AuthCallbacks["signIn"]>;
+type JwtCallback = NonNullable<AuthCallbacks["jwt"]>;
+
+async function runSessionCallback(input: Parameters<SessionCallback>[0]) {
+  const callback = authOptions.callbacks?.session;
+  if (!callback) throw new Error("No session callback");
+  return callback(input);
+}
+
+async function runSignInCallback(input: Parameters<SignInCallback>[0]) {
+  const callback = authOptions.callbacks?.signIn;
+  if (!callback) throw new Error("No signIn callback");
+  return callback(input);
+}
+
+async function runJwtCallback(input: Parameters<JwtCallback>[0]) {
+  const callback = authOptions.callbacks?.jwt;
+  if (!callback) throw new Error("No jwt callback");
+  return callback(input);
+}
 
 describe("authOptions callbacks", () => {
   beforeEach(() => {
     queryRawMock.mockReset();
     companyFindFirstMock.mockReset();
     userFindUniqueMock.mockReset();
+    verifyPasswordMock.mockReset();
     resetUserProfileColumnSupportCacheForTests();
   });
 
@@ -48,6 +77,50 @@ describe("authOptions callbacks", () => {
     expect(providerIds).toContain("google");
   });
 
+  it("denies credentials sign-in when the email is still unverified", async () => {
+    queryRawMock
+      .mockResolvedValueOnce([
+        { column_name: "avatarUrl" },
+        { column_name: "phone" },
+        { column_name: "jobTitle" },
+        { column_name: "bio" },
+        { column_name: "emailVerifiedAt" },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "user-1",
+          name: "Maria",
+          email: "maria@example.com",
+          passwordHash: "stored-hash",
+          avatarUrl: null,
+          phone: null,
+          jobTitle: null,
+          bio: null,
+          role: "USER",
+          status: "ACTIVE",
+          emailVerifiedAt: null,
+        },
+      ]);
+    verifyPasswordMock.mockResolvedValue(true);
+
+    const credentialsProvider = authOptions.providers.find((provider) => provider.id === "credentials");
+    if (!credentialsProvider || credentialsProvider.type !== "credentials") {
+      throw new Error("Missing credentials provider");
+    }
+
+    const authorize = credentialsProvider.authorize;
+    if (!authorize) {
+      throw new Error("Missing credentials authorize callback");
+    }
+
+    expect(
+      authorize({
+        email: "maria@example.com",
+        password: "password123",
+      }, {} as never),
+    ).toBeNull();
+  });
+
   it("hydrates session user fields from the latest database snapshot", async () => {
     queryRawMock
       .mockResolvedValueOnce([
@@ -70,9 +143,7 @@ describe("authOptions callbacks", () => {
       },
       ]);
 
-    const cb = authOptions.callbacks?.session;
-    if (!cb) throw new Error("No session callback");
-    const session = await (cb as any)({
+    const session = await runSessionCallback({
       session: {
         expires: "2026-05-18T12:00:00.000Z",
         user: {
@@ -119,9 +190,7 @@ describe("authOptions callbacks", () => {
       ])
       .mockResolvedValueOnce([]);
 
-    const cb = authOptions.callbacks?.session;
-    if (!cb) throw new Error("No session callback");
-    const session = await (cb as any)({
+    const session = await runSessionCallback({
       session: {
         expires: "2026-05-18T12:00:00.000Z",
         user: {
@@ -174,9 +243,7 @@ describe("authOptions callbacks", () => {
         },
       ]);
 
-    const cb = authOptions.callbacks?.session;
-    if (!cb) throw new Error("No session callback");
-    const session = await (cb as any)({
+    const session = await runSessionCallback({
       session: {
         expires: "2026-05-18T12:00:00.000Z",
         user: {
@@ -214,9 +281,7 @@ describe("authOptions callbacks", () => {
 
   describe("Google OAuth signIn callback", () => {
     it("denies sign-in when Google profile has no email", async () => {
-      const callback = authOptions.callbacks?.signIn;
-      if (!callback) throw new Error("No signIn callback");
-      const result = await (callback as any)({
+      const result = await runSignInCallback({
         user: { email: null },
         account: { provider: "google", type: "oauth", providerAccountId: "123" },
         profile: { email_verified: true },
@@ -228,9 +293,7 @@ describe("authOptions callbacks", () => {
     });
 
     it("denies sign-in when Google email is not verified", async () => {
-      const callback = authOptions.callbacks?.signIn;
-      if (!callback) throw new Error("No signIn callback");
-      const result = await (callback as any)({
+      const result = await runSignInCallback({
         user: { email: "test@example.com" },
         account: { provider: "google", type: "oauth", providerAccountId: "123" },
         profile: { email: "test@example.com", email_verified: false },
@@ -260,9 +323,7 @@ describe("authOptions callbacks", () => {
           },
         ]);
 
-      const callback = authOptions.callbacks?.signIn;
-      if (!callback) throw new Error("No signIn callback");
-      const result = await (callback as any)({
+      const result = await runSignInCallback({
         user: { email: "test@example.com" },
         account: { provider: "google", type: "oauth", providerAccountId: "123" },
         profile: { email: "test@example.com", email_verified: true, name: "Test User" },
@@ -303,9 +364,7 @@ describe("authOptions callbacks", () => {
         membershipPlan: { slug: "starter" },
       });
 
-      const callback = authOptions.callbacks?.jwt;
-      if (!callback) throw new Error("No jwt callback");
-      const token = await (callback as any)({
+      const token = await runJwtCallback({
         token: { name: "", email: "" },
         user: {
           id: "google-oauth-id",

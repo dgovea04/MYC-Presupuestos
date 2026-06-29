@@ -178,6 +178,7 @@ model User {
   id                  String    @id @default(cuid())
   name                String
   email               String    @unique
+  emailVerifiedAt     DateTime?
   avatarUrl           String?
   phone               String?
   jobTitle            String?
@@ -205,10 +206,24 @@ model User {
   metradoSheets       MetradoSheet[]
   customMetradoFormulas CustomMetradoFormula[]
   budgetTemplates     BudgetTemplate[]
+  emailVerificationTokens EmailVerificationToken[]
 
   @@index([role])
   @@index([status])
   @@index([membershipPlanId])
+}
+
+model EmailVerificationToken {
+  id         String   @id
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("email_verification_tokens")
 }
 
 model MembershipPlan {

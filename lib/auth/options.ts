@@ -25,6 +25,7 @@ const authUserSchema = z.object({
   phone: z.string().nullable().optional(),
   jobTitle: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
+  emailVerifiedAt: z.date().nullable().optional(),
   role: z.enum(["ADMIN", "USER"]).optional().default("USER"),
   status: z.enum(["ACTIVE", "SUSPENDED"]).optional().default("ACTIVE"),
 });
@@ -44,6 +45,7 @@ function normalizeAuthUser(row: unknown): AuthUserRecord | null {
     phone: parsedUser.data.phone ?? null,
     jobTitle: parsedUser.data.jobTitle ?? null,
     bio: parsedUser.data.bio ?? null,
+    emailVerifiedAt: parsedUser.data.emailVerifiedAt ?? null,
     passwordHash: parsedUser.data.passwordHash ?? null,
     role: parsedUser.data.role,
     status: parsedUser.data.status,
@@ -53,7 +55,7 @@ function normalizeAuthUser(row: unknown): AuthUserRecord | null {
 async function getAuthUserByEmail(email: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
-    SELECT "id", "name", "email", "passwordHash", "role", "status"
+    SELECT "id", "name", "email", "passwordHash", "emailVerifiedAt", "role", "status"
     ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
     ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
     ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
@@ -138,6 +140,10 @@ export const authOptions: NextAuthOptions = {
         const isValid = await verifyPassword(parsed.data.password, user.passwordHash);
 
         if (!isValid) {
+          return null;
+        }
+
+        if (!user.emailVerifiedAt) {
           return null;
         }
 

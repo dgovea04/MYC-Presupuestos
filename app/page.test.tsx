@@ -143,6 +143,7 @@ describe("MC landing page sections", () => {
     expect(container.textContent).toContain("Planes y precios");
     expect(container.textContent).toContain("Técnicas");
     expect(container.textContent).toContain("¿Qué norma peruana usan para la fórmula polinómica?");
+    expect(container.textContent).toContain("Abrir formulario");
   });
 
   it("renders PricingSection with 3 plan cards including highlighted Pro tier", async () => {

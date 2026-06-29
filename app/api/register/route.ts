@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { issueEmailVerification } from "@/lib/auth/email-verification";
 import { registerSchema } from "@/lib/validations/auth";
 import { hashPassword } from "@/lib/auth/password";
 import { registerUserWithCompany } from "@/lib/auth/registration";
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ese correo ya esta registrado" }, { status: 409 });
     }
 
-    await registerUserWithCompany({
+    const registration = await registerUserWithCompany({
       name: data.name,
       email: data.email,
       passwordHash: await hashPassword(data.password),
@@ -36,7 +37,26 @@ export async function POST(request: Request) {
       ruc: data.ruc || undefined,
     });
 
-    return NextResponse.json({ ok: true }, { status: 201 });
+    let verificationEmailSent = true;
+
+    try {
+      await issueEmailVerification({
+        userId: registration.user.id,
+        email: data.email,
+        name: data.name,
+      });
+    } catch {
+      verificationEmailSent = false;
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        requiresEmailVerification: true,
+        verificationEmailSent,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Error inesperado" }, { status: 400 });
   }

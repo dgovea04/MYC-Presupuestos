@@ -22,6 +22,11 @@ vi.mock("@/lib/auth/registration", () => ({
 import { authOptions } from "@/lib/auth/options";
 import { resetUserProfileColumnSupportCacheForTests } from "@/lib/data/user-profile-columns";
 
+type AuthCallbacks = NonNullable<typeof authOptions.callbacks>;
+type SessionCallback = NonNullable<AuthCallbacks["session"]>;
+type SignInCallback = NonNullable<AuthCallbacks["signIn"]>;
+type JwtCallback = NonNullable<AuthCallbacks["jwt"]>;
+
 function mockProfileColumns() {
   mocks.queryRawMock.mockResolvedValueOnce([
     { column_name: "avatarUrl" },
@@ -81,6 +86,21 @@ function getCallbacks() {
   return cbs;
 }
 
+async function runSignInCallback(input: Parameters<SignInCallback>[0]) {
+  const callbacks = getCallbacks();
+  return callbacks.signIn(input);
+}
+
+async function runJwtCallback(input: Parameters<JwtCallback>[0]) {
+  const callbacks = getCallbacks();
+  return callbacks.jwt(input);
+}
+
+async function runSessionCallback(input: Parameters<SessionCallback>[0]) {
+  const callbacks = getCallbacks();
+  return callbacks.session(input);
+}
+
 describe("Google OAuth — integration flow (signIn → jwt → session)", () => {
   beforeEach(() => {
     mocks.queryRawMock.mockReset();
@@ -92,6 +112,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
   it("full flow: new user signs up via Google, gets correct session", async () => {
     const cbs = getCallbacks();
+    void cbs;
 
     // ── signIn: no existing user → registerUserWithCompany ──
     mockProfileColumns();
@@ -101,7 +122,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
       company: { id: "company-maria" },
     });
 
-    const signInResult = await (cbs.signIn as any)({
+    const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
       account: googleAccount,
       profile: googleProfile,
@@ -122,7 +143,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     mocks.companyFindFirstMock.mockResolvedValue(dbCompany);
     mocks.userFindUniqueMock.mockResolvedValue(dbMembership);
 
-    const token = await (cbs.jwt as any)({
+    const token = await runJwtCallback({
       token: { name: "", email: "" },
       user: {
         id: "google-oauth-id",
@@ -147,7 +168,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     // profile columns still cached; only user lookup needs mocking
     mockDbRows([makeGoogleDbUser()]);
 
-    const session = await (cbs.session as any)({
+    const session = await runSessionCallback({
       session: {
         expires: "2026-05-18T12:00:00.000Z",
         user: { name: "", email: "" },
@@ -175,12 +196,13 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
   it("full flow: existing Google user signs in again, no duplicate created", async () => {
     const cbs = getCallbacks();
+    void cbs;
 
     // ── signIn: user already exists (Google account) ──
     mockProfileColumns();
     mockDbRows([makeGoogleDbUser()]);
 
-    const signInResult = await (cbs.signIn as any)({
+    const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
       account: googleAccount,
       profile: googleProfile,
@@ -197,7 +219,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     mocks.companyFindFirstMock.mockResolvedValue(dbCompany);
     mocks.userFindUniqueMock.mockResolvedValue(dbMembership);
 
-    const token = await (cbs.jwt as any)({
+    const token = await runJwtCallback({
       token: { name: "", email: "" },
       user: {
         id: "google-oauth-id",
@@ -217,7 +239,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     // profile columns still cached
     mockDbRows([makeGoogleDbUser()]);
 
-    const session = await (cbs.session as any)({
+    const session = await runSessionCallback({
       session: {
         expires: "2026-05-18T12:00:00.000Z",
         user: { name: "", email: "" },
@@ -235,12 +257,13 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
   it("full flow: email/password user signs in via Google, no duplicate created", async () => {
     const cbs = getCallbacks();
+    void cbs;
 
     // ── signIn: user already exists with passwordHash ──
     mockProfileColumns();
     mockDbRows([makeCredentialsDbUser()]);
 
-    const signInResult = await (cbs.signIn as any)({
+    const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
       account: googleAccount,
       profile: googleProfile,
@@ -257,7 +280,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     mocks.companyFindFirstMock.mockResolvedValue(dbCompany);
     mocks.userFindUniqueMock.mockResolvedValue(dbMembership);
 
-    const token = await (cbs.jwt as any)({
+    const token = await runJwtCallback({
       token: { name: "", email: "" },
       user: {
         id: "google-oauth-id",
@@ -277,7 +300,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     // profile columns still cached
     mockDbRows([makeCredentialsDbUser()]);
 
-    const session = await (cbs.session as any)({
+    const session = await runSessionCallback({
       session: {
         expires: "2026-05-18T12:00:00.000Z",
         user: { name: "", email: "" },
@@ -297,9 +320,10 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
   it("denies sign-in: unverified Google email is rejected", async () => {
     const cbs = getCallbacks();
+    void cbs;
 
     // No DB mocks needed: email_verified check happens before any DB calls
-    const result = await (cbs.signIn as any)({
+    const result = await runSignInCallback({
       user: { email: googleProfile.email },
       account: googleAccount,
       profile: { ...googleProfile, email_verified: false },
@@ -312,11 +336,12 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
   it("denies the full flow: suspended user is rejected at signIn", async () => {
     const cbs = getCallbacks();
+    void cbs;
 
     mockProfileColumns();
     mockDbRows([makeGoogleDbUser({ status: "SUSPENDED" })]);
 
-    const signInResult = await (cbs.signIn as any)({
+    const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
       account: googleAccount,
       profile: googleProfile,
@@ -330,12 +355,13 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
   it("denies the full flow: registration failure is caught and returns false", async () => {
     const cbs = getCallbacks();
+    void cbs;
 
     mockProfileColumns();
     mockDbRows([]);
     mocks.registerUserWithCompanyMock.mockRejectedValue(new Error("DB connection failed"));
 
-    const signInResult = await (cbs.signIn as any)({
+    const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
       account: googleAccount,
       profile: googleProfile,

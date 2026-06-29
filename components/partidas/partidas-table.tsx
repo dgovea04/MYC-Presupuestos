@@ -406,8 +406,8 @@ export function PartidasTable({
               <col className="w-[88px]" />
               <col className="w-[360px]" />
             </colgroup>
-            <THead className="sticky top-0 z-20 [&_tr]:border-b-slate-200">
-              <TR className="bg-slate-50 hover:bg-slate-50">
+            <THead className="sticky top-0 z-20 [&_tr]:border-b-[var(--app-border)]">
+              <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                 <TH className="text-xs uppercase tracking-wide">Partida</TH>
                 <TH className="text-xs uppercase tracking-wide">Unidad</TH>
                 <TH className="text-xs uppercase tracking-wide text-right">P. Unitario</TH>
@@ -729,7 +729,7 @@ function PartidaPastePreviewSheet({
           <div className={getTableFrameClassName(isExcelMode)}>
             <Table>
               <THead>
-                <TR className="bg-slate-50 hover:bg-slate-50">
+                <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
                   <TH>PARTIDA</TH>
                   <TH>UNIDAD</TH>
                   <TH className="text-right">P. UNITARIO</TH>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingContactDialog } from "@/components/landing/landing-contact-dialog";
 import { LandingLogo } from "@/components/landing/landing-logo";
 
 const footerColumns = {
@@ -48,6 +49,9 @@ export function LandingFooter() {
           <p className="mt-5 max-w-sm text-sm leading-7 text-slate-500">
             Plataforma moderna de costos y presupuestos de obra para oficinas tecnicas, constructoras e ingenieros que necesitan un flujo mas conectado.
           </p>
+          <div className="mt-6">
+            <LandingContactDialog triggerLabel="Contactar al equipo" triggerVariant="primary" />
+          </div>
           <p className="mt-6 text-sm text-slate-400">&copy; 2026 MC Presupuestos. Todos los derechos reservados.</p>
         </div>
         <FooterColumn title="Producto" items={footerColumns.producto} />

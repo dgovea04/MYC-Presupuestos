@@ -3123,10 +3123,10 @@ function PastePreviewSheet({
                                 className={cn(
                                   "rounded-full px-2 py-0.5 text-[11px] font-medium",
                                   row.itemMatch.matchKind === "exact"
-                                    ? "bg-emerald-100 text-emerald-700"
+                                    ? "theme-status-success"
                                     : row.itemMatch.matchKind === "suggested"
-                                      ? "bg-sky-100 text-sky-700"
-                                      : "bg-slate-100 text-slate-600",
+                                      ? "theme-status-info"
+                                      : "theme-badge-slate",
                                 )}
                               >
                                 {row.itemMatch.matchKind === "exact"
@@ -3136,15 +3136,15 @@ function PastePreviewSheet({
                                     : "Sin match claro"}
                               </span>
                               {row.itemMatch.isSuggestionApplied ? (
-                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                <span className="theme-status-success rounded-full border px-2 py-0.5 text-[11px] font-medium">
                                   Sugerencia aplicada
                                 </span>
                               ) : null}
                             </div>
                             {row.itemMatch.bestSuggestion ? (
-                              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                                <p className="font-medium text-slate-700">Sugerencia recomendada</p>
-                                <p className="mt-1 text-sm text-slate-900">{row.itemMatch.bestSuggestion.description}</p>
+                              <div className="theme-muted-panel rounded-xl border px-3 py-2 text-xs">
+                                <p className="theme-strong-text font-medium">Sugerencia recomendada</p>
+                                <p className="theme-strong-text mt-1 text-sm">{row.itemMatch.bestSuggestion.description}</p>
                                 <p className="mt-1">
                                   {row.itemMatch.bestSuggestion.unit} ·{" "}
                                   {formatCurrency(row.itemMatch.bestSuggestion.unitPrice, "PEN", 2)}
@@ -3173,8 +3173,8 @@ function PastePreviewSheet({
                                 className={cn(
                                   "rounded-full px-2 py-0.5 text-[11px] font-medium",
                                   issue.severity === "error"
-                                    ? "bg-rose-100 text-rose-700"
-                                    : "bg-amber-100 text-amber-700",
+                                    ? "theme-status-error"
+                                    : "theme-status-warning",
                                 )}
                               >
                                 {issue.severity === "error" ? "Error" : "Aviso"}: {issue.message}
@@ -3668,14 +3668,18 @@ function collectDescendantLevelIds(levels: BudgetLevelRecord[], parentId: string
 
 function getLevelRowTone(type: BudgetLevelType, isExcelMode = false) {
   if (type === "TITLE") return "bg-[var(--app-surface-muted)]";
-  if (type === "SUBTITLE") return isExcelMode ? "bg-sky-50/50" : "bg-sky-50/60";
-  return isExcelMode ? "bg-amber-50/50" : "bg-amber-50/70";
+  if (type === "SUBTITLE") return isExcelMode ? "bg-sky-50/50 dark:bg-sky-950/30" : "bg-sky-50/60 dark:bg-sky-950/30";
+  return "theme-status-warning-row";
 }
 
 function getStickyActionTone(type: BudgetLevelType, isExcelMode = false) {
   if (type === "TITLE") return "bg-[var(--app-surface-muted)]";
-  if (type === "SUBTITLE") return isExcelMode ? "bg-sky-50/50" : "bg-sky-50/60";
-  return isExcelMode ? "bg-amber-50/50" : "bg-amber-50/70";
+  if (type === "SUBTITLE") return isExcelMode ? "bg-sky-50/50 dark:bg-sky-950/30" : "bg-sky-50/60 dark:bg-sky-950/30";
+  return "theme-status-warning-row";
+}
+
+function getStickyActionHoverTone() {
+  return "group-hover:bg-[var(--app-surface-muted)]/90 group-focus-within:bg-[var(--app-primary-muted)]";
 }
 
 function getInputDensityClass(mode: DensityMode, isExcelMode = false) {
@@ -3871,7 +3875,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
       onDragEnd={onDragEnd}
       onFocusCapture={() => onRowFocus(row.level.id)}
       className={cn(
-        "group hover:bg-transparent",
+        "group",
         getLevelRowTone(row.level.type, isExcelMode),
         isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
         activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
@@ -3918,6 +3922,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
         className={cn(
           getBodyCellClass("actions", activeColumn, "sticky right-0 align-[initial]", densityMode, isExcelMode),
           getStickyActionTone(row.level.type, isExcelMode),
+          getStickyActionHoverTone(),
         )}
       >
         <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
@@ -4054,20 +4059,20 @@ function BudgetItemIssueNoteBadge({
     >
       <button
         type="button"
-        className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-200 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-1"
+        className="theme-status-error rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-1 dark:focus:ring-rose-500/40"
         title="Agregar nota para esta partida"
         aria-label={`Agregar nota para ${item.code || item.description}`}
       >
         {label}
       </button>
       {isPreviewOpen ? (
-        <span className="absolute left-0 top-full z-[80] mt-2 block w-72 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-xs text-[var(--app-text)] shadow-xl shadow-slate-900/12">
-          <span className="mb-2 flex items-center gap-2 font-semibold text-amber-900">
+        <span className="theme-status-warning absolute left-0 top-full z-[80] mt-2 block w-72 rounded-xl border p-3 text-left text-xs shadow-xl shadow-slate-900/12">
+          <span className="theme-status-warning-strong mb-2 flex items-center gap-2 font-semibold">
             <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
             Notas de la partida
           </span>
           {previewState.loading ? <span className="block text-[var(--app-text-muted)]">Cargando notas...</span> : null}
-          {!previewState.loading && previewState.error ? <span className="block text-rose-700">{previewState.error}</span> : null}
+          {!previewState.loading && previewState.error ? <span className="theme-status-error block rounded-lg border px-2 py-1">{previewState.error}</span> : null}
           {!previewState.loading && !previewState.error && previewState.notes.length === 0 ? (
             <span className="block text-[var(--app-text-muted)]">Sin notas abiertas para esta partida.</span>
           ) : null}
@@ -4124,13 +4129,9 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   const hasNoApu = !row.item.apu;
   const requiresCatalogReview = qualityState?.requiresCatalogReview ?? !row.item.apu;
   const itemWarningTone = hasNoUsefulUnitPrice
-    ? isExcelMode
-      ? "bg-rose-50/80 ring-1 ring-rose-200"
-      : "bg-rose-50/70 ring-2 ring-rose-200"
+    ? "theme-status-error-row"
     : requiresCatalogReview
-      ? isExcelMode
-        ? "bg-amber-50/80 ring-1 ring-amber-200"
-        : "bg-amber-50/70 ring-2 ring-amber-200"
+      ? "theme-status-warning-row"
       : "";
 
   return (
@@ -4223,7 +4224,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
               />
             </div>
             {hasNoApu ? (
-              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+              <span className="theme-status-warning shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium">
                 Sin APU
               </span>
             ) : null}
@@ -4239,7 +4240,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
                   />
                 ) : null}
                 {requiresCatalogReview && !hasNoApu ? (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                  <span className="theme-status-warning rounded-full border px-2 py-0.5 text-[11px] font-medium">
                     Revisar match
                   </span>
                 ) : null}
@@ -5454,8 +5455,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getHeaderCellClass(column: ActiveColumn, activeColumn: ActiveColumn, isExcelMode: boolean, extraClassName?: string) {
   return cn(
     "budget-sticky-header sticky top-0 h-10 text-xs uppercase tracking-wide",
-    isExcelMode ? "z-30 border-b border-slate-300 bg-slate-100 text-[11px] font-semibold text-slate-700" : "z-20 bg-slate-50",
-    activeColumn === column ? "bg-sky-100 text-sky-900" : "",
+    isExcelMode
+      ? "z-30 border-b border-slate-300 bg-slate-100 text-[11px] font-semibold text-slate-700 dark:border-[var(--app-border-strong)] dark:bg-[var(--app-surface-strong)] dark:text-[var(--app-text-muted)]"
+      : "z-20 bg-[var(--app-surface-muted)]",
+    activeColumn === column ? "bg-sky-100 text-sky-900 dark:bg-sky-950/45 dark:text-sky-100" : "",
     column === "actions" ? "z-30" : "",
     extraClassName,
   );
@@ -5471,7 +5474,7 @@ function getBodyCellClass(
   return cn(
     getCellPadding(densityMode),
     isExcelMode ? "border-b border-slate-200 text-xs" : "",
-    activeColumn === column ? "bg-sky-50/70" : "",
+    activeColumn === column ? "bg-sky-50/70 dark:bg-sky-950/30" : "",
     extraClassName,
   );
 }

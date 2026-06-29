@@ -1,20 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, HelpCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ChevronDown, HelpCircle, MessageSquareMore } from "lucide-react";
+import { LandingContactDialog } from "@/components/landing/landing-contact-dialog";
 import { faqItems } from "@/components/landing/landing-content";
 import { SectionHeading } from "@/components/landing/section-heading";
-import { LandingLinkButton } from "@/components/landing/landing-link-button";
+import { cn } from "@/lib/utils";
 
 const faqCategories = [
   { label: "Generales", filter: () => true },
-  { label: "Planes y precios", filter: (q: string) =>
-    q.includes("plan") || q.includes("gratuito") || q.includes("soporte") || q.includes("exportación")
-  },
-  { label: "Técnicas", filter: (q: string) =>
-    q.includes("norma") || q.includes("Excel") || q.includes("fórmula") || q.includes("segur")
-  },
+  { label: "Planes y precios", filter: (q: string) => q.includes("plan") || q.includes("gratuito") || q.includes("soporte") || q.includes("exportación") },
+  { label: "Técnicas", filter: (q: string) => q.includes("norma") || q.includes("Excel") || q.includes("fórmula") || q.includes("segur") },
 ];
 
 function FaqItem({
@@ -68,7 +64,7 @@ export function FaqSection() {
   const [activeCategory, setActiveCategory] = useState(faqCategories[0].label);
 
   const filteredFaq = faqItems.filter((item) => {
-    const category = faqCategories.find((c) => c.label === activeCategory);
+    const category = faqCategories.find((currentCategory) => currentCategory.label === activeCategory);
     return category ? category.filter(item.question) : true;
   });
 
@@ -86,45 +82,57 @@ export function FaqSection() {
         align="center"
       />
 
-      <div className="mt-8 flex flex-wrap justify-center gap-2">
-        {faqCategories.map((category) => (
-          <button
-            key={category.label}
-            type="button"
-            onClick={() => handleCategoryChange(category.label)}
-            className={cn(
-              "rounded-full border px-3.5 py-1.5 text-xs font-semibold transition",
-              activeCategory === category.label
-                ? "border-blue-200 bg-blue-50 text-blue-700"
-                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
-            )}
-          >
-            {category.label}
-          </button>
-        ))}
-      </div>
+      <div className="mx-auto mt-10 grid max-w-6xl gap-6 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
+        <div className="landing-surface-elevated rounded-[1.5rem] p-6 sm:p-7">
+          <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <MessageSquareMore className="h-5 w-5" />
+          </div>
+          <h3 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">
+            Una vista más clara para resolver dudas antes de agendar una demo.
+          </h3>
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            Mantuvimos las respuestas en una sola columna porque se leen mejor cuando tienen distinto largo. La mejora está en ampliar el bloque, ordenar mejor la navegación y dejar el contacto a un clic.
+          </p>
 
-      <div className="mx-auto mt-10 max-w-[44rem] space-y-3">
-        {filteredFaq.map((item) => (
-          <FaqItem
-            key={item.question}
-            question={item.question}
-            answer={item.answer}
-            isOpen={openQuestion === item.question}
-            onToggle={() => setOpenQuestion(openQuestion === item.question ? null : item.question)}
-          />
-        ))}
-      </div>
+          <div className="mt-6 flex flex-wrap gap-2">
+            {faqCategories.map((category) => (
+              <button
+                key={category.label}
+                type="button"
+                onClick={() => handleCategoryChange(category.label)}
+                className={cn(
+                  "rounded-full border px-3.5 py-1.5 text-xs font-semibold transition",
+                  activeCategory === category.label
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                )}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
 
-      <div className="mx-auto mt-10 max-w-[44rem] rounded-[1.35rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_100%)] px-6 py-6 text-center">
-        <p className="text-[0.93rem] font-semibold text-slate-900">¿No encontraste lo que buscabas?</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Escríbenos y te respondemos en menos de 24 horas. También podemos agendar una demo guiada para tu equipo.
-        </p>
-        <div className="mt-4 flex justify-center gap-3">
-          <LandingLinkButton href="#contacto" variant="secondary">
-            Contactar
-          </LandingLinkButton>
+          <div className="mt-6 rounded-[1.25rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_100%)] p-5">
+            <p className="text-sm font-semibold text-slate-900">¿No encontraste lo que buscabas?</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Te respondemos en menos de 24 horas y también podemos coordinar una demo guiada para tu equipo.
+            </p>
+            <div className="mt-4">
+              <LandingContactDialog triggerLabel="Abrir formulario" />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {filteredFaq.map((item) => (
+            <FaqItem
+              key={item.question}
+              question={item.question}
+              answer={item.answer}
+              isOpen={openQuestion === item.question}
+              onToggle={() => setOpenQuestion(openQuestion === item.question ? null : item.question)}
+            />
+          ))}
         </div>
       </div>
     </section>

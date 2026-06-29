@@ -276,7 +276,7 @@ export function MetradoSheetTable({
   }, [dragFill]);
 
   return (
-    <div className={getTableFrameClassName(isExcelMode)}>
+    <div className={getTableFrameClassName(isExcelMode, "min-h-[72vh] bg-[var(--app-surface)]")}>
       <div className={cn("flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3", isExcelMode && "px-3 py-2")}>
         <div>
           <h3 className="text-sm font-semibold text-slate-900">Hoja de metrado</h3>
@@ -331,7 +331,7 @@ export function MetradoSheetTable({
           </Button>
         </div>
       </div>
-      <div className="max-h-[62vh] overflow-auto">
+      <div className="min-h-[62vh] max-h-[62vh] overflow-auto bg-[var(--app-surface)]">
         <Table className={cn("min-w-[1320px] table-fixed text-xs", isExcelMode && "w-full min-w-[1180px]")}>
           <THead className={cn("sticky top-0 z-20", isExcelMode ? "bg-slate-100" : "bg-slate-50")}>
             <TR className={cn(isExcelMode ? "bg-slate-100/90 hover:bg-slate-100" : "bg-slate-50 hover:bg-slate-50")}>

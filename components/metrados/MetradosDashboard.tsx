@@ -1098,8 +1098,10 @@ export function MetradosDashboard({
             </div>
           ) : null}
           {isCreatingSheet ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-3 text-sm text-sky-800 md:flex-row md:items-center md:justify-between">
-              <span>Estas configurando una hoja nueva. Creala para habilitar importar, exportar y enviar a partida.</span>
+            <div className="theme-status-info flex flex-col gap-3 rounded-xl border px-3 py-3 text-sm md:flex-row md:items-center md:justify-between">
+              <span className="theme-status-info-strong">
+                Estás configurando una hoja nueva. Créala para habilitar la importación, exportación y el envío a partida.
+              </span>
               <Button size="sm" onClick={createSheet}>
                 <Plus className="mr-2 h-4 w-4" />
                 Crear hoja

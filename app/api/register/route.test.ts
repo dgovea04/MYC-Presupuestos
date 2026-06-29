@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   findUniqueMock: vi.fn(),
   registerUserWithCompanyMock: vi.fn(),
   hashPasswordMock: vi.fn(),
+  issueEmailVerificationMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -18,6 +19,10 @@ vi.mock("@/lib/auth/registration", () => ({
 
 vi.mock("@/lib/auth/password", () => ({
   hashPassword: mocks.hashPasswordMock,
+}));
+
+vi.mock("@/lib/auth/email-verification", () => ({
+  issueEmailVerification: mocks.issueEmailVerificationMock,
 }));
 
 import { POST } from "@/app/api/register/route";
@@ -43,17 +48,23 @@ describe("POST /api/register", () => {
     mocks.findUniqueMock.mockReset();
     mocks.registerUserWithCompanyMock.mockReset();
     mocks.hashPasswordMock.mockReset();
+    mocks.issueEmailVerificationMock.mockReset();
   });
 
-  it("registers a new user successfully and returns 201", async () => {
+  it("registers a new user successfully, issues email verification, and returns 201", async () => {
     mocks.findUniqueMock.mockResolvedValue(null);
     mocks.hashPasswordMock.mockResolvedValue("hashed-password");
     mocks.registerUserWithCompanyMock.mockResolvedValue({ user: { id: "user-1" }, company: { id: "company-1" } });
+    mocks.issueEmailVerificationMock.mockResolvedValue({ sent: true });
 
     const response = await POST(buildRequest(validBody));
 
     expect(response.status).toBe(201);
-    await expect(response.json()).resolves.toEqual({ ok: true });
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      requiresEmailVerification: true,
+      verificationEmailSent: true,
+    });
 
     expect(mocks.findUniqueMock).toHaveBeenCalledWith({
       where: { email: "maria@example.com" },
@@ -66,6 +77,11 @@ describe("POST /api/register", () => {
       passwordHash: "hashed-password",
       companyName: "Constructora Andina SAC",
       ruc: "20123456789",
+    });
+    expect(mocks.issueEmailVerificationMock).toHaveBeenCalledWith({
+      userId: "user-1",
+      email: "maria@example.com",
+      name: "Maria Calderon",
     });
   });
 
@@ -104,6 +120,7 @@ describe("POST /api/register", () => {
     mocks.findUniqueMock.mockResolvedValue(null);
     mocks.hashPasswordMock.mockResolvedValue("hashed-password");
     mocks.registerUserWithCompanyMock.mockResolvedValue({ user: { id: "user-1" }, company: { id: "company-1" } });
+    mocks.issueEmailVerificationMock.mockResolvedValue({ sent: true });
 
     const body = { ...validBody };
     delete body.ruc;
@@ -145,6 +162,7 @@ describe("POST /api/register", () => {
     mocks.findUniqueMock.mockResolvedValue(null);
     mocks.hashPasswordMock.mockResolvedValue("hashed-password");
     mocks.registerUserWithCompanyMock.mockResolvedValue({ user: { id: "user-1" }, company: { id: "company-1" } });
+    mocks.issueEmailVerificationMock.mockResolvedValue({ sent: true });
 
     const body = { ...validBody, ruc: "" };
 
@@ -154,5 +172,21 @@ describe("POST /api/register", () => {
     expect(mocks.registerUserWithCompanyMock).toHaveBeenCalledWith(
       expect.objectContaining({ ruc: undefined }),
     );
+  });
+
+  it("still creates the account when sending the verification email fails", async () => {
+    mocks.findUniqueMock.mockResolvedValue(null);
+    mocks.hashPasswordMock.mockResolvedValue("hashed-password");
+    mocks.registerUserWithCompanyMock.mockResolvedValue({ user: { id: "user-1" }, company: { id: "company-1" } });
+    mocks.issueEmailVerificationMock.mockRejectedValue(new Error("Email provider unavailable"));
+
+    const response = await POST(buildRequest(validBody));
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      requiresEmailVerification: true,
+      verificationEmailSent: false,
+    });
   });
 });

@@ -734,10 +734,10 @@ const ResourceTableRow = memo(function ResourceTableRow({
     <TR
       ref={rowRef}
       className={cn(
-        resource.isNew && "bg-emerald-50/60",
-        resource.isDirty && "bg-amber-50/50",
-        shouldReviewAutomaticIu && !resource.isDirty && "bg-amber-50/70",
-        shouldReviewIu && !resource.isDirty && "bg-rose-50/70",
+        resource.isNew && "theme-status-success-row",
+        resource.isDirty && "theme-status-warning-row",
+        shouldReviewAutomaticIu && !resource.isDirty && "theme-status-warning-row",
+        shouldReviewIu && !resource.isDirty && "theme-status-error-row",
       )}
       style={{ height: isExcelMode ? excelRowHeight : RESOURCE_ROW_HEIGHT }}
     >
@@ -812,9 +812,9 @@ const ResourceTableRow = memo(function ResourceTableRow({
               className={cn(
                 "min-w-0 flex-1",
                 !resource.isEditing && "border-transparent bg-transparent px-0 shadow-none",
-                shouldReviewAutomaticIu && "border-amber-300 bg-amber-50 text-amber-800 placeholder:text-amber-300",
-                shouldShowManualAssignedIu && "border-emerald-300 bg-emerald-50 text-emerald-800 placeholder:text-emerald-300",
-                shouldReviewIu && "border-rose-300 bg-rose-50 text-rose-700 placeholder:text-rose-300",
+                shouldReviewAutomaticIu && "theme-status-warning-field",
+                shouldShowManualAssignedIu && "theme-status-success-field",
+                shouldReviewIu && "theme-status-error-field",
               )}
             />
             {primaryIuSuggestion ? (
@@ -830,15 +830,15 @@ const ResourceTableRow = memo(function ResourceTableRow({
                 ) : null}
               </button>
             ) : shouldReviewIu ? (
-              <span className="ml-auto inline-flex shrink-0 rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+              <span className="theme-status-error ml-auto inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium">
                 Revisar IU
               </span>
             ) : shouldReviewAutomaticIu ? (
-              <span className="ml-auto inline-flex shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+              <span className="theme-status-warning ml-auto inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium">
                 IU autoasignado
               </span>
             ) : shouldShowManualAssignedIu ? (
-              <span className="ml-auto inline-flex shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+              <span className="theme-status-success ml-auto inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium">
                 IU adjudicado
               </span>
             ) : null}

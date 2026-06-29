@@ -360,11 +360,14 @@ export function TemplateLibraryPageContent({
           return (
             <Card
               key={module}
-              className={cn("border-[var(--app-border)] bg-[var(--app-surface)] transition", isSelectedModule ? "border-sky-300 ring-2 ring-sky-100" : null)}
+              className={cn(
+                "border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_14px_34px_-26px_rgba(15,23,42,0.18)] transition dark:border-[var(--app-border-strong)] dark:ring-1 dark:ring-inset dark:ring-[var(--app-border-strong)] dark:shadow-[0_18px_40px_-30px_rgba(0,0,0,0.52)]",
+                isSelectedModule ? "border-sky-300 ring-2 ring-sky-100 dark:border-sky-500/50 dark:ring-2 dark:ring-sky-500/20" : null,
+              )}
             >
               <CardContent className="space-y-4 p-5">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-2 text-[var(--app-text)]">
+                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-2 text-[var(--app-text)] dark:border-[var(--app-border-strong)] dark:bg-[var(--app-surface-strong)]">
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
@@ -576,7 +579,7 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
   const summary = getTemplateActivitySummary(events);
 
   return (
-    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+    <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_16px_38px_-28px_rgba(15,23,42,0.18)] dark:border-[var(--app-border-strong)] dark:shadow-[0_20px_44px_-32px_rgba(0,0,0,0.56)]">
       <CardContent className="space-y-4 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -604,7 +607,7 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
               <Link
                 key={event.id}
                 href={event.href}
-                className="group flex items-start justify-between gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm transition hover:border-sky-200 hover:bg-[var(--app-primary-muted)]"
+                className="group flex items-start justify-between gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm transition hover:border-sky-200 hover:bg-[var(--app-primary-muted)] dark:border-[var(--app-border-strong)] dark:hover:border-sky-500/35 dark:hover:bg-[var(--app-surface-strong)]"
               >
                 <span className="min-w-0">
                   <span className="block font-medium text-[var(--app-text-strong)]">{event.title}</span>
@@ -629,7 +632,7 @@ function TemplateActivityPanel({ events }: { events: TemplateLibraryActivityEven
 
 function TemplateActivityMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 dark:border-[var(--app-border-strong)] dark:shadow-[0_12px_28px_-24px_rgba(0,0,0,0.42)]">
       <p className="text-xs font-medium uppercase text-[var(--app-text-muted)]">{label}</p>
       <p className="mt-1 text-sm font-semibold text-[var(--app-text-strong)]">{value}</p>
     </div>
@@ -642,7 +645,7 @@ function TemplateCard({ item }: { item: TemplateLibraryItem }) {
   const hiddenTagLabel = formatHiddenTagLabel(hiddenTagCount);
 
   return (
-    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm shadow-slate-100/70">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.16)] dark:border-[var(--app-border-strong)] dark:shadow-[0_18px_42px_-30px_rgba(0,0,0,0.52)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-[var(--app-text-strong)]">{item.name}</p>

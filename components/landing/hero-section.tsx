@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import heroImage from "../../public/mc-presupuestos-hero-v2.png";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { LandingLinkButton } from "@/components/landing/landing-link-button";
@@ -75,13 +76,13 @@ export function HeroSection() {
         >
           <div className="landing-surface-elevated relative overflow-hidden rounded-[1.75rem] bg-white p-2">
             <Image
-              src="/hero-1.webp"
-              alt="Dashboard de MC Presupuestos con resumen de proyectos, presupuesto total y acciones rápidas"
+              src={heroImage}
+              alt="Dashboard de MC Presupuestos con presupuesto, APU, cronograma y paneles conectados"
               width={1200}
-              height={575}
+              height={675}
               priority
               sizes="(min-width: 1024px) 1000px, (min-width: 768px) 92vw, 100vw"
-              className="aspect-[1200/575] w-full rounded-[1.35rem] object-cover object-left-top"
+              className="aspect-[1200/575] w-full rounded-[1.35rem] object-cover object-center"
             />
           </div>
         </motion.div>

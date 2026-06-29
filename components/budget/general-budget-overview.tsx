@@ -782,10 +782,10 @@ export function GeneralBudgetOverview({
                                 <Badge
                                   className={
                                     subpartida.hasApu
-                                      ? "bg-emerald-100 text-emerald-700"
+                                      ? "theme-status-success"
                                       : subpartida.hasCatalogPartida
-                                      ? "bg-amber-100 text-amber-700"
-                                      : "bg-[var(--app-surface-strong)] text-[var(--app-text-muted)]"
+                                      ? "theme-status-warning"
+                                      : "theme-badge-slate"
                                   }
                                 >
                                   {subpartida.hasApu ? "Con APU" : subpartida.hasCatalogPartida ? "APU vacio" : "Sin partida"}
@@ -824,7 +824,7 @@ export function GeneralBudgetOverview({
                       </TBody>
                     </Table>
                     {subpartidaCreationError ? (
-                      <p className="border-t border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">{subpartidaCreationError}</p>
+                      <p className="theme-status-error border-t px-3 py-2 text-sm">{subpartidaCreationError}</p>
                     ) : null}
                   </div>
                 ) : null}
@@ -941,6 +941,6 @@ function getLevelTypeLabel(type: BudgetRecord["levels"][number]["type"]) {
 
 function getLevelRowClass(type: BudgetRecord["levels"][number]["type"]) {
   if (type === "TITLE") return "bg-[var(--app-surface-muted)]";
-  if (type === "SUBTITLE") return "bg-sky-50/60";
-  return "bg-amber-50/60";
+  if (type === "SUBTITLE") return "bg-sky-50/60 dark:bg-sky-950/30";
+  return "theme-status-warning-row";
 }
