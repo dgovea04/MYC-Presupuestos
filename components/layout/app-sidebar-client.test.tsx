@@ -30,9 +30,11 @@ vi.mock("next/image", () => ({
     alt,
     priority,
     src,
+    unoptimized,
     ...props
-  }: React.ImgHTMLAttributes<HTMLSpanElement> & { priority?: boolean; src: string }) => {
+  }: React.ImgHTMLAttributes<HTMLSpanElement> & { priority?: boolean; src: string; unoptimized?: boolean }) => {
     void priority;
+    void unoptimized;
 
     return <span aria-label={alt} data-next-image={src} {...props} />;
   },
@@ -135,7 +137,7 @@ describe("AppSidebarClient", () => {
     const navigationHrefs = [...container.querySelectorAll("a")].map((element) => element.getAttribute("href"));
 
     expect(sidebar?.getAttribute("data-sidebar-mode")).toBe("expanded");
-    expect(container.textContent).toContain("Costos y presupuestos de obra");
+    expect(container.textContent).not.toContain("Costos y presupuestos de obra");
     expect(activeLink?.getAttribute("href")).toBe("/budgets");
     expect(navigationHrefs).toEqual([
       "/dashboard",

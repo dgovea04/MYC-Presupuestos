@@ -29,11 +29,6 @@ export function SidebarBrand({
             className={cn("object-contain object-left", isMini && "h-full w-full object-contain object-center")}
           />
         </div>
-        {!isMini ? (
-          <p className="px-[20px] pb-[10px] pl-[10px] pt-[10px] text-[14px] font-semibold uppercase tracking-[0.18em] text-sky-200">
-            Costos y presupuestos de obra
-          </p>
-        ) : null}
       </div>
 
       {isMini ? (

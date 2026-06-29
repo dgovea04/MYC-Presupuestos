@@ -270,7 +270,7 @@ export function CloudAiSettingsCard() {
               </CardDescription>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full items-center justify-end gap-2 lg:w-auto">
             <Button type="button" variant="outline" onClick={() => void loadSettings()} disabled={loading} className="gap-2">
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
               Recargar
