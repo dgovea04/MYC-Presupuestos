@@ -156,7 +156,7 @@ describe("PolynomialCompositionDetail", () => {
 
     expect(markup).toContain("Detalle de composicion");
     expect(markup).toContain("IU 21 : CEMENTO PORTLAND E HIDRAULICO");
-    expect(markup).toContain("Codigo CE · Coef. 0.321");
+    expect(markup).toContain("Codigo CE - Coef. 0.321");
     expect(markup).toContain("CE");
     expect(markup).toContain("21 : CEMENTO PORTLAND TIPO I");
     expect(markup).toContain("Cemento portland tipo I (42.5 kg)");
@@ -169,6 +169,70 @@ describe("PolynomialCompositionDetail", () => {
     expect(markup).toContain("0.321");
     expect(markup).toContain("0.291");
     expect(markup).toContain("1 fuente : resource...id-001");
+  });
+
+  it("renders each monomial group as an expanded collapsable section for easier navigation", () => {
+    const markup = renderToStaticMarkup(
+      <PolynomialCompositionDetail
+        monomials={[
+          createMonomial({
+            id: "labor",
+            code: "MO",
+            name: "IU 47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+            costGroupKey: "LABOR",
+            amount: "200.0000",
+            coefficient: "0.200",
+            baseIndexCode: "47",
+            baseIndexName: "MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+            composition: [
+              {
+                id: "labor-component",
+                monomialId: "labor",
+                apuResourceId: "labor-resource",
+                resourceType: "MO",
+                resourceName: "Operario",
+                amount: "200.00",
+                unifiedIndexCode: "47",
+                unifiedIndexName: "MANO DE OBRA (INCLUYE LEYES SOCIALES)",
+                iuFamily: "LABOR",
+                participationPercentage: "1.000000",
+                coefficientContribution: "0.200000",
+              },
+            ],
+          }),
+          createMonomial({
+            id: "cement",
+            code: "CE",
+            name: "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
+            costGroupKey: "CEMENT",
+            amount: "300.0000",
+            coefficient: "0.300",
+            baseIndexCode: "21",
+            baseIndexName: "CEMENTO PORTLAND E HIDRAULICO",
+            composition: [
+              {
+                id: "cement-component",
+                monomialId: "cement",
+                apuResourceId: "cement-resource",
+                resourceType: "Material",
+                resourceName: "Cemento portland tipo I",
+                amount: "300.00",
+                unifiedIndexCode: "21",
+                unifiedIndexName: "CEMENTO PORTLAND E HIDRAULICO",
+                iuFamily: "CEMENT",
+                participationPercentage: "1.000000",
+                coefficientContribution: "0.300000",
+              },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("<details open=\"\"");
+    expect(markup).toContain("IU 47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)");
+    expect(markup).toContain("IU 21 : CEMENTO PORTLAND E HIDRAULICO");
+    expect(markup).toContain("1 componentes");
   });
 
   it("renders one-digit IU codes with the official two-digit format", () => {
@@ -275,5 +339,37 @@ describe("PolynomialCompositionDetail", () => {
     expect(markup).toContain("100.00%");
     expect(markup).toContain("0.180");
     expect(markup).toContain("0 fuentes");
+  });
+
+  it("renders only an initial window of composition rows for long monomial groups", () => {
+    const markup = renderToStaticMarkup(
+      <PolynomialCompositionDetail
+        monomials={[
+          createMonomial({
+            code: "MAT",
+            name: "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+            composition: Array.from({ length: 10 }, (_, index) => ({
+              id: `component-${index + 1}`,
+              monomialId: "monomial-1",
+              apuResourceId: `resource-${index + 1}`,
+              resourceType: "MATERIAL",
+              amount: "100.00",
+              resourceName: `Insumo ${index + 1}`,
+              unifiedIndexCode: "39",
+              unifiedIndexName: "INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+              iuFamily: "GENERAL_EXPENSES",
+              participationPercentage: "0.100000",
+              coefficientContribution: "0.010000",
+            })),
+          }),
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("8 de 10 componentes visibles");
+    expect(markup).toContain("Mostrar todos (2 restantes)");
+    expect(markup).toContain("Ver 2 componentes mas");
+    expect(markup).toContain("Insumo 8");
+    expect(markup).not.toContain("Insumo 10");
   });
 });

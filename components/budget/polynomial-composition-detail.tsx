@@ -2,7 +2,9 @@
 
 import Decimal from "decimal.js";
 import { ChevronRight } from "lucide-react";
+import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
@@ -62,6 +64,7 @@ type InitialMonomialSummaryRow = {
 };
 
 const ZERO = new Decimal(0);
+const DEFAULT_VISIBLE_COMPONENT_ROWS = 8;
 const initialMonomialGroups: Array<{
   key: InitialMonomialGroupKey;
   code: string;
@@ -267,11 +270,19 @@ export function PolynomialCompositionDetail({
   monomials,
 }: PolynomialCompositionDetailProps) {
   const { isExcelMode } = useAppViewMode();
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const compositionGroups = buildCompositionGroups(monomials);
   const initialRows = buildInitialMonomialSummaryRows(monomials);
   const initialTotalAmount = initialRows.reduce((total, row) => total.plus(row.amount), ZERO);
   const initialTotalCoefficient = initialTotalAmount.equals(ZERO) ? ZERO : new Decimal(1);
   const componentCount = monomials.reduce((total, monomial) => total + monomial.composition.length, 0);
+
+  function toggleGroupRows(monomialId: string) {
+    setExpandedGroups((current) => ({
+      ...current,
+      [monomialId]: !current[monomialId],
+    }));
+  }
 
   return (
     <details className={cn("theme-surface-card theme-soft-shadow group overflow-hidden border", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl")}>
@@ -339,81 +350,153 @@ export function PolynomialCompositionDetail({
 
             <div className="space-y-4">
               {compositionGroups.map((group) => (
-                <div key={group.monomialId} className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="theme-strong-text text-sm font-semibold">{group.monomialName}</p>
-                      <p className="theme-muted-text text-xs">
-                        Codigo {group.monomialCode} · Coef. {formatDecimalString(group.monomialCoefficient, 3)}
-                      </p>
-                    </div>
-                    <span className="theme-muted-text text-xs">{group.rows.length} componentes</span>
-                  </div>
-
-                  <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
-                    <Table className="min-w-[1180px] table-fixed text-xs">
-                      <THead>
-                        <TR className="theme-muted-panel hover:theme-muted-panel">
-                          <TH className="w-[260px]">Indice unificado</TH>
-                          <TH className="w-[240px]">Insumo</TH>
-                          <TH className="w-[130px]">Grupo inicial</TH>
-                          <TH className="w-[120px]">Familia IU</TH>
-                          <TH className="w-[110px] text-right">Monto (S/)</TH>
-                          <TH className="w-[120px] text-right">Participacion</TH>
-                          <TH className="w-[120px] text-right">Aporte coef.</TH>
-                          <TH className="w-[180px]">Fuente</TH>
-                        </TR>
-                      </THead>
-                      <TBody>
-                        {group.rows.map((row) => (
-                          <TR key={row.id} className={row.hasComposition ? undefined : "bg-[var(--app-surface-hover)]"}>
-                            <TD className="align-middle">
-                              {row.unifiedIndexCode || row.unifiedIndexName ? (
-                                <p className="truncate text-xs text-[var(--app-text)]" title={formatUnifiedIndexLabel(row)}>
-                                  {formatUnifiedIndexLabel(row)}
-                                </p>
-                                ) : (
-                                <span className="theme-subtle-text text-xs">Sin indice</span>
-                              )}
-                            </TD>
-                            <TD className="align-middle">
-                              <p className="truncate text-xs text-[var(--app-text)]" title={row.resourceName ?? "Sin insumo"}>
-                                {row.resourceName ?? "Sin insumo"}
-                              </p>
-                            </TD>
-                            <TD className="align-middle text-xs text-[var(--app-text)]">
-                              <span className="block truncate" title={row.initialGroup}>{row.initialGroup}</span>
-                            </TD>
-                            <TD className="align-middle text-xs text-[var(--app-text)]">
-                              <span className="block truncate" title={row.iuFamily ?? "Sin familia"}>{row.iuFamily ?? "Sin familia"}</span>
-                            </TD>
-                            <TD className="text-right align-middle tabular-nums">{formatDecimalString(row.amount, 2)}</TD>
-                            <TD className="text-right align-middle tabular-nums">{formatPercentage(row.participationPercentage)}</TD>
-                            <TD className="theme-strong-text text-right align-middle font-medium tabular-nums">
-                              {formatDecimalString(row.coefficientContribution, 3)}
-                            </TD>
-                            <TD className="align-middle">
-                              <p className="theme-muted-text truncate text-xs" title={formatSourceLabel(row.sourceIds)}>
-                                {formatSourceLabel(row.sourceIds)}
-                              </p>
-                            </TD>
-                          </TR>
-                        ))}
-                        <TR className="theme-muted-panel theme-strong-text font-semibold hover:theme-muted-panel">
-                          <TD colSpan={4}>Total</TD>
-                          <TD className="text-right tabular-nums">{formatDecimal(group.totalAmount, 2)}</TD>
-                          <TD className="text-right tabular-nums">{formatPercentage(group.totalParticipation.toString())}</TD>
-                          <TD className="text-right tabular-nums">{formatDecimal(group.totalCoefficientContribution, 3)}</TD>
-                          <TD />
-                        </TR>
-                      </TBody>
-                    </Table>
-                  </div>
-                </div>
+                <CompositionGroupPanel
+                  key={group.monomialId}
+                  group={group}
+                  isExcelMode={isExcelMode}
+                  showAllRows={expandedGroups[group.monomialId] ?? false}
+                  onToggleRows={() => toggleGroupRows(group.monomialId)}
+                />
               ))}
             </div>
           </>
         )}
+      </div>
+    </details>
+  );
+}
+
+function CompositionGroupPanel({
+  group,
+  isExcelMode,
+  showAllRows,
+  onToggleRows,
+}: {
+  group: CompositionDetailGroup;
+  isExcelMode: boolean;
+  showAllRows: boolean;
+  onToggleRows: () => void;
+}) {
+  const visibleRows = showAllRows ? group.rows : group.rows.slice(0, DEFAULT_VISIBLE_COMPONENT_ROWS);
+  const hiddenRowCount = Math.max(group.rows.length - visibleRows.length, 0);
+
+  return (
+    <details
+      open
+      className={cn(
+        "theme-surface-panel group overflow-hidden border",
+        isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl",
+      )}
+    >
+      <summary
+        className={cn(
+          "flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden",
+          isExcelMode ? "rounded-md" : "rounded-2xl",
+        )}
+      >
+        <div className="min-w-0">
+          <p className="theme-strong-text truncate text-sm font-semibold" title={group.monomialName}>
+            {group.monomialName}
+          </p>
+          <p className="theme-muted-text text-xs">
+            Codigo {group.monomialCode} - Coef. {formatDecimalString(group.monomialCoefficient, 3)}
+          </p>
+        </div>
+        <div className="theme-muted-text flex shrink-0 items-center gap-2 text-xs">
+          <span>{group.rows.length} componentes</span>
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition group-hover:bg-[var(--app-surface-hover-strong)] group-open:rotate-90 group-open:bg-[var(--app-surface-hover-strong)]">
+            <ChevronRight className="h-4 w-4" />
+          </span>
+        </div>
+      </summary>
+
+      <div className="theme-border-top border-t p-4 pt-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="theme-muted-text text-xs">
+            {visibleRows.length} de {group.rows.length} componentes visibles
+          </p>
+          {group.rows.length > DEFAULT_VISIBLE_COMPONENT_ROWS ? (
+            <Button type="button" variant="outline" size="sm" onClick={onToggleRows}>
+              {showAllRows ? "Mostrar menos" : `Mostrar todos (${hiddenRowCount} restantes)`}
+            </Button>
+          ) : null}
+        </div>
+
+        <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
+          <Table className="min-w-[1180px] table-fixed text-xs">
+            <THead>
+              <TR className="theme-muted-panel hover:theme-muted-panel">
+                <TH className="w-[260px]">Indice unificado</TH>
+                <TH className="w-[240px]">Insumo</TH>
+                <TH className="w-[130px]">Grupo inicial</TH>
+                <TH className="w-[120px]">Familia IU</TH>
+                <TH className="w-[110px] text-right">Monto (S/)</TH>
+                <TH className="w-[120px] text-right">Participacion</TH>
+                <TH className="w-[120px] text-right">Aporte coef.</TH>
+                <TH className="w-[180px]">Fuente</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {visibleRows.map((row) => (
+                <TR key={row.id} className={row.hasComposition ? undefined : "bg-[var(--app-surface-hover)]"}>
+                  <TD className="align-middle">
+                    {row.unifiedIndexCode || row.unifiedIndexName ? (
+                      <p className="truncate text-xs text-[var(--app-text)]" title={formatUnifiedIndexLabel(row)}>
+                        {formatUnifiedIndexLabel(row)}
+                      </p>
+                    ) : (
+                      <span className="theme-subtle-text text-xs">Sin indice</span>
+                    )}
+                  </TD>
+                  <TD className="align-middle">
+                    <p className="truncate text-xs text-[var(--app-text)]" title={row.resourceName ?? "Sin insumo"}>
+                      {row.resourceName ?? "Sin insumo"}
+                    </p>
+                  </TD>
+                  <TD className="align-middle text-xs text-[var(--app-text)]">
+                    <span className="block truncate" title={row.initialGroup}>{row.initialGroup}</span>
+                  </TD>
+                  <TD className="align-middle text-xs text-[var(--app-text)]">
+                    <span className="block truncate" title={row.iuFamily ?? "Sin familia"}>{row.iuFamily ?? "Sin familia"}</span>
+                  </TD>
+                  <TD className="text-right align-middle tabular-nums">{formatDecimalString(row.amount, 2)}</TD>
+                  <TD className="text-right align-middle tabular-nums">{formatPercentage(row.participationPercentage)}</TD>
+                  <TD className="theme-strong-text text-right align-middle font-medium tabular-nums">
+                    {formatDecimalString(row.coefficientContribution, 3)}
+                  </TD>
+                  <TD className="align-middle">
+                    <p className="theme-muted-text truncate text-xs" title={formatSourceLabel(row.sourceIds)}>
+                      {formatSourceLabel(row.sourceIds)}
+                    </p>
+                  </TD>
+                </TR>
+              ))}
+              <TR className="theme-muted-panel theme-strong-text font-semibold hover:theme-muted-panel">
+                <TD colSpan={4}>Total</TD>
+                <TD className="text-right tabular-nums">{formatDecimal(group.totalAmount, 2)}</TD>
+                <TD className="text-right tabular-nums">{formatPercentage(group.totalParticipation.toString())}</TD>
+                <TD className="text-right tabular-nums">{formatDecimal(group.totalCoefficientContribution, 3)}</TD>
+                <TD />
+              </TR>
+            </TBody>
+          </Table>
+        </div>
+
+        {!showAllRows && hiddenRowCount > 0 ? (
+          <div
+            className={cn(
+              "theme-muted-panel mt-3 flex flex-wrap items-center justify-between gap-3 border px-4 py-3 text-sm",
+              isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl",
+            )}
+          >
+            <p className="theme-muted-text">
+              Se muestran los primeros {visibleRows.length} componentes para mantener la navegacion fluida.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={onToggleRows}>
+              Ver {hiddenRowCount} componentes mas
+            </Button>
+          </div>
+        ) : null}
       </div>
     </details>
   );

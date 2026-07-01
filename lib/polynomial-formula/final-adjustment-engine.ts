@@ -307,6 +307,60 @@ function mergeIntoTarget(
   });
 }
 
+function selectSameUnifiedIndexTarget(group: readonly MutableMonomial[]): MutableMonomial {
+  return [...group].sort((left, right) => {
+    const lockedComparison = Number(isLocked(right)) - Number(isLocked(left));
+    if (lockedComparison !== 0) return lockedComparison;
+
+    const amountComparison = right.amountDecimal.comparedTo(left.amountDecimal);
+    if (amountComparison !== 0) return amountComparison;
+
+    return left.sortOrder - right.sortOrder;
+  })[0] as MutableMonomial;
+}
+
+function consolidateSameUnifiedIndexMonomials(
+  working: MutableMonomial[],
+  mergePlan: FinalAdjustmentMergePlanEntry[],
+): void {
+  const groups = new Map<string, MutableMonomial[]>();
+
+  for (const monomial of working) {
+    const unifiedIndexCode = primaryUnifiedIndexCode(monomial);
+    if (!unifiedIndexCode) continue;
+
+    const existing = groups.get(unifiedIndexCode);
+    if (existing) {
+      existing.push(monomial);
+      continue;
+    }
+
+    groups.set(unifiedIndexCode, [monomial]);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+
+    const target = selectSameUnifiedIndexTarget(group);
+    const sources = group
+      .filter((monomial) => monomial.id !== target.id)
+      .sort((left, right) => {
+        const amountComparison = left.amountDecimal.comparedTo(right.amountDecimal);
+        if (amountComparison !== 0) return amountComparison;
+
+        return left.sortOrder - right.sortOrder;
+      });
+
+    for (const source of sources) {
+      mergeIntoTarget(target, source, "SAME_IU_CODE", mergePlan);
+      working.splice(
+        working.findIndex((item) => item.id === source.id),
+        1,
+      );
+    }
+  }
+}
+
 function sumAmounts(monomials: readonly MutableMonomial[]): Decimal {
   return monomials.reduce((total, monomial) => total.plus(monomial.amountDecimal), ZERO);
 }
@@ -407,6 +461,8 @@ export function createPolynomialFinalAdjustmentProposal(
   const working = monomials.map(cloneMonomial);
   const mergePlan: FinalAdjustmentMergePlanEntry[] = [];
   const diagnostics: FinalAdjustmentDiagnostic[] = [];
+
+  consolidateSameUnifiedIndexMonomials(working, mergePlan);
 
   let changed = true;
   while (changed) {

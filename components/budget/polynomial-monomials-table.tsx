@@ -15,6 +15,8 @@ import { formatPolynomialIuCodeForDisplay } from "@/lib/polynomial-formula/monom
 import { cn, formatNumber } from "@/lib/utils";
 import type { PolynomialMonomialRecord, UnifiedIndexRecord } from "@/types/polynomial-formula";
 
+const DEFAULT_VISIBLE_MONOMIALS = 12;
+
 type BaseIndexOption = {
   key: string;
   code: string;
@@ -86,6 +88,7 @@ export function PolynomialMonomialsTable({
   const { isExcelMode } = useAppViewMode();
   const [targetMonomialId, setTargetMonomialId] = useState("");
   const [sourceMonomialIds, setSourceMonomialIds] = useState<string[]>([]);
+  const [showAllMonomials, setShowAllMonomials] = useState(false);
   const options = toBaseIndexOptions(baseIndexOptions);
   const selectedTarget = useMemo(
     () => monomials.find((monomial) => monomial.id === targetMonomialId) ?? null,
@@ -102,6 +105,11 @@ export function PolynomialMonomialsTable({
       ),
     [sourceMonomialIds, targetMonomialId, validMonomialIds],
   );
+  const visibleMonomials = useMemo(
+    () => (showAllMonomials ? monomials : monomials.slice(0, DEFAULT_VISIBLE_MONOMIALS)),
+    [monomials, showAllMonomials],
+  );
+  const hiddenMonomialCount = Math.max(monomials.length - visibleMonomials.length, 0);
   const selectedSourceCount = activeSourceMonomialIds.length;
   const canMerge = Boolean(onMergeMonomials && selectedTarget && selectedSourceCount > 0);
 
@@ -139,7 +147,23 @@ export function PolynomialMonomialsTable({
         <OperationalPanel
           title="Monomios"
           description="Edita codigos, nombres e indices base. Los coeficientes deben sumar 1.000 y cada monomio debe quedar asociado a un indice INEI."
-          metrics={<span>{monomials.length} monomios</span>}
+          metrics={
+            <span>
+              {visibleMonomials.length} de {monomials.length} monomios
+            </span>
+          }
+          controls={
+            monomials.length > DEFAULT_VISIBLE_MONOMIALS ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAllMonomials((current) => !current)}
+              >
+                {showAllMonomials ? "Mostrar menos" : `Mostrar todos (${hiddenMonomialCount} restantes)`}
+              </Button>
+            ) : undefined
+          }
         />
 
         {onMergeMonomials ? (
@@ -191,7 +215,7 @@ export function PolynomialMonomialsTable({
               </TR>
             </THead>
             <TBody>
-              {monomials.map((monomial) => {
+              {visibleMonomials.map((monomial) => {
                 const coefficientStatus = getCoefficientStatus(monomial.coefficient);
 
                 return (
@@ -312,6 +336,22 @@ export function PolynomialMonomialsTable({
             </TBody>
           </Table>
         </div>
+
+        {!showAllMonomials && hiddenMonomialCount > 0 ? (
+          <div
+            className={cn(
+              "theme-muted-panel flex flex-wrap items-center justify-between gap-3 border px-4 py-3 text-sm",
+              isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl",
+            )}
+          >
+            <p className="theme-muted-text">
+              Se muestran los primeros {visibleMonomials.length} monomios para mantener la vista fluida.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAllMonomials(true)}>
+              Ver {hiddenMonomialCount} monomios mas
+            </Button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

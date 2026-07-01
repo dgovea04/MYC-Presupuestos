@@ -297,11 +297,16 @@ function mergeDrafts(
   target: DraftMonomial,
   source: DraftMonomial,
   diagnostics: SmartMonomialDiagnostic[],
+  options?: {
+    preserveTargetLabel?: boolean;
+  },
 ): void {
   target.amount = target.amount.plus(source.amount);
   target.items = [...target.items, ...source.items];
   target.sourceItemIds = uniqueValues([...target.sourceItemIds, ...source.sourceItemIds]);
-  target.label = `${target.label} + ${source.label}`;
+  if (!options?.preserveTargetLabel) {
+    target.label = `${target.label} + ${source.label}`;
+  }
   target.representativeUnifiedIndexCode ??= source.representativeUnifiedIndexCode;
   target.representativeUnifiedIndexName ??= source.representativeUnifiedIndexName;
 
@@ -327,15 +332,74 @@ function mergeDrafts(
   );
 }
 
+function selectSameUnifiedIndexTarget(group: readonly DraftMonomial[]): DraftMonomial {
+  return [...group].sort((left, right) => {
+    const lockedDifference = Number(right.locked) - Number(left.locked);
+    if (lockedDifference !== 0) return lockedDifference;
+
+    if (left.broadGroup !== right.broadGroup) {
+      if (left.broadGroup === "GENERAL_EXPENSES_PROFIT") return -1;
+      if (right.broadGroup === "GENERAL_EXPENSES_PROFIT") return 1;
+    }
+
+    const amountDifference = right.amount.comparedTo(left.amount);
+    if (amountDifference !== 0) return amountDifference;
+
+    return left.key.localeCompare(right.key);
+  })[0] as DraftMonomial;
+}
+
+function consolidateDraftsByUnifiedIndex(
+  drafts: DraftMonomial[],
+  diagnostics: SmartMonomialDiagnostic[],
+): DraftMonomial[] {
+  const grouped = new Map<string, DraftMonomial[]>();
+
+  for (const draft of drafts) {
+    const normalizedCode = normalizeUnifiedIndexCodeForPolynomialFormula(draft.representativeUnifiedIndexCode);
+    if (!normalizedCode) continue;
+
+    const existing = grouped.get(normalizedCode);
+    if (existing) {
+      existing.push(draft);
+      continue;
+    }
+
+    grouped.set(normalizedCode, [draft]);
+  }
+
+  const remaining = [...drafts];
+
+  for (const group of grouped.values()) {
+    if (group.length < 2) continue;
+
+    const target = selectSameUnifiedIndexTarget(group);
+    const sources = group.filter((draft) => draft !== target);
+
+    for (const source of sources) {
+      mergeDrafts(target, source, diagnostics, { preserveTargetLabel: true });
+      remaining.splice(remaining.indexOf(source), 1);
+    }
+  }
+
+  return remaining;
+}
+
 function chooseMergeTarget(
   source: DraftMonomial,
   drafts: readonly DraftMonomial[],
 ): DraftMonomial | undefined {
+  const disallowedLockedBroadGroups =
+    source.broadGroup === "GENERAL_EXPENSES_PROFIT" ? new Set<SmartMonomialBroadGroup>() : new Set<SmartMonomialBroadGroup>(["GENERAL_EXPENSES_PROFIT"]);
   const unlockedCandidates = drafts.filter((candidate) => candidate !== source && !candidate.locked);
   const candidates =
     unlockedCandidates.length > 0
       ? unlockedCandidates
-      : drafts.filter((candidate) => candidate !== source);
+      : drafts.filter(
+          (candidate) =>
+            candidate !== source &&
+            !(candidate.locked && disallowedLockedBroadGroups.has(candidate.broadGroup)),
+        );
   if (candidates.length === 0) return undefined;
 
   const compatibleCandidates = candidates.filter(
@@ -594,7 +658,7 @@ export function createSmartPolynomialMonomialProposal(
   );
   const diagnostics = buildZeroAmountDiagnostics(inputItems);
   const initialBroadGroupSummary = buildBroadGroupSummary(inputItems);
-  const initialDrafts = buildInitialDrafts(inputItems);
+  const initialDrafts = consolidateDraftsByUnifiedIndex(buildInitialDrafts(inputItems), diagnostics);
   const draftsAfterMinimumMerge = mergeBelowMinimumDrafts(
     initialDrafts,
     diagnostics,

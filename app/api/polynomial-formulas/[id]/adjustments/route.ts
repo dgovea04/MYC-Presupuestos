@@ -7,8 +7,11 @@ import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { prisma } from "@/lib/db/prisma";
 import {
+  getPolynomialFormulaAdjustmentsTag,
   calculatePolynomialFormulaAdjustment,
   listPolynomialFormulaAdjustments,
+  POLYNOMIAL_FORMULA_ADJUSTMENTS_CACHE_TAG,
+  POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG,
 } from "@/lib/data/polynomial-formulas";
 import { polynomialAdjustmentCreateSchema } from "@/lib/validations/polynomial-formula";
 
@@ -65,6 +68,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       select: {
         name: true,
         budgetId: true,
+        budget: {
+          select: {
+            kind: true,
+            parentBudgetId: true,
+          },
+        },
       },
     });
 
@@ -78,6 +87,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
     }
 
+    const routeBudgetId =
+      formula?.budget.kind === "SUB_BUDGET" && formula.budget.parentBudgetId
+        ? formula.budget.parentBudgetId
+        : formula?.budgetId;
+
+    revalidateTag(POLYNOMIAL_FORMULA_ADJUSTMENTS_CACHE_TAG, "max");
+    revalidateTag(getPolynomialFormulaAdjustmentsTag(id), "max");
+    revalidateTag(POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG, "max");
+    if (formula?.budgetId) {
+      revalidateTag(`${POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG}:${formula.budgetId}`, "max");
+      revalidatePath(`/budgets/${formula.budgetId}/polynomial-formula`);
+    }
+    if (routeBudgetId) {
+      revalidateTag(`${POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG}:${routeBudgetId}`, "max");
+      revalidatePath(`/budgets/${routeBudgetId}/polynomial-formula`);
+    }
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag("dashboard-analytics");

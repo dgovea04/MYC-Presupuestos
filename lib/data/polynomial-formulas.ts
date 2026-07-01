@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { unstable_cache } from "next/cache";
 
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -23,6 +24,8 @@ import {
   IU_MONOMIAL_METADATA,
   resolvePolynomialMonomialDisplayMetadata,
 } from "@/lib/polynomial-formula/monomial-metadata";
+import { unifiedIndexDictionaryData } from "@/lib/polynomial-formula/unified-index-dictionary-data";
+import { resolveCurrentResourceIu } from "@/lib/resources/current-iu-assignment";
 import { ensureDate } from "@/lib/utils";
 import { createSmartPolynomialMonomialProposal } from "@/lib/polynomial-formula/smart-monomial-engine";
 import type {
@@ -30,7 +33,12 @@ import type {
   SmartMonomialInputItem,
   SmartMonomialProposal,
 } from "@/lib/polynomial-formula/smart-monomial-types";
-import type { PolynomialFormulaSectionData, PolynomialFormulaSectionsData } from "@/types/budget-sections";
+import type {
+  PolynomialFormulaSectionData,
+  PolynomialFormulaSectionsData,
+  PolynomialFormulaSectionSummary,
+  PolynomialFormulaSectionTab,
+} from "@/types/budget-sections";
 import type {
   AdjustmentCalculationRecord,
   PolynomialCostGroupKey,
@@ -43,6 +51,9 @@ import type {
 
 const ZERO = new Decimal(0);
 const PLACEHOLDER_BASE_INDEX_NAME = "Pendiente de asignar";
+export const POLYNOMIAL_FORMULA_SECTION_CACHE_TAG = "polynomial-formula-section";
+export const POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG = "polynomial-formula-sections";
+export const POLYNOMIAL_FORMULA_ADJUSTMENTS_CACHE_TAG = "polynomial-formula-adjustments";
 type GeneratedCostGroupKey =
   | "LABOR"
   | "MATERIALS"
@@ -57,6 +68,22 @@ const GROUP_ORDER: GeneratedCostGroupKey[] = [
   "OTHERS",
   "GENERAL_EXPENSES_PROFIT",
 ];
+
+const resourceIuLookupRows = [...new Map(
+  unifiedIndexDictionaryData.map((row) => [row.code.trim(), { code: row.code.trim(), name: row.element.trim() }]),
+).values()];
+
+function getPolynomialFormulaSectionTag(budgetId: string) {
+  return `${POLYNOMIAL_FORMULA_SECTION_CACHE_TAG}:${budgetId}`;
+}
+
+function getPolynomialFormulaSectionsTag(budgetId: string) {
+  return `${POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG}:${budgetId}`;
+}
+
+export function getPolynomialFormulaAdjustmentsTag(formulaId: string) {
+  return `${POLYNOMIAL_FORMULA_ADJUSTMENTS_CACHE_TAG}:${formulaId}`;
+}
 
 const MONOMIAL_METADATA: Record<
   PolynomialCostGroupKey,
@@ -379,6 +406,33 @@ function buildSectionSummary(formula: PolynomialFormulaRecord | null) {
   } as const;
 }
 
+function buildSectionSummaryFromSnapshot(input?: {
+  totalBaseAmount: string;
+  status: PolynomialFormulaStatus;
+  monomialCount: number;
+} | null): PolynomialFormulaSectionSummary {
+  return {
+    hasFormula: input !== null && input !== undefined,
+    monomialCount: input?.monomialCount ?? 0,
+    totalBaseAmount: input?.totalBaseAmount ?? "0",
+    status: input?.status ?? "NOT_CREATED",
+  };
+}
+
+function buildSectionTab(input: {
+  title: string;
+  budgetId?: string;
+  currency: string;
+  summary: PolynomialFormulaSectionSummary;
+}): PolynomialFormulaSectionTab {
+  return {
+    title: input.title,
+    budgetId: input.budgetId,
+    currency: input.currency,
+    summary: input.summary,
+  };
+}
+
 function formatBaseAmount(value: Decimal.Value): string {
   return formatFixed(value, 4);
 }
@@ -388,7 +442,19 @@ function resolveUnifiedIndexName(resource: FormulaBudgetResourceInput["resource"
 }
 
 function resolveResourceUnifiedIndexCode(resource: FormulaBudgetResourceInput["resource"]) {
-  return resource?.iuCurrent?.trim() || resource?.iu?.trim() || undefined;
+  if (!resource) {
+    return undefined;
+  }
+
+  const resolved = resolveCurrentResourceIu({
+    description: resource.description?.trim() ?? "",
+    category: resource.category?.trim() ?? "MATERIAL",
+    legacyIu: resource.iuCurrent?.trim() || resource.iu?.trim() || undefined,
+    unifiedIndices: resourceIuLookupRows,
+    dictionaryRows: unifiedIndexDictionaryData,
+  });
+
+  return resolved ?? resource.iuCurrent?.trim() ?? resource.iu?.trim() ?? undefined;
 }
 
 function classifySmartIuFamily(input: {
@@ -712,7 +778,7 @@ export function buildMonomialComponentCreateData(component: PersistedMonomialCom
   };
 }
 
-export async function getBudgetPolynomialFormulaSectionData(
+async function _getBudgetPolynomialFormulaSectionData(
   budgetId: string,
   userId: string,
   options?: PolynomialFormulaReadOptions,
@@ -782,10 +848,34 @@ export async function getBudgetPolynomialFormulaSectionData(
   };
 }
 
-export async function getBudgetPolynomialFormulaSectionsData(
+export async function getBudgetPolynomialFormulaSectionData(
   budgetId: string,
   userId: string,
   options?: PolynomialFormulaReadOptions,
+): Promise<PolynomialFormulaSectionData> {
+  if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
+    return _getBudgetPolynomialFormulaSectionData(budgetId, userId, options);
+  }
+
+  const includeCompositionDetail = options?.includeCompositionDetail === true;
+
+  return unstable_cache(
+    async (resolvedBudgetId: string, resolvedUserId: string, resolvedIncludeCompositionDetail: boolean) =>
+      _getBudgetPolynomialFormulaSectionData(resolvedBudgetId, resolvedUserId, {
+        includeCompositionDetail: resolvedIncludeCompositionDetail,
+      }),
+    ["budget-polynomial-formula-section-v1"],
+    {
+      tags: [POLYNOMIAL_FORMULA_SECTION_CACHE_TAG, getPolynomialFormulaSectionTag(budgetId)],
+    },
+  )(budgetId, userId, includeCompositionDetail);
+}
+
+async function _getBudgetPolynomialFormulaSectionsData(
+  budgetId: string,
+  userId: string,
+  options?: PolynomialFormulaReadOptions,
+  activeSectionBudgetId?: string,
 ): Promise<PolynomialFormulaSectionsData> {
   const budget = await prisma.budget.findFirst({
     where: {
@@ -809,8 +899,10 @@ export async function getBudgetPolynomialFormulaSectionsData(
         select: {
           id: true,
           name: true,
+          currency: true,
         },
       },
+      currency: true,
     },
   });
 
@@ -823,17 +915,85 @@ export async function getBudgetPolynomialFormulaSectionsData(
     return {
       title: "Formula polinomica",
       notes: section.notes,
-      sections: [section],
+      sections: [
+        buildSectionTab({
+          title: section.title,
+          budgetId: section.budgetId,
+          currency: section.currency,
+          summary: section.summary,
+        }),
+      ],
+      activeSection: section,
       hasSubBudgetSections: false,
     };
   }
 
   const orderedChildBudgets = orderSubBudgetsBySpecialty(budget.childBudgets);
-  const sections = await Promise.all(
-    orderedChildBudgets.map((childBudget) =>
-      getBudgetPolynomialFormulaSectionData(childBudget.id, userId, options),
-    ),
+  const latestFormulas = await prisma.polynomialFormula.findMany({
+    where: {
+      budgetId: {
+        in: orderedChildBudgets.map((childBudget) => childBudget.id),
+      },
+      budget: {
+        project: {
+          company: {
+            userId,
+          },
+        },
+      },
+    },
+    orderBy: [
+      {
+        budgetId: "asc",
+      },
+      {
+        updatedAt: "desc",
+      },
+    ],
+    select: {
+      budgetId: true,
+      totalBaseAmount: true,
+      status: true,
+      _count: {
+        select: {
+          monomials: true,
+        },
+      },
+    },
+  });
+  const latestFormulaByBudgetId = new Map<string, {
+    totalBaseAmount: string;
+    status: PolynomialFormulaStatus;
+    monomialCount: number;
+  }>();
+
+  for (const formula of latestFormulas) {
+    if (latestFormulaByBudgetId.has(formula.budgetId)) {
+      continue;
+    }
+
+    latestFormulaByBudgetId.set(formula.budgetId, {
+      totalBaseAmount: decimalToString(formula.totalBaseAmount),
+      status: formula.status,
+      monomialCount: formula._count.monomials,
+    });
+  }
+
+  const sections = orderedChildBudgets.map((childBudget) =>
+    buildSectionTab({
+      title: `Formula polinomica - ${childBudget.name}`,
+      budgetId: childBudget.id,
+      currency: childBudget.currency,
+      summary: buildSectionSummaryFromSnapshot(latestFormulaByBudgetId.get(childBudget.id)),
+    }),
   );
+  const resolvedActiveSectionBudgetId =
+    sections.find((section) => section.budgetId === activeSectionBudgetId)?.budgetId ??
+    sections[0]?.budgetId ??
+    null;
+  const activeSection = resolvedActiveSectionBudgetId
+    ? await getBudgetPolynomialFormulaSectionData(resolvedActiveSectionBudgetId, userId, options)
+    : null;
 
   return {
     title: "Formula polinomica por subpresupuesto",
@@ -842,8 +1002,44 @@ export async function getBudgetPolynomialFormulaSectionsData(
       "Los coeficientes, expresion K y cuadro de monomios se calculan solo con las partidas del subpresupuesto correspondiente.",
     ],
     sections,
+    activeSection,
     hasSubBudgetSections: true,
   };
+}
+
+export async function getBudgetPolynomialFormulaSectionsData(
+  budgetId: string,
+  userId: string,
+  options?: PolynomialFormulaReadOptions,
+  activeSectionBudgetId?: string,
+): Promise<PolynomialFormulaSectionsData> {
+  if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
+    return _getBudgetPolynomialFormulaSectionsData(budgetId, userId, options, activeSectionBudgetId);
+  }
+
+  const includeCompositionDetail = options?.includeCompositionDetail === true;
+  const resolvedActiveSectionBudgetId = activeSectionBudgetId ?? "";
+
+  return unstable_cache(
+    async (
+      resolvedBudgetId: string,
+      resolvedUserId: string,
+      resolvedIncludeCompositionDetail: boolean,
+      resolvedActiveBudgetId: string,
+    ) =>
+      _getBudgetPolynomialFormulaSectionsData(
+        resolvedBudgetId,
+        resolvedUserId,
+        {
+          includeCompositionDetail: resolvedIncludeCompositionDetail,
+        },
+        resolvedActiveBudgetId || undefined,
+      ),
+    ["budget-polynomial-formula-sections-v1"],
+    {
+      tags: [POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG, getPolynomialFormulaSectionsTag(budgetId)],
+    },
+  )(budgetId, userId, includeCompositionDetail, resolvedActiveSectionBudgetId);
 }
 
 export async function generatePolynomialFormulaFromBudget(
@@ -1247,29 +1443,44 @@ export async function listPolynomialFormulaAdjustments(
   formulaId: string,
   userId: string,
 ): Promise<AdjustmentCalculationRecord[]> {
-  const formula = await getAccessibleBudgetFormula(formulaId, userId);
-  const adjustments = await prisma.adjustmentCalculation.findMany({
-    where: {
-      formulaId: formula.id,
-    },
-    orderBy: [
-      {
-        year: "desc",
+  const readAdjustments = async (resolvedFormulaId: string, resolvedUserId: string) => {
+    const formula = await getAccessibleBudgetFormula(resolvedFormulaId, resolvedUserId);
+    const adjustments = await prisma.adjustmentCalculation.findMany({
+      where: {
+        formulaId: formula.id,
       },
-      {
-        month: "desc",
-      },
-    ],
-    include: {
-      terms: {
-        orderBy: {
-          sortOrder: "asc",
+      orderBy: [
+        {
+          year: "desc",
+        },
+        {
+          month: "desc",
+        },
+      ],
+      include: {
+        terms: {
+          orderBy: {
+            sortOrder: "asc",
+          },
         },
       },
-    },
-  });
+    });
 
-  return adjustments.map(serializeAdjustmentCalculation);
+    return adjustments.map(serializeAdjustmentCalculation);
+  };
+
+  if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
+    return readAdjustments(formulaId, userId);
+  }
+
+  return unstable_cache(
+    async (resolvedFormulaId: string, resolvedUserId: string) =>
+      readAdjustments(resolvedFormulaId, resolvedUserId),
+    ["polynomial-formula-adjustments-v1"],
+    {
+      tags: [POLYNOMIAL_FORMULA_ADJUSTMENTS_CACHE_TAG, getPolynomialFormulaAdjustmentsTag(formulaId)],
+    },
+  )(formulaId, userId);
 }
 
 async function loadBudgetForFormulaGeneration(budgetId: string, userId: string) {

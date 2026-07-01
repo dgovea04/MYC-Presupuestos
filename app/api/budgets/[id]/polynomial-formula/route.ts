@@ -8,6 +8,10 @@ import { prisma } from "@/lib/db/prisma";
 import {
   generatePolynomialFormulaFromBudget,
   getBudgetPolynomialFormulaSectionData,
+  getPolynomialFormulaAdjustmentsTag,
+  POLYNOMIAL_FORMULA_ADJUSTMENTS_CACHE_TAG,
+  POLYNOMIAL_FORMULA_SECTION_CACHE_TAG,
+  POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG,
   savePolynomialFormula,
   type PolynomialFormulaReadOptions,
 } from "@/lib/data/polynomial-formulas";
@@ -69,6 +73,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       detail: formula.name,
       href: activityHref,
     });
+    await revalidatePolynomialFormulaCaches(formula.budgetId, session.user.id, formula.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag("dashboard-analytics");
@@ -104,6 +109,7 @@ export async function PATCH(request: Request) {
       detail: formula.name,
       href: activityHref,
     });
+    await revalidatePolynomialFormulaCaches(formula.budgetId, session.user.id, formula.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag("dashboard-analytics");
@@ -140,4 +146,38 @@ async function getPolynomialFormulaActivityHref(budgetId: string, userId: string
 
   const routeBudgetId = budget?.kind === "SUB_BUDGET" && budget.parentBudgetId ? budget.parentBudgetId : budgetId;
   return `/budgets/${routeBudgetId}/polynomial-formula`;
+}
+
+async function revalidatePolynomialFormulaCaches(budgetId: string, userId: string, formulaId?: string) {
+  const budget = await prisma.budget.findFirst({
+    where: {
+      id: budgetId,
+      project: {
+        company: {
+          userId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      kind: true,
+      parentBudgetId: true,
+    },
+  });
+
+  const routeBudgetId = budget?.kind === "SUB_BUDGET" && budget.parentBudgetId ? budget.parentBudgetId : budgetId;
+
+  revalidateTag(POLYNOMIAL_FORMULA_SECTION_CACHE_TAG, "max");
+  revalidateTag(`${POLYNOMIAL_FORMULA_SECTION_CACHE_TAG}:${budgetId}`, "max");
+  revalidateTag(POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG, "max");
+  revalidateTag(`${POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG}:${budgetId}`, "max");
+  revalidateTag(`${POLYNOMIAL_FORMULA_SECTIONS_CACHE_TAG}:${routeBudgetId}`, "max");
+  if (formulaId) {
+    revalidateTag(POLYNOMIAL_FORMULA_ADJUSTMENTS_CACHE_TAG, "max");
+    revalidateTag(getPolynomialFormulaAdjustmentsTag(formulaId), "max");
+  }
+  revalidatePath(`/budgets/${budgetId}`);
+  revalidatePath(`/budgets/${budgetId}/polynomial-formula`);
+  revalidatePath(`/budgets/${routeBudgetId}`);
+  revalidatePath(`/budgets/${routeBudgetId}/polynomial-formula`);
 }

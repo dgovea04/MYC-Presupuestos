@@ -348,6 +348,72 @@ describe("sanitizePolynomialMonomialComponents", () => {
       name: "IU 21 : CEMENTO PORTLAND E HIDRAULICO",
     });
   });
+
+  it("reclassifies materials with generic IU 39 into their real material families before grouping", () => {
+    const result = composeBudgetPolynomialFormulaInput({
+      id: "budget-generic-39",
+      projectId: "project-1",
+      totalGeneralExpenses: 150,
+      totalUtility: 50,
+      items: [
+        {
+          id: "item-generic-39",
+          quantity: 1,
+          apu: {
+            resources: [
+              {
+                id: "steel-resource",
+                resourceType: "Material",
+                subtotal: 180,
+                resource: {
+                  category: "MATERIAL",
+                  description: "ACERO CORRUGADO FY 4200",
+                  iu: "39",
+                  iuCurrent: "39",
+                },
+              },
+              {
+                id: "cement-resource",
+                resourceType: "Material",
+                subtotal: 120,
+                resource: {
+                  category: "MATERIAL",
+                  description: "CEMENTO PORTLAND TIPO I",
+                  iu: "39",
+                  iuCurrent: "39",
+                },
+              },
+              {
+                id: "pipe-resource",
+                resourceType: "Material",
+                subtotal: 90,
+                resource: {
+                  category: "MATERIAL",
+                  description: "TUBERIA DE PVC SAP",
+                  iu: "39",
+                  iuCurrent: "39",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.monomials.filter((monomial) => monomial.baseIndexCode === "39")).toHaveLength(1);
+    expect(result.monomials.map((monomial) => [monomial.code, monomial.baseIndexCode])).toEqual(
+      expect.arrayContaining([
+        ["AC", "3"],
+        ["CE", "21"],
+        ["IS", "66"],
+        ["GU", "39"],
+      ]),
+    );
+    expect(result.monomials.find((monomial) => monomial.code === "GU")?.amount).toBe("200.0000");
+    expect(result.monomials.find((monomial) => monomial.code === "GU")?.name).toBe(
+      "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+    );
+  });
 });
 
 describe("getPolynomialFormulaReadOptionsForEnvironment", () => {

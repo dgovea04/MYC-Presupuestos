@@ -193,6 +193,66 @@ describe("createSmartPolynomialMonomialProposal", () => {
     );
   });
 
+  it("never merges non-general-expense groups into the locked IU 39 general expenses group", () => {
+    const result = createSmartPolynomialMonomialProposal([
+      item({ id: "labor-1", broadGroup: "LABOR", amount: "480", iuFamily: "LABOR", unifiedIndexCode: "47" }),
+      item({
+        id: "gu-1",
+        broadGroup: "GENERAL_EXPENSES_PROFIT",
+        amount: "480",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+      item({ id: "other-small", broadGroup: "OTHERS", amount: "40", iuFamily: "OTHERS" }),
+    ]);
+
+    expect(result.proposedMonomials.map((monomial) => monomial.key)).toEqual(["LABOR", "GENERAL_EXPENSES_PROFIT"]);
+    expect(result.proposedMonomials.find((monomial) => monomial.key === "GENERAL_EXPENSES_PROFIT")?.sourceItemIds).toEqual([
+      "gu-1",
+    ]);
+    expect(result.proposedMonomials.find((monomial) => monomial.key === "LABOR")?.sourceItemIds).toEqual([
+      "labor-1",
+      "other-small",
+    ]);
+  });
+
+  it("always consolidates all items with IU 39 into a single initial monomial", () => {
+    const result = createSmartPolynomialMonomialProposal([
+      item({
+        id: "gu-1",
+        broadGroup: "GENERAL_EXPENSES_PROFIT",
+        amount: "200",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+        unifiedIndexName: "Indice general",
+      }),
+      item({
+        id: "paint-generic-39",
+        broadGroup: "MATERIALS",
+        amount: "20",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+        unifiedIndexName: "Indice general",
+      }),
+      item({
+        id: "cable-generic-39",
+        broadGroup: "MATERIALS",
+        amount: "9",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+        unifiedIndexName: "Indice general",
+      }),
+    ]);
+
+    expect(result.proposedMonomials).toHaveLength(1);
+    expect(result.proposedMonomials[0]).toMatchObject({
+      key: "GENERAL_EXPENSES_PROFIT",
+      locked: true,
+    });
+    expect(result.proposedMonomials[0]?.sourceItemIds).toEqual(["gu-1", "paint-generic-39", "cable-generic-39"]);
+    expect(result.proposedMonomials[0]?.amount.toFixed(3)).toBe("229.000");
+  });
+
   it("reduces more than ten candidate groups by merging the smallest non-locked groups", () => {
     const materialFamilies: PolynomialIuFamily[] = [
       "STEEL",

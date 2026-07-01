@@ -43,11 +43,13 @@ export function PolynomialKCalculator({
   onPreviewMonthChange,
   onPreviewYearChange,
   onOriginalAmountChange,
+  onCalculatePreview,
   result,
   resultError,
   isLoading,
   adjustedAmounts,
   canApply,
+  canCalculatePreview,
   onApplyAdjustment,
   isApplyingAdjustment,
   currency,
@@ -59,6 +61,7 @@ export function PolynomialKCalculator({
   onPreviewMonthChange: (value: number) => void;
   onPreviewYearChange: (value: number) => void;
   onOriginalAmountChange: (value: string) => void;
+  onCalculatePreview: () => void;
   result: KPreviewResult | null;
   resultError: string;
   isLoading: boolean;
@@ -68,6 +71,7 @@ export function PolynomialKCalculator({
     adjustmentAmount: string;
   } | null;
   canApply: boolean;
+  canCalculatePreview: boolean;
   onApplyAdjustment: () => void;
   isApplyingAdjustment: boolean;
   currency: string;
@@ -84,7 +88,7 @@ export function PolynomialKCalculator({
           metrics={result ? <span>{result.terms.length} monomios en cálculo</span> : undefined}
         />
 
-        <div className="grid gap-4 lg:grid-cols-[140px_160px_minmax(220px,1fr)_auto]">
+        <div className="grid gap-4 lg:grid-cols-[140px_160px_minmax(220px,1fr)_auto_auto]">
           <div>
             <label className="theme-muted-text text-xs uppercase tracking-[0.2em]">Mes reajuste</label>
             <Input
@@ -115,6 +119,12 @@ export function PolynomialKCalculator({
               onChange={(event) => onOriginalAmountChange(event.target.value)}
               className="mt-2"
             />
+          </div>
+          <div className="flex items-end">
+            <Button type="button" variant="outline" onClick={onCalculatePreview} disabled={!canCalculatePreview || isLoading}>
+              <Calculator className="mr-2 h-4 w-4" />
+              {isLoading ? "Calculando..." : "Calcular K"}
+            </Button>
           </div>
           <div className="flex items-end">
             <Button type="button" onClick={onApplyAdjustment} disabled={!canApply || isApplyingAdjustment}>

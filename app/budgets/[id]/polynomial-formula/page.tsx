@@ -1,16 +1,23 @@
 import { PolynomialFormulaEditor } from "@/components/budget/polynomial-formula-editor";
+import { PolynomialFormulaSectionTabs } from "@/components/budget/polynomial-formula-section-tabs";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
 import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import {
   getBudgetPolynomialFormulaSectionsData,
   getPolynomialFormulaReadOptionsForEnvironment,
-  listPolynomialFormulaAdjustments,
   type PolynomialFormulaReadOptions,
 } from "@/lib/data/polynomial-formulas";
 
-export default async function GeneralBudgetPolynomialFormulaPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function GeneralBudgetPolynomialFormulaPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ section?: string }>;
+}) {
   const { id } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
   const license = await getEffectiveUserLicense({ userId: session.user.id });
   const canUsePolynomialAdjustments = hasFeatureAccess(license, "polynomial_formula.adjustments");
@@ -19,18 +26,13 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
     includeCompositionDetail: true,
   } satisfies PolynomialFormulaReadOptions;
 
-  const sectionsData = await getBudgetPolynomialFormulaSectionsData(id, session.user.id, formulaReadOptions);
-  const sectionAdjustments = await Promise.all(
-    sectionsData.sections.map(async (section) => ({
-      budgetId: section.budgetId,
-      adjustments: section.formula && canUsePolynomialAdjustments
-        ? await listPolynomialFormulaAdjustments(section.formula.id, session.user.id)
-        : [],
-    })),
+  const sectionsData = await getBudgetPolynomialFormulaSectionsData(
+    id,
+    session.user.id,
+    formulaReadOptions,
+    resolvedSearchParams.section,
   );
-  const adjustmentsByBudgetId = new Map(
-    sectionAdjustments.map((entry) => [entry.budgetId, entry.adjustments]),
-  );
+  const activeSection = sectionsData.activeSection;
 
   return (
     <GeneralBudgetSectionShell
@@ -50,19 +52,27 @@ export default async function GeneralBudgetPolynomialFormulaPage({ params }: { p
     >
       <div className="space-y-6">
         {sectionsData.hasSubBudgetSections ? (
-          <div className="theme-status-info theme-status-info-strong rounded-2xl border px-4 py-3 text-sm leading-6">
-            {sectionsData.notes.join(" ")}
-          </div>
+          <>
+            <div className="theme-status-info theme-status-info-strong rounded-2xl border px-4 py-3 text-sm leading-6">
+              {sectionsData.notes.join(" ")}
+            </div>
+            <section className="theme-surface-card rounded-2xl border p-4">
+              <PolynomialFormulaSectionTabs
+                budgetId={budget.id}
+                activeSection={activeSection}
+                sections={sectionsData.sections}
+              />
+            </section>
+          </>
         ) : null}
-        {sectionsData.sections.map((section) => (
+        {activeSection ? (
           <PolynomialFormulaEditor
-            key={section.budgetId ?? section.title}
-            section={section}
-            adjustments={adjustmentsByBudgetId.get(section.budgetId) ?? []}
+            key={activeSection.budgetId ?? activeSection.title}
+            section={activeSection}
             canUsePolynomialAdjustments={canUsePolynomialAdjustments}
             showCompositionDetail={showCompositionDetail}
           />
-        ))}
+        ) : null}
       </div>
     </GeneralBudgetSectionShell>
   );

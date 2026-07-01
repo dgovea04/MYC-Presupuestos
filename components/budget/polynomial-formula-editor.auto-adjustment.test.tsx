@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PolynomialFormulaEditor } from "@/components/budget/polynomial-formula-editor";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
@@ -12,6 +12,10 @@ import type { UserSettingsRecord } from "@/types/settings";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
+
+beforeEach(() => {
+  vi.useRealTimers();
+});
 
 afterEach(() => {
   if (root) {
@@ -39,7 +43,6 @@ describe("PolynomialFormulaEditor automatic adjustment", () => {
           <AppViewModeProvider initialViewMode="modern">
             <PolynomialFormulaEditor
               section={section()}
-              adjustments={[]}
               canUsePolynomialAdjustments={false}
             />
           </AppViewModeProvider>
@@ -58,6 +61,8 @@ describe("PolynomialFormulaEditor automatic adjustment", () => {
     expect(document.body.textContent).toContain("Ajuste automatico de formula");
     expect(document.body.textContent).toContain("6 actuales");
     expect(document.body.textContent).toContain("5 propuestos");
+    expect(document.body.querySelector("[data-testid='polynomial-auto-adjustment-scroll-area']")?.className).toContain("overflow-y-auto");
+    expect(document.body.querySelector("[data-testid='polynomial-auto-adjustment-dialog-viewport']")?.className).toContain("overflow-hidden");
     expect(container.textContent).toContain("PI");
 
     await act(async () => {
@@ -79,6 +84,347 @@ describe("PolynomialFormulaEditor automatic adjustment", () => {
     expect(container.textContent).toContain("5 monomios");
     expect(container.textContent).toContain("Ajuste automatico aplicado");
   });
+
+  it("does not calculate K automatically before the user requests it", async () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-15T12:00:00.000Z"));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/unified-indices")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              { code: "47", name: "Mano de obra", value: "105" },
+              { code: "54", name: "Pintura", value: "106" },
+              { code: "21", name: "Cemento", value: "107" },
+              { code: "3", name: "Acero", value: "108" },
+              { code: "16", name: "Acabados", value: "109" },
+              { code: "39", name: "Indice general", value: "110" },
+            ]),
+            { status: 200 },
+          ),
+        );
+      }
+
+      if (url.includes("/api/polynomial-formulas/formula-1/calculate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              kRaw: "1.0123",
+              kRounded: "1.012",
+              terms: [
+                {
+                  name: "Mano de obra",
+                  coefficient: "0.250",
+                  baseIndexValue: "100",
+                  adjustmentIndexValue: "105",
+                  ratio: "1.0500",
+                  partial: "0.2625",
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        <FormattingSettingsProvider settings={settings()}>
+          <AppViewModeProvider initialViewMode="modern">
+            <PolynomialFormulaEditor
+              section={section()}
+              canUsePolynomialAdjustments
+            />
+          </AppViewModeProvider>
+        </FormattingSettingsProvider>,
+      );
+    });
+
+    await act(async () => undefined);
+
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) => String(input).includes("/calculate") || init?.method === "POST",
+      ),
+    ).toBe(false);
+
+    const calculateButton = getButton("Calcular K");
+    expect(calculateButton.disabled).toBe(false);
+
+    expect(document.body.textContent).toContain("Calcular K");
+  });
+
+  it("loads adjustment history only after the user opens it", async () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/unified-indices")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+
+      if (url.includes("/api/polynomial-formulas/formula-1/adjustments")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                id: "adj-1",
+                formulaId: "formula-1",
+                month: 1,
+                year: 2026,
+                originalAmount: "100000.00",
+                kRounded: "1.012",
+                adjustedAmount: "101200.00",
+                adjustmentAmount: "1200.00",
+                terms: [],
+                createdAt: "2026-01-15T00:00:00.000Z",
+              },
+            ]),
+            { status: 200 },
+          ),
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        <FormattingSettingsProvider settings={settings()}>
+          <AppViewModeProvider initialViewMode="modern">
+            <PolynomialFormulaEditor
+              section={section()}
+              canUsePolynomialAdjustments
+            />
+          </AppViewModeProvider>
+        </FormattingSettingsProvider>,
+      );
+    });
+
+    await act(async () => undefined);
+
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/adjustments"))).toBe(false);
+
+    await act(async () => {
+      getButton("Mostrar historial").click();
+    });
+
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/adjustments"))).toBe(true);
+  });
+
+  it("reuses cached history when the same sub budget editor remounts", async () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/unified-indices")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+
+      if (url.includes("/api/polynomial-formulas/formula-1/adjustments")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                id: "adj-1",
+                formulaId: "formula-1",
+                month: 1,
+                year: 2026,
+                originalAmount: "100000.00",
+                kRounded: "1.012",
+                adjustedAmount: "101200.00",
+                adjustmentAmount: "1200.00",
+                terms: [],
+                createdAt: "2026-01-15T00:00:00.000Z",
+              },
+            ]),
+            { status: 200 },
+          ),
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const remountSection = section("Formula remount cache");
+
+    await renderEditor(remountSection);
+    await act(async () => undefined);
+
+    await act(async () => {
+      getButton("Mostrar historial").click();
+    });
+
+    expect(countAdjustmentRequests(fetchMock)).toBe(1);
+    expect(container.textContent).toContain("101,200.00");
+
+    act(() => root?.unmount());
+    container.remove();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await renderEditor(remountSection);
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("101,200.00");
+    expect(countAdjustmentRequests(fetchMock)).toBe(1);
+    expect(getButton("Ocultar historial")).toBeTruthy();
+  });
+
+  it("reuses the cached formula draft and base indices when the same sub budget editor remounts", async () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/unified-indices")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([{ code: "47", name: "Mano de obra", value: "105" }]),
+            { status: 200 },
+          ),
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const remountSection = section("Formula local cache");
+    remountSection.formula.baseMonth = 12;
+    remountSection.formula.baseYear = 2035;
+
+    await renderEditor(remountSection);
+    await act(async () => undefined);
+
+    const formulaNameInput = getInputByValue("Formula");
+
+    await act(async () => {
+      setNativeInputValue(formulaNameInput, "Formula editada localmente");
+      formulaNameInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(formulaNameInput.value).toBe("Formula editada localmente");
+    expect(countUnifiedIndexRequests(fetchMock)).toBe(1);
+
+    act(() => root?.unmount());
+    container.remove();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await renderEditor(remountSection);
+    await act(async () => undefined);
+
+    expect(getInputByValue("Formula editada localmente").value).toBe("Formula editada localmente");
+    expect(countUnifiedIndexRequests(fetchMock)).toBe(1);
+  });
+
+  it("reuses the cached K preview when the same sub budget editor remounts", async () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/unified-indices")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              { code: "47", name: "Mano de obra", value: "105" },
+              { code: "54", name: "Pintura", value: "106" },
+              { code: "21", name: "Cemento", value: "107" },
+              { code: "3", name: "Acero", value: "108" },
+              { code: "16", name: "Acabados", value: "109" },
+              { code: "39", name: "Indice general", value: "110" },
+            ]),
+            { status: 200 },
+          ),
+        );
+      }
+
+      if (url.includes("/api/polynomial-formulas/formula-1/calculate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              kRaw: "1.0123",
+              kRounded: "1.012",
+              terms: [
+                {
+                  name: "Mano de obra",
+                  coefficient: "0.250",
+                  baseIndexValue: "100",
+                  adjustmentIndexValue: "105",
+                  ratio: "1.0500",
+                  partial: "0.2625",
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const remountSection = section("Formula k cache");
+    remountSection.formula.baseMonth = 11;
+    remountSection.formula.baseYear = 2036;
+
+    await renderEditor(remountSection);
+    await act(async () => undefined);
+
+    await act(async () => {
+      getButton("Calcular K").click();
+    });
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("K redondeado");
+    expect(container.textContent).toContain("1.012");
+    expect(countCalculateRequests(fetchMock)).toBe(1);
+
+    act(() => root?.unmount());
+    container.remove();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await renderEditor(remountSection);
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain("K redondeado");
+    expect(container.textContent).toContain("1.012");
+    expect(countCalculateRequests(fetchMock)).toBe(1);
+  });
 });
 
 declare global {
@@ -97,6 +443,49 @@ function getButton(text: string) {
   return button;
 }
 
+function getInputByValue(value: string) {
+  const input = [...document.body.querySelectorAll("input")].find((candidate) => candidate.value === value);
+
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`Missing input value: ${value}`);
+  }
+
+  return input;
+}
+
+function setNativeInputValue(input: HTMLInputElement, value: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+
+  descriptor?.set?.call(input, value);
+}
+
+function countAdjustmentRequests(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.filter(([input]) => String(input).includes("/adjustments")).length;
+}
+
+function countUnifiedIndexRequests(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/unified-indices")).length;
+}
+
+function countCalculateRequests(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.filter(([input]) => String(input).includes("/calculate")).length;
+}
+
+async function renderEditor(nextSection: PolynomialFormulaSectionData = section()) {
+  await act(async () => {
+    root?.render(
+      <FormattingSettingsProvider settings={settings()}>
+        <AppViewModeProvider initialViewMode="modern">
+          <PolynomialFormulaEditor
+            section={nextSection}
+            canUsePolynomialAdjustments
+          />
+        </AppViewModeProvider>
+      </FormattingSettingsProvider>,
+    );
+  });
+}
+
 function settings(): UserSettingsRecord {
   return {
     aiProviderPreference: "auto",
@@ -113,10 +502,10 @@ function settings(): UserSettingsRecord {
   };
 }
 
-function section(): PolynomialFormulaSectionData {
+function section(title = "Formula polinomica"): PolynomialFormulaSectionData {
   return {
     id: "polynomial",
-    title: "Formula polinomica",
+    title,
     budgetId: "budget-1",
     currency: "PEN",
     coefficients: [],

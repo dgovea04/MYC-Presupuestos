@@ -105,9 +105,17 @@ export type PolynomialFormulaSectionData = {
   summary: PolynomialFormulaSectionSummary;
 };
 
+export type PolynomialFormulaSectionTab = {
+  title: string;
+  budgetId?: string;
+  currency: string;
+  summary: PolynomialFormulaSectionSummary;
+};
+
 export type PolynomialFormulaSectionsData = {
   title: string;
   notes: string[];
-  sections: PolynomialFormulaSectionData[];
+  sections: PolynomialFormulaSectionTab[];
+  activeSection: PolynomialFormulaSectionData | null;
   hasSubBudgetSections: boolean;
 };

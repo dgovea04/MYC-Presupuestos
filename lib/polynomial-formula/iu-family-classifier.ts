@@ -32,6 +32,7 @@ const familyByKnownCode: Record<string, PolynomialIuFamily> = {
   "54": "FINISHES",
   "16": "FINISHES",
   "24": "FINISHES",
+  "66": "SANITARY_INSTALLATIONS",
   "72": "SANITARY_INSTALLATIONS",
   "65": "SANITARY_INSTALLATIONS",
   "7": "ELECTRICAL_INSTALLATIONS",

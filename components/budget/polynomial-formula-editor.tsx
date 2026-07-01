@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Save } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -55,8 +55,26 @@ type KPreviewResult = {
 };
 
 type FormulaStatus = PolynomialFormulaSectionData["summary"]["status"];
+type CachedPolynomialFormulaEditorState = {
+  formula: PolynomialFormulaRecord | null;
+  summary: PolynomialFormulaSectionData["summary"];
+  baseIndexOptions: UnifiedIndexRecord[];
+  generateMonth: number;
+  generateYear: number;
+  previewMonth: number;
+  previewYear: number;
+  originalAmount: string;
+  kPreview: KPreviewResult | null;
+  kPreviewError: string;
+  history: AdjustmentCalculationRecord[];
+  historyLoaded: boolean;
+  historyOpen: boolean;
+  compositionDetailOpen: boolean;
+};
 
 const PLACEHOLDER_INDEX_NAME = "Pendiente de asignar";
+const unifiedIndicesRequestCache = new Map<string, Promise<UnifiedIndexRecord[]>>();
+const polynomialFormulaEditorUiCache = new Map<string, CachedPolynomialFormulaEditorState>();
 const DynamicPolynomialCompositionDetail =
   process.env.NODE_ENV !== "production"
     ? dynamic<PolynomialCompositionDetailProps>(() =>
@@ -181,31 +199,86 @@ function formatLastSavedLabel(lastSavedAt: number | null, currentTime: number) {
   return `Último guardado hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
 }
 
+function buildUnifiedIndicesCacheKey(month: number, year: number) {
+  return `${year}-${month}`;
+}
+
+function buildPolynomialFormulaEditorCacheKey(section: PolynomialFormulaSectionData) {
+  return `${section.budgetId ?? "without-budget"}:${section.title}`;
+}
+
+function loadUnifiedIndices(month: number, year: number) {
+  const cacheKey = buildUnifiedIndicesCacheKey(month, year);
+  const cachedRequest = unifiedIndicesRequestCache.get(cacheKey);
+
+  if (cachedRequest) {
+    return cachedRequest;
+  }
+
+  const request = fetch(`/api/unified-indices?month=${month}&year=${year}`)
+    .then(async (response) => {
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "No se pudieron cargar los Ã­ndices");
+      }
+
+      return (await response.json()) as UnifiedIndexRecord[];
+    })
+    .catch((error) => {
+      unifiedIndicesRequestCache.delete(cacheKey);
+      throw error;
+    });
+
+  unifiedIndicesRequestCache.set(cacheKey, request);
+  return request;
+}
+
 export function PolynomialFormulaEditor({
   section,
-  adjustments,
   canUsePolynomialAdjustments,
   showCompositionDetail = false,
 }: {
   section: PolynomialFormulaSectionData;
-  adjustments: AdjustmentCalculationRecord[];
   canUsePolynomialAdjustments: boolean;
   showCompositionDetail?: boolean;
 }) {
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
-  const [formula, setFormula] = useState(() => cloneFormula(section.formula));
-  const [summary, setSummary] = useState(() => createFormulaSummary(section.formula));
-  const [history, setHistory] = useState(adjustments);
-  const [baseIndexOptions, setBaseIndexOptions] = useState<UnifiedIndexRecord[]>([]);
-  const [baseIndicesLoading, setBaseIndicesLoading] = useState(() => Boolean(section.formula));
-  const [generateMonth, setGenerateMonth] = useState(section.formula?.baseMonth ?? new Date().getMonth() + 1);
-  const [generateYear, setGenerateYear] = useState(section.formula?.baseYear ?? new Date().getFullYear());
-  const [previewMonth, setPreviewMonth] = useState(new Date().getMonth() + 1);
-  const [previewYear, setPreviewYear] = useState(new Date().getFullYear());
-  const [originalAmount, setOriginalAmount] = useState("100000.00");
-  const [kPreview, setKPreview] = useState<KPreviewResult | null>(null);
-  const [kPreviewError, setKPreviewError] = useState("");
+  const cacheKey = buildPolynomialFormulaEditorCacheKey(section);
+  const cachedUiState = polynomialFormulaEditorUiCache.get(cacheKey);
+  const [formula, setFormula] = useState(() => cloneFormula(cachedUiState?.formula ?? section.formula));
+  const [summary, setSummary] = useState(() => cachedUiState?.summary ?? createFormulaSummary(section.formula));
+  const [history, setHistory] = useState<AdjustmentCalculationRecord[]>(cachedUiState?.history ?? []);
+  const [historyOpen, setHistoryOpen] = useState(cachedUiState?.historyOpen ?? false);
+  const [historyLoaded, setHistoryLoaded] = useState(cachedUiState?.historyLoaded ?? false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [compositionDetailOpen, setCompositionDetailOpen] = useState(cachedUiState?.compositionDetailOpen ?? false);
+  const [baseIndexOptions, setBaseIndexOptions] = useState<UnifiedIndexRecord[]>(cachedUiState?.baseIndexOptions ?? []);
+  const [baseIndicesLoading, setBaseIndicesLoading] = useState(() => {
+    if (!section.formula) {
+      return false;
+    }
+
+    return (cachedUiState?.baseIndexOptions.length ?? 0) === 0;
+  });
+  const [generateMonth, setGenerateMonth] = useState(
+    cachedUiState?.generateMonth ?? section.formula?.baseMonth ?? new Date().getMonth() + 1,
+  );
+  const [generateYear, setGenerateYear] = useState(
+    cachedUiState?.generateYear ?? section.formula?.baseYear ?? new Date().getFullYear(),
+  );
+  const [previewMonth, setPreviewMonth] = useState(
+    cachedUiState?.previewMonth ?? new Date().getMonth() + 1,
+  );
+  const [previewYear, setPreviewYear] = useState(
+    cachedUiState?.previewYear ?? new Date().getFullYear(),
+  );
+  const [originalAmount, setOriginalAmount] = useState(
+    cachedUiState?.originalAmount ?? "100000.00",
+  );
+  const [kPreview, setKPreview] = useState<KPreviewResult | null>(cachedUiState?.kPreview ?? null);
+  const [kPreviewError, setKPreviewError] = useState(cachedUiState?.kPreviewError ?? "");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -218,10 +291,12 @@ export function PolynomialFormulaEditor({
   const lastSavedPayload = useRef<string | null>(
     section.formula ? JSON.stringify(getFormulaSavePayload(section.formula)) : null,
   );
+  const editorMonomials = formula?.monomials ?? [];
+  const deferredEditorMonomials = useDeferredValue(editorMonomials);
 
   const validation = useMemo(
-    () => validatePolynomialFormula(buildMonomialValidationInput(formula?.monomials ?? [])),
-    [formula],
+    () => validatePolynomialFormula(buildMonomialValidationInput(deferredEditorMonomials)),
+    [deferredEditorMonomials],
   );
   const canCalculatePreview =
     canUsePolynomialAdjustments &&
@@ -241,13 +316,13 @@ export function PolynomialFormulaEditor({
     }
   }, [kPreview, originalAmount]);
 
-  const calculateKPreview = useEffectEvent(
+  const calculateKPreview = useCallback(
     async (formulaToPreview: PolynomialFormulaRecord, month: number, year: number) => {
       setPreviewLoading(true);
       setKPreviewError("");
 
       try {
-        const response = await fetch(`/api/unified-indices?month=${month}&year=${year}`);
+        const response = { ok: true, json: async () => loadUnifiedIndices(month, year) };
         if (!response.ok) {
           const data = await response.json();
           throw new Error(data.error ?? "No se pudieron cargar los índices de reajuste");
@@ -312,6 +387,7 @@ export function PolynomialFormulaEditor({
         setPreviewLoading(false);
       }
     },
+    [],
   );
 
   useEffect(() => {
@@ -319,9 +395,13 @@ export function PolynomialFormulaEditor({
       return;
     }
 
+    if (baseIndexOptions.length > 0) {
+      return;
+    }
+
     let isActive = true;
 
-    void fetch(`/api/unified-indices?month=${formula.baseMonth}&year=${formula.baseYear}`)
+    void Promise.resolve({ ok: true, json: async () => loadUnifiedIndices(formula.baseMonth, formula.baseYear) })
       .then(async (response) => {
         if (!response.ok) {
           const data = await response.json();
@@ -347,7 +427,42 @@ export function PolynomialFormulaEditor({
     return () => {
       isActive = false;
     };
-  }, [formula?.baseMonth, formula?.baseYear, formula]);
+  }, [baseIndexOptions.length, formula?.baseMonth, formula?.baseYear, formula]);
+
+  useEffect(() => {
+    polynomialFormulaEditorUiCache.set(cacheKey, {
+      formula: cloneFormula(formula),
+      summary,
+      baseIndexOptions,
+      generateMonth,
+      generateYear,
+      previewMonth,
+      previewYear,
+      originalAmount,
+      kPreview,
+      kPreviewError,
+      history,
+      historyLoaded,
+      historyOpen,
+      compositionDetailOpen,
+    });
+  }, [
+    baseIndexOptions,
+    cacheKey,
+    compositionDetailOpen,
+    formula,
+    generateMonth,
+    generateYear,
+    history,
+    historyLoaded,
+    historyOpen,
+    kPreview,
+    kPreviewError,
+    originalAmount,
+    previewMonth,
+    previewYear,
+    summary,
+  ]);
 
   useEffect(() => {
     if (!formula) return;
@@ -375,18 +490,6 @@ export function PolynomialFormulaEditor({
     const timeout = window.setTimeout(() => setFeedback(""), 3500);
     return () => window.clearTimeout(timeout);
   }, [feedback]);
-
-  useEffect(() => {
-    if (!canCalculatePreview || !formula) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      void calculateKPreview(formula, previewMonth, previewYear);
-    }, 500);
-
-    return () => window.clearTimeout(timeout);
-  }, [canCalculatePreview, formula, previewMonth, previewYear]);
 
   async function generateFormula() {
     if (!section.budgetId) return;
@@ -505,12 +608,85 @@ export function PolynomialFormulaEditor({
       const adjustment = (await response.json()) as AdjustmentCalculationRecord;
       setHistory((current) => [adjustment, ...current.filter((item) => item.id !== adjustment.id)]);
       setFeedback("Reajuste registrado en el historial.");
+      setHistoryOpen(true);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "No se pudo aplicar el reajuste");
     } finally {
       setIsApplyingAdjustment(false);
     }
   }
+
+  const handlePreviewMonthChange = useCallback((value: number) => {
+    setPreviewMonth(value);
+    setKPreview(null);
+    setKPreviewError("");
+  }, []);
+
+  const handlePreviewYearChange = useCallback((value: number) => {
+    setPreviewYear(value);
+    setKPreview(null);
+    setKPreviewError("");
+  }, []);
+
+  const handleCalculatePreview = useCallback(() => {
+    if (!canCalculatePreview || !formula) {
+      return;
+    }
+
+    void calculateKPreview(formula, previewMonth, previewYear);
+  }, [canCalculatePreview, calculateKPreview, formula, previewMonth, previewYear]);
+
+  const handleToggleHistory = useCallback(() => {
+    const nextOpen = !historyOpen;
+    setHistoryOpen(nextOpen);
+
+    if (!nextOpen || historyLoaded || historyLoading || !formula || !canUsePolynomialAdjustments) {
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError("");
+
+    void fetch(`/api/polynomial-formulas/${formula.id}/adjustments`)
+      .then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error ?? "No se pudo cargar el historial de reajustes");
+        }
+
+        return (await response.json()) as AdjustmentCalculationRecord[];
+      })
+      .then((adjustments) => {
+        setHistory((current) => {
+          const merged = new Map<string, AdjustmentCalculationRecord>();
+
+          for (const adjustment of adjustments) {
+            merged.set(adjustment.id, adjustment);
+          }
+
+          for (const adjustment of current) {
+            if (!merged.has(adjustment.id)) {
+              merged.set(adjustment.id, adjustment);
+            }
+          }
+
+          return [...merged.values()];
+        });
+        setHistoryLoaded(true);
+      })
+      .catch((requestError) => {
+        setHistoryError(
+          requestError instanceof Error ? requestError.message : "No se pudo cargar el historial de reajustes",
+        );
+      })
+      .finally(() => {
+        setHistoryLoading(false);
+      });
+  }, [canUsePolynomialAdjustments, formula, historyLoaded, historyLoading, historyOpen]);
+
+  const handleToggleCompositionDetail = useCallback(() => {
+    setCompositionDetailOpen((current) => !current);
+  }, []);
 
   function updateFormula(changes: Partial<PolynomialFormulaRecord>) {
     setFormula((current) => {
@@ -573,14 +749,18 @@ export function PolynomialFormulaEditor({
     });
   }
 
-  function openAutoAdjustmentPreview() {
+  const openAutoAdjustmentPreview = useCallback(() => {
     if (!formula) return;
 
     setError("");
     setAutoAdjustmentPreview(createPolynomialFinalAdjustmentProposal(formula.monomials));
-  }
+  }, [formula]);
 
-  function applyAutoAdjustmentPreview() {
+  const closeAutoAdjustmentPreview = useCallback(() => {
+    setAutoAdjustmentPreview(null);
+  }, []);
+
+  const applyAutoAdjustmentPreview = useCallback(() => {
     if (!autoAdjustmentPreview?.canApply) return;
 
     setFormula((current) => {
@@ -602,7 +782,7 @@ export function PolynomialFormulaEditor({
       return next;
     });
     setAutoAdjustmentPreview(null);
-  }
+  }, [autoAdjustmentPreview]);
 
   return (
     <div className="space-y-5">
@@ -775,11 +955,11 @@ export function PolynomialFormulaEditor({
                 </div>
               </div>
 
-              <PolynomialFormulaMath monomials={formula.monomials} />
+              <PolynomialFormulaMath monomials={deferredEditorMonomials} />
             </CardContent>
           </Card>
 
-          <PolynomialValidationSummary monomials={formula.monomials} />
+          <PolynomialValidationSummary monomials={deferredEditorMonomials} />
           <PolynomialMonomialsTable
             monomials={formula.monomials}
             baseIndexOptions={baseIndexOptions}
@@ -793,10 +973,27 @@ export function PolynomialFormulaEditor({
             open={autoAdjustmentPreview !== null}
             preview={autoAdjustmentPreview}
             onApply={applyAutoAdjustmentPreview}
-            onClose={() => setAutoAdjustmentPreview(null)}
+            onClose={closeAutoAdjustmentPreview}
           />
           {showCompositionDetail && DynamicPolynomialCompositionDetail ? (
-            <DynamicPolynomialCompositionDetail monomials={formula.monomials} />
+            <Card className={cn("theme-surface-card", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border theme-soft-shadow")}>
+              <CardContent className="space-y-4 p-6">
+                <OperationalPanel
+                  title="Detalle de composicion"
+                  description="Carga la trazabilidad detallada solo cuando necesites revisar como se formo cada monomio."
+                  metrics={<span>{compositionDetailOpen ? "Vista activa" : "Bajo demanda"}</span>}
+                  controls={
+                    <Button type="button" variant="outline" size="sm" onClick={handleToggleCompositionDetail}>
+                      {compositionDetailOpen ? "Ocultar detalle" : "Mostrar detalle"}
+                    </Button>
+                  }
+                />
+
+                {compositionDetailOpen ? (
+                  <DynamicPolynomialCompositionDetail monomials={deferredEditorMonomials} />
+                ) : null}
+              </CardContent>
+            </Card>
           ) : null}
           {canUsePolynomialAdjustments ? (
             <>
@@ -804,24 +1001,49 @@ export function PolynomialFormulaEditor({
                 previewMonth={previewMonth}
                 previewYear={previewYear}
                 originalAmount={originalAmount}
-                onPreviewMonthChange={setPreviewMonth}
-                onPreviewYearChange={setPreviewYear}
+                onPreviewMonthChange={handlePreviewMonthChange}
+                onPreviewYearChange={handlePreviewYearChange}
                 onOriginalAmountChange={setOriginalAmount}
+                onCalculatePreview={handleCalculatePreview}
                 result={kPreview}
                 resultError={kPreviewError}
                 isLoading={previewLoading}
                 adjustedAmounts={previewAdjustedAmounts}
+                canCalculatePreview={canCalculatePreview}
                 canApply={Boolean(kPreview && previewAdjustedAmounts && !kPreviewError)}
                 onApplyAdjustment={() => void applyAdjustment()}
                 isApplyingAdjustment={isApplyingAdjustment}
                 currency={section.currency}
                 currencyDecimals={currencyDecimals}
               />
-              <PolynomialAdjustmentHistory
-                adjustments={history}
-                currency={section.currency}
-                currencyDecimals={currencyDecimals}
-              />
+              <Card className={cn("theme-surface-card", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border theme-soft-shadow")}>
+                <CardContent className="space-y-4 p-6">
+                  <OperationalPanel
+                    title="Historial de reajustes"
+                    description="Carga el registro mensual solo cuando necesites revisarlo."
+                    metrics={<span>{historyLoaded ? `${history.length} registros` : "Bajo demanda"}</span>}
+                    controls={
+                      <Button type="button" variant="outline" size="sm" onClick={handleToggleHistory}>
+                        {historyOpen ? "Ocultar historial" : "Mostrar historial"}
+                      </Button>
+                    }
+                  />
+
+                  {historyOpen ? (
+                    <>
+                      {historyLoading ? <p className="theme-muted-text text-sm">Cargando historial de reajustes...</p> : null}
+                      {historyError ? <p className="text-sm text-rose-600">{historyError}</p> : null}
+                      {!historyLoading && !historyError ? (
+                        <PolynomialAdjustmentHistory
+                          adjustments={history}
+                          currency={section.currency}
+                          currencyDecimals={currencyDecimals}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+                </CardContent>
+              </Card>
             </>
           ) : (
             <UpgradeCTA

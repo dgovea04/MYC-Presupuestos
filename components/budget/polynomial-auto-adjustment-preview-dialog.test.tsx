@@ -47,9 +47,17 @@ describe("PolynomialAutoAdjustmentPreviewDialog", () => {
     expect(getText("0.120")).toBeTruthy();
     expect(getText("Agrupamiento propuesto")).toBeTruthy();
     expect(getText("BA - Acabados")).toBeTruthy();
+    expect(getText("2 monomios en el grupo")).toBeTruthy();
+    expect(getText("0.120")).toBeTruthy();
+    expect(getText("Reglas FP")).toBeTruthy();
+    expect(countBadgeTexts("Cumple")).toBe(3);
+
+    await act(async () => {
+      getButton("Ver detalle").click();
+    });
+
     expect(getText("BA - Baldosa - Coef. 0.090")).toBeTruthy();
     expect(getText("PI - Pintura - Coef. 0.030")).toBeTruthy();
-    expect(getText("0.120")).toBeTruthy();
 
     await act(async () => {
       getButton("Aplicar propuesta").click();
@@ -83,6 +91,29 @@ describe("PolynomialAutoAdjustmentPreviewDialog", () => {
     expect(errorDiagnostic.className).toContain("text-rose-700");
   });
 
+  it("shows a review badge only when the final grouped coefficient is below 0.050", async () => {
+    await renderDialog({
+      open: true,
+      preview: createPreview({
+        finalMonomials: [
+          createMonomial({ id: "mo", code: "MO", name: "Mano de obra", coefficient: "0.390" }),
+          createMonomial({
+            id: "gg",
+            code: "GG",
+            name: "Gastos generales",
+            coefficient: "0.030",
+          }),
+        ],
+      }),
+      onApply: vi.fn(),
+      onClose: vi.fn(),
+    });
+
+    expect(getText("Revisar")).toBeTruthy();
+    expect(countBadgeTexts("Cumple")).toBe(1);
+    expect(countBadgeTexts("Revisar")).toBe(1);
+  });
+
   async function renderDialog(props: React.ComponentProps<typeof PolynomialAutoAdjustmentPreviewDialog>) {
     await act(async () => {
       root.render(<PolynomialAutoAdjustmentPreviewDialog {...props} />);
@@ -114,6 +145,10 @@ function getText(text: string) {
   }
 
   return element;
+}
+
+function countBadgeTexts(text: string) {
+  return [...document.querySelectorAll("span")].filter((candidate) => candidate.textContent?.trim() === text).length;
 }
 
 function createMonomial(input: {

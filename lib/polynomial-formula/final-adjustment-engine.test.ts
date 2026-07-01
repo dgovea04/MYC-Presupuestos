@@ -574,6 +574,106 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
     expect(coefficientSum(result)).toBe("1.000");
   });
 
+  it("merges repeated monomials that share the same unified index before applying affinity rules", () => {
+    const result = createPolynomialFinalAdjustmentProposal([
+      monomial({
+        id: "mo",
+        code: "MO",
+        name: "Mano de obra",
+        costGroupKey: "LABOR",
+        amount: "280",
+        coefficient: "0.280",
+        iuFamily: "LABOR",
+        unifiedIndexCode: "47",
+      }),
+      monomial({
+        id: "cement",
+        code: "CE",
+        name: "Cemento",
+        costGroupKey: "MATERIALS",
+        amount: "140",
+        coefficient: "0.140",
+        iuFamily: "CEMENT",
+        unifiedIndexCode: "21",
+      }),
+      monomial({
+        id: "steel",
+        code: "AC",
+        name: "Acero",
+        costGroupKey: "MATERIALS",
+        amount: "120",
+        coefficient: "0.120",
+        iuFamily: "STEEL",
+        unifiedIndexCode: "3",
+      }),
+      monomial({
+        id: "gg-1",
+        code: "GU",
+        name: "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "90",
+        coefficient: "0.090",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+      monomial({
+        id: "gg-2",
+        code: "GU",
+        name: "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "80",
+        coefficient: "0.080",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+      monomial({
+        id: "gg-3",
+        code: "GU",
+        name: "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
+        costGroupKey: "GENERAL_EXPENSES_PROFIT",
+        amount: "70",
+        coefficient: "0.070",
+        iuFamily: "GENERAL_EXPENSES",
+        unifiedIndexCode: "39",
+      }),
+      monomial({
+        id: "wood",
+        code: "MA",
+        name: "Madera",
+        costGroupKey: "MATERIALS",
+        amount: "110",
+        coefficient: "0.110",
+        iuFamily: "WOOD",
+        unifiedIndexCode: "43",
+      }),
+      monomial({
+        id: "finish",
+        code: "PI",
+        name: "Pintura",
+        costGroupKey: "MATERIALS",
+        amount: "110",
+        coefficient: "0.110",
+        iuFamily: "FINISHES",
+        unifiedIndexCode: "54",
+      }),
+    ]);
+
+    expect(result.finalMonomials.filter((item) => item.baseIndexCode === "39")).toHaveLength(1);
+    expect(result.mergePlan.filter((entry) => entry.reason === "SAME_IU_CODE")).toEqual([
+      expect.objectContaining({
+        targetMonomialId: "gg-1",
+        sourceMonomialIds: ["gg-3"],
+      }),
+      expect.objectContaining({
+        targetMonomialId: "gg-1",
+        sourceMonomialIds: ["gg-2"],
+      }),
+    ]);
+    expect(result.finalMonomials.find((item) => item.id === "gg-1")?.composition).toHaveLength(3);
+    expect(coefficientSum(result)).toBe("1.000");
+    expect(result.canApply).toBe(true);
+  });
+
   it("does not classify missing IU families as compatible-family matches", () => {
     const result = createPolynomialFinalAdjustmentProposal([
       monomial({
