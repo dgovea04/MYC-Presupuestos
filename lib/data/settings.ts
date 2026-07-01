@@ -1,5 +1,4 @@
 import { cache } from "react";
-import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { userSettingsSchema, type UserSettingsInput } from "@/lib/validations/settings";
@@ -21,8 +20,6 @@ import {
 import { z } from "zod";
 
 export const USER_SETTINGS_CACHE_TAG = "user-settings";
-
-const isTestEnvironment = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
 
 export const defaultUserSettings: UserSettingsRecord = {
   defaultCurrency: "PEN",
@@ -63,18 +60,23 @@ export type AiProviderSettingsInput = {
   aiProviderPreference: AiProviderPreference;
   openaiApiKey?: string | null;
   geminiApiKey?: string | null;
+  openrouterApiKey?: string | null;
   openaiModel?: string | null;
   geminiModel?: string | null;
+  openrouterModel?: string | null;
 };
 
 export type AiProviderSettings = {
   aiProviderPreference: AiProviderPreference;
   openaiApiKeyMasked: string;
   geminiApiKeyMasked: string;
+  openrouterApiKeyMasked: string;
   openaiModel: string;
   geminiModel: string;
+  openrouterModel: string;
   openaiConfigured: boolean;
   geminiConfigured: boolean;
+  openrouterConfigured: boolean;
 };
 
 function createDefaultUserSettings(): UserSettingsRecord {
@@ -245,21 +247,19 @@ const _hasUserSettingsColumn = async (columnName: string) => {
   return parsedResult.success ? parsedResult.data.exists : false;
 }
 
-// Memoize column existence checks — column structure doesn't change during the server's lifetime
-const hasUserSettingsColumn = cache(async (columnName: string) => {
-  return process.env.NODE_ENV === "test" || process.env.VITEST === "true"
-    ? _hasUserSettingsColumn(columnName)
-    : unstable_cache(
-        async (col: string) => _hasUserSettingsColumn(col),
-        ["user-settings-columns", columnName],
-      )(columnName);
-});
+// Do not cache schema checks here.
+// In development, migrations can run while the server stays alive, and stale
+// column metadata causes false negatives like "column does not exist" when it
+// already exists in the database.
+const hasUserSettingsColumn = cache(async (columnName: string) => _hasUserSettingsColumn(columnName));
 
 const aiProviderColumns = [
   "openaiApiKey",
   "openaiModel",
   "geminiApiKey",
   "geminiModel",
+  "openrouterApiKey",
+  "openrouterModel",
   "aiProviderPreference",
 ] as const;
 
@@ -267,7 +267,15 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
   const columnFlags = await Promise.all(
     aiProviderColumns.map((column) => hasUserSettingsColumn(column)),
   );
-  const [supportsOpenaiApiKey, supportsOpenaiModel, supportsGeminiApiKey, supportsGeminiModel, supportsAiProviderPreference] = columnFlags;
+  const [
+    supportsOpenaiApiKey,
+    supportsOpenaiModel,
+    supportsGeminiApiKey,
+    supportsGeminiModel,
+    supportsOpenrouterApiKey,
+    supportsOpenrouterModel,
+    supportsAiProviderPreference,
+  ] = columnFlags;
 
   const hasAnyAiColumn = columnFlags.some(Boolean);
 
@@ -276,53 +284,66 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
       aiProviderPreference: "auto",
       openaiApiKeyMasked: "",
       geminiApiKeyMasked: "",
+      openrouterApiKeyMasked: "",
       openaiModel: "",
       geminiModel: "",
+      openrouterModel: "",
       openaiConfigured: false,
       geminiConfigured: false,
+      openrouterConfigured: false,
     };
   }
 
-  const [settings] = await prisma.$queryRaw<Array<unknown>>`
-    SELECT
-      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
-      ${supportsOpenaiApiKey ? Prisma.sql`"openaiApiKey",` : Prisma.empty}
-      ${supportsGeminiApiKey ? Prisma.sql`"geminiApiKey",` : Prisma.empty}
-      ${supportsOpenaiModel ? Prisma.sql`"openaiModel",` : Prisma.empty}
-      ${supportsGeminiModel ? Prisma.sql`"geminiModel"` : Prisma.empty}
-    FROM "UserSettings"
-    WHERE "userId" = ${userId}
-    LIMIT 1
-  `;
+  const settings = await prisma.userSettings.findUnique({
+    where: { userId },
+    select: {
+      ...(supportsAiProviderPreference ? { aiProviderPreference: true } : {}),
+      ...(supportsOpenaiApiKey ? { openaiApiKey: true } : {}),
+      ...(supportsGeminiApiKey ? { geminiApiKey: true } : {}),
+      ...(supportsOpenrouterApiKey ? { openrouterApiKey: true } : {}),
+      ...(supportsOpenaiModel ? { openaiModel: true } : {}),
+      ...(supportsGeminiModel ? { geminiModel: true } : {}),
+      ...(supportsOpenrouterModel ? { openrouterModel: true } : {}),
+    },
+  });
 
   if (!settings || typeof settings !== "object") {
     return {
       aiProviderPreference: "auto",
       openaiApiKeyMasked: "",
       geminiApiKeyMasked: "",
+      openrouterApiKeyMasked: "",
       openaiModel: "",
       geminiModel: "",
+      openrouterModel: "",
       openaiConfigured: false,
       geminiConfigured: false,
+      openrouterConfigured: false,
     };
   }
 
   const row = settings as Record<string, unknown>;
   const encryptedOpenaiKey = supportsOpenaiApiKey && typeof row.openaiApiKey === "string" ? row.openaiApiKey : "";
   const encryptedGeminiKey = supportsGeminiApiKey && typeof row.geminiApiKey === "string" ? row.geminiApiKey : "";
+  const encryptedOpenrouterKey = supportsOpenrouterApiKey && typeof row.openrouterApiKey === "string" ? row.openrouterApiKey : "";
   const decryptedOpenaiKey = encryptedOpenaiKey ? decryptApiKey(encryptedOpenaiKey) : "";
   const decryptedGeminiKey = encryptedGeminiKey ? decryptApiKey(encryptedGeminiKey) : "";
+  const decryptedOpenrouterKey = encryptedOpenrouterKey ? decryptApiKey(encryptedOpenrouterKey) : "";
   const openaiModel = supportsOpenaiModel && typeof row.openaiModel === "string" ? row.openaiModel : "";
   const geminiModel = supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : "";
+  const openrouterModel = supportsOpenrouterModel && typeof row.openrouterModel === "string" ? row.openrouterModel : "";
 
   return {
     aiProviderPreference: readAiProviderPreference(supportsAiProviderPreference ? row.aiProviderPreference : undefined),
     openaiApiKeyMasked: maskApiKey(decryptedOpenaiKey),
     geminiApiKeyMasked: maskApiKey(decryptedGeminiKey),
+    openrouterApiKeyMasked: maskApiKey(decryptedOpenrouterKey),
     openaiModel,
     geminiModel,
+    openrouterModel,
     openaiConfigured: decryptedOpenaiKey.length > 0,
     geminiConfigured: decryptedGeminiKey.length > 0,
+    openrouterConfigured: decryptedOpenrouterKey.length > 0,
   };
 }
 
@@ -356,6 +377,21 @@ export async function getDecryptedGeminiApiKey(userId: string): Promise<string> 
   return encrypted ? decryptApiKey(encrypted) : "";
 }
 
+export async function getDecryptedOpenrouterApiKey(userId: string): Promise<string> {
+  const [supportsOpenrouterApiKey] = await Promise.all([hasUserSettingsColumn("openrouterApiKey")]);
+
+  if (!supportsOpenrouterApiKey) return "";
+
+  const [settings] = await prisma.$queryRaw<Array<unknown>>`
+    SELECT "openrouterApiKey" FROM "UserSettings" WHERE "userId" = ${userId} LIMIT 1
+  `;
+
+  if (!settings || typeof settings !== "object") return "";
+  const row = settings as Record<string, unknown>;
+  const encrypted = typeof row.openrouterApiKey === "string" ? row.openrouterApiKey : "";
+  return encrypted ? decryptApiKey(encrypted) : "";
+}
+
 export async function updateAiProviderSettings(
   userId: string,
   input: AiProviderSettingsInput,
@@ -363,7 +399,15 @@ export async function updateAiProviderSettings(
   const columnFlags = await Promise.all(
     aiProviderColumns.map((column) => hasUserSettingsColumn(column)),
   );
-  const [supportsOpenaiApiKey, supportsOpenaiModel, supportsGeminiApiKey, supportsGeminiModel, supportsAiProviderPreference] = columnFlags;
+  const [
+    supportsOpenaiApiKey,
+    supportsOpenaiModel,
+    supportsGeminiApiKey,
+    supportsGeminiModel,
+    supportsOpenrouterApiKey,
+    supportsOpenrouterModel,
+    supportsAiProviderPreference,
+  ] = columnFlags;
 
   const encryptedOpenaiKey = input.openaiApiKey && input.openaiApiKey.trim().length > 0
     ? encryptApiKey(input.openaiApiKey.trim())
@@ -371,70 +415,77 @@ export async function updateAiProviderSettings(
   const encryptedGeminiKey = input.geminiApiKey && input.geminiApiKey.trim().length > 0
     ? encryptApiKey(input.geminiApiKey.trim())
     : input.geminiApiKey === "" ? "" : undefined;
+  const encryptedOpenrouterKey = input.openrouterApiKey && input.openrouterApiKey.trim().length > 0
+    ? encryptApiKey(input.openrouterApiKey.trim())
+    : input.openrouterApiKey === "" ? "" : undefined;
 
-  const [settings] = await prisma.$queryRaw<Array<unknown>>`
-    INSERT INTO "UserSettings" (
-      "id",
-      "userId",
-      "defaultCurrency",
-      "currencyDecimals",
-      "defaultIgvRate",
-      "defaultGeneralExpensesRate",
-      "defaultUtilityRate",
-      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
-      ${supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? Prisma.sql`"openaiApiKey",` : Prisma.empty}
-      ${supportsGeminiApiKey && encryptedGeminiKey !== undefined ? Prisma.sql`"geminiApiKey",` : Prisma.empty}
-      ${supportsOpenaiModel ? Prisma.sql`"openaiModel",` : Prisma.empty}
-      ${supportsGeminiModel ? Prisma.sql`"geminiModel",` : Prisma.empty}
-      "createdAt",
-      "updatedAt"
-    )
-    VALUES (
-      ${crypto.randomUUID()},
-      ${userId},
-      ${"PEN"},
-      ${2},
-      ${0.18},
-      ${0.10},
-      ${0.08},
-      ${supportsAiProviderPreference ? Prisma.sql`${input.aiProviderPreference},` : Prisma.empty}
-      ${supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? Prisma.sql`${encryptedOpenaiKey},` : Prisma.empty}
-      ${supportsGeminiApiKey && encryptedGeminiKey !== undefined ? Prisma.sql`${encryptedGeminiKey},` : Prisma.empty}
-      ${supportsOpenaiModel ? Prisma.sql`${input.openaiModel ?? null},` : Prisma.empty}
-      ${supportsGeminiModel ? Prisma.sql`${input.geminiModel ?? null},` : Prisma.empty}
-      NOW(),
-      NOW()
-    )
-    ON CONFLICT ("userId")
-    DO UPDATE SET
-      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference" = EXCLUDED."aiProviderPreference",` : Prisma.empty}
-      ${supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? Prisma.sql`"openaiApiKey" = EXCLUDED."openaiApiKey",` : Prisma.empty}
-      ${supportsGeminiApiKey && encryptedGeminiKey !== undefined ? Prisma.sql`"geminiApiKey" = EXCLUDED."geminiApiKey",` : Prisma.empty}
-      ${supportsOpenaiModel ? Prisma.sql`"openaiModel" = EXCLUDED."openaiModel",` : Prisma.empty}
-      ${supportsGeminiModel ? Prisma.sql`"geminiModel" = EXCLUDED."geminiModel",` : Prisma.empty}
-      "updatedAt" = NOW()
-    RETURNING
-      ${supportsAiProviderPreference ? Prisma.sql`"aiProviderPreference",` : Prisma.empty}
-      ${supportsOpenaiApiKey ? Prisma.sql`"openaiApiKey",` : Prisma.empty}
-      ${supportsGeminiApiKey ? Prisma.sql`"geminiApiKey",` : Prisma.empty}
-      ${supportsOpenaiModel ? Prisma.sql`"openaiModel",` : Prisma.empty}
-      ${supportsGeminiModel ? Prisma.sql`"geminiModel"` : Prisma.empty}
-  `;
+  const isUpdatingOpenrouter =
+    input.aiProviderPreference === "openrouter" ||
+    input.openrouterApiKey !== undefined ||
+    input.openrouterModel !== undefined;
+
+  if (isUpdatingOpenrouter && (!supportsOpenrouterApiKey || !supportsOpenrouterModel)) {
+    throw new Error(
+      "OpenRouter aun no puede guardarse en esta base de datos. Ejecuta la migracion pendiente para agregar openrouterApiKey y openrouterModel.",
+    );
+  }
+
+  const settings = await prisma.userSettings.upsert({
+    where: { userId },
+    create: {
+      userId,
+      defaultCurrency: "PEN",
+      currencyDecimals: 2,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.10,
+      defaultUtilityRate: 0.08,
+      ...(supportsAiProviderPreference ? { aiProviderPreference: input.aiProviderPreference } : {}),
+      ...(supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? { openaiApiKey: encryptedOpenaiKey || null } : {}),
+      ...(supportsGeminiApiKey && encryptedGeminiKey !== undefined ? { geminiApiKey: encryptedGeminiKey || null } : {}),
+      ...(supportsOpenrouterApiKey && encryptedOpenrouterKey !== undefined ? { openrouterApiKey: encryptedOpenrouterKey || null } : {}),
+      ...(supportsOpenaiModel ? { openaiModel: input.openaiModel ?? null } : {}),
+      ...(supportsGeminiModel ? { geminiModel: input.geminiModel ?? null } : {}),
+      ...(supportsOpenrouterModel ? { openrouterModel: input.openrouterModel ?? null } : {}),
+    },
+    update: {
+      ...(supportsAiProviderPreference ? { aiProviderPreference: input.aiProviderPreference } : {}),
+      ...(supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? { openaiApiKey: encryptedOpenaiKey || null } : {}),
+      ...(supportsGeminiApiKey && encryptedGeminiKey !== undefined ? { geminiApiKey: encryptedGeminiKey || null } : {}),
+      ...(supportsOpenrouterApiKey && encryptedOpenrouterKey !== undefined ? { openrouterApiKey: encryptedOpenrouterKey || null } : {}),
+      ...(supportsOpenaiModel ? { openaiModel: input.openaiModel ?? null } : {}),
+      ...(supportsGeminiModel ? { geminiModel: input.geminiModel ?? null } : {}),
+      ...(supportsOpenrouterModel ? { openrouterModel: input.openrouterModel ?? null } : {}),
+    },
+    select: {
+      ...(supportsAiProviderPreference ? { aiProviderPreference: true } : {}),
+      ...(supportsOpenaiApiKey ? { openaiApiKey: true } : {}),
+      ...(supportsGeminiApiKey ? { geminiApiKey: true } : {}),
+      ...(supportsOpenrouterApiKey ? { openrouterApiKey: true } : {}),
+      ...(supportsOpenaiModel ? { openaiModel: true } : {}),
+      ...(supportsGeminiModel ? { geminiModel: true } : {}),
+      ...(supportsOpenrouterModel ? { openrouterModel: true } : {}),
+    },
+  });
 
   const row = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
   const storedEncryptedOpenaiKey = supportsOpenaiApiKey && typeof row.openaiApiKey === "string" ? row.openaiApiKey : "";
   const storedEncryptedGeminiKey = supportsGeminiApiKey && typeof row.geminiApiKey === "string" ? row.geminiApiKey : "";
+  const storedEncryptedOpenrouterKey = supportsOpenrouterApiKey && typeof row.openrouterApiKey === "string" ? row.openrouterApiKey : "";
   const storedDecryptedOpenai = storedEncryptedOpenaiKey ? decryptApiKey(storedEncryptedOpenaiKey) : "";
   const storedDecryptedGemini = storedEncryptedGeminiKey ? decryptApiKey(storedEncryptedGeminiKey) : "";
+  const storedDecryptedOpenrouter = storedEncryptedOpenrouterKey ? decryptApiKey(storedEncryptedOpenrouterKey) : "";
 
   return {
     aiProviderPreference: readAiProviderPreference(supportsAiProviderPreference ? row.aiProviderPreference : input.aiProviderPreference),
     openaiApiKeyMasked: maskApiKey(storedDecryptedOpenai),
     geminiApiKeyMasked: maskApiKey(storedDecryptedGemini),
+    openrouterApiKeyMasked: maskApiKey(storedDecryptedOpenrouter),
     openaiModel: supportsOpenaiModel && typeof row.openaiModel === "string" ? row.openaiModel : input.openaiModel ?? "",
     geminiModel: supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : input.geminiModel ?? "",
+    openrouterModel: supportsOpenrouterModel && typeof row.openrouterModel === "string" ? row.openrouterModel : input.openrouterModel ?? "",
     openaiConfigured: storedDecryptedOpenai.length > 0,
     geminiConfigured: storedDecryptedGemini.length > 0,
+    openrouterConfigured: storedDecryptedOpenrouter.length > 0,
   };
 }
 
@@ -531,15 +582,7 @@ const _getUserSettings = async (userId: string): Promise<UserSettingsRecord> => 
 
 export const getUserSettings = cache(
   async (userId: string): Promise<UserSettingsRecord> => {
-    if (isTestEnvironment) {
-      return _getUserSettings(userId);
-    }
-
-    return unstable_cache(
-      async (uid: string) => _getUserSettings(uid),
-      [USER_SETTINGS_CACHE_TAG],
-      { tags: [USER_SETTINGS_CACHE_TAG] },
-    )(userId);
+    return _getUserSettings(userId);
   },
 );
 

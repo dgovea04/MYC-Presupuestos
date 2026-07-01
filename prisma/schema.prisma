@@ -389,8 +389,10 @@ model SystemSettings {
   singletonKey   String   @unique @default("system")
   openaiApiKey   String?
   geminiApiKey   String?
+  openrouterApiKey String?
   openaiModel    String?
   geminiModel    String?
+  openrouterModel String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -413,9 +415,11 @@ model UserSettings {
   defaultSubBudgetNames      String[] @default(["Estructuras", "Arquitectura", "Instalaciones Sanitarias", "Instalaciones Electricas"])
   openaiApiKey               String?
   geminiApiKey               String?
+  openrouterApiKey           String?
   aiProviderPreference       String   @default("auto")
   openaiModel                String?
   geminiModel                String?
+  openrouterModel            String?
   floatingKhipuProvider      String   @default("ollama")
   floatingKhipuWidth         Int      @default(600)
   floatingKhipuHeight        Int      @default(500)

@@ -9,7 +9,7 @@ import { executeOllamaProvider } from "@/lib/ai/gateway/providers/ollama-provide
 import { executeOpenAIProvider } from "@/lib/ai/gateway/providers/openai-provider";
 import { executeOpenRouterProvider } from "@/lib/ai/gateway/providers/openrouter-provider";
 import { buildSkillProviderRequest } from "@/lib/ai/skills/registry";
-import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
 
 type ExecutableProviderId = Exclude<AiProviderId, "auto">;
@@ -158,6 +158,27 @@ async function enrichProviderRequest(
         ...request,
         apiKey: systemSettings.geminiApiKey,
         modelPreference: systemSettings.geminiModel || request.modelPreference,
+      };
+    }
+  }
+
+  if (resolvedProvider === "openrouter") {
+    if (userId) {
+      const [apiKey, settings] = await Promise.all([
+        getDecryptedOpenrouterApiKey(userId),
+        getAiProviderSettings(userId),
+      ]);
+      if (apiKey) {
+        return { ...request, apiKey, modelPreference: settings.openrouterModel || undefined };
+      }
+    }
+
+    const systemSettings = await getSystemSettings();
+    if (systemSettings.openrouterApiKey) {
+      return {
+        ...request,
+        apiKey: systemSettings.openrouterApiKey,
+        modelPreference: systemSettings.openrouterModel || request.modelPreference,
       };
     }
   }

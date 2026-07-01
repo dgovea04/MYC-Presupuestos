@@ -59,9 +59,11 @@ export type UserSettingsRecord = {
   defaultSubBudgetNames: string[];
   openaiApiKey?: string;
   geminiApiKey?: string;
+  openrouterApiKey?: string;
   aiProviderPreference: AiProviderPreference;
   openaiModel?: string;
   geminiModel?: string;
+  openrouterModel?: string;
   floatingKhipuProvider: AiProviderPreference;
   floatingKhipuWidth: number;
   floatingKhipuHeight: number;

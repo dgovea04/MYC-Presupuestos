@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
-import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey } from "@/lib/data/settings";
+import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getDecryptedOpenrouterApiKey } from "@/lib/data/settings";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const RATE_LIMIT_MAX = 3;
@@ -79,6 +79,8 @@ export async function POST(request: Request) {
         apiKey = await getDecryptedOpenaiApiKey(session.user.id);
       } else if (provider === "gemini") {
         apiKey = await getDecryptedGeminiApiKey(session.user.id);
+      } else if (provider === "openrouter") {
+        apiKey = await getDecryptedOpenrouterApiKey(session.user.id);
       }
     }
 
@@ -93,6 +95,11 @@ export async function POST(request: Request) {
 
     if (provider === "gemini") {
       const isValid = await testGeminiKey(apiKey);
+      return NextResponse.json({ valid: isValid });
+    }
+
+    if (provider === "openrouter") {
+      const isValid = await testOpenrouterKey(apiKey);
       return NextResponse.json({ valid: isValid });
     }
 
@@ -151,6 +158,26 @@ async function testGeminiKey(apiKey: string): Promise<boolean> {
           return false;
         }
       }
+      return false;
+    }
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function testOpenrouterKey(apiKey: string): Promise<boolean> {
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status === 401 || response.status === 403) {
       return false;
     }
 

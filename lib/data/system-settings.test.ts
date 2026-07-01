@@ -31,6 +31,7 @@ import {
   updateSystemSettings,
   getDecryptedSystemOpenaiApiKey,
   getDecryptedSystemGeminiApiKey,
+  getDecryptedSystemOpenrouterApiKey,
 } from "@/lib/data/system-settings";
 
 function mockEncryption() {
@@ -51,15 +52,19 @@ function defaultSettingsRow(overrides?: Partial<{
   singletonKey: string;
   openaiApiKey: string | null;
   geminiApiKey: string | null;
+  openrouterApiKey: string | null;
   openaiModel: string | null;
   geminiModel: string | null;
+  openrouterModel: string | null;
 }>) {
   return {
     singletonKey: "system",
     openaiApiKey: null,
     geminiApiKey: null,
+    openrouterApiKey: null,
     openaiModel: null,
     geminiModel: null,
+    openrouterModel: null,
     ...overrides,
   };
 }
@@ -79,12 +84,16 @@ describe("system settings data", () => {
       expect(result).toEqual({
         openaiApiKey: "",
         geminiApiKey: "",
+        openrouterApiKey: "",
         openaiApiKeyMasked: "",
         geminiApiKeyMasked: "",
+        openrouterApiKeyMasked: "",
         openaiModel: "",
         geminiModel: "",
+        openrouterModel: "",
         openaiConfigured: false,
         geminiConfigured: false,
+        openrouterConfigured: false,
       });
       expect(findUniqueMock).toHaveBeenCalledWith({
         where: { singletonKey: "system" },
@@ -96,8 +105,10 @@ describe("system settings data", () => {
         defaultSettingsRow({
           openaiApiKey: "encrypted:sk-test-key",
           geminiApiKey: "encrypted:ai-test-key",
+          openrouterApiKey: "encrypted:sk-or-test-key",
           openaiModel: "gpt-5-mini",
           geminiModel: "gemini-2.5-flash",
+          openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
         }),
       );
 
@@ -106,12 +117,16 @@ describe("system settings data", () => {
       expect(result).toEqual({
         openaiApiKey: "sk-test-key",
         geminiApiKey: "ai-test-key",
+        openrouterApiKey: "sk-or-test-key",
         openaiApiKeyMasked: "sk-t...-key",
         geminiApiKeyMasked: "ai-t...-key",
+        openrouterApiKeyMasked: "sk-o...-key",
         openaiModel: "gpt-5-mini",
         geminiModel: "gemini-2.5-flash",
+        openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
         openaiConfigured: true,
         geminiConfigured: true,
+        openrouterConfigured: true,
       });
     });
 
@@ -120,6 +135,7 @@ describe("system settings data", () => {
         defaultSettingsRow({
           openaiApiKey: "",
           geminiApiKey: "",
+          openrouterApiKey: "",
         }),
       );
 
@@ -127,10 +143,13 @@ describe("system settings data", () => {
 
       expect(result.openaiConfigured).toBe(false);
       expect(result.geminiConfigured).toBe(false);
+      expect(result.openrouterConfigured).toBe(false);
       expect(result.openaiApiKey).toBe("");
       expect(result.geminiApiKey).toBe("");
+      expect(result.openrouterApiKey).toBe("");
       expect(result.openaiApiKeyMasked).toBe("");
       expect(result.geminiApiKeyMasked).toBe("");
+      expect(result.openrouterApiKeyMasked).toBe("");
     });
 
     it("returns model fields when keys are absent", async () => {
@@ -138,6 +157,7 @@ describe("system settings data", () => {
         defaultSettingsRow({
           openaiModel: "custom-model",
           geminiModel: null,
+          openrouterModel: "custom-openrouter",
         }),
       );
 
@@ -145,8 +165,10 @@ describe("system settings data", () => {
 
       expect(result.openaiApiKey).toBe("");
       expect(result.geminiApiKey).toBe("");
+      expect(result.openrouterApiKey).toBe("");
       expect(result.openaiModel).toBe("custom-model");
       expect(result.geminiModel).toBe("");
+      expect(result.openrouterModel).toBe("custom-openrouter");
       expect(result.openaiConfigured).toBe(false);
     });
   });
@@ -157,31 +179,38 @@ describe("system settings data", () => {
         defaultSettingsRow({
           openaiApiKey: "encrypted:sk-new-key",
           geminiApiKey: "encrypted:ai-new-key",
+          openrouterApiKey: "encrypted:sk-or-new-key",
           openaiModel: "gpt-5-mini",
           geminiModel: "gemini-2.5-flash",
+          openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
         }),
       );
 
       const result = await updateSystemSettings({
         openaiApiKey: "sk-new-key",
         geminiApiKey: "ai-new-key",
+        openrouterApiKey: "sk-or-new-key",
         openaiModel: "gpt-5-mini",
         geminiModel: "gemini-2.5-flash",
+        openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
       });
 
       expect(encryptApiKeyMock).toHaveBeenCalledWith("sk-new-key");
       expect(encryptApiKeyMock).toHaveBeenCalledWith("ai-new-key");
+      expect(encryptApiKeyMock).toHaveBeenCalledWith("sk-or-new-key");
       expect(upsertMock).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { singletonKey: "system" },
           create: expect.objectContaining({
             openaiApiKey: "encrypted:sk-new-key",
             geminiApiKey: "encrypted:ai-new-key",
+            openrouterApiKey: "encrypted:sk-or-new-key",
           }),
         }),
       );
       expect(result.openaiConfigured).toBe(true);
       expect(result.geminiConfigured).toBe(true);
+      expect(result.openrouterConfigured).toBe(true);
     });
 
     it("updates only provided fields — leaves non-provided keys unchanged", async () => {
@@ -189,6 +218,7 @@ describe("system settings data", () => {
         defaultSettingsRow({
           openaiApiKey: "encrypted:existing-openai",
           geminiApiKey: "encrypted:existing-gemini",
+          openrouterApiKey: "encrypted:existing-openrouter",
           openaiModel: "updated-model",
         }),
       );
@@ -201,6 +231,7 @@ describe("system settings data", () => {
       const upsertCall = upsertMock.mock.calls[0]?.[0] as { update: Record<string, unknown> };
       expect(upsertCall.update).not.toHaveProperty("openaiApiKey");
       expect(upsertCall.update).not.toHaveProperty("geminiApiKey");
+      expect(upsertCall.update).not.toHaveProperty("openrouterApiKey");
       expect(upsertCall.update).toHaveProperty("openaiModel", "updated-model");
       expect(result.openaiModel).toBe("updated-model");
     });
@@ -210,6 +241,7 @@ describe("system settings data", () => {
         defaultSettingsRow({
           openaiApiKey: "",
           geminiApiKey: "encrypted:existing-gemini",
+          openrouterApiKey: "encrypted:existing-openrouter",
         }),
       );
 
@@ -221,6 +253,7 @@ describe("system settings data", () => {
       expect(upsertCall.update).toHaveProperty("openaiApiKey", null);
       expect(result.openaiConfigured).toBe(false);
       expect(result.geminiConfigured).toBe(true);
+      expect(result.openrouterConfigured).toBe(true);
     });
 
     it("does not clear key when openaiApiKey is null (not sent)", async () => {
@@ -228,6 +261,7 @@ describe("system settings data", () => {
         defaultSettingsRow({
           openaiApiKey: "encrypted:should-remain",
           geminiApiKey: "encrypted:should-remain",
+          openrouterApiKey: "encrypted:should-remain",
         }),
       );
 
@@ -309,6 +343,27 @@ describe("system settings data", () => {
 
       expect(result).toBe("ai-real-key");
       expect(decryptApiKeyMock).toHaveBeenCalledWith("encrypted:ai-real-key");
+    });
+  });
+
+  describe("getDecryptedSystemOpenrouterApiKey", () => {
+    it("returns empty string when no settings row exists", async () => {
+      findUniqueMock.mockResolvedValue(null);
+
+      const result = await getDecryptedSystemOpenrouterApiKey();
+
+      expect(result).toBe("");
+    });
+
+    it("returns decrypted key when openrouterApiKey is set", async () => {
+      findUniqueMock.mockResolvedValue(
+        defaultSettingsRow({ openrouterApiKey: "encrypted:sk-or-real-key" }),
+      );
+
+      const result = await getDecryptedSystemOpenrouterApiKey();
+
+      expect(result).toBe("sk-or-real-key");
+      expect(decryptApiKeyMock).toHaveBeenCalledWith("encrypted:sk-or-real-key");
     });
   });
 });

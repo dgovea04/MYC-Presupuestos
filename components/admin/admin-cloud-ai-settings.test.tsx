@@ -12,18 +12,24 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 function createSettingsPayload(overrides?: {
   openaiConfigured?: boolean;
   geminiConfigured?: boolean;
+  openrouterConfigured?: boolean;
   openaiApiKeyMasked?: string;
   geminiApiKeyMasked?: string;
+  openrouterApiKeyMasked?: string;
   openaiModel?: string;
   geminiModel?: string;
+  openrouterModel?: string;
 }) {
   return {
     openaiApiKeyMasked: overrides?.openaiApiKeyMasked ?? "sk-d...-key",
     geminiApiKeyMasked: overrides?.geminiApiKeyMasked ?? "ai-d...-key",
+    openrouterApiKeyMasked: overrides?.openrouterApiKeyMasked ?? "sk-o...-key",
     openaiModel: overrides?.openaiModel ?? "gpt-5-mini",
     geminiModel: overrides?.geminiModel ?? "gemini-2.5-flash",
+    openrouterModel: overrides?.openrouterModel ?? "deepseek/deepseek-chat-v3-0324:free",
     openaiConfigured: overrides?.openaiConfigured ?? true,
     geminiConfigured: overrides?.geminiConfigured ?? true,
+    openrouterConfigured: overrides?.openrouterConfigured ?? true,
   };
 }
 
@@ -255,7 +261,7 @@ async function renderCard() {
       if (!openaiHeader) return null;
 
       // Navigate up to the card div, then find the Trash2 button
-      const cardDiv = openaiHeader.closest(".rounded-2xl.border.border-slate-200.bg-white");
+      const cardDiv = openaiHeader.closest(".rounded-2xl");
       if (!cardDiv) return null;
 
       return (cardDiv.querySelector("button.text-rose-600") ?? null) as HTMLButtonElement | null;
@@ -266,7 +272,7 @@ async function renderCard() {
       );
       if (!geminiHeader) return null;
 
-      const cardDiv = geminiHeader.closest(".rounded-2xl.border.border-slate-200.bg-white");
+      const cardDiv = geminiHeader.closest(".rounded-2xl");
       if (!cardDiv) return null;
 
       return (cardDiv.querySelector("button.text-rose-600") ?? null) as HTMLButtonElement | null;

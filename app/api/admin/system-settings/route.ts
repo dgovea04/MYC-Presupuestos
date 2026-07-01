@@ -14,13 +14,10 @@ export async function GET() {
 
   try {
     const settings = await getSystemSettings();
-    // Strip decrypted keys — never expose raw API keys in the response
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { openaiApiKey: _openaiApiKey, geminiApiKey: _geminiApiKey, ...safeSettings } = settings;
-    return NextResponse.json(safeSettings);
+    return NextResponse.json(toSafeSystemSettings(settings));
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Error al cargar configuración del sistema." },
+      { error: error instanceof Error ? error.message : "Error al cargar configuracion del sistema." },
       { status: 500 },
     );
   }
@@ -36,45 +33,54 @@ export async function PUT(request: Request) {
     const body: unknown = await request.json();
 
     if (!isRecord(body)) {
-      return NextResponse.json({ error: "Cuerpo de solicitud inválido." }, { status: 400 });
+      return NextResponse.json({ error: "Cuerpo de solicitud invalido." }, { status: 400 });
     }
 
     const input: SystemSettingsInput = {
-      openaiApiKey:
-        typeof body.openaiApiKey === "string" && body.openaiApiKey.trim().length > 0
-          ? body.openaiApiKey.trim()
-          : typeof body.openaiApiKey === "string" && body.openaiApiKey.trim().length === 0
-            ? ""
-            : null,
-      geminiApiKey:
-        typeof body.geminiApiKey === "string" && body.geminiApiKey.trim().length > 0
-          ? body.geminiApiKey.trim()
-          : typeof body.geminiApiKey === "string" && body.geminiApiKey.trim().length === 0
-            ? ""
-            : null,
-      openaiModel:
-        typeof body.openaiModel === "string" && body.openaiModel.trim().length > 0
-          ? body.openaiModel.trim()
-          : null,
-      geminiModel:
-        typeof body.geminiModel === "string" && body.geminiModel.trim().length > 0
-          ? body.geminiModel.trim()
-          : null,
+      openaiApiKey: readOptionalSecret(body.openaiApiKey),
+      geminiApiKey: readOptionalSecret(body.geminiApiKey),
+      openrouterApiKey: readOptionalSecret(body.openrouterApiKey),
+      openaiModel: readOptionalModel(body.openaiModel),
+      geminiModel: readOptionalModel(body.geminiModel),
+      openrouterModel: readOptionalModel(body.openrouterModel),
     };
 
     const settings = await updateSystemSettings(input);
-    // Strip decrypted keys — never expose raw API keys in the response
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { openaiApiKey: _openaiApiKey, geminiApiKey: _geminiApiKey, ...safeSettings } = settings;
-    return NextResponse.json(safeSettings);
+    return NextResponse.json(toSafeSystemSettings(settings));
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Error al guardar configuración del sistema." },
+      { error: error instanceof Error ? error.message : "Error al guardar configuracion del sistema." },
       { status: 500 },
     );
   }
 }
 
+function readOptionalSecret(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : "";
+}
+
+function readOptionalModel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toSafeSystemSettings(settings: Awaited<ReturnType<typeof getSystemSettings>>) {
+  return {
+    openaiApiKeyMasked: settings.openaiApiKeyMasked,
+    geminiApiKeyMasked: settings.geminiApiKeyMasked,
+    openrouterApiKeyMasked: settings.openrouterApiKeyMasked,
+    openaiModel: settings.openaiModel,
+    geminiModel: settings.geminiModel,
+    openrouterModel: settings.openrouterModel,
+    openaiConfigured: settings.openaiConfigured,
+    geminiConfigured: settings.geminiConfigured,
+    openrouterConfigured: settings.openrouterConfigured,
+  };
 }

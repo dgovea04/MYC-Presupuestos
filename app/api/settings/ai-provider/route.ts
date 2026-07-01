@@ -36,15 +36,27 @@ export async function PUT(request: Request) {
       aiProviderPreference: readAiProviderPreference(body.aiProviderPreference),
       openaiApiKey: typeof body.openaiApiKey === "string" && body.openaiApiKey.trim().length > 0
         ? body.openaiApiKey.trim()
-        : null,
+        : typeof body.openaiApiKey === "string" && body.openaiApiKey.trim().length === 0
+          ? ""
+          : null,
       geminiApiKey: typeof body.geminiApiKey === "string" && body.geminiApiKey.trim().length > 0
         ? body.geminiApiKey.trim()
-        : null,
+        : typeof body.geminiApiKey === "string" && body.geminiApiKey.trim().length === 0
+          ? ""
+          : null,
+      openrouterApiKey: typeof body.openrouterApiKey === "string" && body.openrouterApiKey.trim().length > 0
+        ? body.openrouterApiKey.trim()
+        : typeof body.openrouterApiKey === "string" && body.openrouterApiKey.trim().length === 0
+          ? ""
+          : null,
       openaiModel: typeof body.openaiModel === "string" && body.openaiModel.trim().length > 0
         ? body.openaiModel.trim()
         : null,
       geminiModel: typeof body.geminiModel === "string" && body.geminiModel.trim().length > 0
         ? body.geminiModel.trim()
+        : null,
+      openrouterModel: typeof body.openrouterModel === "string" && body.openrouterModel.trim().length > 0
+        ? body.openrouterModel.trim()
         : null,
     };
 

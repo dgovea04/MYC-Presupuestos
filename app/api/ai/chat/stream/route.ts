@@ -3,7 +3,8 @@ import { buildChatMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { streamChatAiResponse } from "@/lib/ai/service";
 import { aiChatRequestSchema } from "@/lib/ai/validation";
-import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import { getSystemSettings } from "@/lib/data/system-settings";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -21,23 +22,29 @@ export async function POST(request: Request) {
     };
 
     if (data.provider === "openai") {
-      const [apiKey, settings] = await Promise.all([
+      const [apiKey, settings, systemSettings] = await Promise.all([
         getDecryptedOpenaiApiKey(session.user.id),
         getAiProviderSettings(session.user.id),
+        getSystemSettings(),
       ]);
-      if (apiKey) {
-        streamInput.apiKey = apiKey;
-        streamInput.modelPreference = settings.openaiModel || undefined;
-      }
+      streamInput.apiKey = apiKey || systemSettings.openaiApiKey || undefined;
+      streamInput.modelPreference = settings.openaiModel || systemSettings.openaiModel || undefined;
     } else if (data.provider === "gemini") {
-      const [apiKey, settings] = await Promise.all([
+      const [apiKey, settings, systemSettings] = await Promise.all([
         getDecryptedGeminiApiKey(session.user.id),
         getAiProviderSettings(session.user.id),
+        getSystemSettings(),
       ]);
-      if (apiKey) {
-        streamInput.apiKey = apiKey;
-        streamInput.modelPreference = settings.geminiModel || undefined;
-      }
+      streamInput.apiKey = apiKey || systemSettings.geminiApiKey || undefined;
+      streamInput.modelPreference = settings.geminiModel || systemSettings.geminiModel || undefined;
+    } else if (data.provider === "openrouter") {
+      const [apiKey, settings, systemSettings] = await Promise.all([
+        getDecryptedOpenrouterApiKey(session.user.id),
+        getAiProviderSettings(session.user.id),
+        getSystemSettings(),
+      ]);
+      streamInput.apiKey = apiKey || systemSettings.openrouterApiKey || undefined;
+      streamInput.modelPreference = settings.openrouterModel || systemSettings.openrouterModel || undefined;
     }
 
     const stream = new ReadableStream<Uint8Array>({

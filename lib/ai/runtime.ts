@@ -44,23 +44,28 @@ export async function getAiHealth(fetchImpl?: FetchLike, userId?: string): Promi
     const actions = buildActionResolutions(availableModels);
     const warningsCount = Object.values(actions).filter((action) => action.fallbackUsed || action.warnings.length > 0).length;
 
-    let cloudConfigured = { openai: false, gemini: false };
+    let cloudConfigured = { openai: false, gemini: false, openrouter: false };
     if (userId) {
       try {
         const cloudSettings = await getAiProviderSettings(userId);
-        cloudConfigured = { openai: cloudSettings.openaiConfigured, gemini: cloudSettings.geminiConfigured };
+        cloudConfigured = {
+          openai: cloudSettings.openaiConfigured,
+          gemini: cloudSettings.geminiConfigured,
+          openrouter: cloudSettings.openrouterConfigured,
+        };
       } catch {
         // Cloud status is best-effort
       }
     }
 
     // Also check system settings for fallback keys
-    if (!cloudConfigured.openai || !cloudConfigured.gemini) {
+    if (!cloudConfigured.openai || !cloudConfigured.gemini || !cloudConfigured.openrouter) {
       try {
         const systemSettings = await getSystemSettings();
         cloudConfigured = {
           openai: cloudConfigured.openai || systemSettings.openaiConfigured,
           gemini: cloudConfigured.gemini || systemSettings.geminiConfigured,
+          openrouter: cloudConfigured.openrouter || systemSettings.openrouterConfigured,
         };
       } catch {
         // System settings check is best-effort
@@ -78,23 +83,28 @@ export async function getAiHealth(fetchImpl?: FetchLike, userId?: string): Promi
       routing: buildRoutingHealth(),
     };
   } catch (error) {
-    let cloudConfigured = { openai: false, gemini: false };
+    let cloudConfigured = { openai: false, gemini: false, openrouter: false };
     if (userId) {
       try {
         const cloudSettings = await getAiProviderSettings(userId);
-        cloudConfigured = { openai: cloudSettings.openaiConfigured, gemini: cloudSettings.geminiConfigured };
+        cloudConfigured = {
+          openai: cloudSettings.openaiConfigured,
+          gemini: cloudSettings.geminiConfigured,
+          openrouter: cloudSettings.openrouterConfigured,
+        };
       } catch {
         // Cloud status is best-effort
       }
     }
 
     // Also check system settings for fallback keys
-    if (!cloudConfigured.openai || !cloudConfigured.gemini) {
+    if (!cloudConfigured.openai || !cloudConfigured.gemini || !cloudConfigured.openrouter) {
       try {
         const systemSettings = await getSystemSettings();
         cloudConfigured = {
           openai: cloudConfigured.openai || systemSettings.openaiConfigured,
           gemini: cloudConfigured.gemini || systemSettings.geminiConfigured,
+          openrouter: cloudConfigured.openrouter || systemSettings.openrouterConfigured,
         };
       } catch {
         // System settings check is best-effort
@@ -187,7 +197,10 @@ function cloneMetrics(): Record<AiAction, AiActionMetric> {
   };
 }
 
-function buildProviderHealth(ollamaReachable: boolean, cloudConfigured?: { openai: boolean; gemini: boolean }): AiHealth["providers"] {
+function buildProviderHealth(
+  ollamaReachable: boolean,
+  cloudConfigured?: { openai: boolean; gemini: boolean; openrouter: boolean },
+): AiHealth["providers"] {
   return {
     ollama: {
       configured: true,
@@ -202,7 +215,7 @@ function buildProviderHealth(ollamaReachable: boolean, cloudConfigured?: { opena
       reachable: null,
     },
     openrouter: {
-      configured: hasEnvValue(process.env.OPENROUTER_API_KEY),
+      configured: (cloudConfigured?.openrouter ?? false) || hasEnvValue(process.env.OPENROUTER_API_KEY),
       reachable: null,
     },
     chatgpt_bridge: {
