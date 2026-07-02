@@ -1,4 +1,13 @@
-import type { RiskHistogramBin, RiskSCurvePoint } from "@/types/risk";
+import type {
+  RiskBoxPlotStats,
+  RiskBudgetItem,
+  RiskHistogramBin,
+  RiskSCurvePoint,
+  RiskSimulationSummary,
+  RiskTornadoRow,
+  RiskVariableRecord,
+  RiskWorkScheduleSummary,
+} from "@/types/risk";
 
 export function sortNumeric(values: number[]): number[] {
   return [...values].sort((left, right) => left - right);
@@ -135,4 +144,140 @@ export function buildSCurve(values: number[], requestedPointCount = 100): RiskSC
       cumulativeProbability: (sortedIndex + 1) / sorted.length,
     };
   });
+}
+
+export function buildTornadoSensitivity(
+  items: RiskBudgetItem[],
+  variables: RiskVariableRecord[],
+  baseTotal: number,
+  limit = 10,
+): RiskTornadoRow[] {
+  const itemById = new Map(items.map((item) => [item.itemId, item]));
+
+  return variables
+    .filter(
+      (variable) =>
+        variable.enabled &&
+        (variable.variableType === "QUANTITY" || variable.variableType === "UNIT_PRICE"),
+    )
+    .map((variable) => {
+      const item = itemById.get(variable.budgetItemId);
+      if (!item) {
+        return null;
+      }
+
+      const lowScenarioTotal =
+        variable.variableType === "UNIT_PRICE"
+          ? baseTotal - item.baseTotal + item.baseQuantity * variable.minimum
+          : baseTotal - item.baseTotal + variable.minimum * item.unitPrice;
+      const highScenarioTotal =
+        variable.variableType === "UNIT_PRICE"
+          ? baseTotal - item.baseTotal + item.baseQuantity * variable.maximum
+          : baseTotal - item.baseTotal + variable.maximum * item.unitPrice;
+      const lowDelta = roundFinancial(lowScenarioTotal - baseTotal);
+      const highDelta = roundFinancial(highScenarioTotal - baseTotal);
+      const labelPrefix = variable.variableType === "UNIT_PRICE" ? "PU" : "Cant.";
+      const label = `${labelPrefix} ${[item.code, item.description].filter(Boolean).join(" ").trim() || item.description}`;
+
+      return {
+        itemId: item.itemId,
+        label,
+        lowDelta,
+        highDelta,
+        impact: roundFinancial(Math.max(Math.abs(lowDelta), Math.abs(highDelta))),
+      } satisfies RiskTornadoRow;
+    })
+    .filter((row): row is RiskTornadoRow => row !== null)
+    .sort((left, right) => right.impact - left.impact)
+    .slice(0, Math.max(1, Math.floor(limit)));
+}
+
+export function buildBoxPlotStats(summary: RiskSimulationSummary): RiskBoxPlotStats | null {
+  if (summary.histogramBins.length === 0 || summary.sCurvePoints.length === 0) {
+    return null;
+  }
+
+  const minimum = summary.histogramBins[0]?.min;
+  const maximum = summary.histogramBins.at(-1)?.max;
+  const lowerQuartile = estimateCostAtProbability(summary.sCurvePoints, 0.25);
+  const upperQuartile = estimateCostAtProbability(summary.sCurvePoints, 0.75);
+
+  if (
+    minimum == null ||
+    maximum == null ||
+    lowerQuartile == null ||
+    upperQuartile == null
+  ) {
+    return null;
+  }
+
+  return {
+    minimum: roundFinancial(minimum),
+    lowerQuartile: roundFinancial(lowerQuartile),
+    median: roundFinancial(summary.median),
+    upperQuartile: roundFinancial(upperQuartile),
+    maximum: roundFinancial(maximum),
+  };
+}
+
+export function buildWorkScheduleExposureSummary(
+  summary: RiskWorkScheduleSummary | null,
+  variables: RiskVariableRecord[],
+): {
+  exposedCriticalCost: number;
+  exposedCriticalItemCount: number;
+  exposedCriticalShare: number;
+  totalCriticalCost: number;
+  uncoveredCriticalCost: number;
+} | null {
+  if (!summary || summary.criticalItems.length === 0) {
+    return null;
+  }
+
+  const activeRiskItemIds = new Set(
+    variables.filter((variable) => variable.enabled).map((variable) => variable.budgetItemId),
+  );
+  const totalCriticalCost = roundFinancial(
+    summary.criticalItems.reduce((sum, item) => sum + item.partial, 0),
+  );
+  const exposedCriticalItems = summary.criticalItems.filter((item) => activeRiskItemIds.has(item.budgetItemId));
+  const exposedCriticalCost = roundFinancial(
+    exposedCriticalItems.reduce((sum, item) => sum + item.partial, 0),
+  );
+
+  return {
+    exposedCriticalCost,
+    exposedCriticalItemCount: exposedCriticalItems.length,
+    exposedCriticalShare:
+      summary.criticalItems.length > 0 ? exposedCriticalItems.length / summary.criticalItems.length : 0,
+    totalCriticalCost,
+    uncoveredCriticalCost: roundFinancial(totalCriticalCost - exposedCriticalCost),
+  };
+}
+
+function estimateCostAtProbability(points: RiskSCurvePoint[], targetProbability: number): number | null {
+  const sorted = [...points].sort((left, right) => left.cumulativeProbability - right.cumulativeProbability);
+  const exact = sorted.find((point) => point.cumulativeProbability === targetProbability);
+  if (exact) {
+    return exact.cost;
+  }
+
+  const upperIndex = sorted.findIndex((point) => point.cumulativeProbability > targetProbability);
+  if (upperIndex <= 0) {
+    return sorted[0]?.cost ?? null;
+  }
+
+  const lower = sorted[upperIndex - 1];
+  const upper = sorted[upperIndex];
+  if (!lower || !upper) {
+    return sorted.at(-1)?.cost ?? null;
+  }
+
+  const probabilityRange = upper.cumulativeProbability - lower.cumulativeProbability;
+  if (probabilityRange <= 0) {
+    return upper.cost;
+  }
+
+  const weight = (targetProbability - lower.cumulativeProbability) / probabilityRange;
+  return lower.cost + (upper.cost - lower.cost) * weight;
 }

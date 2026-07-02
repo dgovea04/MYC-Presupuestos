@@ -20,6 +20,24 @@ vi.mock("@/components/risk/s-curve-chart", () => ({
   SCurveChart: () => React.createElement("div", null, "Curva S placeholder"),
 }));
 
+vi.mock("@/components/risk/tornado-chart", () => ({
+  TornadoChart: (props: { rows?: Array<unknown> }) =>
+    React.createElement(
+      "div",
+      null,
+      props.rows?.length ? "Tornado con datos" : "Activa variables para ver sensibilidad.",
+    ),
+}));
+
+vi.mock("@/components/risk/box-plot-chart", () => ({
+  BoxPlotChart: (props: { result?: unknown }) =>
+    React.createElement(
+      "div",
+      null,
+      props.result ? "Box plot con datos" : "Ejecuta una simulacion para ver el box plot.",
+    ),
+}));
+
 // Mock next/dynamic to synchronously render components via useEffect+useState
 vi.mock("next/dynamic", () => ({
   default: (importFn: () => Promise<React.ComponentType | { default: React.ComponentType }>) => {
@@ -72,7 +90,33 @@ describe("RiskAnalysisDashboard", () => {
 
     expect(getByText("Riesgos Monte Carlo")).toBeTruthy();
     expect(getByText("Excavacion")).toBeTruthy();
+    expect(getByText("Cantidad")).toBeTruthy();
+    expect(getByText("Precio unitario")).toBeTruthy();
     expect(getByText("Ejecuta una simulacion para ver el histograma.")).toBeTruthy();
+    expect(getByText("Promedio")).toBeTruthy();
+    expect(getByText("Mediana")).toBeTruthy();
+    expect(getByText("Asimetria")).toBeTruthy();
+    expect(getByText("Correlaciones")).toBeTruthy();
+    expect(getByText("Este analisis de riesgo no tiene un cronograma general vinculado para cruzar ruta critica y variables.")).toBeTruthy();
+    expect(getByText("Activa variables para ver sensibilidad.")).toBeTruthy();
+    expect(getByText("Ejecuta una simulacion para ver el box plot.")).toBeTruthy();
+  });
+
+  it("collapses the whole quality panel by default and expands it on demand", async () => {
+    const { container, getByLabelText, getByTestId } = await renderRiskAnalysisDashboard();
+
+    const qualityPanel = getByTestId("risk-validation-panel");
+    expect(qualityPanel.getAttribute("data-collapsed")).toBe("true");
+    expect(container.textContent).not.toContain("Control de calidad");
+    expect(container.textContent).not.toContain("Variables listas para simulacion.");
+
+    await act(async () => {
+      getByLabelText("Expandir control de calidad").click();
+    });
+
+    expect(qualityPanel.getAttribute("data-collapsed")).toBe("false");
+    expect(container.textContent).toContain("Control de calidad");
+    expect(container.textContent).toContain("Variables listas para simulacion.");
   });
 });
 
@@ -94,11 +138,32 @@ async function renderRiskAnalysisDashboard() {
   });
 
   return {
+    container,
     getByText: (text: string) => {
       const element = [...container.querySelectorAll("*")].find((candidate) => candidate.textContent === text);
 
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing element: ${text}`);
+      }
+
+      return element;
+    },
+    getByLabelText: (text: string) => {
+      const element = [...container.querySelectorAll("*")].find(
+        (candidate) => candidate.getAttribute("aria-label") === text,
+      );
+
+      if (!(element instanceof HTMLElement)) {
+        throw new Error(`Missing element by label: ${text}`);
+      }
+
+      return element;
+    },
+    getByTestId: (testId: string) => {
+      const element = container.querySelector(`[data-testid="${testId}"]`);
+
+      if (!(element instanceof HTMLElement)) {
+        throw new Error(`Missing test id: ${testId}`);
       }
 
       return element;
@@ -130,6 +195,7 @@ function createPayload(): RiskAnalysisPayload {
       },
     ],
     variables: [],
+    correlations: [],
     latestRun: null,
   };
 }

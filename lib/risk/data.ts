@@ -3,18 +3,24 @@ import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { runMonteCarloSimulation } from "@/lib/risk/monte-carlo-engine";
 import {
+  riskCorrelationsSaveSchema,
   riskHistogramBinSchema,
+  riskScheduleDurationSummarySchema,
   riskSCurvePointSchema,
   riskSimulationRunInputSchema,
   riskVariablesSaveSchema,
+  type RiskCorrelationsSaveInput,
   type RiskSimulationRunInput,
   type RiskVariablesSaveInput,
 } from "@/lib/validations/risk";
+import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import type {
   RiskAnalysisPayload,
   RiskBudgetItem,
+  RiskCorrelationRecord,
   RiskSimulationSummary,
   RiskVariableRecord,
+  RiskWorkScheduleSimulationLine,
 } from "@/types/risk";
 
 const riskBudgetItemSelect = {
@@ -50,6 +56,7 @@ type BudgetWithRiskScope = {
 };
 
 type RiskVariableModel = Prisma.RiskVariableGetPayload<Record<string, never>>;
+type RiskCorrelationModel = Prisma.RiskCorrelationGetPayload<Record<string, never>>;
 type RiskSimulationRunModel = Prisma.RiskSimulationRunGetPayload<Record<string, never>>;
 
 export class RiskBudgetAccessError extends Error {
@@ -71,12 +78,16 @@ export async function getRiskAnalysisPayload(
 
   const items = normalizeRiskBudgetItems(budget);
   const scopedItemIds = items.map((item) => item.itemId);
-  const [variables, latestRun] = await Promise.all([
+  const [variables, correlations, latestRun] = await Promise.all([
     prisma.riskVariable.findMany({
       where: {
         budgetId,
         budgetItemId: { in: scopedItemIds },
       },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.riskCorrelation.findMany({
+      where: { budgetId },
       orderBy: { createdAt: "asc" },
     }),
     prisma.riskSimulationRun.findFirst({
@@ -85,7 +96,7 @@ export async function getRiskAnalysisPayload(
     }),
   ]);
 
-  const modelChangedAt = getRiskModelChangedAt(items, variables);
+  const modelChangedAt = getRiskModelChangedAt(items, variables, correlations);
   const currentLatestRun = latestRun && latestRun.createdAt >= modelChangedAt ? latestRun : null;
 
   return {
@@ -101,6 +112,10 @@ export async function getRiskAnalysisPayload(
     variables: variables
       .filter((variable) => scopedItemIds.includes(variable.budgetItemId))
       .map(serializeRiskVariable),
+    correlations: correlations
+      .filter((correlation) => variables.some((variable) => variable.id === correlation.sourceVariableId))
+      .filter((correlation) => variables.some((variable) => variable.id === correlation.targetVariableId))
+      .map(serializeRiskCorrelation),
     latestRun: currentLatestRun ? serializeRiskSimulationRun(currentLatestRun) : null,
   };
 }
@@ -168,6 +183,70 @@ export async function saveRiskVariables(
   return getRiskAnalysisPayload(budgetId, userId);
 }
 
+export async function saveRiskCorrelations(
+  budgetId: string,
+  userId: string,
+  input: RiskCorrelationsSaveInput,
+): Promise<RiskAnalysisPayload> {
+  const parsed = riskCorrelationsSaveSchema.parse(input);
+  const budget = await findAccessibleBudgetWithItems(budgetId, userId);
+
+  if (!budget) {
+    throw new Error("No tienes permisos para modificar este presupuesto.");
+  }
+
+  const scopedItemIds = new Set(normalizeRiskBudgetItems(budget).map((item) => item.itemId));
+  const variables = await prisma.riskVariable.findMany({
+    where: {
+      budgetId,
+      budgetItemId: { in: [...scopedItemIds] },
+    },
+  });
+  const variableIds = new Set(variables.map((variable) => variable.id));
+
+  await prisma.$transaction(async (tx) => {
+    for (const correlation of parsed.correlations) {
+      const normalized = normalizeCorrelationPair(correlation.sourceVariableId, correlation.targetVariableId);
+
+      if (!variableIds.has(normalized.sourceVariableId) || !variableIds.has(normalized.targetVariableId)) {
+        throw new Error("La correlacion usa variables fuera del alcance actual.");
+      }
+
+      if (correlation.delete || correlation.coefficient === 0) {
+        await tx.riskCorrelation.deleteMany({
+          where: {
+            budgetId,
+            sourceVariableId: normalized.sourceVariableId,
+            targetVariableId: normalized.targetVariableId,
+          },
+        });
+        continue;
+      }
+
+      await tx.riskCorrelation.upsert({
+        where: {
+          budgetId_sourceVariableId_targetVariableId: {
+            budgetId,
+            sourceVariableId: normalized.sourceVariableId,
+            targetVariableId: normalized.targetVariableId,
+          },
+        },
+        update: {
+          coefficient: correlation.coefficient,
+        },
+        create: {
+          budgetId,
+          sourceVariableId: normalized.sourceVariableId,
+          targetVariableId: normalized.targetVariableId,
+          coefficient: correlation.coefficient,
+        },
+      });
+    }
+  });
+
+  return getRiskAnalysisPayload(budgetId, userId);
+}
+
 export async function saveRiskSimulationRun(
   budgetId: string,
   userId: string,
@@ -189,12 +268,18 @@ export async function saveRiskSimulationRun(
     },
     orderBy: { createdAt: "asc" },
   });
+  const correlations = await prisma.riskCorrelation.findMany({
+    where: { budgetId },
+    orderBy: { createdAt: "asc" },
+  });
   const summary = runMonteCarloSimulation({
     budgetId,
     baseTotal: roundBaseTotal(items.reduce((total, item) => total + item.baseTotal, 0)),
     iterations: parsed.iterations,
     items,
     variables: variables.map(serializeRiskVariable),
+    correlations: correlations.map(serializeRiskCorrelation),
+    workSchedule: await buildRiskWorkScheduleSimulationInput(budget.kind, budgetId, userId),
   });
 
   const created = await prisma.riskSimulationRun.create({
@@ -215,6 +300,7 @@ export async function saveRiskSimulationRun(
       p95: summary.p95,
       histogramBins: summary.histogramBins,
       sCurvePoints: summary.sCurvePoints,
+      scheduleSummary: summary.scheduleDuration,
     },
   });
 
@@ -337,6 +423,18 @@ function serializeRiskVariable(variable: RiskVariableModel): RiskVariableRecord 
   };
 }
 
+function serializeRiskCorrelation(correlation: RiskCorrelationModel): RiskCorrelationRecord {
+  return {
+    id: correlation.id,
+    budgetId: correlation.budgetId,
+    sourceVariableId: correlation.sourceVariableId,
+    targetVariableId: correlation.targetVariableId,
+    coefficient: decimalToNumber(correlation.coefficient),
+    createdAt: correlation.createdAt.toISOString(),
+    updatedAt: correlation.updatedAt.toISOString(),
+  };
+}
+
 function serializeRiskSimulationRun(run: RiskSimulationRunModel): RiskSimulationSummary {
   return {
     id: run.id,
@@ -356,6 +454,7 @@ function serializeRiskSimulationRun(run: RiskSimulationRunModel): RiskSimulation
     p95: decimalToNumber(run.p95),
     histogramBins: parseHistogramBins(run.histogramBins),
     sCurvePoints: parseSCurvePoints(run.sCurvePoints),
+    scheduleDuration: parseScheduleSummary(run.scheduleSummary),
     createdAt: run.createdAt.toISOString(),
   };
 }
@@ -370,10 +469,20 @@ function parseSCurvePoints(value: Prisma.JsonValue) {
   return parsed.success ? parsed.data : [];
 }
 
-function getRiskModelChangedAt(items: RiskBudgetItem[], variables: RiskVariableModel[]) {
+function parseScheduleSummary(value: Prisma.JsonValue | null) {
+  const parsed = riskScheduleDurationSummarySchema.nullable().safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function getRiskModelChangedAt(
+  items: RiskBudgetItem[],
+  variables: RiskVariableModel[],
+  correlations: RiskCorrelationModel[],
+) {
   const timestamps = [
     ...items.map((item) => Date.parse(item.updatedAt)),
     ...variables.map((variable) => variable.updatedAt.getTime()),
+    ...correlations.map((correlation) => correlation.updatedAt.getTime()),
   ].filter((timestamp) => Number.isFinite(timestamp));
 
   return new Date(timestamps.length > 0 ? Math.max(...timestamps) : 0);
@@ -381,4 +490,44 @@ function getRiskModelChangedAt(items: RiskBudgetItem[], variables: RiskVariableM
 
 function roundBaseTotal(value: number) {
   return Math.round((value + Number.EPSILON) * 10_000) / 10_000;
+}
+
+function normalizeCorrelationPair(sourceVariableId: string, targetVariableId: string) {
+  return sourceVariableId < targetVariableId
+    ? { sourceVariableId, targetVariableId }
+    : { sourceVariableId: targetVariableId, targetVariableId: sourceVariableId };
+}
+
+async function buildRiskWorkScheduleSimulationInput(
+  budgetKind: BudgetWithRiskScope["kind"],
+  budgetId: string,
+  userId: string,
+): Promise<{ lines: RiskWorkScheduleSimulationLine[] } | null> {
+  if (budgetKind !== "GENERAL") {
+    return null;
+  }
+
+  try {
+    const section = await getWorkScheduleSection(budgetId, userId);
+    const lines = section.groups.flatMap((group) =>
+      group.lines.flatMap((line) =>
+        line.durationDays && line.durationDays > 0
+          ? [
+              {
+                budgetItemId: line.budgetItemId,
+                itemCode: line.itemCode,
+                description: line.description,
+                durationDays: line.durationDays,
+                predecessor: line.predecessor ?? null,
+                subBudgetName: line.subBudgetName,
+              },
+            ]
+          : [],
+      ),
+    );
+
+    return lines.length > 0 ? { lines } : null;
+  } catch {
+    return null;
+  }
 }

@@ -25,8 +25,9 @@ vi.mock("next/link", () => ({
     onFocus,
     className,
     prefetch,
+    scroll,
     "aria-current": ariaCurrent,
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; prefetch?: boolean }) => (
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; prefetch?: boolean; scroll?: boolean }) => (
     <a
       href={href}
       onClick={onClick}
@@ -34,6 +35,7 @@ vi.mock("next/link", () => ({
       onFocus={onFocus}
       className={className}
       data-prefetch={prefetch ? "true" : "false"}
+      data-scroll={scroll === false ? "false" : "true"}
       aria-current={ariaCurrent}
     >
       {children}
@@ -103,7 +105,8 @@ describe("PolynomialFormulaSectionTabs", () => {
       estructurasLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
 
-    expect(routerMocks.push).toHaveBeenCalledWith("/budgets/general-1/polynomial-formula?section=sub-1");
+    expect(estructurasLink.getAttribute("data-scroll")).toBe("false");
+    expect(routerMocks.push).toHaveBeenCalledWith("/budgets/general-1/polynomial-formula?section=sub-1", { scroll: false });
     expect(getAnchor("Arquitectura").getAttribute("aria-current")).toBe("page");
   });
 });

@@ -138,10 +138,15 @@ enum BillingSubscriptionStatus {
 
 enum RiskVariableType {
   QUANTITY
+  UNIT_PRICE
+  DURATION
 }
 
 enum RiskDistributionType {
   TRIANGULAR
+  PERT
+  NORMAL
+  UNIFORM
 }
 
 enum NoteTaskPriority {
@@ -541,6 +546,7 @@ model Budget {
   valuations            Valuation[]
   reports               Report[]
   riskVariables         RiskVariable[]
+  riskCorrelations      RiskCorrelation[]
   riskSimulationRuns    RiskSimulationRun[]
   noteTasks             NoteTask[]
   metradoSheets         MetradoSheet[]
@@ -775,10 +781,30 @@ model RiskVariable {
   updatedAt        DateTime             @updatedAt
   budget           Budget               @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   budgetItem       BudgetItem           @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  sourceCorrelations RiskCorrelation[]  @relation("RiskCorrelationSource")
+  targetCorrelations RiskCorrelation[]  @relation("RiskCorrelationTarget")
 
   @@unique([budgetId, budgetItemId, variableType])
   @@index([budgetId])
   @@index([budgetItemId])
+}
+
+model RiskCorrelation {
+  id               String       @id @default(cuid())
+  budgetId         String
+  sourceVariableId String
+  targetVariableId String
+  coefficient      Decimal      @default(0) @db.Decimal(8, 4)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  budget           Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  sourceVariable   RiskVariable @relation("RiskCorrelationSource", fields: [sourceVariableId], references: [id], onDelete: Cascade)
+  targetVariable   RiskVariable @relation("RiskCorrelationTarget", fields: [targetVariableId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, sourceVariableId, targetVariableId])
+  @@index([budgetId])
+  @@index([sourceVariableId])
+  @@index([targetVariableId])
 }
 
 model RiskSimulationRun {
@@ -799,6 +825,7 @@ model RiskSimulationRun {
   p95               Decimal  @default(0) @db.Decimal(18, 4)
   histogramBins     Json
   sCurvePoints      Json
+  scheduleSummary   Json?
   createdAt         DateTime @default(now())
   budget            Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
 

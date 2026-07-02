@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getRiskAnalysisPayload, normalizeRiskBudgetItems, saveRiskSimulationRun } from "@/lib/risk/data";
+import { getRiskAnalysisPayload, normalizeRiskBudgetItems, saveRiskCorrelations, saveRiskSimulationRun } from "@/lib/risk/data";
 import { MONTE_CARLO_ITERATIONS } from "@/types/risk";
 import {
+  riskCorrelationInputSchema,
   riskSimulationRunInputSchema,
   riskVariableInputSchema,
 } from "@/lib/validations/risk";
@@ -19,10 +20,16 @@ vi.mock("@/lib/db/prisma", () => ({
     riskVariable: {
       findMany: vi.fn() as any,
     },
+    riskCorrelation: {
+      findMany: vi.fn() as any,
+      upsert: vi.fn() as any,
+      deleteMany: vi.fn() as any,
+    },
     riskSimulationRun: {
       create: vi.fn() as any,
       findFirst: vi.fn() as any,
     },
+    $transaction: vi.fn(async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma as unknown as typeof prisma)),
   },
 }));
 
@@ -51,6 +58,102 @@ describe("risk analysis validation", () => {
     });
   });
 
+  it("accepts a valid unit price triangular variable", () => {
+    const parsed = riskVariableInputSchema.parse({
+      id: "risk-2",
+      budgetItemId: "item-1",
+      variableType: "UNIT_PRICE",
+      distributionType: "TRIANGULAR",
+      minimum: 20,
+      mostLikely: 25,
+      maximum: 30,
+      enabled: true,
+    });
+
+    expect(parsed).toEqual({
+      id: "risk-2",
+      budgetItemId: "item-1",
+      variableType: "UNIT_PRICE",
+      distributionType: "TRIANGULAR",
+      minimum: 20,
+      mostLikely: 25,
+      maximum: 30,
+      enabled: true,
+    });
+  });
+
+  it("accepts a valid PERT variable", () => {
+    const parsed = riskVariableInputSchema.parse({
+      id: "risk-3",
+      budgetItemId: "item-1",
+      variableType: "QUANTITY",
+      distributionType: "PERT",
+      minimum: 18,
+      mostLikely: 20,
+      maximum: 24,
+      enabled: true,
+    });
+
+    expect(parsed).toEqual({
+      id: "risk-3",
+      budgetItemId: "item-1",
+      variableType: "QUANTITY",
+      distributionType: "PERT",
+      minimum: 18,
+      mostLikely: 20,
+      maximum: 24,
+      enabled: true,
+    });
+  });
+
+  it("accepts a valid NORMAL variable", () => {
+    const parsed = riskVariableInputSchema.parse({
+      id: "risk-4",
+      budgetItemId: "item-1",
+      variableType: "UNIT_PRICE",
+      distributionType: "NORMAL",
+      minimum: 95,
+      mostLikely: 100,
+      maximum: 110,
+      enabled: true,
+    });
+
+    expect(parsed).toEqual({
+      id: "risk-4",
+      budgetItemId: "item-1",
+      variableType: "UNIT_PRICE",
+      distributionType: "NORMAL",
+      minimum: 95,
+      mostLikely: 100,
+      maximum: 110,
+      enabled: true,
+    });
+  });
+
+  it("accepts a valid UNIFORM variable", () => {
+    const parsed = riskVariableInputSchema.parse({
+      id: "risk-5",
+      budgetItemId: "item-1",
+      variableType: "QUANTITY",
+      distributionType: "UNIFORM",
+      minimum: 8,
+      mostLikely: 10,
+      maximum: 12,
+      enabled: true,
+    });
+
+    expect(parsed).toEqual({
+      id: "risk-5",
+      budgetItemId: "item-1",
+      variableType: "QUANTITY",
+      distributionType: "UNIFORM",
+      minimum: 8,
+      mostLikely: 10,
+      maximum: 12,
+      enabled: true,
+    });
+  });
+
   it("rejects inverted triangular ranges", () => {
     expect(() =>
       riskVariableInputSchema.parse({
@@ -63,6 +166,20 @@ describe("risk analysis validation", () => {
         enabled: true,
       }),
     ).toThrow(ZodError);
+  });
+
+  it("accepts a valid correlation pair", () => {
+    const parsed = riskCorrelationInputSchema.parse({
+      sourceVariableId: "risk-1",
+      targetVariableId: "risk-2",
+      coefficient: 0.65,
+    });
+
+    expect(parsed).toEqual({
+      sourceVariableId: "risk-1",
+      targetVariableId: "risk-2",
+      coefficient: 0.65,
+    });
   });
 
   it("requires the fixed Monte Carlo iteration count for saved runs", () => {
@@ -89,6 +206,7 @@ describe("risk analysis validation", () => {
     vi.mocked(prisma.riskVariable.findMany).mockResolvedValueOnce([
       createRiskVariable({ id: "risk-1", budgetItemId: "item-1" }),
     ]);
+    vi.mocked(prisma.riskCorrelation.findMany).mockResolvedValueOnce([]);
     vi.mocked(prisma.riskSimulationRun.create).mockImplementationOnce(((args: any) => ({
       ...createRiskRun({ id: "run-1", budgetId: "budget-1" }),
       ...args.data,
@@ -183,6 +301,7 @@ describe("risk analysis validation", () => {
       createRiskVariable({ id: "risk-allowed", budgetItemId: "allowed-item" }),
       createRiskVariable({ id: "risk-stale", budgetItemId: "stale-item" }),
     ]);
+    vi.mocked(prisma.riskCorrelation.findMany).mockResolvedValueOnce([]);
     vi.mocked(prisma.riskSimulationRun.findFirst).mockResolvedValueOnce(null);
 
     const payload = await getRiskAnalysisPayload("general-1", "user-1");
@@ -205,6 +324,7 @@ describe("risk analysis validation", () => {
       }),
     );
     expect(payload.variables.map((variable) => variable.id)).toEqual(["risk-allowed"]);
+    expect(payload.correlations).toEqual([]);
   });
 
   it("hides the latest run when risk variables changed after it was created", async () => {
@@ -222,6 +342,7 @@ describe("risk analysis validation", () => {
         updatedAt: new Date("2026-05-26T10:00:00.000Z"),
       },
     ]);
+    vi.mocked(prisma.riskCorrelation.findMany).mockResolvedValueOnce([]);
     vi.mocked(prisma.riskSimulationRun.findFirst).mockResolvedValueOnce(
       createRiskRun({
         id: "stale-run",
@@ -233,6 +354,52 @@ describe("risk analysis validation", () => {
     const payload = await getRiskAnalysisPayload("budget-1", "user-1");
 
     expect(payload.latestRun).toBeNull();
+  });
+
+  it("normalizes and saves correlation pairs using canonical variable order", async () => {
+    vi.mocked(prisma.budget.findFirst).mockResolvedValue({
+      ...baseBudget,
+      id: "budget-1",
+      projectId: "project-1",
+      kind: "SUB_BUDGET",
+      name: "Estructuras",
+      items: [createBudgetItem({ id: "item-1", budgetId: "budget-1" }), createBudgetItem({ id: "item-2", budgetId: "budget-1" })],
+    } as any);
+    vi.mocked(prisma.riskVariable.findMany)
+      .mockResolvedValueOnce([
+        createRiskVariable({ id: "risk-2", budgetItemId: "item-2" }),
+        createRiskVariable({ id: "risk-1", budgetItemId: "item-1" }),
+      ])
+      .mockResolvedValueOnce([
+        createRiskVariable({ id: "risk-1", budgetItemId: "item-1" }),
+        createRiskVariable({ id: "risk-2", budgetItemId: "item-2" }),
+      ]);
+    vi.mocked(prisma.riskCorrelation.upsert).mockResolvedValueOnce({} as any);
+    vi.mocked(prisma.riskCorrelation.findMany).mockResolvedValueOnce([
+      createRiskCorrelation({ sourceVariableId: "risk-1", targetVariableId: "risk-2" }),
+    ] as any);
+    vi.mocked(prisma.riskSimulationRun.findFirst).mockResolvedValueOnce(null);
+
+    const payload = await saveRiskCorrelations("budget-1", "user-1", {
+      correlations: [{ sourceVariableId: "risk-2", targetVariableId: "risk-1", coefficient: 0.4 }],
+    });
+
+    expect(prisma.riskCorrelation.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          budgetId_sourceVariableId_targetVariableId: {
+            budgetId: "budget-1",
+            sourceVariableId: "risk-1",
+            targetVariableId: "risk-2",
+          },
+        },
+      }),
+    );
+    expect(payload.correlations[0]).toMatchObject({
+      sourceVariableId: "risk-1",
+      targetVariableId: "risk-2",
+      coefficient: 0.4,
+    });
   });
 });
 
@@ -265,6 +432,7 @@ const validRunInput = {
       cumulativeProbability: 0.5,
     },
   ],
+  scheduleDuration: null,
 };
 
 const decimalZero = new Prisma.Decimal(0);
@@ -322,6 +490,24 @@ function createRiskVariable({ id, budgetItemId }: { id: string; budgetItemId: st
   };
 }
 
+function createRiskCorrelation({
+  sourceVariableId,
+  targetVariableId,
+}: {
+  sourceVariableId: string;
+  targetVariableId: string;
+}) {
+  return {
+    id: "corr-1",
+    budgetId: "budget-1",
+    sourceVariableId,
+    targetVariableId,
+    coefficient: new Prisma.Decimal(0.4),
+    createdAt: baseDate,
+    updatedAt: baseDate,
+  };
+}
+
 function createRiskRun({
   budgetId,
   createdAt = baseDate,
@@ -363,6 +549,7 @@ function createRiskRun({
         cumulativeProbability: 1,
       },
     ],
+    scheduleSummary: null,
     createdAt,
   };
 }

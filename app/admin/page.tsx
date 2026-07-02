@@ -62,6 +62,7 @@ export default async function AdminPage({
                 <Link
                   key={plan.slug}
                   href={`/admin?plan=${plan.slug}`}
+                  scroll={false}
                   className="theme-surface-card rounded-2xl border px-4 py-3 transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)]"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -206,6 +207,7 @@ function FilterLink({ active, href, label }: { active: boolean; href: string; la
   return (
     <Link
       href={href}
+      scroll={false}
       className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
         active ? "theme-status-info theme-status-info-strong" : "theme-surface-card theme-muted-text hover:border-sky-300 hover:bg-[var(--app-primary-muted)]"
       }`}

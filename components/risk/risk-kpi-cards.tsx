@@ -15,6 +15,8 @@ export function RiskKPICards({
   result: RiskSimulationSummary | null;
 }) {
   const values: Array<{ icon: IconComponent; label: string; value: string }> = [
+    { icon: Sigma, label: "Promedio", value: result ? formatCurrency(result.mean, currency, currencyDecimals) : "-" },
+    { icon: Sigma, label: "Mediana", value: result ? formatCurrency(result.median, currency, currencyDecimals) : "-" },
     { icon: Gauge, label: "P50", value: result ? formatCurrency(result.p50, currency, currencyDecimals) : "-" },
     { icon: LineChart, label: "P80", value: result ? formatCurrency(result.p80, currency, currencyDecimals) : "-" },
     { icon: BarChart3, label: "P90", value: result ? formatCurrency(result.p90, currency, currencyDecimals) : "-" },
@@ -23,12 +25,12 @@ export function RiskKPICards({
       label: "Desv. estandar",
       value: result ? formatCurrency(result.standardDeviation, currency, currencyDecimals) : "-",
     },
-    { icon: Sigma, label: "Varianza", value: result ? formatNumber(result.variance, 2) : "-" },
+    { icon: Gauge, label: "Asimetria", value: result ? formatNumber(result.skewness, 4) : "-" },
     { icon: Gauge, label: "Curtosis", value: result ? formatNumber(result.kurtosis, 4) : "-" },
   ];
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
       {values.map((item) => {
         const Icon = item.icon;
 

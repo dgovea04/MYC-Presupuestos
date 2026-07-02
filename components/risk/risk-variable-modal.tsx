@@ -6,53 +6,73 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { RiskBudgetItem, RiskVariableRecord } from "@/types/risk";
+import { Select } from "@/components/ui/select";
+import type { RiskBudgetItem, RiskDistributionType, RiskVariableRecord, RiskVariableType } from "@/types/risk";
 
 export function RiskVariableModal({
+  baseValueLabel,
+  baseValueOverride,
   item,
   onClose,
   onDelete,
   onSave,
+  variableType,
   variable,
 }: {
+  baseValueLabel?: string;
+  baseValueOverride?: number | null;
   item: RiskBudgetItem | null;
   onClose: () => void;
   onDelete?: () => Promise<void>;
   onSave: (variable: RiskVariableRecord) => Promise<void>;
+  variableType: RiskVariableType | null;
   variable: RiskVariableRecord | null;
 }) {
-  if (!item) {
+  if (!item || !variableType) {
     return null;
   }
 
   return (
     <RiskVariableModalContent
-      key={`${item.itemId}:${variable?.id ?? "new"}:${variable?.updatedAt ?? "fresh"}`}
+      key={`${item.itemId}:${variableType}:${variable?.id ?? "new"}:${variable?.updatedAt ?? "fresh"}`}
+      baseValueLabel={baseValueLabel}
+      baseValueOverride={baseValueOverride}
       item={item}
       onClose={onClose}
       onDelete={onDelete}
       onSave={onSave}
+      variableType={variableType}
       variable={variable}
     />
   );
 }
 
 function RiskVariableModalContent({
+  baseValueLabel,
+  baseValueOverride,
   item,
   onClose,
   onDelete,
   onSave,
+  variableType,
   variable,
 }: {
+  baseValueLabel?: string;
+  baseValueOverride?: number | null;
   item: RiskBudgetItem;
   onClose: () => void;
   onDelete?: () => Promise<void>;
   onSave: (variable: RiskVariableRecord) => Promise<void>;
+  variableType: RiskVariableType;
   variable: RiskVariableRecord | null;
 }) {
-  const [minimum, setMinimum] = useState(String(variable?.minimum ?? item.baseQuantity));
-  const [mostLikely, setMostLikely] = useState(String(variable?.mostLikely ?? item.baseQuantity));
-  const [maximum, setMaximum] = useState(String(variable?.maximum ?? item.baseQuantity));
+  const variableLabel = getVariableLabel(variableType);
+  const defaultValue = baseValueOverride ?? getDefaultValue(item, variableType);
+  const helperLabel = baseValueLabel ?? getBaseValueLabel(variableType);
+  const [minimum, setMinimum] = useState(String(variable?.minimum ?? defaultValue));
+  const [mostLikely, setMostLikely] = useState(String(variable?.mostLikely ?? defaultValue));
+  const [maximum, setMaximum] = useState(String(variable?.maximum ?? defaultValue));
+  const [distributionType, setDistributionType] = useState<RiskDistributionType>(variable?.distributionType ?? "TRIANGULAR");
   const [enabled, setEnabled] = useState(variable?.enabled ?? true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -77,11 +97,11 @@ function RiskVariableModalContent({
 
     try {
       await onSave({
-        id: variable?.id ?? `temp:${item.itemId}:quantity`,
+        id: variable?.id ?? `temp:${item.itemId}:${variableType.toLowerCase()}`,
         budgetId: variable?.budgetId ?? item.budgetId,
         budgetItemId: item.itemId,
-        variableType: "QUANTITY",
-        distributionType: "TRIANGULAR",
+        variableType,
+        distributionType,
         minimum: min,
         mostLikely: likely,
         maximum: max,
@@ -120,7 +140,7 @@ function RiskVariableModalContent({
             <div className="min-w-0">
               <Dialog.Title className="theme-strong-text text-lg font-semibold">Variable de riesgo</Dialog.Title>
               <Dialog.Description className="theme-muted-text mt-1 text-sm">
-                {item.code || "Sin codigo"} · {item.description}
+                {item.code || "Sin codigo"} | {item.description} | {variableLabel}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -134,10 +154,32 @@ function RiskVariableModalContent({
             </Dialog.Close>
           </div>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          <p className="theme-muted-text mt-4 text-xs">
+            Base actual: {defaultValue} ({helperLabel})
+          </p>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <Field id={`risk-minimum-${item.itemId}`} label="Min" onChange={setMinimum} value={minimum} />
             <Field id={`risk-most-likely-${item.itemId}`} label="Probable" onChange={setMostLikely} value={mostLikely} />
             <Field id={`risk-maximum-${item.itemId}`} label="Max" onChange={setMaximum} value={maximum} />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor={`risk-distribution-${item.itemId}`}>Distribucion</Label>
+            <Select
+              aria-label="Distribucion"
+              id={`risk-distribution-${item.itemId}`}
+              onChange={(event) => setDistributionType(event.target.value as RiskDistributionType)}
+              value={distributionType}
+            >
+              <option value="TRIANGULAR">Triangular</option>
+              <option value="PERT">PERT</option>
+              <option value="NORMAL">Normal</option>
+              <option value="UNIFORM">Uniforme</option>
+            </Select>
+            <p className="theme-muted-text text-xs">
+              {buildDistributionHelperText(distributionType)}
+            </p>
           </div>
 
           <label className="theme-strong-text mt-4 flex items-center gap-2 text-sm">
@@ -174,4 +216,52 @@ function Field({ id, label, onChange, value }: { id: string; label: string; onCh
       <Input id={id} inputMode="decimal" onChange={(event) => onChange(event.target.value)} value={value} />
     </div>
   );
+}
+
+function getVariableLabel(variableType: RiskVariableType) {
+  if (variableType === "UNIT_PRICE") {
+    return "Precio unitario";
+  }
+
+  if (variableType === "DURATION") {
+    return "Duracion";
+  }
+
+  return "Cantidad";
+}
+
+function getBaseValueLabel(variableType: RiskVariableType) {
+  if (variableType === "UNIT_PRICE") {
+    return "precio unitario";
+  }
+
+  if (variableType === "DURATION") {
+    return "duracion";
+  }
+
+  return "cantidad";
+}
+
+function getDefaultValue(item: RiskBudgetItem, variableType: RiskVariableType) {
+  if (variableType === "UNIT_PRICE") {
+    return item.unitPrice;
+  }
+
+  return item.baseQuantity;
+}
+
+function buildDistributionHelperText(distributionType: RiskDistributionType) {
+  if (distributionType === "PERT") {
+    return "PERT suaviza los extremos y concentra mas escenarios cerca del valor probable.";
+  }
+
+  if (distributionType === "NORMAL") {
+    return "Normal usa el valor probable como media y aproxima la dispersion a partir del rango min-max.";
+  }
+
+  if (distributionType === "UNIFORM") {
+    return "Uniforme reparte la misma probabilidad entre el minimo y el maximo.";
+  }
+
+  return "Triangular usa min, probable y max con una forma lineal simple.";
 }

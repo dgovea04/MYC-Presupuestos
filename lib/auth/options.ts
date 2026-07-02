@@ -3,6 +3,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { z } from "zod";
+import { authSessionCookieName } from "@/lib/auth/cookies";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { registerUserWithCompany } from "@/lib/auth/registration";
@@ -14,7 +15,6 @@ const authSecret =
   process.env.AUTH_SECRET ??
   (process.env.NODE_ENV === "production" ? undefined : "myc-presupuestos-dev-auth-secret");
 const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith("https://") ?? process.env.NODE_ENV === "production";
-const sessionCookieName = `${useSecureCookies ? "__Secure-" : ""}myc-presupuestos.session-token`;
 
 const authUserSchema = z.object({
   id: z.string(),
@@ -105,7 +105,7 @@ export const authOptions: NextAuthOptions = {
   },
   cookies: {
     sessionToken: {
-      name: sessionCookieName,
+      name: authSessionCookieName,
       options: {
         httpOnly: true,
         sameSite: "lax",

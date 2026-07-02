@@ -41,7 +41,7 @@ export function PolynomialFormulaSectionTabs({
   const navigateToSection = useCallback(
     (href: string) => {
       startTransition(() => {
-        router.push(href);
+        router.push(href, { scroll: false });
       });
     },
     [router],
@@ -74,6 +74,7 @@ export function PolynomialFormulaSectionTabs({
           <Link
             key={sectionId}
             href={href}
+            scroll={false}
             prefetch
             onMouseEnter={() => prefetchSection(section)}
             onFocus={() => prefetchSection(section)}

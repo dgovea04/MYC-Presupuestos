@@ -1,7 +1,7 @@
 export const MONTE_CARLO_ITERATIONS = 10000;
 
-export type RiskVariableType = "QUANTITY";
-export type RiskDistributionType = "TRIANGULAR";
+export type RiskVariableType = "QUANTITY" | "UNIT_PRICE" | "DURATION";
+export type RiskDistributionType = "TRIANGULAR" | "PERT" | "NORMAL" | "UNIFORM";
 
 export type RiskBudgetKind = "GENERAL" | "SUB_BUDGET";
 
@@ -41,6 +41,61 @@ export type RiskVariableRecord = {
   updatedAt?: string;
 };
 
+export type RiskVariableDraftKey = `${string}:${RiskVariableType}`;
+
+export type RiskCorrelationRecord = {
+  id: string;
+  budgetId: string;
+  sourceVariableId: string;
+  targetVariableId: string;
+  coefficient: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type RiskWorkScheduleCriticalItem = {
+  budgetItemId: string;
+  itemCode: string;
+  description: string;
+  subBudgetName: string;
+  partial: number;
+  durationDays: number | null;
+  startDate: string | null;
+  endDate: string | null;
+};
+
+export type RiskWorkScheduleSimulationLine = {
+  budgetItemId: string;
+  itemCode: string;
+  description: string;
+  durationDays: number;
+  predecessor: string | null;
+  subBudgetName: string;
+};
+
+export type RiskWorkScheduleSummary = {
+  budgetId: string;
+  budgetName: string;
+  currency: string;
+  timeline: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  criticalPath: {
+    status: "calculated" | "cycle";
+    projectDurationDays: number;
+    scheduledItemCount: number;
+    criticalItemCount: number;
+    issues: string[];
+  } | null;
+  generationSummary: {
+    generatedCount: number;
+    pendingCount: number;
+  } | null;
+  criticalItems: RiskWorkScheduleCriticalItem[];
+  simulationLines: RiskWorkScheduleSimulationLine[];
+};
+
 export type RiskHistogramBin = {
   min: number;
   max: number;
@@ -52,6 +107,22 @@ export type RiskHistogramBin = {
 export type RiskSCurvePoint = {
   cost: number;
   cumulativeProbability: number;
+};
+
+export type RiskBoxPlotStats = {
+  minimum: number;
+  lowerQuartile: number;
+  median: number;
+  upperQuartile: number;
+  maximum: number;
+};
+
+export type RiskTornadoRow = {
+  itemId: string;
+  label: string;
+  lowDelta: number;
+  highDelta: number;
+  impact: number;
 };
 
 export type RiskPercentileKey = "p10" | "p50" | "p80" | "p90" | "p95";
@@ -74,13 +145,30 @@ export type RiskSimulationSummary = {
   p95: number;
   histogramBins: RiskHistogramBin[];
   sCurvePoints: RiskSCurvePoint[];
+  scheduleDuration: RiskScheduleDurationSummary | null;
   createdAt?: string;
+};
+
+export type RiskScheduleDurationSummary = {
+  iterations: number;
+  baseProjectDurationDays: number;
+  meanDurationDays: number;
+  medianDurationDays: number;
+  p80DurationDays: number;
+  p90DurationDays: number;
+  p95DurationDays: number;
+  minimumDurationDays: number;
+  maximumDurationDays: number;
+  criticalItemCount: number;
+  histogramBins: RiskHistogramBin[];
+  sCurvePoints: RiskSCurvePoint[];
 };
 
 export type RiskAnalysisPayload = {
   budget: RiskBudgetContext;
   items: RiskBudgetItem[];
   variables: RiskVariableRecord[];
+  correlations: RiskCorrelationRecord[];
   latestRun: RiskSimulationSummary | null;
 };
 
@@ -90,6 +178,10 @@ export type RiskSimulationInput = {
   iterations: number;
   items: RiskBudgetItem[];
   variables: RiskVariableRecord[];
+  correlations: RiskCorrelationRecord[];
+  workSchedule?: {
+    lines: RiskWorkScheduleSimulationLine[];
+  } | null;
 };
 
 export type RiskWorkerRunMessage = {

@@ -1,4 +1,4 @@
-import { Activity, Play, ShieldAlert } from "lucide-react";
+import { Activity, Download, Play, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ContextBadge } from "@/components/ui/context-badges";
@@ -14,6 +14,7 @@ export function SimulationToolbar({
   error,
   itemCount,
   lastRunAt,
+  onExportPdf,
   onRunSimulation,
   progress,
   status,
@@ -25,6 +26,7 @@ export function SimulationToolbar({
   error: string;
   itemCount: number;
   lastRunAt: string | null;
+  onExportPdf: () => void;
   onRunSimulation: () => void;
   progress: number;
   status: SimulationStatus;
@@ -49,10 +51,16 @@ export function SimulationToolbar({
             </p>
           </div>
 
-          <Button className="shrink-0" disabled={running || enabledVariables === 0} onClick={onRunSimulation}>
-            <Play className="mr-2 h-4 w-4" />
-            {running ? "Simulando..." : "Ejecutar simulacion"}
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button disabled={!lastRunAt || running} onClick={onExportPdf} variant="outline">
+              <Download className="mr-2 h-4 w-4" />
+              Exportar PDF
+            </Button>
+            <Button disabled={running || enabledVariables === 0} onClick={onRunSimulation}>
+              <Play className="mr-2 h-4 w-4" />
+              {running ? "Simulando..." : "Ejecutar simulacion"}
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">

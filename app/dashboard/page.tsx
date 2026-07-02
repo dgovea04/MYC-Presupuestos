@@ -916,6 +916,7 @@ function PendingTabLink({
   return (
     <Link
       href={href}
+      scroll={false}
       className={cn(
         "dashboard-pending-tab inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition sm:flex-none",
         active

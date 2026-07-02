@@ -19,6 +19,7 @@ export function FilterPillLink({
   return (
     <Link
       href={href}
+      scroll={false}
       className={cn(
         "filter-pill inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition",
         `filter-pill-${tone}`,

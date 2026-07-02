@@ -1,0 +1,1 @@
+ALTER TYPE "RiskDistributionType" ADD VALUE IF NOT EXISTS 'PERT';

@@ -7,6 +7,15 @@ import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
 import { Button } from "@/components/ui/button";
 import type { FloatingKhipuTheme } from "@/types/settings";
 
+const headerIconButtonClassName =
+  "h-8 w-8 rounded-lg p-0 transition-colors";
+
+const lightHeaderIconButtonClassName =
+  "text-slate-400 hover:bg-slate-100 hover:text-slate-600";
+
+const darkHeaderIconButtonClassName =
+  "text-slate-500 hover:bg-slate-800 hover:text-slate-200";
+
 type KhipuChatPanelProps = {
   /** Panel children (messages, input, etc.) */
   children: ReactNode;
@@ -77,7 +86,10 @@ export function KhipuChatPanel({
               type="button"
               variant="ghost"
               size="sm"
-              className={cn("h-8 w-8 rounded-lg p-0", isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600")}
+              className={cn(
+                headerIconButtonClassName,
+                isDark ? darkHeaderIconButtonClassName : lightHeaderIconButtonClassName,
+              )}
               onClick={onToggleHistory}
               aria-label="Volver al chat"
             >
@@ -114,7 +126,10 @@ export function KhipuChatPanel({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className={cn("h-8 w-8 rounded-lg p-0", isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600")}
+                  className={cn(
+                    headerIconButtonClassName,
+                    isDark ? darkHeaderIconButtonClassName : lightHeaderIconButtonClassName,
+                  )}
                   onClick={onToggleTheme}
                   aria-label={isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
                 >
@@ -126,7 +141,11 @@ export function KhipuChatPanel({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className={cn("relative h-8 w-8 rounded-lg p-0", isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600")}
+                  className={cn(
+                    "relative",
+                    headerIconButtonClassName,
+                    isDark ? darkHeaderIconButtonClassName : lightHeaderIconButtonClassName,
+                  )}
                   onClick={onToggleHistory}
                   aria-label="Ver historial"
                 >
@@ -143,7 +162,10 @@ export function KhipuChatPanel({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className={cn("h-8 w-8 rounded-lg p-0", isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600")}
+                  className={cn(
+                    headerIconButtonClassName,
+                    isDark ? darkHeaderIconButtonClassName : lightHeaderIconButtonClassName,
+                  )}
                   onClick={onExpand}
                   aria-label={expanded ? "Minimizar" : "Expandir"}
                 >
@@ -175,7 +197,10 @@ export function KhipuChatPanel({
                   data-khipu-close
                   variant="ghost"
                   size="sm"
-                  className={cn("h-8 w-8 rounded-lg p-0", isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600")}
+                  className={cn(
+                    headerIconButtonClassName,
+                    isDark ? darkHeaderIconButtonClassName : lightHeaderIconButtonClassName,
+                  )}
                   onClick={onClose}
                   aria-label="Cerrar Khipu"
                 >

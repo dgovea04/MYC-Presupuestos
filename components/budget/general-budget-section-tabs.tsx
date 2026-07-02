@@ -26,7 +26,7 @@ export function GeneralBudgetSectionTabs({
         <button
           key={section.id}
           type="button"
-          onClick={() => router.push(`/budgets/${budgetId}/${section.href}`)}
+          onClick={() => router.push(`/budgets/${budgetId}/${section.href}`, { scroll: false })}
           className={cn(
             "inline-flex rounded-full border px-3 py-1.5 text-sm transition",
             section.id === activeSection
