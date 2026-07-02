@@ -74,7 +74,23 @@ export const riskScheduleDurationSummarySchema = z.object({
 });
 
 export const riskSimulationRunInputSchema = z.object({
+  budgetId: z.string().min(1),
   iterations: z.literal(MONTE_CARLO_ITERATIONS),
+  baseTotal: finiteNonnegativeNumber,
+  mean: finiteNonnegativeNumber,
+  median: finiteNonnegativeNumber,
+  variance: finiteNonnegativeNumber,
+  standardDeviation: finiteNonnegativeNumber,
+  skewness: z.number().finite(),
+  kurtosis: z.number().finite(),
+  p10: finiteNonnegativeNumber,
+  p50: finiteNonnegativeNumber,
+  p80: finiteNonnegativeNumber,
+  p90: finiteNonnegativeNumber,
+  p95: finiteNonnegativeNumber,
+  histogramBins: z.array(riskHistogramBinSchema),
+  sCurvePoints: z.array(riskSCurvePointSchema),
+  scheduleDuration: riskScheduleDurationSummarySchema.nullable(),
 });
 
 export type RiskVariablesSaveInput = z.infer<typeof riskVariablesSaveSchema>;

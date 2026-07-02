@@ -275,7 +275,7 @@ function RiskVariablesTableGrid({
       </div>
 
       <div className="max-h-[560px] overflow-auto">
-      <Table className="risk-variables-table min-w-[1420px] text-[10px]">
+      <Table className="risk-variables-table min-w-[1420px] text-[10px] relative">
         <THead className="theme-muted-panel sticky top-0 z-10">
           {table.getHeaderGroups().map((headerGroup) => (
             <TR key={headerGroup.id} className="theme-muted-panel hover:theme-muted-panel">

@@ -116,7 +116,7 @@ export function RiskAnalysisDashboard({
       const response = await fetch(`/api/budgets/${summary.budgetId}/risk-analysis/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ iterations: summary.iterations }),
+        body: JSON.stringify(summary),
       });
 
       if (!response.ok) {
@@ -132,9 +132,11 @@ export function RiskAnalysisDashboard({
       if (result.budgetId === activeBudgetIdRef.current) {
         setLatestRun(result);
       }
-    } catch {
+    } catch (error) {
       if (summary.budgetId === activeBudgetIdRef.current) {
-        failSimulation("La simulacion termino, pero no se pudo guardar el resultado.");
+        failSimulation(
+          error instanceof Error ? error.message : "La simulacion termino, pero no se pudo guardar el resultado.",
+        );
       }
     }
   };

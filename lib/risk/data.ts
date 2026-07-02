@@ -1,7 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
-import { runMonteCarloSimulation } from "@/lib/risk/monte-carlo-engine";
 import {
   riskCorrelationsSaveSchema,
   riskHistogramBinSchema,
@@ -13,14 +12,12 @@ import {
   type RiskSimulationRunInput,
   type RiskVariablesSaveInput,
 } from "@/lib/validations/risk";
-import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import type {
   RiskAnalysisPayload,
   RiskBudgetItem,
   RiskCorrelationRecord,
   RiskSimulationSummary,
   RiskVariableRecord,
-  RiskWorkScheduleSimulationLine,
 } from "@/types/risk";
 
 const riskBudgetItemSelect = {
@@ -233,48 +230,29 @@ export async function saveRiskSimulationRun(
     throw new Error("No tienes permisos para guardar esta simulacion.");
   }
 
-  const items = normalizeRiskBudgetItems(budget);
-  const scopedItemIds = items.map((item) => item.itemId);
-  const variables = await prisma.riskVariable.findMany({
-    where: {
-      budgetId,
-      budgetItemId: { in: scopedItemIds },
-    },
-    orderBy: { createdAt: "asc" },
-  });
-  const correlations = await prisma.riskCorrelation.findMany({
-    where: { budgetId },
-    orderBy: { createdAt: "asc" },
-  });
-  const summary = runMonteCarloSimulation({
-    budgetId,
-    baseTotal: roundBaseTotal(items.reduce((total, item) => total + item.baseTotal, 0)),
-    iterations: parsed.iterations,
-    items,
-    variables: variables.map(serializeRiskVariable),
-    correlations: correlations.map(serializeRiskCorrelation),
-    workSchedule: await buildRiskWorkScheduleSimulationInput(budget.kind, budgetId, userId),
-  });
+  if (parsed.budgetId !== budgetId) {
+    throw new Error("La simulacion no corresponde al presupuesto seleccionado.");
+  }
 
   const created = await prisma.riskSimulationRun.create({
     data: {
       budgetId,
-      iterations: summary.iterations,
-      baseTotal: summary.baseTotal,
-      mean: summary.mean,
-      median: summary.median,
-      variance: summary.variance,
-      standardDeviation: summary.standardDeviation,
-      skewness: summary.skewness,
-      kurtosis: summary.kurtosis,
-      p10: summary.p10,
-      p50: summary.p50,
-      p80: summary.p80,
-      p90: summary.p90,
-      p95: summary.p95,
-      histogramBins: summary.histogramBins,
-      sCurvePoints: summary.sCurvePoints,
-      scheduleSummary: summary.scheduleDuration,
+      iterations: parsed.iterations,
+      baseTotal: parsed.baseTotal,
+      mean: parsed.mean,
+      median: parsed.median,
+      variance: parsed.variance,
+      standardDeviation: parsed.standardDeviation,
+      skewness: parsed.skewness,
+      kurtosis: parsed.kurtosis,
+      p10: parsed.p10,
+      p50: parsed.p50,
+      p80: parsed.p80,
+      p90: parsed.p90,
+      p95: parsed.p95,
+      histogramBins: parsed.histogramBins,
+      sCurvePoints: parsed.sCurvePoints,
+      scheduleSummary: parsed.scheduleDuration,
     },
   });
 
@@ -521,48 +499,11 @@ async function queryAndSerializeRiskData(
   };
 }
 
-function getRiskModelChangedAtForVariables(
-  variables: RiskVariableModel[],
-  correlations: RiskCorrelationModel[],
-) {
+function getRiskModelChangedAtForVariables(variables: RiskVariableModel[], correlations: RiskCorrelationModel[]) {
   const timestamps = [
     ...variables.map((variable) => variable.updatedAt.getTime()),
     ...correlations.map((correlation) => correlation.updatedAt.getTime()),
   ].filter((timestamp) => Number.isFinite(timestamp));
 
   return new Date(timestamps.length > 0 ? Math.max(...timestamps) : 0);
-}
-
-async function buildRiskWorkScheduleSimulationInput(
-  budgetKind: BudgetWithRiskScope["kind"],
-  budgetId: string,
-  userId: string,
-): Promise<{ lines: RiskWorkScheduleSimulationLine[] } | null> {
-  if (budgetKind !== "GENERAL") {
-    return null;
-  }
-
-  try {
-    const section = await getWorkScheduleSection(budgetId, userId);
-    const lines = section.groups.flatMap((group) =>
-      group.lines.flatMap((line) =>
-        line.durationDays && line.durationDays > 0
-          ? [
-              {
-                budgetItemId: line.budgetItemId,
-                itemCode: line.itemCode,
-                description: line.description,
-                durationDays: line.durationDays,
-                predecessor: line.predecessor ?? null,
-                subBudgetName: line.subBudgetName,
-              },
-            ]
-          : [],
-      ),
-    );
-
-    return lines.length > 0 ? { lines } : null;
-  } catch {
-    return null;
-  }
 }
