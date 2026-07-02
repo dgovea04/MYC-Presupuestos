@@ -5,11 +5,38 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 
 vi.mock("@/lib/billing/entitlements", () => ({
-  assertFeatureAccess: vi.fn(),
+  assertFeatureAccess: vi.fn().mockResolvedValue({
+    availableFeatures: ["risk_analysis"],
+    budgetLimit: null,
+    budgetUsage: 0,
+    isInGracePeriod: false,
+    planName: "Pro",
+    planSlug: "pro",
+    projectLimit: null,
+    projectUsage: 0,
+  } as import("@/lib/billing/entitlements").EffectiveUserLicense),
 }));
 
 vi.mock("@/lib/data/settings", () => ({
-  getUserSettings: vi.fn(),
+  getUserSettings: vi.fn().mockResolvedValue({
+    currencyDecimals: 2,
+    defaultCurrency: "PEN",
+    dateFormat: "DD_MMM_YYYY",
+    defaultViewMode: "modern",
+    excelShowFieldBorders: false,
+    excelRowHeight: 40,
+    defaultIgvRate: 0.18,
+    defaultGeneralExpensesRate: 0.1,
+    defaultUtilityRate: 0.08,
+    defaultSubBudgetNames: [],
+    aiProviderPreference: "auto",
+    floatingKhipuProvider: "ollama",
+    floatingKhipuWidth: 600,
+    floatingKhipuHeight: 500,
+    floatingKhipuFontSize: "normal",
+    floatingKhipuPosition: "bottom-right",
+    floatingKhipuTheme: "light",
+  } as import("@/types/settings").UserSettingsRecord),
 }));
 
 vi.mock("@/lib/risk/data", () => ({
@@ -22,16 +49,12 @@ vi.mock("@/lib/risk/pdf-report", () => ({
 
 import { GET } from "@/app/api/budgets/[id]/risk-analysis/report/route";
 import { getAuthSession } from "@/lib/auth/session";
-import { assertFeatureAccess } from "@/lib/billing/entitlements";
-import { getUserSettings } from "@/lib/data/settings";
 import { getRiskAnalysisPayload } from "@/lib/risk/data";
 import { createRiskAnalysisPdf } from "@/lib/risk/pdf-report";
 
 describe("risk analysis report route", () => {
   it("exports the latest simulation as pdf", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
-    vi.mocked(assertFeatureAccess).mockResolvedValue(undefined);
-    vi.mocked(getUserSettings).mockResolvedValue({ currencyDecimals: 2 });
     vi.mocked(getRiskAnalysisPayload).mockResolvedValue(createPayload());
     vi.mocked(createRiskAnalysisPdf).mockResolvedValue(Buffer.from("pdf"));
 
@@ -45,8 +68,6 @@ describe("risk analysis report route", () => {
 
   it("rejects export when there is no current simulation", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
-    vi.mocked(assertFeatureAccess).mockResolvedValue(undefined);
-    vi.mocked(getUserSettings).mockResolvedValue({ currencyDecimals: 2 });
     vi.mocked(getRiskAnalysisPayload).mockResolvedValue({ ...createPayload(), latestRun: null });
 
     const response = await GET(new Request("http://localhost"), { params: Promise.resolve({ id: "budget-1" }) });
@@ -78,6 +99,7 @@ function createPayload() {
         baseQuantity: 10,
         unitPrice: 100,
         baseTotal: 1000,
+        updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
     variables: [

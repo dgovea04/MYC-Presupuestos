@@ -78,26 +78,7 @@ export async function getRiskAnalysisPayload(
 
   const items = normalizeRiskBudgetItems(budget);
   const scopedItemIds = items.map((item) => item.itemId);
-  const [variables, correlations, latestRun] = await Promise.all([
-    prisma.riskVariable.findMany({
-      where: {
-        budgetId,
-        budgetItemId: { in: scopedItemIds },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.riskCorrelation.findMany({
-      where: { budgetId },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.riskSimulationRun.findFirst({
-      where: { budgetId },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
-
-  const modelChangedAt = getRiskModelChangedAt(items, variables, correlations);
-  const currentLatestRun = latestRun && latestRun.createdAt >= modelChangedAt ? latestRun : null;
+  const riskData = await queryAndSerializeRiskData(budgetId, scopedItemIds, items);
 
   return {
     budget: {
@@ -109,14 +90,7 @@ export async function getRiskAnalysisPayload(
       baseTotal: roundBaseTotal(items.reduce((total, item) => total + item.baseTotal, 0)),
     },
     items,
-    variables: variables
-      .filter((variable) => scopedItemIds.includes(variable.budgetItemId))
-      .map(serializeRiskVariable),
-    correlations: correlations
-      .filter((correlation) => variables.some((variable) => variable.id === correlation.sourceVariableId))
-      .filter((correlation) => variables.some((variable) => variable.id === correlation.targetVariableId))
-      .map(serializeRiskCorrelation),
-    latestRun: currentLatestRun ? serializeRiskSimulationRun(currentLatestRun) : null,
+    ...riskData,
   };
 }
 
@@ -496,6 +470,67 @@ function normalizeCorrelationPair(sourceVariableId: string, targetVariableId: st
   return sourceVariableId < targetVariableId
     ? { sourceVariableId, targetVariableId }
     : { sourceVariableId: targetVariableId, targetVariableId: sourceVariableId };
+}
+
+export async function getRiskAnalysisFallbackData(
+  budgetId: string,
+  scopedItemIds: string[],
+): Promise<Pick<RiskAnalysisPayload, "variables" | "correlations" | "latestRun">> {
+  return queryAndSerializeRiskData(budgetId, scopedItemIds);
+}
+
+async function queryAndSerializeRiskData(
+  budgetId: string,
+  scopedItemIds: string[],
+  items?: RiskBudgetItem[],
+): Promise<Pick<RiskAnalysisPayload, "variables" | "correlations" | "latestRun">> {
+  const [rawVariables, rawCorrelations, rawLatestRun] = await Promise.all([
+    prisma.riskVariable.findMany({
+      where: {
+        budgetId,
+        budgetItemId: { in: scopedItemIds },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.riskCorrelation.findMany({
+      where: { budgetId },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.riskSimulationRun.findFirst({
+      where: { budgetId },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  // In the fallback path, items are omitted so we only use variable and correlation
+  // timestamps to avoid invalidating the latest run against items with epoch-hack dates.
+  const modelChangedAt = items
+    ? getRiskModelChangedAt(items, rawVariables, rawCorrelations)
+    : getRiskModelChangedAtForVariables(rawVariables, rawCorrelations);
+  const currentLatestRun = rawLatestRun && rawLatestRun.createdAt >= modelChangedAt ? rawLatestRun : null;
+
+  return {
+    variables: rawVariables
+      .filter((variable) => scopedItemIds.includes(variable.budgetItemId))
+      .map(serializeRiskVariable),
+    correlations: rawCorrelations
+      .filter((correlation) => rawVariables.some((variable) => variable.id === correlation.sourceVariableId))
+      .filter((correlation) => rawVariables.some((variable) => variable.id === correlation.targetVariableId))
+      .map(serializeRiskCorrelation),
+    latestRun: currentLatestRun ? serializeRiskSimulationRun(currentLatestRun) : null,
+  };
+}
+
+function getRiskModelChangedAtForVariables(
+  variables: RiskVariableModel[],
+  correlations: RiskCorrelationModel[],
+) {
+  const timestamps = [
+    ...variables.map((variable) => variable.updatedAt.getTime()),
+    ...correlations.map((correlation) => correlation.updatedAt.getTime()),
+  ].filter((timestamp) => Number.isFinite(timestamp));
+
+  return new Date(timestamps.length > 0 ? Math.max(...timestamps) : 0);
 }
 
 async function buildRiskWorkScheduleSimulationInput(

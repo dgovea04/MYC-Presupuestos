@@ -2145,6 +2145,10 @@ body,
   font-size: 0.75rem !important;
 }
 
+[data-view-mode="excel"] .risk-variables-table .ui-table-row {
+  height: calc(var(--excel-row-height) + 10px);
+}
+
 [data-view-mode="excel"] .ui-table-row {
   height: var(--excel-row-height);
   border-bottom-color: var(--excel-border-soft);
