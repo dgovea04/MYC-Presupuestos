@@ -147,7 +147,7 @@ const _getUserCompanies = async (userId: string) => {
 
 export const getUserCompanies = cache(
   async (userId: string) => {
-    if (isTestEnvironment) {
+    if (shouldBypassPersistentCache) {
       return _getUserCompanies(userId);
     }
 
@@ -287,11 +287,11 @@ function normalizeProjectsListDates(
   }));
 }
 
-const isTestEnvironment = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
 
 export const getProjectsListByUser = cache(
   async (userId: string) => {
-    if (isTestEnvironment) {
+    if (shouldBypassPersistentCache) {
       return normalizeProjectsListDates(await _getProjectsListByUser(userId));
     }
 
@@ -402,7 +402,7 @@ function normalizeProjectOverviewDates(
 
 export const getProjectOverviewById = cache(
   async (id: string, userId: string) => {
-    if (isTestEnvironment) {
+    if (shouldBypassPersistentCache) {
       return normalizeProjectOverviewDates(await _getProjectOverviewById(id, userId));
     }
 

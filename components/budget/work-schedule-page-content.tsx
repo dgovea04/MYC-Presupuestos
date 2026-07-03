@@ -6,7 +6,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -27,6 +26,12 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import {
+  buildWorkScheduleView,
+  calculateWorkScheduleDurationDays,
+  recalculateDependentWorkScheduleLines,
+  recalculateWorkScheduleLineFromPredecessors,
+} from "@/lib/calculations/work-schedule";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { parseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
@@ -46,6 +51,7 @@ type WorkSchedulePageContentProps = {
 };
 
 type ActiveView = "overview" | "valuation" | "resources" | "curve";
+type DerivedCalendarView = Exclude<ActiveView, "overview">;
 type WorkbookExportScope = "detail_only" | "detail_and_total" | "detail_subtotals_and_total";
 type WorkbookExportProfile = "minimal" | "executive" | "analytical";
 type WorkbookCell = {
@@ -63,6 +69,8 @@ type WorkbookTableData = {
 type EditableLine = {
   budgetItemId: string;
   description: string;
+  quantity: number;
+  performance: number | null;
   startDate: string;
   endDate: string;
   durationDays: number;
@@ -139,33 +147,57 @@ type PredecessorRowNumberMaps = {
   rowNumberToItemCode: Map<number, string>;
 };
 
+type DerivedDataLoadState = Record<DerivedCalendarView, "idle" | "loading" | "error">;
+type PeriodRangeSelection = {
+  fromPeriodKey: string;
+  toPeriodKey: string;
+};
+
 export function WorkSchedulePageContent({ initialData }: WorkSchedulePageContentProps) {
   return <WorkSchedulePageContentInner key={initialData.budgetId} initialData={initialData} />;
 }
 
+function normalizeWorkScheduleView(data: WorkScheduleViewRecord): WorkScheduleViewRecord {
+  return {
+    ...data,
+    valuationCalendar: data.valuationCalendar ?? null,
+    resourceCalendar: data.resourceCalendar ?? null,
+    curveSeries: data.curveSeries ?? null,
+    scale: data.scale ?? {
+      periodCount: data.valuationCalendar?.periods.length ?? 0,
+      timelineDayCount: 0,
+      canLoadDailyTimeline: true,
+      canLoadDerivedCalendars: true,
+      firstPeriodKey: data.valuationCalendar?.periods[0]?.key ?? null,
+      lastPeriodKey: data.valuationCalendar?.periods.at(-1)?.key ?? null,
+    },
+  };
+}
+
 function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentProps) {
+  const normalizedInitialData = normalizeWorkScheduleView(initialData);
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
-  const [data, setData] = useState(initialData);
-  const [activeView, setActiveView] = useState<ActiveView>(() => readActiveView(initialData.budgetId));
+  const [data, setData] = useState(normalizedInitialData);
+  const [activeView, setActiveView] = useState<ActiveView>(() => readActiveView(normalizedInitialData.budgetId));
   const [editingLine, setEditingLine] = useState<EditableLine | null>(() =>
-    readEditingLine(initialData, buildPredecessorRowNumberMaps(initialData.groups).itemCodeToRowNumber),
+    readEditingLine(normalizedInitialData, buildPredecessorRowNumberMaps(normalizedInitialData.groups).itemCodeToRowNumber),
   );
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => readCollapsedGroups(initialData.budgetId));
-  const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(() => readOverviewFilter(initialData.budgetId));
-  const [showCriticalPath, setShowCriticalPath] = useState(() => readCriticalPathVisibility(initialData.budgetId));
-  const [resourceCalendarMode, setResourceCalendarMode] = useState<ResourceCalendarMode>(() => readResourceCalendarMode(initialData.budgetId));
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => readCollapsedGroups(normalizedInitialData.budgetId));
+  const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(() => readOverviewFilter(normalizedInitialData.budgetId));
+  const [showCriticalPath, setShowCriticalPath] = useState(() => readCriticalPathVisibility(normalizedInitialData.budgetId));
+  const [resourceCalendarMode, setResourceCalendarMode] = useState<ResourceCalendarMode>(() => readResourceCalendarMode(normalizedInitialData.budgetId));
   const [executiveWorkbookScope, setExecutiveWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readExecutiveWorkbookScope(initialData.budgetId),
+    readExecutiveWorkbookScope(normalizedInitialData.budgetId),
   );
   const [valuationWorkbookScope, setValuationWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readValuationWorkbookScope(initialData.budgetId),
+    readValuationWorkbookScope(normalizedInitialData.budgetId),
   );
   const [resourceWorkbookScope, setResourceWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readResourceWorkbookScope(initialData.budgetId),
+    readResourceWorkbookScope(normalizedInitialData.budgetId),
   );
   const [curveWorkbookScope, setCurveWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readCurveWorkbookScope(initialData.budgetId),
+    readCurveWorkbookScope(normalizedInitialData.budgetId),
   );
   const [overviewScrollRequest, setOverviewScrollRequest] = useState<number | null>(null);
   const [highlightedBudgetItemId, setHighlightedBudgetItemId] = useState<string | null>(null);
@@ -176,25 +208,63 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [inlineSaveStateById, setInlineSaveStateById] = useState<Record<string, "idle" | "saving" | "error">>({});
   const [inlineErrorsById, setInlineErrorsById] = useState<Record<string, string>>({});
   const [isGenerationDialogOpen, setIsGenerationDialogOpen] = useState(false);
-  const [generationBaseDate, setGenerationBaseDate] = useState(() => initialData.timeline.startDate ?? new Date().toISOString().slice(0, 10));
+  const [generationBaseDate, setGenerationBaseDate] = useState(() => normalizedInitialData.timeline.startDate ?? new Date().toISOString().slice(0, 10));
   const [generationState, setGenerationState] = useState<"idle" | "saving" | "error">("idle");
   const [generationError, setGenerationError] = useState("");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [derivedDataLoadState, setDerivedDataLoadState] = useState<DerivedDataLoadState>(() => ({
+    valuation: normalizedInitialData.valuationCalendar ? "idle" : "idle",
+    resources: normalizedInitialData.resourceCalendar ? "idle" : "idle",
+    curve: normalizedInitialData.curveSeries ? "idle" : "idle",
+  }));
+  const [derivedDataErrors, setDerivedDataErrors] = useState<Record<DerivedCalendarView, string>>({
+    valuation: "",
+    resources: "",
+    curve: "",
+  });
+  const [valuationRange, setValuationRange] = useState<PeriodRangeSelection>(() => createDefaultValuationRange(normalizedInitialData));
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  const basePredecessorMaps = useMemo(() => buildPredecessorRowNumberMaps(data.groups), [data.groups]);
+  const previewData = useMemo(
+    () =>
+      buildPreviewWorkScheduleView({
+        data,
+        editingLine,
+        inlineDrafts,
+        rowNumberToItemCode: basePredecessorMaps.rowNumberToItemCode,
+      }),
+    [basePredecessorMaps.rowNumberToItemCode, data, editingLine, inlineDrafts],
+  );
+  const presentationData = previewData ?? data;
+  const presentationLines = useMemo(() => presentationData.groups.flatMap((group) => group.lines), [presentationData.groups]);
+  const presentationLinesByBudgetItemId = useMemo(
+    () => new Map(presentationLines.map((line) => [line.budgetItemId, line])),
+    [presentationLines],
+  );
+  const presentationLinesByCode = useMemo(
+    () => new Map(presentationLines.map((line) => [line.itemCode, line])),
+    [presentationLines],
+  );
 
-  const timelineDays = useMemo(() => buildTimelineDays(data.timeline.startDate, data.timeline.endDate), [data.timeline.endDate, data.timeline.startDate]);
+  const timelineDays = useMemo(
+    () =>
+      presentationData.scale.canLoadDailyTimeline
+        ? buildTimelineDays(presentationData.timeline.startDate, presentationData.timeline.endDate)
+        : [],
+    [presentationData.scale.canLoadDailyTimeline, presentationData.timeline.endDate, presentationData.timeline.startDate],
+  );
   const timelineDayIndexByIso = useMemo(
     () => new Map(timelineDays.map((day, index) => [day.iso, index])),
     [timelineDays],
   );
-  const summary = useMemo(() => summarizeView(data), [data]);
-  const orderedLines = useMemo(() => data.groups.flatMap((group) => group.lines), [data.groups]);
+  const summary = useMemo(() => summarizeView(presentationData), [presentationData]);
+  const orderedLines = presentationLines;
   const visibleOrderedLines = useMemo(
     () =>
-      data.groups.flatMap((group) =>
+      presentationData.groups.flatMap((group) =>
         collapsedGroups[group.subBudgetId] === true ? [] : group.lines,
       ),
-    [collapsedGroups, data.groups],
+    [collapsedGroups, presentationData.groups],
   );
   const filteredVisibleLines = useMemo(
     () => visibleOrderedLines.filter((line) => matchesOverviewFilter(line, overviewFilter)),
@@ -211,7 +281,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     () =>
       shouldPrepareResourceRows
         ? new Set(
-            filteredVisibleLines.flatMap((line) => (line.resources ?? []).map((resource) => resource.resourceId)),
+            filteredVisibleLines.flatMap((line) => line.resourceIds ?? (line.resources ?? []).map((resource) => resource.resourceId)),
           )
         : new Set<string>(),
     [filteredVisibleLines, shouldPrepareResourceRows],
@@ -225,27 +295,37 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
       !shouldPrepareValuationRows
         ? []
         : overviewFilter === "all"
-        ? data.valuationCalendar.rows
-        : data.valuationCalendar.rows.filter((row) => filteredLineIds.has(row.budgetItemId)),
-    [data.valuationCalendar.rows, filteredLineIds, overviewFilter, shouldPrepareValuationRows],
+        ? (data.valuationCalendar?.rows ?? [])
+        : (data.valuationCalendar?.rows ?? []).filter((row) => filteredLineIds.has(row.budgetItemId)),
+    [data.valuationCalendar, filteredLineIds, overviewFilter, shouldPrepareValuationRows],
   );
   const filteredResourceRows = useMemo(
     () =>
       !shouldPrepareResourceRows
         ? []
         : overviewFilter === "all"
-        ? data.resourceCalendar.rows
-        : data.resourceCalendar.rows.filter((row) => filteredResourceIds.has(row.resourceId)),
-    [data.resourceCalendar.rows, filteredResourceIds, overviewFilter, shouldPrepareResourceRows],
+        ? (data.resourceCalendar?.rows ?? [])
+        : (data.resourceCalendar?.rows ?? []).filter((row) => filteredResourceIds.has(row.resourceId)),
+    [data.resourceCalendar, filteredResourceIds, overviewFilter, shouldPrepareResourceRows],
   );
   const filteredCurveSeries = useMemo(
-    () => (shouldPrepareCurveSeries ? buildCurveSeriesFromValuationRows(filteredValuationRows, data.valuationCalendar.periods) : []),
-    [data.valuationCalendar.periods, filteredValuationRows, shouldPrepareCurveSeries],
+    () => {
+      if (!shouldPrepareCurveSeries) {
+        return [];
+      }
+
+      if (overviewFilter !== "all" && data.valuationCalendar) {
+        return buildCurveSeriesFromValuationRows(filteredValuationRows, data.valuationCalendar.periods);
+      }
+
+      return data.curveSeries ?? [];
+    },
+    [data.curveSeries, data.valuationCalendar, filteredValuationRows, overviewFilter, shouldPrepareCurveSeries],
   );
   const {
     itemCodeToRowNumber: predecessorItemCodeToRowNumber,
     rowNumberToItemCode: predecessorRowNumberToItemCode,
-  } = useMemo(() => buildPredecessorRowNumberMaps(data.groups), [data.groups]);
+  } = useMemo(() => buildPredecessorRowNumberMaps(presentationData.groups), [presentationData.groups]);
 
   async function persistWorkScheduleLine(line: EditableLine) {
     const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule`, {
@@ -262,6 +342,89 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     return (await response.json()) as WorkScheduleViewRecord;
   }
 
+  const loadDerivedViewData = useCallback(async (view: DerivedCalendarView, range?: PeriodRangeSelection) => {
+    setDerivedDataLoadState((current) => ({ ...current, [view]: "loading" }));
+    setDerivedDataErrors((current) => ({ ...current, [view]: "" }));
+
+    try {
+      const endpoint =
+        view === "valuation"
+          ? "valuation-calendar"
+          : view === "resources"
+          ? "resource-calendar"
+          : "curve-s";
+      const query =
+        view === "valuation" && range
+          ? `?from=${encodeURIComponent(range.fromPeriodKey)}&to=${encodeURIComponent(range.toPeriodKey)}`
+          : "";
+      const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule/${endpoint}${query}`);
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? "No se pudo cargar la vista derivada del cronograma");
+      }
+
+      const payload = await response.json();
+      if (view === "valuation" && isPeriodRangeSelection(payload?.selectedRange)) {
+        setValuationRange(payload.selectedRange);
+      }
+      setData((current) =>
+        normalizeWorkScheduleView({
+          ...current,
+          valuationCalendar: view === "valuation" ? payload : current.valuationCalendar,
+          resourceCalendar: view === "resources" ? payload : current.resourceCalendar,
+          curveSeries: view === "curve" ? payload : current.curveSeries,
+        }),
+      );
+      setDerivedDataLoadState((current) => ({ ...current, [view]: "idle" }));
+    } catch (loadError) {
+      setDerivedDataLoadState((current) => ({ ...current, [view]: "error" }));
+      setDerivedDataErrors((current) => ({
+        ...current,
+        [view]: loadError instanceof Error ? loadError.message : "No se pudo cargar la vista derivada del cronograma",
+      }));
+    }
+  }, [data.budgetId]);
+
+  useEffect(() => {
+    if (activeView === "overview") {
+      return;
+    }
+
+    if (activeView === "valuation" && data.valuationCalendar == null && derivedDataLoadState.valuation === "idle") {
+      if (data.scale.canLoadDerivedCalendars) {
+        void loadDerivedViewData("valuation");
+      } else {
+        void loadDerivedViewData("valuation", valuationRange);
+      }
+      return;
+    }
+
+    if (!data.scale.canLoadDerivedCalendars) {
+      return;
+    }
+
+    if (activeView === "resources" && data.resourceCalendar == null && derivedDataLoadState.resources === "idle") {
+      void loadDerivedViewData("resources");
+      return;
+    }
+
+    if (activeView === "curve" && data.curveSeries == null && derivedDataLoadState.curve === "idle") {
+      void loadDerivedViewData("curve");
+    }
+  }, [
+    activeView,
+    data.curveSeries,
+    data.resourceCalendar,
+    data.scale.canLoadDerivedCalendars,
+    data.valuationCalendar,
+    derivedDataLoadState.curve,
+    derivedDataLoadState.resources,
+    derivedDataLoadState.valuation,
+    loadDerivedViewData,
+    valuationRange,
+  ]);
+
   async function handleSave() {
     if (!editingLine) return;
 
@@ -271,7 +434,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     try {
       const nextData = await persistWorkScheduleLine(editingLine);
       writeEditingLineBudgetItemId(data.budgetId, null);
-      setData(nextData);
+      setData(normalizeWorkScheduleView(nextData));
       setEditingLine(null);
       setSaveState("idle");
     } catch (saveError) {
@@ -291,7 +454,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
     try {
       const nextData = await persistWorkScheduleLine(draft);
-      setData(nextData);
+      setData(normalizeWorkScheduleView(nextData));
       setInlineSaveStateById((current) => ({ ...current, [rowId]: "idle" }));
       setInlineErrorsById((current) => ({ ...current, [rowId]: "" }));
       setInlineDrafts((current) => {
@@ -328,7 +491,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
       }
 
       const nextData = (await response.json()) as WorkScheduleViewRecord;
-      setData(nextData);
+      setData(normalizeWorkScheduleView(nextData));
       setInlineDrafts({});
       setInlineErrorsById({});
       setInlineSaveStateById({});
@@ -376,6 +539,31 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const handleInlineDraftChange = useCallback((rowId: string, draft: EditableLine) => {
     setInlineDrafts((current) => ({ ...current, [rowId]: draft }));
   }, []);
+
+  const handleEditingLineChange = useCallback((line: EditableLine | null) => {
+    setEditingLine(line);
+  }, []);
+
+  const handleEditorPredecessorChange = useCallback((line: EditableLine, predecessor: string) => {
+    setEditingLine(
+      updateEditableLinePredecessor(line, predecessor, {
+        lineByBudgetItemId: presentationLinesByBudgetItemId,
+        lineByCode: presentationLinesByCode,
+        rowNumberToItemCode: predecessorRowNumberToItemCode,
+      }),
+    );
+  }, [predecessorRowNumberToItemCode, presentationLinesByBudgetItemId, presentationLinesByCode]);
+
+  const handleInlinePredecessorChange = useCallback((rowId: string, line: EditableLine, predecessor: string) => {
+    setInlineDrafts((current) => ({
+      ...current,
+      [rowId]: updateEditableLinePredecessor(line, predecessor, {
+        lineByBudgetItemId: presentationLinesByBudgetItemId,
+        lineByCode: presentationLinesByCode,
+        rowNumberToItemCode: predecessorRowNumberToItemCode,
+      }),
+    }));
+  }, [predecessorRowNumberToItemCode, presentationLinesByBudgetItemId, presentationLinesByCode]);
 
   function handleInlineRowSaveRequest(rowId: string) {
     void handleInlineRowSave(rowId);
@@ -462,53 +650,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     return () => window.clearTimeout(timeoutId);
   }, [highlightedBudgetItemId]);
 
-  const navigateEditingLine = useEffectEvent((direction: "previous" | "next") => {
-    handleNavigateEditingLine(direction);
-  });
-
-  useEffect(() => {
-    if (!editingLine) {
-      return;
-    }
-
-    function handleEditingLineKeyboardNavigation(event: KeyboardEvent) {
-      if (!event.altKey) {
-        return;
-      }
-
-      if (event.key === "ArrowLeft" && canNavigateToPreviousLine) {
-        event.preventDefault();
-        navigateEditingLine("previous");
-      }
-
-      if (event.key === "ArrowRight" && canNavigateToNextLine) {
-        event.preventDefault();
-        navigateEditingLine("next");
-      }
-    }
-
-    window.addEventListener("keydown", handleEditingLineKeyboardNavigation);
-    return () => window.removeEventListener("keydown", handleEditingLineKeyboardNavigation);
-  }, [canNavigateToNextLine, canNavigateToPreviousLine, editingLine]);
-
-  function handleCloseEditor() {
-    writeEditingLineBudgetItemId(data.budgetId, null);
-    setEditingLine(null);
-    setSaveState("idle");
-    setError("");
-  }
-
-  function handleJumpToSchedule() {
-    if (!editingLine) {
-      return;
-    }
-
-    setActiveView("overview");
-    setOverviewScrollRequest(calculateOverviewScrollTarget(editingLine.startDate, timelineDays, timelineDayIndexByIso));
-    setHighlightedBudgetItemId(editingLine.budgetItemId);
-  }
-
-  function handleNavigateEditingLine(direction: "previous" | "next") {
+  const handleNavigateEditingLine = useCallback((direction: "previous" | "next") => {
     if (!editingLine) {
       return;
     }
@@ -528,16 +670,59 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     setActiveView("overview");
     setOverviewScrollRequest(calculateOverviewScrollTarget(targetLine.startDate ?? "", timelineDays, timelineDayIndexByIso));
     setHighlightedBudgetItemId(targetLine.budgetItemId);
+  }, [editingLine, navigationLines, predecessorItemCodeToRowNumber, timelineDayIndexByIso, timelineDays]);
+
+  useEffect(() => {
+    if (!editingLine) {
+      return;
+    }
+
+    function handleEditingLineKeyboardNavigation(event: KeyboardEvent) {
+      if (!event.altKey) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft" && canNavigateToPreviousLine) {
+        event.preventDefault();
+        handleNavigateEditingLine("previous");
+      }
+
+      if (event.key === "ArrowRight" && canNavigateToNextLine) {
+        event.preventDefault();
+        handleNavigateEditingLine("next");
+      }
+    }
+
+    window.addEventListener("keydown", handleEditingLineKeyboardNavigation);
+    return () => window.removeEventListener("keydown", handleEditingLineKeyboardNavigation);
+  }, [canNavigateToNextLine, canNavigateToPreviousLine, editingLine, handleNavigateEditingLine]);
+
+  function handleCloseEditor() {
+    writeEditingLineBudgetItemId(data.budgetId, null);
+    setEditingLine(null);
+    setSaveState("idle");
+    setError("");
+  }
+
+  function handleJumpToSchedule() {
+    if (!editingLine) {
+      return;
+    }
+
+    setActiveView("overview");
+    setOverviewScrollRequest(calculateOverviewScrollTarget(editingLine.startDate, timelineDays, timelineDayIndexByIso));
+    setHighlightedBudgetItemId(editingLine.budgetItemId);
   }
 
   function handleExportCsv() {
+    const periods = data.valuationCalendar?.periods ?? [];
     const exportPayload = buildWorkScheduleCsvExport({
       activeView,
       overviewLines: filteredVisibleLines,
       valuationRows: filteredValuationRows,
       resourceRows: filteredResourceRows,
       curvePoints: filteredCurveSeries,
-      periods: data.valuationCalendar.periods,
+      periods,
       currency: data.currency,
       currencyDecimals,
       dateFormat,
@@ -562,9 +747,10 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   }
 
   function handleExportOverviewMonthlySummaryCsv() {
+    const periods = data.valuationCalendar?.periods ?? [];
     const exportPayload = buildWorkScheduleOverviewMonthlySummaryCsvExport({
       valuationRows: filteredValuationRows,
-      periods: data.valuationCalendar.periods,
+      periods,
       currency: data.currency,
       currencyDecimals,
     });
@@ -573,10 +759,11 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   }
 
   function handleExportOverviewExecutivePackageCsv() {
+    const periods = data.valuationCalendar?.periods ?? [];
     const exportPayload = buildWorkScheduleOverviewExecutivePackageCsvExport({
       overviewLines: filteredVisibleLines,
       valuationRows: filteredValuationRows,
-      periods: data.valuationCalendar.periods,
+      periods,
       currency: data.currency,
       currencyDecimals,
       dateFormat,
@@ -586,10 +773,11 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   }
 
   async function handleExportOverviewExecutivePackageXlsx() {
+    const periods = data.valuationCalendar?.periods ?? [];
     const workbookBuffer = await buildWorkScheduleOverviewExecutivePackageWorkbook({
       overviewLines: filteredVisibleLines,
       valuationRows: filteredValuationRows,
-      periods: data.valuationCalendar.periods,
+      periods,
       currency: data.currency,
       currencyDecimals,
       dateFormat,
@@ -604,12 +792,13 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   }
 
   async function handleExportActiveViewXlsx() {
+    const periods = data.valuationCalendar?.periods ?? [];
     const exportPayload = await buildWorkScheduleActiveViewWorkbook({
       activeView,
       valuationRows: filteredValuationRows,
       resourceRows: filteredResourceRows,
       curvePoints: filteredCurveSeries,
-      periods: data.valuationCalendar.periods,
+      periods,
       currency: data.currency,
       currencyDecimals,
       curveWorkbookScope,
@@ -661,7 +850,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
             <InfoTile label="Proyecto" value={data.projectName} />
             <InfoTile label="Ventana" value={formatTimelineRange(data.timeline.startDate, data.timeline.endDate, dateFormat)} />
             <InfoTile label="Total programado" value={formatCurrency(summary.totalAmount, data.currency, currencyDecimals)} />
-            <InfoTile label="Insumos derivados" value={`${data.resourceCalendar.rows.length}`} />
+            <InfoTile label="Insumos derivados" value={`${data.resourceCalendar?.rows.length ?? 0}`} />
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -942,14 +1131,39 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
               ) : null}
             </div>
           ) : null}
+
+          {data.reviewSummary && data.reviewSummary.warnings.length > 0 ? (
+            <div className="theme-status-warning theme-status-warning-strong space-y-2 rounded-2xl border px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold">Revision previa del cronograma</span>
+                <span>{data.reviewSummary.warningCount} advertencias detectadas</span>
+              </div>
+              <div className="space-y-2 text-xs">
+                {data.reviewSummary.warnings.map((warning) => (
+                  <div key={warning.code} className="space-y-1">
+                    <p className="font-medium">{warning.label}</p>
+                    <p className="theme-muted-text">{warning.count} partidas afectadas.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {warning.examples.map((example) => (
+                        <span key={example.budgetItemId} className="theme-surface-panel theme-muted-text rounded-full border px-2.5 py-1">
+                          {example.itemCode}: {example.description}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
       {activeView === "overview" ? (
         <WorkScheduleOverview
-          data={data}
+          data={presentationData}
           isExcelMode={isExcelMode}
           timelineDays={timelineDays}
+          hasDailyTimeline={presentationData.scale.canLoadDailyTimeline}
           dateFormat={dateFormat}
           currencyDecimals={currencyDecimals}
           predecessorItemCodeToRowNumber={predecessorItemCodeToRowNumber}
@@ -971,40 +1185,86 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           inlineErrorsById={inlineErrorsById}
           onActivateInlineRow={handleActivateInlineRow}
           onInlineDraftChange={handleInlineDraftChange}
+          onInlinePredecessorChange={handleInlinePredecessorChange}
           onInlineRowSave={handleInlineRowSaveRequest}
           onInlineRowCancel={handleInlineRowCancel}
         />
       ) : null}
 
       {activeView === "valuation" ? (
-        <ValuationCalendarView
-          rows={filteredValuationRows}
-          periods={data.valuationCalendar.periods}
-          currency={data.currency}
-          currencyDecimals={currencyDecimals}
-          activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
-        />
+        derivedDataLoadState.valuation === "loading" && data.valuationCalendar == null ? (
+          <DerivedViewLoadingCard label="Cargando calendario valorizado" />
+        ) : derivedDataLoadState.valuation === "error" && data.valuationCalendar == null ? (
+          <DerivedViewUnavailableCard
+            title="No se pudo cargar el calendario valorizado"
+            description={derivedDataErrors.valuation || "Vuelve a intentarlo en unos segundos."}
+          />
+        ) : (
+          <ValuationCalendarView
+            rows={filteredValuationRows}
+            periods={data.valuationCalendar?.periods ?? []}
+            currency={data.currency}
+            currencyDecimals={currencyDecimals}
+            activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
+            periodRange={valuationRange}
+            availableRange={data.valuationCalendar?.availableRange ?? getAvailableValuationRange(data)}
+            isSegmented={!data.scale.canLoadDerivedCalendars}
+            onPeriodRangeChange={setValuationRange}
+            onApplyPeriodRange={() => {
+              setData((current) => normalizeWorkScheduleView({ ...current, valuationCalendar: null }));
+              void loadDerivedViewData("valuation", valuationRange);
+            }}
+          />
+        )
       ) : null}
 
       {activeView === "resources" ? (
-        <ResourceCalendarView
-          rows={filteredResourceRows}
-          periods={data.resourceCalendar.periods}
-          currency={data.currency}
-          currencyDecimals={currencyDecimals}
-          mode={resourceCalendarMode}
-          onModeChange={setResourceCalendarMode}
-          activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
-        />
+        !data.scale.canLoadDerivedCalendars ? (
+          <DerivedViewUnavailableCard
+            title="Calendario de insumos diferido"
+            description={`Este cronograma abarca ${formatNumber(data.scale.periodCount, 0)} periodos. Reduce el rango o abre una version segmentada antes de cargar este calendario.`}
+          />
+        ) : derivedDataLoadState.resources === "loading" && data.resourceCalendar == null ? (
+          <DerivedViewLoadingCard label="Cargando calendario de insumos" />
+        ) : derivedDataLoadState.resources === "error" && data.resourceCalendar == null ? (
+          <DerivedViewUnavailableCard
+            title="No se pudo cargar el calendario de insumos"
+            description={derivedDataErrors.resources || "Vuelve a intentarlo en unos segundos."}
+          />
+        ) : (
+          <ResourceCalendarView
+            rows={filteredResourceRows}
+            periods={data.resourceCalendar?.periods ?? []}
+            currency={data.currency}
+            currencyDecimals={currencyDecimals}
+            mode={resourceCalendarMode}
+            onModeChange={setResourceCalendarMode}
+            activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
+          />
+        )
       ) : null}
 
       {activeView === "curve" ? (
-        <CurveSView
-          points={filteredCurveSeries}
-          currency={data.currency}
-          currencyDecimals={currencyDecimals}
-          activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
-        />
+        !data.scale.canLoadDerivedCalendars ? (
+          <DerivedViewUnavailableCard
+            title="Curva S diferida"
+            description={`Este cronograma abarca ${formatNumber(data.scale.periodCount, 0)} periodos. Reduce el rango o abre una version segmentada antes de cargar esta curva.`}
+          />
+        ) : derivedDataLoadState.curve === "loading" && data.curveSeries == null ? (
+          <DerivedViewLoadingCard label="Cargando curva S" />
+        ) : derivedDataLoadState.curve === "error" && data.curveSeries == null ? (
+          <DerivedViewUnavailableCard
+            title="No se pudo cargar la curva S"
+            description={derivedDataErrors.curve || "Vuelve a intentarlo en unos segundos."}
+          />
+        ) : (
+          <CurveSView
+            points={filteredCurveSeries}
+            currency={data.currency}
+            currencyDecimals={currencyDecimals}
+            activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
+          />
+        )
       ) : null}
 
       {editingLine ? (
@@ -1020,7 +1280,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           onNavigateToPreviousLine={() => handleNavigateEditingLine("previous")}
           onNavigateToNextLine={() => handleNavigateEditingLine("next")}
           onSave={handleSave}
-          onChange={setEditingLine}
+          onChange={handleEditingLineChange}
+          onPredecessorChange={handleEditorPredecessorChange}
         />
       ) : null}
 
@@ -1030,6 +1291,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         saveState={generationState}
         error={generationError}
         hasExistingSchedule={orderedLines.some((line) => line.startDate && line.endDate && line.durationDays != null)}
+        reviewSummary={data.reviewSummary ?? null}
         onBaseStartDateChange={setGenerationBaseDate}
         onClose={() => setIsGenerationDialogOpen(false)}
         onSubmit={() => void handleGenerateIntelligentSchedule()}
@@ -1042,6 +1304,7 @@ function WorkScheduleOverview({
   data,
   isExcelMode,
   timelineDays,
+  hasDailyTimeline,
   dateFormat,
   currencyDecimals,
   predecessorItemCodeToRowNumber,
@@ -1063,12 +1326,14 @@ function WorkScheduleOverview({
   inlineErrorsById,
   onActivateInlineRow,
   onInlineDraftChange,
+  onInlinePredecessorChange,
   onInlineRowSave,
   onInlineRowCancel,
 }: {
   data: WorkScheduleViewRecord;
   isExcelMode: boolean;
   timelineDays: TimelineDay[];
+  hasDailyTimeline: boolean;
   dateFormat: string;
   currencyDecimals: number;
   predecessorItemCodeToRowNumber: Map<string, number>;
@@ -1090,6 +1355,7 @@ function WorkScheduleOverview({
   inlineErrorsById: Record<string, string>;
   onActivateInlineRow: (line: WorkScheduleLineRecord) => void;
   onInlineDraftChange: (rowId: string, draft: EditableLine) => void;
+  onInlinePredecessorChange: (rowId: string, line: EditableLine, predecessor: string) => void;
   onInlineRowSave: (rowId: string) => void;
   onInlineRowCancel: (rowId: string) => void;
 }) {
@@ -2080,6 +2346,7 @@ function WorkScheduleOverview({
                             inlineError={inlineErrorsById[item.row.line.budgetItemId] ?? ""}
                             onActivateInlineRow={onActivateInlineRow}
                             onInlineDraftChange={onInlineDraftChange}
+                            onInlinePredecessorChange={onInlinePredecessorChange}
                             onInlineRowSave={onInlineRowSave}
                             onInlineRowCancel={onInlineRowCancel}
                           />
@@ -2136,108 +2403,120 @@ function WorkScheduleOverview({
                 <span className={cn("bg-[var(--app-border-strong)]", isExcelMode ? "h-8 w-px rounded-sm" : "h-10 w-1 rounded-full")} />
               </div>
 
-              <div
-                ref={scrollContainerRef}
-                data-testid="work-schedule-overview-scroll"
-                className="h-full overflow-x-auto overflow-y-hidden pl-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                onScroll={handleOverviewScroll}
-              >
-                <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }} className="text-xs">
-                  <TimelineHeader
-                    timelineDays={timelineDays}
-                    isExcelMode={isExcelMode}
-                    timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
-                  />
-                  <div className="relative">
-                    {timelineDependencyPaths.length > 0 ? (
-                      <svg
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 z-10 overflow-visible"
-                        style={{ width: `${timelineContentWidth}px`, height: "100%" }}
-                      >
-                        <defs>
-                          <marker id="work-schedule-dependency-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                            <path d="M0,0 L6,3 L0,6 Z" fill="#64748b" />
-                          </marker>
-                        </defs>
-                        {timelineDependencyPaths.map((path) => (
-                          <path
-                            key={path.key}
-                            d={path.d}
-                            fill="none"
-                            stroke="#64748b"
-                            strokeWidth="1.5"
-                            strokeLinejoin="round"
-                            markerEnd="url(#work-schedule-dependency-arrowhead)"
-                          />
-                        ))}
-                      </svg>
-                    ) : null}
-                    {overviewVirtualWindow.topSpacerHeight > 0 ? (
-                      <div aria-hidden="true" style={{ height: overviewVirtualWindow.topSpacerHeight }} />
-                    ) : null}
-                    {overviewVirtualWindow.visibleItems.map((item) =>
-                      item.kind === "group" ? (
-                        <div
-                          key={item.key}
-                          data-testid={`work-schedule-timeline-group-row-${item.group.subBudgetId}`}
-                          className={cn(
-                            "flex items-center justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-muted)] px-2.5 text-xs font-semibold text-[var(--app-text-strong)]",
-                            OVERVIEW_GROUP_ROW_HEIGHT_CLASS,
-                          )}
-                          style={{
-                            height: `${normalizeMeasuredHeight(
-                              tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
-                              OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
-                            )}px`,
-                          }}
+              {hasDailyTimeline ? (
+                <div
+                  ref={scrollContainerRef}
+                  data-testid="work-schedule-overview-scroll"
+                  className="h-full overflow-x-auto overflow-y-hidden pl-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  onScroll={handleOverviewScroll}
+                >
+                  <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }} className="text-xs">
+                    <TimelineHeader
+                      timelineDays={timelineDays}
+                      isExcelMode={isExcelMode}
+                      timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
+                    />
+                    <div className="relative">
+                      {timelineDependencyPaths.length > 0 ? (
+                        <svg
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 z-10 overflow-visible"
+                          style={{ width: `${timelineContentWidth}px`, height: "100%" }}
                         >
-                          <span>{item.group.subBudgetName}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-[11px]"
-                            onClick={() => onToggleGroup(item.group.subBudgetId)}
+                          <defs>
+                            <marker id="work-schedule-dependency-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                              <path d="M0,0 L6,3 L0,6 Z" fill="#64748b" />
+                            </marker>
+                          </defs>
+                          {timelineDependencyPaths.map((path) => (
+                            <path
+                              key={path.key}
+                              d={path.d}
+                              fill="none"
+                              stroke="#64748b"
+                              strokeWidth="1.5"
+                              strokeLinejoin="round"
+                              markerEnd="url(#work-schedule-dependency-arrowhead)"
+                            />
+                          ))}
+                        </svg>
+                      ) : null}
+                      {overviewVirtualWindow.topSpacerHeight > 0 ? (
+                        <div aria-hidden="true" style={{ height: overviewVirtualWindow.topSpacerHeight }} />
+                      ) : null}
+                      {overviewVirtualWindow.visibleItems.map((item) =>
+                        item.kind === "group" ? (
+                          <div
+                            key={item.key}
+                            data-testid={`work-schedule-timeline-group-row-${item.group.subBudgetId}`}
+                            className={cn(
+                              "flex items-center justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-muted)] px-2.5 text-xs font-semibold text-[var(--app-text-strong)]",
+                              OVERVIEW_GROUP_ROW_HEIGHT_CLASS,
+                            )}
+                            style={{
+                              height: `${normalizeMeasuredHeight(
+                                tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
+                                OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+                              )}px`,
+                            }}
                           >
-                            {item.collapsed ? `Expandir ${item.group.subBudgetName}` : `Contraer ${item.group.subBudgetName}`}
-                          </Button>
-                        </div>
-                      ) : (
-                        <TimelineRow
-                          key={item.key}
-                          row={item.row}
-                          timelineDays={timelineDays}
-                          timelineDayIndexByIso={timelineDayIndexByIso}
-                          currency={data.currency}
-                          currencyDecimals={currencyDecimals}
-                          showCriticalPath={showCriticalPath}
-                          timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
-                          timelineDayGap={getZoomedTimelineDayGap(timelineZoomPercent)}
-                          highlighted={item.row.kind === "line" && highlightedBudgetItemId === item.row.line.budgetItemId}
-                          rowHeight={normalizeMeasuredHeight(
-                            tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
-                            OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
-                          )}
-                        />
-                      ),
-                    )}
-                    {overviewVirtualWindow.bottomSpacerHeight > 0 ? (
-                      <div aria-hidden="true" style={{ height: overviewVirtualWindow.bottomSpacerHeight }} />
-                    ) : null}
-                  </div>
-                  <div className={cn("border-t bg-[var(--app-surface-muted)] px-2.5", OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")}>
-                    <div className="flex h-full flex-wrap items-center gap-2 text-[11px] text-[var(--app-text-muted)]">
-                      <span className="font-semibold text-[var(--app-text-strong)]">Leyenda de segmentos</span>
-                      {segmentLegend.map((item) => (
-                        <span key={item.label} className="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1">
-                          <span className={cn("h-2.5 w-2.5 rounded-full", item.colorClassName)} />
-                          {item.label}
-                        </span>
-                      ))}
+                            <span>{item.group.subBudgetName}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[11px]"
+                              onClick={() => onToggleGroup(item.group.subBudgetId)}
+                            >
+                              {item.collapsed ? `Expandir ${item.group.subBudgetName}` : `Contraer ${item.group.subBudgetName}`}
+                            </Button>
+                          </div>
+                        ) : (
+                          <TimelineRow
+                            key={item.key}
+                            row={item.row}
+                            timelineDays={timelineDays}
+                            timelineDayIndexByIso={timelineDayIndexByIso}
+                            currency={data.currency}
+                            currencyDecimals={currencyDecimals}
+                            showCriticalPath={showCriticalPath}
+                            timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
+                            timelineDayGap={getZoomedTimelineDayGap(timelineZoomPercent)}
+                            highlighted={item.row.kind === "line" && highlightedBudgetItemId === item.row.line.budgetItemId}
+                            rowHeight={normalizeMeasuredHeight(
+                              tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
+                              OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+                            )}
+                          />
+                        ),
+                      )}
+                      {overviewVirtualWindow.bottomSpacerHeight > 0 ? (
+                        <div aria-hidden="true" style={{ height: overviewVirtualWindow.bottomSpacerHeight }} />
+                      ) : null}
+                    </div>
+                    <div className={cn("border-t bg-[var(--app-surface-muted)] px-2.5", OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")}>
+                      <div className="flex h-full flex-wrap items-center gap-2 text-[11px] text-[var(--app-text-muted)]">
+                        <span className="font-semibold text-[var(--app-text-strong)]">Leyenda de segmentos</span>
+                        {segmentLegend.map((item) => (
+                          <span key={item.label} className="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1">
+                            <span className={cn("h-2.5 w-2.5 rounded-full", item.colorClassName)} />
+                            {item.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex h-full items-center justify-center px-8">
+                  <div className="max-w-md rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] p-6 text-sm text-[var(--app-text-muted)]">
+                    <p className="font-semibold text-[var(--app-text-strong)]">Timeline diario diferido</p>
+                    <p className="mt-2">
+                      Este cronograma cubre {formatNumber(data.scale.timelineDayCount, 0)} dias. Para evitar bloqueos,
+                      el overview carga primero la tabla y difiere el gantt diario para rangos extremos.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2269,18 +2548,49 @@ function WorkScheduleOverview({
                   isExcelMode ? "rounded-none border-[var(--app-border-strong)] shadow-none" : "rounded-br-2xl border-[var(--app-border)] shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
                 )}
               >
-                <div
-                  ref={timelineBottomScrollRef}
-                  data-testid="work-schedule-timeline-bottom-scroll"
-                  className="overflow-x-auto overflow-y-hidden pl-3"
-                  onScroll={handleTimelineBottomScroll}
-                >
-                  <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px`, height: "1px" }} />
-                </div>
+                {hasDailyTimeline ? (
+                  <div
+                    ref={timelineBottomScrollRef}
+                    data-testid="work-schedule-timeline-bottom-scroll"
+                    className="overflow-x-auto overflow-y-hidden pl-3"
+                    onScroll={handleTimelineBottomScroll}
+                  >
+                    <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px`, height: "1px" }} />
+                  </div>
+                ) : (
+                  <div className="h-px" />
+                )}
               </div>
             </div>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DerivedViewLoadingCard({ label }: { label: string }) {
+  return (
+    <Card className="rounded-3xl border border-[var(--app-border)] shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)]">
+      <CardContent className="flex min-h-40 items-center justify-center p-8 text-sm text-[var(--app-text-muted)]">
+        {label}...
+      </CardContent>
+    </Card>
+  );
+}
+
+function DerivedViewUnavailableCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <Card className="rounded-3xl border border-[var(--app-border)] shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)]">
+      <CardContent className="space-y-3 p-8">
+        <p className="text-base font-semibold text-[var(--app-text-strong)]">{title}</p>
+        <p className="text-sm text-[var(--app-text-muted)]">{description}</p>
       </CardContent>
     </Card>
   );
@@ -2326,6 +2636,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
   inlineError,
   onActivateInlineRow,
   onInlineDraftChange,
+  onInlinePredecessorChange,
   onInlineRowSave,
   onInlineRowCancel,
 }: WorkScheduleLineTableRowProps) {
@@ -2472,13 +2783,30 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
           <Input
             value={inlineDraft.predecessor}
             onKeyDown={handleInlineKeyDown}
-            onChange={(event) => onInlineDraftChange(inlineRowId, { ...inlineDraft, predecessor: event.target.value })}
+            onChange={(event) => onInlinePredecessorChange(inlineRowId, inlineDraft, event.target.value)}
           />
         ) : (
           displayPredecessor || "-"
         )}
       </TD>
-      <TD className="align-middle">{line.crew != null ? formatNumber(line.crew, 2) : "-"}</TD>
+      <TD
+        className="align-middle"
+        data-testid={`work-schedule-inline-cell-crew-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            value={inlineDraft.crew}
+            onKeyDown={handleInlineKeyDown}
+            onChange={(event) => onInlineDraftChange(inlineRowId, updateEditableLineCrew(inlineDraft, event.target.value))}
+          />
+        ) : (
+          line.crew != null ? formatNumber(line.crew, 2) : "-"
+        )}
+      </TD>
       <TD className="align-middle">{line.performanceLabel || (line.performance != null ? `${formatNumber(line.performance, 2)} ${line.unit}/DIA` : "-")}</TD>
       <TD className="align-middle">{line.unit}</TD>
       <TD className="align-middle">{formatNumber(line.quantity, 2)}</TD>
@@ -2902,12 +3230,22 @@ function ValuationCalendarView({
   currency,
   currencyDecimals,
   activeFilterLabel,
+  periodRange,
+  availableRange,
+  isSegmented,
+  onPeriodRangeChange,
+  onApplyPeriodRange,
 }: {
   rows: WorkScheduleValuationCalendarRow[];
   periods: WorkSchedulePeriodRecord[];
   currency: string;
   currencyDecimals: number;
   activeFilterLabel: string | null;
+  periodRange: PeriodRangeSelection;
+  availableRange: PeriodRangeSelection | null;
+  isSegmented: boolean;
+  onPeriodRangeChange: (range: PeriodRangeSelection) => void;
+  onApplyPeriodRange: () => void;
 }) {
   return (
     <DerivedTableCard
@@ -2915,6 +3253,40 @@ function ValuationCalendarView({
       description="Vista mensual valorizada inspirada en el archivo Calendario_Valorizado.xlsx."
       activeFilterLabel={activeFilterLabel}
     >
+      {isSegmented ? (
+        <div className="mb-3 flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3">
+          <label className="flex min-w-40 flex-col gap-1 text-xs text-[var(--app-text-muted)]">
+            Rango mensual
+            <input
+              type="month"
+              value={periodRange.fromPeriodKey}
+              min={availableRange?.fromPeriodKey ?? undefined}
+              max={periodRange.toPeriodKey}
+              onChange={(event) => onPeriodRangeChange({ ...periodRange, fromPeriodKey: event.target.value })}
+              className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text-strong)]"
+            />
+          </label>
+          <label className="flex min-w-40 flex-col gap-1 text-xs text-[var(--app-text-muted)]">
+            Hasta
+            <input
+              type="month"
+              value={periodRange.toPeriodKey}
+              min={periodRange.fromPeriodKey}
+              max={availableRange?.toPeriodKey ?? undefined}
+              onChange={(event) => onPeriodRangeChange({ ...periodRange, toPeriodKey: event.target.value })}
+              className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text-strong)]"
+            />
+          </label>
+          <Button className="h-10 px-4" onClick={onApplyPeriodRange}>
+            Aplicar rango
+          </Button>
+          {availableRange ? (
+            <span className="text-xs text-[var(--app-text-muted)]">
+              Disponible: {availableRange.fromPeriodKey} a {availableRange.toPeriodKey}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div data-testid="valuation-calendar-table-scroll" className="overflow-x-auto rounded-2xl border border-[var(--app-border)]">
         <Table
           className="min-w-max text-[11px]"
@@ -3216,6 +3588,7 @@ function WorkScheduleEditorSheet({
   onNavigateToNextLine,
   onSave,
   onChange,
+  onPredecessorChange,
 }: {
   line: EditableLine | null;
   open: boolean;
@@ -3229,6 +3602,7 @@ function WorkScheduleEditorSheet({
   onNavigateToNextLine: () => void;
   onSave: () => void;
   onChange: (line: EditableLine | null) => void;
+  onPredecessorChange: (line: EditableLine, predecessor: string) => void;
 }) {
   const totalPercentage = line?.monthlyDistributions.reduce((sum, distribution) => sum + Number(distribution.percentage), 0) ?? 0;
   const percentageDifference = 100 - totalPercentage;
@@ -3300,10 +3674,10 @@ function WorkScheduleEditorSheet({
                       />
                     </Field>
                     <Field label="Predecesora">
-                      <Input value={line.predecessor} onChange={(event) => onChange({ ...line, predecessor: event.target.value })} />
+                      <Input value={line.predecessor} onChange={(event) => onPredecessorChange(line, event.target.value)} />
                     </Field>
                     <Field label="Cuadrilla">
-                      <Input value={line.crew} onChange={(event) => onChange({ ...line, crew: event.target.value })} />
+                      <Input value={line.crew} onChange={(event) => onChange(updateEditableLineCrew(line, event.target.value))} />
                     </Field>
                   </CardContent>
                 </Card>
@@ -3412,6 +3786,7 @@ function WorkScheduleGenerationDialog({
   saveState,
   error,
   hasExistingSchedule,
+  reviewSummary,
   onBaseStartDateChange,
   onClose,
   onSubmit,
@@ -3421,6 +3796,7 @@ function WorkScheduleGenerationDialog({
   saveState: "idle" | "saving" | "error";
   error: string;
   hasExistingSchedule: boolean;
+  reviewSummary: WorkScheduleViewRecord["reviewSummary"];
   onBaseStartDateChange: (value: string) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -3457,6 +3833,18 @@ function WorkScheduleGenerationDialog({
                   {hasExistingSchedule ? (
                     <div className="theme-status-warning theme-status-warning-strong rounded-2xl border px-4 py-3 text-sm">
                       Se reemplazara la programacion actual de las partidas ya programadas.
+                    </div>
+                  ) : null}
+
+                  {reviewSummary && reviewSummary.warnings.length > 0 ? (
+                    <div className="theme-status-warning theme-status-warning-strong space-y-2 rounded-2xl border px-4 py-3 text-sm">
+                      <p className="font-semibold">Revision previa recomendada</p>
+                      {reviewSummary.warnings.map((warning) => (
+                        <div key={warning.code} className="space-y-1">
+                          <p>{warning.label}</p>
+                          <p className="theme-muted-text text-xs">{warning.count} partidas afectadas.</p>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </CardContent>
@@ -3845,7 +4233,7 @@ function summarizeView(data: WorkScheduleViewRecord) {
   return {
     programmedItems,
     totalAmount,
-    periods: data.valuationCalendar.periods.length,
+    periods: data.scale.periodCount,
   };
 }
 
@@ -4185,6 +4573,134 @@ function buildPredecessorRowNumberMaps(groups: WorkScheduleViewRecord["groups"])
   return {
     itemCodeToRowNumber,
     rowNumberToItemCode,
+  };
+}
+
+function buildPreviewWorkScheduleView({
+  data,
+  editingLine,
+  inlineDrafts,
+  rowNumberToItemCode,
+}: {
+  data: WorkScheduleViewRecord;
+  editingLine: EditableLine | null;
+  inlineDrafts: Record<string, EditableLine>;
+  rowNumberToItemCode: Map<number, string>;
+}) {
+  const draftEntries = new Map<string, EditableLine>();
+
+  for (const draft of Object.values(inlineDrafts)) {
+    draftEntries.set(draft.budgetItemId, draft);
+  }
+
+  if (editingLine) {
+    draftEntries.set(editingLine.budgetItemId, editingLine);
+  }
+
+  if (draftEntries.size === 0) {
+    return null;
+  }
+
+  let nextLines = data.groups.flatMap((group) => group.lines).map((line) => ({
+    ...line,
+    monthlyDistributions: line.monthlyDistributions.map((distribution) => ({ ...distribution })),
+    resourceIds: line.resourceIds ? [...line.resourceIds] : undefined,
+    resources: line.resources?.map((resource) => ({ ...resource })),
+    criticalPath: line.criticalPath ? { ...line.criticalPath } : null,
+  }));
+
+  for (const draft of draftEntries.values()) {
+    nextLines = nextLines.map((line) =>
+      line.budgetItemId === draft.budgetItemId ? applyEditableDraftToLine(line, draft, rowNumberToItemCode) : line,
+    );
+    const nextLinesByCode = new Map(nextLines.map((line) => [line.itemCode, line]));
+    nextLines = nextLines.map((line) =>
+      line.budgetItemId === draft.budgetItemId
+        ? (() => {
+            const recalculatedLine = recalculateWorkScheduleLineFromPredecessors(line, nextLinesByCode);
+            return recalculatedLine ? { ...line, ...recalculatedLine } : line;
+          })()
+        : line,
+    );
+    nextLines = recalculateDependentWorkScheduleLines(nextLines, draft.budgetItemId);
+  }
+
+  const previewView = buildWorkScheduleView(
+    {
+      budgetId: data.budgetId,
+      budgetName: data.budgetName,
+      projectName: data.projectName,
+      currency: data.currency,
+      lines: nextLines,
+    },
+    { includeDerivedCalendars: false },
+  );
+  const previewLineByBudgetItemId = new Map(previewView.groups.flatMap((group) => group.lines).map((line) => [line.budgetItemId, line]));
+
+  return normalizeWorkScheduleView({
+    ...data,
+    groups: data.groups.map((group) => {
+      const lines = group.lines.map((line) => previewLineByBudgetItemId.get(line.budgetItemId) ?? line);
+
+      return {
+        ...group,
+        lines,
+        rows: group.rows.map((row) =>
+          row.kind === "line"
+            ? { ...row, line: previewLineByBudgetItemId.get(row.line.budgetItemId) ?? row.line }
+            : rebuildPreviewLevelSummaryRow(row, previewLineByBudgetItemId),
+        ),
+      };
+    }),
+    timeline: previewView.timeline,
+    scale: previewView.scale,
+    criticalPath: previewView.criticalPath,
+  });
+}
+
+function applyEditableDraftToLine(
+  line: WorkScheduleLineRecord,
+  draft: EditableLine,
+  rowNumberToItemCode: Map<number, string>,
+): WorkScheduleLineRecord {
+  const serializedDraft = serializeEditableLine(draft, rowNumberToItemCode);
+
+  return {
+    ...line,
+    startDate: serializedDraft.startDate,
+    endDate: serializedDraft.endDate,
+    durationDays: serializedDraft.durationDays,
+    predecessor: serializedDraft.predecessor,
+    crew: serializedDraft.crew,
+    monthlyDistributions: serializedDraft.monthlyDistributions.map((distribution) => ({
+      year: distribution.year,
+      month: distribution.month,
+      percentage: distribution.percentage,
+    })),
+  };
+}
+
+function rebuildPreviewLevelSummaryRow(
+  row: Extract<WorkScheduleDisplayRowRecord, { kind: "level" }>,
+  previewLineByBudgetItemId: Map<string, WorkScheduleLineRecord>,
+): Extract<WorkScheduleDisplayRowRecord, { kind: "level" }> {
+  const childLines = row.childLineIds
+    .map((lineId) => previewLineByBudgetItemId.get(lineId))
+    .filter((line): line is WorkScheduleLineRecord => Boolean(line));
+
+  if (childLines.length === 0) {
+    return row;
+  }
+
+  const startDates = childLines.map((line) => line.startDate).filter((value): value is string => Boolean(value)).sort();
+  const endDates = childLines.map((line) => line.endDate).filter((value): value is string => Boolean(value)).sort();
+
+  return {
+    ...row,
+    durationDays: childLines.reduce((sum, line) => sum + (line.durationDays ?? 0), 0),
+    startDate: startDates[0] ?? null,
+    endDate: endDates.at(-1) ?? null,
+    partial: childLines.reduce((sum, line) => sum + line.partial, 0),
   };
 }
 
@@ -4724,6 +5240,55 @@ function buildCurveSeriesFromValuationRows(
       accumulatedPercentage: totalAmount > 0 ? (accumulatedAmount / totalAmount) * 100 : 0,
     };
   });
+}
+
+function createDefaultValuationRange(data: WorkScheduleViewRecord): PeriodRangeSelection {
+  const availableRange = getAvailableValuationRange(data);
+  if (!availableRange) {
+    return { fromPeriodKey: "", toPeriodKey: "" };
+  }
+
+  const toPeriodKey = clampPeriodKey(addMonthsToPeriodKey(availableRange.fromPeriodKey, 11), availableRange.toPeriodKey);
+  return {
+    fromPeriodKey: availableRange.fromPeriodKey,
+    toPeriodKey,
+  };
+}
+
+function getAvailableValuationRange(data: WorkScheduleViewRecord): PeriodRangeSelection | null {
+  if (data.valuationCalendar?.availableRange) {
+    return data.valuationCalendar.availableRange;
+  }
+
+  if (data.scale.firstPeriodKey && data.scale.lastPeriodKey) {
+    return {
+      fromPeriodKey: data.scale.firstPeriodKey,
+      toPeriodKey: data.scale.lastPeriodKey,
+    };
+  }
+
+  return null;
+}
+
+function isPeriodRangeSelection(value: unknown): value is PeriodRangeSelection {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<PeriodRangeSelection>;
+  return typeof candidate.fromPeriodKey === "string" && typeof candidate.toPeriodKey === "string";
+}
+
+function addMonthsToPeriodKey(periodKey: string, deltaMonths: number) {
+  const [year, month] = periodKey.split("-").map(Number);
+  const totalMonths = year * 12 + (month - 1) + deltaMonths;
+  const nextYear = Math.floor(totalMonths / 12);
+  const nextMonth = (totalMonths % 12) + 1;
+  return `${nextYear}-${nextMonth.toString().padStart(2, "0")}`;
+}
+
+function clampPeriodKey(periodKey: string, maxPeriodKey: string) {
+  return periodKey > maxPeriodKey ? maxPeriodKey : periodKey;
 }
 
 function buildWorkScheduleCsvExport({
@@ -5819,11 +6384,13 @@ function createEditableLine(
     {
       budgetItemId: line.budgetItemId,
       description: line.description,
+      quantity: line.quantity,
+      performance: line.performance ?? null,
       startDate: line.startDate ?? "",
       endDate: line.endDate ?? "",
       durationDays: line.durationDays ?? 0,
       predecessor: formatPredecessorForDisplay(line.predecessor ?? "", itemCodeToRowNumber),
-      crew: line.crew != null ? String(line.crew) : "",
+      crew: line.crew != null ? String(line.crew) : "1",
       monthlyDistributions: fallbackDistributions,
     },
     {},
@@ -5837,7 +6404,7 @@ function serializeEditableLine(line: EditableLine, rowNumberToItemCode: Map<numb
     endDate: line.endDate,
     durationDays: Number(line.durationDays),
     predecessor: formatPredecessorForStorage(line.predecessor, rowNumberToItemCode),
-    crew: line.crew.trim() ? Number(line.crew) : null,
+    crew: parseEditableCrew(line.crew) ?? 1,
     monthlyDistributions: line.monthlyDistributions.map((distribution) => ({
       year: distribution.year,
       month: distribution.month,
@@ -6037,6 +6604,93 @@ function updateEditableLineDuration(line: EditableLine, durationDays: number) {
       ? buildInitialDistributionsFromRange(line.startDate, endDate)
       : line.monthlyDistributions,
   };
+}
+
+function updateEditableLineCrew(line: EditableLine, crew: string) {
+  const nextLine = {
+    ...line,
+    crew,
+  };
+  const parsedCrew = parseEditableCrew(crew);
+  const durationDays =
+    parsedCrew == null
+      ? null
+      : calculateWorkScheduleDurationDays({
+          quantity: line.quantity,
+          performance: line.performance,
+          crew: parsedCrew,
+        });
+
+  if (durationDays == null) {
+    return nextLine;
+  }
+
+  return updateEditableLineDuration(nextLine, durationDays);
+}
+
+function updateEditableLinePredecessor(
+  line: EditableLine,
+  predecessor: string,
+  {
+    lineByBudgetItemId,
+    lineByCode,
+    rowNumberToItemCode,
+  }: {
+    lineByBudgetItemId: Map<string, WorkScheduleLineRecord>;
+    lineByCode: Map<string, WorkScheduleLineRecord>;
+    rowNumberToItemCode: Map<number, string>;
+  },
+) {
+  const nextLine = {
+    ...line,
+    predecessor,
+  };
+  const baseLine = lineByBudgetItemId.get(line.budgetItemId);
+
+  if (!baseLine) {
+    return nextLine;
+  }
+
+  const serializedDraft = serializeEditableLine(nextLine, rowNumberToItemCode);
+  const draftLine: WorkScheduleLineRecord = {
+    ...baseLine,
+    startDate: serializedDraft.startDate,
+    endDate: serializedDraft.endDate,
+    durationDays: serializedDraft.durationDays,
+    predecessor: serializedDraft.predecessor,
+    crew: serializedDraft.crew,
+    monthlyDistributions: serializedDraft.monthlyDistributions.map((distribution) => ({
+      year: distribution.year,
+      month: distribution.month,
+      percentage: distribution.percentage,
+    })),
+  };
+  const nextLineByCode = new Map(lineByCode);
+  nextLineByCode.set(draftLine.itemCode, draftLine);
+  const recalculatedLine = recalculateWorkScheduleLineFromPredecessors(draftLine, nextLineByCode);
+
+  if (!recalculatedLine?.startDate || recalculatedLine.durationDays == null) {
+    return nextLine;
+  }
+
+  return updateEditableLineDuration(
+    {
+      ...nextLine,
+      startDate: recalculatedLine.startDate,
+    },
+    recalculatedLine.durationDays,
+  );
+}
+
+function parseEditableCrew(value: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
 }
 
 function calculateInclusiveDurationDays(startDate: string, endDate: string) {

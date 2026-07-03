@@ -153,6 +153,51 @@ describe("WorkSchedulePageContent", () => {
     expect(getByText("PEON")).toBeTruthy();
   });
 
+  it("loads a segmented valuation slice for oversized schedules", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        periods: [{ year: 2030, month: 1, key: "2030-01" }],
+        rows: [
+          {
+            budgetItemId: "item-1",
+            itemCode: "01.01",
+            description: "Trazo y replanteo",
+            unit: "GLB",
+            quantity: 1,
+            unitPrice: 1000,
+            partial: 1000,
+            subBudgetName: "Estructuras",
+            rowTotal: 1000,
+            periodAmounts: { "2030-01": 1000 },
+          },
+        ],
+        availableRange: {
+          fromPeriodKey: "2030-01",
+          toPeriodKey: "2035-12",
+        },
+        selectedRange: {
+          fromPeriodKey: "2030-01",
+          toPeriodKey: "2030-01",
+        },
+        isPartial: true,
+      }),
+    });
+
+    const { clickByText, getByText, getInputByLabel } = await renderWithView(createOversizedSegmentedView(), createSettings());
+
+    await act(async () => {
+      clickByText("Calendario valorizado");
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/budget-1/work-schedule/valuation-calendar?from=2030-01&to=2030-12",
+    );
+    expect(getByText("Trazo y replanteo")).toBeTruthy();
+    expect(getInputByLabel("Rango mensual").value).toBe("2030-01");
+  });
+
   it("uses date pickers for start and end dates and recalculates duration automatically", async () => {
     const { clickByText, getInputByLabel } = await renderContent();
 
@@ -179,6 +224,74 @@ describe("WorkSchedulePageContent", () => {
     expect(getInputByLabel("Duracion").value).toBe("11");
   });
 
+  it("defaults the cronograma crew to 1 and recalculates duration when the user edits it", async () => {
+    const { clickByText, getInputByLabel } = await renderContent();
+
+    await act(async () => {
+      clickByText("Editar");
+    });
+
+    const crewInput = getInputByLabel("Cuadrilla");
+    const durationInput = getInputByLabel("Duracion");
+
+    expect(crewInput.value).toBe("1");
+    expect(durationInput.value).toBe("14");
+
+    await act(async () => {
+      setInputValue(crewInput, "5");
+    });
+
+    expect(getInputByLabel("Duracion").value).toBe("1");
+  });
+
+  it("shows dependent successor start dates updated live before saving", async () => {
+    const { getInputByLabel, getByTestId, getInputByValue } = await renderWithView(
+      createViewWithDependencyPreview(),
+      createSettings(),
+    );
+
+    await act(async () => {
+      const editButton = document.querySelector("[aria-label='Editar Trazo y replanteo']");
+      if (!(editButton instanceof HTMLButtonElement)) {
+        throw new Error("Missing edit button for Trazo y replanteo");
+      }
+
+      editButton.click();
+    });
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Cuadrilla"), "5");
+    });
+
+    await act(async () => {
+      getByTestId("work-schedule-inline-cell-startDate-item-2").click();
+    });
+
+    expect(getInputByValue("2026-03-02")).toBeTruthy();
+  });
+
+  it("recalculates the edited partida start date live when its predecessor changes", async () => {
+    const { getInputByLabel } = await renderWithView(createViewWithDependencyPreview(), createSettings());
+
+    await act(async () => {
+      const editButton = document.querySelector("[aria-label='Editar Tarrajeo']");
+      if (!(editButton instanceof HTMLButtonElement)) {
+        throw new Error("Missing edit button for Tarrajeo");
+      }
+
+      editButton.click();
+    });
+
+    expect(getInputByLabel("Inicio").value).toBe("2026-03-06");
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Predecesora"), "01.01FS+2d");
+    });
+
+    expect(getInputByLabel("Inicio").value).toBe("2026-03-08");
+    expect(getInputByLabel("Fin").value).toBe("2026-03-10");
+  });
+
   it("allows inline row editing and autosaves the line when leaving the row", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
@@ -201,6 +314,40 @@ describe("WorkSchedulePageContent", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
       method: "PATCH",
     }));
+  });
+
+  it("allows editing crew inline and persists the recalculated duration", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => createInitialData(),
+    });
+
+    const { getByTestId, getInputByValue } = await renderContent();
+
+    await act(async () => {
+      getByTestId("work-schedule-inline-cell-crew-item-2").click();
+    });
+
+    const crewInput = getInputByValue("1");
+
+    await act(async () => {
+      setInputValue(crewInput, "5");
+      crewInput.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/budget-1/work-schedule",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining("\"crew\":5"),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/budget-1/work-schedule",
+      expect.objectContaining({
+        body: expect.stringContaining("\"durationDays\":1"),
+      }),
+    );
   });
 
   it("opens the intelligent schedule dialog and sends the base generation request", async () => {
@@ -232,6 +379,35 @@ describe("WorkSchedulePageContent", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
       method: "POST",
     }));
+  });
+
+  it("shows review warnings in the page and before generating the intelligent schedule", async () => {
+    const view = createView();
+    view.reviewSummary = {
+      warningCount: 2,
+      warnings: [
+        {
+          code: "performance_default_one",
+          label: "Partidas con rendimiento 1 detectadas. Esto suele indicar un posible error de importacion de Delphin.",
+          count: 2,
+          examples: [
+            { budgetItemId: "item-1", itemCode: "01.01", description: "Trazo y replanteo", unit: "m2", performance: 1 },
+          ],
+        },
+      ],
+    };
+
+    const { clickByText, getByText } = await renderWithView(view, createSettings());
+
+    expect(getByText("Revision previa del cronograma")).toBeTruthy();
+    expect(getByText("2 advertencias detectadas")).toBeTruthy();
+
+    await act(async () => {
+      clickByText("Generar cronograma inteligente");
+    });
+
+    expect(getByText("Revision previa recomendada")).toBeTruthy();
+    expect(getByText("2 partidas afectadas.")).toBeTruthy();
   });
 
   it("proposes an end date automatically when the start date changes and the current end date is earlier", async () => {
@@ -1545,6 +1721,8 @@ function createView(): WorkScheduleViewRecord {
             startDate: "2026-03-08",
             endDate: "2026-03-21",
             durationDays: 14,
+            crew: null,
+            performance: 2,
             criticalPath: {
               earlyStartDay: 0,
               earlyFinishDay: 13,
@@ -1585,24 +1763,26 @@ function createView(): WorkScheduleViewRecord {
             partial: 1000,
             subBudgetId: "sub-1",
             subBudgetName: "Estructuras",
-              startDate: "2026-03-01",
-              endDate: "2026-04-07",
-              durationDays: 38,
-              criticalPath: {
-                earlyStartDay: 0,
-                earlyFinishDay: 37,
-                lateStartDay: 0,
-                lateFinishDay: 37,
-                totalSlackDays: 0,
-                isCritical: true,
-              },
-              monthlyDistributions: [
-                { year: 2026, month: 3, percentage: 60 },
-                { year: 2026, month: 4, percentage: 40 },
-              ],
-              resources: [
-                {
-                  resourceId: "res-1",
+            crew: 1,
+            performance: 10,
+            startDate: "2026-03-01",
+            endDate: "2026-04-07",
+            durationDays: 38,
+            criticalPath: {
+              earlyStartDay: 0,
+              earlyFinishDay: 37,
+              lateStartDay: 0,
+              lateFinishDay: 37,
+              totalSlackDays: 0,
+              isCritical: true,
+            },
+            monthlyDistributions: [
+              { year: 2026, month: 3, percentage: 60 },
+              { year: 2026, month: 4, percentage: 40 },
+            ],
+            resources: [
+              {
+                resourceId: "res-1",
                 code: "MAT-001",
                 description: "Cemento",
                 unit: "BLS",
@@ -1706,12 +1886,81 @@ function createView(): WorkScheduleViewRecord {
       startDate: "2026-03-01",
       endDate: "2026-04-07",
     },
+    scale: {
+      periodCount: 2,
+      timelineDayCount: 38,
+      canLoadDailyTimeline: true,
+      canLoadDerivedCalendars: true,
+      firstPeriodKey: "2026-03",
+      lastPeriodKey: "2026-04",
+    },
     criticalPath: {
       status: "calculated",
       projectDurationDays: 38,
       scheduledItemCount: 2,
       criticalItemCount: 1,
       issues: [],
+    },
+  };
+}
+
+function createOversizedSegmentedView(): WorkScheduleViewRecord {
+  const view = createView();
+
+  return {
+    ...view,
+    valuationCalendar: null,
+    scale: {
+      periodCount: 72,
+      timelineDayCount: 2500,
+      canLoadDailyTimeline: true,
+      canLoadDerivedCalendars: false,
+      firstPeriodKey: "2030-01",
+      lastPeriodKey: "2035-12",
+    },
+  };
+}
+
+function createViewWithDependencyPreview(): WorkScheduleViewRecord {
+  const view = createView();
+
+  return {
+    ...view,
+    groups: rebuildTestWorkScheduleRows(
+      view.groups.map((group) => ({
+        ...group,
+        lines: group.lines.map((line) => {
+          if (line.budgetItemId === "item-1") {
+            return {
+              ...line,
+              quantity: 10,
+              performance: 2,
+              crew: 1,
+              startDate: "2026-03-01",
+              endDate: "2026-03-05",
+              durationDays: 5,
+              monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
+            };
+          }
+
+          if (line.budgetItemId === "item-2") {
+            return {
+              ...line,
+              predecessor: "01.01FS",
+              startDate: "2026-03-06",
+              endDate: "2026-03-08",
+              durationDays: 3,
+              monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
+            };
+          }
+
+          return line;
+        }),
+      })),
+    ),
+    timeline: {
+      startDate: "2026-03-01",
+      endDate: "2026-03-08",
     },
   };
 }

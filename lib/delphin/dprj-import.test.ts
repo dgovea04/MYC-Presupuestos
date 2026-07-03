@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseDelphinDprjToS10Snapshot } from "@/lib/delphin/dprj-import";
+import { formatDelphinDecodeFailure, parseDelphinDprjToS10Snapshot } from "@/lib/delphin/dprj-import";
 import { createMycImportDraftFromS10 } from "@/lib/s10/import-mapper";
 
 describe("parseDelphinDprjToS10Snapshot", () => {
@@ -72,6 +72,22 @@ describe("parseDelphinDprjToS10Snapshot", () => {
         unitPrice: 0.63,
       }),
     ]);
+    expect(snapshot.partidas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          Descripcion: "Acarreo de lladrillo pastelero",
+          RendimientoMO: 1000,
+        }),
+        expect.objectContaining({
+          Descripcion: "Concreto f'c=140 kg/cm2, para columna (Preparación y vaciado)",
+          RendimientoMO: 10,
+        }),
+        expect.objectContaining({
+          Descripcion: "Desencofrado de columna típica",
+          RendimientoMO: 40,
+        }),
+      ]),
+    );
     expect(draft.resources.some((resource) => resource.description === "Peón")).toBe(true);
     expect(draft.itemMetadata.filter((metadata) => metadata.apuStatus !== "OK")).toHaveLength(0);
     expect(draft.budgetFooterRows.find((rows) => rows.budgetId === general?.id)?.rows).toEqual(
@@ -136,6 +152,19 @@ describe("parseDelphinDprjToS10Snapshot", () => {
         expect.objectContaining({ CodSubpresupuesto: "1", Linea: "03", Descripcion: "UTILIDAD (30%)", Valor1: 5607788.2 }),
         expect.objectContaining({ CodSubpresupuesto: "1", Linea: "05", Descripcion: "IGV (18%)", Valor1: 4374074.79 }),
         expect.objectContaining({ CodSubpresupuesto: "999", Linea: "06", Descripcion: "TOTAL PRESUPUESTO", Valor1: 87258458.95 }),
+      ]),
+    );
+
+    expect(snapshot.partidas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          Descripcion: "MURO LADRILLO K.K. DE CABEZA MEZC. C:A 1:4, TIPO IV P. TARRAJ.C/FIERRO 1/4\" C/6 HILADAS",
+          RendimientoMO: 8,
+        }),
+        expect.objectContaining({
+          Descripcion: "MURO LADRILLO K.K. DE SOGA MEZC. C:A 1:4, TIPO IV P. TARRAJ.C/FIERRO 1/4\" C/6 HILADAS",
+          RendimientoMO: 10,
+        }),
       ]),
     );
 
@@ -220,4 +249,28 @@ describe("parseDelphinDprjToS10Snapshot", () => {
       });
     }
   }, 30000);
+
+  it("surfaces a clear error when Colegios.dprj has an invalid BinaryFormatter object graph", () => {
+    const buffer = readFileSync(resolve("presupuesto-ejemplo/de/Colegios.dprj"));
+
+    expect(() =>
+      parseDelphinDprjToS10Snapshot({
+        buffer,
+        fileName: "Colegios.dprj",
+      }),
+    ).toThrow(/objectID cannot be less than or equal to zero/i);
+  }, 30000);
+});
+
+describe("formatDelphinDecodeFailure", () => {
+  it("explains unsupported BinaryFormatter variants with an actionable message", () => {
+    const message = formatDelphinDecodeFailure(
+      'decode.ps1 : Exception calling "ExportJson" with "1" argument(s): "objectID cannot be less than or equal to zero. Parameter name: objectID"',
+      "archivo .dprj",
+    );
+
+    expect(message).toContain("No se pudo decodificar el archivo .dprj.");
+    expect(message).toContain("variante de serializacion BinaryFormatter");
+    expect(message).toContain("Detalle tecnico:");
+  });
 });

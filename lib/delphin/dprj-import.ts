@@ -56,6 +56,7 @@ type DelphinCost = {
   description?: string | null;
   unitId?: string | null;
   code?: string | null;
+  productivity?: number | null;
   unitPrice?: number | null;
   quantity?: number | null;
   partial?: number | null;
@@ -462,7 +463,7 @@ function collectPartida(input: {
     Descripcion: description,
     CodUnidad: unit,
     Precio1: unitPrice,
-    RendimientoMO: roundRate(input.node.analysis?.productivity ?? 1),
+    RendimientoMO: roundRate(input.node.productivity ?? input.node.analysis?.productivity ?? 1),
     RendimientoEQ: 0,
   });
   input.accumulator.detalles.push({
@@ -551,7 +552,8 @@ function decodeDelphinDprj(buffer: Buffer): DelphinDecodedProject {
     }
 
     if (result.status !== 0) {
-      throw new Error([result.stderr.trim(), result.stdout.trim()].filter(Boolean).join("\n") || "No se pudo decodificar el archivo Delphin.");
+      const rawMessage = [result.stderr.trim(), result.stdout.trim()].filter(Boolean).join("\n");
+      throw new Error(formatDelphinDecodeFailure(rawMessage, "archivo .dprj"));
     }
 
     return parseDecodedProjectJson(result.stdout);
@@ -673,6 +675,20 @@ function roundRate(value: Decimal.Value) {
 function resolvePowerShellExecutable() {
   const windowsPowerShell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
   return fs.existsSync(windowsPowerShell) ? windowsPowerShell : "powershell";
+}
+
+export function formatDelphinDecodeFailure(rawMessage: string, sourceLabel = "archivo Delphin") {
+  const message = rawMessage.trim();
+  if (message.includes("objectID cannot be less than or equal to zero")) {
+    return [
+      `No se pudo decodificar el ${sourceLabel}.`,
+      "El archivo .dprj parece usar una variante de serializacion BinaryFormatter que el decoder actual no soporta, o el export esta dañado.",
+      "Vuelve a exportarlo desde Delphin Express y, si el problema persiste, comparte ese .dprj para ampliar la compatibilidad del importador.",
+      `Detalle tecnico: ${message}`,
+    ].join(" ");
+  }
+
+  return message || `No se pudo decodificar el ${sourceLabel}.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -803,6 +819,7 @@ public static class ${probeClassName} {
     PStr(sb, "description", S(V(cost, "descripcion_costo")), true);
     PStr(sb, "unitId", S(V(cost, "id_unidad")), true);
     PStr(sb, "code", S(V(cost, "numeracion_costo")), true);
+    PNum(sb, "productivity", V(cost, "productividad"), true);
     PNum(sb, "unitPrice", V(cost, "costo_unitario"), true);
     PNum(sb, "quantity", V(cost, "cantidad"), true);
     PNum(sb, "partial", V(cost, "parcial_costo"), true);
@@ -1023,6 +1040,7 @@ function Convert-Cost($cost) {
     description = Scalar (Value $cost "descripcion_costo")
     unitId = Scalar (Value $cost "id_unidad")
     code = Scalar (Value $cost "numeracion_costo")
+    productivity = Scalar (Value $cost "productividad")
     unitPrice = Scalar (Value $cost "costo_unitario")
     quantity = Scalar (Value $cost "cantidad")
     partial = Scalar (Value $cost "parcial_costo")

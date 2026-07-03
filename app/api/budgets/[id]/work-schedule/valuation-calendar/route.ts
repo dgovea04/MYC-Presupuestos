@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
-import { getWorkScheduleSection } from "@/lib/data/work-schedule";
+import { getWorkScheduleValuationCalendarSection } from "@/lib/data/work-schedule";
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -13,8 +13,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     await assertFeatureAccess({ userId: session.user.id, feature: "work_schedule.intelligent" });
     const { id } = await params;
-    const section = await getWorkScheduleSection(id, session.user.id);
-    return NextResponse.json(section.valuationCalendar);
+    const fromPeriodKey = request.nextUrl.searchParams.get("from") ?? undefined;
+    const toPeriodKey = request.nextUrl.searchParams.get("to") ?? undefined;
+    const valuationCalendar = await getWorkScheduleValuationCalendarSection(id, session.user.id, {
+      fromPeriodKey,
+      toPeriodKey,
+    });
+    return NextResponse.json(valuationCalendar);
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);
     if (billingResponse) return billingResponse;

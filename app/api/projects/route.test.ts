@@ -5,10 +5,12 @@ const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   recordActivityEvent: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -31,6 +33,7 @@ describe("POST /api/projects", () => {
     mocks.getAuthSession.mockReset();
     mocks.recordActivityEvent.mockReset();
     mocks.revalidatePath.mockReset();
+    mocks.revalidateTag.mockReset();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -108,5 +111,33 @@ describe("POST /api/projects", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "No se pudo crear el proyecto" });
+  });
+
+  it("returns the first Zod validation message when project creation payload is invalid", async () => {
+    const { ZodError } = await import("zod");
+
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.createProject.mockRejectedValue(
+      new ZodError([
+        {
+          code: "too_small",
+          origin: "string",
+          minimum: 3,
+          inclusive: true,
+          path: ["name"],
+          message: "Ingresa el nombre de la obra",
+        },
+      ]),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ companyId: "company-1", name: "", status: "PLANNING" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Ingresa el nombre de la obra" });
   });
 });

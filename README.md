@@ -203,6 +203,19 @@ El seed crea usuario demo, empresa, proyecto, presupuesto, insumos, partidas, AP
 npm.cmd run dev
 ```
 
+`npm run dev` usa Webpack por defecto en este repositorio para evitar cierres por memoria de Turbopack en vistas grandes como presupuesto general, cronograma y editor de presupuesto. Si necesitas probar Turbopack manualmente:
+
+```powershell
+npm.cmd run dev:turbo
+```
+
+Si el servidor de desarrollo vuelve a degradarse por cache pesado en `.next`, puedes reiniciarlo limpio con:
+
+```powershell
+npm.cmd run clean:next
+npm.cmd run dev
+```
+
 Luego abre:
 
 ```text

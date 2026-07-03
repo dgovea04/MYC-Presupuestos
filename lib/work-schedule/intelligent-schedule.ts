@@ -1,4 +1,4 @@
-import Decimal from "decimal.js";
+import { calculateWorkScheduleDurationDays, hasSuspiciousDefaultWorkSchedulePerformance } from "@/lib/calculations/work-schedule";
 import { formatGeneratedPredecessor } from "@/lib/work-schedule/predecessors";
 import type {
   WorkScheduleGenerationIssueRecord,
@@ -17,6 +17,9 @@ type GeneratedScheduleLine = {
   crew: number | null;
   monthlyDistributions: WorkScheduleMonthlyDistributionRecord[];
 };
+
+const DEFAULT_GENERATED_WORK_SCHEDULE_CREW = 1;
+const MAX_GENERATED_WORK_SCHEDULE_DURATION_DAYS = 36525;
 
 export function buildIntelligentWorkScheduleBase({
   baseStartDate,
@@ -51,12 +54,30 @@ export function buildIntelligentWorkScheduleBase({
     let previousGeneratedLine: GeneratedScheduleLine | null = null;
 
     for (const line of orderedGroupLines) {
+      if (hasSuspiciousDefaultWorkSchedulePerformance({ performance: line.performance, unit: line.unit, quantity: line.quantity })) {
+        issues.push({
+          budgetItemId: line.budgetItemId,
+          itemCode: line.itemCode,
+          reason: `La partida mantiene el rendimiento tecnico por defecto (1 ${line.unit}/DIA) para su metrado actual. Define un rendimiento real antes de programarla`,
+        });
+        continue;
+      }
+
       const durationDays = calculateSmartDurationDays(line);
       if (durationDays == null) {
         issues.push({
           budgetItemId: line.budgetItemId,
           itemCode: line.itemCode,
           reason: "La partida no tiene rendimiento o cuadrilla suficiente para calcular duracion",
+        });
+        continue;
+      }
+
+      if (durationDays > MAX_GENERATED_WORK_SCHEDULE_DURATION_DAYS) {
+        issues.push({
+          budgetItemId: line.budgetItemId,
+          itemCode: line.itemCode,
+          reason: `La duracion calculada supera el limite permitido de ${MAX_GENERATED_WORK_SCHEDULE_DURATION_DAYS.toLocaleString("en-US")} dias`,
         });
         continue;
       }
@@ -70,7 +91,7 @@ export function buildIntelligentWorkScheduleBase({
         endDate,
         durationDays,
         predecessor: previousGeneratedLine ? formatGeneratedPredecessor(previousGeneratedLine.itemCode) : null,
-        crew: line.crew ?? null,
+        crew: DEFAULT_GENERATED_WORK_SCHEDULE_CREW,
         monthlyDistributions: buildMonthlyDistributionsFromRange(startDate, endDate),
       };
 
@@ -93,19 +114,11 @@ export function buildIntelligentWorkScheduleBase({
 }
 
 function calculateSmartDurationDays(line: WorkScheduleLineRecord) {
-  if (line.performance == null || line.crew == null) {
-    return null;
-  }
-
-  const performance = new Decimal(line.performance);
-  const crew = new Decimal(line.crew);
-  const quantity = new Decimal(line.quantity);
-
-  if (performance.lte(0) || crew.lte(0) || quantity.lte(0)) {
-    return null;
-  }
-
-  return quantity.dividedBy(performance.times(crew)).toDecimalPlaces(0, Decimal.ROUND_CEIL).toNumber();
+  return calculateWorkScheduleDurationDays({
+    quantity: line.quantity,
+    performance: line.performance,
+    crew: DEFAULT_GENERATED_WORK_SCHEDULE_CREW,
+  });
 }
 
 function buildMonthlyDistributionsFromRange(startDate: string, endDate: string): WorkScheduleMonthlyDistributionRecord[] {

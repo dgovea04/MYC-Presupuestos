@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
-import { generateWorkScheduleBase, getWorkScheduleSection, saveWorkScheduleItem } from "@/lib/data/work-schedule";
+import { generateWorkScheduleBase, getWorkScheduleOverviewSection, saveWorkScheduleItem } from "@/lib/data/work-schedule";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -14,7 +14,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     await assertFeatureAccess({ userId: session.user.id, feature: "work_schedule.intelligent" });
     const { id } = await params;
-    const section = await getWorkScheduleSection(id, session.user.id);
+    const section = await getWorkScheduleOverviewSection(id, session.user.id);
     return NextResponse.json(section);
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);

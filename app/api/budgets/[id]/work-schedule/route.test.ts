@@ -9,7 +9,7 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 
 vi.mock("@/lib/data/work-schedule", () => ({
-  getWorkScheduleSection: vi.fn(),
+  getWorkScheduleOverviewSection: vi.fn(),
   generateWorkScheduleBase: vi.fn(),
   saveWorkScheduleItem: vi.fn(),
 }));
@@ -25,7 +25,7 @@ vi.mock("@/lib/billing/entitlements", async (importOriginal) => {
 
 import { GET, PATCH, POST } from "@/app/api/budgets/[id]/work-schedule/route";
 import { getAuthSession } from "@/lib/auth/session";
-import { generateWorkScheduleBase, getWorkScheduleSection, saveWorkScheduleItem } from "@/lib/data/work-schedule";
+import { generateWorkScheduleBase, getWorkScheduleOverviewSection, saveWorkScheduleItem } from "@/lib/data/work-schedule";
 import { assertFeatureAccess, FeatureAccessError } from "@/lib/billing/entitlements";
 
 describe("budget work schedule route", () => {
@@ -55,21 +55,27 @@ describe("budget work schedule route", () => {
       upgradeRequired: true,
       upgradeUrl: "/account",
     });
-    expect(getWorkScheduleSection).not.toHaveBeenCalled();
+    expect(getWorkScheduleOverviewSection).not.toHaveBeenCalled();
   });
 
   it("returns the consolidated work schedule on GET", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
-    vi.mocked(getWorkScheduleSection).mockResolvedValue({
+    vi.mocked(getWorkScheduleOverviewSection).mockResolvedValue({
       budgetId: "budget-1",
       budgetName: "Presupuesto General",
       projectName: "Proyecto demo",
       currency: "PEN",
       groups: [],
-      valuationCalendar: { periods: [], rows: [] },
-      resourceCalendar: { periods: [], rows: [] },
-      curveSeries: [],
+      valuationCalendar: null,
+      resourceCalendar: null,
+      curveSeries: null,
       timeline: { startDate: null, endDate: null },
+      scale: {
+        periodCount: 0,
+        timelineDayCount: 0,
+        canLoadDailyTimeline: true,
+        canLoadDerivedCalendars: true,
+      },
     });
 
     const response = await GET(new Request("http://localhost/api/budgets/budget-1/work-schedule"), {
@@ -78,7 +84,7 @@ describe("budget work schedule route", () => {
 
     expect(response.status).toBe(200);
     expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "work_schedule.intelligent" });
-    expect(getWorkScheduleSection).toHaveBeenCalledWith("budget-1", "user-1");
+    expect(getWorkScheduleOverviewSection).toHaveBeenCalledWith("budget-1", "user-1");
   });
 
   it("persists a scheduled partida payload on PATCH", async () => {
@@ -89,10 +95,16 @@ describe("budget work schedule route", () => {
       projectName: "Proyecto demo",
       currency: "PEN",
       groups: [],
-      valuationCalendar: { periods: [], rows: [] },
-      resourceCalendar: { periods: [], rows: [] },
-      curveSeries: [],
+      valuationCalendar: null,
+      resourceCalendar: null,
+      curveSeries: null,
       timeline: { startDate: "2026-03-01", endDate: "2026-03-31" },
+      scale: {
+        periodCount: 1,
+        timelineDayCount: 31,
+        canLoadDailyTimeline: true,
+        canLoadDerivedCalendars: true,
+      },
     });
 
     const payload = {
@@ -129,10 +141,16 @@ describe("budget work schedule route", () => {
       projectName: "Proyecto demo",
       currency: "PEN",
       groups: [],
-      valuationCalendar: { periods: [], rows: [] },
-      resourceCalendar: { periods: [], rows: [] },
-      curveSeries: [],
+      valuationCalendar: null,
+      resourceCalendar: null,
+      curveSeries: null,
       timeline: { startDate: "2026-06-01", endDate: "2026-06-30" },
+      scale: {
+        periodCount: 1,
+        timelineDayCount: 30,
+        canLoadDailyTimeline: true,
+        canLoadDerivedCalendars: true,
+      },
       generationSummary: {
         generatedCount: 4,
         pendingCount: 1,

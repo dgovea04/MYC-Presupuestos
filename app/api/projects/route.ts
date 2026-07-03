@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { ZodError } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
@@ -27,6 +28,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);
     if (billingResponse) return billingResponse;
+
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: error.issues[0]?.message ?? "Datos de proyecto no validos" }, { status: 400 });
+    }
 
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo crear el proyecto" }, { status: 400 });
   }

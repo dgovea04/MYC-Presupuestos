@@ -35,6 +35,7 @@ export type WorkScheduleLineRecord = {
   performance?: number | null;
   performanceLabel?: string | null;
   monthlyDistributions: WorkScheduleMonthlyDistributionRecord[];
+  resourceIds?: string[];
   resources?: WorkScheduleResourceRecord[];
   criticalPath?: WorkScheduleCriticalPathLineRecord | null;
 };
@@ -76,6 +77,11 @@ export type WorkSchedulePeriodRecord = {
   year: number;
   month: number;
   key: string;
+};
+
+export type WorkSchedulePeriodRangeRecord = {
+  fromPeriodKey: string;
+  toPeriodKey: string;
 };
 
 export type WorkScheduleValuationCalendarRow = {
@@ -125,12 +131,39 @@ export type WorkScheduleGenerationSummaryRecord = {
   issues: WorkScheduleGenerationIssueRecord[];
 };
 
+export type WorkScheduleReviewWarningRecord = {
+  code: "performance_default_one";
+  label: string;
+  count: number;
+  examples: Array<{
+    budgetItemId: string;
+    itemCode: string;
+    description: string;
+    unit: string;
+    performance: number | null;
+  }>;
+};
+
+export type WorkScheduleReviewSummaryRecord = {
+  warningCount: number;
+  warnings: WorkScheduleReviewWarningRecord[];
+};
+
 export type WorkScheduleGroupRecord = {
   subBudgetId: string;
   subBudgetName: string;
   totalAmount: number;
   lines: WorkScheduleLineRecord[];
   rows: WorkScheduleDisplayRowRecord[];
+};
+
+export type WorkScheduleScaleRecord = {
+  periodCount: number;
+  timelineDayCount: number;
+  canLoadDailyTimeline: boolean;
+  canLoadDerivedCalendars: boolean;
+  firstPeriodKey: string | null;
+  lastPeriodKey: string | null;
 };
 
 export type WorkScheduleViewRecord = {
@@ -142,18 +175,20 @@ export type WorkScheduleViewRecord = {
   valuationCalendar: {
     periods: WorkSchedulePeriodRecord[];
     rows: WorkScheduleValuationCalendarRow[];
-  };
+  } | null;
   resourceCalendar: {
     periods: WorkSchedulePeriodRecord[];
     rows: WorkScheduleResourceCalendarRow[];
-  };
-  curveSeries: WorkScheduleCurvePointRecord[];
+  } | null;
+  curveSeries: WorkScheduleCurvePointRecord[] | null;
   timeline: {
     startDate: string | null;
     endDate: string | null;
   };
+  scale: WorkScheduleScaleRecord;
   criticalPath?: WorkScheduleCriticalPathSummaryRecord | null;
   generationSummary?: WorkScheduleGenerationSummaryRecord | null;
+  reviewSummary?: WorkScheduleReviewSummaryRecord | null;
 };
 
 export type WorkScheduleCriticalPathSummaryRecord = {
@@ -162,4 +197,12 @@ export type WorkScheduleCriticalPathSummaryRecord = {
   scheduledItemCount: number;
   criticalItemCount: number;
   issues: string[];
+};
+
+export type WorkScheduleValuationCalendarRecord = {
+  periods: WorkSchedulePeriodRecord[];
+  rows: WorkScheduleValuationCalendarRow[];
+  availableRange?: WorkSchedulePeriodRangeRecord;
+  selectedRange?: WorkSchedulePeriodRangeRecord;
+  isPartial?: boolean;
 };

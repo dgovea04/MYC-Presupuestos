@@ -26,7 +26,7 @@ function createLine(overrides: Partial<WorkScheduleLineRecord>): WorkScheduleLin
 }
 
 describe("buildIntelligentWorkScheduleBase", () => {
-  it("builds a sequential gantt base inside each sub budget using quantity, performance and crew", () => {
+  it("builds a sequential gantt base inside each sub budget using quantity, performance and default cronograma crew", () => {
     const result = buildIntelligentWorkScheduleBase({
       baseStartDate: "2026-06-01",
       lines: [
@@ -52,16 +52,18 @@ describe("buildIntelligentWorkScheduleBase", () => {
         budgetItemId: "item-1",
         itemCode: "01.01",
         startDate: "2026-06-01",
-        endDate: "2026-06-05",
-        durationDays: 5,
+        endDate: "2026-06-10",
+        durationDays: 10,
+        crew: 1,
         predecessor: null,
       }),
       expect.objectContaining({
         budgetItemId: "item-2",
         itemCode: "01.02",
-        startDate: "2026-06-06",
-        endDate: "2026-06-08",
-        durationDays: 3,
+        startDate: "2026-06-11",
+        endDate: "2026-06-16",
+        durationDays: 6,
+        crew: 1,
         predecessor: "01.01FS",
       }),
     ]);
@@ -119,6 +121,113 @@ describe("buildIntelligentWorkScheduleBase", () => {
           budgetItemId: "item-1",
           itemCode: "01.01",
           reason: "La partida no tiene rendimiento o cuadrilla suficiente para calcular duracion",
+        },
+      ],
+    });
+  });
+
+  it("resets persisted cronograma crew values to 1 when regenerating the intelligent base", () => {
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-06-01",
+      lines: [
+        createLine({
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          quantity: 100,
+          performance: 10,
+          crew: 5,
+        }),
+      ],
+    });
+
+    expect(result.generatedItems).toEqual([
+      expect.objectContaining({
+        budgetItemId: "item-1",
+        durationDays: 10,
+        crew: 1,
+      }),
+    ]);
+  });
+
+  it("skips lines whose calculated duration is absurdly large", () => {
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-06-01",
+      lines: [
+        createLine({
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          unit: "UND",
+          quantity: 400000,
+          performance: 0.5,
+        }),
+      ],
+    });
+
+    expect(result.generatedItems).toEqual([]);
+    expect(result.summary).toEqual({
+      generatedCount: 0,
+      pendingCount: 1,
+      issues: [
+        {
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          reason: "La duracion calculada supera el limite permitido de 36,525 dias",
+        },
+      ],
+    });
+  });
+
+  it("marks metric-style partidas with the default technical performance as pending", () => {
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-06-01",
+      lines: [
+        createLine({
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          unit: "m2",
+          quantity: 250,
+          performance: 1,
+        }),
+      ],
+    });
+
+    expect(result.generatedItems).toEqual([]);
+    expect(result.summary).toEqual({
+      generatedCount: 0,
+      pendingCount: 1,
+      issues: [
+        {
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          reason: "La partida mantiene el rendimiento tecnico por defecto (1 m2/DIA) para su metrado actual. Define un rendimiento real antes de programarla",
+        },
+      ],
+    });
+  });
+
+  it("marks large non-metric partidas with default technical performance as pending too", () => {
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-06-01",
+      lines: [
+        createLine({
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          unit: "pto",
+          quantity: 900,
+          performance: 1,
+        }),
+      ],
+    });
+
+    expect(result.generatedItems).toEqual([]);
+    expect(result.summary).toEqual({
+      generatedCount: 0,
+      pendingCount: 1,
+      issues: [
+        {
+          budgetItemId: "item-1",
+          itemCode: "01.01",
+          reason: "La partida mantiene el rendimiento tecnico por defecto (1 pto/DIA) para su metrado actual. Define un rendimiento real antes de programarla",
         },
       ],
     });
