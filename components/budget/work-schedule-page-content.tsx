@@ -130,6 +130,7 @@ const OVERVIEW_TIMELINE_DAY_GAP_PX = 1;
 const MIN_OVERVIEW_TIMELINE_ZOOM_PERCENT = 10;
 const MAX_OVERVIEW_TIMELINE_ZOOM_PERCENT = 500;
 const DEFAULT_OVERVIEW_TIMELINE_ZOOM_PERCENT = 100;
+const MIN_LEGIBLE_TIMELINE_DAY_WIDTH_PX = 8;
 const OVERVIEW_TABLE_COLUMN_WIDTHS = {
   rowNumber: 36,
   item: 96,
@@ -3309,7 +3310,8 @@ function TimelineHeader({
             key={month.key}
             data-testid="work-schedule-month-band"
             className={cn(
-              "flex h-5 items-center justify-center px-1.5 text-center text-[11px] font-semibold",
+              "flex items-center justify-center px-1.5 text-center text-[11px] font-semibold",
+              timelineDayWidth >= MIN_LEGIBLE_TIMELINE_DAY_WIDTH_PX ? "h-5" : "h-8",
               isExcelMode
                 ? index % 2 === 0
                   ? "bg-[var(--app-surface-muted)] text-[var(--app-text)]"
@@ -3324,28 +3326,32 @@ function TimelineHeader({
           </div>
         ))}
       </div>
-      <div className="grid gap-px bg-[var(--app-border)]" style={{ gridTemplateColumns }}>
-        {weeks.map((week) => (
-          <div
-            key={week.key}
-            className="flex h-5 items-center justify-center bg-[var(--app-surface-muted)] px-1.5 text-center text-[11px] font-semibold text-[var(--app-text-muted)]"
-            style={{ gridColumn: `span ${week.length}` }}
-          >
-            {week.label}
+      {timelineDayWidth >= MIN_LEGIBLE_TIMELINE_DAY_WIDTH_PX ? (
+        <>
+          <div className="grid gap-px bg-[var(--app-border)]" style={{ gridTemplateColumns }}>
+            {weeks.map((week) => (
+              <div
+                key={week.key}
+                className="flex h-5 items-center justify-center bg-[var(--app-surface-muted)] px-1.5 text-center text-[11px] font-semibold text-[var(--app-text-muted)]"
+                style={{ gridColumn: `span ${week.length}` }}
+              >
+                {week.label}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="grid gap-px bg-[var(--app-surface-strong)]" style={{ gridTemplateColumns }}>
-        {timelineDays.map((day) => (
-          <div
-            key={day.iso}
-            data-testid="work-schedule-timeline-day-header"
-            className="flex h-8 items-center justify-center bg-[var(--app-surface)] text-[9px] uppercase tracking-wide text-[var(--app-text-muted)]"
-          >
-            {dayFormatter.format(day.date).slice(0, 1)}
+          <div className="grid gap-px bg-[var(--app-surface-strong)]" style={{ gridTemplateColumns }}>
+            {timelineDays.map((day) => (
+              <div
+                key={day.iso}
+                data-testid="work-schedule-timeline-day-header"
+                className="flex h-8 items-center justify-center bg-[var(--app-surface)] text-[9px] uppercase tracking-wide text-[var(--app-text-muted)]"
+              >
+                {dayFormatter.format(day.date).slice(0, 1)}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      ) : null}
     </div>
   );
 }
