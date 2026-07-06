@@ -155,10 +155,27 @@ describe("budget work schedule route", () => {
         generatedCount: 4,
         pendingCount: 1,
         issues: [{ budgetItemId: "item-9", itemCode: "03.01", reason: "Pendiente" }],
+        appliedOptions: {
+          strategy: "by_level",
+          interSubBudgetParallelism: "parallel",
+          levelLinkage: { "title-1": "parallel" },
+          maxDurationDays: 10,
+          similarityLagDays: 2,
+        },
+        highlights: ["Estrategia por niveles (titulos en paralelo)"],
       },
     });
 
-    const payload = { baseStartDate: "2026-06-01" };
+    const payload = {
+      baseStartDate: "2026-06-01",
+      options: {
+        strategy: "by_level",
+        interSubBudgetParallelism: "parallel",
+        levelLinkage: { "title-1": "parallel" },
+        maxDurationDays: 10,
+        similarityLagDays: 2,
+      },
+    };
 
     const response = await POST(
       new Request("http://localhost/api/budgets/budget-1/work-schedule", {

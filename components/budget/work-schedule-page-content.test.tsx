@@ -347,7 +347,7 @@ describe("WorkSchedulePageContent", () => {
     );
   });
 
-  it("opens the intelligent schedule dialog and sends the base generation request", async () => {
+  it("opens the intelligent schedule dialog and sends the base generation request with advanced options", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -356,25 +356,45 @@ describe("WorkSchedulePageContent", () => {
           generatedCount: 2,
           pendingCount: 1,
           issues: [{ budgetItemId: "item-9", itemCode: "03.01", reason: "Pendiente" }],
+          appliedOptions: {
+            strategy: "by_level",
+            interSubBudgetParallelism: "parallel",
+            levelLinkage: {
+              "title-1": "parallel",
+              "subtitle-1a": "parallel",
+              "title-2": "parallel",
+            },
+            maxDurationDays: 10,
+            similarityLagDays: 2,
+          },
+          highlights: ["Estrategia por niveles (titulos en paralelo)"],
         },
       }),
     });
 
-    const { clickByText, getByText, getInputByLabel } = await renderContent();
+    const { clickByText, getByText, getInputByLabel } = await renderWithView(createViewWithLevels(), createSettings());
 
     await act(async () => {
       clickByText("Generar cronograma inteligente");
     });
 
     expect(getByText("Cronograma inteligente")).toBeTruthy();
+    expect(getByText("Previsualizacion de niveles")).toBeTruthy();
+    expect(getByText("Estructuras")).toBeTruthy();
 
     await act(async () => {
       setInputValue(getInputByLabel("Fecha base"), "2026-06-01");
+      setInputValue(getInputByLabel("Duracion maxima"), "10");
+      setInputValue(getInputByLabel("Separacion por similitud"), "2");
       clickByText("Generar base");
     });
 
     expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
       method: "POST",
+      body: expect.stringContaining("\"options\""),
+    }));
+    expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
+      body: expect.stringContaining("\"strategy\":\"by_level\""),
     }));
   });
 
@@ -405,6 +425,105 @@ describe("WorkSchedulePageContent", () => {
 
     expect(getByText("Revision previa recomendada")).toBeTruthy();
     expect(getByText("2 partidas afectadas.")).toBeTruthy();
+  });
+
+  it("allows marking affected partidas as reviewed before generating the intelligent schedule", async () => {
+    const view = createView();
+    view.reviewSummary = {
+      warningCount: 1,
+      warnings: [
+        {
+          code: "performance_default_one",
+          label: "Partidas con rendimiento 1 detectadas. Esto suele indicar un posible error de importacion de Delphin.",
+          count: 1,
+          examples: [
+            { budgetItemId: "item-1", itemCode: "01.01", description: "Trazo y replanteo", unit: "m2", performance: 1 },
+          ],
+        },
+      ],
+    };
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...createInitialData(),
+        reviewSummary: view.reviewSummary,
+        generationSummary: {
+          generatedCount: 2,
+          pendingCount: 0,
+          issues: [],
+          appliedOptions: {
+            strategy: "by_level",
+            interSubBudgetParallelism: "independent",
+            levelLinkage: null,
+            maxDurationDays: null,
+            similarityLagDays: 0,
+          },
+          highlights: [],
+        },
+      }),
+    });
+
+    const { clickByText, getByText, getInputByLabel, queryByText } = await renderWithView(view, createSettings());
+
+    await act(async () => {
+      clickByText("Generar cronograma inteligente");
+    });
+
+    expect(getByText("Revision previa recomendada")).toBeTruthy();
+
+    await act(async () => {
+      clickByText("Marcar como revisada");
+    });
+
+    expect(queryByText("01.01: Trazo y replanteo")).toBeNull();
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Fecha base"), "2026-06-01");
+      clickByText("Generar base");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
+      body: expect.stringContaining("\"reviewedBudgetItemIds\":[\"item-1\"]"),
+    }));
+  });
+
+  it("updates pending review counts in the page and dialog after marking partidas as reviewed", async () => {
+    const view = createView();
+    view.reviewSummary = {
+      warningCount: 2,
+      warnings: [
+        {
+          code: "performance_default_one",
+          label: "Partidas con rendimiento 1 detectadas. Esto suele indicar un posible error de importacion de Delphin.",
+          count: 2,
+          examples: [
+            { budgetItemId: "item-1", itemCode: "01.01", description: "Trazo y replanteo", unit: "m2", performance: 1 },
+            { budgetItemId: "item-2", itemCode: "01.02", description: "Excavacion manual", unit: "m3", performance: 1 },
+          ],
+        },
+      ],
+    };
+
+    const { clickByText, getByText, queryByText } = await renderWithView(view, createSettings());
+
+    expect(getByText("2 advertencias detectadas")).toBeTruthy();
+    expect(getByText("2 partidas afectadas.")).toBeTruthy();
+
+    await act(async () => {
+      clickByText("Generar cronograma inteligente");
+    });
+
+    expect(getByText("2 partidas afectadas.")).toBeTruthy();
+
+    await act(async () => {
+      clickByText("Marcar como revisada");
+    });
+
+    expect(getByText("1 advertencias detectadas")).toBeTruthy();
+    expect(getByText("1 partidas afectadas.")).toBeTruthy();
+    expect(queryByText("01.01: Trazo y replanteo")).toBeNull();
+    expect(getByText("01.02: Excavacion manual")).toBeTruthy();
   });
 
   it("proposes an end date automatically when the start date changes and the current end date is earlier", async () => {
@@ -1498,8 +1617,7 @@ describe("WorkSchedulePageContent", () => {
     expect(overviewSheet?.getCell("B6").value).toBe("Total");
     expect(overviewSheet?.getCell("K6").value).toBe(200);
   });
-});    it.skip("'Todo paralelo' sets all level toggles to parallel in the generation dialog tree preview", async () => {
-    // Feature not yet implemented in current source - requires generation dialog tree preview code
+});    it("'Todo paralelo' sets all level toggles to parallel in the generation dialog tree preview", async () => {
     window.localStorage.setItem("work-schedule-generation-strategy:budget-1", "sequential");
     window.localStorage.removeItem("work-schedule-generation-level-linkage:budget-1");
 
@@ -1542,8 +1660,7 @@ describe("WorkSchedulePageContent", () => {
       (btn) => btn.textContent?.trim() === "Paralelo",
     );
     expect(paralelosAfter.length).toBe(3);
-  });    it.skip("'Todo encadenar' sets all level toggles to chain in the generation dialog tree preview", async () => {
-    // Feature not yet implemented in current source - requires generation dialog tree preview code
+  });    it("'Todo encadenar' sets all level toggles to chain in the generation dialog tree preview", async () => {
     window.localStorage.setItem("work-schedule-generation-strategy:budget-1", "sequential");
     window.localStorage.removeItem("work-schedule-generation-level-linkage:budget-1");
 
@@ -1575,8 +1692,7 @@ describe("WorkSchedulePageContent", () => {
     );
     // Level toggle buttons (3 levels) plus "Todo encadenar" itself = 4+
     expect(encadenarAfter.length).toBe(3);
-  });    it.skip("collapses and expands sub-budget levels in the generation dialog tree preview", async () => {
-    // Feature not yet implemented in current source - requires generation dialog tree preview code
+  });    it("collapses and expands sub-budget levels in the generation dialog tree preview", async () => {
     window.localStorage.setItem("work-schedule-generation-strategy:budget-1", "sequential");
     window.localStorage.removeItem("work-schedule-generation-level-linkage:budget-1");
 

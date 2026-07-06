@@ -15,9 +15,10 @@ import {
   type MouseEvent as ReactMouseEvent,
   type UIEvent as ReactUIEvent,
 } from "react";
-import { CalendarDays, ChartSpline, MoreHorizontal, Package2, PenSquare, Save, WandSparkles, X } from "lucide-react";
+import { CalendarDays, ChartSpline, Info, MoreHorizontal, Package2, PenSquare, Save, WandSparkles, X } from "lucide-react";
 import type ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
@@ -41,9 +42,13 @@ import { DependencyEditPopover } from "@/components/budget/gantt/dependency-edit
 import { useGanttConnectionMode, type LinePosition, type WorkSchedulePredecessorRelation } from "@/components/budget/gantt/use-gantt-connection-mode";
 import type { GanttBarChangeResult } from "@/components/budget/gantt/gantt-utils";
 import type {
+  InterSubBudgetParallelism,
+  LevelLinkageMode,
   WorkScheduleCurvePointRecord,
   WorkScheduleLineRecord,
   WorkScheduleDisplayRowRecord,
+  WorkScheduleGenerationOptions,
+  WorkScheduleGenerationStrategy,
   WorkScheduleMonthlyDistributionRecord,
   WorkSchedulePeriodRecord,
   WorkScheduleResourceCalendarRow,
@@ -158,6 +163,28 @@ type PeriodRangeSelection = {
   toPeriodKey: string;
 };
 
+type WorkScheduleGenerationFormState = {
+  strategy: WorkScheduleGenerationStrategy;
+  interSubBudgetParallelism: InterSubBudgetParallelism;
+  interSubBudgetStaggerDays: string;
+  maxDurationDays: string;
+  similarityLagDays: string;
+  levelLinkage: Record<string, LevelLinkageMode>;
+};
+
+type GenerationLevelPreviewRow = {
+  levelId: string;
+  levelType: "TITLE" | "SUBTITLE";
+  itemCode: string;
+  description: string;
+};
+
+type GenerationLevelPreviewGroup = {
+  subBudgetId: string;
+  subBudgetName: string;
+  levels: GenerationLevelPreviewRow[];
+};
+
 export function WorkSchedulePageContent({ initialData }: WorkSchedulePageContentProps) {
   return <WorkSchedulePageContentInner key={initialData.budgetId} initialData={initialData} />;
 }
@@ -214,6 +241,15 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [inlineErrorsById, setInlineErrorsById] = useState<Record<string, string>>({});
   const [isGenerationDialogOpen, setIsGenerationDialogOpen] = useState(false);
   const [generationBaseDate, setGenerationBaseDate] = useState(() => normalizedInitialData.timeline.startDate ?? new Date().toISOString().slice(0, 10));
+  const [generationFormState, setGenerationFormState] = useState<WorkScheduleGenerationFormState>(() =>
+    readGenerationFormState(normalizedInitialData.budgetId, normalizedInitialData.groups),
+  );
+  const [generationPreviewCollapsedGroups, setGenerationPreviewCollapsedGroups] = useState<Record<string, boolean>>(() =>
+    readGenerationPreviewCollapsedGroups(normalizedInitialData.budgetId),
+  );
+  const [generationReviewedBudgetItemIds, setGenerationReviewedBudgetItemIds] = useState<string[]>(() =>
+    readGenerationReviewedBudgetItemIds(normalizedInitialData.budgetId),
+  );
   const [generationState, setGenerationState] = useState<"idle" | "saving" | "error">("idle");
   const [generationError, setGenerationError] = useState("");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
@@ -230,6 +266,11 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [valuationRange, setValuationRange] = useState<PeriodRangeSelection>(() => createDefaultValuationRange(normalizedInitialData));
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const basePredecessorMaps = useMemo(() => buildPredecessorRowNumberMaps(data.groups), [data.groups]);
+  const generationLevelPreviewGroups = useMemo(() => buildGenerationLevelPreviewGroups(data.groups), [data.groups]);
+  const effectiveReviewSummary = useMemo(
+    () => deriveEffectiveReviewSummary(data.reviewSummary ?? null, generationReviewedBudgetItemIds),
+    [data.reviewSummary, generationReviewedBudgetItemIds],
+  );
   const previewData = useMemo(
     () =>
       buildPreviewWorkScheduleView({
@@ -487,6 +528,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           baseStartDate: generationBaseDate,
+          reviewedBudgetItemIds: generationReviewedBudgetItemIds,
+          options: buildGenerationOptionsPayload(generationFormState),
         }),
       });
 
@@ -783,6 +826,18 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   useEffect(() => {
     writeOverviewFilter(data.budgetId, overviewFilter);
   }, [data.budgetId, overviewFilter]);
+
+  useEffect(() => {
+    writeGenerationFormState(data.budgetId, generationFormState);
+  }, [data.budgetId, generationFormState]);
+
+  useEffect(() => {
+    writeGenerationPreviewCollapsedGroups(data.budgetId, generationPreviewCollapsedGroups);
+  }, [data.budgetId, generationPreviewCollapsedGroups]);
+
+  useEffect(() => {
+    writeGenerationReviewedBudgetItemIds(data.budgetId, generationReviewedBudgetItemIds);
+  }, [data.budgetId, generationReviewedBudgetItemIds]);
 
   useEffect(() => {
     writeCriticalPathVisibility(data.budgetId, showCriticalPath);
@@ -1324,14 +1379,14 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
             </div>
           ) : null}
 
-          {data.reviewSummary && data.reviewSummary.warnings.length > 0 ? (
+          {effectiveReviewSummary && effectiveReviewSummary.warnings.length > 0 ? (
             <div className="theme-status-warning theme-status-warning-strong space-y-2 rounded-2xl border px-4 py-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-semibold">Revision previa del cronograma</span>
-                <span>{data.reviewSummary.warningCount} advertencias detectadas</span>
+                <span>{effectiveReviewSummary.warningCount} advertencias detectadas</span>
               </div>
               <div className="space-y-2 text-xs">
-                {data.reviewSummary.warnings.map((warning) => (
+                {effectiveReviewSummary.warnings.map((warning) => (
                   <div key={warning.code} className="space-y-1">
                     <p className="font-medium">{warning.label}</p>
                     <p className="theme-muted-text">{warning.count} partidas afectadas.</p>
@@ -1484,11 +1539,44 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
       <WorkScheduleGenerationDialog
         open={isGenerationDialogOpen}
         baseStartDate={generationBaseDate}
+        formState={generationFormState}
+        previewGroups={generationLevelPreviewGroups}
+        collapsedGroups={generationPreviewCollapsedGroups}
+        reviewedBudgetItemIds={generationReviewedBudgetItemIds}
         saveState={generationState}
         error={generationError}
         hasExistingSchedule={orderedLines.some((line) => line.startDate && line.endDate && line.durationDays != null)}
-        reviewSummary={data.reviewSummary ?? null}
+        reviewSummary={effectiveReviewSummary}
         onBaseStartDateChange={setGenerationBaseDate}
+        onFormStateChange={setGenerationFormState}
+        onTogglePreviewGroup={(subBudgetId) =>
+          setGenerationPreviewCollapsedGroups((current) => ({
+            ...current,
+            [subBudgetId]: !current[subBudgetId],
+          }))
+        }
+        onSetAllLevelLinkage={(mode) =>
+          setGenerationFormState((current) => ({
+            ...current,
+            levelLinkage: Object.fromEntries(
+              generationLevelPreviewGroups.flatMap((group) => group.levels.map((level) => [level.levelId, mode])),
+            ),
+          }))
+        }
+        onToggleReviewedBudgetItem={(budgetItemId) =>
+          setGenerationReviewedBudgetItemIds((current) =>
+            current.includes(budgetItemId) ? current.filter((itemId) => itemId !== budgetItemId) : [...current, budgetItemId],
+          )
+        }
+        onMarkAllReviewed={() =>
+          setGenerationReviewedBudgetItemIds((current) => {
+            const allExampleIds = (
+              effectiveReviewSummary?.warnings.flatMap((w) => w.examples.map((e) => e.budgetItemId)) ?? []
+            );
+            const newIds = allExampleIds.filter((id) => !current.includes(id));
+            return newIds.length > 0 ? [...current, ...newIds] : current;
+          })
+        }
         onClose={() => setIsGenerationDialogOpen(false)}
         onSubmit={() => void handleGenerateIntelligentSchedule()}
       />
@@ -3964,21 +4052,39 @@ function WorkScheduleEditorSheet({
 function WorkScheduleGenerationDialog({
   open,
   baseStartDate,
+  formState,
+  previewGroups,
+  collapsedGroups,
+  reviewedBudgetItemIds,
   saveState,
   error,
   hasExistingSchedule,
   reviewSummary,
   onBaseStartDateChange,
+  onFormStateChange,
+  onTogglePreviewGroup,
+  onSetAllLevelLinkage,
+  onToggleReviewedBudgetItem,
+  onMarkAllReviewed,
   onClose,
   onSubmit,
 }: {
   open: boolean;
   baseStartDate: string;
+  formState: WorkScheduleGenerationFormState;
+  previewGroups: GenerationLevelPreviewGroup[];
+  collapsedGroups: Record<string, boolean>;
+  reviewedBudgetItemIds: string[];
   saveState: "idle" | "saving" | "error";
   error: string;
   hasExistingSchedule: boolean;
   reviewSummary: WorkScheduleViewRecord["reviewSummary"];
   onBaseStartDateChange: (value: string) => void;
+  onFormStateChange: (value: WorkScheduleGenerationFormState | ((current: WorkScheduleGenerationFormState) => WorkScheduleGenerationFormState)) => void;
+  onTogglePreviewGroup: (subBudgetId: string) => void;
+  onSetAllLevelLinkage: (mode: LevelLinkageMode) => void;
+  onToggleReviewedBudgetItem: (budgetItemId: string) => void;
+  onMarkAllReviewed: () => void;
   onClose: () => void;
   onSubmit: () => void;
 }) {
@@ -4004,12 +4110,67 @@ function WorkScheduleGenerationDialog({
               </Button>
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-6">
               <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
-                <CardContent className="space-y-4 p-5">
-                  <Field label="Fecha base">
-                    <Input type="date" value={baseStartDate} onChange={(event) => onBaseStartDateChange(event.target.value)} />
-                  </Field>
+                <CardContent className="space-y-7 p-6">
+                  <div className="mb-4">
+                    <Field label="Fecha base">
+                      <Input type="date" value={baseStartDate} onChange={(event) => onBaseStartDateChange(event.target.value)} />
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <Field label="Estrategia base" tooltip="Secuencial: una tras otra. Por niveles: agrupa por nivel. Por similitud: agrupa por metrados.">
+                      <Select
+                        value={formState.strategy}
+                        onChange={(event) => onFormStateChange((current) => ({ ...current, strategy: event.target.value as WorkScheduleGenerationStrategy }))}
+                      >
+                        <option value="sequential">Secuencial</option>
+                        <option value="by_level">Por niveles</option>
+                        <option value="by_similarity">Por similitud</option>
+                      </Select>
+                    </Field>
+
+                    <Field label="Especialidades" tooltip="Independientes: cada especialidad inicia sola. En paralelo: arrancan juntas. Escalonado: inician con N dias de retraso.">
+                      <Select
+                        value={formState.interSubBudgetParallelism}
+                        onChange={(event) => onFormStateChange((current) => ({ ...current, interSubBudgetParallelism: event.target.value as InterSubBudgetParallelism }))}
+                      >
+                        <option value="independent">Independientes</option>
+                        <option value="parallel">En paralelo</option>
+                        <option value="staggered">Escalonado</option>
+                      </Select>
+                    </Field>
+
+                    <Field label="Duracion maxima" tooltip="Limite de dias por partida. Si excede, se divide. Vacio = sin limite.">
+                      <Input
+                        inputMode="numeric"
+                        placeholder="Sin limite"
+                        value={formState.maxDurationDays}
+                        onChange={(event) => onFormStateChange((current) => ({ ...current, maxDurationDays: event.target.value }))}
+                      />
+                    </Field>
+
+                    <Field label="Separacion por similitud" tooltip="Dias entre grupos de partidas similares. Escalona bloques de trabajo parecidos.">
+                      <Input
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={formState.similarityLagDays}
+                        onChange={(event) => onFormStateChange((current) => ({ ...current, similarityLagDays: event.target.value }))}
+                      />
+                    </Field>
+                  </div>
+
+                  {formState.interSubBudgetParallelism === "staggered" ? (
+                    <Field label="Escalonado" tooltip="Dias de retraso entre especialidades. La primera inicia en la fecha base.">
+                      <Input
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={formState.interSubBudgetStaggerDays}
+                        onChange={(event) => onFormStateChange((current) => ({ ...current, interSubBudgetStaggerDays: event.target.value }))}
+                      />
+                    </Field>
+                  ) : null}
 
                   {hasExistingSchedule ? (
                     <div className="theme-status-warning theme-status-warning-strong rounded-2xl border px-4 py-3 text-sm">
@@ -4017,13 +4178,135 @@ function WorkScheduleGenerationDialog({
                     </div>
                   ) : null}
 
+                  {previewGroups.length > 0 ? (
+                    <div className="space-y-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--app-text-strong)]">Previsualizacion de niveles</p>
+                          <p className="mt-1 text-xs text-[var(--app-text-muted)]">
+                            Define si cada titulo o subtitulo debe ejecutarse en paralelo o encadenado.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                            onClick={() => onSetAllLevelLinkage("parallel")}
+                          >
+                            Todo paralelo
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                            onClick={() => onSetAllLevelLinkage("chain")}
+                          >
+                            Todo encadenar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {previewGroups.map((group) => {
+                          const collapsed = collapsedGroups[group.subBudgetId] === true;
+
+                          return (
+                            <div key={group.subBudgetId} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]">
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                                onClick={() => onTogglePreviewGroup(group.subBudgetId)}
+                              >
+                                <span className="text-sm font-semibold text-[var(--app-text-strong)]">
+                                  {group.subBudgetName} ({group.levels.length})
+                                </span>
+                                <span className="text-xs text-[var(--app-text-muted)]">{collapsed ? "Expandir" : "Ocultar"}</span>
+                              </button>
+
+                              {!collapsed ? (
+                                <div className="space-y-2 border-t border-[var(--app-border)] px-4 py-3">
+                                  {group.levels.map((level) => {
+                                    const linkageMode = formState.levelLinkage[level.levelId] ?? "parallel";
+
+                                    return (
+                                      <div key={level.levelId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--app-border)] px-3 py-2">
+                                        <div className="min-w-0">
+                                          <p className="truncate text-sm font-medium text-[var(--app-text-strong)]">{`${level.itemCode}: ${level.description}`}</p>
+                                          <p className="text-xs text-[var(--app-text-muted)]">
+                                            {level.levelType === "TITLE" ? "Titulo" : "Subtitulo"}
+                                          </p>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                                          onClick={() =>
+                                            onFormStateChange((current) => ({
+                                              ...current,
+                                              levelLinkage: {
+                                                ...current.levelLinkage,
+                                                [level.levelId]: linkageMode === "parallel" ? "chain" : "parallel",
+                                              },
+                                            }))
+                                          }
+                                        >
+                                          {linkageMode === "parallel" ? "Paralelo" : "Encadenar"}
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
                   {reviewSummary && reviewSummary.warnings.length > 0 ? (
                     <div className="theme-status-warning theme-status-warning-strong space-y-2 rounded-2xl border px-4 py-3 text-sm">
-                      <p className="font-semibold">Revision previa recomendada</p>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="font-semibold">Revision previa recomendada</p>
+                        {reviewSummary.warnings.flatMap((w) => w.examples).some((e) => !reviewedBudgetItemIds.includes(e.budgetItemId)) ? (
+                          <button
+                            type="button"
+                            className="inline-flex shrink-0 items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-[10px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                            onClick={onMarkAllReviewed}
+                          >
+                            Marcar todos como revisados
+                          </button>
+                        ) : null}
+                      </div>
                       {reviewSummary.warnings.map((warning) => (
                         <div key={warning.code} className="space-y-1">
-                          <p>{warning.label}</p>
-                          <p className="theme-muted-text text-xs">{warning.count} partidas afectadas.</p>
+                          <p className="text-xs">{warning.label}</p>
+                          <p className="theme-muted-text text-[10px]">{warning.count} partidas afectadas.</p>
+                          {warning.examples.length > 0 ? (
+                            <div className="space-y-1.5 pt-1">
+                              {warning.examples.map((example) => {
+                                const reviewed = reviewedBudgetItemIds.includes(example.budgetItemId);
+
+                                return (
+                                  <div
+                                    key={example.budgetItemId}
+                                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1"
+                                  >
+                                    <span className="min-w-0 truncate text-[11px] text-[var(--app-text-strong)]">{`${example.itemCode}: ${example.description}`}</span>
+                                    <button
+                                      type="button"
+                                      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition ${
+                                        reviewed
+                                          ? "border-sky-300 bg-sky-100 text-sky-700 hover:border-sky-400 hover:bg-sky-200"
+                                          : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                                      }`}
+                                      onClick={() => onToggleReviewedBudgetItem(example.budgetItemId)}
+                                    >
+                                      {reviewed ? "Revisada" : "Marcar como revisada"}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -4161,10 +4444,46 @@ function WorkScheduleExportMenuButton({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, tooltip }: { label: string; children: React.ReactNode; tooltip?: string }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const wrapperRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!showTooltip) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setShowTooltip(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [showTooltip]);
+
   return (
     <label className="space-y-2 text-sm">
-      <span className="font-medium text-[var(--app-text)]">{label}</span>
+      <span className="inline-flex items-center gap-1.5 font-medium text-[var(--app-text)]">
+        {label}
+        {tooltip ? (
+          <span ref={wrapperRef} className="relative inline-flex">
+            <Info
+              className="h-3.5 w-3.5 cursor-pointer text-[var(--app-text-muted)] transition-colors hover:text-sky-500"
+              onClick={(event) => {
+                event.preventDefault();
+                setShowTooltip((current) => !current);
+              }}
+            />
+            {showTooltip ? (
+              <span
+                className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 w-72 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1.5 text-[11px] font-normal leading-snug text-[var(--app-text)] shadow-lg whitespace-normal"
+              >
+                {tooltip}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+      </span>
       {children}
     </label>
   );
@@ -4655,6 +4974,38 @@ function getCurveWorkbookScopeStorageKey(budgetId: string) {
   return `work-schedule-curve-workbook-scope:${budgetId}`;
 }
 
+function getGenerationStrategyStorageKey(budgetId: string) {
+  return `work-schedule-generation-strategy:${budgetId}`;
+}
+
+function getGenerationLevelLinkageStorageKey(budgetId: string) {
+  return `work-schedule-generation-level-linkage:${budgetId}`;
+}
+
+function getGenerationParallelismStorageKey(budgetId: string) {
+  return `work-schedule-generation-parallelism:${budgetId}`;
+}
+
+function getGenerationStaggerDaysStorageKey(budgetId: string) {
+  return `work-schedule-generation-stagger-days:${budgetId}`;
+}
+
+function getGenerationMaxDurationStorageKey(budgetId: string) {
+  return `work-schedule-generation-max-duration:${budgetId}`;
+}
+
+function getGenerationSimilarityLagStorageKey(budgetId: string) {
+  return `work-schedule-generation-similarity-lag:${budgetId}`;
+}
+
+function getGenerationPreviewCollapsedGroupsStorageKey(budgetId: string) {
+  return `work-schedule-generation-preview-collapsed:${budgetId}`;
+}
+
+function getGenerationReviewedItemsStorageKey(budgetId: string) {
+  return `work-schedule-generation-reviewed-items:${budgetId}`;
+}
+
 function readCollapsedGroups(budgetId: string): Record<string, boolean> {
   if (typeof window === "undefined") {
     return {};
@@ -4673,6 +5024,231 @@ function readCollapsedGroups(budgetId: string): Record<string, boolean> {
   } catch {
     return {};
   }
+}
+
+function buildGenerationLevelPreviewGroups(groups: WorkScheduleViewRecord["groups"]): GenerationLevelPreviewGroup[] {
+  return groups
+    .map((group) => ({
+      subBudgetId: group.subBudgetId,
+      subBudgetName: group.subBudgetName,
+      levels: group.rows.flatMap((row) =>
+        row.kind === "level"
+          ? [{
+              levelId: row.levelId,
+              levelType: row.levelType,
+              itemCode: row.itemCode,
+              description: row.description,
+            }]
+          : [],
+      ),
+    }))
+    .filter((group) => group.levels.length > 0);
+}
+
+function isWorkScheduleGenerationStrategy(value: string): value is WorkScheduleGenerationStrategy {
+  return value === "sequential" || value === "by_level" || value === "by_similarity";
+}
+
+function isInterSubBudgetParallelism(value: string): value is InterSubBudgetParallelism {
+  return value === "independent" || value === "parallel" || value === "staggered";
+}
+
+function readGenerationFormState(
+  budgetId: string,
+  groups: WorkScheduleViewRecord["groups"],
+): WorkScheduleGenerationFormState {
+  const previewGroups = buildGenerationLevelPreviewGroups(groups);
+  const defaultStrategy: WorkScheduleGenerationStrategy = previewGroups.length > 0 ? "by_level" : "sequential";
+
+  if (typeof window === "undefined") {
+    return {
+      strategy: defaultStrategy,
+      interSubBudgetParallelism: "independent",
+      interSubBudgetStaggerDays: "7",
+      maxDurationDays: "",
+      similarityLagDays: "0",
+      levelLinkage: Object.fromEntries(
+        previewGroups.flatMap((group) => group.levels.map((level) => [level.levelId, "parallel" as const])),
+      ),
+    };
+  }
+
+  const storedStrategy = window.localStorage.getItem(getGenerationStrategyStorageKey(budgetId));
+  const storedParallelism = window.localStorage.getItem(getGenerationParallelismStorageKey(budgetId));
+  const baseLevelLinkage = Object.fromEntries(
+    previewGroups.flatMap((group) => group.levels.map((level) => [level.levelId, "parallel" as const])),
+  );
+
+  let parsedLevelLinkage = baseLevelLinkage;
+  try {
+    const storedLevelLinkage = window.localStorage.getItem(getGenerationLevelLinkageStorageKey(budgetId));
+    if (storedLevelLinkage) {
+      const raw = JSON.parse(storedLevelLinkage) as Record<string, unknown>;
+      parsedLevelLinkage = {
+        ...baseLevelLinkage,
+        ...Object.fromEntries(
+          Object.entries(raw).filter((entry): entry is [string, LevelLinkageMode] => entry[1] === "parallel" || entry[1] === "chain"),
+        ),
+      };
+    }
+  } catch {
+    parsedLevelLinkage = baseLevelLinkage;
+  }
+
+  return {
+    strategy: storedStrategy && isWorkScheduleGenerationStrategy(storedStrategy) ? storedStrategy : defaultStrategy,
+    interSubBudgetParallelism:
+      storedParallelism && isInterSubBudgetParallelism(storedParallelism) ? storedParallelism : "independent",
+    interSubBudgetStaggerDays: window.localStorage.getItem(getGenerationStaggerDaysStorageKey(budgetId)) ?? "7",
+    maxDurationDays: window.localStorage.getItem(getGenerationMaxDurationStorageKey(budgetId)) ?? "",
+    similarityLagDays: window.localStorage.getItem(getGenerationSimilarityLagStorageKey(budgetId)) ?? "0",
+    levelLinkage: parsedLevelLinkage,
+  };
+}
+
+function writeGenerationFormState(budgetId: string, formState: WorkScheduleGenerationFormState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(getGenerationStrategyStorageKey(budgetId), formState.strategy);
+  window.localStorage.setItem(getGenerationParallelismStorageKey(budgetId), formState.interSubBudgetParallelism);
+  window.localStorage.setItem(getGenerationLevelLinkageStorageKey(budgetId), JSON.stringify(formState.levelLinkage));
+
+  writeStringPreference(getGenerationStaggerDaysStorageKey(budgetId), formState.interSubBudgetStaggerDays, "7");
+  writeStringPreference(getGenerationMaxDurationStorageKey(budgetId), formState.maxDurationDays, "");
+  writeStringPreference(getGenerationSimilarityLagStorageKey(budgetId), formState.similarityLagDays, "0");
+}
+
+function readGenerationPreviewCollapsedGroups(budgetId: string): Record<string, boolean> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(getGenerationPreviewCollapsedGroupsStorageKey(budgetId));
+    if (!storedValue) {
+      return {};
+    }
+
+    const parsedValue = JSON.parse(storedValue) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsedValue).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeGenerationPreviewCollapsedGroups(budgetId: string, collapsedGroups: Record<string, boolean>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const activeCollapsedGroups = Object.fromEntries(Object.entries(collapsedGroups).filter((entry) => entry[1] === true));
+  if (Object.keys(activeCollapsedGroups).length === 0) {
+    window.localStorage.removeItem(getGenerationPreviewCollapsedGroupsStorageKey(budgetId));
+    return;
+  }
+
+  window.localStorage.setItem(getGenerationPreviewCollapsedGroupsStorageKey(budgetId), JSON.stringify(activeCollapsedGroups));
+}
+
+function readGenerationReviewedBudgetItemIds(budgetId: string): string[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(getGenerationReviewedItemsStorageKey(budgetId));
+    if (!storedValue) {
+      return [];
+    }
+
+    const parsedValue = JSON.parse(storedValue) as unknown[];
+    return parsedValue.filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function writeGenerationReviewedBudgetItemIds(budgetId: string, reviewedBudgetItemIds: string[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (reviewedBudgetItemIds.length === 0) {
+    window.localStorage.removeItem(getGenerationReviewedItemsStorageKey(budgetId));
+    return;
+  }
+
+  window.localStorage.setItem(getGenerationReviewedItemsStorageKey(budgetId), JSON.stringify(reviewedBudgetItemIds));
+}
+
+function deriveEffectiveReviewSummary(
+  reviewSummary: WorkScheduleViewRecord["reviewSummary"],
+  reviewedBudgetItemIds: string[],
+) {
+  if (!reviewSummary) {
+    return null;
+  }
+
+  const reviewedIds = new Set(reviewedBudgetItemIds);
+  const warnings = reviewSummary.warnings
+    .map((warning) => {
+      const reviewedExampleCount = warning.examples.filter((example) => reviewedIds.has(example.budgetItemId)).length;
+      const nextCount = Math.max(0, warning.count - reviewedExampleCount);
+      const nextExamples = warning.examples.filter((example) => !reviewedIds.has(example.budgetItemId));
+
+      return {
+        ...warning,
+        count: nextCount,
+        examples: nextExamples,
+      };
+    })
+    .filter((warning) => warning.count > 0);
+
+  const warningCount = warnings.reduce((sum, warning) => sum + warning.count, 0);
+
+  return {
+    ...reviewSummary,
+    warningCount,
+    warnings,
+  };
+}
+
+function buildGenerationOptionsPayload(formState: WorkScheduleGenerationFormState): WorkScheduleGenerationOptions {
+  return {
+    strategy: formState.strategy,
+    interSubBudgetParallelism: formState.interSubBudgetParallelism,
+    interSubBudgetStaggerDays: parseOptionalPositiveInteger(formState.interSubBudgetStaggerDays),
+    maxDurationDays: parseOptionalPositiveInteger(formState.maxDurationDays),
+    similarityLagDays: parseOptionalNonNegativeInteger(formState.similarityLagDays) ?? 0,
+    levelLinkage: Object.keys(formState.levelLinkage).length > 0 ? formState.levelLinkage : null,
+  };
+}
+
+function parseOptionalPositiveInteger(value: string) {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? Math.round(parsedValue) : null;
+}
+
+function parseOptionalNonNegativeInteger(value: string) {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) && parsedValue >= 0 ? Math.round(parsedValue) : null;
+}
+
+function writeStringPreference(storageKey: string, value: string, defaultValue: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (value === defaultValue) {
+    window.localStorage.removeItem(storageKey);
+    return;
+  }
+
+  window.localStorage.setItem(storageKey, value);
 }
 
 function writeCollapsedGroups(budgetId: string, collapsedGroups: Record<string, boolean>) {
