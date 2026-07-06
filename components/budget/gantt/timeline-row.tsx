@@ -119,9 +119,7 @@ export const TimelineRow = memo(function TimelineRow({
         <div
           className={cn(
             "absolute inset-y-2 z-20 overflow-visible rounded-full",
-            showCriticalPath && line?.criticalPath?.isCritical
-              ? "shadow-[0_10px_20px_-16px_rgba(225,29,72,0.9)] ring-1 ring-rose-300 dark:ring-rose-500/40"
-              : row.kind === "line"
+            row.kind === "line"
               ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)] ring-1 ring-black/5 dark:ring-white/6"
               : "bg-[var(--app-text-subtle)]/90",
           )}

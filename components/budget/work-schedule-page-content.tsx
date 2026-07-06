@@ -15,7 +15,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type UIEvent as ReactUIEvent,
 } from "react";
-import { CalendarDays, ChartSpline, Info, MoreHorizontal, Package2, PenSquare, Save, WandSparkles, X } from "lucide-react";
+import { CalendarDays, ChartSpline, ChevronDown, Info, MoreHorizontal, Package2, PenSquare, Save, WandSparkles, X } from "lucide-react";
 import type ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -218,6 +218,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     readEditingLine(normalizedInitialData, buildPredecessorRowNumberMaps(normalizedInitialData.groups).itemCodeToRowNumber),
   );
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => readCollapsedGroups(normalizedInitialData.budgetId));
+  const [collapsedLevelIds, setCollapsedLevelIds] = useState<Record<string, boolean>>(() => readCollapsedLevelIds(normalizedInitialData.budgetId));
   const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(() => readOverviewFilter(normalizedInitialData.budgetId));
   const [showCriticalPath, setShowCriticalPath] = useState(() => readCriticalPathVisibility(normalizedInitialData.budgetId));
   const [resourceCalendarMode, setResourceCalendarMode] = useState<ResourceCalendarMode>(() => readResourceCalendarMode(normalizedInitialData.budgetId));
@@ -561,6 +562,13 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     }));
   }, []);
 
+  const handleToggleCollapsedLevel = useCallback((rowId: string) => {
+    setCollapsedLevelIds((current) => ({
+      ...current,
+      [rowId]: !current[rowId],
+    }));
+  }, []);
+
   const handleCollapseAllGroups = useCallback(() => {
     setCollapsedGroups(Object.fromEntries(data.groups.map((group) => [group.subBudgetId, true])));
   }, [data.groups]);
@@ -824,6 +832,10 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   useEffect(() => {
     writeCollapsedGroups(data.budgetId, collapsedGroups);
   }, [collapsedGroups, data.budgetId]);
+
+  useEffect(() => {
+    writeCollapsedLevelIds(data.budgetId, collapsedLevelIds);
+  }, [collapsedLevelIds, data.budgetId]);
 
   useEffect(() => {
     writeOverviewFilter(data.budgetId, overviewFilter);
@@ -1417,7 +1429,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           currencyDecimals={currencyDecimals}
           predecessorItemCodeToRowNumber={predecessorItemCodeToRowNumber}
           collapsedGroups={collapsedGroups}
+          collapsedLevelIds={collapsedLevelIds}
           onToggleGroup={handleToggleCollapsedGroup}
+          onToggleCollapsedLevel={handleToggleCollapsedLevel}
           onCollapseAll={handleCollapseAllGroups}
           onExpandAll={handleExpandAllGroups}
           overviewFilter={overviewFilter}
@@ -1595,7 +1609,9 @@ function WorkScheduleOverview({
   currencyDecimals,
   predecessorItemCodeToRowNumber,
   collapsedGroups,
+  collapsedLevelIds,
   onToggleGroup,
+  onToggleCollapsedLevel,
   onCollapseAll,
   onExpandAll,
   overviewFilter,
@@ -1628,7 +1644,9 @@ function WorkScheduleOverview({
   currencyDecimals: number;
   predecessorItemCodeToRowNumber: Map<string, number>;
   collapsedGroups: Record<string, boolean>;
+  collapsedLevelIds: Record<string, boolean>;
   onToggleGroup: (subBudgetId: string) => void;
+  onToggleCollapsedLevel: (rowId: string) => void;
   onCollapseAll: () => void;
   onExpandAll: () => void;
   overviewFilter: OverviewFilter;
@@ -1766,6 +1784,18 @@ function WorkScheduleOverview({
   const overviewVirtualItems = useMemo<OverviewVirtualItem[]>(() => {
     const items: OverviewVirtualItem[] = [];
 
+    // Build set of line IDs hidden by collapsed levels
+    const hiddenLineIds = new Set<string>();
+    for (const group of visibleGroups) {
+      for (const row of group.rows) {
+        if (row.kind === "level" && collapsedLevelIds[row.rowId] === true) {
+          for (const id of row.childLineIds) {
+            hiddenLineIds.add(id);
+          }
+        }
+      }
+    }
+
     for (const group of visibleGroups) {
       const collapsed = collapsedGroups[group.subBudgetId] === true;
       items.push({
@@ -1781,6 +1811,21 @@ function WorkScheduleOverview({
       }
 
       for (const row of group.rows) {
+        if (row.kind === "level") {
+          // Skip level rows that are inside a collapsed parent level
+          const isNestedInCollapsedParent =
+            row.childLineIds.length > 0 &&
+            collapsedLevelIds[row.rowId] !== true &&
+            row.childLineIds.some((id) => hiddenLineIds.has(id));
+          if (isNestedInCollapsedParent) {
+            continue;
+          }
+        } else if (row.kind === "line") {
+          // Skip line rows hidden by a collapsed level
+          if (hiddenLineIds.has(row.line.budgetItemId)) {
+            continue;
+          }
+        }
         items.push({
           key: `row:${row.rowId}`,
           kind: "row",
@@ -1792,7 +1837,7 @@ function WorkScheduleOverview({
     }
 
     return items;
-  }, [collapsedGroups, tableGroupHeights, tableLineHeights, visibleGroups]);
+  }, [collapsedGroups, collapsedLevelIds, tableGroupHeights, tableLineHeights, visibleGroups]);
   const overviewVirtualWindow = useMemo(
     () =>
       buildOverviewVirtualWindow({
@@ -2705,6 +2750,8 @@ function WorkScheduleOverview({
                             currencyDecimals={currencyDecimals}
                             showCostColumns={showCostColumns}
                             rowNumber={overviewRowNumbers[`row:${item.row.rowId}`] ?? null}
+                            collapsed={collapsedLevelIds[item.row.rowId] === true}
+                            onToggleCollapsed={onToggleCollapsedLevel}
                             onRegisterRow={setLineRowRef}
                           />
                         ),
@@ -3244,6 +3291,8 @@ type WorkScheduleLevelTableRowProps = {
   currency: string;
   currencyDecimals: number;
   showCostColumns: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: (rowId: string) => void;
   onRegisterRow: (rowId: string, element: HTMLElement | null) => void;
 };
 
@@ -3254,6 +3303,8 @@ const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
   currency,
   currencyDecimals,
   showCostColumns,
+  collapsed,
+  onToggleCollapsed,
   onRegisterRow,
 }: WorkScheduleLevelTableRowProps) {
   const toneClassName =
@@ -3266,7 +3317,20 @@ const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
       <TD className="bg-[var(--app-surface-strong)] px-1 text-center align-middle !text-[10px] font-medium text-[var(--app-text-muted)]">{rowNumber ?? ""}</TD>
       <TD className="align-middle">{row.itemCode}</TD>
       <TD className="align-middle">
-        <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+        <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap">
+          <button
+            type="button"
+            onClick={() => onToggleCollapsed(row.rowId)}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)] focus-visible:outline-none"
+            aria-label={collapsed ? "Expandir" : "Contraer"}
+          >
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                collapsed ? "-rotate-90" : "rotate-0",
+              )}
+            />
+          </button>
           <span className="shrink-0 rounded-full border border-[var(--app-border-strong)] bg-[var(--app-surface)]/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--app-text-muted)]">
             {row.levelType === "TITLE" ? "Titulo" : "Subtitulo"}
           </span>
@@ -3394,6 +3458,8 @@ function areWorkScheduleLevelTableRowPropsEqual(
     previousProps.currency === nextProps.currency &&
     previousProps.currencyDecimals === nextProps.currencyDecimals &&
     previousProps.showCostColumns === nextProps.showCostColumns &&
+    previousProps.collapsed === nextProps.collapsed &&
+    previousProps.onToggleCollapsed === nextProps.onToggleCollapsed &&
     previousProps.onRegisterRow === nextProps.onRegisterRow
   );
 }
@@ -4919,6 +4985,51 @@ function buildWorkbookExportPreviewBadges(
 
 function getCollapsedGroupsStorageKey(budgetId: string) {
   return `work-schedule-collapsed-groups:${budgetId}`;
+}
+
+function getCollapsedLevelIdsStorageKey(budgetId: string) {
+  return `work-schedule-collapsed-level-ids:${budgetId}`;
+}
+
+function readCollapsedLevelIds(budgetId: string): Record<string, boolean> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(getCollapsedLevelIdsStorageKey(budgetId));
+    if (!storedValue) {
+      return {};
+    }
+
+    const parsed = JSON.parse(storedValue) as Record<string, boolean>;
+    if (typeof parsed !== "object" || parsed === null) {
+      return {};
+    }
+
+    return Object.fromEntries(Object.entries(parsed).filter((entry) => entry[1] === true));
+  } catch {
+    return {};
+  }
+}
+
+function writeCollapsedLevelIds(budgetId: string, collapsedLevelIds: Record<string, boolean>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const activeCollapsedIds = Object.fromEntries(Object.entries(collapsedLevelIds).filter((entry) => entry[1] === true));
+
+  if (Object.keys(activeCollapsedIds).length === 0) {
+    window.localStorage.removeItem(getCollapsedLevelIdsStorageKey(budgetId));
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(getCollapsedLevelIdsStorageKey(budgetId), JSON.stringify(activeCollapsedIds));
+  } catch {
+    // quota exceeded, ignore
+  }
 }
 
 function getActiveViewStorageKey(budgetId: string) {

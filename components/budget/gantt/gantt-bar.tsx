@@ -228,9 +228,7 @@ export const GanttBar = memo(function GanttBar({
     <div
       className={cn(
         "group absolute top-1/2 h-5 -translate-y-1/2 overflow-visible rounded-full",
-        isCritical
-          ? "ring-2 ring-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.35)]"
-          : "shadow-sm",
+        "shadow-sm",
         isInteracting && "z-20",
         state.isValid ? "opacity-100" : "opacity-70",
       )}
@@ -258,7 +256,7 @@ export const GanttBar = memo(function GanttBar({
                 key={`${distribution.year}-${distribution.month}`}
                 className={cn(
                   "h-full",
-                  segmentColors[index % segmentColors.length],
+                  isCritical ? "bg-rose-500" : segmentColors[index % segmentColors.length],
                 )}
                 style={{ width: `${distribution.percentage}%` }}
               />
