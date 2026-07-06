@@ -57,9 +57,9 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 function revalidateBudgetPaths(projectId: string, budgetId: string) {
   revalidatePath("/dashboard");
   revalidateTag("dashboard-stats", "max");
-  revalidateTag("dashboard-analytics");
-  revalidateTag(BUDGETS_LIST_CACHE_TAG);
-  revalidateTag(BUDGET_DETAIL_CACHE_TAG);
+  revalidateTag("dashboard-analytics", "max");
+  revalidateTag(BUDGETS_LIST_CACHE_TAG, "max");
+  revalidateTag(BUDGET_DETAIL_CACHE_TAG, "max");
   revalidatePath("/budgets");
   revalidatePath(`/budgets/${budgetId}`);
   revalidatePath("/projects");

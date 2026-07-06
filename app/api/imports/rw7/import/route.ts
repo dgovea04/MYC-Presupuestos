@@ -43,8 +43,8 @@ export async function POST(request: Request) {
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("dashboard-analytics");
-    revalidateTag("projects-list");
+    revalidateTag("dashboard-analytics", "max");
+    revalidateTag("projects-list", "max");
     revalidatePath("/projects");
     revalidatePath(`/projects/${result.projectId}`);
     revalidatePath("/budgets");

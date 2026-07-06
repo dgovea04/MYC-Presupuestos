@@ -322,13 +322,7 @@ export function PolynomialFormulaEditor({
       setKPreviewError("");
 
       try {
-        const response = { ok: true, json: async () => loadUnifiedIndices(month, year) };
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error ?? "No se pudieron cargar los índices de reajuste");
-        }
-
-        const indices = (await response.json()) as UnifiedIndexRecord[];
+        const indices = await loadUnifiedIndices(month, year);
         const uniqueByCode = new Map<string, UnifiedIndexRecord>();
         const duplicateCodes = new Set<string>();
 
@@ -401,15 +395,7 @@ export function PolynomialFormulaEditor({
 
     let isActive = true;
 
-    void Promise.resolve({ ok: true, json: async () => loadUnifiedIndices(formula.baseMonth, formula.baseYear) })
-      .then(async (response) => {
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error ?? "No se pudieron cargar los índices base");
-        }
-
-        return (await response.json()) as UnifiedIndexRecord[];
-      })
+    void loadUnifiedIndices(formula.baseMonth, formula.baseYear)
       .then((data) => {
         if (!isActive) return;
         setBaseIndexOptions(data);

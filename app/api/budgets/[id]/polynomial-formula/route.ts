@@ -76,7 +76,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await revalidatePolynomialFormulaCaches(formula.budgetId, session.user.id, formula.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("dashboard-analytics");
+    revalidateTag("dashboard-analytics", "max");
     return NextResponse.json(formula, { status: 201 });
   } catch (error) {
     return NextResponse.json(
@@ -112,7 +112,7 @@ export async function PATCH(request: Request) {
     await revalidatePolynomialFormulaCaches(formula.budgetId, session.user.id, formula.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("dashboard-analytics");
+    revalidateTag("dashboard-analytics", "max");
     return NextResponse.json(formula);
   } catch (error) {
     return NextResponse.json(

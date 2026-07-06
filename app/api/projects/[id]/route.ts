@@ -52,10 +52,10 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 function revalidateProjectPaths(projectId: string) {
   revalidatePath("/dashboard");
   revalidateTag("dashboard-stats", "max");
-  revalidateTag("dashboard-analytics");
-  revalidateTag(PROJECTS_LIST_CACHE_TAG);
-  revalidateTag(PROJECT_OVERVIEW_CACHE_TAG);
-  revalidateTag(USER_COMPANIES_CACHE_TAG);
+  revalidateTag("dashboard-analytics", "max");
+  revalidateTag(PROJECTS_LIST_CACHE_TAG, "max");
+  revalidateTag(PROJECT_OVERVIEW_CACHE_TAG, "max");
+  revalidateTag(USER_COMPANIES_CACHE_TAG, "max");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/budgets");

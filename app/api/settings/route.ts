@@ -34,7 +34,7 @@ export async function PATCH(request: Request) {
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("user-settings");
+    revalidateTag("user-settings", "max");
     revalidatePath("/projects");
     revalidatePath("/budgets");
     revalidatePath("/resources");

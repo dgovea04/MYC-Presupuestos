@@ -23,7 +23,7 @@ export async function PATCH(request: Request) {
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag(USER_COMPANIES_CACHE_TAG);
+    revalidateTag(USER_COMPANIES_CACHE_TAG, "max");
     revalidatePath("/projects");
     revalidatePath("/budgets");
     revalidatePath("/resources");

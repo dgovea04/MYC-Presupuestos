@@ -36,6 +36,7 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
+import { countWorkDays } from "@/lib/work-schedule/calendar";
 import { TimelineRow as GanttTimelineRow } from "@/components/budget/gantt/timeline-row";
 import { GanttConnectionOverlay } from "@/components/budget/gantt/gantt-connection-overlay";
 import { DependencyEditPopover } from "@/components/budget/gantt/dependency-edit-popover";
@@ -1096,7 +1097,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <InfoTile label="Proyecto" value={data.projectName} />
-            <InfoTile label="Ventana" value={formatTimelineRange(data.timeline.startDate, data.timeline.endDate, dateFormat)} />
+            {(() => { const start = data.timeline.startDate; const end = data.timeline.endDate; const days = start && end ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1 : null; const workDays = start && end && data.workCalendar ? countWorkDays(start, end, data.workCalendar.workDays) : null; return <InfoTile label="Ventana" value={days != null ? `${formatTimelineRange(start, end, dateFormat)} · ${days} días${workDays != null ? ` (${workDays} hábiles)` : ""}` : formatTimelineRange(start, end, dateFormat)} />; })()}
             <InfoTile label="Total programado" value={formatCurrency(summary.totalAmount, data.currency, currencyDecimals)} />
             <InfoTile label="Insumos derivados" value={`${data.resourceCalendar?.rows.length ?? 0}`} />
           </div>
@@ -3311,7 +3312,7 @@ function TimelineHeader({
             data-testid="work-schedule-month-band"
             className={cn(
               "flex items-center justify-center px-1.5 text-center text-[11px] font-semibold",
-              timelineDayWidth >= MIN_LEGIBLE_TIMELINE_DAY_WIDTH_PX ? "h-5" : "h-8",
+              timelineDayWidth >= MIN_LEGIBLE_TIMELINE_DAY_WIDTH_PX ? "h-5 text-[11px]" : "h-[72px] text-sm",
               isExcelMode
                 ? index % 2 === 0
                   ? "bg-[var(--app-surface-muted)] text-[var(--app-text)]"
@@ -5380,15 +5381,6 @@ function buildPreviewWorkScheduleView({
   for (const draft of draftEntries.values()) {
     nextLines = nextLines.map((line) =>
       line.budgetItemId === draft.budgetItemId ? applyEditableDraftToLine(line, draft, rowNumberToItemCode) : line,
-    );
-    const nextLinesByCode = new Map(nextLines.map((line) => [line.itemCode, line]));
-    nextLines = nextLines.map((line) =>
-      line.budgetItemId === draft.budgetItemId
-        ? (() => {
-            const recalculatedLine = recalculateWorkScheduleLineFromPredecessors(line, nextLinesByCode);
-            return recalculatedLine ? { ...line, ...recalculatedLine } : line;
-          })()
-        : line,
     );
     nextLines = recalculateDependentWorkScheduleLines(nextLines, draft.budgetItemId);
   }

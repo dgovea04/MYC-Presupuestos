@@ -343,6 +343,7 @@ export async function getProjectById(id: string, userId: string) {
     return {
       ...project,
       budgets,
+      workCalendarId: project.projectCalendars[0]?.workCalendarId ?? null,
     };
   });
 }

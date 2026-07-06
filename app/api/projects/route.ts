@@ -19,8 +19,8 @@ export async function POST(request: Request) {
     await safelyRecordProjectCreatedActivity(project.id, project.name, session.user.id, getRequestTemplateId(body));
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("dashboard-analytics");
-    revalidateTag("projects-list");
+    revalidateTag("dashboard-analytics", "max");
+    revalidateTag("projects-list", "max");
     revalidatePath("/projects");
     revalidatePath(`/projects/${project.id}`);
     revalidatePath("/budgets");

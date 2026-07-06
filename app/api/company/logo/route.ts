@@ -13,7 +13,7 @@ const COMPANY_LOGO_SAVE_ERROR = "No se pudo guardar el logo de la empresa.";
 function revalidateCompanyPaths() {
   revalidatePath("/dashboard");
   revalidateTag("dashboard-stats", "max");
-  revalidateTag(USER_COMPANIES_CACHE_TAG);
+  revalidateTag(USER_COMPANIES_CACHE_TAG, "max");
   revalidatePath("/projects");
   revalidatePath("/budgets");
   revalidatePath("/resources");

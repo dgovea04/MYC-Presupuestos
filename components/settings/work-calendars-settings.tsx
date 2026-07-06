@@ -202,9 +202,10 @@ export function WorkCalendarsSettings({ initialCalendars }: { initialCalendars?:
           const payload = await response.json() as { error?: string };
           throw new Error(payload.error ?? "No se pudieron cargar las excepciones");
         }
+        const exceptions = await response.json() as ExceptionItem[];
         setExceptionsByCalendar((prev) => ({
           ...prev,
-          [calendarId]: await response.json() as ExceptionItem[],
+          [calendarId]: exceptions,
         }));
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Error al cargar excepciones");
@@ -257,9 +258,10 @@ export function WorkCalendarsSettings({ initialCalendars }: { initialCalendars?:
       // Reload exceptions
       const reloadResponse = await fetch(`/api/work-calendars/exceptions?workCalendarId=${expandedCalendarId}`);
       if (reloadResponse.ok) {
+        const reloadedExceptions = await reloadResponse.json() as ExceptionItem[];
         setExceptionsByCalendar((prev) => ({
           ...prev,
-          [expandedCalendarId]: await reloadResponse.json() as ExceptionItem[],
+          [expandedCalendarId]: reloadedExceptions,
         }));
       }
     } catch (caught) {
@@ -284,9 +286,10 @@ export function WorkCalendarsSettings({ initialCalendars }: { initialCalendars?:
       // Reload exceptions
       const reloadResponse = await fetch(`/api/work-calendars/exceptions?workCalendarId=${expandedCalendarId}`);
       if (reloadResponse.ok) {
+        const reloadedExceptions = await reloadResponse.json() as ExceptionItem[];
         setExceptionsByCalendar((prev) => ({
           ...prev,
-          [expandedCalendarId]: await reloadResponse.json() as ExceptionItem[],
+          [expandedCalendarId]: reloadedExceptions,
         }));
       }
     } catch (caught) {

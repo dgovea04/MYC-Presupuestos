@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectById, getUserCompanies } from "@/lib/data/projects";
+import { getWorkCalendars } from "@/lib/data/work-calendars";
 import { ProjectForm } from "@/components/projects/project-form";
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getAuthSession();
-  const [project, companies] = await Promise.all([getProjectById(id, session!.user.id), getUserCompanies(session!.user.id)]);
+  const [project, companies, workCalendars] = await Promise.all([getProjectById(id, session!.user.id), getUserCompanies(session!.user.id), getWorkCalendars()]);
 
   if (!project) {
     notFound();
@@ -27,7 +28,7 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
           />
         </CardHeader>
         <CardContent className="pt-6">
-          <ProjectForm companies={companies} project={project} />
+          <ProjectForm companies={companies} workCalendars={workCalendars} project={project} />
         </CardContent>
       </Card>
     </AppShell>

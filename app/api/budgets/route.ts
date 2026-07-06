@@ -24,9 +24,9 @@ export async function POST(request: Request) {
     });
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("dashboard-analytics");
-    revalidateTag(BUDGETS_LIST_CACHE_TAG);
-    revalidateTag(PROJECT_OVERVIEW_CACHE_TAG);
+    revalidateTag("dashboard-analytics", "max");
+    revalidateTag(BUDGETS_LIST_CACHE_TAG, "max");
+    revalidateTag(PROJECT_OVERVIEW_CACHE_TAG, "max");
     revalidatePath("/budgets");
     revalidatePath("/projects");
     revalidatePath(`/projects/${budget.projectId}`);
