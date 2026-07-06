@@ -317,6 +317,15 @@ export async function getProjectById(id: string, userId: string) {
       },
       include: {
         company: true,
+        projectCalendars: {
+          include: {
+            workCalendar: {
+              include: {
+                exceptions: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -363,6 +372,30 @@ const _getProjectOverviewById = async (id: string, userId: string) => {
           name: true,
         },
       },
+      projectCalendars: {
+        select: {
+          id: true,
+          label: true,
+          sortOrder: true,
+          workCalendar: {
+            select: {
+              id: true,
+              name: true,
+              workDays: true,
+              workHoursPerDay: true,
+              exceptions: {
+                select: {
+                  id: true,
+                  date: true,
+                  type: true,
+                  description: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { sortOrder: "asc" },
+      },
       budgets: {
         select: {
           id: true,
@@ -393,6 +426,20 @@ function normalizeProjectOverviewDates(
     endDate: project.endDate ? ensureDate(project.endDate) : null,
     createdAt: ensureDate(project.createdAt),
     updatedAt: ensureDate(project.updatedAt),
+    workCalendar: project.projectCalendars?.[0]?.workCalendar
+      ? {
+          id: project.projectCalendars[0].workCalendar.id,
+          name: project.projectCalendars[0].workCalendar.name,
+          workDays: project.projectCalendars[0].workCalendar.workDays,
+          workHoursPerDay: Number(project.projectCalendars[0].workCalendar.workHoursPerDay),
+          exceptions: project.projectCalendars[0].workCalendar.exceptions.map((e) => ({
+            id: e.id,
+            date: e.date.toISOString().slice(0, 10),
+            type: e.type as "HOLIDAY" | "WORK_DAY",
+            description: e.description,
+          })),
+        }
+      : null,
     budgets: project.budgets.map((budget) => ({
       ...budget,
       updatedAt: ensureDate(budget.updatedAt),
@@ -471,6 +518,14 @@ export async function createProject(userId: string, input: ProjectInput) {
         status: data.status,
         startDate: data.startDate ? new Date(data.startDate) : undefined,
         endDate: data.endDate ? new Date(data.endDate) : undefined,
+        projectCalendars: data.workCalendarId
+          ? {
+              create: {
+                workCalendarId: data.workCalendarId,
+                sortOrder: 0,
+              },
+            }
+          : undefined,
       },
     });
 
@@ -515,15 +570,34 @@ export async function updateProject(id: string, userId: string, input: Partial<P
     startDate: input.startDate ?? (current.startDate ? ensureDate(current.startDate).toISOString().slice(0, 10) : ""),
     endDate: input.endDate ?? (current.endDate ? ensureDate(current.endDate).toISOString().slice(0, 10) : ""),
     status: input.status ?? current.status,
+    workCalendarId: input.workCalendarId !== undefined ? (input.workCalendarId || null) : undefined,
   };
   const data = projectSchema.parse(merged);
+
+  const upsertProjectCalendars =
+    merged.workCalendarId !== undefined
+      ? {
+          deleteMany: {},
+          ...(merged.workCalendarId
+            ? {
+                create: {
+                  workCalendarId: merged.workCalendarId,
+                  sortOrder: 0,
+                },
+              }
+            : {}),
+        }
+      : undefined;
+
+  const { workCalendarId: _wcId, templateId: _tid, ...prismaData } = data;
 
   return prisma.project.update({
     where: { id },
     data: {
-      ...data,
+      ...prismaData,
       startDate: data.startDate ? new Date(data.startDate) : null,
       endDate: data.endDate ? new Date(data.endDate) : null,
+      projectCalendars: upsertProjectCalendars,
     },
   });
 }

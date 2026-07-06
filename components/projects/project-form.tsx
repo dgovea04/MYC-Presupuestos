@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CalendarDays, MapPin, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { formatWorkDaysLabel } from "@/lib/work-schedule/calendar";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +17,16 @@ type CompanyOption = {
   name: string;
 };
 
+type WorkCalendarOption = {
+  id: string;
+  name: string;
+  workDays: number;
+  workHoursPerDay: number;
+};
+
 type ProjectFormProps = {
   companies: CompanyOption[];
+  workCalendars?: WorkCalendarOption[];
   selectedTemplate?: TemplateLibraryItem | null;
   project?: {
     id: string;
@@ -29,10 +38,11 @@ type ProjectFormProps = {
     startDate?: string | Date | null;
     endDate?: string | Date | null;
     status: string;
+    workCalendarId?: string | null;
   };
 };
 
-export function ProjectForm({ companies, project, selectedTemplate }: ProjectFormProps) {
+export function ProjectForm({ companies, workCalendars, project, selectedTemplate }: ProjectFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -128,6 +138,19 @@ export function ProjectForm({ companies, project, selectedTemplate }: ProjectFor
           <Field id="startDate" type="date" label="Fecha inicio" defaultValue={normalizeDate(project?.startDate)} />
           <Field id="endDate" type="date" label="Fecha fin" defaultValue={normalizeDate(project?.endDate)} />
         </div>
+        {workCalendars && workCalendars.length > 0 ? (
+          <div className="space-y-2">
+            <Label htmlFor="workCalendarId">Calendario laboral</Label>
+            <Select id="workCalendarId" name="workCalendarId" defaultValue={project?.workCalendarId ?? ""}>
+              <option value="">Calendario por defecto (Lun-Vie, 8h)</option>
+              {workCalendars.map((calendar) => (
+                <option key={calendar.id} value={calendar.id}>
+                  {calendar.name} ({formatWorkDaysLabel(calendar.workDays)}, {calendar.workHoursPerDay}h/dia)
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="status">Estado</Label>
           <Select id="status" name="status" defaultValue={project?.status ?? "PLANNING"}>
@@ -199,3 +222,5 @@ function getProjectStatusLabel(status: string) {
       return "Planificación";
   }
 }
+
+

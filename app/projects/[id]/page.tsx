@@ -16,6 +16,7 @@ import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectActivityHistory } from "@/components/projects/project-activity-history";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
 import { getProjectOtherSections } from "@/lib/projects/other-sections";
+import { formatWorkDaysLabel } from "@/lib/work-schedule/calendar";
 import { ensureDate, formatDate } from "@/lib/utils";
 
 const projectSections = [
@@ -123,10 +124,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             />
           </CardHeader>
           <CardContent className="space-y-5 pt-6">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
               <InfoCard label="Cliente" value={project.clientName || "Pendiente"} />
               <InfoCard label="Ubicación" value={project.location || "Pendiente"} />
               <InfoCard label="Tipo de obra" value={project.projectType || "Pendiente"} />
+              <InfoCard
+                label="Calendario laboral"
+                value={
+                  project.workCalendar
+                    ? `${project.workCalendar.name} (${formatWorkDaysLabel(project.workCalendar.workDays)}, ${project.workCalendar.workHoursPerDay}h/dia)`
+                    : "Por defecto (Lun-Vie, 8h/dia)"
+                }
+              />
               <InfoCard label="Presupuestos" value={String(generalBudgetsCount)} />
               <InfoCard label="Actualizado" value={formatDate(project.updatedAt, settings.dateFormat)} />
             </div>

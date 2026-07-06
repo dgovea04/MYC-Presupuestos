@@ -17,6 +17,7 @@ import { decimalToNumber } from "@/lib/db/serializers";
 import { ensureDate } from "@/lib/utils";
 import { validateWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import { buildIntelligentWorkScheduleBase } from "@/lib/work-schedule/intelligent-schedule";
+import { buildExceptionMap } from "@/lib/data/work-calendars";
 import {
   workScheduleGenerateBaseSchema,
   workScheduleItemSaveSchema,
@@ -29,6 +30,7 @@ import type {
   WorkScheduleLineRecord,
   WorkScheduleReviewSummaryRecord,
   WorkScheduleViewRecord,
+  WorkScheduleCalendarInfoRecord,
 } from "@/types/work-schedule";
 
 type WorkScheduleProfileSnapshot = {
@@ -56,6 +58,7 @@ export async function getWorkScheduleSection(budgetId: string, userId: string): 
   return {
     ...withWorkScheduleGroupRows(view, orderedSubBudgets),
     reviewSummary,
+    workCalendar: budget.workCalendar ?? null,
   };
 }
 
@@ -77,6 +80,7 @@ export async function getWorkScheduleOverviewSection(budgetId: string, userId: s
   return {
     ...withWorkScheduleGroupRows(view, orderedSubBudgets),
     reviewSummary,
+    workCalendar: budget.workCalendar ?? null,
   };
 }
 
@@ -400,12 +404,18 @@ export async function generateWorkScheduleBase(
   const reviewedBudgetItemIds = payload.reviewedBudgetItemIds
     ? new Set(payload.reviewedBudgetItemIds)
     : undefined;
+  const exceptionMap = budget.workCalendar?.exceptions
+    ? buildExceptionMap(budget.workCalendar.exceptions)
+    : undefined;
+
   const generation = buildIntelligentWorkScheduleBase({
     baseStartDate: payload.baseStartDate,
     lines,
     reviewedBudgetItemIds,
     options: payload.options,
     levelById,
+    workDaysBitmask: budget.workCalendar?.workDays,
+    exceptionMap,
   });
 
   await prisma.$transaction(async (tx) => {
@@ -475,6 +485,29 @@ async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
         select: {
           id: true,
           name: true,
+          projectCalendars: {
+            select: {
+              id: true,
+              workCalendar: {
+                select: {
+                  id: true,
+                  name: true,
+                  workDays: true,
+                  workHoursPerDay: true,
+                  exceptions: {
+                    select: {
+                      id: true,
+                      date: true,
+                      type: true,
+                      description: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: { sortOrder: "asc" },
+            take: 1,
+          },
         },
       },
     },
@@ -484,7 +517,23 @@ async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
     throw new Error("No tienes permisos para acceder a esta programacion de obra");
   }
 
-  return budget;
+  const firstCalendar = budget.project.projectCalendars[0]?.workCalendar;
+  const workCalendar: WorkScheduleCalendarInfoRecord | null = firstCalendar
+    ? {
+        id: firstCalendar.id,
+        name: firstCalendar.name,
+        workDays: firstCalendar.workDays,
+        workHoursPerDay: Number(firstCalendar.workHoursPerDay),
+        exceptions: firstCalendar.exceptions.map((e) => ({
+          id: e.id,
+          date: e.date.toISOString().slice(0, 10),
+          type: e.type as "HOLIDAY" | "WORK_DAY",
+          description: e.description,
+        })),
+      }
+    : null;
+
+  return { ...budget, workCalendar };
 }
 
 async function getWorkScheduleLinesForBudget(

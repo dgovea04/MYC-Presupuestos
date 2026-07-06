@@ -10,6 +10,7 @@ export const projectSchema = z.object({
   endDate: z.string().optional(),
   status: z.enum(["PLANNING", "IN_PROGRESS", "COMPLETED", "ON_HOLD"]),
   templateId: z.string().optional(),
+  workCalendarId: z.string().nullable().optional(),
 });
 
 export type ProjectInput = z.infer<typeof projectSchema>;

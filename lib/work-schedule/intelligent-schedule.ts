@@ -1,4 +1,5 @@
 import { buildWorkScheduleMonthlyDistributionsFromRange, calculateWorkScheduleDurationDays, hasSuspiciousDefaultWorkSchedulePerformance } from "@/lib/calculations/work-schedule";
+import { addWorkDays, type CalendarExceptionMap } from "@/lib/work-schedule/calendar";
 import { formatGeneratedPredecessor } from "@/lib/work-schedule/predecessors";
 import type {
   InterSubBudgetParallelism,
@@ -38,12 +39,16 @@ export function buildIntelligentWorkScheduleBase({
   reviewedBudgetItemIds,
   options,
   levelById,
+  workDaysBitmask,
+  exceptionMap,
 }: {
   baseStartDate: string;
   lines: WorkScheduleLineRecord[];
   reviewedBudgetItemIds?: Set<string>;
   options?: WorkScheduleGenerationOptions;
   levelById?: Map<string, LevelInfo>;
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
 }) {
   const appliedOptions = normalizeGenerationOptions(options);
   const issues: WorkScheduleGenerationIssueRecord[] = [];
@@ -51,14 +56,14 @@ export function buildIntelligentWorkScheduleBase({
 
   switch (appliedOptions.strategy) {
     case "by_level":
-      generatedItems = buildByLevelBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById });
+      generatedItems = buildByLevelBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById, workDaysBitmask, exceptionMap });
       break;
     case "by_similarity":
-      generatedItems = buildBySimilarityBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById });
+      generatedItems = buildBySimilarityBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById, workDaysBitmask, exceptionMap });
       break;
     case "sequential":
     default:
-      generatedItems = buildSequentialBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById });
+      generatedItems = buildSequentialBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById, workDaysBitmask, exceptionMap });
       break;
   }
 
@@ -87,6 +92,8 @@ function buildSequentialBase({
   issues,
   options,
   levelById,
+  workDaysBitmask,
+  exceptionMap,
 }: {
   baseStartDate: string;
   lines: WorkScheduleLineRecord[];
@@ -94,6 +101,8 @@ function buildSequentialBase({
   issues: WorkScheduleGenerationIssueRecord[];
   options: WorkScheduleGenerationOptions;
   levelById?: Map<string, LevelInfo>;
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
 }) {
   const generatedItems: GeneratedScheduleLine[] = [];
   const linesBySubBudget = groupLinesBySubBudget(lines);
@@ -105,7 +114,7 @@ function buildSequentialBase({
 
   for (const subBudgetId of orderedSubBudgetIds) {
     const groupLines = linesBySubBudget.get(subBudgetId) ?? [];
-    const subBudgetStartDate = addDaysInclusive(baseStartDate, subBudgetStaggerOffset);
+    const subBudgetStartDate = addDaysInclusive(baseStartDate, subBudgetStaggerOffset, workDaysBitmask, exceptionMap);
 
     if (hasLevelLinkage) {
       buildGroupedLevelSchedule({
@@ -117,6 +126,8 @@ function buildSequentialBase({
         issues,
         options,
         generatedItems,
+        workDaysBitmask,
+        exceptionMap,
       });
     } else {
       // Original flat sequential behavior within each sub-budget
@@ -126,14 +137,14 @@ function buildSequentialBase({
       let previousGeneratedLine: GeneratedScheduleLine | null = null;
 
       for (const line of orderedGroupLines) {
-        const result = tryGenerateLine({ line, cursor: groupCursor, previousLine: previousGeneratedLine?.itemCode ?? null, reviewedBudgetItemIds, issues, options });
+        const result = tryGenerateLine({ line, cursor: groupCursor, previousLine: previousGeneratedLine?.itemCode ?? null, reviewedBudgetItemIds, issues, options, workDaysBitmask, exceptionMap });
         if (!result) {
           continue;
         }
 
         generatedItems.push(result.generatedLine);
         previousGeneratedLine = result.generatedLine;
-        groupCursor = addDaysInclusive(result.generatedLine.endDate, 1);
+        groupCursor = addDaysInclusive(result.generatedLine.endDate, 1, workDaysBitmask, exceptionMap);
       }
     }
 
@@ -152,6 +163,8 @@ function buildByLevelBase({
   issues,
   options,
   levelById,
+  workDaysBitmask,
+  exceptionMap,
 }: {
   baseStartDate: string;
   lines: WorkScheduleLineRecord[];
@@ -159,6 +172,8 @@ function buildByLevelBase({
   issues: WorkScheduleGenerationIssueRecord[];
   options: WorkScheduleGenerationOptions;
   levelById?: Map<string, LevelInfo>;
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
 }) {
   const generatedItems: GeneratedScheduleLine[] = [];
   const linesBySubBudget = groupLinesBySubBudget(lines);
@@ -169,7 +184,7 @@ function buildByLevelBase({
 
   for (const subBudgetId of orderedSubBudgetIds) {
     const groupLines = linesBySubBudget.get(subBudgetId) ?? [];
-    const subBudgetStartDate = addDaysInclusive(baseStartDate, subBudgetStaggerOffset);
+    const subBudgetStartDate = addDaysInclusive(baseStartDate, subBudgetStaggerOffset, workDaysBitmask, exceptionMap);
 
     // Group lines by top-level ancestor and schedule with chain/parallel linkage
     buildGroupedLevelSchedule({
@@ -181,6 +196,8 @@ function buildByLevelBase({
       issues,
       options,
       generatedItems,
+      workDaysBitmask,
+      exceptionMap,
     });
 
     subBudgetStaggerOffset = getNextSubBudgetStaggerOffset(subBudgetStaggerOffset, options);
@@ -199,6 +216,8 @@ function forEachLevelGroup({
   levelLinkage,
   levelById,
   scheduleLevel,
+  workDaysBitmask,
+  exceptionMap,
 }: {
   groupLines: WorkScheduleLineRecord[];
   subBudgetStartDate: string;
@@ -210,6 +229,8 @@ function forEachLevelGroup({
     levelCursor: string;
     shouldChain: boolean;
   }) => string | null;
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
 }) {
   const linesByTopLevel = groupLinesByTopLevel(groupLines, levelById);
   // Preserve insertion order — Map keys follow the order items appear in the
@@ -224,7 +245,7 @@ function forEachLevelGroup({
     const shouldChain: boolean = linkageMode === "chain" && previousLevelEndDate != null;
 
     const levelCursor: string = shouldChain
-      ? addDaysInclusive(previousLevelEndDate!, 1)
+      ? addDaysInclusive(previousLevelEndDate!, 1, workDaysBitmask, exceptionMap)
       : subBudgetStartDate;
 
     const endDate = scheduleLevel({ levelKey: topLevelKey, levelLines, levelCursor, shouldChain });
@@ -246,6 +267,8 @@ function buildGroupedLevelSchedule({
   issues,
   options,
   generatedItems,
+  workDaysBitmask,
+  exceptionMap,
 }: {
   groupLines: WorkScheduleLineRecord[];
   subBudgetStartDate: string;
@@ -255,6 +278,8 @@ function buildGroupedLevelSchedule({
   issues: WorkScheduleGenerationIssueRecord[];
   options: WorkScheduleGenerationOptions;
   generatedItems: GeneratedScheduleLine[];
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
 }) {
   let lastPreviousGroupItem: GeneratedScheduleLine | null = null;
 
@@ -263,6 +288,8 @@ function buildGroupedLevelSchedule({
     subBudgetStartDate,
     levelLinkage,
     levelById,
+    workDaysBitmask,
+    exceptionMap,
     scheduleLevel: ({ levelLines, levelCursor, shouldChain }) => {
       const orderedLevelLines = sortLines(levelLines);
       let previousInLevel: GeneratedScheduleLine | null = null;
@@ -276,6 +303,8 @@ function buildGroupedLevelSchedule({
           reviewedBudgetItemIds,
           issues,
           options,
+          workDaysBitmask,
+          exceptionMap,
         });
         if (!result) {
           continue;
@@ -283,7 +312,7 @@ function buildGroupedLevelSchedule({
 
         generatedItems.push(result.generatedLine);
         previousInLevel = result.generatedLine;
-        cursor = addDaysInclusive(result.generatedLine.endDate, 1);
+        cursor = addDaysInclusive(result.generatedLine.endDate, 1, workDaysBitmask, exceptionMap);
       }
 
       // Always update so the next chain level gets the correct predecessor —
@@ -303,6 +332,8 @@ function buildBySimilarityBase({
   issues,
   options,
   levelById,
+  workDaysBitmask,
+  exceptionMap,
 }: {
   baseStartDate: string;
   lines: WorkScheduleLineRecord[];
@@ -310,6 +341,8 @@ function buildBySimilarityBase({
   issues: WorkScheduleGenerationIssueRecord[];
   options: WorkScheduleGenerationOptions;
   levelById?: Map<string, LevelInfo>;
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
 }) {
   const generatedItems: GeneratedScheduleLine[] = [];
   const linesBySubBudget = groupLinesBySubBudget(lines);
@@ -320,7 +353,7 @@ function buildBySimilarityBase({
 
   for (const subBudgetId of orderedSubBudgetIds) {
     const groupLines = linesBySubBudget.get(subBudgetId) ?? [];
-    const subBudgetStartDate = addDaysInclusive(baseStartDate, subBudgetStaggerOffset);
+    const subBudgetStartDate = addDaysInclusive(baseStartDate, subBudgetStaggerOffset, workDaysBitmask, exceptionMap);
 
     // Group by top-level with chain/parallel linkage, then detect similar clusters within each level
     forEachLevelGroup({
@@ -328,6 +361,8 @@ function buildBySimilarityBase({
       subBudgetStartDate,
       levelLinkage,
       levelById,
+      workDaysBitmask,
+      exceptionMap,
       scheduleLevel: ({ levelLines, levelCursor }) => {
         const clusters = buildSimilarityClusters(levelLines);
         let previousClusterEndDate = levelCursor;
@@ -344,10 +379,12 @@ function buildBySimilarityBase({
               reviewedBudgetItemIds,
               issues,
               options,
+              workDaysBitmask,
+              exceptionMap,
             });
             if (result) {
               generatedItems.push(result.generatedLine);
-              cursor = addDaysInclusive(result.generatedLine.endDate, 1);
+              cursor = addDaysInclusive(result.generatedLine.endDate, 1, workDaysBitmask, exceptionMap);
               previousClusterEndDate = result.generatedLine.endDate;
             }
           } else {
@@ -359,7 +396,7 @@ function buildBySimilarityBase({
 
             for (let i = 0; i < sortedCluster.length; i++) {
               const line = sortedCluster[i];
-              const staggeredCursor = i === 0 ? clusterCursor : addDaysInclusive(clusterCursor, lagDays);
+              const staggeredCursor = i === 0 ? clusterCursor : addDaysInclusive(clusterCursor, lagDays, workDaysBitmask, exceptionMap);
 
               const result = tryGenerateLine({
                 line,
@@ -369,6 +406,8 @@ function buildBySimilarityBase({
                 issues,
                 options,
                 useSSPredecessor: i > 0,
+                workDaysBitmask,
+                exceptionMap,
               });
               if (!result) {
                 continue;
@@ -380,7 +419,7 @@ function buildBySimilarityBase({
               }
             }
 
-            cursor = addDaysInclusive(clusterMaxEndDate, 1);
+            cursor = addDaysInclusive(clusterMaxEndDate, 1, workDaysBitmask, exceptionMap);
             previousClusterEndDate = clusterMaxEndDate;
           }
         }
@@ -405,6 +444,8 @@ function tryGenerateLine({
   issues,
   options,
   useSSPredecessor = false,
+  workDaysBitmask,
+  exceptionMap,
 }: {
   line: WorkScheduleLineRecord;
   cursor: string;
@@ -413,6 +454,8 @@ function tryGenerateLine({
   issues: WorkScheduleGenerationIssueRecord[];
   options: WorkScheduleGenerationOptions;
   useSSPredecessor?: boolean;
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
 }) {
   // Check suspicious default performance
   if (
@@ -448,8 +491,7 @@ function tryGenerateLine({
     return null;
   }
 
-  const startDate = cursor;
-  const endDate = addDaysInclusive(startDate, durationDays - 1);
+  const startDate = cursor;    const endDate = addDaysInclusive(startDate, durationDays - 1, workDaysBitmask, exceptionMap);
 
   let predecessor: string | null = null;
   if (previousLine) {
@@ -754,7 +796,11 @@ function buildGenerationHighlights(
   return highlights;
 }
 
-function addDaysInclusive(isoDate: string, daysToAdd: number) {
+function addDaysInclusive(isoDate: string, daysToAdd: number, workDaysBitmask?: number, exceptionMap?: CalendarExceptionMap) {
+  if (workDaysBitmask != null) {
+    return addWorkDays(isoDate, daysToAdd, workDaysBitmask, exceptionMap);
+  }
+
   const date = new Date(`${isoDate}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + daysToAdd);
   return date.toISOString().slice(0, 10);

@@ -186,6 +186,21 @@ export type WorkScheduleScaleRecord = {
   lastPeriodKey: string | null;
 };
 
+export type WorkScheduleCalendarExceptionRecord = {
+  id: string;
+  date: string;
+  type: "HOLIDAY" | "WORK_DAY";
+  description: string | null;
+};
+
+export type WorkScheduleCalendarInfoRecord = {
+  id: string;
+  name: string;
+  workDays: number;
+  workHoursPerDay: number;
+  exceptions?: WorkScheduleCalendarExceptionRecord[];
+};
+
 export type WorkScheduleViewRecord = {
   budgetId: string;
   budgetName: string;
@@ -206,6 +221,7 @@ export type WorkScheduleViewRecord = {
   criticalPath?: WorkScheduleCriticalPathSummaryRecord | null;
   generationSummary?: WorkScheduleGenerationSummaryRecord | null;
   reviewSummary?: WorkScheduleReviewSummaryRecord | null;
+  workCalendar?: WorkScheduleCalendarInfoRecord | null;
 };
 
 export type WorkScheduleCriticalPathSummaryRecord = {

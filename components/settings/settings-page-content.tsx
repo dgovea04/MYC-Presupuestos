@@ -12,6 +12,7 @@ import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
 import { APP_SETTINGS_UPDATED_EVENT } from "@/lib/settings/events";
+import { WorkCalendarsSettings } from "@/components/settings/work-calendars-settings";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import type { AccountRecord } from "@/types/account";
 import type { UserSettingsRecord } from "@/types/settings";
@@ -38,6 +39,11 @@ const SETTINGS_TABS = [
     label: "IA",
     description: "Ollama, proveedores cloud y configuracion de Khipu.",
   },
+  {
+    id: "calendars",
+    label: "Calendarios",
+    description: "Calendarios laborales personalizados con dias y horas por proyecto.",
+  },
 ] as const;
 
 const FORMAT_FORM_ID = "format-settings-form";
@@ -48,6 +54,7 @@ export function SettingsPageContent({
   company,
   account,
   initialSettings,
+  initialWorkCalendars,
 }: {
   company?: {
     name?: string | null;
@@ -56,6 +63,7 @@ export function SettingsPageContent({
   };
   account: AccountRecord;
   initialSettings: UserSettingsRecord;
+  initialWorkCalendars?: { id: string; name: string; workDays: number; workHoursPerDay: number }[];
 }) {
   const [companyState, setCompanyState] = useState(company);
   const [settings, setSettings] = useState(initialSettings);
@@ -264,6 +272,14 @@ export function SettingsPageContent({
             />
           </CardContent>
         </Card>
+      </section>
+
+      <section
+        id="settings-tab-panel-calendars"
+        aria-hidden={activeTab !== "calendars"}
+        className={cn(activeTab === "calendars" ? "block" : "hidden")}
+      >
+        <WorkCalendarsSettings initialCalendars={initialWorkCalendars} />
       </section>
 
       <section

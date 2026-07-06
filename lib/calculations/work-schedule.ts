@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { addWorkDays } from "@/lib/work-schedule/calendar";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors, type WorkSchedulePredecessorReference } from "@/lib/work-schedule/predecessors";
 import type {
@@ -219,6 +220,7 @@ export function recalculateDependentWorkScheduleLines(
 export function recalculateWorkScheduleLineFromPredecessors(
   line: WorkScheduleLineRecord,
   lineByCode: Map<string, WorkScheduleLineRecord>,
+  workDaysBitmask?: number,
 ) {
   if (!line.predecessor || line.durationDays == null || line.durationDays <= 0) {
     return null;
@@ -229,7 +231,7 @@ export function recalculateWorkScheduleLineFromPredecessors(
     return null;
   }
 
-  return recalculateWorkScheduleLineFromReferences(line, parsedReferences, lineByCode);
+  return recalculateWorkScheduleLineFromReferences(line, parsedReferences, lineByCode, workDaysBitmask);
 }
 
 /**
@@ -241,6 +243,7 @@ export function recalculateWorkScheduleLineFromReferences(
   line: WorkScheduleLineRecord,
   predecessorReferences: WorkSchedulePredecessorReference[],
   lineByCode: Map<string, WorkScheduleLineRecord>,
+  workDaysBitmask?: number,
 ) {
   if (predecessorReferences.length === 0 || line.durationDays == null || line.durationDays <= 0) {
     return null;
@@ -252,15 +255,19 @@ export function recalculateWorkScheduleLineFromReferences(
       return null;
     }
 
+    const addDays = workDaysBitmask != null
+      ? (date: string, days: number) => addWorkDays(date, days, workDaysBitmask)
+      : addIsoDays;
+
     switch (reference.relation) {
       case "FS":
-        return addIsoDays(predecessorLine.endDate, reference.lagDays + 1);
+        return addDays(predecessorLine.endDate, reference.lagDays + 1);
       case "SS":
-        return addIsoDays(predecessorLine.startDate, reference.lagDays);
+        return addDays(predecessorLine.startDate, reference.lagDays);
       case "FF":
-        return addIsoDays(predecessorLine.endDate, reference.lagDays - line.durationDays + 1);
+        return addDays(predecessorLine.endDate, reference.lagDays - line.durationDays + 1);
       case "SF":
-        return addIsoDays(predecessorLine.startDate, reference.lagDays - line.durationDays + 1);
+        return addDays(predecessorLine.startDate, reference.lagDays - line.durationDays + 1);
       default:
         return null;
     }

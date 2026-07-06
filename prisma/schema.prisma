@@ -453,20 +453,65 @@ model Company {
   @@index([userId])
 }
 
+model WorkCalendar {
+  id              String                    @id @default(cuid())
+  name            String
+  workDays        Int                       @default(31)
+  workHoursPerDay Decimal                   @default(8) @db.Decimal(6, 2)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  exceptions      WorkCalendarException[]
+  projectLinks    ProjectWorkCalendar[]
+
+  @@map("work_calendars")
+}
+
+model WorkCalendarException {
+  id             String       @id @default(cuid())
+  workCalendarId String
+  workCalendar   WorkCalendar @relation(fields: [workCalendarId], references: [id], onDelete: Cascade)
+  date           DateTime     @db.Date
+  type           String       @default("HOLIDAY")
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([workCalendarId, date])
+  @@index([workCalendarId])
+  @@map("work_calendar_exceptions")
+}
+
+model ProjectWorkCalendar {
+  id              String       @id @default(cuid())
+  projectId       String
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workCalendarId  String
+  workCalendar    WorkCalendar @relation(fields: [workCalendarId], references: [id], onDelete: Cascade)
+  label           String?
+  sortOrder       Int          @default(0)
+  createdAt       DateTime     @default(now())
+
+  @@unique([projectId, workCalendarId])
+  @@index([projectId])
+  @@index([workCalendarId])
+  @@map("project_work_calendars")
+}
+
 model Project {
-  id          String        @id @default(cuid())
-  companyId   String
-  name        String
-  clientName  String?
-  location    String?
-  projectType String?
-  startDate   DateTime?
-  endDate     DateTime?
-  status      ProjectStatus @default(PLANNING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  budgets     Budget[]
+  id              String        @id @default(cuid())
+  companyId       String
+  name            String
+  clientName      String?
+  location        String?
+  projectType     String?
+  startDate       DateTime?
+  endDate         DateTime?
+  status          ProjectStatus @default(PLANNING)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  projectCalendars ProjectWorkCalendar[]
+  budgets         Budget[]
   polynomialFormulas PolynomialFormula[]
   noteTasks   NoteTask[]
   metradoSheets MetradoSheet[]
