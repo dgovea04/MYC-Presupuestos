@@ -6,7 +6,6 @@ import {
   buildWorkScheduleCurveSeries,
   buildWorkScheduleResourceCalendar,
   calculateWorkScheduleDurationDays,
-  recalculateDependentWorkScheduleLines,
   buildWorkScheduleValuationCalendarSlice,
   buildWorkScheduleValuationCalendar,
   buildWorkScheduleView,
@@ -384,10 +383,7 @@ export async function saveWorkScheduleItem(
       });
     }
 
-    await cascadeDependentWorkScheduleItems(tx, {
-      scheduleId: schedule.id,
-      changedBudgetItemId: normalizedPayload.budgetItemId,
-    });
+
   });
 
   return getWorkScheduleOverviewSection(budgetId, userId);
@@ -801,114 +797,6 @@ async function loadWorkScheduleDataset(
   );
 
   return { orderedSubBudgets, lines };
-}
-
-async function cascadeDependentWorkScheduleItems(
-  tx: Prisma.TransactionClient,
-  {
-    scheduleId,
-    changedBudgetItemId,
-  }: {
-    scheduleId: string;
-    changedBudgetItemId: string;
-  },
-) {
-  const scheduledItems = await tx.workScheduleItem.findMany({
-    where: { scheduleId },
-    include: {
-      budgetItem: {
-        select: {
-          id: true,
-          code: true,
-          description: true,
-          unit: true,
-          quantity: true,
-          unitPrice: true,
-          partial: true,
-          budget: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-      distributions: {
-        orderBy: [{ year: "asc" }, { month: "asc" }],
-      },
-    },
-  });
-
-  const lines = scheduledItems.map<WorkScheduleLineRecord>((item) => ({
-    scheduleItemId: item.id,
-    budgetItemId: item.budgetItemId,
-    itemCode: item.budgetItem.code,
-    description: item.budgetItem.description,
-    unit: item.budgetItem.unit,
-    quantity: decimalToNumber(item.budgetItem.quantity),
-    unitPrice: decimalToNumber(item.budgetItem.unitPrice),
-    partial: decimalToNumber(item.budgetItem.partial),
-    subBudgetId: item.budgetItem.budget.id,
-    subBudgetName: item.budgetItem.budget.name,
-    startDate: item.startDate ? ensureDate(item.startDate).toISOString().slice(0, 10) : null,
-    endDate: item.endDate ? ensureDate(item.endDate).toISOString().slice(0, 10) : null,
-    durationDays: item.durationDays,
-    predecessor: item.predecessor,
-    crew: item.crew == null ? null : decimalToNumber(item.crew),
-    monthlyDistributions: item.distributions.map((distribution) => ({
-      year: distribution.year,
-      month: distribution.month,
-      percentage: decimalToNumber(distribution.percentage),
-    })),
-  }));
-
-  const recalculatedLines = recalculateDependentWorkScheduleLines(lines, changedBudgetItemId);
-  const originalLineById = new Map(lines.map((line) => [line.budgetItemId, line]));
-
-  for (const recalculatedLine of recalculatedLines) {
-    if (recalculatedLine.budgetItemId === changedBudgetItemId) {
-      continue;
-    }
-
-    const originalLine = originalLineById.get(recalculatedLine.budgetItemId);
-    if (
-      !originalLine ||
-      recalculatedLine.startDate === originalLine.startDate &&
-      recalculatedLine.endDate === originalLine.endDate &&
-      recalculatedLine.durationDays === originalLine.durationDays
-    ) {
-      continue;
-    }
-
-    const nextStartDate = recalculatedLine.startDate;
-    const nextEndDate = recalculatedLine.endDate;
-    const nextDurationDays = recalculatedLine.durationDays;
-    if (!recalculatedLine.scheduleItemId || !nextStartDate || !nextEndDate || nextDurationDays == null) {
-      continue;
-    }
-
-    await tx.workScheduleDistribution.deleteMany({
-      where: { scheduleItemId: recalculatedLine.scheduleItemId },
-    });
-
-    await tx.workScheduleItem.update({
-      where: { id: recalculatedLine.scheduleItemId },
-      data: {
-        startDate: new Date(`${nextStartDate}T00:00:00.000Z`),
-        endDate: new Date(`${nextEndDate}T00:00:00.000Z`),
-        durationDays: nextDurationDays,
-        distributions: {
-          createMany: {
-            data: recalculatedLine.monthlyDistributions.map((distribution) => ({
-              year: distribution.year,
-              month: distribution.month,
-              percentage: new Prisma.Decimal(distribution.percentage),
-            })),
-          },
-        },
-      },
-    });
-  }
 }
 
 async function getSubBudgetsForProject(projectId: string) {

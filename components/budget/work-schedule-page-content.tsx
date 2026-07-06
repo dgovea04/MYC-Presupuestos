@@ -77,7 +77,7 @@ type WorkbookTableData = {
   totalRow?: WorkbookCell[];
 };
 
-type EditableLine = {
+export type EditableLine = {
   budgetItemId: string;
   description: string;
   quantity: number;
@@ -4596,7 +4596,7 @@ function buildTimelineDependencyPaths({
   return paths;
 }
 
-function buildTimelineDependencyConnector({
+export function buildTimelineDependencyConnector({
   predecessor,
   predecessorReference,
   predecessorStartIndex,
@@ -4633,16 +4633,12 @@ function buildTimelineDependencyConnector({
   const sameDayOrNextDayDelta = (leftIndex: number, rightIndex: number) => rightIndex - leftIndex;
   const isSameDayHandoff =
     (predecessorReference.relation === "FS" &&
-      sameDayOrNextDayDelta(predecessorEndIndex, successorStartIndex) >= 0 &&
       sameDayOrNextDayDelta(predecessorEndIndex, successorStartIndex) <= 1) ||
     (predecessorReference.relation === "SS" &&
-      sameDayOrNextDayDelta(predecessorStartIndex, successorStartIndex) >= 0 &&
       sameDayOrNextDayDelta(predecessorStartIndex, successorStartIndex) <= 1) ||
     (predecessorReference.relation === "FF" &&
-      sameDayOrNextDayDelta(predecessorEndIndex, successorEndIndex) >= 0 &&
       sameDayOrNextDayDelta(predecessorEndIndex, successorEndIndex) <= 1) ||
     (predecessorReference.relation === "SF" &&
-      sameDayOrNextDayDelta(predecessorStartIndex, successorEndIndex) >= 0 &&
       sameDayOrNextDayDelta(predecessorStartIndex, successorEndIndex) <= 1);
 
   const sourceX =
@@ -5345,7 +5341,7 @@ function buildPredecessorRowNumberMaps(groups: WorkScheduleViewRecord["groups"])
   };
 }
 
-function buildPreviewWorkScheduleView({
+export function buildPreviewWorkScheduleView({
   data,
   editingLine,
   inlineDrafts,
@@ -5382,7 +5378,6 @@ function buildPreviewWorkScheduleView({
     nextLines = nextLines.map((line) =>
       line.budgetItemId === draft.budgetItemId ? applyEditableDraftToLine(line, draft, rowNumberToItemCode) : line,
     );
-    nextLines = recalculateDependentWorkScheduleLines(nextLines, draft.budgetItemId);
   }
 
   const previewView = buildWorkScheduleView(
