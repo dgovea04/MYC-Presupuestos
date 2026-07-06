@@ -16,7 +16,7 @@ export default async function DelphinImportsPage() {
         <PageHeaderCard
           icon={<FileSpreadsheet className="h-5 w-5" />}
           title="Importador Delphin Express"
-          description="Convierte archivos .dprj de Delphin Express en proyectos MYC con presupuesto, partidas, APUs e insumos."
+          description="Convierte archivos .dprj de Delphin Express en proyectos MC con presupuesto, partidas, APUs e insumos."
         />
         <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
           <CardHeader />
@@ -32,7 +32,7 @@ export default async function DelphinImportsPage() {
                 noCompaniesMessage: "Crea una empresa antes de importar proyectos Delphin.",
                 projectLabel: "Delphin Express",
                 sourceCodeLabel: "Presupuesto Delphin",
-                uploadDescription: "Lee el contenedor DPRJ serializado de Delphin para generar el draft MYC.",
+                uploadDescription: "Lee el contenedor DPRJ serializado de Delphin para generar el draft MC.",
               }}
             />
           </CardContent>

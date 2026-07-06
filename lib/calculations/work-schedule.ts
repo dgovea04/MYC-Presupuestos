@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
-import { parseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
+import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors, type WorkSchedulePredecessorReference } from "@/lib/work-schedule/predecessors";
 import type {
   WorkScheduleCurvePointRecord,
   WorkScheduleLineRecord,
@@ -155,7 +155,12 @@ export function recalculateDependentWorkScheduleLines(
   const successorCodesByPredecessorCode = new Map<string, Set<string>>();
 
   for (const line of nextLines) {
-    for (const predecessor of parseWorkSchedulePredecessors(line.predecessor)) {
+    const parsedPredecessors = tryParseWorkSchedulePredecessors(line.predecessor);
+    if (!parsedPredecessors) {
+      continue;
+    }
+
+    for (const predecessor of parsedPredecessors) {
       const bucket = successorCodesByPredecessorCode.get(predecessor.code) ?? new Set<string>();
       bucket.add(line.itemCode);
       successorCodesByPredecessorCode.set(predecessor.code, bucket);
@@ -219,8 +224,25 @@ export function recalculateWorkScheduleLineFromPredecessors(
     return null;
   }
 
-  const predecessorReferences = parseWorkSchedulePredecessors(line.predecessor);
-  if (predecessorReferences.length === 0) {
+  const parsedReferences = tryParseWorkSchedulePredecessors(line.predecessor);
+  if (!parsedReferences || parsedReferences.length === 0) {
+    return null;
+  }
+
+  return recalculateWorkScheduleLineFromReferences(line, parsedReferences, lineByCode);
+}
+
+/**
+ * Variant that accepts pre-parsed predecessor references to avoid redundant parsing.
+ * Use when the caller has already validated/parsed the predecessor string
+ * (e.g., via {@link tryParseWorkSchedulePredecessors}).
+ */
+export function recalculateWorkScheduleLineFromReferences(
+  line: WorkScheduleLineRecord,
+  predecessorReferences: WorkSchedulePredecessorReference[],
+  lineByCode: Map<string, WorkScheduleLineRecord>,
+) {
+  if (predecessorReferences.length === 0 || line.durationDays == null || line.durationDays <= 0) {
     return null;
   }
 

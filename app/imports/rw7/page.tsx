@@ -16,7 +16,7 @@ export default async function Rw7ImportsPage() {
         <PageHeaderCard
           icon={<FileSpreadsheet className="h-5 w-5" />}
           title="Importador RW7"
-          description="Convierte archivos Excel de Sistemas RW7 en proyectos MYC con presupuesto, partidas, APUs e insumos."
+          description="Convierte archivos Excel de Sistemas RW7 en proyectos MC con presupuesto, partidas, APUs e insumos."
         />
         <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
           <CardHeader />

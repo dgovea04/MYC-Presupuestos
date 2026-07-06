@@ -24,5 +24,5 @@ export function buildContextBlock(context?: AiContext) {
     return "";
   }
 
-  return ["Contexto operativo de MYC Presupuestos:", ...entries.map(([label, value]) => `- ${label}: ${value}`)].join("\n");
+  return ["Contexto operativo de MC Presupuestos:", ...entries.map(([label, value]) => `- ${label}: ${value}`)].join("\n");
 }

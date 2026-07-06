@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatGeneratedPredecessor,
   parseWorkSchedulePredecessors,
+  tryParseWorkSchedulePredecessors,
   validateWorkSchedulePredecessors,
 } from "@/lib/work-schedule/predecessors";
 
@@ -22,6 +23,19 @@ describe("parseWorkSchedulePredecessors", () => {
     expect(() => parseWorkSchedulePredecessors("01.01XY")).toThrow("Ingresa una predecesora valida");
     expect(() => parseWorkSchedulePredecessors("01.01FS+")).toThrow("Ingresa una predecesora valida");
   });
+
+  it("filters out empty segments from trailing, leading, and consecutive commas", () => {
+    expect(parseWorkSchedulePredecessors("01.01FS,")).toEqual([
+      { code: "01.01", relation: "FS", lagDays: 0 },
+    ]);
+    expect(parseWorkSchedulePredecessors(",01.01FS")).toEqual([
+      { code: "01.01", relation: "FS", lagDays: 0 },
+    ]);
+    expect(parseWorkSchedulePredecessors("01.01FS,,02.03SS")).toEqual([
+      { code: "01.01", relation: "FS", lagDays: 0 },
+      { code: "02.03", relation: "SS", lagDays: 0 },
+    ]);
+  });
 });
 
 describe("validateWorkSchedulePredecessors", () => {
@@ -41,6 +55,32 @@ describe("validateWorkSchedulePredecessors", () => {
         currentItemCode: "02.01",
       }),
     ).toThrow("La partida no puede ser predecesora de si misma");
+  });
+});
+
+describe("tryParseWorkSchedulePredecessors", () => {
+  it("returns the same result as parseWorkSchedulePredecessors for valid strings", () => {
+    expect(tryParseWorkSchedulePredecessors("01.01FS,02.03SS+2d,03.01FF-1d")).toEqual([
+      { code: "01.01", relation: "FS", lagDays: 0 },
+      { code: "02.03", relation: "SS", lagDays: 2 },
+      { code: "03.01", relation: "FF", lagDays: -1 },
+    ]);
+    expect(tryParseWorkSchedulePredecessors("01.01")).toEqual([{ code: "01.01", relation: "FS", lagDays: 0 }]);
+  });
+
+  it("returns null for malformed syntax instead of throwing", () => {
+    expect(tryParseWorkSchedulePredecessors("01.01XY")).toBeNull();
+    expect(tryParseWorkSchedulePredecessors("01.01FS+")).toBeNull();
+    expect(tryParseWorkSchedulePredecessors("01.")).toBeNull();
+    expect(tryParseWorkSchedulePredecessors("01.01,")).toEqual([{ code: "01.01", relation: "FS", lagDays: 0 }]);
+    expect(tryParseWorkSchedulePredecessors("XY")).toBeNull();
+  });
+
+  it("returns an empty array for empty or falsy input", () => {
+    expect(tryParseWorkSchedulePredecessors(null)).toEqual([]);
+    expect(tryParseWorkSchedulePredecessors(undefined)).toEqual([]);
+    expect(tryParseWorkSchedulePredecessors("")).toEqual([]);
+    expect(tryParseWorkSchedulePredecessors("  ")).toEqual([]);
   });
 });
 

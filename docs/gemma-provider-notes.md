@@ -57,7 +57,7 @@ Cambiado `useFlatPrompt: false` → `useFlatPrompt: isGemma`. Los modelos Gemma 
 
 ### 4. Preservación de contexto pre-construido
 
-`simplifyMessagesForGemma` ahora detecta bloques de contexto que empiezan con `"Contexto operativo de MYC Presupuestos:"` (formato de `buildChatMessages` / `buildContextString`). Antes solo detectaba el formato `"Solicitud del usuario"` de los task payloads.
+`simplifyMessagesForGemma` ahora detecta bloques de contexto que empiezan con `"Contexto operativo de MC Presupuestos:"` (formato de `buildChatMessages` / `buildContextString`). Antes solo detectaba el formato `"Solicitud del usuario"` de los task payloads.
 
 ### 5. Restricción autocomplete-only
 

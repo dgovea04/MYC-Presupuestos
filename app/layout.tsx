@@ -29,7 +29,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "MYC Presupuestos",
+  title: "MC Presupuestos",
   description: "Plataforma moderna de costos y presupuestos de obra para Peru",
 };
 

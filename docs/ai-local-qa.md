@@ -1,4 +1,4 @@
-# QA manual - IA local MYC Presupuestos
+# QA manual - IA local MC Presupuestos
 
 Checklist operativo para validar la integracion local con Ollama antes de entregar una iteracion.
 

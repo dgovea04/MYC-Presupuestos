@@ -155,10 +155,10 @@ async function sendVerificationEmail(params: { email: string; name: string; veri
     body: JSON.stringify({
       from: emailFrom,
       to: [params.email],
-      subject: "Verifica tu correo en MYC Presupuestos",
+      subject: "Verifica tu correo en MC Presupuestos",
       html: [
         `<p>Hola ${escapeHtml(params.name)},</p>`,
-        "<p>Confirma tu correo para activar tu cuenta de MYC Presupuestos.</p>",
+        "<p>Confirma tu correo para activar tu cuenta de MC Presupuestos.</p>",
         `<p><a href="${params.verificationUrl}">Verificar correo</a></p>`,
       ].join(""),
     }),

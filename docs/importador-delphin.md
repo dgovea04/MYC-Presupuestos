@@ -1,6 +1,6 @@
 # Importador Delphin Express
 
-Esta guia documenta las reglas usadas para importar archivos `.dprj` de Delphin Express a MYC Presupuestos. Debe usarse como referencia para revisar nuevos archivos Delphin y para evitar regresiones en jerarquia, APUs y advertencias de precio unitario.
+Esta guia documenta las reglas usadas para importar archivos `.dprj` de Delphin Express a MC Presupuestos. Debe usarse como referencia para revisar nuevos archivos Delphin y para evitar regresiones en jerarquia, APUs y advertencias de precio unitario.
 
 ## Formato de origen
 
@@ -60,7 +60,7 @@ INSTALACIONES ELECTROMECANICAS       -> Sub presupuesto
 
 Regla aplicada:
 
-- `Presupuesto` Delphin = `Sub presupuesto` MYC cuando contiene su propio arbol de costos.
+- `Presupuesto` Delphin = `Sub presupuesto` MC cuando contiene su propio arbol de costos.
 - `Costo` sin unidad ni analisis = nivel jerarquico.
 - Primer nivel dentro del sub presupuesto = `TITLE`.
 - Niveles internos = `SUBTITLE`.

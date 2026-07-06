@@ -50,8 +50,25 @@ export const workScheduleItemSaveSchema = z.object({
   monthlyDistributions: z.array(workScheduleDistributionInputSchema).min(1, "Registra al menos un periodo"),
 });
 
+export const workScheduleGenerationStrategySchema = z.enum(["sequential", "by_level", "by_similarity"]);
+
+export const interSubBudgetParallelismSchema = z.enum(["independent", "staggered", "parallel"]);
+
+export const levelLinkageModeSchema = z.enum(["chain", "parallel"]);
+
+export const workScheduleGenerationOptionsSchema = z.object({
+  strategy: workScheduleGenerationStrategySchema.default("sequential"),
+  maxDurationDays: z.coerce.number().int().min(1).max(36525).optional().nullable(),
+  similarityLagDays: z.coerce.number().int().min(0).max(365).optional().nullable(),
+  interSubBudgetParallelism: interSubBudgetParallelismSchema.optional().nullable(),
+  interSubBudgetStaggerDays: z.coerce.number().int().min(1).max(365).optional().nullable(),
+  levelLinkage: z.record(z.string(), levelLinkageModeSchema).optional().nullable(),
+});
+
 export const workScheduleGenerateBaseSchema = z.object({
   baseStartDate: isoDateSchema,
+  reviewedBudgetItemIds: z.array(z.string().trim().min(1)).optional(),
+  options: workScheduleGenerationOptionsSchema.optional(),
 });
 
 export type WorkScheduleDistributionInput = z.infer<typeof workScheduleDistributionInputSchema>;

@@ -28,19 +28,19 @@ import { cn, ensureDate, formatCurrency, formatDate } from "@/lib/utils";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const session = await getAuthSession();
-  if (!session) return { title: "Presupuesto | MYC Presupuestos" };
+  if (!session) return { title: "Presupuesto | MC Presupuestos" };
 
   const budget = await getBudgetById(id, session.user.id);
-  if (!budget) return { title: "Presupuesto | MYC Presupuestos" };
+  if (!budget) return { title: "Presupuesto | MC Presupuestos" };
 
   const isGeneral = budget.kind === "GENERAL";
   const kindLabel = isGeneral ? "Presupuesto General" : "Sub Presupuesto";
 
   return {
-    title: `${budget.name} | MYC Presupuestos`,
+    title: `${budget.name} | MC Presupuestos`,
     description: `${kindLabel} — ${budget.name}. Moneda: ${budget.currency}. Total: ${budget.totalAmount}. Presupuesto de obra para construcción.`,
     openGraph: {
-      title: `${budget.name} | MYC Presupuestos`,
+      title: `${budget.name} | MC Presupuestos`,
       description: `${kindLabel}: ${budget.name}. Gestión de costos y presupuestos de obra.`,
     },
   };

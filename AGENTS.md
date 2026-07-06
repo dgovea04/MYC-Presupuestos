@@ -21,11 +21,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - npm run lint
 
 
-# MYC Presupuestos — Project Agent Rules
+# MC Presupuestos — Project Agent Rules
 
 ## Project Overview
 
-MYC Presupuestos is a modern SaaS web application for construction cost estimation and budgeting.
+MC Presupuestos is a modern SaaS web application for construction cost estimation and budgeting.
 
 The platform helps engineers, contractors, technical offices, and construction companies manage:
 
@@ -96,7 +96,7 @@ Prioritize:
 
 ## Product Name
 
-MYC Presupuestos
+MC Presupuestos
 
 ## Tagline
 

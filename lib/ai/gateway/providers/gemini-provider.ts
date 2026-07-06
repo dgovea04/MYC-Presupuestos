@@ -81,7 +81,7 @@ export function simplifyMessagesForGemma(messages: AiMessage[]): AiMessage[] {
         skillInfo = msg.content.replace(/^skill[-:]+\s*/, "").trim();
       }
       // Detect pre-built context block from buildChatMessages / buildContextString
-      else if (msg.content.startsWith("Contexto operativo de MYC Presupuestos:")) {
+      else if (msg.content.startsWith("Contexto operativo de MC Presupuestos:")) {
         contextInfo = msg.content;
       }
       // Detect context block (contains "Solicitud del usuario")
@@ -167,7 +167,7 @@ function buildContextString(ctx: Record<string, unknown>): string {
 
   if (items.length === 0) return "";
 
-  return `Contexto operativo de MYC Presupuestos:\n${items.map((i) => `- ${i}`).join("\n")}`;
+  return `Contexto operativo de MC Presupuestos:\n${items.map((i) => `- ${i}`).join("\n")}`;
 }
 
 /**

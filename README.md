@@ -324,7 +324,6 @@ Tambien puedes crear una cuenta desde `/register`.
 
 ```powershell
 npm.cmd run dev
-npm.cmd run dev
 npm.cmd run build
 npm.cmd run lint
 npm.cmd run test

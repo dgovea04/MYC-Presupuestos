@@ -14,8 +14,8 @@ import {
 } from "@/components/landing-v2/landing-v2-sections";
 
 export const metadata: Metadata = {
-  title: "MYC Presupuestos | Landing v2",
-  description: "Landing alternativa para A/B testing de MYC Presupuestos.",
+  title: "MC Presupuestos | Landing v2",
+  description: "Landing alternativa para A/B testing de MC Presupuestos.",
 };
 
 export default function LandingV2Page() {

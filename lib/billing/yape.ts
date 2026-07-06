@@ -32,7 +32,7 @@ type YapePrismaClient = {
 
 export function getYapePaymentConfig() {
   return {
-    accountName: process.env.NEXT_PUBLIC_YAPE_ACCOUNT_NAME ?? "MYC Presupuestos",
+    accountName: process.env.NEXT_PUBLIC_YAPE_ACCOUNT_NAME ?? "MC Presupuestos",
     amount: process.env.NEXT_PUBLIC_YAPE_PRO_AMOUNT ?? "",
     phone: process.env.NEXT_PUBLIC_YAPE_PHONE ?? "",
     qrImageUrl: process.env.NEXT_PUBLIC_YAPE_QR_IMAGE_URL ?? "",

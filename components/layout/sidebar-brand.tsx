@@ -22,7 +22,7 @@ export function SidebarBrand({
         <div className={cn("relative overflow-hidden", isMini ? "w-10" : "w-[140px]")}>
           <Image
             src={isMini ? `/myc-logo-tr-mini.svg?v=${LOGO_VERSION}` : "/nuevo-logo-white-300-v3.png"}
-            alt="MYC Presupuestos"
+            alt="MC Presupuestos"
             priority
             width={isMini ? 40 : 140}
             height={isMini ? 40 : 40}

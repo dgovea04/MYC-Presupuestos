@@ -153,7 +153,7 @@ export function LandingV2ComparisonSection() {
             <div className="px-5 py-4">Criterio</div>
             <div className="px-5 py-4 text-center">Excel</div>
             <div className="px-5 py-4 text-center">Software tradicional</div>
-            <div className="bg-[#0007cd] px-5 py-4 text-center">MYC Presupuestos</div>
+            <div className="bg-[#0007cd] px-5 py-4 text-center">MC Presupuestos</div>
           </div>
           <div className="overflow-x-auto">
             {comparisonRows.map((row) => (
@@ -346,11 +346,11 @@ export function LandingV2Footer() {
     <footer id="contacto" className="border-t border-[#222222] bg-[#0f0f0f] px-4 py-14 sm:px-6">
       <div className="mx-auto grid max-w-[1200px] gap-10 lg:grid-cols-[1.2fr_repeat(3,0.75fr)]">
         <div>
-          <p className="text-lg font-semibold text-white">MYC Presupuestos</p>
+          <p className="text-lg font-semibold text-white">MC Presupuestos</p>
           <p className="mt-4 max-w-sm text-sm leading-7 text-[#888888]">
             Plataforma moderna de costos y presupuestos de obra para ingenieros, contratistas y oficinas tecnicas.
           </p>
-          <p className="mt-6 text-sm text-[#666666]">&copy; 2026 MYC Presupuestos. Todos los derechos reservados.</p>
+          <p className="mt-6 text-sm text-[#666666]">&copy; 2026 MC Presupuestos. Todos los derechos reservados.</p>
         </div>
         <FooterColumn title="Producto" items={landingV2FooterLinks.producto} />
         <FooterColumn title="Empresa" items={landingV2FooterLinks.empresa} />

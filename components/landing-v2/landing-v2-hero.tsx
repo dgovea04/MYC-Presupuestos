@@ -15,7 +15,7 @@ export function LandingV2Hero() {
           Presupuestos de obra con la precision de una terminal tecnica.
         </h1>
         <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-[#a8a8a8] sm:text-lg">
-          MYC Presupuestos unifica presupuestos, APU, catalogo de insumos, formula polinomica, programacion y reportes en una experiencia SaaS para oficinas tecnicas.
+          MC Presupuestos unifica presupuestos, APU, catalogo de insumos, formula polinomica, programacion y reportes en una experiencia SaaS para oficinas tecnicas.
         </p>
         <div className="mx-auto mt-8 flex max-w-sm flex-col justify-center gap-3 sm:max-w-none sm:flex-row">
           <LandingV2Button href="/register" showArrow className="w-full sm:w-auto">

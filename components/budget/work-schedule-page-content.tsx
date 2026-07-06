@@ -34,7 +34,12 @@ import {
 } from "@/lib/calculations/work-schedule";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { getExportDefinition } from "@/lib/exports/definitions";
-import { parseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
+import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
+import { TimelineRow as GanttTimelineRow } from "@/components/budget/gantt/timeline-row";
+import { GanttConnectionOverlay } from "@/components/budget/gantt/gantt-connection-overlay";
+import { DependencyEditPopover } from "@/components/budget/gantt/dependency-edit-popover";
+import { useGanttConnectionMode, type LinePosition, type WorkSchedulePredecessorRelation } from "@/components/budget/gantt/use-gantt-connection-mode";
+import type { GanttBarChangeResult } from "@/components/budget/gantt/gantt-utils";
 import type {
   WorkScheduleCurvePointRecord,
   WorkScheduleLineRecord,
@@ -579,6 +584,193 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     setInlineSaveStateById((current) => ({ ...current, [rowId]: "idle" }));
     setActiveInlineRowId((current) => (current === rowId ? null : current));
   }, []);
+
+  const handleGanttBarChange = useCallback(
+    (line: WorkScheduleLineRecord, result: GanttBarChangeResult) => {
+      const editableLine: EditableLine = {
+        budgetItemId: line.budgetItemId,
+        description: line.description,
+        quantity: line.quantity,
+        performance: line.performance ?? null,
+        startDate: result.startDate,
+        endDate: result.endDate,
+        durationDays: result.durationDays,
+        predecessor: line.predecessor ?? "",
+        crew: line.crew?.toString() ?? "",
+        monthlyDistributions: result.monthlyDistributions,
+      };
+
+      // Optimistic update: set inline draft immediately so the bar stays at the dragged position
+      setInlineDrafts((current) => ({ ...current, [line.budgetItemId]: editableLine }));
+
+      // PATCH in background
+      persistWorkScheduleLine(editableLine)
+        .then((nextData) => {
+          setData(normalizeWorkScheduleView(nextData));
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[line.budgetItemId];
+            return d;
+          });
+        })
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error("Failed to save Gantt bar change:", err);
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[line.budgetItemId];
+            return d;
+          });
+        });
+    },
+    [persistWorkScheduleLine],
+  );
+
+
+
+  const handleCreateDependency = useCallback(
+    (sourceItemCode: string, targetItemCode: string, relation: WorkSchedulePredecessorRelation, lagDays: number) => {
+      const targetLine = presentationLinesByCode.get(targetItemCode);
+      if (!targetLine) return;
+
+      const existingPredecessors = parseWorkSchedulePredecessors(targetLine.predecessor);
+      const alreadyExists = existingPredecessors.some((ref) => ref.code === sourceItemCode);
+      if (alreadyExists) return;
+
+      const newPredecessor = formatPredecessorToken(sourceItemCode, relation, lagDays);
+      const mergedPredecessors = existingPredecessors.length > 0
+        ? [...existingPredecessors.map((ref) => formatPredecessorToken(ref.code, ref.relation, ref.lagDays)), newPredecessor].join(",")
+        : newPredecessor;
+
+      const editableLine: EditableLine = {
+        budgetItemId: targetLine.budgetItemId,
+        description: targetLine.description,
+        quantity: targetLine.quantity,
+        performance: targetLine.performance ?? null,
+        startDate: targetLine.startDate ?? "",
+        endDate: targetLine.endDate ?? "",
+        durationDays: targetLine.durationDays ?? 1,
+        predecessor: mergedPredecessors,
+        crew: targetLine.crew?.toString() ?? "",
+        monthlyDistributions: targetLine.monthlyDistributions,
+      };
+
+      setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
+      persistWorkScheduleLine(editableLine)
+        .then((nextData) => {
+          setData(normalizeWorkScheduleView(nextData));
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[targetLine.budgetItemId];
+            return d;
+          });
+        })
+        .catch((err) => {
+          console.error("Failed to create dependency:", err);
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[targetLine.budgetItemId];
+            return d;
+          });
+        });
+    },
+    [presentationLinesByCode],
+  );
+
+  const handleEditDependencySave = useCallback(
+    (sourceCode: string, targetCode: string, relation: WorkSchedulePredecessorRelation, lagDays: number) => {
+      const targetLine = presentationLinesByCode.get(targetCode);
+      if (!targetLine) return;
+
+      const predecessors = parseWorkSchedulePredecessors(targetLine.predecessor);
+      const updatedPredecessors = predecessors
+        .map((ref) =>
+          ref.code === sourceCode
+            ? formatPredecessorToken(ref.code, relation, lagDays)
+            : formatPredecessorToken(ref.code, ref.relation, ref.lagDays),
+        )
+        .join(",");
+
+      const editableLine: EditableLine = {
+        budgetItemId: targetLine.budgetItemId,
+        description: targetLine.description,
+        quantity: targetLine.quantity,
+        performance: targetLine.performance ?? null,
+        startDate: targetLine.startDate ?? "",
+        endDate: targetLine.endDate ?? "",
+        durationDays: targetLine.durationDays ?? 1,
+        predecessor: updatedPredecessors,
+        crew: targetLine.crew?.toString() ?? "",
+        monthlyDistributions: targetLine.monthlyDistributions,
+      };
+
+      setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
+      persistWorkScheduleLine(editableLine)
+        .then((nextData) => {
+          setData(normalizeWorkScheduleView(nextData));
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[targetLine.budgetItemId];
+            return d;
+          });
+        })
+        .catch((err) => {
+          console.error("Failed to edit dependency:", err);
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[targetLine.budgetItemId];
+            return d;
+          });
+        });
+    },
+    [presentationLinesByCode],
+  );
+
+  const handleEditDependencyDelete = useCallback(
+    (sourceCode: string, targetCode: string) => {
+      const targetLine = presentationLinesByCode.get(targetCode);
+      if (!targetLine) return;
+
+      const predecessors = parseWorkSchedulePredecessors(targetLine.predecessor);
+      const updatedPredecessors = predecessors
+        .filter((ref) => ref.code !== sourceCode)
+        .map((ref) => formatPredecessorToken(ref.code, ref.relation, ref.lagDays))
+        .join(",");
+
+      const editableLine: EditableLine = {
+        budgetItemId: targetLine.budgetItemId,
+        description: targetLine.description,
+        quantity: targetLine.quantity,
+        performance: targetLine.performance ?? null,
+        startDate: targetLine.startDate ?? "",
+        endDate: targetLine.endDate ?? "",
+        durationDays: targetLine.durationDays ?? 1,
+        predecessor: updatedPredecessors,
+        crew: targetLine.crew?.toString() ?? "",
+        monthlyDistributions: targetLine.monthlyDistributions,
+      };
+
+      setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
+      persistWorkScheduleLine(editableLine)
+        .then((nextData) => {
+          setData(normalizeWorkScheduleView(nextData));
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[targetLine.budgetItemId];
+            return d;
+          });
+        })
+        .catch((err) => {
+          console.error("Failed to delete dependency:", err);
+          setInlineDrafts((current) => {
+            const d = { ...current };
+            delete d[targetLine.budgetItemId];
+            return d;
+          });
+        });
+    },
+    [presentationLinesByCode],
+  );
 
   useLayoutEffect(() => {
     writeActiveView(data.budgetId, activeView);
@@ -1188,6 +1380,10 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           onInlinePredecessorChange={handleInlinePredecessorChange}
           onInlineRowSave={handleInlineRowSaveRequest}
           onInlineRowCancel={handleInlineRowCancel}
+          onGanttBarChange={handleGanttBarChange}
+          onCreateDependency={handleCreateDependency}
+          onEditDependency={handleEditDependencySave}
+          onDeleteDependency={handleEditDependencyDelete}
         />
       ) : null}
 
@@ -1329,6 +1525,10 @@ function WorkScheduleOverview({
   onInlinePredecessorChange,
   onInlineRowSave,
   onInlineRowCancel,
+  onGanttBarChange,
+  onCreateDependency,
+  onEditDependency,
+  onDeleteDependency,
 }: {
   data: WorkScheduleViewRecord;
   isExcelMode: boolean;
@@ -1358,6 +1558,10 @@ function WorkScheduleOverview({
   onInlinePredecessorChange: (rowId: string, line: EditableLine, predecessor: string) => void;
   onInlineRowSave: (rowId: string) => void;
   onInlineRowCancel: (rowId: string) => void;
+  onGanttBarChange?: (line: WorkScheduleLineRecord, result: GanttBarChangeResult) => void;
+  onCreateDependency?: (sourceItemCode: string, targetItemCode: string, relation: WorkSchedulePredecessorRelation, lagDays: number) => void;
+  onEditDependency?: (sourceCode: string, targetCode: string, relation: WorkSchedulePredecessorRelation, lagDays: number) => void;
+  onDeleteDependency?: (sourceCode: string, targetCode: string) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineBottomScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1605,6 +1809,58 @@ function WorkScheduleOverview({
       }),
     [timelineDayIndexByIso, timelineZoomPercent, visibleTimelineLinePositions],
   );
+
+  // Gantt connection mode for visual dependency creation
+  const timelineLinePositions = useMemo<LinePosition[]>(
+    () =>
+      [...visibleTimelineLinePositions.entries()].map(([itemCode, pos]) => ({
+        budgetItemId: pos.line.budgetItemId,
+        itemCode,
+        top: pos.top,
+        height: pos.height,
+      })),
+    [visibleTimelineLinePositions],
+  );
+
+  const {
+    connectionState,
+    confirmingState,
+    startConnection,
+    updateConnectionPointer,
+    endConnection,
+    confirmConnection,
+    cancelConfirmConnection,
+    cancelConnection,
+  } = useGanttConnectionMode({
+    linePositions: timelineLinePositions,
+    onConnect: (sourceItemCode, targetItemCode, relation, lagDays) => {
+      onCreateDependency?.(sourceItemCode, targetItemCode, relation, lagDays);
+    },
+  });
+
+  // Editing existing dependency
+  const [editingDependency, setEditingDependency] = useState<{
+    sourceCode: string;
+    targetCode: string;
+    sourceItemCode: string;
+    targetItemCode: string;
+    currentRelation: WorkSchedulePredecessorRelation;
+    currentLagDays: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const totalTimelineHeight = useMemo(
+    () => {
+      const itemsHeight = overviewVirtualItems.reduce(
+        (sum, item) => sum + (item.estimatedHeight ?? 40),
+        0,
+      );
+      return itemsHeight > 0 ? itemsHeight : 120;
+    },
+    [overviewVirtualItems],
+  );
+
   const setGroupRowRef = useCallback((subBudgetId: string, element: HTMLElement | null) => {
     const previousElement = groupRowRefs.current.get(subBudgetId);
     if (previousElement && groupRowObserverRef.current) {
@@ -2437,10 +2693,73 @@ function WorkScheduleOverview({
                               strokeWidth="1.5"
                               strokeLinejoin="round"
                               markerEnd="url(#work-schedule-dependency-arrowhead)"
+                              className="pointer-events-auto cursor-pointer hover:stroke-sky-500 hover:stroke-[2.5]"
+                              onClick={(event) => {
+                                const sourceCode = path.key.split("→")[0];
+                                const targetCode = path.key.split("→")[1];
+                                if (!sourceCode || !targetCode) return;
+                                const targetLine = data.groups
+                                  .flatMap((g) => g.lines)
+                                  .find((l) => l.itemCode === targetCode);
+                                if (!targetLine?.predecessor) return;
+                                const parsed = tryParseWorkSchedulePredecessors(targetLine.predecessor);
+                                if (!parsed) return;
+                                const ref = parsed.find((r) => r.code === sourceCode);
+                                if (!ref) return;
+                                const svgRect = event.currentTarget.closest("svg")?.getBoundingClientRect();
+                                setEditingDependency({
+                                  sourceCode,
+                                  targetCode,
+                                  sourceItemCode: sourceCode,
+                                  targetItemCode: targetCode,
+                                  currentRelation: ref.relation,
+                                  currentLagDays: ref.lagDays,
+                                  x: svgRect ? event.clientX - svgRect.left : event.clientX,
+                                  y: svgRect ? event.clientY - svgRect.top : event.clientY,
+                                });
+                              }}
                             />
                           ))}
                         </svg>
                       ) : null}
+
+                        {/* Gantt connection overlay */}
+                        {(connectionState || confirmingState) && (
+                          <GanttConnectionOverlay
+                            connectionState={connectionState}
+                            confirmingState={confirmingState}
+                            linePositions={timelineLinePositions}
+                            timelineContentWidth={timelineContentWidth}
+                            totalHeight={totalTimelineHeight}
+                            onPointerMove={updateConnectionPointer}
+                            onEndConnection={endConnection}
+                            onConfirmConnection={confirmConnection}
+                            onCancelConfirmConnection={cancelConfirmConnection}
+                            onCancelConnection={cancelConnection}
+                          />
+                        )}
+
+                        {/* Dependency edit popover */}
+                        {editingDependency && (
+                          <DependencyEditPopover
+                            sourceCode={editingDependency.sourceCode}
+                            targetCode={editingDependency.targetCode}
+                            currentRelation={editingDependency.currentRelation}
+                            currentLagDays={editingDependency.currentLagDays}
+                            x={editingDependency.x}
+                            y={editingDependency.y}
+                            onSave={(relation, lagDays) => {
+                              onEditDependency?.(editingDependency.sourceItemCode, editingDependency.targetItemCode, relation, lagDays);
+                              setEditingDependency(null);
+                            }}
+                            onDelete={() => {
+                              onDeleteDependency?.(editingDependency.sourceItemCode, editingDependency.targetItemCode);
+                              setEditingDependency(null);
+                            }}
+                            onClose={() => setEditingDependency(null)}
+                          />
+                        )}
+
                       {overviewVirtualWindow.topSpacerHeight > 0 ? (
                         <div aria-hidden="true" style={{ height: overviewVirtualWindow.topSpacerHeight }} />
                       ) : null}
@@ -2471,7 +2790,7 @@ function WorkScheduleOverview({
                             </Button>
                           </div>
                         ) : (
-                          <TimelineRow
+                          <GanttTimelineRow
                             key={item.key}
                             row={item.row}
                             timelineDays={timelineDays}
@@ -2486,6 +2805,10 @@ function WorkScheduleOverview({
                               tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
                               OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
                             )}
+                            timelineStartIso={data.timeline.startDate}
+                            timelineEndIso={data.timeline.endDate}
+                            onGanttBarChange={onGanttBarChange}
+                            onStartConnection={startConnection}
                           />
                         ),
                       )}
@@ -2938,133 +3261,6 @@ function TimelineHeader({
     </div>
   );
 }
-
-type TimelineRowProps = {
-  row: WorkScheduleDisplayRowRecord;
-  timelineDays: TimelineDay[];
-  timelineDayIndexByIso: Map<string, number>;
-  currency: string;
-  currencyDecimals: number;
-  showCriticalPath: boolean;
-  timelineDayWidth: number;
-  timelineDayGap: number;
-  highlighted: boolean;
-  rowHeight?: number;
-};
-
-const TimelineRow = memo(function TimelineRow({
-  row,
-  timelineDays,
-  timelineDayIndexByIso,
-  currency,
-  currencyDecimals,
-  showCriticalPath,
-  timelineDayWidth,
-  timelineDayGap,
-  highlighted,
-  rowHeight,
-}: TimelineRowProps) {
-  const line = row.kind === "line" ? row.line : null;
-  const startDate = row.kind === "line" ? row.line.startDate : row.startDate;
-  const endDate = row.kind === "line" ? row.line.endDate : row.endDate;
-  const itemCode = row.kind === "line" ? row.line.itemCode : row.itemCode;
-  const description = row.kind === "line" ? row.line.description : row.description;
-  const partial = row.kind === "line" ? row.line.partial : row.partial;
-  const timelineDayCount = Math.max(timelineDays.length, 1);
-  const startIndex = startDate ? (timelineDayIndexByIso.get(startDate) ?? -1) : -1;
-  const endIndex = endDate ? (timelineDayIndexByIso.get(endDate) ?? -1) : -1;
-  const span = startIndex >= 0 && endIndex >= startIndex ? endIndex - startIndex + 1 : 0;
-  const hasActiveRange = span > 0;
-  const timelineColumnWidth = timelineDayWidth + timelineDayGap;
-  const segmentColors = [
-    "bg-sky-600 dark:bg-sky-500",
-    "bg-cyan-500 dark:bg-cyan-400",
-    "bg-indigo-500 dark:bg-indigo-400",
-    "bg-emerald-500 dark:bg-emerald-400",
-    "bg-amber-500 dark:bg-amber-400",
-    "bg-rose-500 dark:bg-rose-400",
-  ] as const;
-  const timelineBarStyle = hasActiveRange
-    ? {
-        left: `${startIndex * timelineColumnWidth}px`,
-        width: `${span * timelineDayWidth + Math.max(0, span - 1) * timelineDayGap}px`,
-      }
-    : null;
-  const timelineRowBackgroundStyle = {
-    backgroundColor: highlighted ? "var(--app-surface-hover-strong)" : "var(--app-surface-muted)",
-    backgroundImage: `repeating-linear-gradient(
-      to right,
-      var(--app-surface) 0,
-      var(--app-surface) calc((100% / ${timelineDayCount}) - 1px),
-      var(--app-surface-hover-strong) calc((100% / ${timelineDayCount}) - 1px),
-      var(--app-surface-hover-strong) calc(100% / ${timelineDayCount})
-    )`,
-  } as const;
-
-  return (
-    <div
-      data-testid="work-schedule-timeline-row"
-      data-line-id={row.rowId}
-      data-highlighted={highlighted ? "true" : "false"}
-      data-critical={showCriticalPath && line?.criticalPath?.isCritical ? "true" : "false"}
-      className="relative overflow-visible border-b border-[var(--app-border-soft)] px-0.5 py-1"
-      style={{
-        height: rowHeight ? `${rowHeight}px` : undefined,
-        ...timelineRowBackgroundStyle,
-      }}
-    >
-      {timelineBarStyle ? (
-        <div
-          className={cn(
-            "absolute inset-y-2 z-20 overflow-visible rounded-full",
-            showCriticalPath && line?.criticalPath?.isCritical
-              ? "shadow-[0_10px_20px_-16px_rgba(225,29,72,0.9)] ring-1 ring-rose-300 dark:ring-rose-500/40"
-              : row.kind === "line"
-              ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)] ring-1 ring-black/5 dark:ring-white/6"
-              : "bg-[var(--app-text-subtle)]/90",
-          )}
-          style={timelineBarStyle}
-          title={description}
-        >
-          <div className="absolute inset-0 flex overflow-hidden rounded-full">
-            {line && line.monthlyDistributions.length > 0 ? (
-              line.monthlyDistributions.map((distribution, distributionIndex) => (
-                <div
-                  key={`${row.rowId}-${distribution.year}-${distribution.month}`}
-                  data-testid={`work-schedule-bar-segment-${row.rowId}`}
-                  className={cn(
-                    "h-full border-r border-white/35 dark:border-black/20 last:border-r-0",
-                    showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : segmentColors[distributionIndex % segmentColors.length],
-                  )}
-                  style={{ width: `${distribution.percentage}%` }}
-                  title={formatDistributionTooltip(distribution, partial, currency, currencyDecimals)}
-                />
-              ))
-            ) : line ? (
-              <div className={cn("h-full w-full", showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : "bg-sky-600 dark:bg-sky-500")} />
-            ) : (
-              <div className="h-full w-full bg-[var(--app-text-subtle)]" />
-            )}
-          </div>
-          <div className="absolute inset-0 px-1 text-[9px] font-semibold text-white">
-            <span className="line-clamp-1 block truncate py-1">{itemCode}</span>
-          </div>
-          {highlighted ? (
-            <div className="absolute -top-5 left-0">
-              <span
-                data-testid={`work-schedule-active-timeline-badge-${row.rowId}`}
-                className="theme-status-warning theme-status-warning-strong rounded-full border px-1.5 py-0.5 text-[9px] font-semibold shadow-sm"
-              >
-                Partida activa
-              </span>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}, areTimelineRowPropsEqual);
-
 function areWorkScheduleLineTableRowPropsEqual(
   previousProps: WorkScheduleLineTableRowProps,
   nextProps: WorkScheduleLineTableRowProps,
@@ -3104,21 +3300,6 @@ function areWorkScheduleLevelTableRowPropsEqual(
     previousProps.currencyDecimals === nextProps.currencyDecimals &&
     previousProps.showCostColumns === nextProps.showCostColumns &&
     previousProps.onRegisterRow === nextProps.onRegisterRow
-  );
-}
-
-function areTimelineRowPropsEqual(previousProps: TimelineRowProps, nextProps: TimelineRowProps) {
-  return (
-    previousProps.row === nextProps.row &&
-    previousProps.timelineDays === nextProps.timelineDays &&
-    previousProps.timelineDayIndexByIso === nextProps.timelineDayIndexByIso &&
-    previousProps.currency === nextProps.currency &&
-    previousProps.currencyDecimals === nextProps.currencyDecimals &&
-    previousProps.showCriticalPath === nextProps.showCriticalPath &&
-    previousProps.timelineDayWidth === nextProps.timelineDayWidth &&
-    previousProps.timelineDayGap === nextProps.timelineDayGap &&
-    previousProps.highlighted === nextProps.highlighted &&
-    previousProps.rowHeight === nextProps.rowHeight
   );
 }
 
@@ -4045,7 +4226,12 @@ function buildTimelineDependencyPaths({
       continue;
     }
 
-    for (const predecessorReference of parseWorkSchedulePredecessors(successor.line.predecessor)) {
+    const parsedPredecessors = tryParseWorkSchedulePredecessors(successor.line.predecessor);
+    if (!parsedPredecessors) {
+      continue;
+    }
+
+    for (const predecessorReference of parsedPredecessors) {
       const predecessor = visibleLinePositions.get(predecessorReference.code);
       if (!predecessor) {
         continue;
@@ -6457,6 +6643,15 @@ function formatPredecessorForStorage(value: string, rowNumberToItemCode: Map<num
 function formatPredecessorReference(code: string, relation: string, lagDays: number) {
   const lagLabel = lagDays === 0 ? "" : `${lagDays > 0 ? "+" : "-"}${Math.abs(lagDays)}d`;
   return `${code}${relation}${lagLabel}`;
+}
+
+function formatPredecessorToken(code: string, relation: string, lagDays: number) {
+  if (lagDays === 0) {
+    return `${code}${relation}`;
+  }
+
+  const sign = lagDays > 0 ? "+" : "";
+  return `${code}${relation}${sign}${lagDays}d`;
 }
 
 function createNextDistribution(distributions: WorkScheduleMonthlyDistributionRecord[]) {

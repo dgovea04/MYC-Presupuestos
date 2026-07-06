@@ -15,17 +15,17 @@ import { buildFallbackRiskAnalysisPayload, buildRiskWorkScheduleSummary } from "
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const session = await getAuthSession();
-  if (!session) return { title: "Riesgos | MYC Presupuestos" };
+  if (!session) return { title: "Riesgos | MC Presupuestos" };
 
   const budget = await getBudgetHeaderById(id, session.user.id);
 
   return {
-    title: budget ? `Riesgos — ${budget.name} | MYC Presupuestos` : "Riesgos | MYC Presupuestos",
+    title: budget ? `Riesgos — ${budget.name} | MC Presupuestos` : "Riesgos | MC Presupuestos",
     description: budget
       ? `Análisis de riesgo Monte Carlo para ${budget.name}. Simulación probabilística con percentiles, histograma y curva S.`
       : "Análisis de riesgo, simulación Monte Carlo y percentiles para presupuestos de obra.",
     openGraph: {
-      title: budget ? `Riesgos — ${budget.name} | MYC Presupuestos` : "Riesgos | MYC Presupuestos",
+      title: budget ? `Riesgos — ${budget.name} | MC Presupuestos` : "Riesgos | MC Presupuestos",
       description: budget
         ? `Simulación de riesgo probabilística para el presupuesto ${budget.name}.`
         : "Evaluación de riesgos y contingencias en presupuestos de construcción.",

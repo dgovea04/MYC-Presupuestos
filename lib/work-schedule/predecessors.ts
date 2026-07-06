@@ -17,7 +17,24 @@ export function parseWorkSchedulePredecessors(value: string | null | undefined):
     return [];
   }
 
-  return normalized.split(",").map((segment) => parseWorkSchedulePredecessorToken(segment.trim()));
+  return normalized
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0)
+    .map((segment) => parseWorkSchedulePredecessorToken(segment));
+}
+
+/**
+ * Non-throwing variant that returns null when the predecessor string
+ * is syntactically invalid. Useful for intermediate editing states
+ * (e.g., user partially typing or deleting a predecessor code).
+ */
+export function tryParseWorkSchedulePredecessors(value: string | null | undefined): WorkSchedulePredecessorReference[] | null {
+  try {
+    return parseWorkSchedulePredecessors(value);
+  } catch {
+    return null;
+  }
 }
 
 export function validateWorkSchedulePredecessors(

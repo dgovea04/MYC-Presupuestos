@@ -146,7 +146,7 @@ export function LocalAiSettingsCard() {
             <div>
               <CardTitle>Integracion de IA Local</CardTitle>
               <CardDescription>
-                Diagnostico de Ollama, modelos requeridos y reglas de uso seguro para MYC Presupuestos.
+                Diagnostico de Ollama, modelos requeridos y reglas de uso seguro para MC Presupuestos.
               </CardDescription>
             </div>
           </div>

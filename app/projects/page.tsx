@@ -11,11 +11,11 @@ import { getProjectsListByUser } from "@/lib/data/projects";
 import { ensureDate } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Proyectos | MYC Presupuestos",
+  title: "Proyectos | MC Presupuestos",
   description:
     "Gestiona obras, clientes y accesos rápidos a presupuestos desde una tabla operativa. Proyectos de construcción, ingeniería y costos.",
   openGraph: {
-    title: "Proyectos | MYC Presupuestos",
+    title: "Proyectos | MC Presupuestos",
     description: "Panel de gestión de proyectos de construcción con presupuestos, cronogramas y control de costos.",
   },
 };

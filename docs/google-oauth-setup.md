@@ -1,10 +1,10 @@
 # Google OAuth Setup Guide
 
-Guía para desarrolladores: cómo configurar "Continue with Google" en MYC Presupuestos.
+Guía para desarrolladores: cómo configurar "Continue with Google" en MC Presupuestos.
 
 ## Resumen
 
-MYC Presupuestos usa NextAuth v4 con el provider de Google para permitir que los usuarios se registren e inicien sesión con su cuenta de Google. No se requiere adapter de base de datos — el registro automático se maneja en el callback `signIn` mediante una transacción Prisma que crea User + Company + Membership (plan Starter).
+MC Presupuestos usa NextAuth v4 con el provider de Google para permitir que los usuarios se registren e inicien sesión con su cuenta de Google. No se requiere adapter de base de datos — el registro automático se maneja en el callback `signIn` mediante una transacción Prisma que crea User + Company + Membership (plan Starter).
 
 ## Prerrequisitos
 
@@ -26,7 +26,7 @@ MYC Presupuestos usa NextAuth v4 con el provider de Google para permitir que los
 | Campo | Valor |
 |---|---|
 | User Type | External |
-| App name | MYC Presupuestos |
+| App name | MC Presupuestos |
 | User support email | Tu correo |
 | Developer contact email | Tu correo |
 | Scopes | `openid`, `email`, `profile` (los defaults de NextAuth) |

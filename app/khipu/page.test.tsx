@@ -207,7 +207,7 @@ describe("Khipu landing page sections", () => {
     expect(chips.length).toBeGreaterThanOrEqual(3);
 
     // Navbar is present
-    expect(container.textContent).toContain("MYC Presupuestos");
+    expect(container.textContent).toContain("MC Presupuestos");
   });
 });
 

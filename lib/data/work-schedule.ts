@@ -5,11 +5,8 @@ import {
   analyzeWorkScheduleScale,
   buildWorkScheduleCurveSeries,
   buildWorkScheduleResourceCalendar,
-  buildWorkScheduleMonthlyDistributionsFromRange,
   calculateWorkScheduleDurationDays,
-  hasSuspiciousDefaultWorkSchedulePerformance,
   recalculateDependentWorkScheduleLines,
-  recalculateWorkScheduleLineFromPredecessors,
   buildWorkScheduleValuationCalendarSlice,
   buildWorkScheduleValuationCalendar,
   buildWorkScheduleView,
@@ -315,10 +312,7 @@ export async function saveWorkScheduleItem(
     allowedCodes: new Set(budgetItem.budget.items.map((item) => item.code)),
     currentItemCode: budgetItem.code,
   });
-  const normalizedPayload = normalizeWorkScheduleItemSaveInput(
-    payload,
-    await getWorkScheduleLinesForBudget(budget, { includeResources: false }),
-  );
+  const normalizedPayload = normalizeWorkScheduleItemSaveInput(payload);
   validateWorkScheduleInput(normalizedPayload);
 
   await prisma.$transaction(async (tx) => {
@@ -402,10 +396,16 @@ export async function generateWorkScheduleBase(
 ): Promise<WorkScheduleViewRecord> {
   const payload = workScheduleGenerateBaseSchema.parse(input);
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
-  const lines = await getWorkScheduleLinesForBudget(budget);
+  const { lines, levelById } = await getWorkScheduleLinesWithLevels(budget);
+  const reviewedBudgetItemIds = payload.reviewedBudgetItemIds
+    ? new Set(payload.reviewedBudgetItemIds)
+    : undefined;
   const generation = buildIntelligentWorkScheduleBase({
     baseStartDate: payload.baseStartDate,
     lines,
+    reviewedBudgetItemIds,
+    options: payload.options,
+    levelById,
   });
 
   await prisma.$transaction(async (tx) => {
@@ -495,48 +495,28 @@ async function getWorkScheduleLinesForBudget(
   return dataset.lines;
 }
 
+async function getWorkScheduleLinesWithLevels(
+  budget: Awaited<ReturnType<typeof getAccessibleGeneralBudget>>,
+): Promise<{ lines: WorkScheduleLineRecord[]; levelById: Map<string, { parentId: string | null; type: string }> }> {
+  const dataset = await loadWorkScheduleDataset(budget, { includeResources: false });
+  const levelById = new Map<string, { parentId: string | null; type: string }>();
+
+  for (const subBudget of dataset.orderedSubBudgets) {
+    for (const level of subBudget.levels) {
+      levelById.set(level.id, { parentId: level.parentId, type: level.type });
+    }
+  }
+
+  return { lines: dataset.lines, levelById };
+}
+
 function normalizeOptionalString(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
   return normalized.length > 0 ? normalized : null;
 }
 
-function normalizeWorkScheduleItemSaveInput(
-  payload: WorkScheduleItemSaveInput,
-  lines: WorkScheduleLineRecord[],
-) {
-  const currentLine = lines.find((line) => line.budgetItemId === payload.budgetItemId);
-  if (!currentLine) {
-    return payload;
-  }
-
-  const nextLine: WorkScheduleLineRecord = {
-    ...currentLine,
-    startDate: payload.startDate,
-    endDate: payload.endDate,
-    durationDays: payload.durationDays,
-    predecessor: normalizeOptionalString(payload.predecessor),
-    crew: payload.crew ?? currentLine.crew ?? 1,
-    monthlyDistributions: payload.monthlyDistributions.map((distribution) => ({
-      year: distribution.year,
-      month: distribution.month,
-      percentage: distribution.percentage,
-    })),
-  };
-  const lineByCode = new Map(lines.map((line) => [line.itemCode, line]));
-  lineByCode.set(nextLine.itemCode, nextLine);
-  const recalculated = recalculateWorkScheduleLineFromPredecessors(nextLine, lineByCode);
-
-  if (!recalculated?.startDate || !recalculated.endDate || recalculated.durationDays == null) {
-    return payload;
-  }
-
-  return {
-    ...payload,
-    startDate: recalculated.startDate,
-    endDate: recalculated.endDate,
-    durationDays: recalculated.durationDays,
-    monthlyDistributions: buildWorkScheduleMonthlyDistributionsFromRange(recalculated.startDate, recalculated.endDate),
-  };
+function normalizeWorkScheduleItemSaveInput(payload: WorkScheduleItemSaveInput) {
+  return payload;
 }
 
 function buildWorkScheduleGroupRows(
@@ -977,7 +957,7 @@ function sanitizePersistedWorkScheduleLine(input: {
   crew: number | null;
   unit: string;
 }) {
-  if (!isPersistedWorkScheduleRangeAbsurd(input) && !isPersistedWorkScheduleGeneratedFromSuspiciousDefault(input)) {
+  if (!isPersistedWorkScheduleRangeAbsurd(input)) {
     return input;
   }
 
@@ -1012,33 +992,6 @@ function isPersistedWorkScheduleRangeAbsurd(input: {
   }
 
   return input.monthlyDistributions.some((distribution) => distribution.year > MAX_PERSISTED_WORK_SCHEDULE_YEAR);
-}
-
-function isPersistedWorkScheduleGeneratedFromSuspiciousDefault(input: {
-  startDate: string | null;
-  endDate: string | null;
-  durationDays: number | null;
-  monthlyDistributions: WorkScheduleLineRecord["monthlyDistributions"];
-  quantity: number;
-  performance: number | null;
-  crew: number | null;
-  unit: string;
-}) {
-  if (!input.startDate || !input.endDate || input.durationDays == null || input.monthlyDistributions.length === 0) {
-    return false;
-  }
-
-  if (!hasSuspiciousDefaultWorkSchedulePerformance({ performance: input.performance, unit: input.unit, quantity: input.quantity })) {
-    return false;
-  }
-
-  const expectedDurationDays = calculateWorkScheduleDurationDays({
-    quantity: input.quantity,
-    performance: input.performance,
-    crew: input.crew,
-  });
-
-  return expectedDurationDays != null && expectedDurationDays === input.durationDays;
 }
 
 function summarizeWorkScheduleProfileOutliers(lines: WorkScheduleLineRecord[]) {
@@ -1082,7 +1035,7 @@ function buildWorkScheduleReviewSummary(lines: WorkScheduleLineRecord[]): WorkSc
         code: "performance_default_one",
         label: "Partidas con rendimiento 1 detectadas. Esto suele indicar un posible error de importacion de Delphin.",
         count: linesWithDefaultPerformance.length,
-        examples: linesWithDefaultPerformance.slice(0, 5),
+        examples: linesWithDefaultPerformance,
       },
     ],
   };

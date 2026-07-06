@@ -141,7 +141,7 @@ function YapeRequestPanel({ request }: { request: YapeRequest }) {
         <div className="theme-surface-card relative flex h-40 w-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl border">
           {request.yape.qrImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- QR can be an arbitrary operator-provided URL.
-            <img alt="Codigo QR de Yape para MYC Presupuestos" src={request.yape.qrImageUrl} className="h-full w-full object-contain p-2" />
+            <img alt="Codigo QR de Yape para MC Presupuestos" src={request.yape.qrImageUrl} className="h-full w-full object-contain p-2" />
           ) : (
             <span className="theme-muted-text px-4 text-center text-xs leading-5">Configura el QR de Yape en el entorno</span>
           )}

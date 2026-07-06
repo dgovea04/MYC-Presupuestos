@@ -17,7 +17,7 @@ export default async function S10ImportsPage() {
           <PageHeaderCard
             icon={<DatabaseZap className="h-5 w-5" />}
             title="Importador S10"
-            description="Analiza respaldos .s2k y revisa el draft de presupuestos, partidas, APUs e insumos antes de crear datos en MYC."
+            description="Analiza respaldos .s2k y revisa el draft de presupuestos, partidas, APUs e insumos antes de crear datos en MC."
           />
         </CardHeader>
         <CardContent className="pt-6">

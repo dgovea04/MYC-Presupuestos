@@ -57,7 +57,7 @@ export async function createBudgetWorkbook(
   const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
   const identityAssets = await loadReportIdentityAssets(responsible);
 
-  workbook.creator = "MYC Presupuestos";
+  workbook.creator = "MC Presupuestos";
   sheet.views = [{ state: "frozen", ySplit: 6 }];
   sheet.columns = [
     { header: "Codigo", key: "code", width: 18 },
@@ -168,7 +168,7 @@ export async function createApuWorkbook(
   const normalizedDecimals = normalizeDecimalPlaces(currencyDecimals);
   const identityAssets = await loadReportIdentityAssets(responsible);
 
-  workbook.creator = "MYC Presupuestos";
+  workbook.creator = "MC Presupuestos";
   sheet.columns = [
     { header: "Codigo de partida", key: "itemCode", width: 18 },
     { header: "Descripcion de partida", key: "itemDescription", width: 36 },

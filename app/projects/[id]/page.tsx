@@ -47,12 +47,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const project = await getProjectOverviewById(id, session!.user.id);
 
   return {
-    title: project ? `${project.name} | MYC Presupuestos` : "Proyecto | MYC Presupuestos",
+    title: project ? `${project.name} | MC Presupuestos` : "Proyecto | MC Presupuestos",
     description: project
       ? `${project.name} — ${project.clientName || "Sin cliente"}. ${project.location || "Ubicación no especificada"}. Estado: ${project.status}.`
       : "Detalle del proyecto de construcción con presupuestos, cronogramas y control de costos.",
     openGraph: {
-      title: project ? `${project.name} | MYC Presupuestos` : "Proyecto | MYC Presupuestos",
+      title: project ? `${project.name} | MC Presupuestos` : "Proyecto | MC Presupuestos",
       description: project
         ? `Gestión de presupuestos y costos para el proyecto ${project.name}.`
         : "Detalle del proyecto de construcción.",

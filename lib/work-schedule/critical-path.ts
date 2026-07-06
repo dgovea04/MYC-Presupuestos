@@ -1,5 +1,5 @@
 import type { WorkScheduleLineRecord } from "@/types/work-schedule";
-import { parseWorkSchedulePredecessors, type WorkSchedulePredecessorRelation } from "@/lib/work-schedule/predecessors";
+import { tryParseWorkSchedulePredecessors, type WorkSchedulePredecessorRelation } from "@/lib/work-schedule/predecessors";
 
 export type WorkScheduleCriticalPathItem = {
   budgetItemId: string;
@@ -51,7 +51,12 @@ export function calculateWorkScheduleCriticalPath(lines: WorkScheduleLineRecord[
       continue;
     }
 
-    for (const reference of parseWorkSchedulePredecessors(line.predecessor)) {
+    const parsedPredecessors = tryParseWorkSchedulePredecessors(line.predecessor);
+    if (!parsedPredecessors) {
+      continue;
+    }
+
+    for (const reference of parsedPredecessors) {
       const predecessor = nodesByItemCode.get(reference.code);
       if (!predecessor) {
         issues.push(`La predecesora ${reference.code} no existe en este cronograma`);

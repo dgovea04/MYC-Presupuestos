@@ -170,7 +170,7 @@ describe("buildGeminiRequestBody", () => {
 
       // System 2: concise context block
       expect(result[1].role).toBe("system");
-      expect(result[1].content).toContain("Contexto operativo de MYC Presupuestos");
+      expect(result[1].content).toContain("Contexto operativo de MC Presupuestos");
       expect(result[1].content).toContain("Proyecto: Edificio Multifamiliar");
       expect(result[1].content).toContain("Partida seleccionada: Concreto f'c=210");
       expect(result[1].content).toContain("Unidad: m3");
@@ -202,7 +202,7 @@ describe("buildGeminiRequestBody", () => {
     });
 
     it("preserves pre-built context blocks from buildContextString / buildChatMessages", () => {
-      const prebuiltContext = "Contexto operativo de MYC Presupuestos:\n- Proyecto: Edificio Multifamiliar\n- Módulo: Editor APU";
+      const prebuiltContext = "Contexto operativo de MC Presupuestos:\n- Proyecto: Edificio Multifamiliar\n- Módulo: Editor APU";
       const result = simplifyMessagesForGemma([
         { role: "system", content: "Eres un asistente tecnico experto en presupuestos de construccion en Peru.\nResponde SIEMPRE en espanol." },
         { role: "system", content: prebuiltContext },

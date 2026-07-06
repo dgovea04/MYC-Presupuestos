@@ -645,7 +645,7 @@ async function createTableExportResult(
 
 async function buildExportTablesWorkbook(tables: ExportTable[]) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "MYC Presupuestos";
+  workbook.creator = "MC Presupuestos";
 
   for (const table of tables) {
     const sheet = workbook.addWorksheet(table.title.slice(0, 31));
@@ -944,7 +944,7 @@ function buildWorkScheduleCurveTable(curveRows: WorkScheduleCurvePointRecord[], 
 
 async function buildWorkScheduleWorkbook(tables: WorkScheduleExportTable[]) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "MYC Presupuestos";
+  workbook.creator = "MC Presupuestos";
 
   for (const table of tables) {
     const sheet = workbook.addWorksheet(table.title.slice(0, 31));

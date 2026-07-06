@@ -119,6 +119,21 @@ export type WorkScheduleCurvePointRecord = {
   accumulatedPercentage: number;
 };
 
+export type WorkScheduleGenerationStrategy = "sequential" | "by_level" | "by_similarity";
+
+export type InterSubBudgetParallelism = "independent" | "staggered" | "parallel";
+
+export type LevelLinkageMode = "chain" | "parallel";
+
+export type WorkScheduleGenerationOptions = {
+  strategy: WorkScheduleGenerationStrategy;
+  maxDurationDays?: number | null;
+  similarityLagDays?: number | null;
+  interSubBudgetParallelism?: InterSubBudgetParallelism | null;
+  interSubBudgetStaggerDays?: number | null;
+  levelLinkage?: Record<string, LevelLinkageMode> | null;
+};
+
 export type WorkScheduleGenerationIssueRecord = {
   budgetItemId: string;
   itemCode: string;
@@ -129,10 +144,14 @@ export type WorkScheduleGenerationSummaryRecord = {
   generatedCount: number;
   pendingCount: number;
   issues: WorkScheduleGenerationIssueRecord[];
+  appliedOptions: WorkScheduleGenerationOptions;
+  highlights: string[];
 };
 
+export type WorkScheduleReviewWarningCode = "performance_default_one" | "long_duration";
+
 export type WorkScheduleReviewWarningRecord = {
-  code: "performance_default_one";
+  code: WorkScheduleReviewWarningCode;
   label: string;
   count: number;
   examples: Array<{
@@ -141,6 +160,7 @@ export type WorkScheduleReviewWarningRecord = {
     description: string;
     unit: string;
     performance: number | null;
+    durationDays?: number | null;
   }>;
 };
 
@@ -172,10 +192,7 @@ export type WorkScheduleViewRecord = {
   projectName: string;
   currency: string;
   groups: WorkScheduleGroupRecord[];
-  valuationCalendar: {
-    periods: WorkSchedulePeriodRecord[];
-    rows: WorkScheduleValuationCalendarRow[];
-  } | null;
+  valuationCalendar: WorkScheduleValuationCalendarRecord | null;
   resourceCalendar: {
     periods: WorkSchedulePeriodRecord[];
     rows: WorkScheduleResourceCalendarRow[];

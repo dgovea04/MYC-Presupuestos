@@ -7,7 +7,7 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/billing/yape", () => ({
   createYapePaymentRequest: vi.fn(),
   getYapePaymentConfig: vi.fn(() => ({
-    accountName: "MYC Presupuestos",
+    accountName: "MC Presupuestos",
     amount: "S/ 49.00",
     phone: "999999999",
     qrImageUrl: "/yape-qr.png",
@@ -45,7 +45,7 @@ describe("billing yape request route", () => {
       status: "INCOMPLETE",
       createdAt: "2026-05-29T12:00:00.000Z",
       yape: {
-        accountName: "MYC Presupuestos",
+        accountName: "MC Presupuestos",
         amount: "S/ 49.00",
         phone: "999999999",
         qrImageUrl: "/yape-qr.png",

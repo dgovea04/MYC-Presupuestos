@@ -49,7 +49,7 @@ export async function createMetradoWorkbook(sheet: MetradoSheetRecord) {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Metrado");
 
-  workbook.creator = "MYC Presupuestos";
+  workbook.creator = "MC Presupuestos";
   worksheet.views = [{ state: "frozen", ySplit: 7 }];
   worksheet.columns = worksheetColumns;
 

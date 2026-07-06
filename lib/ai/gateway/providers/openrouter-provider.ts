@@ -86,7 +86,7 @@ function createOpenRouterModel({
   const openrouter = createOpenRouter({
     apiKey,
     fetch: fetchImpl,
-    appName: "MYC Presupuestos",
+    appName: "MC Presupuestos",
     appUrl: process.env.NEXT_PUBLIC_APP_URL || "https://myc-presupuestos.local",
   });
 
