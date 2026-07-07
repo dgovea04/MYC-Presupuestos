@@ -4,6 +4,7 @@ import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
 
 const mocks = vi.hoisted(() => ({
   companyFindFirst: vi.fn(),
+  companyMembershipFindUnique: vi.fn(),
   transaction: vi.fn(),
   projectFindFirst: vi.fn(),
   projectFindMany: vi.fn(),
@@ -36,6 +37,9 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     company: {
       findFirst: mocks.companyFindFirst,
+    },
+    companyMembership: {
+      findUnique: mocks.companyMembershipFindUnique,
     },
     $transaction: mocks.transaction,
   },
@@ -344,6 +348,7 @@ function wireDuplicationTransactionMocks() {
 describe("project data", () => {
   beforeEach(() => {
     mocks.companyFindFirst.mockReset();
+    mocks.companyMembershipFindUnique.mockReset();
     mocks.transaction.mockReset();
     mocks.projectFindFirst.mockReset();
     mocks.projectCreate.mockReset();
@@ -355,7 +360,7 @@ describe("project data", () => {
     mocks.getUserSettings.mockReset();
     mocks.assertWithinPlanLimit.mockReset();
 
-    mocks.companyFindFirst.mockResolvedValue({ id: "company-1" });
+    mocks.companyMembershipFindUnique.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
     mocks.assertWithinPlanLimit.mockResolvedValue(undefined);
     mocks.projectCreate.mockResolvedValue({ id: "project-1", name: "Proyecto 1" });
     mocks.budgetCreate.mockResolvedValue({ id: "budget-general-1" });

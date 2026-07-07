@@ -3,6 +3,7 @@ import {
   workspaceMembershipSchema,
   activeWorkspaceSelectionSchema,
   workspaceRoleSchema,
+  inviteWorkspaceMemberSchema,
 } from "@/lib/validations/workspace";
 
 describe("workspace validation", () => {
@@ -44,5 +45,31 @@ describe("workspace validation", () => {
     for (const role of ["OWNER", "ADMIN", "EDITOR", "VIEWER"]) {
       expect(() => workspaceRoleSchema.parse(role)).not.toThrow();
     }
+  });
+
+  describe("inviteWorkspaceMemberSchema", () => {
+    it("accepts a valid email", () => {
+      expect(inviteWorkspaceMemberSchema.parse({ email: "user@test.com" })).toEqual({
+        email: "user@test.com",
+      });
+    });
+
+    it("trims whitespace from email", () => {
+      expect(inviteWorkspaceMemberSchema.parse({ email: "  user@test.com  " })).toEqual({
+        email: "user@test.com",
+      });
+    });
+
+    it("rejects missing email", () => {
+      expect(() => inviteWorkspaceMemberSchema.parse({})).toThrow();
+    });
+
+    it("rejects invalid email format", () => {
+      expect(() => inviteWorkspaceMemberSchema.parse({ email: "not-an-email" })).toThrow();
+    });
+
+    it("rejects empty string email", () => {
+      expect(() => inviteWorkspaceMemberSchema.parse({ email: "   " })).toThrow();
+    });
   });
 });

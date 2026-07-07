@@ -9,6 +9,7 @@ import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 import { ensureDate } from "@/lib/utils";
 import { serializeBudgetForClientForm } from "@/lib/data/serializers";
+import { assertWorkspaceMembership } from "@/lib/workspace/access";
 
 export const PROJECTS_LIST_CACHE_TAG = "projects-list";
 export const PROJECT_OVERVIEW_CACHE_TAG = "project-overview";
@@ -155,10 +156,13 @@ function getFallbackSubBudgetNames(defaultSubBudgetNames: readonly string[]) {
 }
 
 const _getUserCompanies = async (userId: string) => {
-  return prisma.company.findMany({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
+  const memberships = await prisma.companyMembership.findMany({
+    where: { userId, status: "ACTIVE" },
+    include: { company: true },
+    orderBy: { joinedAt: "asc" },
   });
+
+  return memberships.map((m) => m.company);
 }
 
 export const getUserCompanies = cache(
@@ -184,7 +188,12 @@ export async function getProjectsByUser(userId: string) {
     const projects = await tx.project.findMany({
       where: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
       include: {
@@ -518,17 +527,7 @@ export async function createProject(userId: string, input: ProjectInput) {
   const data = projectSchema.parse(input);
   await assertWithinPlanLimit({ userId, resource: "projects" });
 
-  const company = await prisma.company.findFirst({
-    where: {
-      id: data.companyId,
-      userId,
-    },
-    select: { id: true },
-  });
-
-  if (!company) {
-    throw new Error("No puedes crear proyectos en una empresa que no te pertenece");
-  }
+  await assertWorkspaceMembership({ userId, companyId: data.companyId, minimumRole: "EDITOR" });
 
   const settings = await getUserSettings(userId);
   const template = data.templateId ? getTemplateLibraryItem(data.templateId) : null;

@@ -24,5 +24,10 @@ export const workspaceMemberUpdateSchema = z.object({
   { message: "No hay cambios para guardar" },
 );
 
+export const inviteWorkspaceMemberSchema = z.object({
+  email: z.string().trim().min(1, "Email requerido").email("Email inválido"),
+});
+
 export type WorkspaceMembershipInput = z.infer<typeof workspaceMembershipSchema>;
 export type ActiveWorkspaceSelection = z.infer<typeof activeWorkspaceSelectionSchema>;
+export type InviteWorkspaceMemberInput = z.infer<typeof inviteWorkspaceMemberSchema>;
