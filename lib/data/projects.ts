@@ -8,6 +8,7 @@ import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 import { ensureDate } from "@/lib/utils";
+import { serializeBudgetForClientForm } from "@/lib/data/serializers";
 
 export const PROJECTS_LIST_CACHE_TAG = "projects-list";
 export const PROJECT_OVERVIEW_CACHE_TAG = "project-overview";
@@ -65,6 +66,21 @@ type SourceProjectGraph = Prisma.ProjectGetPayload<{
         monomials: {
           include: {
             components: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+type ProjectWithCalendars = Prisma.ProjectGetPayload<{
+  include: {
+    company: true;
+    projectCalendars: {
+      include: {
+        workCalendar: {
+          include: {
+            exceptions: true;
           };
         };
       };
@@ -340,12 +356,27 @@ export async function getProjectById(id: string, userId: string) {
       settings.defaultSubBudgetNames,
     );
 
-    return {
-      ...project,
-      budgets,
-      workCalendarId: project.projectCalendars[0]?.workCalendarId ?? null,
-    };
+    return serializeProjectForClientForm(project, budgets);
   });
+}
+
+function serializeProjectForClientForm(
+  project: ProjectWithCalendars,
+  budgets: Awaited<ReturnType<typeof ensureProjectBudgetStructure>>,
+) {
+  return {
+    id: project.id,
+    companyId: project.companyId,
+    name: project.name,
+    clientName: project.clientName,
+    location: project.location,
+    projectType: project.projectType,
+    startDate: project.startDate?.toISOString() ?? null,
+    endDate: project.endDate?.toISOString() ?? null,
+    status: project.status,
+    budgets: budgets.map(serializeBudgetForClientForm),
+    workCalendarId: project.projectCalendars?.[0]?.workCalendarId ?? null,
+  };
 }
 
 const _getProjectOverviewById = async (id: string, userId: string) => {

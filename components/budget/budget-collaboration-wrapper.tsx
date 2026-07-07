@@ -1,0 +1,142 @@
+"use client";
+
+import { memo, useCallback, useState, useEffect, useRef } from "react";
+import { BudgetCollaborationBar } from "@/components/budget/budget-collaboration-bar";
+import { BudgetCommentsSheet } from "@/components/budget/budget-comments-sheet";
+import { BudgetChangeHistorySheet } from "@/components/budget/budget-change-history-sheet";
+import { BudgetVersionHistorySheet } from "@/components/budget/budget-version-history-sheet";
+import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
+import { useBudgetCollaborationStream, type CollaborationStreamEvent } from "@/hooks/use-budget-collaboration-stream";
+import type { CollaborationPresenceRecord } from "@/types/collaboration";
+
+type SheetKind = "comments" | "history" | "versions" | null;
+
+interface BudgetCollaborationWrapperProps {
+  budgetId: string;
+  projectId: string;
+  budgetName: string;
+  children: React.ReactNode;
+}
+
+export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapper({
+  budgetId,
+  projectId,
+  budgetName,
+  children,
+}: BudgetCollaborationWrapperProps) {
+  const [activeSheet, setActiveSheet] = useState<SheetKind>(null);
+  const [presence, setPresence] = useState<CollaborationPresenceRecord[]>([]);
+  const [activeCommentCount, setActiveCommentCount] = useState(0);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Presence heartbeat
+  useBudgetPresenceHeartbeat({
+    budgetId,
+    route: typeof window !== "undefined" ? window.location.pathname : `/budgets/${budgetId}`,
+    module: "budget",
+  });
+
+  // Collaboration stream
+  const fetchPresence = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/budgets/${budgetId}/collaboration/presence`);
+      if (!response.ok) return;
+      const data = (await response.json()) as { presence: CollaborationPresenceRecord[] };
+      setPresence(data.presence);
+    } catch {
+      // silent
+    }
+  }, [budgetId]);
+
+  const fetchPresenceRef = useRef(fetchPresence);
+  fetchPresenceRef.current = fetchPresence;
+
+  // Collaboration stream
+  const { connected } = useBudgetCollaborationStream({
+    budgetId,
+    onEvent: useCallback((_event: CollaborationStreamEvent) => {
+      fetchPresenceRef.current();
+    }, []),
+  });
+
+  useEffect(() => {
+    fetchPresence();
+    const interval = setInterval(() => fetchPresenceRef.current(), 30_000);
+    return () => clearInterval(interval);
+  }, [budgetId]);
+
+  const handleSaveVersion = useCallback(async () => {
+    try {
+      await fetch(`/api/budgets/${budgetId}/collaboration/versions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: `Snapshot - ${budgetName}`,
+          reason: "Version manual",
+        }),
+      });
+      // Refresh versions sheet if open
+      if (activeSheet === "versions") {
+        setActiveSheet(null);
+        setTimeout(() => setActiveSheet("versions"), 100);
+      }
+    } catch {
+      // silent
+    }
+  }, [budgetId, budgetName, activeSheet]);
+
+  const sheetWidth = activeSheet ? "w-80" : "w-0";
+
+  return (
+    <div className="relative flex flex-col gap-3">
+      {/* Collaboration bar */}
+      <div className="flex items-center justify-end">
+        <BudgetCollaborationBar
+          budgetId={budgetId}
+          projectId={projectId}
+          connected={connected}
+          presence={presence}
+          activeCommentCount={activeCommentCount}
+          onOpenComments={() =>
+            setActiveSheet((current) => (current === "comments" ? null : "comments"))
+          }
+          onOpenHistory={() =>
+            setActiveSheet((current) => (current === "history" ? null : "history"))
+          }
+          onOpenVersions={() =>
+            setActiveSheet((current) => (current === "versions" ? null : "versions"))
+          }
+          onSaveVersion={handleSaveVersion}
+        />
+      </div>
+
+      {/* Main content with optional side sheet */}
+      <div className="flex gap-0">
+        <div className="min-w-0 flex-1">{children}</div>
+        {activeSheet ? (
+          <div ref={sheetRef} className={sheetWidth + " shrink-0 overflow-hidden transition-all"}>
+            {activeSheet === "comments" ? (
+              <BudgetCommentsSheet
+                open
+                budgetId={budgetId}
+                onClose={() => setActiveSheet(null)}
+              />
+            ) : activeSheet === "history" ? (
+              <BudgetChangeHistorySheet
+                open
+                budgetId={budgetId}
+                onClose={() => setActiveSheet(null)}
+              />
+            ) : activeSheet === "versions" ? (
+              <BudgetVersionHistorySheet
+                open
+                budgetId={budgetId}
+                onClose={() => setActiveSheet(null)}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+});

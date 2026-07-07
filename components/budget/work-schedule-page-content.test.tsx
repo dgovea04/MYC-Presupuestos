@@ -1484,7 +1484,7 @@ describe("WorkSchedulePageContent", () => {
     expect(lastCreatedBlob).toBeTruthy();
 
     const csvContent = await lastCreatedBlob?.text();
-    expect(csvContent).toContain("Item,Partida,Duracion,Inicio,Fin,Predecesora,Cuadrilla,Unidad,Metrado,PU,Parcial");
+    expect(csvContent).toContain("Item,Partida,Duracion,Dias calendario,Inicio,Fin,Predecesora,Cuadrilla,Unidad,Metrado,PU,Parcial");
     expect(csvContent).toContain("02.01,Tarrajeo,14,");
     expect(csvContent).toContain(",-,-,M2,10.00,S/ 20.00,S/ 200.00");
     expect(csvContent).not.toContain("Trazo y replanteo");

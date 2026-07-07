@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CellValue, Worksheet } from "exceljs";
-import { BarChart3, Calculator, ChevronRight, Copy, FileSpreadsheet, Plus, Redo, Trash2, Undo2 } from "lucide-react";
+import { BarChart3, Calculator, ChevronRight, Copy, FileSpreadsheet, PenLine, Plus, Redo, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -34,6 +34,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { calculateMetradoSheet } from "@/lib/calculations/metrados";
 import { customMetradoFormulaSuggestions } from "@/lib/metrados/custom-formula-suggestions";
+import { useEditSession } from "@/hooks/use-edit-session";
+import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
 import { validateMetradoSheet } from "@/lib/metrados/validation";
 import { cn } from "@/lib/utils";
 import type {
@@ -198,6 +200,32 @@ export function MetradosDashboard({
     [calculated.issues, validationIssues],
   );
   const hasBlockingIssues = issues.some((issue) => issue.severity === "error");
+
+  // Collaboration: presence and edit session when editing a budget's metrados
+  useBudgetPresenceHeartbeat({
+    budgetId,
+    route: selectedSheet ? `Metrados: ${selectedSheet.name}` : "Metrados avanzados",
+    module: "metrados-dashboard",
+  });
+
+  const {
+    activeSession,
+    startEditSession,
+    finishCurrentSession,
+  } = useEditSession({ budgetId });
+
+  useEffect(() => {
+    if (!budgetId || !selectedSheet) return;
+
+    startEditSession("METRADO", selectedSheet.id, "metrados-dashboard");
+
+    return () => {
+      finishCurrentSession();
+    };
+  // budgetId is tracked directly (not Boolean-wrapped) so edits restart when budget changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSheet?.id, budgetId]);
+
   const filteredBudgets = budgets.filter((budget) => budget.projectId === projectId);
   const filteredPartidas = partidas.filter((partida) => partida.budgetId === budgetId);
   const activeSheetByPartidaId = useMemo(() => {
@@ -751,6 +779,12 @@ export function MetradosDashboard({
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text-strong)]">Hoja de metrados</h1>
           <p className="text-xs leading-5 text-[var(--app-text-muted)]">Registro de cantidades con formulas, autosave y envio a partida.</p>
+          {activeSession ? (
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-sky-600">
+              <PenLine className="h-3 w-3" />
+              Modo edicion colaborativa activo
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           {projectId ? (

@@ -2121,6 +2121,7 @@ export function BudgetEditor({
           partidasCatalog={partidasCatalog}
           resourcesCatalog={resourcesCatalog}
           densityMode={effectiveDensityMode}
+          budgetId={budget.id}
           onClose={() => {
             setApuSheetSession(null);
           }}
@@ -2631,6 +2632,7 @@ function ApuSheetController({
   onUpdate,
   partidasCatalog,
   resourcesCatalog,
+  budgetId,
 }: {
   initialItem: BudgetItemRecord;
   initialRestoreFocusElement: HTMLElement | null;
@@ -2639,6 +2641,7 @@ function ApuSheetController({
   onUpdate: (item: BudgetItemRecord) => void;
   partidasCatalog: CatalogPartidaRecord[];
   resourcesCatalog: ResourceRecord[];
+  budgetId: string;
 }) {
   const [draftItem, setDraftItem] = useState<BudgetItemRecord | null>(initialItem);
   const [restoreFocusElement, setRestoreFocusElement] = useState<HTMLElement | null>(initialRestoreFocusElement);
@@ -2654,8 +2657,7 @@ function ApuSheetController({
     onClose();
   }, [draftItem, onClose, onUpdate]);
 
-  return (
-    <ApuEditorSheet
+  return (      <ApuEditorSheet
       item={draftItem}
       open={draftItem !== null}
       onClose={closeSheet}
@@ -2664,6 +2666,7 @@ function ApuSheetController({
       resourcesCatalog={resourcesCatalog}
       restoreFocusElement={restoreFocusElement}
       densityMode={densityMode}
+      budgetId={budgetId}
     />
   );
 }

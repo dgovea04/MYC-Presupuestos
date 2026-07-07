@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BotMessageSquare, GitCompareArrows, GripVertical, Search, Sparkles } from "lucide-react";
+import { BotMessageSquare, GitCompareArrows, GripVertical, PenLine, Search, Sparkles } from "lucide-react";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -32,6 +32,8 @@ import type { CatalogPartidaRecord, PartidaApuRowRecord } from "@/types/partida"
 import type { ResourceRecord } from "@/types/resource";
 import { PreviewDebugPanel } from "@/components/ai/debug-panel";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useEditSession } from "@/hooks/use-edit-session";
+import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
 
 type ApuEditorSheetProps = {
   item: BudgetItemRecord | null;
@@ -42,6 +44,7 @@ type ApuEditorSheetProps = {
   catalogPartidas: CatalogPartidaRecord[];
   restoreFocusElement?: HTMLElement | null;
   densityMode: "compact" | "comfortable";
+  budgetId?: string;
 };
 type ResourceMenuState = {
   rowId: string;
@@ -59,6 +62,7 @@ export function ApuEditorSheet({
   catalogPartidas,
   restoreFocusElement,
   densityMode,
+  budgetId,
 }: ApuEditorSheetProps) {
   const { isExcelMode } = useBudgetViewMode();
   const { currencyDecimals, excelRowHeight, excelShowFieldBorders } = useFormattingSettings();
@@ -90,6 +94,32 @@ export function ApuEditorSheet({
   const effectiveDensityMode = isExcelMode ? "compact" : densityMode;
   const deferredAddResourceQuery = useDeferredValue(addResourceQuery);
   const deferredEditingResourceQuery = useDeferredValue(editingResourceQuery);
+
+  // Collaboration: edit session and presence when APU sheet is open
+  const currentItemId = item?.id ?? null;
+  const {
+    activeSession,
+    startEditSession,
+    finishCurrentSession,
+  } = useEditSession({ budgetId: budgetId ?? "" });
+
+  useBudgetPresenceHeartbeat({
+    budgetId: budgetId ?? "",
+    route: `APU: ${item?.description ?? "APU"}`,
+    module: "apu-editor",
+  });
+
+  useEffect(() => {
+    if (!budgetId || !open || !currentItemId) return;
+
+    startEditSession("APU", currentItemId, "apu-editor");
+
+    return () => {
+      finishCurrentSession();
+    };
+  // Only run when open/close state changes or item id changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, currentItemId, Boolean(budgetId)]);
   const indexedResourcesCatalog = useMemo(
     () =>
       resourcesCatalog.map((resource) => ({
@@ -495,6 +525,12 @@ export function ApuEditorSheet({
                 <Dialog.Description asChild>
                   <p className={cn("theme-muted-text mt-1", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItemRecord.unit}</p>
                 </Dialog.Description>
+                {activeSession ? (
+                  <p className="mt-1 flex items-center gap-1 text-[11px] text-sky-600">
+                    <PenLine className="h-3 w-3" />
+                    Modo edicion colaborativa activo
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 <Link href={buildAiHref("chat", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice, "Explica tecnicamente esta partida y valida su rendimiento.")}>

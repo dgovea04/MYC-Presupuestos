@@ -160,6 +160,27 @@ enum NoteTaskStatus {
   RESOLVED
 }
 
+enum CollaborationEntityType {
+  BUDGET
+  BUDGET_ITEM
+  APU
+  APU_RESOURCE
+  METRADO_SHEET
+  METRADO_ROW
+  WORK_SCHEDULE_ITEM
+}
+
+enum CollaborationPresenceStatus {
+  ACTIVE
+  IDLE
+}
+
+enum CollaborationChangeSource {
+  USER
+  SYSTEM
+  KHIPU
+}
+
 enum MetradoTemplateType {
   CONCRETE
   REBAR
@@ -212,6 +233,12 @@ model User {
   customMetradoFormulas CustomMetradoFormula[]
   budgetTemplates     BudgetTemplate[]
   emailVerificationTokens EmailVerificationToken[]
+  collaborationPresences   CollaborationPresence[]
+  collaborationEditSessions CollaborationEditSession[]
+  collaborationCommentsCreated CollaborationComment[] @relation("CommentCreatedBy")
+  collaborationCommentsResolved CollaborationComment[] @relation("CommentResolvedBy")
+  changeEvents           BudgetChangeEvent[]
+  versionSnapshots       BudgetVersionSnapshot[]
 
   @@index([role])
   @@index([status])
@@ -449,6 +476,11 @@ model Company {
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects   Project[]
   resources  Resource[]
+  collaborationPresence   CollaborationPresence[]
+  collaborationEditSessions CollaborationEditSession[]
+  collaborationComments   CollaborationComment[]
+  budgetChangeEvents      BudgetChangeEvent[]
+  budgetVersionSnapshots  BudgetVersionSnapshot[]
 
   @@index([userId])
 }
@@ -519,6 +551,11 @@ model Project {
   aiProjectHistoryEntries AiProjectHistoryEntry[]
   aiSuggestionFeedbackEvents AiSuggestionFeedbackEvent[]
   aiMemory AiProjectMemory[]
+  collaborationPresence   CollaborationPresence[]
+  collaborationEditSessions CollaborationEditSession[]
+  collaborationComments   CollaborationComment[]
+  budgetChangeEvents      BudgetChangeEvent[]
+  budgetVersionSnapshots  BudgetVersionSnapshot[]
 
   @@index([companyId])
 }
@@ -596,6 +633,11 @@ model Budget {
   noteTasks             NoteTask[]
   metradoSheets         MetradoSheet[]
   budgetTemplates       BudgetTemplate[]
+  collaborationPresence   CollaborationPresence[]
+  collaborationEditSessions CollaborationEditSession[]
+  collaborationComments   CollaborationComment[]
+  budgetChangeEvents      BudgetChangeEvent[]
+  budgetVersionSnapshots  BudgetVersionSnapshot[]
 
   @@index([projectId])
   @@index([parentBudgetId])
@@ -621,6 +663,137 @@ model BudgetTemplate {
   @@index([sourceProjectId])
   @@index([sourceBudgetId])
   @@map("budget_templates")
+}
+
+model CollaborationPresence {
+  id        String                      @id @default(cuid())
+  companyId String
+  projectId String
+  budgetId  String
+  userId    String
+  route     String
+  module    String
+  status    CollaborationPresenceStatus @default(ACTIVE)
+  lastSeenAt DateTime                  @default(now())
+  expiresAt  DateTime
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+  budget     Budget                    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  user       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project    Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company    Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, userId])
+  @@index([budgetId, expiresAt])
+  @@index([projectId])
+  @@index([companyId])
+  @@index([expiresAt])
+  @@map("collaboration_presence")
+}
+
+model CollaborationEditSession {
+  id               String                   @id @default(cuid())
+  companyId        String
+  projectId        String
+  budgetId         String
+  userId           String
+  entityType       CollaborationEntityType
+  entityId         String
+  field            String
+  startedAt        DateTime                 @default(now())
+  lastHeartbeatAt  DateTime                 @default(now())
+  expiresAt        DateTime
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  budget           Budget                   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company          Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId, entityType, entityId])
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("collaboration_edit_sessions")
+}
+
+model CollaborationComment {
+  id              String                   @id @default(cuid())
+  companyId       String
+  projectId       String
+  budgetId        String
+  entityType      CollaborationEntityType
+  entityId        String
+  parentCommentId String?
+  body            String
+  mentions        String[]                 @default([])
+  createdById     String
+  resolvedAt      DateTime?
+  resolvedById    String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  budget          Budget                   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company         Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User                     @relation("CommentCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  resolvedBy      User?                    @relation("CommentResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  parentComment   CollaborationComment?    @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies         CollaborationComment[]   @relation("CommentReplies")
+
+  @@index([budgetId, entityType, entityId, createdAt(sort: Desc)])
+  @@index([parentCommentId])
+  @@index([companyId])
+  @@index([createdById])
+  @@map("collaboration_comments")
+}
+
+model BudgetChangeEvent {
+  id          String                     @id @default(cuid())
+  companyId   String
+  projectId   String
+  budgetId    String
+  entityType  CollaborationEntityType
+  entityId    String
+  action      String
+  field       String
+  oldValue    String?
+  newValue    String?
+  diffSummary String?
+  source      CollaborationChangeSource  @default(USER)
+  userId      String?
+  requestId   String?
+  createdAt   DateTime                   @default(now())
+  budget      Budget                     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  project     Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company     Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([budgetId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@index([companyId])
+  @@index([userId])
+  @@map("budget_change_events")
+}
+
+model BudgetVersionSnapshot {
+  id            String   @id @default(cuid())
+  budgetId      String
+  projectId     String
+  companyId     String
+  versionNumber Int
+  label         String?
+  reason        String?
+  snapshot      Json
+  createdById   String
+  createdAt     DateTime @default(now())
+  budget        Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([budgetId, createdAt(sort: Desc)])
+  @@index([companyId])
+  @@unique([budgetId, versionNumber])
+  @@map("budget_version_snapshots")
 }
 
 model BudgetLevel {

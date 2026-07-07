@@ -15,7 +15,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type UIEvent as ReactUIEvent,
 } from "react";
-import { CalendarDays, ChartSpline, ChevronDown, Info, MoreHorizontal, Package2, PenSquare, Save, WandSparkles, X } from "lucide-react";
+import { CalendarDays, ChartSpline, ChevronDown, Info, MoreHorizontal, Package2, PenLine, PenSquare, Save, WandSparkles, X } from "lucide-react";
 import type ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -34,6 +34,8 @@ import {
   recalculateWorkScheduleLineFromPredecessors,
 } from "@/lib/calculations/work-schedule";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { useEditSession } from "@/hooks/use-edit-session";
+import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import { countWorkDays } from "@/lib/work-schedule/calendar";
