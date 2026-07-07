@@ -16,6 +16,7 @@ export const noteTaskCreateSchema = z.object({
   budgetId: optionalIdSchema,
   budgetItemId: optionalIdSchema,
   sourcePath: z.string().trim().min(1, "Indica la vista de origen"),
+  sharedWith: z.array(z.string()).optional(),
 });
 
 export const noteTaskUpdateSchema = z
@@ -23,8 +24,9 @@ export const noteTaskUpdateSchema = z
     body: z.string().trim().min(1, "Ingresa una nota").optional(),
     priority: noteTaskPrioritySchema.optional(),
     status: noteTaskStatusSchema.optional(),
+    sharedWith: z.array(z.string()).optional(),
   })
-  .refine((value) => value.body !== undefined || value.priority !== undefined || value.status !== undefined, {
+  .refine((value) => value.body !== undefined || value.priority !== undefined || value.status !== undefined || value.sharedWith !== undefined, {
     message: "No hay cambios para guardar",
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, Loader2, MessageSquarePlus, StickyNote, Trash2, X } from "lucide-react";
+import { Check, Loader2, MessageSquarePlus, Share2, StickyNote, Trash2, UserPlus, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -27,6 +27,13 @@ export type NoteDraftContext = {
 export function openNoteDraft(context: NoteDraftContext = {}) {
   window.dispatchEvent(new CustomEvent<NoteDraftContext>(OPEN_NOTE_DRAFT_EVENT, { detail: context }));
 }
+
+type SearchableUser = {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+};
 
 export function NotesDrawer() {
   const pathname = usePathname() ?? "/dashboard";
@@ -84,6 +91,10 @@ export function NotesDrawer() {
     },
     [loadNotes],
   );
+
+  function handleUpdateNote(updated: NoteTaskRecord) {
+    setNotes((current) => current.map((n) => (n.id === updated.id ? updated : n)));
+  }
 
   const contextualNotes = useMemo(
     () =>
@@ -265,8 +276,8 @@ export function NotesDrawer() {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <NoteList title="Contexto actual" notes={contextualNotes} onResolve={updateNoteStatus} onDelete={deleteNote} />
-                  <NoteList title="Otros pendientes" notes={generalNotes} onResolve={updateNoteStatus} onDelete={deleteNote} />
+                  <NoteList title="Contexto actual" notes={contextualNotes} onResolve={updateNoteStatus} onDelete={deleteNote} onUpdateNote={handleUpdateNote} />
+                  <NoteList title="Otros pendientes" notes={generalNotes} onResolve={updateNoteStatus} onDelete={deleteNote} onUpdateNote={handleUpdateNote} />
                 </div>
               )}
             </div>
@@ -275,6 +286,7 @@ export function NotesDrawer() {
       </Dialog.Portal>
     </Dialog.Root>
   );
+
 }
 
 function NoteList({
@@ -282,11 +294,13 @@ function NoteList({
   notes,
   onResolve,
   onDelete,
+  onUpdateNote,
 }: {
   title: string;
   notes: NoteTaskRecord[];
   onResolve: (note: NoteTaskRecord, status: "RESOLVED") => Promise<void>;
   onDelete: (note: NoteTaskRecord) => Promise<void>;
+  onUpdateNote: (note: NoteTaskRecord) => void;
 }) {
   if (notes.length === 0) {
     return null;
@@ -296,29 +310,219 @@ function NoteList({
     <section className="space-y-3">
       <p className="theme-muted-text text-xs font-semibold uppercase tracking-wide">{title}</p>
       {notes.map((note) => (
-        <article key={note.id} className="theme-surface-card rounded-2xl border p-4 shadow-sm shadow-slate-100/70">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="theme-strong-text whitespace-pre-wrap text-sm font-medium">{note.body}</p>
-              <p className="theme-muted-text mt-2 text-xs">{getNoteContextLabel(note)}</p>
-            </div>
-            <span className={cn("rounded-full px-2 py-1 text-[11px] font-semibold", getPriorityClassName(note.priority))}>
-              {getPriorityLabel(note.priority)}
-            </span>
-          </div>
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void onResolve(note, "RESOLVED")}>
-              <Check className="h-4 w-4" />
-              Resolver
-            </Button>
-            <Button type="button" variant="ghost" size="sm" className="gap-2 text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10" onClick={() => void onDelete(note)}>
-              <Trash2 className="h-4 w-4" />
-              Eliminar
-            </Button>
-          </div>
-        </article>
+        <NoteCard key={note.id} note={note} onResolve={onResolve} onDelete={onDelete} onUpdateNote={onUpdateNote} />
       ))}
     </section>
+  );
+}
+
+function NoteCard({
+  note,
+  onResolve,
+  onDelete,
+  onUpdateNote,
+}: {
+  note: NoteTaskRecord;
+  onResolve: (note: NoteTaskRecord, status: "RESOLVED") => Promise<void>;
+  onDelete: (note: NoteTaskRecord) => Promise<void>;
+  onUpdateNote: (note: NoteTaskRecord) => void;
+}) {
+  const [sharingOpen, setSharingOpen] = useState(false);
+  const [userQuery, setUserQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchableUser[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [shareError, setShareError] = useState("");
+  const [sharingUserId, setSharingUserId] = useState<string | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function handleSearch(value: string) {
+    setUserQuery(value);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (value.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      void searchUsers(value.trim());
+    }, 300);
+  }
+
+  async function searchUsers(q: string) {
+    setSearching(true);
+    setShareError("");
+    try {
+      const response = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`);
+      const payload = (await response.json()) as { users?: SearchableUser[] };
+      setSearchResults(payload.users ?? []);
+    } catch {
+      setShareError("No se pudo buscar usuarios");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function addSharedUser(userId: string) {
+    setShareError("");
+    setSharingUserId(userId);
+    const newSharedWith = [...new Set([...note.sharedWith, userId])];
+    try {
+      const response = await fetch(`/api/notes/${note.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sharedWith: newSharedWith }),
+      });
+      const payload = (await response.json()) as { note?: NoteTaskRecord; error?: string };
+      if (!response.ok || !payload.note) {
+        throw new Error(payload.error ?? "No se pudo compartir la nota");
+      }
+      onUpdateNote(payload.note);
+      setUserQuery("");
+      setSearchResults([]);
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : "Error al compartir");
+    } finally {
+      setSharingUserId(null);
+    }
+  }
+
+  async function removeSharedUser(userId: string) {
+    setShareError("");
+    setSharingUserId(userId);
+    const newSharedWith = note.sharedWith.filter((id) => id !== userId);
+    try {
+      const response = await fetch(`/api/notes/${note.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sharedWith: newSharedWith }),
+      });
+      const payload = (await response.json()) as { note?: NoteTaskRecord; error?: string };
+      if (!response.ok || !payload.note) {
+        throw new Error(payload.error ?? "No se pudo actualizar la nota");
+      }
+      onUpdateNote(payload.note);
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : "Error al quitar acceso");
+    } finally {
+      setSharingUserId(null);
+    }
+  }
+
+  return (
+    <article className="theme-surface-card rounded-2xl border p-4 shadow-sm shadow-slate-100/70">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="theme-strong-text whitespace-pre-wrap text-sm font-medium">{note.body}</p>
+          {/* Author */}
+          <div className="mt-2 flex items-center gap-2">
+            {note.author.avatarUrl ? (
+              <img src={note.author.avatarUrl} alt={note.author.name} className="h-5 w-5 rounded-full" />
+            ) : (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600">
+                {note.author.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <span className="theme-muted-text text-xs">{note.author.name}</span>
+          </div>
+          <p className="theme-muted-text mt-1 text-xs">{getNoteContextLabel(note)}</p>
+        </div>
+        <span className={cn("rounded-full px-2 py-1 text-[11px] font-semibold", getPriorityClassName(note.priority))}>
+          {getPriorityLabel(note.priority)}
+        </span>
+      </div>
+
+      {/* Shared with indicator */}
+      {note.sharedWith.length > 0 && (
+        <div className="mt-3 flex items-center gap-1.5 text-xs text-[var(--app-text-muted)]">
+          <Share2 className="h-3 w-3" />
+          <span>Compartida con {note.sharedWith.length} usuario{note.sharedWith.length > 1 ? "s" : ""}</span>
+        </div>
+      )}
+
+      {/* Sharing panel */}
+      {shareError && <p className="mt-2 text-xs text-red-600">{shareError}</p>}
+
+      {sharingOpen && (
+        <div className="mt-3 rounded-xl border bg-slate-50/50 p-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={userQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Buscar por nombre o email..."
+              className="flex-1 rounded-lg border bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+            />
+            {searching && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+              {searchResults.map((user) => {
+                const alreadyShared = note.sharedWith.includes(user.id);
+                return (
+                  <div key={user.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.name} className="h-5 w-5 flex-shrink-0 rounded-full" />
+                      ) : (
+                        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-300 text-[10px] font-semibold text-slate-700">
+                          {user.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium">{user.name}</p>
+                        <p className="truncate text-[10px] text-slate-500">{user.email}</p>
+                      </div>
+                    </div>
+                    {alreadyShared ? (
+                      <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs text-rose-600 hover:bg-rose-50" onClick={() => removeSharedUser(user.id)} disabled={sharingUserId !== null}>
+                        {sharingUserId === user.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                        Quitar
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs text-blue-600 hover:bg-blue-50" onClick={() => addSharedUser(user.id)} disabled={sharingUserId !== null}>
+                        {sharingUserId === user.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+                        Agregar
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {userQuery.trim().length >= 2 && searchResults.length === 0 && !searching && (
+            <p className="mt-2 text-xs text-slate-400">No se encontraron usuarios.</p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs text-slate-600 hover:bg-slate-100" onClick={() => setSharingOpen(!sharingOpen)}>
+          <UserPlus className="h-3.5 w-3.5" />
+          {sharingOpen ? "Cerrar" : "Compartir"}
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void onResolve(note, "RESOLVED")}>
+          <Check className="h-4 w-4" />
+          Resolver
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="gap-2 text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10" onClick={() => void onDelete(note)}>
+          <Trash2 className="h-4 w-4" />
+          Eliminar
+        </Button>
+      </div>
+    </article>
   );
 }
 

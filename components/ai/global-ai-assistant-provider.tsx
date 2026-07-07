@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { Toaster } from "sonner";
 import { AiViewContextProvider, type AiViewContextValue } from "@/components/ai/ai-view-context";
 import { FloatingAiAssistant } from "@/components/ai/floating-ai-assistant";
 
@@ -31,6 +32,7 @@ export function GlobalAiAssistantProvider({ children }: { children: ReactNode })
     <AiViewContextProvider value={viewContext}>
       {children}
       {visible ? <FloatingAiAssistant open={open} onOpenChange={setOpen} /> : null}
+      <Toaster position="bottom-right" richColors closeButton />
     </AiViewContextProvider>
   );
 }

@@ -37,18 +37,46 @@ export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
     }
   }, [presence.length]);
 
-  if (collapsed && presence.length <= 1) {
+  const actionButtons = (
+    <div className="flex items-center gap-0.5">
+      <BarButton
+        onClick={onOpenComments}
+        label="Comentarios"
+        badge={activeCommentCount > 0 ? activeCommentCount : undefined}
+      >
+        <MessageSquare className="h-3.5 w-3.5" />
+      </BarButton>
+      <BarButton onClick={onOpenHistory} label="Historial">
+        <Clock className="h-3.5 w-3.5" />
+      </BarButton>
+      <BarButton onClick={onOpenVersions} label="Versiones">
+        <History className="h-3.5 w-3.5" />
+      </BarButton>
+      <BarButton onClick={onSaveVersion} label="Guardar version">
+        <Save className="h-3.5 w-3.5" />
+      </BarButton>
+    </div>
+  );
+
+  if (collapsed) {
     return (
       <div className="flex items-center gap-1 px-3 py-1.5">
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-xs font-medium text-[var(--app-text-muted)] transition hover:border-[var(--app-border-strong)] hover:text-[var(--app-text-strong)]"
-          title="Colaboracion"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-medium text-[var(--app-text-muted)] transition hover:border-[var(--app-border-strong)] hover:text-[var(--app-text-strong)]"
+          title="Abrir barra de colaboracion"
           aria-label="Abrir barra de colaboracion"
         >
           <Users className="h-3.5 w-3.5" />
+          Colaboracion
         </button>
+        {actionButtons}
+        {presence.length > 1 ? (
+          <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">
+            {presence.length}
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -88,24 +116,7 @@ export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-0.5">
-        <BarButton
-          onClick={onOpenComments}
-          label="Comentarios"
-          badge={activeCommentCount > 0 ? activeCommentCount : undefined}
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-        </BarButton>
-        <BarButton onClick={onOpenHistory} label="Historial">
-          <Clock className="h-3.5 w-3.5" />
-        </BarButton>
-        <BarButton onClick={onOpenVersions} label="Versiones">
-          <History className="h-3.5 w-3.5" />
-        </BarButton>
-        <BarButton onClick={onSaveVersion} label="Guardar version">
-          <Save className="h-3.5 w-3.5" />
-        </BarButton>
-      </div>
+      {actionButtons}
 
       {/* Collapse button */}
       <button

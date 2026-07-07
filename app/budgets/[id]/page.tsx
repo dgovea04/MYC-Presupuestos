@@ -97,7 +97,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           viewSummary: `Presupuesto general ${budget.name} del proyecto ${project.name}.`,
         }}
       >
-        <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name}>
+        <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id}>
         <div className="space-y-5">
           <Card className="theme-surface-card rounded-2xl">
             <CardHeader className="theme-surface-card-gradient gap-4 rounded-2xl">
@@ -283,7 +283,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         viewSummary: `Sub presupuesto ${budget.name} del proyecto ${project.name}.`,
       }}
     >
-      <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name}>
+      <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id}>
       <BudgetFlowWrapper
         budget={budget}
         projectName={project.name}

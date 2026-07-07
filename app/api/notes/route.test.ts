@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -16,6 +17,22 @@ vi.mock("@/lib/data/notes", () => ({
 import { GET, POST } from "@/app/api/notes/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { createNoteTask, listNoteTasks } from "@/lib/data/notes";
+import type { NoteTaskRecord } from "@/types/notes";
+
+function makeNote(overrides: Partial<NoteTaskRecord> = {}): NoteTaskRecord {
+  return {
+    id: "note-1",
+    body: "Revisar",
+    priority: "MEDIUM" as const,
+    status: "OPEN" as const,
+    sourcePath: "/dashboard",
+    author: { name: "Test User", avatarUrl: null },
+    sharedWith: [],
+    createdAt: "2026-05-27T10:00:00.000Z",
+    updatedAt: "2026-05-27T10:00:00.000Z",
+    ...overrides,
+  };
+}
 
 describe("notes route", () => {
   it("requires authentication for listing notes", async () => {
@@ -44,15 +61,7 @@ describe("notes route", () => {
 
   it("creates notes for the authenticated user", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
-    vi.mocked(createNoteTask).mockResolvedValue({
-      id: "note-1",
-      body: "Revisar",
-      priority: "MEDIUM",
-      status: "OPEN",
-      sourcePath: "/dashboard",
-      createdAt: "2026-05-27T10:00:00.000Z",
-      updatedAt: "2026-05-27T10:00:00.000Z",
-    });
+    vi.mocked(createNoteTask).mockResolvedValue(makeNote());
 
     const response = await POST(
       new Request("http://localhost/api/notes", {

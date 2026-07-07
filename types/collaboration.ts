@@ -108,6 +108,7 @@ export type CollaborationStreamEventType =
   | "change.created"
   | "version.created"
   | "version.restored"
+  | "note.shared"
   | "ping";
 
 export interface CollaborationStreamEvent {

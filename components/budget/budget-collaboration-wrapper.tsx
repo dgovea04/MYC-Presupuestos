@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { BudgetCollaborationBar } from "@/components/budget/budget-collaboration-bar";
 import { BudgetCommentsSheet } from "@/components/budget/budget-comments-sheet";
 import { BudgetChangeHistorySheet } from "@/components/budget/budget-change-history-sheet";
@@ -15,6 +16,7 @@ interface BudgetCollaborationWrapperProps {
   budgetId: string;
   projectId: string;
   budgetName: string;
+  userId: string;
   children: React.ReactNode;
 }
 
@@ -22,6 +24,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   budgetId,
   projectId,
   budgetName,
+  userId,
   children,
 }: BudgetCollaborationWrapperProps) {
   const [activeSheet, setActiveSheet] = useState<SheetKind>(null);
@@ -51,11 +54,32 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   const fetchPresenceRef = useRef(fetchPresence);
   fetchPresenceRef.current = fetchPresence;
 
+  const sessionUserIdRef = useRef(userId);
+  sessionUserIdRef.current = userId;
+
   // Collaboration stream
   const { connected } = useBudgetCollaborationStream({
     budgetId,
-    onEvent: useCallback((_event: CollaborationStreamEvent) => {
+    onEvent: useCallback((event: CollaborationStreamEvent) => {
       fetchPresenceRef.current();
+
+      // Show toast when a note is shared with the current user
+      if (event.type === "note.shared") {
+        const payload = event.payload as {
+          noteId: string;
+          body: string;
+          author: { name: string; avatarUrl: string | null };
+          sharedByUserId: string;
+          sharedWith: string[];
+        } | null;
+
+        if (payload && payload.sharedWith.includes(sessionUserIdRef.current)) {
+          toast.info("Te compartieron una nota", {
+            description: payload.body.length > 80 ? payload.body.slice(0, 80) + "…" : payload.body,
+            duration: 5000,
+          });
+        }
+      }
     }, []),
   });
 

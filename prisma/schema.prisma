@@ -970,6 +970,7 @@ model NoteTask {
   priority     NoteTaskPriority @default(MEDIUM)
   status       NoteTaskStatus   @default(OPEN)
   sourcePath   String
+  sharedWith   String[]         @default([])
   resolvedAt   DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

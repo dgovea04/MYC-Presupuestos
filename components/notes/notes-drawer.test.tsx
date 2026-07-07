@@ -19,6 +19,21 @@ let activeContainer: HTMLDivElement | null = null;
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+function makeNote(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "note-1",
+    body: "Revisar metrado",
+    priority: "HIGH",
+    status: "OPEN",
+    sourcePath: "/budgets/budget-1",
+    author: { name: "Test User", avatarUrl: null },
+    sharedWith: [],
+    createdAt: "2026-05-27T10:00:00.000Z",
+    updatedAt: "2026-05-27T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("NotesDrawer", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
@@ -46,17 +61,7 @@ describe("NotesDrawer", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            notes: [
-              {
-                id: "note-1",
-                body: "Revisar metrado",
-                priority: "HIGH",
-                status: "OPEN",
-                sourcePath: "/budgets/budget-1",
-                createdAt: "2026-05-27T10:00:00.000Z",
-                updatedAt: "2026-05-27T10:00:00.000Z",
-              },
-            ],
+            notes: [makeNote()],
           }),
           { status: 200 },
         ),
@@ -64,16 +69,7 @@ describe("NotesDrawer", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            note: {
-              id: "note-1",
-              body: "Revisar metrado",
-              priority: "HIGH",
-              status: "RESOLVED",
-              sourcePath: "/budgets/budget-1",
-              createdAt: "2026-05-27T10:00:00.000Z",
-              updatedAt: "2026-05-27T10:00:00.000Z",
-              resolvedAt: "2026-05-27T10:01:00.000Z",
-            },
+            note: makeNote({ status: "RESOLVED", resolvedAt: "2026-05-27T10:01:00.000Z" }),
           }),
           { status: 200 },
         ),
@@ -107,17 +103,13 @@ describe("NotesDrawer", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            note: {
+            note: makeNote({
               id: "note-2",
               body: "Validar partida",
               priority: "MEDIUM",
-              status: "OPEN",
               budgetId: "budget-1",
               budgetItemId: "item-1",
-              sourcePath: "/budgets/budget-1",
-              createdAt: "2026-05-27T10:00:00.000Z",
-              updatedAt: "2026-05-27T10:00:00.000Z",
-            },
+            }),
           }),
           { status: 200 },
         ),
@@ -159,6 +151,25 @@ describe("NotesDrawer", () => {
         }),
       }),
     );
+  });
+
+  it("displays the author name on each note", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          notes: [makeNote({ author: { name: "Carlos Perez", avatarUrl: null } })],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const { getButtonByText } = await renderDrawer();
+
+    await act(async () => {
+      getButtonByText("Notas").click();
+    });
+
+    expect(document.body.textContent).toContain("Carlos Perez");
   });
 });
 
