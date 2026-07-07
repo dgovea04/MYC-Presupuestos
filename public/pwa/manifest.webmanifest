@@ -1,0 +1,9 @@
+{
+  "name": "MC Presupuestos",
+  "short_name": "MC Presupuestos",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0F172A",
+  "description": "Plataforma moderna de costos y presupuestos de obra para Peru"
+}

@@ -42,6 +42,15 @@ export async function registerUserWithCompany(params: {
       },
     });
 
+    await tx.companyMembership.create({
+      data: {
+        companyId: company.id,
+        userId: user.id,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
     return { user, company };
   });
 }

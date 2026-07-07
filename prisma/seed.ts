@@ -113,15 +113,21 @@ async function main() {
     orderBy: { createdAt: "asc" },
   });
 
-  if (!existingDemoUserCompany) {
-    await prisma.company.create({
+  const demoCompany =
+    existingDemoUserCompany ??
+    (await prisma.company.create({
       data: {
         userId: demoUser.id,
         name: "Constructora Demo",
         ruc: "20987654321",
       },
-    });
-  }
+    }));
+
+  await prisma.companyMembership.upsert({
+    where: { companyId_userId: { companyId: demoCompany.id, userId: demoUser.id } },
+    update: { role: "OWNER", status: "ACTIVE" },
+    create: { companyId: demoCompany.id, userId: demoUser.id, role: "OWNER", status: "ACTIVE" },
+  });
 
   const existingCompany = await prisma.company.findFirst({
     where: { userId: user.id },
@@ -137,6 +143,12 @@ async function main() {
         ruc: "20123456789",
       },
     }));
+
+  await prisma.companyMembership.upsert({
+    where: { companyId_userId: { companyId: company.id, userId: user.id } },
+    update: { role: "OWNER", status: "ACTIVE" },
+    create: { companyId: company.id, userId: user.id, role: "OWNER", status: "ACTIVE" },
+  });
 
   await seedUnifiedIndicesFromWorkbook();
   await seedGeneralResourcesCatalog();

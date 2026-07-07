@@ -9,6 +9,7 @@ import { verifyPassword } from "@/lib/auth/password";
 import { registerUserWithCompany } from "@/lib/auth/registration";
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { loginSchema } from "@/lib/validations/auth";
+import { listUserWorkspaces } from "@/lib/workspace/active-workspace";
 
 const authSecret =
   process.env.NEXTAUTH_SECRET ??
@@ -230,19 +231,17 @@ export const authOptions: NextAuthOptions = {
         const userId = token.id as string | undefined;
 
         if (userId) {
-          const [company, membershipUser] = await Promise.all([
-            prisma.company.findFirst({
-              where: { userId },
-              orderBy: { createdAt: "asc" },
-              select: { id: true },
-            }),
+          const [workspaces, membershipUser] = await Promise.all([
+            listUserWorkspaces(userId),
             prisma.user.findUnique({
               where: { id: userId },
               select: { membershipPlan: { select: { slug: true } } },
             }),
           ]);
 
-          token.companyId = company?.id ?? null;
+          token.companyId = workspaces[0]?.id ?? null;
+          token.activeCompanyId = workspaces[0]?.id ?? null;
+          token.workspaces = workspaces;
           token.plan = membershipUser?.membershipPlan?.slug ?? null;
         }
       }
@@ -263,6 +262,8 @@ export const authOptions: NextAuthOptions = {
         session.user.role = currentUser?.role ?? (token.role as "ADMIN" | "USER" | undefined) ?? "USER";
         session.user.status = currentUser?.status ?? (token.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE";
         session.user.companyId = token.companyId ?? null;
+        session.user.activeCompanyId = token.activeCompanyId ?? null;
+        session.user.workspaces = Array.isArray(token.workspaces) ? token.workspaces : [];
         session.user.plan = token.plan ?? null;
       }
 

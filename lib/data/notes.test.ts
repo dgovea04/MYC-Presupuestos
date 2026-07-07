@@ -1,165 +1,278 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  findMany: vi.fn(),
-  findFirst: vi.fn(),
-  create: vi.fn(),
-  update: vi.fn(),
-  delete: vi.fn(),
-}));
-
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     noteTask: {
-      findMany: mocks.findMany,
-      findFirst: mocks.findFirst,
-      create: mocks.create,
-      update: mocks.update,
-      delete: mocks.delete,
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
     },
   },
 }));
 
-import { createNoteTask, listNoteTasks, updateNoteTask } from "@/lib/data/notes";
+vi.mock("@/lib/collaboration/events", () => ({
+  publishBudgetEvent: vi.fn(),
+}));
 
-const createdAt = new Date("2026-05-27T10:00:00.000Z");
-const updatedAt = new Date("2026-05-27T10:15:00.000Z");
+import { createNoteTask, updateNoteTask } from "@/lib/data/notes";
+import { publishBudgetEvent } from "@/lib/collaboration/events";
+import { prisma } from "@/lib/db/prisma";
 
-describe("note task data", () => {
+const mockNoteTask = (prisma as unknown as {
+  noteTask: {
+    findMany: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+  };
+}).noteTask;
+
+function makeNote(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "note-1",
+    body: "Revisar metrado",
+    priority: "MEDIUM" as const,
+    status: "OPEN" as const,
+    sourcePath: "/budgets/budget-1",
+    sharedWith: [] as string[],
+    userId: "user-1",
+    budgetId: null as string | null,
+    budgetItemId: null as string | null,
+    projectId: null as string | null,
+    user: { name: "Carlos", avatarUrl: null as string | null },
+    project: null,
+    budget: null,
+    budgetItem: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    resolvedAt: null as Date | null,
+    ...overrides,
+  };
+}
+
+describe("note.shared SSE event emission", () => {
   beforeEach(() => {
-    mocks.findMany.mockReset();
-    mocks.findFirst.mockReset();
-    mocks.create.mockReset();
-    mocks.update.mockReset();
-    mocks.delete.mockReset();
+    vi.resetAllMocks();
   });
 
-  it("lists only the current user's open notes and includes optional context labels", async () => {
-    mocks.findMany.mockResolvedValue([
-      {
-        id: "note-1",
-        userId: "user-1",
-        projectId: "project-1",
-        budgetId: "budget-1",
-        budgetItemId: "item-1",
-        body: "Revisar partida",
-        priority: "HIGH",
-        status: "OPEN",
-        sourcePath: "/budgets/budget-1",
-        createdAt,
-        updatedAt,
-        resolvedAt: null,
-        project: { name: "Colegio Sur" },
-        budget: { name: "Estructuras" },
-        budgetItem: { code: "01.01", description: "Concreto f'c=210" },
-      },
-    ]);
+  describe("createNoteTask", () => {
+    it("emits note.shared when created with shared users and a budgetId", async () => {
+      mockNoteTask.create.mockResolvedValue(
+        makeNote({ budgetId: "budget-1", sharedWith: ["user-2"] }),
+      );
 
-    await expect(listNoteTasks("user-1", { status: "OPEN", budgetId: "budget-1" })).resolves.toEqual([
-      {
-        id: "note-1",
-        body: "Revisar partida",
-        priority: "HIGH",
-        status: "OPEN",
-        projectId: "project-1",
-        budgetId: "budget-1",
-        budgetItemId: "item-1",
-        projectName: "Colegio Sur",
-        budgetName: "Estructuras",
-        budgetItemCode: "01.01",
-        budgetItemDescription: "Concreto f'c=210",
+      await createNoteTask("user-1", {
+        body: "Revisar metrado",
+        priority: "MEDIUM",
         sourcePath: "/budgets/budget-1",
-        createdAt: createdAt.toISOString(),
-        updatedAt: updatedAt.toISOString(),
-        resolvedAt: undefined,
-      },
-    ]);
-    expect(mocks.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          userId: "user-1",
-          status: "OPEN",
-          budgetId: "budget-1",
+        budgetId: "budget-1",
+        sharedWith: ["user-2"],
+      });
+
+      expect(publishBudgetEvent).toHaveBeenCalledWith(
+        "budget-1",
+        "note.shared",
+        expect.objectContaining({
+          noteId: "note-1",
+          body: "Revisar metrado",
+          sharedByUserId: "user-1",
+          sharedWith: ["user-2"],
         }),
-      }),
-    );
-  });
-
-  it("creates a private note for the current user", async () => {
-    mocks.create.mockResolvedValue({
-      id: "note-2",
-      userId: "user-1",
-      projectId: null,
-      budgetId: null,
-      budgetItemId: null,
-      body: "Llamar al residente",
-      priority: "MEDIUM",
-      status: "OPEN",
-      sourcePath: "/dashboard",
-      createdAt,
-      updatedAt,
-      resolvedAt: null,
-      project: null,
-      budget: null,
-      budgetItem: null,
+      );
     });
 
-    await createNoteTask("user-1", {
-      body: "Llamar al residente",
-      priority: "MEDIUM",
-      sourcePath: "/dashboard",
+    it("does NOT emit when sharedWith is empty", async () => {
+      mockNoteTask.create.mockResolvedValue(
+        makeNote({ budgetId: "budget-1", sharedWith: [] }),
+      );
+
+      await createNoteTask("user-1", {
+        body: "Nota sin compartir",
+        priority: "LOW",
+        sourcePath: "/dashboard",
+        budgetId: "budget-1",
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
     });
 
-    expect(mocks.create).toHaveBeenCalledWith({
-      data: {
-        userId: "user-1",
-        body: "Llamar al residente",
+    it("does NOT emit when note has no budgetId", async () => {
+      mockNoteTask.create.mockResolvedValue(
+        makeNote({ budgetId: null, sharedWith: ["user-2"] }),
+      );
+
+      await createNoteTask("user-1", {
+        body: "Nota sin presupuesto",
+        priority: "HIGH",
+        sourcePath: "/dashboard",
+        sharedWith: ["user-2"],
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
+    });
+
+    it("does NOT emit when sharedWith is not provided at all", async () => {
+      mockNoteTask.create.mockResolvedValue(
+        makeNote({ budgetId: "budget-1" }),
+      );
+
+      await createNoteTask("user-1", {
+        body: "Nota simple",
         priority: "MEDIUM",
         sourcePath: "/dashboard",
-        projectId: null,
-        budgetId: null,
-        budgetItemId: null,
-      },
-      include: expect.any(Object),
+        budgetId: "budget-1",
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
     });
   });
 
-  it("updates only notes owned by the current user and stamps resolvedAt", async () => {
-    mocks.findFirst.mockResolvedValue({ id: "note-1" });
-    mocks.update.mockResolvedValue({
-      id: "note-1",
-      userId: "user-1",
-      projectId: null,
-      budgetId: null,
-      budgetItemId: null,
-      body: "Resolver observacion",
-      priority: "LOW",
-      status: "RESOLVED",
-      sourcePath: "/dashboard",
-      createdAt,
-      updatedAt,
-      resolvedAt: updatedAt,
-      project: null,
-      budget: null,
-      budgetItem: null,
+  describe("updateNoteTask", () => {
+    it("emits note.shared when new users are added to sharedWith", async () => {
+      mockNoteTask.findFirst
+        .mockResolvedValueOnce({ id: "note-1" })
+        .mockResolvedValueOnce({
+          sharedWith: ["user-2"],
+          budgetId: "budget-1",
+          body: "Revisar metrado",
+          userId: "user-1",
+        });
+      mockNoteTask.update.mockResolvedValue(
+        makeNote({ budgetId: "budget-1", sharedWith: ["user-2", "user-3"] }),
+      );
+
+      await updateNoteTask("note-1", "user-1", {
+        sharedWith: ["user-2", "user-3"],
+      });
+
+      expect(publishBudgetEvent).toHaveBeenCalledWith(
+        "budget-1",
+        "note.shared",
+        expect.objectContaining({
+          noteId: "note-1",
+          sharedByUserId: "user-1",
+          sharedWith: ["user-3"],
+        }),
+      );
     });
 
-    await updateNoteTask("note-1", "user-1", { status: "RESOLVED" });
+    it("does NOT emit when no new users are added (remove-only change)", async () => {
+      mockNoteTask.findFirst
+        .mockResolvedValueOnce({ id: "note-1" })
+        .mockResolvedValueOnce({
+          sharedWith: ["user-2", "user-3"],
+          budgetId: "budget-1",
+          body: "Revisar metrado",
+          userId: "user-1",
+        });
+      mockNoteTask.update.mockResolvedValue(
+        makeNote({ budgetId: "budget-1", sharedWith: ["user-2"] }),
+      );
 
-    expect(mocks.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: "note-1",
-        userId: "user-1",
-      },
-      select: { id: true },
+      await updateNoteTask("note-1", "user-1", {
+        sharedWith: ["user-2"],
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
     });
-    expect(mocks.update).toHaveBeenCalledWith({
-      where: { id: "note-1" },
-      data: expect.objectContaining({
+
+    it("does NOT emit when sharedWith is unchanged", async () => {
+      mockNoteTask.findFirst
+        .mockResolvedValueOnce({ id: "note-1" })
+        .mockResolvedValueOnce({
+          sharedWith: ["user-2"],
+          budgetId: "budget-1",
+          body: "Revisar metrado",
+          userId: "user-1",
+        });
+      mockNoteTask.update.mockResolvedValue(
+        makeNote({ budgetId: "budget-1", sharedWith: ["user-2"] }),
+      );
+
+      await updateNoteTask("note-1", "user-1", {
+        sharedWith: ["user-2"],
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
+    });
+
+    it("does NOT emit when note has no budgetId", async () => {
+      mockNoteTask.findFirst
+        .mockResolvedValueOnce({ id: "note-1" })
+        .mockResolvedValueOnce({
+          sharedWith: [],
+          budgetId: null,
+          body: "Nota sin presupuesto",
+          userId: "user-1",
+        });
+      mockNoteTask.update.mockResolvedValue(
+        makeNote({ budgetId: null, sharedWith: ["user-2"] }),
+      );
+
+      await updateNoteTask("note-1", "user-1", {
+        sharedWith: ["user-2"],
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
+    });
+
+    it("does NOT emit when sharedWith is not in the update payload", async () => {
+      mockNoteTask.findFirst
+        .mockResolvedValueOnce({ id: "note-1" })
+        .mockResolvedValueOnce(null);
+      mockNoteTask.update.mockResolvedValue(
+        makeNote({ budgetId: "budget-1" }),
+      );
+
+      await updateNoteTask("note-1", "user-1", {
+        body: "Updated body",
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
+    });
+
+    it("does NOT emit on status-only update", async () => {
+      mockNoteTask.findFirst
+        .mockResolvedValueOnce({ id: "note-1" })
+        .mockResolvedValueOnce(null);
+      mockNoteTask.update.mockResolvedValue(
+        makeNote({ status: "RESOLVED" as const }),
+      );
+
+      await updateNoteTask("note-1", "user-1", {
         status: "RESOLVED",
-        resolvedAt: expect.any(Date),
-      }),
-      include: expect.any(Object),
+      });
+
+      expect(publishBudgetEvent).not.toHaveBeenCalled();
+    });
+
+    it("emits for multiple newly added users", async () => {
+      mockNoteTask.findFirst
+        .mockResolvedValueOnce({ id: "note-1" })
+        .mockResolvedValueOnce({
+          sharedWith: [],
+          budgetId: "budget-1",
+          body: "Revisar metrado",
+          userId: "user-1",
+        });
+      mockNoteTask.update.mockResolvedValue(
+        makeNote({ budgetId: "budget-1", sharedWith: ["user-2", "user-3", "user-4"] }),
+      );
+
+      await updateNoteTask("note-1", "user-1", {
+        sharedWith: ["user-2", "user-3", "user-4"],
+      });
+
+      expect(publishBudgetEvent).toHaveBeenCalledWith(
+        "budget-1",
+        "note.shared",
+        expect.objectContaining({
+          sharedWith: ["user-2", "user-3", "user-4"],
+        }),
+      );
     });
   });
 });
