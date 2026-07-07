@@ -66,6 +66,26 @@ describe("GET /api/cron/reactivate-members", () => {
     expect(response.status).toBe(401);
   });
 
+  it("accepts secret via query parameter (Vercel Cron)", async () => {
+    mockPrisma.companyMembership.updateMany.mockResolvedValueOnce({ count: 1 });
+
+    const response = await GET(
+      new Request("http://localhost/api/cron/reactivate-members?secret=test-secret"),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.reactivated).toBe(1);
+  });
+
+  it("returns 401 when query parameter secret is wrong", async () => {
+    const response = await GET(
+      new Request("http://localhost/api/cron/reactivate-members?secret=wrong"),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
   it("reactivates expired members and returns count", async () => {
     mockPrisma.companyMembership.updateMany.mockResolvedValueOnce({ count: 3 });
 

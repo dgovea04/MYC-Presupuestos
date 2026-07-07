@@ -5,10 +5,11 @@ import { prisma } from "@/lib/db/prisma";
  * GET /api/cron/reactivate-members
  *
  * Cron endpoint that proactively reactivates expired suspensions across all workspaces.
- * Protected by a CRON_SECRET shared secret header.
+ * Protected by CRON_SECRET via Bearer token OR query parameter (for Vercel Cron).
  *
- * Expected caller: Vercel Cron Jobs, GitHub Actions, or any external scheduler.
- * Usage: curl -H "Authorization: Bearer <CRON_SECRET>" https://.../api/cron/reactivate-members
+ * Usage:
+ *   curl -H "Authorization: Bearer <CRON_SECRET>" https://.../api/cron/reactivate-members
+ *   curl https://.../api/cron/reactivate-members?secret=<CRON_SECRET>
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -19,9 +20,13 @@ export async function GET(request: Request) {
     );
   }
 
+  // Accept secret via Bearer token OR query parameter (for Vercel Cron)
+  const { searchParams } = new URL(request.url);
+  const querySecret = searchParams.get("secret");
   const auth = request.headers.get("Authorization");
-  const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (token !== secret) {
+  const bearerToken = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+
+  if (bearerToken !== secret && querySecret !== secret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
