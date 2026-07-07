@@ -40,7 +40,14 @@ export const removeMemberSchema = z.object({
 export const toggleStatusSchema = z.object({
   userId: z.string().min(1, "userId requerido"),
   status: z.enum(["ACTIVE", "SUSPENDED"]),
-});
+  suspendedUntil: z.string().datetime().nullish(),
+}).refine(
+  (v) => v.status !== "SUSPENDED" || v.suspendedUntil == null || new Date(v.suspendedUntil) > new Date(),
+  { message: "La fecha de suspensión debe ser futura" },
+).refine(
+  (v) => v.status === "SUSPENDED" || v.suspendedUntil == null,
+  { message: "suspendedUntil solo aplica al suspender" },
+);
 
 export type WorkspaceMembershipInput = z.infer<typeof workspaceMembershipSchema>;
 export type ActiveWorkspaceSelection = z.infer<typeof activeWorkspaceSelectionSchema>;

@@ -13,10 +13,23 @@ export async function assertWorkspaceMembership(options: {
         userId: options.userId,
       },
     },
-    select: { role: true, status: true },
+    select: { role: true, status: true, suspendedUntil: true },
   });
 
-  if (!membership || membership.status !== "ACTIVE") {
+  if (!membership) {
+    throw new Error("Workspace no disponible");
+  }
+
+  // Auto-reactivate if suspension has expired
+  if (membership.status === "SUSPENDED" && membership.suspendedUntil && membership.suspendedUntil < new Date()) {
+    await prisma.companyMembership.update({
+      where: { companyId_userId: { companyId: options.companyId, userId: options.userId } },
+      data: { status: "ACTIVE", suspendedUntil: null },
+    });
+    membership.status = "ACTIVE";
+  }
+
+  if (membership.status !== "ACTIVE") {
     throw new Error("Workspace no disponible");
   }
 

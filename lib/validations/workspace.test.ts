@@ -4,6 +4,7 @@ import {
   activeWorkspaceSelectionSchema,
   workspaceRoleSchema,
   inviteWorkspaceMemberSchema,
+  toggleStatusSchema,
 } from "@/lib/validations/workspace";
 
 describe("workspace validation", () => {
@@ -70,6 +71,65 @@ describe("workspace validation", () => {
 
     it("rejects empty string email", () => {
       expect(() => inviteWorkspaceMemberSchema.parse({ email: "   " })).toThrow();
+    });
+  });
+
+  describe("toggleStatusSchema", () => {
+    it("accepts suspend without expiry date", () => {
+      expect(toggleStatusSchema.parse({ userId: "user-1", status: "SUSPENDED" })).toEqual({
+        userId: "user-1",
+        status: "SUSPENDED",
+      });
+    });
+
+    it("accepts suspend with future expiry date", () => {
+      const future = new Date(Date.now() + 86400000).toISOString();
+      expect(toggleStatusSchema.parse({ userId: "user-1", status: "SUSPENDED", suspendedUntil: future })).toEqual({
+        userId: "user-1",
+        status: "SUSPENDED",
+        suspendedUntil: future,
+      });
+    });
+
+    it("rejects suspend with past expiry date", () => {
+      const past = new Date(Date.now() - 86400000).toISOString();
+      expect(() => toggleStatusSchema.parse({ userId: "user-1", status: "SUSPENDED", suspendedUntil: past })).toThrow(
+        "La fecha de suspensión debe ser futura",
+      );
+    });
+
+    it("accepts reactivation (ACTIVE status)", () => {
+      expect(toggleStatusSchema.parse({ userId: "user-1", status: "ACTIVE" })).toEqual({
+        userId: "user-1",
+        status: "ACTIVE",
+      });
+    });
+
+    it("rejects ACTIVE status with suspendedUntil", () => {
+      const future = new Date(Date.now() + 86400000).toISOString();
+      expect(() => toggleStatusSchema.parse({ userId: "user-1", status: "ACTIVE", suspendedUntil: future })).toThrow(
+        "suspendedUntil solo aplica al suspender",
+      );
+    });
+
+    it("rejects missing userId", () => {
+      expect(() => toggleStatusSchema.parse({ status: "SUSPENDED" })).toThrow();
+    });
+
+    it("rejects invalid status", () => {
+      expect(() => toggleStatusSchema.parse({ userId: "user-1", status: "INVITED" })).toThrow();
+    });
+
+    it("accepts null suspendedUntil with SUSPENDED (indefinite)", () => {
+      expect(toggleStatusSchema.parse({ userId: "user-1", status: "SUSPENDED", suspendedUntil: null })).toEqual({
+        userId: "user-1",
+        status: "SUSPENDED",
+        suspendedUntil: null,
+      });
+    });
+
+    it("rejects empty userId", () => {
+      expect(() => toggleStatusSchema.parse({ userId: "", status: "SUSPENDED" })).toThrow();
     });
   });
 });

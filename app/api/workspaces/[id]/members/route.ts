@@ -28,6 +28,19 @@ export async function GET(
     );
   }
 
+  // Auto-reactivate any expired suspensions before listing
+  await prisma.companyMembership.updateMany({
+    where: {
+      companyId,
+      status: "SUSPENDED",
+      suspendedUntil: { not: null, lte: new Date() },
+    },
+    data: {
+      status: "ACTIVE",
+      suspendedUntil: null,
+    },
+  });
+
   const members = await prisma.companyMembership.findMany({
     where: { companyId },
     include: {
@@ -48,6 +61,7 @@ export async function GET(
       status: m.status,
       invitedByName: m.invitedBy?.name ?? null,
       joinedAt: m.joinedAt.toISOString(),
+      suspendedUntil: m.suspendedUntil?.toISOString() ?? null,
     })),
   });
 }
@@ -284,7 +298,12 @@ export async function PATCH(
 
   const updateData = isRoleChange
     ? { role: roleResult.data!.role }
-    : { status: statusResult.data!.status };
+    : {
+        status: statusResult.data!.status,
+        suspendedUntil: statusResult.data!.status === "SUSPENDED"
+          ? (statusResult.data!.suspendedUntil ? new Date(statusResult.data!.suspendedUntil) : null)
+          : null,
+      };
 
   const updated = await prisma.companyMembership.update({
     where: { id: targetMembership.id },
@@ -306,6 +325,7 @@ export async function PATCH(
       status: updated.status,
       invitedByName: updated.invitedBy?.name ?? null,
       joinedAt: updated.joinedAt.toISOString(),
+      suspendedUntil: updated.suspendedUntil?.toISOString() ?? null,
     },
   });
 }

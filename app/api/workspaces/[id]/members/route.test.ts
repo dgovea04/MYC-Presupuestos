@@ -11,6 +11,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
       count: vi.fn(),
     },
@@ -30,6 +31,7 @@ const mockPrisma = prisma as unknown as {
     findMany: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
   };
@@ -758,7 +760,7 @@ describe("PATCH /api/workspaces/[id]/members", () => {
     expect(body.member.status).toBe("SUSPENDED");
     expect(mockPrisma.companyMembership.update).toHaveBeenCalledWith({
       where: { id: "mem-2" },
-      data: { status: "SUSPENDED" },
+      data: expect.objectContaining({ status: "SUSPENDED" }),
       include: expect.any(Object),
     });
   });
@@ -795,7 +797,7 @@ describe("PATCH /api/workspaces/[id]/members", () => {
     expect(body.member.status).toBe("ACTIVE");
     expect(mockPrisma.companyMembership.update).toHaveBeenCalledWith({
       where: { id: "mem-2" },
-      data: { status: "ACTIVE" },
+      data: expect.objectContaining({ status: "ACTIVE" }),
       include: expect.any(Object),
     });
   });

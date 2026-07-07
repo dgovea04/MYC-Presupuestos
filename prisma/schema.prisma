@@ -979,15 +979,16 @@ model CustomMetradoFormula {
 }
 
 model CompanyMembership {
-  id          String                  @id @default(cuid())
-  companyId   String
-  userId      String
-  role        CompanyMembershipRole
-  status      CompanyMembershipStatus @default(ACTIVE)
-  invitedById String?
-  joinedAt    DateTime                @default(now())
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  id             String                  @id @default(cuid())
+  companyId      String
+  userId         String
+  role           CompanyMembershipRole
+  status         CompanyMembershipStatus @default(ACTIVE)
+  invitedById    String?
+  suspendedUntil DateTime?
+  joinedAt       DateTime                @default(now())
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
   company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   invitedBy   User?                   @relation("MembershipInviter", fields: [invitedById], references: [id], onDelete: SetNull)

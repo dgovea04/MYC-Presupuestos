@@ -16,6 +16,7 @@ interface MemberInfo {
   status: "ACTIVE" | "INVITED" | "SUSPENDED";
   invitedByName: string | null;
   joinedAt: string;
+  suspendedUntil: string | null;
 }
 
 interface PendingInvitation {
@@ -55,6 +56,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmRemoveUserId, setConfirmRemoveUserId] = useState<string | null>(null);
+  const [suspendUntil, setSuspendUntil] = useState("");
   const [memberActionError, setMemberActionError] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -106,19 +108,24 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
     }
   }, []);
 
-  const handleToggleStatus = useCallback(async (userId: string, newStatus: "ACTIVE" | "SUSPENDED") => {
+  const handleToggleStatus = useCallback(async (userId: string, newStatus: "ACTIVE" | "SUSPENDED", suspendedUntil?: string) => {
     setChangingRoleId(userId);
     setOpenDropdownId(null);
+    setSuspendUntil("");
     setMemberActionError("");
     try {
+      const body: Record<string, unknown> = { userId, status: newStatus };
+      if (newStatus === "SUSPENDED" && suspendedUntil) {
+        body.suspendedUntil = new Date(suspendedUntil).toISOString();
+      }
       const res = await fetch(`/api/workspaces/${activeWorkspaceId}/members`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, status: newStatus }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const data = await res.json();
-        setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, status: data.member.status } : m)));
+        setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, status: data.member.status, suspendedUntil: data.member.suspendedUntil ?? null } : m)));
       } else {
         const data = await res.json().catch(() => ({}));
         setMemberActionError(data.error || "Error al cambiar estado");
@@ -191,6 +198,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
       if (dropdown && !dropdown.contains(e.target as Node)) {
         setOpenDropdownId(null);
         setConfirmRemoveUserId(null);
+        setSuspendUntil("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -504,6 +512,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setConfirmRemoveUserId(null);
+                                setSuspendUntil("");
                                 setOpenDropdownId(openDropdownId === member.id ? null : member.id);
                               }}
                               className="inline-flex items-center justify-center h-6 w-6 rounded-md text-[var(--app-text-muted)] hover:bg-[var(--app-bg-hover)] hover:text-[#0F172A] disabled:opacity-50 transition-colors"
@@ -542,24 +551,45 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                                   </button>
                                 ))}
                                 <div className="border-t border-[var(--app-border)] my-1" />
-                                <button
-                                  type="button"
-                                  disabled={isBusy || member.status === "INVITED"}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleStatus(
-                                      member.userId,
-                                      member.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
-                                    );
-                                  }}
-                                  className={`w-full text-left px-2.5 py-1 text-[11px] transition-colors disabled:opacity-50 ${
-                                    member.status === "SUSPENDED"
-                                      ? "text-[#10B981] hover:bg-green-50"
-                                      : "text-amber-600 hover:bg-amber-50"
-                                  }`}
-                                >
-                                  {member.status === "SUSPENDED" ? "Reactivar miembro" : "Suspender miembro"}
-                                </button>
+                                {member.status === "SUSPENDED" ? (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleStatus(member.userId, "ACTIVE");
+                                    }}
+                                    className="w-full text-left px-2.5 py-1 text-[11px] text-[#10B981] hover:bg-green-50 transition-colors disabled:opacity-50"
+                                  >
+                                    Reactivar miembro
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy || member.status === "INVITED"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleStatus(member.userId, "SUSPENDED", suspendUntil || undefined);
+                                    }}
+                                    className="w-full text-left px-2.5 py-1 text-[11px] text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                                  >
+                                    Suspender miembro
+                                  </button>
+                                )}
+                                {member.status !== "SUSPENDED" && member.status !== "INVITED" && (
+                                  <div className="px-2.5 pb-1.5">
+                                    <input
+                                      type="datetime-local"
+                                      value={suspendUntil}
+                                      onChange={(e) => setSuspendUntil(e.target.value)}
+                                      placeholder="Hasta (opcional)"
+                                      className="w-full rounded-md border border-[var(--app-border)] px-2 py-1 text-[10px] focus:outline-none focus:ring-1 focus:ring-[#2563EB]/30 focus:border-[#2563EB]"
+                                    />
+                                    <p className="mt-0.5 text-[9px] text-[var(--app-text-muted)]">
+                                      Fecha opcional de reactivación
+                                    </p>
+                                  </div>
+                                )}
                                 <div className="border-t border-[var(--app-border)] my-1" />
                                 {confirmRemoveUserId === member.userId ? (
                                   <div className="px-2.5 py-1.5">
