@@ -51,7 +51,12 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [acceptingIds, setAcceptingIds] = useState<Set<string>>(new Set());
   const [rejectingIds, setRejectingIds] = useState<Set<string>>(new Set());
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [memberActionError, setMemberActionError] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
+  const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Fetch pending invitations on mount
   useEffect(() => {
@@ -99,6 +104,70 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
       });
     }
   }, []);
+
+  const handleChangeRole = useCallback(async (userId: string, role: WorkspaceRole) => {
+    setChangingRoleId(userId);
+    setOpenDropdownId(null);
+    setMemberActionError("");
+    try {
+      const res = await fetch(`/api/workspaces/${activeWorkspaceId}/members`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, role }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, role: data.member.role } : m)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMemberActionError(data.error || "Error al cambiar rol");
+        setTimeout(() => setMemberActionError(""), 4000);
+      }
+    } catch {
+      setMemberActionError("Error de conexión");
+      setTimeout(() => setMemberActionError(""), 4000);
+    } finally {
+      setChangingRoleId(null);
+    }
+  }, [activeWorkspaceId]);
+
+  const handleRemoveMember = useCallback(async (userId: string) => {
+    setRemovingId(userId);
+    setOpenDropdownId(null);
+    setMemberActionError("");
+    try {
+      const res = await fetch(`/api/workspaces/${activeWorkspaceId}/members`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        setMembers((prev) => prev.filter((m) => m.userId !== userId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMemberActionError(data.error || "Error al remover miembro");
+        setTimeout(() => setMemberActionError(""), 4000);
+      }
+    } catch {
+      setMemberActionError("Error de conexión");
+      setTimeout(() => setMemberActionError(""), 4000);
+    } finally {
+      setRemovingId(null);
+    }
+  }, [activeWorkspaceId]);
+
+  // Close role dropdown on outside click
+  useEffect(() => {
+    if (!openDropdownId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const dropdown = dropdownRefs.current.get(openDropdownId);
+      if (dropdown && !dropdown.contains(e.target as Node)) {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openDropdownId]);
 
   // Close panel on outside click
   useEffect(() => {
@@ -338,6 +407,9 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                 {error && (
                   <p className="mt-1.5 text-[11px] text-[#EF4444]">{error}</p>
                 )}
+                {memberActionError && (
+                  <p className="mt-1.5 text-[11px] text-[#EF4444]">{memberActionError}</p>
+                )}
                 {successMsg && (
                   <p className="mt-1.5 text-[11px] text-[#10B981]">{successMsg}</p>
                 )}
@@ -354,7 +426,13 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                   </p>
                 ) : (
                   <ul className="space-y-0.5">
-                    {members.map((member) => (
+                    {members.map((member) => {
+                      const isOwner = currentWorkspace?.role === "OWNER";
+                      const isSelfOwner = isOwner && member.role === "OWNER";
+                      const showControls = isOwner && !isSelfOwner;
+                      const isBusy = changingRoleId === member.userId || removingId === member.userId;
+
+                      return (
                       <li
                         key={member.id}
                         className="flex items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-[var(--app-bg-hover)]"
@@ -367,9 +445,13 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                             <span className="truncate text-xs font-medium text-[#0F172A]">
                               {member.userName}
                             </span>
-                            <span className="shrink-0 text-[10px] text-[var(--app-text-muted)]">
-                              {ROLE_LABEL[member.role]}
-                            </span>
+                            {isBusy ? (
+                              <span className="shrink-0 text-[10px] text-[var(--app-text-muted)]">...</span>
+                            ) : (
+                              <span className="shrink-0 text-[10px] text-[var(--app-text-muted)]">
+                                {ROLE_LABEL[member.role]}
+                              </span>
+                            )}
                             {member.status === "INVITED" && (
                               <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                                 Pendiente
@@ -381,8 +463,69 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                             {member.invitedByName && ` · Invitado por ${member.invitedByName}`}
                           </p>
                         </div>
+                        {showControls && (
+                          <div className="relative shrink-0" ref={(el) => { if (el) dropdownRefs.current.set(member.id, el); else dropdownRefs.current.delete(member.id); }}>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenDropdownId(openDropdownId === member.id ? null : member.id);
+                              }}
+                              className="inline-flex items-center justify-center h-6 w-6 rounded-md text-[var(--app-text-muted)] hover:bg-[var(--app-bg-hover)] hover:text-[#0F172A] disabled:opacity-50 transition-colors"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                              </svg>
+                            </button>
+
+                            {openDropdownId === member.id && (
+                              <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-xl border border-[var(--app-border)] bg-white shadow-lg py-1">
+                                <p className="px-2.5 py-1 text-[10px] font-semibold text-[var(--app-text-muted)] uppercase tracking-wide">Cambiar rol</p>
+                                {(Object.keys(ROLE_LABEL) as WorkspaceRole[]).map((role) => (
+                                  <button
+                                    key={role}
+                                    type="button"
+                                    disabled={member.role === role || isBusy}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleChangeRole(member.userId, role);
+                                    }}
+                                    className={`w-full text-left px-2.5 py-1 text-[11px] transition-colors ${
+                                      member.role === role
+                                        ? "text-[#2563EB] font-medium bg-[#EFF6FF]"
+                                        : "text-[#0F172A] hover:bg-[var(--app-bg-hover)]"
+                                    } disabled:opacity-50`}
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      {member.role === role && (
+                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      )}
+                                      {ROLE_LABEL[role]}
+                                    </span>
+                                  </button>
+                                ))}
+                                <div className="border-t border-[var(--app-border)] my-1" />
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveMember(member.userId);
+                                  }}
+                                  className="w-full text-left px-2.5 py-1 text-[11px] text-[#EF4444] hover:bg-red-50 transition-colors disabled:opacity-50"
+                                >
+                                  {removingId === member.userId ? "Removiendo..." : "Remover miembro"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
-import { inviteWorkspaceMemberSchema } from "@/lib/validations/workspace";
+import { inviteWorkspaceMemberSchema, changeRoleSchema, removeMemberSchema } from "@/lib/validations/workspace";
 
 export async function GET(
   _request: Request,
@@ -170,4 +170,195 @@ export async function POST(
     },
     { status: 201 },
   );
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getAuthSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id: companyId } = await params;
+
+  // Only OWNER can change roles
+  try {
+    await assertWorkspaceMembership({
+      userId: session.user.id,
+      companyId,
+      minimumRole: "OWNER",
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Solo el Owner puede cambiar roles" },
+      { status: 403 },
+    );
+  }
+
+  let parsed: { userId: string; role: WorkspaceRole };
+  try {
+    const body = await request.json();
+    parsed = changeRoleSchema.parse(body);
+  } catch {
+    return NextResponse.json(
+      { error: "Se requiere userId y role válidos" },
+      { status: 400 },
+    );
+  }
+
+  // Resolve the current membership of the target user
+  const targetMembership = await prisma.companyMembership.findUnique({
+    where: {
+      companyId_userId: {
+        companyId,
+        userId: parsed.userId,
+      },
+    },
+    select: { id: true, role: true, status: true },
+  });
+
+  if (!targetMembership) {
+    return NextResponse.json(
+      { error: "Miembro no encontrado" },
+      { status: 404 },
+    );
+  }
+
+  // Cannot demote the last OWNER
+  if (targetMembership.role === "OWNER" && parsed.role !== "OWNER") {
+    const ownerCount = await prisma.companyMembership.count({
+      where: {
+        companyId,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    if (ownerCount <= 1) {
+      return NextResponse.json(
+        { error: "No puedes remover el último Owner del workspace" },
+        { status: 403 },
+      );
+    }
+  }
+
+  // Cannot change your own role
+  if (parsed.userId === session.user.id) {
+    return NextResponse.json(
+      { error: "No puedes cambiar tu propio rol" },
+      { status: 400 },
+    );
+  }
+
+  const updated = await prisma.companyMembership.update({
+    where: { id: targetMembership.id },
+    data: { role: parsed.role },
+    include: {
+      user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      invitedBy: { select: { id: true, name: true } },
+    },
+  });
+
+  return NextResponse.json({
+    member: {
+      id: updated.id,
+      userId: updated.userId,
+      userName: updated.user.name,
+      userEmail: updated.user.email,
+      userAvatarUrl: updated.user.avatarUrl,
+      role: updated.role,
+      status: updated.status,
+      invitedByName: updated.invitedBy?.name ?? null,
+      joinedAt: updated.joinedAt.toISOString(),
+    },
+  });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getAuthSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id: companyId } = await params;
+
+  // Only OWNER can remove members
+  try {
+    await assertWorkspaceMembership({
+      userId: session.user.id,
+      companyId,
+      minimumRole: "OWNER",
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Solo el Owner puede remover miembros" },
+      { status: 403 },
+    );
+  }
+
+  let parsed: { userId: string };
+  try {
+    const body = await request.json();
+    parsed = removeMemberSchema.parse(body);
+  } catch {
+    return NextResponse.json(
+      { error: "Se requiere userId válido" },
+      { status: 400 },
+    );
+  }
+
+  // Cannot remove yourself
+  if (parsed.userId === session.user.id) {
+    return NextResponse.json(
+      { error: "No puedes removerte a ti mismo del workspace" },
+      { status: 400 },
+    );
+  }
+
+  // Find the target membership
+  const targetMembership = await prisma.companyMembership.findUnique({
+    where: {
+      companyId_userId: {
+        companyId,
+        userId: parsed.userId,
+      },
+    },
+    select: { id: true, role: true },
+  });
+
+  if (!targetMembership) {
+    return NextResponse.json(
+      { error: "Miembro no encontrado" },
+      { status: 404 },
+    );
+  }
+
+  // Cannot remove the last OWNER
+  if (targetMembership.role === "OWNER") {
+    const ownerCount = await prisma.companyMembership.count({
+      where: {
+        companyId,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    if (ownerCount <= 1) {
+      return NextResponse.json(
+        { error: "No puedes remover el último Owner del workspace" },
+        { status: 403 },
+      );
+    }
+  }
+
+  await prisma.companyMembership.delete({
+    where: { id: targetMembership.id },
+  });
+
+  return NextResponse.json({ ok: true });
 }

@@ -28,6 +28,15 @@ export const inviteWorkspaceMemberSchema = z.object({
   email: z.string().trim().min(1, "Email requerido").email("Email inválido"),
 });
 
+export const changeRoleSchema = z.object({
+  userId: z.string().min(1, "userId requerido"),
+  role: workspaceRoleSchema,
+});
+
+export const removeMemberSchema = z.object({
+  userId: z.string().min(1, "userId requerido"),
+});
+
 export type WorkspaceMembershipInput = z.infer<typeof workspaceMembershipSchema>;
 export type ActiveWorkspaceSelection = z.infer<typeof activeWorkspaceSelectionSchema>;
 export type InviteWorkspaceMemberInput = z.infer<typeof inviteWorkspaceMemberSchema>;

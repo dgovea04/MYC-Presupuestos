@@ -10,6 +10,9 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      count: vi.fn(),
     },
     user: {
       findUnique: vi.fn(),
@@ -17,7 +20,7 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
-import { GET, POST } from "@/app/api/workspaces/[id]/members/route";
+import { GET, POST, PATCH, DELETE } from "@/app/api/workspaces/[id]/members/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
@@ -26,6 +29,9 @@ const mockPrisma = prisma as unknown as {
     findUnique: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   user: {
     findUnique: ReturnType<typeof vi.fn>;
@@ -468,6 +474,322 @@ describe("POST /api/workspaces/[id]/members", () => {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
         invitedBy: { select: { id: true, name: true } },
       }),
+    });
+  });
+});
+
+describe("PATCH /api/workspaces/[id]/members", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(null);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", role: "ADMIN" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 403 when user is ADMIN (not OWNER)", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "ADMIN",
+      status: "ACTIVE",
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", role: "EDITOR" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 403 when user is EDITOR", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "EDITOR",
+      status: "ACTIVE",
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", role: "EDITOR" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 400 when body is missing", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "OWNER",
+      status: "ACTIVE",
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when trying to change own role", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-1", role: "OWNER", status: "ACTIVE" }); // target (self)
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-1", role: "ADMIN" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("propio rol");
+  });
+
+  it("returns 404 when target member not found", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce(null); // target
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-unknown", role: "EDITOR" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 403 when demoting the last OWNER", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-owner", role: "OWNER", status: "ACTIVE" }); // target
+
+    mockPrisma.companyMembership.count.mockResolvedValueOnce(1);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", role: "EDITOR" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("último Owner");
+  });
+
+  it("successfully changes role when OWNER", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "EDITOR", status: "ACTIVE" }); // target
+
+    mockPrisma.companyMembership.update.mockResolvedValueOnce({
+      id: "mem-2",
+      userId: "user-2",
+      role: "ADMIN",
+      status: "ACTIVE",
+      invitedById: "user-1",
+      joinedAt: new Date("2026-07-07"),
+      user: { id: "user-2", name: "User 2", email: "user2@test.com", avatarUrl: null },
+      invitedBy: { id: "user-1", name: "Owner" },
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", role: "ADMIN" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.member.role).toBe("ADMIN");
+    expect(body.member.userId).toBe("user-2");
+    expect(mockPrisma.companyMembership.update).toHaveBeenCalledWith({
+      where: { id: "mem-2" },
+      data: { role: "ADMIN" },
+      include: expect.objectContaining({
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        invitedBy: { select: { id: true, name: true } },
+      }),
+    });
+  });
+});
+
+describe("DELETE /api/workspaces/[id]/members", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(null);
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 403 when user is ADMIN (not OWNER)", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "ADMIN",
+      status: "ACTIVE",
+    });
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 400 when trying to remove yourself", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "OWNER",
+      status: "ACTIVE",
+    });
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-1" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("removerte a ti mismo");
+  });
+
+  it("returns 404 when target member not found", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce(null); // target
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-unknown" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 403 when removing the last OWNER", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-owner", role: "OWNER" }); // target
+
+    mockPrisma.companyMembership.count.mockResolvedValueOnce(1);
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("último Owner");
+  });
+
+  it("successfully removes a member when OWNER", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "EDITOR" }); // target
+
+    mockPrisma.companyMembership.delete.mockResolvedValueOnce({} as never);
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.ok).toBe(true);
+    expect(mockPrisma.companyMembership.delete).toHaveBeenCalledWith({
+      where: { id: "mem-2" },
     });
   });
 });

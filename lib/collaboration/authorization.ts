@@ -11,7 +11,12 @@ export async function resolveBudgetOwnership(budgetId: string, userId: string) {
       id: budgetId,
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
