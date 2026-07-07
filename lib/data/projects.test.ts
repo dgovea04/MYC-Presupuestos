@@ -35,6 +35,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
+    project: {
+      findFirst: mocks.projectFindFirst,
+    },
     company: {
       findFirst: mocks.companyFindFirst,
     },

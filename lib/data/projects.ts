@@ -269,7 +269,12 @@ const _getProjectsListByUser = async (userId: string) => {
   return prisma.project.findMany({
     where: {
       company: {
-        userId,
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
       },
     },
     select: {
@@ -337,7 +342,12 @@ export async function getProjectById(id: string, userId: string) {
       where: {
         id,
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
       include: {
@@ -393,7 +403,12 @@ const _getProjectOverviewById = async (id: string, userId: string) => {
     where: {
       id,
       company: {
-        userId,
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
       },
     },
     select: {
@@ -508,7 +523,12 @@ export async function getProjectHeaderById(id: string, userId: string) {
     where: {
       id,
       company: {
-        userId,
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
       },
     },
     select: {
@@ -588,10 +608,16 @@ export async function updateProject(id: string, userId: string, input: Partial<P
     where: {
       id,
       company: {
-        userId,
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
       },
     },
   });
+  await assertWorkspaceMembership({ userId, companyId: current.companyId, minimumRole: "EDITOR" });
   const merged = {
     companyId: input.companyId ?? current.companyId,
     name: input.name ?? current.name,
@@ -635,18 +661,15 @@ export async function updateProject(id: string, userId: string, input: Partial<P
 
 export async function deleteProject(id: string, userId: string) {
   const project = await prisma.project.findFirst({
-    where: {
-      id,
-      company: {
-        userId,
-      },
-    },
-    select: { id: true },
+    where: { id },
+    select: { id: true, companyId: true },
   });
 
   if (!project) {
-    throw new Error("No tienes permisos para eliminar este proyecto");
+    throw new Error("El proyecto no existe");
   }
+
+  await assertWorkspaceMembership({ userId, companyId: project.companyId, minimumRole: "ADMIN" });
 
   await prisma.project.delete({
     where: { id },
@@ -654,13 +677,21 @@ export async function deleteProject(id: string, userId: string) {
 }
 
 export async function duplicateProject(sourceProjectId: string, userId: string) {
+  const preview = await prisma.project.findFirst({
+    where: { id: sourceProjectId },
+    select: { id: true, companyId: true },
+  });
+
+  if (!preview) {
+    throw new Error("No tienes permisos para duplicar este proyecto");
+  }
+
+  await assertWorkspaceMembership({ userId, companyId: preview.companyId, minimumRole: "EDITOR" });
+
   return prisma.$transaction(async (tx) => {
     const sourceProject = await tx.project.findFirst({
       where: {
         id: sourceProjectId,
-        company: {
-          userId,
-        },
       },
       include: {
         budgets: {
