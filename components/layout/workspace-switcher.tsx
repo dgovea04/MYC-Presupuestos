@@ -503,6 +503,11 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                             {member.userEmail}
                             {member.invitedByName && ` · Invitado por ${member.invitedByName}`}
                           </p>
+                          {member.status === "SUSPENDED" && member.suspendedUntil && (
+                            <p className="truncate text-[9px] text-amber-600">
+                              Hasta {new Date(member.suspendedUntil).toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          )}
                         </div>
                         {showControls && (
                           <div className="relative shrink-0" ref={(el) => { if (el) dropdownRefs.current.set(member.id, el); else dropdownRefs.current.delete(member.id); }}>

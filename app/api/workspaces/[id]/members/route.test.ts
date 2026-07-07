@@ -187,6 +187,99 @@ describe("GET /api/workspaces/[id]/members", () => {
     const body = await response.json();
     expect(body.members).toEqual([]);
   });
+
+  it("calls updateMany to auto-reactivate expired suspensions before listing", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "OWNER",
+      status: "ACTIVE",
+    });
+
+    mockPrisma.companyMembership.findMany.mockResolvedValueOnce([]);
+
+    await GET(
+      new Request("http://localhost/api/workspaces/ws-1/members"),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    // updateMany must be called with the correct where/data params
+    expect(mockPrisma.companyMembership.updateMany).toHaveBeenCalledWith({
+      where: {
+        companyId: "ws-1",
+        status: "SUSPENDED",
+        suspendedUntil: { not: null, lte: expect.any(Date) },
+      },
+      data: {
+        status: "ACTIVE",
+        suspendedUntil: null,
+      },
+    });
+  });
+
+  it("includes suspendedUntil in each member response", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "OWNER",
+      status: "ACTIVE",
+    });
+
+    const futureDate = new Date(Date.now() + 86400000);
+    mockPrisma.companyMembership.findMany.mockResolvedValueOnce([
+      {
+        id: "mem-1",
+        userId: "user-1",
+        role: "EDITOR",
+        status: "SUSPENDED",
+        suspendedUntil: futureDate,
+        user: { id: "user-1", name: "Suspendido", email: "s@test.com", avatarUrl: null },
+        invitedBy: { id: "user-0", name: "Owner" },
+        joinedAt: new Date("2026-01-01"),
+      },
+    ]);
+
+    const response = await GET(
+      new Request("http://localhost/api/workspaces/ws-1/members"),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.members[0].suspendedUntil).toBe(futureDate.toISOString());
+    expect(body.members[0].status).toBe("SUSPENDED");
+  });
+
+  it("returns null suspendedUntil for members without expiry", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "OWNER",
+      status: "ACTIVE",
+    });
+
+    mockPrisma.companyMembership.findMany.mockResolvedValueOnce([
+      {
+        id: "mem-1",
+        userId: "user-1",
+        role: "EDITOR",
+        status: "ACTIVE",
+        suspendedUntil: null,
+        user: { id: "user-1", name: "Activo", email: "a@test.com", avatarUrl: null },
+        invitedBy: null,
+        joinedAt: new Date("2026-01-01"),
+      },
+    ]);
+
+    const response = await GET(
+      new Request("http://localhost/api/workspaces/ws-1/members"),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.members[0].suspendedUntil).toBeNull();
+  });
 });
 
 describe("POST /api/workspaces/[id]/members", () => {
