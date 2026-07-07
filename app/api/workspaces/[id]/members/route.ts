@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
-import { inviteWorkspaceMemberSchema, changeRoleSchema, removeMemberSchema } from "@/lib/validations/workspace";
+import { inviteWorkspaceMemberSchema, changeRoleSchema, removeMemberSchema, toggleStatusSchema } from "@/lib/validations/workspace";
 
 export async function GET(
   _request: Request,
@@ -183,7 +183,7 @@ export async function PATCH(
 
   const { id: companyId } = await params;
 
-  // Only OWNER can change roles
+  // Only OWNER can change roles or status
   try {
     await assertWorkspaceMembership({
       userId: session.user.id,
@@ -192,28 +192,42 @@ export async function PATCH(
     });
   } catch {
     return NextResponse.json(
-      { error: "Solo el Owner puede cambiar roles" },
+      { error: "Solo el Owner puede modificar miembros" },
       { status: 403 },
     );
   }
 
-  let parsed: { userId: string; role: WorkspaceRole };
+  let body: Record<string, unknown>;
   try {
-    const body = await request.json();
-    parsed = changeRoleSchema.parse(body);
+    body = await request.json();
   } catch {
     return NextResponse.json(
-      { error: "Se requiere userId y role válidos" },
+      { error: "Cuerpo JSON inválido" },
       { status: 400 },
     );
   }
+
+  // Try role change first, then status toggle
+  const roleResult = changeRoleSchema.safeParse(body);
+  const statusResult = toggleStatusSchema.safeParse(body);
+
+  if (!roleResult.success && !statusResult.success) {
+    return NextResponse.json(
+      { error: "Se requiere userId con role o status válidos" },
+      { status: 400 },
+    );
+  }
+
+  // Determine what to update
+  const targetUserId = roleResult.success ? roleResult.data.userId : statusResult.data!.userId;
+  const isRoleChange = roleResult.success;
 
   // Resolve the current membership of the target user
   const targetMembership = await prisma.companyMembership.findUnique({
     where: {
       companyId_userId: {
         companyId,
-        userId: parsed.userId,
+        userId: targetUserId,
       },
     },
     select: { id: true, role: true, status: true },
@@ -226,8 +240,8 @@ export async function PATCH(
     );
   }
 
-  // Cannot demote the last OWNER
-  if (targetMembership.role === "OWNER" && parsed.role !== "OWNER") {
+  // Cannot demote the last OWNER (only for role changes)
+  if (isRoleChange && targetMembership.role === "OWNER" && roleResult.data!.role !== "OWNER") {
     const ownerCount = await prisma.companyMembership.count({
       where: {
         companyId,
@@ -244,17 +258,37 @@ export async function PATCH(
     }
   }
 
-  // Cannot change your own role
-  if (parsed.userId === session.user.id) {
+  // Cannot change your own role or status
+  if (targetUserId === session.user.id) {
     return NextResponse.json(
-      { error: "No puedes cambiar tu propio rol" },
+      { error: isRoleChange ? "No puedes cambiar tu propio rol" : "No puedes cambiar tu propio estado" },
       { status: 400 },
     );
   }
 
+  // Cannot toggle status on an OWNER (role change handles OWNER demotion separately)
+  if (!isRoleChange && targetMembership.role === "OWNER") {
+    return NextResponse.json(
+      { error: "No puedes suspender al Owner del workspace" },
+      { status: 403 },
+    );
+  }
+
+  // Cannot suspend a member with INVITED status
+  if (!isRoleChange && targetMembership.status === "INVITED") {
+    return NextResponse.json(
+      { error: "No puedes suspender a un miembro con invitación pendiente" },
+      { status: 400 },
+    );
+  }
+
+  const updateData = isRoleChange
+    ? { role: roleResult.data!.role }
+    : { status: statusResult.data!.status };
+
   const updated = await prisma.companyMembership.update({
     where: { id: targetMembership.id },
-    data: { role: parsed.role },
+    data: updateData,
     include: {
       user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       invitedBy: { select: { id: true, name: true } },

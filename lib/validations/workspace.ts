@@ -37,6 +37,11 @@ export const removeMemberSchema = z.object({
   userId: z.string().min(1, "userId requerido"),
 });
 
+export const toggleStatusSchema = z.object({
+  userId: z.string().min(1, "userId requerido"),
+  status: z.enum(["ACTIVE", "SUSPENDED"]),
+});
+
 export type WorkspaceMembershipInput = z.infer<typeof workspaceMembershipSchema>;
 export type ActiveWorkspaceSelection = z.infer<typeof activeWorkspaceSelectionSchema>;
 export type InviteWorkspaceMemberInput = z.infer<typeof inviteWorkspaceMemberSchema>;

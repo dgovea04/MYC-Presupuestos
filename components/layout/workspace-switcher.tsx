@@ -54,6 +54,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [confirmRemoveUserId, setConfirmRemoveUserId] = useState<string | null>(null);
   const [memberActionError, setMemberActionError] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -104,6 +105,32 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
       });
     }
   }, []);
+
+  const handleToggleStatus = useCallback(async (userId: string, newStatus: "ACTIVE" | "SUSPENDED") => {
+    setChangingRoleId(userId);
+    setOpenDropdownId(null);
+    setMemberActionError("");
+    try {
+      const res = await fetch(`/api/workspaces/${activeWorkspaceId}/members`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, status: newStatus }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, status: data.member.status } : m)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMemberActionError(data.error || "Error al cambiar estado");
+        setTimeout(() => setMemberActionError(""), 4000);
+      }
+    } catch {
+      setMemberActionError("Error de conexión");
+      setTimeout(() => setMemberActionError(""), 4000);
+    } finally {
+      setChangingRoleId(null);
+    }
+  }, [activeWorkspaceId]);
 
   const handleChangeRole = useCallback(async (userId: string, role: WorkspaceRole) => {
     setChangingRoleId(userId);
@@ -163,6 +190,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
       const dropdown = dropdownRefs.current.get(openDropdownId);
       if (dropdown && !dropdown.contains(e.target as Node)) {
         setOpenDropdownId(null);
+        setConfirmRemoveUserId(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -457,6 +485,11 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                                 Pendiente
                               </span>
                             )}
+                            {member.status === "SUSPENDED" && (
+                              <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                Suspendido
+                              </span>
+                            )}
                           </div>
                           <p className="truncate text-[10px] text-[var(--app-text-muted)]">
                             {member.userEmail}
@@ -470,6 +503,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                               disabled={isBusy}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setConfirmRemoveUserId(null);
                                 setOpenDropdownId(openDropdownId === member.id ? null : member.id);
                               }}
                               className="inline-flex items-center justify-center h-6 w-6 rounded-md text-[var(--app-text-muted)] hover:bg-[var(--app-bg-hover)] hover:text-[#0F172A] disabled:opacity-50 transition-colors"
@@ -510,15 +544,67 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                                 <div className="border-t border-[var(--app-border)] my-1" />
                                 <button
                                   type="button"
-                                  disabled={isBusy}
+                                  disabled={isBusy || member.status === "INVITED"}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleRemoveMember(member.userId);
+                                    handleToggleStatus(
+                                      member.userId,
+                                      member.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
+                                    );
                                   }}
-                                  className="w-full text-left px-2.5 py-1 text-[11px] text-[#EF4444] hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  className={`w-full text-left px-2.5 py-1 text-[11px] transition-colors disabled:opacity-50 ${
+                                    member.status === "SUSPENDED"
+                                      ? "text-[#10B981] hover:bg-green-50"
+                                      : "text-amber-600 hover:bg-amber-50"
+                                  }`}
                                 >
-                                  {removingId === member.userId ? "Removiendo..." : "Remover miembro"}
+                                  {member.status === "SUSPENDED" ? "Reactivar miembro" : "Suspender miembro"}
                                 </button>
+                                <div className="border-t border-[var(--app-border)] my-1" />
+                                {confirmRemoveUserId === member.userId ? (
+                                  <div className="px-2.5 py-1.5">
+                                    <p className="text-[10px] text-[var(--app-text-muted)] leading-tight mb-2">
+                                      ¿Estás seguro de remover a <span className="font-medium text-[#0F172A]">{member.userName}</span>?
+                                    </p>
+                                    <div className="flex gap-1.5">
+                                      <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setConfirmRemoveUserId(null);
+                                        }}
+                                        className="flex-1 rounded-md border border-[var(--app-border)] px-2 py-1 text-[10px] font-medium text-[var(--app-text-muted)] hover:bg-[var(--app-bg-hover)] disabled:opacity-50 transition-colors"
+                                      >
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setConfirmRemoveUserId(null);
+                                          handleRemoveMember(member.userId);
+                                        }}
+                                        className="flex-1 rounded-md bg-[#EF4444] px-2 py-1 text-[10px] font-medium text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+                                      >
+                                        {removingId === member.userId ? "..." : "Remover"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setConfirmRemoveUserId(member.userId);
+                                    }}
+                                    className="w-full text-left px-2.5 py-1 text-[11px] text-[#EF4444] hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  >
+                                    Remover miembro
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>

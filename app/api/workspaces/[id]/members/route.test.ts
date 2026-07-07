@@ -661,6 +661,144 @@ describe("PATCH /api/workspaces/[id]/members", () => {
       }),
     });
   });
+
+  // Status toggle tests
+  it("returns 400 when trying to change own status", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-1", role: "OWNER", status: "ACTIVE" }); // target (self)
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-1", status: "SUSPENDED" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("propio estado");
+  });
+
+  it("returns 403 when trying to suspend an OWNER", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "OWNER", status: "ACTIVE" }); // target
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", status: "SUSPENDED" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("suspender al Owner");
+  });
+
+  it("returns 400 when trying to suspend INVITED member", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-3", role: "EDITOR", status: "INVITED" }); // target
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-3", status: "SUSPENDED" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("invitación pendiente");
+  });
+
+  it("successfully suspends an ACTIVE member", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "EDITOR", status: "ACTIVE" }); // target
+
+    mockPrisma.companyMembership.update.mockResolvedValueOnce({
+      id: "mem-2",
+      userId: "user-2",
+      role: "EDITOR",
+      status: "SUSPENDED",
+      invitedById: "user-1",
+      joinedAt: new Date("2026-07-07"),
+      user: { id: "user-2", name: "User 2", email: "user2@test.com", avatarUrl: null },
+      invitedBy: { id: "user-1", name: "Owner" },
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", status: "SUSPENDED" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.member.status).toBe("SUSPENDED");
+    expect(mockPrisma.companyMembership.update).toHaveBeenCalledWith({
+      where: { id: "mem-2" },
+      data: { status: "SUSPENDED" },
+      include: expect.any(Object),
+    });
+  });
+
+  it("successfully reactivates a SUSPENDED member", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "EDITOR", status: "SUSPENDED" }); // target
+
+    mockPrisma.companyMembership.update.mockResolvedValueOnce({
+      id: "mem-2",
+      userId: "user-2",
+      role: "EDITOR",
+      status: "ACTIVE",
+      invitedById: "user-1",
+      joinedAt: new Date("2026-07-07"),
+      user: { id: "user-2", name: "User 2", email: "user2@test.com", avatarUrl: null },
+      invitedBy: { id: "user-1", name: "Owner" },
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", status: "ACTIVE" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.member.status).toBe("ACTIVE");
+    expect(mockPrisma.companyMembership.update).toHaveBeenCalledWith({
+      where: { id: "mem-2" },
+      data: { status: "ACTIVE" },
+      include: expect.any(Object),
+    });
+  });
 });
 
 describe("DELETE /api/workspaces/[id]/members", () => {
