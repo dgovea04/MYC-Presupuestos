@@ -17,6 +17,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
 import { getBudgetById, getProjectSubBudgetDetails, getProjectSubBudgetSummaries } from "@/lib/data/budgets";
 import { BudgetFlowWrapper } from "@/components/budget/budget-flow-wrapper";
+import { BudgetCollaborationWrapper } from "@/components/budget/budget-collaboration-wrapper";
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getProjectOverviewById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
@@ -96,6 +97,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           viewSummary: `Presupuesto general ${budget.name} del proyecto ${project.name}.`,
         }}
       >
+        <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name}>
         <div className="space-y-5">
           <Card className="theme-surface-card rounded-2xl">
             <CardHeader className="theme-surface-card-gradient gap-4 rounded-2xl">
@@ -258,6 +260,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
             subBudgetDetails={subBudgetDetails}
           />
         </div>
+        </BudgetCollaborationWrapper>
       </AppShell>
     );
   }
@@ -280,6 +283,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         viewSummary: `Sub presupuesto ${budget.name} del proyecto ${project.name}.`,
       }}
     >
+      <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name}>
       <BudgetFlowWrapper
         budget={budget}
         projectName={project.name}
@@ -300,6 +304,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           source: resource.source ?? undefined,
         }))}
       />
+      </BudgetCollaborationWrapper>
     </AppShell>
   );
 }

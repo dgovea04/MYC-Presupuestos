@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useEditSession } from "@/hooks/use-edit-session";
@@ -349,6 +349,42 @@ describe("useEditSession", () => {
 
       // Should still clear the session state even if DELETE fails
       expect(result.current.activeSession).toBeNull();
+    });
+  });
+
+  describe("stale-closure cleanup", () => {
+    it("finishCurrentSession cleans up even when called from a stale closure", async () => {
+      // Simulates the unmount scenario: a useEffect cleanup captures
+      // finishCurrentSession before the session is created, but it must
+      // still clean up correctly using the ref-based approach.
+      resolveFetchOk({ editSession: { id: "session-1" } });
+
+      const { result } = renderHook(() => useEditSession({ budgetId: "budget-1" }));
+
+      // Capture finishCurrentSession BEFORE starting a session (stale closure)
+      const cleanupFromStaleClosure = result.current.finishCurrentSession;
+
+      await act(async () => {
+        await result.current.startEditSession("APU", "item-1", "apu-editor");
+      });
+
+      expect(result.current.activeSession).not.toBeNull();
+
+      // Now the activeSession state is set, but cleanupFromStaleClosure
+      // was captured when activeSession was null. The ref-based fix
+      // should still allow it to DELETE the session.
+      resolveFetchOk({}); // DELETE response
+
+      vi.mocked(fetch).mockClear();
+
+      await act(async () => {
+        await cleanupFromStaleClosure();
+      });
+
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/budgets/budget-1/collaboration/edit-sessions/session-1",
+        expect.objectContaining({ method: "DELETE" }),
+      );
     });
   });
 

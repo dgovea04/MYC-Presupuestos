@@ -222,9 +222,7 @@ export function MetradosDashboard({
     return () => {
       finishCurrentSession();
     };
-  // budgetId is tracked directly (not Boolean-wrapped) so edits restart when budget changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSheet?.id, budgetId]);
+  }, [selectedSheet?.id, budgetId, startEditSession, finishCurrentSession]);
 
   const filteredBudgets = budgets.filter((budget) => budget.projectId === projectId);
   const filteredPartidas = partidas.filter((partida) => partida.budgetId === budgetId);

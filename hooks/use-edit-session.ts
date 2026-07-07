@@ -17,15 +17,17 @@ interface EditSessionInfo {
 
 export function useEditSession({ budgetId }: UseEditSessionOptions) {
   const [activeSession, setActiveSession] = useState<EditSessionInfo | null>(null);
+  const activeSessionRef = useRef<EditSessionInfo | null>(null);
   const heartbeatRef = useRef<number | null>(null);
 
   const startEditSession = useCallback(
     async (entityType: string, entityId: string, field: string) => {
-      // Finish any existing session first
-      if (activeSession) {
+      // Finish any existing session first (read from ref to avoid stale closure)
+      const currentSession = activeSessionRef.current;
+      if (currentSession) {
         try {
           await fetch(
-            `/api/budgets/${budgetId}/collaboration/edit-sessions/${activeSession.sessionId}`,
+            `/api/budgets/${budgetId}/collaboration/edit-sessions/${currentSession.sessionId}`,
             { method: "DELETE" },
           );
         } catch {
@@ -57,6 +59,7 @@ export function useEditSession({ budgetId }: UseEditSessionOptions) {
         };
 
         setActiveSession(sessionInfo);
+        activeSessionRef.current = sessionInfo;
 
         // Start heartbeat
         if (heartbeatRef.current) {
@@ -73,15 +76,17 @@ export function useEditSession({ budgetId }: UseEditSessionOptions) {
         // non-critical
       }
     },
-    [budgetId, activeSession],
+    [budgetId],
   );
 
   const finishCurrentSession = useCallback(async () => {
-    if (!activeSession) return;
+    // Read from ref to avoid stale closure — always sees the latest session
+    const currentSession = activeSessionRef.current;
+    if (!currentSession) return;
 
     try {
       await fetch(
-        `/api/budgets/${budgetId}/collaboration/edit-sessions/${activeSession.sessionId}`,
+        `/api/budgets/${budgetId}/collaboration/edit-sessions/${currentSession.sessionId}`,
         { method: "DELETE" },
       );
     } catch {
@@ -89,12 +94,13 @@ export function useEditSession({ budgetId }: UseEditSessionOptions) {
     }
 
     setActiveSession(null);
+    activeSessionRef.current = null;
 
     if (heartbeatRef.current) {
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
-  }, [activeSession, budgetId]);
+  }, [budgetId]);
 
   return {
     activeSession,

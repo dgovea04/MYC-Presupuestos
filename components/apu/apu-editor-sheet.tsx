@@ -117,9 +117,7 @@ export function ApuEditorSheet({
     return () => {
       finishCurrentSession();
     };
-  // Only run when open/close state changes or item id changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, currentItemId, Boolean(budgetId)]);
+  }, [open, currentItemId, budgetId, startEditSession, finishCurrentSession]);
   const indexedResourcesCatalog = useMemo(
     () =>
       resourcesCatalog.map((resource) => ({
