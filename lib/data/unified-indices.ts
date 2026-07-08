@@ -63,7 +63,12 @@ async function getVisibleResourceIUsByUser(userId: string) {
         { companyId: null },
         {
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
       ],

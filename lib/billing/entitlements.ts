@@ -103,7 +103,12 @@ type EntitlementPrismaClient = {
         kind: "GENERAL";
         project: {
           company: {
-            userId: string;
+            memberships: {
+              some: {
+                userId: string;
+                status: "ACTIVE";
+              };
+            };
           };
         };
       };
@@ -225,10 +230,14 @@ export async function getEffectiveUserLicense({
     prisma.budget.count({
       where: {
         kind: "GENERAL",
-        project: {
-          company: {
-            userId,
-          },
+        project: {            company: {
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
         },
       },
     }),

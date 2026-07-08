@@ -178,7 +178,12 @@ describe("Khipu suggestion feedback service", () => {
           userId: "user-1",
           project: {
             company: {
-              userId: "user-1",
+              memberships: {
+                some: {
+                  userId: "user-1",
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         },
@@ -262,7 +267,12 @@ describe("Khipu suggestion feedback service", () => {
           userId: "user-1",
           project: {
             company: {
-              userId: "user-1",
+              memberships: {
+                some: {
+                  userId: "user-1",
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         },

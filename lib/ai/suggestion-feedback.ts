@@ -159,10 +159,14 @@ export async function getLatestAiSuggestionFeedbackByHistoryEntry({
       historyEntry: {
         projectId,
         userId,
-        project: {
-          company: {
-            userId,
-          },
+        project: {            company: {
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
         },
       },
     },
@@ -185,10 +189,14 @@ export async function getAiSuggestionFeedbackSummary({
       historyEntry: {
         projectId,
         userId,
-        project: {
-          company: {
-            userId,
-          },
+        project: {            company: {
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
         },
       },
     },
@@ -208,10 +216,14 @@ export async function getUserAiFeedbackSummary({
       userId,
       historyEntry: {
         userId,
-        project: {
-          company: {
-            userId,
-          },
+        project: {            company: {
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
         },
       },
     },
@@ -231,10 +243,14 @@ export async function getUserFeedbackTrends({
       userId,
       historyEntry: {
         userId,
-        project: {
-          company: {
-            userId,
-          },
+        project: {            company: {
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
         },
       },
     },

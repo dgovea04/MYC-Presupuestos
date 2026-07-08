@@ -73,7 +73,12 @@ describe("getUnifiedIndexRelationRows", () => {
           { companyId: null },
           {
             company: {
-              userId: "user-1",
+              memberships: {
+                some: {
+                  userId: "user-1",
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         ],

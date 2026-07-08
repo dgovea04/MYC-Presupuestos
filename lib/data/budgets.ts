@@ -39,7 +39,7 @@ import { getUserSettings } from "@/lib/data/settings";
 export const BUDGETS_LIST_CACHE_TAG = "budgets-list";
 export const BUDGET_DETAIL_CACHE_TAG = "budget-detail";
 
-const isTestEnvironment = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
 
 function normalizeBudgetListEntry<T extends Awaited<ReturnType<typeof prisma.budget.findMany>>[number]>(budget: T): T {
   return {
@@ -60,7 +60,12 @@ const _getBudgetsByUser = async (userId: string) => {
       kind: "GENERAL",
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -77,7 +82,7 @@ const _getBudgetsByUser = async (userId: string) => {
 
 export const getBudgetsByUser = cache(
   async (userId: string) => {
-    if (isTestEnvironment) {
+    if (shouldBypassPersistentCache) {
       return _getBudgetsByUser(userId);
     }
 
@@ -96,7 +101,12 @@ export async function getProjectSubBudgetSummaries(projectId: string, userId: st
       kind: "SUB_BUDGET",
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -132,7 +142,12 @@ export async function getProjectSubBudgetDetails(projectId: string, userId: stri
       kind: "SUB_BUDGET",
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -176,7 +191,12 @@ const _getBudgetById = async (id: string, userId: string) => {
       id,
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -219,7 +239,7 @@ const _getBudgetById = async (id: string, userId: string) => {
 
 export const getBudgetById = cache(
   async (id: string, userId: string) => {
-    if (isTestEnvironment) {
+    if (shouldBypassPersistentCache) {
       return _getBudgetById(id, userId);
     }
 
@@ -237,7 +257,12 @@ export async function getBudgetHeaderById(id: string, userId: string) {
       id,
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -401,7 +426,12 @@ export async function saveBudgetFooterStructure(
         budget: {
           project: {
             company: {
-              userId,
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         },
@@ -472,7 +502,12 @@ export async function saveBudgetGeneralExpensesStructure(
           budget: {
             project: {
               company: {
-                userId,
+                memberships: {
+                  some: {
+                    userId,
+                    status: "ACTIVE",
+                  },
+                },
               },
             },
           },
@@ -573,7 +608,12 @@ export async function createBudgetGeneralExpenseTitle(
       budget: {
         project: {
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
       },
@@ -625,7 +665,12 @@ export async function updateBudgetGeneralExpenseTitle(
         budget: {
           project: {
             company: {
-              userId,
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         },
@@ -673,7 +718,12 @@ export async function deleteBudgetGeneralExpenseTitle(
         budget: {
           project: {
             company: {
-              userId,
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         },
@@ -711,7 +761,12 @@ export async function createBudgetGeneralExpenseItem(
         budget: {
           project: {
             company: {
-              userId,
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         },
@@ -766,7 +821,12 @@ export async function updateBudgetGeneralExpenseItem(
           budget: {
             project: {
               company: {
-                userId,
+                memberships: {
+                  some: {
+                    userId,
+                    status: "ACTIVE",
+                  },
+                },
               },
             },
           },
@@ -812,7 +872,12 @@ export async function deleteBudgetGeneralExpenseItem(
           budget: {
             project: {
               company: {
-                userId,
+                memberships: {
+                  some: {
+                    userId,
+                    status: "ACTIVE",
+                  },
+                },
               },
             },
           },
@@ -839,7 +904,12 @@ export async function getBudgetLiveUpdateSummaries(id: string, userId: string): 
       id,
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -858,7 +928,12 @@ export async function getBudgetLiveUpdateSummaries(id: string, userId: string): 
       id: { in: ids },
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -905,7 +980,12 @@ export async function createBudget(userIdOrInput: string | BudgetInput, input?: 
       where: {
         id: data.projectId,
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
       select: { id: true },
@@ -949,7 +1029,12 @@ export async function deleteBudget(id: string, userId: string) {
       id,
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -1007,7 +1092,12 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
         id,
         project: {
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
       },
@@ -1582,7 +1672,12 @@ async function resolvePersistableApuResourceId(
           { companyId: null },
           {
             company: {
-              userId,
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         ],
@@ -1605,7 +1700,12 @@ async function resolvePersistableApuResourceId(
           { companyId: null },
           {
             company: {
-              userId,
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         ],
@@ -1635,7 +1735,12 @@ async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
       kind: "GENERAL",
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },

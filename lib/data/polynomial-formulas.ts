@@ -789,10 +789,14 @@ async function _getBudgetPolynomialFormulaSectionData(
       kind: {
         in: ["GENERAL", "SUB_BUDGET"],
       },
-      project: {
-        company: {
-          userId,
-        },
+      project: {              company: {
+                memberships: {
+                  some: {
+                    userId,
+                    status: "ACTIVE",
+                  },
+                },
+              },
       },
     },
     select: {
@@ -813,7 +817,12 @@ async function _getBudgetPolynomialFormulaSectionData(
       budget: {
         project: {
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
       },
@@ -883,10 +892,14 @@ async function _getBudgetPolynomialFormulaSectionsData(
       kind: {
         in: ["GENERAL", "SUB_BUDGET"],
       },
-      project: {
-        company: {
-          userId,
-        },
+      project: {              company: {
+                memberships: {
+                  some: {
+                    userId,
+                    status: "ACTIVE",
+                  },
+                },
+              },
       },
     },
     select: {
@@ -937,7 +950,12 @@ async function _getBudgetPolynomialFormulaSectionsData(
       budget: {
         project: {
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
       },
@@ -1161,7 +1179,12 @@ export async function savePolynomialFormula(
       budget: {
         project: {
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
       },
@@ -1490,10 +1513,14 @@ async function loadBudgetForFormulaGeneration(budgetId: string, userId: string) 
       kind: {
         in: ["GENERAL", "SUB_BUDGET"],
       },
-      project: {
-        company: {
-          userId,
-        },
+      project: {              company: {
+                memberships: {
+                  some: {
+                    userId,
+                    status: "ACTIVE",
+                  },
+                },
+              },
       },
     },
     select: {
@@ -1635,7 +1662,12 @@ async function getAccessibleBudgetFormula(formulaId: string, userId: string) {
       budget: {
         project: {
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
       },

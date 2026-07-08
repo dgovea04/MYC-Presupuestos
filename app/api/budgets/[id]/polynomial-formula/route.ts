@@ -131,10 +131,14 @@ async function getPolynomialFormulaActivityHref(budgetId: string, userId: string
   const budget = await prisma.budget.findFirst({
     where: {
       id: budgetId,
-      project: {
-        company: {
-          userId,
-        },
+      project: {            company: {
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
       },
     },
     select: {
@@ -152,10 +156,14 @@ async function revalidatePolynomialFormulaCaches(budgetId: string, userId: strin
   const budget = await prisma.budget.findFirst({
     where: {
       id: budgetId,
-      project: {
-        company: {
-          userId,
-        },
+      project: {            company: {
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
       },
     },
     select: {

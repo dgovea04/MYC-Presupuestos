@@ -58,10 +58,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       where: {
         id,
         budget: {
-          project: {
-            company: {
-              userId: session.user.id,
-            },
+          project: {              company: {
+                memberships: {
+                  some: {
+                    userId: session.user.id,
+                    status: "ACTIVE",
+                  },
+                },
+              },
           },
         },
       },

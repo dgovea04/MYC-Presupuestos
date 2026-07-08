@@ -9,10 +9,14 @@ export async function getProjectContextSummary({
 }): Promise<string> {
   const project = await prisma.project.findFirst({
     where: {
-      id: projectId,
-      company: {
-        userId,
-      },
+      id: projectId,        company: {
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
+        },
     },
     select: {
       name: true,

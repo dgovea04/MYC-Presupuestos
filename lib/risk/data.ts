@@ -265,7 +265,12 @@ async function findAccessibleBudgetWithItems(budgetId: string, userId: string) {
       id: budgetId,
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },
@@ -300,7 +305,12 @@ async function findAccessibleBudgetWithItems(budgetId: string, userId: string) {
       projectId: budget.projectId,
       project: {
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
     },

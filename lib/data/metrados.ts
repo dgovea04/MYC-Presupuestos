@@ -344,10 +344,14 @@ export async function listMetradoSheetsByUser(userId: string): Promise<MetradoSh
 
 export async function listMetradoCreationOptions(userId: string): Promise<MetradoCreationOptions> {
   const projects = await prisma.project.findMany({
-    where: {
-      company: {
-        userId,
-      },
+    where: {        company: {
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
+        },
     },
     include: {
       budgets: {

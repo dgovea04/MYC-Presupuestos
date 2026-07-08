@@ -466,10 +466,14 @@ async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
     where: {
       id: budgetId,
       kind: "GENERAL",
-      project: {
-        company: {
-          userId,
-        },
+      project: {          company: {
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
+          },
       },
     },
     select: {

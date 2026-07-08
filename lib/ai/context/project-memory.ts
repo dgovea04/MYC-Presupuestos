@@ -97,10 +97,14 @@ export async function recordProjectAiMemory({
 function findOwnedProject(projectId: string, userId: string) {
   return prisma.project.findFirst({
     where: {
-      id: projectId,
-      company: {
-        userId,
-      },
+      id: projectId,        company: {
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
+        },
     },
     select: {
       id: true,
