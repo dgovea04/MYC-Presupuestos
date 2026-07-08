@@ -26,6 +26,9 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Scroll detection is handled directly by FloatingAiAssistant
+  // via the data-comments-scroll attribute on the list container below
+
   const fetchComments = useCallback(async () => {
     setLoading(true);
     try {
@@ -145,7 +148,7 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
       </div>
 
       {/* Comments list */}
-      <div ref={listRef} className="flex-1 overflow-auto px-4 py-3">
+      <div ref={listRef} data-comments-scroll className="flex-1 overflow-auto px-4 py-3">
         {loading ? (
           <p className="py-6 text-center text-xs text-[var(--app-text-muted)]">
             Cargando comentarios...
@@ -170,7 +173,7 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
       </div>
 
       {/* Input */}
-      <div className="shrink-0 border-t border-[var(--app-border)] p-3">
+      <div className="relative z-[70] shrink-0 border-t border-[var(--app-border)] bg-[var(--app-surface)] p-3">
         {replyToId ? (
           <div className="mb-2 flex items-center gap-1 text-[11px] text-[var(--app-text-muted)]">
             <Reply className="h-3 w-3" />

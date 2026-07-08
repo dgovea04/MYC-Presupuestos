@@ -51,6 +51,69 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
     height: khipuSettings.floatingKhipuHeight,
   });
   const [expanded, setExpanded] = useState(false);
+  const [hiddenByScroll, setHiddenByScroll] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollAwayOffset, setScrollAwayOffset] = useState(0);
+
+  // Directly observe the comments scroll container in the DOM
+  // MutationObserver stays active to handle open/close cycles
+  useEffect(() => {
+    let attached = false;
+    let currentContainer: HTMLElement | null = null;
+    let detach: (() => void) | null = null;
+
+    function attachToContainer(container: HTMLElement) {
+      const onScroll = () => {
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        setHiddenByScroll(distanceFromBottom < 100);
+      };
+      onScroll();
+      container.addEventListener("scroll", onScroll, { passive: true });
+      currentContainer = container;
+      attached = true;
+
+      return () => {
+        container.removeEventListener("scroll", onScroll);
+        setHiddenByScroll(false);
+        currentContainer = null;
+        attached = false;
+      };
+    }
+
+    // Check if container already exists
+    const existing = document.querySelector<HTMLElement>("[data-comments-scroll]");
+    if (existing) {
+      detach = attachToContainer(existing);
+    }
+
+    // Watch for element added/removed (sheet open/close)
+    const observer = new MutationObserver(() => {
+      const el = document.querySelector<HTMLElement>("[data-comments-scroll]");
+      if (el && el !== currentContainer) {
+        if (detach) detach();
+        detach = attachToContainer(el);
+      } else if (!el && attached) {
+        setHiddenByScroll(false);
+        attached = false;
+        currentContainer = null;
+        detach = null;
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      if (detach) detach();
+    };
+  }, []);
+
+  // When open/expanded changes, re-measure the container after layout settles
+  useEffect(() => {
+    if (containerRef.current) {
+      setScrollAwayOffset(containerRef.current.offsetHeight + 40);
+    }
+  }, [open, expanded]);
+
   const [showHistory, setShowHistory] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
   const [theme, setTheme] = useState<FloatingKhipuTheme>(() => readStoredTheme() ?? khipuSettings.floatingKhipuTheme);
@@ -114,15 +177,31 @@ export function FloatingAiAssistant({ open, onOpenChange }: FloatingAiAssistantP
     ? { duration: 0 }
     : { type: "spring" as const, stiffness: 400, damping: 25 };
 
-  const positionStyle = POSITION_STYLE[khipuSettings.floatingKhipuPosition];
-  const containerStyle = expanded
+  const position = khipuSettings.floatingKhipuPosition;
+  const isTopPosition = position === "top-left" || position === "top-right";
+
+  const positionStyle = POSITION_STYLE[position];
+  const baseStyle: React.CSSProperties = expanded
     ? { position: "fixed" as const, inset: "1rem" }
     : { position: "fixed" as const, ...positionStyle };
+  const scrollTransform = hiddenByScroll
+    ? isTopPosition
+      ? `translateY(${-scrollAwayOffset}px)`
+      : `translateY(${scrollAwayOffset}px)`
+    : 'translateY(0px)';
+  const containerStyle: React.CSSProperties = {
+    ...baseStyle,
+    transform: scrollTransform,
+    transition: prefersReducedMotion
+      ? 'none'
+      : 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+  };
   const fontSizeClass = FONT_SIZE_MAP[khipuSettings.floatingKhipuFontSize];
   const isDark = theme === "dark";
 
   return (
     <div
+      ref={containerRef}
       data-khipu-panel
       className={cn("z-[60] flex flex-col gap-3", expanded ? "items-stretch" : "items-end")}
       style={containerStyle}
