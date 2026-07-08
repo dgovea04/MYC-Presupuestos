@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  assertWorkspaceMembership: vi.fn(),
   assertWithinPlanLimit: vi.fn(),
-  companyFindFirst: vi.fn(),
   projectCreate: vi.fn(),
   resourceFindMany: vi.fn(),
   resourceCreate: vi.fn(),
@@ -16,11 +16,12 @@ const mocks = vi.hoisted(() => ({
   getUserSettings: vi.fn(),
 }));
 
+vi.mock("@/lib/workspace/access", () => ({
+  assertWorkspaceMembership: mocks.assertWorkspaceMembership,
+}));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    company: {
-      findFirst: mocks.companyFindFirst,
-    },
     $transaction: mocks.transaction,
   },
 }));
@@ -135,7 +136,7 @@ const snapshot: S10ExportSnapshot = {
 describe("importS10SnapshotToMyc", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.companyFindFirst.mockResolvedValue({ id: "company-1" });
+    mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
     mocks.assertWithinPlanLimit.mockResolvedValue(undefined);
     mocks.getUserSettings.mockResolvedValue({
       defaultIgvRate: 0.18,
@@ -180,11 +181,6 @@ describe("importS10SnapshotToMyc", () => {
     const result = await importS10SnapshotToMyc("user-1", snapshot, {
       budgetCode: "0302044",
       companyId: "company-1",
-    });
-
-    expect(mocks.companyFindFirst).toHaveBeenCalledWith({
-      where: { id: "company-1", userId: "user-1" },
-      select: { id: true },
     });
     expect(mocks.assertWithinPlanLimit).toHaveBeenCalledWith({ userId: "user-1", resource: "projects" });
     expect(mocks.assertWithinPlanLimit).toHaveBeenCalledWith({ userId: "user-1", resource: "budgets" });
@@ -270,13 +266,13 @@ describe("importS10SnapshotToMyc", () => {
     });
   });
 
-  it("rejects imports for companies the user does not own", async () => {
-    mocks.companyFindFirst.mockResolvedValue(null);
+  it("rejects imports when user lacks workspace membership", async () => {
+    mocks.assertWorkspaceMembership.mockRejectedValue(new Error("No tienes acceso a este workspace"));
 
     await expect(
       importS10SnapshotToMyc("user-1", snapshot, {
         companyId: "company-2",
       }),
-    ).rejects.toThrow("No puedes importar S10 en una empresa que no te pertenece");
+    ).rejects.toThrow("No tienes acceso a este workspace");
   });
 });

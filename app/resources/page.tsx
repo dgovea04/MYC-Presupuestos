@@ -4,6 +4,7 @@ import { Wrench } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getResourcesByUser } from "@/lib/data/resources";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ResourcesPageContent } from "@/components/resources/resources-page-content";
 import { getUserCompanies } from "@/lib/data/projects";
@@ -13,8 +14,9 @@ import { getExportDefinition } from "@/lib/exports/definitions";
 
 export default async function ResourcesPage() {
   const session = await getAuthSession();
+  const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
   const [resources, companies, unifiedIndexDictionaryRows, unifiedIndexRows] = await Promise.all([
-    getResourcesByUser(session!.user.id),
+    getResourcesByUser(session!.user.id, activeWorkspaceId),
     getUserCompanies(session!.user.id),
     getUnifiedIndexDictionaryRows(),
     getUnifiedIndexRelationRows(session!.user.id),

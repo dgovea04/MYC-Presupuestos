@@ -69,7 +69,7 @@ type DashboardBudgetTemplateRow = {
   payload: unknown;
 };
 
-async function _getDashboardStats(userId: string) {
+async function _getDashboardStats(userId: string, activeCompanyId?: string | null) {
   const [
     companiesCount,
     projects,
@@ -79,13 +79,19 @@ async function _getDashboardStats(userId: string) {
     templateBudgetApplicationCount,
     templateMaintenanceEventCount,
   ] = await Promise.all([
-    prisma.company.count({
-      where: { userId },
+    prisma.companyMembership.count({
+      where: { userId, status: "ACTIVE" },
     }),
     prisma.project.findMany({
       where: {
+        companyId: activeCompanyId ?? undefined,
         company: {
-          userId,
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
         },
       },
       select: {
@@ -269,10 +275,12 @@ async function _getDashboardStats(userId: string) {
 }
 
 const getCachedDashboardStats = cache(
-  async (userId: string) => {
+  async (userId: string, activeCompanyId?: string | null) => {
     const result = await unstable_cache(
-      async (uid: string) => _getDashboardStats(uid),
-      ["dashboard-stats"],
+      async (uid: string) => _getDashboardStats(uid, activeCompanyId),
+      activeCompanyId
+        ? ["dashboard-stats", activeCompanyId]
+        : ["dashboard-stats"],
       { revalidate: 30, tags: ["dashboard-stats"] },
     )(userId);
     return normalizeDashboardDates(result);

@@ -113,6 +113,36 @@ describe("POST /api/projects", () => {
     await expect(response.json()).resolves.toEqual({ error: "No se pudo crear el proyecto" });
   });
 
+  it("returns 400 when workspace membership validation fails", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.createProject.mockRejectedValue(new Error("Workspace no disponible"));
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ companyId: "company-2", name: "Hospital Norte", status: "PLANNING" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Workspace no disponible" });
+  });
+
+  it("returns 400 when user has insufficient role for project creation", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.createProject.mockRejectedValue(new Error("No tienes el rol necesario en este workspace"));
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ companyId: "company-1", name: "Hospital Norte", status: "PLANNING" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "No tienes el rol necesario en este workspace" });
+  });
+
   it("returns the first Zod validation message when project creation payload is invalid", async () => {
     const { ZodError } = await import("zod");
 

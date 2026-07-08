@@ -3,7 +3,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { AIWorkspace } from "@/components/ai/AIWorkspace";
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { getAuthSession } from "@/lib/auth/session";
-import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 
 export default async function AIPage({
@@ -18,7 +19,8 @@ export default async function AIPage({
 
   const resolvedSearchParams = await searchParams;
   const settings = await getUserSettings(session.user.id);
-  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
   if (!hasFeatureAccess(license, "ai.local")) {
     return (
       <AppShell currentUser={session.user} settings={settings}>

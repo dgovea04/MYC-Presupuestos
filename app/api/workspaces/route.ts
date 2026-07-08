@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
-import { listUserWorkspaces, setActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { listUserWorkspaces, setActiveWorkspaceId, WORKSPACE_LIST_CACHE_TAG } from "@/lib/workspace/active-workspace";
 import { activeWorkspaceSelectionSchema } from "@/lib/validations/workspace";
 
 export async function GET() {
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
     const parsed = activeWorkspaceSelectionSchema.parse(body);
 
     await setActiveWorkspaceId(session.user.id, parsed.companyId);
+
+    revalidatePath("/", "layout");
+    revalidateTag(`${WORKSPACE_LIST_CACHE_TAG}-${session.user.id}`, "max");
 
     return NextResponse.json({ ok: true, activeCompanyId: parsed.companyId });
   } catch (error) {

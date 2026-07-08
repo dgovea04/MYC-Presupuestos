@@ -39,6 +39,7 @@ import {
   type DashboardActivityItem,
   type DashboardPendingItem,
 } from "@/lib/data/dashboard";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { DashboardAnalyticsSection } from "@/components/dashboard/dashboard-analytics-section";
 import { DashboardAnalyticsSectionSkeleton } from "@/components/dashboard/dashboard-analytics-section-skeleton";
 import { getProjectStatusLabel } from "@/lib/project-status";
@@ -58,8 +59,9 @@ export default async function DashboardPage({
   }
 
   const resolvedSearchParams = (await searchParams) ?? {};
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
   const [stats, settings] = await Promise.all([
-    getDashboardStats(session.user.id),
+    getDashboardStats(session.user.id, activeWorkspaceId),
     getUserSettings(session.user.id),
   ]);
   const selectedPriority = resolvePendingPriorityFilter(resolvedSearchParams.priority);

@@ -76,7 +76,7 @@ describe("GET /api/workspaces/[id]/members", () => {
     expect(response.status).toBe(403);
   });
 
-  it("returns 403 when user is a VIEWER (insufficient role)", async () => {
+  it("returns members list when user is a VIEWER", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(makeSession());
 
     mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
@@ -84,15 +84,29 @@ describe("GET /api/workspaces/[id]/members", () => {
       status: "ACTIVE",
     });
 
+    mockPrisma.companyMembership.findMany.mockResolvedValueOnce([
+      {
+        id: "mem-1",
+        userId: "user-1",
+        role: "OWNER",
+        status: "ACTIVE",
+        user: { id: "user-1", name: "Owner", email: "owner@test.com", avatarUrl: null },
+        invitedBy: null,
+        joinedAt: new Date("2026-01-01"),
+      },
+    ]);
+
     const response = await GET(
       new Request("http://localhost/api/workspaces/ws-1/members"),
       { params: Promise.resolve({ id: "ws-1" }) },
     );
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.members).toHaveLength(1);
   });
 
-  it("returns 403 when user is an EDITOR (insufficient role)", async () => {
+  it("returns members list when user is an EDITOR", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(makeSession());
 
     mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
@@ -100,12 +114,26 @@ describe("GET /api/workspaces/[id]/members", () => {
       status: "ACTIVE",
     });
 
+    mockPrisma.companyMembership.findMany.mockResolvedValueOnce([
+      {
+        id: "mem-1",
+        userId: "user-1",
+        role: "OWNER",
+        status: "ACTIVE",
+        user: { id: "user-1", name: "Owner", email: "owner@test.com", avatarUrl: null },
+        invitedBy: null,
+        joinedAt: new Date("2026-01-01"),
+      },
+    ]);
+
     const response = await GET(
       new Request("http://localhost/api/workspaces/ws-1/members"),
       { params: Promise.resolve({ id: "ws-1" }) },
     );
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.members).toHaveLength(1);
   });
 
   it("returns 403 when membership status is not ACTIVE", async () => {

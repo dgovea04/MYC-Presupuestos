@@ -6,6 +6,7 @@ import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getResourcesByUser } from "@/lib/data/resources";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { decimalToNumber } from "@/lib/db/serializers";
 
 export default async function PartidasPage({
@@ -16,7 +17,8 @@ export default async function PartidasPage({
   const session = await getAuthSession();
   const resolvedSearchParams = await searchParams;
   const initialFilter = readSearchParam(resolvedSearchParams.q);
-  const [partidas, resources] = await Promise.all([getCatalogPartidas(), getResourcesByUser(session!.user.id)]);
+  const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
+  const [partidas, resources] = await Promise.all([getCatalogPartidas(), getResourcesByUser(session!.user.id, activeWorkspaceId)]);
 
   return (
     <AppShell

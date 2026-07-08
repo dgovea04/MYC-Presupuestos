@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("next/cache", () => ({
+  unstable_cache: <T extends (...args: never[]) => unknown>(fn: T) => fn,
+}));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: mocks.prisma,
 }));

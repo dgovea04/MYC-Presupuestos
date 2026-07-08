@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { parseDelphinDprjToS10Snapshot } from "@/lib/delphin/dprj-import";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
 
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file");
     const companyId = readRequiredFormString(formData, "companyId");
+    await assertWorkspaceMembership({ userId: session.user.id, companyId, minimumRole: "EDITOR" });
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Adjunta un archivo .dprj exportado desde Delphin Express." }, { status: 400 });

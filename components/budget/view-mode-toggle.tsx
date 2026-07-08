@@ -10,7 +10,7 @@ export function ViewModeToggle() {
   return (
     <div
       aria-label="Selector de modo de vista"
-      className="view-mode-toggle inline-flex items-center rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] p-1 shadow-sm transition hover:border-[var(--app-border)]"
+      className="view-mode-toggle inline-flex items-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 h-9"
       role="group"
     >
       <Button

@@ -5,7 +5,8 @@ import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { AppShell } from "@/components/layout/app-shell";
 import { RiskAnalysisDashboard } from "@/components/risk/risk-analysis-dashboard";
 import { getAuthSession } from "@/lib/auth/session";
-import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import { getBudgetHeaderById } from "@/lib/data/budgets";
@@ -42,7 +43,8 @@ export default async function BudgetRiskAnalysisPage({ params }: { params: Promi
   }
 
   const settings = await getUserSettings(session.user.id);
-  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
   if (!hasFeatureAccess(license, "risk_analysis")) {
     return (
       <AppShell currentUser={session.user} settings={settings}>

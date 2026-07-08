@@ -7,6 +7,7 @@ import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetById } from "@/lib/data/budgets";
 import { getProjectsByUser } from "@/lib/data/projects";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 
 export default async function EditBudgetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,7 +16,11 @@ export default async function EditBudgetPage({ params }: { params: Promise<{ id:
     redirect("/login");
   }
 
-  const [budget, projects] = await Promise.all([getBudgetById(id, session.user.id), getProjectsByUser(session.user.id)]);
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const [budget, projects] = await Promise.all([
+    getBudgetById(id, session.user.id),
+    getProjectsByUser(session.user.id, activeWorkspaceId),
+  ]);
 
   if (!budget) {
     notFound();

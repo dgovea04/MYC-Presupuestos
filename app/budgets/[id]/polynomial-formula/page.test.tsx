@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   editorSpy: vi.fn(),
   tabsSpy: vi.fn(),
   getGeneralBudgetSectionContext: vi.fn(),
-  getEffectiveUserLicense: vi.fn(),
+  getActiveWorkspaceId: vi.fn(),
+  getEffectiveWorkspaceLicense: vi.fn(),
   hasFeatureAccess: vi.fn(),
   getBudgetPolynomialFormulaSectionsData: vi.fn(),
   getPolynomialFormulaReadOptionsForEnvironment: vi.fn(),
@@ -59,8 +60,12 @@ vi.mock("@/app/budgets/[id]/section-context", () => ({
   getGeneralBudgetSectionContext: mocks.getGeneralBudgetSectionContext,
 }));
 
-vi.mock("@/lib/billing/entitlements", () => ({
-  getEffectiveUserLicense: mocks.getEffectiveUserLicense,
+vi.mock("@/lib/workspace/active-workspace", () => ({
+  getActiveWorkspaceId: mocks.getActiveWorkspaceId,
+}));
+
+vi.mock("@/lib/workspace/entitlements", () => ({
+  getEffectiveWorkspaceLicense: mocks.getEffectiveWorkspaceLicense,
   hasFeatureAccess: mocks.hasFeatureAccess,
 }));
 
@@ -82,7 +87,13 @@ describe("GeneralBudgetPolynomialFormulaPage", () => {
       session: { user: { id: "user-1" } },
       settings: { defaultCurrency: "PEN" },
     });
-    mocks.getEffectiveUserLicense.mockResolvedValue({ plan: "pro" });
+    mocks.getActiveWorkspaceId.mockResolvedValue("ws-1");
+    mocks.getEffectiveWorkspaceLicense.mockResolvedValue({
+      planSlug: "pro",
+      planName: "Pro",
+      role: "OWNER",
+      availableFeatures: ["polynomial_formula.adjustments", "polynomial_formula"],
+    });
     mocks.hasFeatureAccess.mockReturnValue(true);
     mocks.getPolynomialFormulaReadOptionsForEnvironment.mockReturnValue({
       includeCompositionDetail: false,
@@ -152,5 +163,49 @@ describe("GeneralBudgetPolynomialFormulaPage", () => {
         expect.objectContaining({ budgetId: "sub-2" }),
       ]),
     });
+  });
+
+  it("calls getActiveWorkspaceId and getEffectiveWorkspaceLicense", async () => {
+    await GeneralBudgetPolynomialFormulaPage({
+      params: Promise.resolve({ id: "general-1" }),
+    });
+
+    expect(mocks.getActiveWorkspaceId).toHaveBeenCalledWith("user-1");
+    expect(mocks.getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
+      userId: "user-1",
+      companyId: "ws-1",
+    });
+    expect(mocks.hasFeatureAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ planSlug: "pro" }),
+      "polynomial_formula.adjustments",
+    );
+  });
+
+  it("disables adjustments when license lacks polynomial_formula.adjustments", async () => {
+    mocks.hasFeatureAccess.mockReturnValue(false);
+
+    const tree = await GeneralBudgetPolynomialFormulaPage({
+      params: Promise.resolve({ id: "general-1" }),
+    });
+
+    const markup = renderToStaticMarkup(tree);
+    expect(markup).toContain("data-testid=\"shell\"");
+    expect(mocks.editorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ canUsePolynomialAdjustments: false }),
+    );
+  });
+
+  it("handles null workspace (no active workspace selected)", async () => {
+    mocks.getActiveWorkspaceId.mockResolvedValue(null);
+    mocks.getEffectiveWorkspaceLicense.mockResolvedValue(null);
+    mocks.hasFeatureAccess.mockReturnValue(false);
+
+    const tree = await GeneralBudgetPolynomialFormulaPage({
+      params: Promise.resolve({ id: "general-1" }),
+    });
+
+    const markup = renderToStaticMarkup(tree);
+    expect(markup).toContain("data-testid=\"shell\"");
+    expect(mocks.hasFeatureAccess).toHaveBeenCalledWith(null, "polynomial_formula.adjustments");
   });
 });

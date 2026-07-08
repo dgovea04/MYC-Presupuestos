@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   queryRawMock,
+  userFindUniqueMock,
+  getEffectiveWorkspaceLicenseMock,
 } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
+  userFindUniqueMock: vi.fn(),
+  getEffectiveWorkspaceLicenseMock: vi.fn(),
 }));
 
 const {
@@ -17,6 +21,9 @@ const {
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     $queryRaw: queryRawMock,
+    user: {
+      findUnique: userFindUniqueMock,
+    },
   },
 }));
 
@@ -25,10 +32,15 @@ vi.mock("@/lib/auth/password", () => ({
   verifyPassword: verifyPasswordMock,
 }));
 
+vi.mock("@/lib/workspace/entitlements", () => ({
+  getEffectiveWorkspaceLicense: getEffectiveWorkspaceLicenseMock,
+}));
+
 import {
   AccountCurrentPasswordError,
   clearUserAvatar,
   getUserAccount,
+  getUserAccountMembership,
   updateUserAccountAvatar,
   updateUserAccountProfile,
   updateUserPassword,
@@ -38,6 +50,8 @@ import { resetUserProfileColumnSupportCacheForTests } from "@/lib/data/user-prof
 describe("account data", () => {
   beforeEach(() => {
     queryRawMock.mockReset();
+    userFindUniqueMock.mockReset();
+    getEffectiveWorkspaceLicenseMock.mockReset();
     hashPasswordMock.mockReset();
     verifyPasswordMock.mockReset();
     resetUserProfileColumnSupportCacheForTests();
@@ -199,5 +213,82 @@ describe("account data", () => {
       }),
     ).rejects.toBeInstanceOf(AccountCurrentPasswordError);
     expect(queryRawMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe("getUserAccountMembership", () => {
+    beforeEach(() => {
+      userFindUniqueMock.mockResolvedValue({
+        aiTokenExtraMonthly: 0,
+        membershipPlan: {
+          name: "Pro",
+          slug: "pro",
+          monthlyTokenLimit: 10000,
+        },
+        billingSubscriptions: [],
+        aiUsagePeriods: [],
+      });
+      getEffectiveWorkspaceLicenseMock.mockResolvedValue({
+        planSlug: "pro",
+        planName: "Pro",
+        role: "OWNER",
+        availableFeatures: ["ai.local", "exports.advanced"],
+      });
+    });
+
+    it("passes activeCompanyId to getEffectiveWorkspaceLicense", async () => {
+      await getUserAccountMembership("user-1", "ws-1");
+
+      expect(getEffectiveWorkspaceLicenseMock).toHaveBeenCalledWith({
+        userId: "user-1",
+        companyId: "ws-1",
+      });
+    });
+
+    it("passes null companyId when not provided", async () => {
+      await getUserAccountMembership("user-1");
+
+      expect(getEffectiveWorkspaceLicenseMock).toHaveBeenCalledWith({
+        userId: "user-1",
+        companyId: undefined,
+      });
+    });
+
+    it("passes null companyId when explicitly null", async () => {
+      await getUserAccountMembership("user-1", null);
+
+      expect(getEffectiveWorkspaceLicenseMock).toHaveBeenCalledWith({
+        userId: "user-1",
+        companyId: null,
+      });
+    });
+
+    it("returns effectivePlanSlug from workspace license", async () => {
+      getEffectiveWorkspaceLicenseMock.mockResolvedValue({
+        planSlug: "starter",
+        planName: "Starter",
+        role: "MEMBER",
+        availableFeatures: [],
+      });
+
+      const result = await getUserAccountMembership("user-1", "ws-1");
+
+      expect(result.effectivePlanSlug).toBe("starter");
+      expect(result.canUpgrade).toBe(true);
+    });
+
+    it("returns canUpgrade=false when license is already pro", async () => {
+      const result = await getUserAccountMembership("user-1", "ws-1");
+
+      expect(result.effectivePlanSlug).toBe("pro");
+      expect(result.canUpgrade).toBe(false);
+    });
+
+    it("throws when user is not found", async () => {
+      userFindUniqueMock.mockResolvedValue(null);
+
+      await expect(
+        getUserAccountMembership("user-1", "ws-1"),
+      ).rejects.toThrow("Usuario no encontrado.");
+    });
   });
 });

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { WORKSPACE_LIST_CACHE_TAG } from "@/lib/workspace/active-workspace";
 
 export async function POST(
   _request: Request,
@@ -55,6 +57,8 @@ export async function POST(
       invitedBy: { select: { name: true } },
     },
   });
+
+  revalidateTag(`${WORKSPACE_LIST_CACHE_TAG}-${session.user.id}`, "max");
 
   return NextResponse.json({
     workspace: {

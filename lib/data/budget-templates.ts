@@ -63,7 +63,7 @@ type BudgetTemplateDelegate = {
 type BudgetTemplateApplyTx = {
   project: {
     findFirst(args: {
-      where: { id: string; company: { userId: string } };
+      where: { id: string; company: { memberships: { some: { userId: string; status: "ACTIVE" } } } };
       select: { id: true; companyId: true };
     }): Promise<{ id: string; companyId: string } | null>;
   };
@@ -360,12 +360,12 @@ export async function applyUserBudgetTemplateToProject(
   return prisma.$transaction(async (tx) => {
     const applyTx = tx as unknown as BudgetTemplateApplyTx;
     const project = await applyTx.project.findFirst({
-      where: { id: input.projectId, company: { userId } },
+      where: { id: input.projectId, company: { memberships: { some: { userId, status: "ACTIVE" } } } },
       select: { id: true, companyId: true },
     });
 
     if (!project) {
-      throw new Error("No puedes aplicar plantillas en un proyecto que no te pertenece");
+      throw new Error("No tienes acceso a este proyecto");
     }
 
     const parentBudget = template.snapshot.budget.kind === "SUB_BUDGET"

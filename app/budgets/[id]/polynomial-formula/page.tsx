@@ -2,7 +2,8 @@ import { PolynomialFormulaEditor } from "@/components/budget/polynomial-formula-
 import { PolynomialFormulaSectionTabs } from "@/components/budget/polynomial-formula-section-tabs";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
-import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import {
   getBudgetPolynomialFormulaSectionsData,
   getPolynomialFormulaReadOptionsForEnvironment,
@@ -19,7 +20,8 @@ export default async function GeneralBudgetPolynomialFormulaPage({
   const { id } = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
-  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
   const canUsePolynomialAdjustments = hasFeatureAccess(license, "polynomial_formula.adjustments");
   const showCompositionDetail = Boolean(getPolynomialFormulaReadOptionsForEnvironment().includeCompositionDetail);
   const formulaReadOptions = {

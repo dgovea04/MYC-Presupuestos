@@ -72,8 +72,14 @@ describe("project data cache behavior", () => {
     expect(projects).toHaveLength(1);
     expect(projectFindManyMock).toHaveBeenCalledWith({
       where: {
+        companyId: undefined,
         company: {
-          userId: "user-1",
+          memberships: {
+            some: {
+              userId: "user-1",
+              status: "ACTIVE",
+            },
+          },
         },
       },
       select: {

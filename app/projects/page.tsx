@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectsListByUser } from "@/lib/data/projects";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { ensureDate } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -21,7 +22,8 @@ export const metadata: Metadata = {
 };
 export default async function ProjectsPage() {
   const session = await getAuthSession();
-  const projects = await getProjectsListByUser(session!.user.id);
+  const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
+  const projects = await getProjectsListByUser(session!.user.id, activeWorkspaceId);
 
   return (
     <AppShell currentUser={session!.user}>

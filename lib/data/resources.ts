@@ -5,6 +5,7 @@ import { serializeResource } from "@/lib/db/serializers";
 import { ensureDate } from "@/lib/utils";
 import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { resourceSchema, resourceStatePatchSchema, type ResourceInput } from "@/lib/validations/resource";
+import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import type {
   ResourceCategory,
   ResourcePatchFields,
@@ -32,13 +33,15 @@ function normalizeResourcesDates<T extends { createdAt?: Date | string | null; u
 }
 
 export const getResourcesByUser = cache(
-  async (userId: string) => {
+  async (userId: string, activeCompanyId?: string | null) => {
     const result = await unstable_cache(
-      async (userId: string) => {
-        const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(userId)]);
+      async (uid: string) => {
+        const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(uid, activeCompanyId)]);
         return mergeVisibleResourcesForCatalog(globalResources, userResources).sort(compareResourcesForCatalog);
       },
-      ["resources-by-user"],
+      activeCompanyId
+        ? ["resources-by-user", activeCompanyId]
+        : ["resources-by-user"],
       { revalidate: 60, tags: ["resources-by-user"] },
     )(userId);
 
@@ -62,11 +65,17 @@ const getCachedGlobalResources =
         tags: [GLOBAL_RESOURCES_CACHE_TAG],
       });
 
-async function getUserOwnedResources(userId: string) {
+async function getUserOwnedResources(userId: string, activeCompanyId?: string | null) {
   return prisma.resource.findMany({
     where: {
+      companyId: activeCompanyId ?? undefined,
       company: {
-        userId,
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
       },
     },
     orderBy: [{ category: "asc" }, { description: "asc" }],
@@ -160,7 +169,12 @@ export async function resourcePatchTouchesGlobalCatalog(userId: string, patchInp
           { companyId: null },
           {
             company: {
-              userId,
+              memberships: {
+                some: {
+                  userId,
+                  status: "ACTIVE",
+                },
+              },
             },
           },
         ],
@@ -199,17 +213,7 @@ export async function createResourceForUser(userId: string, input: ResourceInput
   const normalized = normalizeResourceFields(parsed);
 
   if (normalized.companyId) {
-    const company = await prisma.company.findFirst({
-      where: {
-        id: normalized.companyId,
-        userId,
-      },
-      select: { id: true },
-    });
-
-    if (!company) {
-      throw new Error("No puedes crear insumos en una empresa que no te pertenece");
-    }
+    await assertWorkspaceMembership({ userId, companyId: normalized.companyId, minimumRole: "EDITOR" });
   }
 
   const code = await generateNextResourceCode(prisma, normalized.companyId ?? null, normalized.category);
@@ -226,7 +230,12 @@ export async function updateResource(id: string, userId: string, input: Resource
     where: {
       id,
       company: {
-        userId,
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
       },
     },
   });
@@ -262,7 +271,12 @@ export async function deleteResource(id: string, userId: string) {
     where: {
       id,
       company: {
-        userId,
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
       },
     },
     include: {
@@ -320,7 +334,12 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
           OR: [
             {
               company: {
-                userId,
+                memberships: {
+                  some: {
+                    userId,
+                    status: "ACTIVE",
+                  },
+                },
               },
             },
             {
@@ -380,7 +399,12 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
         where: {
           id,
           company: {
-            userId,
+            memberships: {
+              some: {
+                userId,
+                status: "ACTIVE",
+              },
+            },
           },
         },
         include: {
@@ -560,15 +584,9 @@ async function assertCompanyOwnership(
   userId: string,
   companyId: string,
 ) {
-  const company = await tx.company.findFirst({
-    where: {
-      id: companyId,
-      userId,
-    },
-    select: { id: true },
-  });
-
-  if (!company) {
+  try {
+    await assertWorkspaceMembership({ userId, companyId, minimumRole: "EDITOR" });
+  } catch {
     throw new Error("No puedes crear o mover insumos a una empresa que no te pertenece");
   }
 }

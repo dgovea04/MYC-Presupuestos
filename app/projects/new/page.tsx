@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { getUserCompanies } from "@/lib/data/projects";
 import { getTemplateLibraryItem } from "@/lib/templates/template-library";
-
 import { getWorkCalendars } from "@/lib/data/work-calendars";
 
 export default async function NewProjectPage({
@@ -22,8 +22,11 @@ export default async function NewProjectPage({
     ? resolvedSearchParams?.template[0]
     : resolvedSearchParams?.template;
   const selectedTemplate = templateId ? getTemplateLibraryItem(templateId) : null;
-  const companies = await getUserCompanies(session!.user.id);
-  const workCalendars = await getWorkCalendars();
+  const [companies, activeWorkspaceId, workCalendars] = await Promise.all([
+    getUserCompanies(session!.user.id),
+    getActiveWorkspaceId(session!.user.id),
+    getWorkCalendars(),
+  ]);
 
   return (
     <AppShell>
@@ -41,7 +44,12 @@ export default async function NewProjectPage({
         </CardHeader>
         <CardContent className="pt-6">
           {companies.length > 0 ? (
-            <ProjectForm companies={companies} workCalendars={workCalendars} selectedTemplate={selectedTemplate?.module === "BUDGET" ? selectedTemplate : null} />
+            <ProjectForm
+              companies={companies}
+              workCalendars={workCalendars}
+              selectedTemplate={selectedTemplate?.module === "BUDGET" ? selectedTemplate : null}
+              activeWorkspaceId={activeWorkspaceId ?? undefined}
+            />
           ) : (
             <div className="theme-status-warning theme-status-warning-strong space-y-4 rounded-2xl border p-5">
               <p className="font-medium">Primero necesitas una empresa o perfil profesional.</p>

@@ -179,7 +179,7 @@ export const getUserCompanies = cache(
   },
 );
 
-export async function getProjectsByUser(userId: string) {
+export async function getProjectsByUser(userId: string, activeCompanyId?: string | null) {
   const settings = await getUserSettings(userId);
   const defaultBudgetContext = createDefaultBudgetContext(settings);
   const defaultSubBudgetNames = getFallbackSubBudgetNames(settings.defaultSubBudgetNames);
@@ -187,6 +187,7 @@ export async function getProjectsByUser(userId: string) {
   return prisma.$transaction(async (tx) => {
     const projects = await tx.project.findMany({
       where: {
+        companyId: activeCompanyId ?? undefined,
         company: {
           memberships: {
             some: {
@@ -265,9 +266,10 @@ function findGeneralBudget(budgets: Awaited<ReturnType<typeof prisma.budget.find
   );
 }
 
-const _getProjectsListByUser = async (userId: string) => {
+const _getProjectsListByUser = async (userId: string, activeCompanyId?: string | null) => {
   return prisma.project.findMany({
     where: {
+      companyId: activeCompanyId ?? undefined,
       company: {
         memberships: {
           some: {
@@ -320,14 +322,16 @@ function normalizeProjectsListDates(
 const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
 
 export const getProjectsListByUser = cache(
-  async (userId: string) => {
+  async (userId: string, activeCompanyId?: string | null) => {
     if (shouldBypassPersistentCache) {
-      return normalizeProjectsListDates(await _getProjectsListByUser(userId));
+      return normalizeProjectsListDates(await _getProjectsListByUser(userId, activeCompanyId));
     }
 
     const result = await unstable_cache(
-      async (uid: string) => _getProjectsListByUser(uid),
-      [PROJECTS_LIST_CACHE_TAG],
+      async (uid: string) => _getProjectsListByUser(uid, activeCompanyId),
+      activeCompanyId
+        ? [PROJECTS_LIST_CACHE_TAG, activeCompanyId]
+        : [PROJECTS_LIST_CACHE_TAG],
       { tags: [PROJECTS_LIST_CACHE_TAG] },
     )(userId);
     return normalizeProjectsListDates(result);

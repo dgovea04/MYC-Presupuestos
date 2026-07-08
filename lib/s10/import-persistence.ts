@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
+import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { prisma } from "@/lib/db/prisma";
 import {
   createMycImportDraftFromS10,
@@ -44,14 +45,7 @@ export async function importS10SnapshotToMyc(
   options: S10ImportPersistenceOptions,
 ): Promise<S10ImportPersistenceResult> {
   const sourceSystem = options.sourceSystem ?? "S10";
-  const company = await prisma.company.findFirst({
-    where: { id: options.companyId, userId },
-    select: { id: true },
-  });
-
-  if (!company) {
-    throw new Error(`No puedes importar ${sourceSystem} en una empresa que no te pertenece`);
-  }
+  await assertWorkspaceMembership({ userId, companyId: options.companyId, minimumRole: "EDITOR" });
 
   await assertWithinPlanLimit({ userId, resource: "projects" });
   await assertWithinPlanLimit({ userId, resource: "budgets" });

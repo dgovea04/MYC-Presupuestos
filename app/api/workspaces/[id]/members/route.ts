@@ -19,7 +19,7 @@ export async function GET(
     await assertWorkspaceMembership({
       userId: session.user.id,
       companyId,
-      minimumRole: "ADMIN",
+      minimumRole: "VIEWER",
     });
   } catch {
     return NextResponse.json(
@@ -28,19 +28,7 @@ export async function GET(
     );
   }
 
-  // Auto-reactivate any expired suspensions before listing
-  await prisma.companyMembership.updateMany({
-    where: {
-      companyId,
-      status: "SUSPENDED",
-      suspendedUntil: { not: null, lte: new Date() },
-    },
-    data: {
-      status: "ACTIVE",
-      suspendedUntil: null,
-    },
-  });
-
+  // Note: auto-reactivation of expired suspensions happens lazily via assertWorkspaceMembership
   const members = await prisma.companyMembership.findMany({
     where: { companyId },
     include: {

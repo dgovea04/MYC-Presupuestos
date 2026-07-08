@@ -326,7 +326,7 @@ describe("budget templates data service", () => {
       templateName: "Arquitectura reusable",
     });
     expect(mocks.projectFindFirst).toHaveBeenCalledWith({
-      where: { id: "target-project", company: { userId: "user-1" } },
+      where: { id: "target-project", company: { memberships: { some: { userId: "user-1", status: "ACTIVE" } } } },
       select: { id: true, companyId: true },
     });
     expect(mocks.budgetCreate).toHaveBeenCalledWith({

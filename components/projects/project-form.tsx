@@ -28,6 +28,7 @@ type ProjectFormProps = {
   companies: CompanyOption[];
   workCalendars?: WorkCalendarOption[];
   selectedTemplate?: TemplateLibraryItem | null;
+  activeWorkspaceId?: string;
   project?: {
     id: string;
     companyId: string;
@@ -42,7 +43,7 @@ type ProjectFormProps = {
   };
 };
 
-export function ProjectForm({ companies, workCalendars, project, selectedTemplate }: ProjectFormProps) {
+export function ProjectForm({ companies, workCalendars, project, selectedTemplate, activeWorkspaceId }: ProjectFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -104,13 +105,22 @@ export function ProjectForm({ companies, workCalendars, project, selectedTemplat
       >
         <div className="space-y-2">
           <Label htmlFor="companyId">Empresa</Label>
-          <Select id="companyId" name="companyId" defaultValue={project?.companyId ?? companies[0]?.id}>
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </Select>
+          {companies.length > 1 ? (
+            <Select id="companyId" name="companyId" defaultValue={project?.companyId ?? activeWorkspaceId ?? companies[0]?.id}>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <>
+              <input type="hidden" name="companyId" value={companies[0]?.id} />
+              <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text-strong)]">
+                {companies[0]?.name}
+              </div>
+            </>
+          )}
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Field id="name" label="Nombre de obra" defaultValue={project?.name} required />

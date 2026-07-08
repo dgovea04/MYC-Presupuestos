@@ -6,7 +6,7 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    company: {
+    companyMembership: {
       findMany: vi.fn(),
     },
     user: {
@@ -20,7 +20,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 const mockPrisma = prisma as unknown as {
-  company: { findMany: ReturnType<typeof vi.fn> };
+  companyMembership: { findMany: ReturnType<typeof vi.fn> };
   user: { findMany: ReturnType<typeof vi.fn> };
 };
 
@@ -59,12 +59,12 @@ describe("users search route", () => {
     expect(body).toEqual({ users: [] });
   });
 
-  it("returns empty when user has no companies", async () => {
+  it("returns empty when user has no company memberships", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({
       expires: new Date().toISOString(),
       user: { id: "user-1" },
     });
-    mockPrisma.company.findMany.mockResolvedValue([]);
+    mockPrisma.companyMembership.findMany.mockResolvedValue([]);
 
     const response = await GET(new Request("http://localhost/api/users/search?q=ca"));
 
@@ -79,8 +79,8 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Mi Empresa S.A.C." },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Mi Empresa S.A.C." } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([
@@ -94,13 +94,16 @@ describe("users search route", () => {
     expect(body.users).toHaveLength(1);
     expect(body.users[0].name).toBe("Carlos");
 
-    // Verify company filter was applied
+    // Verify company filter was applied via memberships
     expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          companies: {
+          companyMemberships: {
             some: {
-              name: { in: ["Mi Empresa S.A.C."] },
+              status: "ACTIVE",
+              company: {
+                name: { in: ["Mi Empresa S.A.C."] },
+              },
             },
           },
         }),
@@ -114,8 +117,8 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Mi Empresa S.A.C." },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Mi Empresa S.A.C." } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([]);
@@ -141,8 +144,8 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Mi Empresa S.A.C." },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Mi Empresa S.A.C." } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([
@@ -163,8 +166,8 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Mi Empresa S.A.C." },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Mi Empresa S.A.C." } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([
@@ -185,8 +188,8 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Mi Empresa S.A.C." },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Mi Empresa S.A.C." } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([]);
@@ -204,8 +207,8 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Mi Empresa S.A.C." },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Mi Empresa S.A.C." } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([]);
@@ -225,7 +228,7 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockRejectedValue(new Error("DB error"));
+    mockPrisma.companyMembership.findMany.mockRejectedValue(new Error("DB error"));
 
     const response = await GET(new Request("http://localhost/api/users/search?q=ca"));
 
@@ -234,15 +237,15 @@ describe("users search route", () => {
     expect(body).toEqual({ users: [] });
   });
 
-  it("deduplicates company names from the current user", async () => {
+  it("deduplicates company names from the current user's memberships", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({
       expires: new Date().toISOString(),
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Mi Empresa S.A.C." },
-      { name: "Mi Empresa S.A.C." },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Mi Empresa S.A.C." } },
+      { company: { name: "Mi Empresa S.A.C." } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([]);
@@ -253,9 +256,12 @@ describe("users search route", () => {
     expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          companies: {
+          companyMemberships: {
             some: {
-              name: { in: ["Mi Empresa S.A.C."] },
+              status: "ACTIVE",
+              company: {
+                name: { in: ["Mi Empresa S.A.C."] },
+              },
             },
           },
         }),
@@ -269,9 +275,9 @@ describe("users search route", () => {
       user: { id: "user-1" },
     });
 
-    mockPrisma.company.findMany.mockResolvedValue([
-      { name: "Constructora Alfa" },
-      { name: "Constructora Beta" },
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      { company: { name: "Constructora Alfa" } },
+      { company: { name: "Constructora Beta" } },
     ]);
 
     mockPrisma.user.findMany.mockResolvedValue([]);
@@ -281,9 +287,12 @@ describe("users search route", () => {
     expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          companies: {
+          companyMemberships: {
             some: {
-              name: { in: ["Constructora Alfa", "Constructora Beta"] },
+              status: "ACTIVE",
+              company: {
+                name: { in: ["Constructora Alfa", "Constructora Beta"] },
+              },
             },
           },
         }),

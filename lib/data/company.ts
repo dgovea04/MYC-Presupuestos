@@ -4,15 +4,15 @@ import { companySchema, type CompanyInput } from "@/lib/validations/company";
 export async function upsertPrimaryCompany(userId: string, input: CompanyInput) {
   const data = companySchema.parse(input);
 
-  const existingCompany = await prisma.company.findFirst({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
+  const existingMembership = await prisma.companyMembership.findFirst({
+    where: { userId, role: "OWNER", status: "ACTIVE" },
+    orderBy: { joinedAt: "asc" },
+    select: { companyId: true },
   });
 
-  if (existingCompany) {
+  if (existingMembership) {
     return prisma.company.update({
-      where: { id: existingCompany.id },
+      where: { id: existingMembership.companyId },
       data: {
         name: data.name,
         ruc: data.ruc ?? null,
@@ -20,16 +20,64 @@ export async function upsertPrimaryCompany(userId: string, input: CompanyInput) 
     });
   }
 
-  return prisma.company.create({
-    data: {
-      userId,
-      name: data.name,
-      ruc: data.ruc ?? null,
-    },
+  // Legacy fallback: user may have a Company.userId record but no OWNER membership
+  const legacyCompany = await prisma.company.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+
+  if (legacyCompany) {
+    await prisma.companyMembership.create({
+      data: {
+        companyId: legacyCompany.id,
+        userId,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    return prisma.company.update({
+      where: { id: legacyCompany.id },
+      data: {
+        name: data.name,
+        ruc: data.ruc ?? null,
+      },
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const company = await tx.company.create({
+      data: {
+        userId,
+        name: data.name,
+        ruc: data.ruc ?? null,
+      },
+    });
+
+    await tx.companyMembership.create({
+      data: {
+        companyId: company.id,
+        userId,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    return company;
   });
 }
 
 export async function getPrimaryCompany(userId: string) {
+  const membership = await prisma.companyMembership.findFirst({
+    where: { userId, role: "OWNER", status: "ACTIVE" },
+    orderBy: { joinedAt: "asc" },
+    include: { company: true },
+  });
+
+  if (membership) return membership.company;
+
+  // Legacy fallback for users without an OWNER membership
   return prisma.company.findFirst({
     where: { userId },
     orderBy: { createdAt: "asc" },

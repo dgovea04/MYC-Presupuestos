@@ -6,9 +6,10 @@ import { PartidaSimilarityGeneratorPageContent } from "@/components/partidas/par
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
-import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getResourcesByUser } from "@/lib/data/resources";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { decimalToNumber } from "@/lib/db/serializers";
 
 export default async function GeneratePartidaPage({
@@ -22,7 +23,8 @@ export default async function GeneratePartidaPage({
   }
 
   const resolvedSearchParams = await searchParams;
-  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
 
   if (!hasFeatureAccess(license, "partidas.similarity")) {
     return (
@@ -51,7 +53,8 @@ export default async function GeneratePartidaPage({
     );
   }
 
-  const [partidas, resources] = await Promise.all([getCatalogPartidas(), getResourcesByUser(session.user.id)]);
+
+  const [partidas, resources] = await Promise.all([getCatalogPartidas(), getResourcesByUser(session.user.id, activeWorkspaceId)]);
 
   return (
     <AppShell currentUser={session.user}>

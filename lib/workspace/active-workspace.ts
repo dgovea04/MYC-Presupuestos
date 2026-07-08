@@ -1,10 +1,13 @@
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import type { WorkspaceRole } from "@/types/workspace";
 
 const ACTIVE_WORKSPACE_COOKIE = "myc_active_workspace";
+export const WORKSPACE_LIST_CACHE_TAG = "user-workspaces";
 
-export async function getActiveWorkspaceId(userId: string): Promise<string | null> {
+export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(userId: string): Promise<string | null> {
   const cookieStore = await cookies();
   const stored = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value;
 
@@ -28,7 +31,7 @@ export async function getActiveWorkspaceId(userId: string): Promise<string | nul
   });
 
   return first?.companyId ?? null;
-}
+});
 
 export async function setActiveWorkspaceId(userId: string, companyId: string): Promise<void> {
   const membership = await prisma.companyMembership.findUnique({
@@ -49,9 +52,9 @@ export async function setActiveWorkspaceId(userId: string, companyId: string): P
   });
 }
 
-export async function listUserWorkspaces(userId: string): Promise<
-  { id: string; name: string; role: WorkspaceRole; logoUrl: string | null }[]
-> {
+type WorkspaceListEntry = { id: string; name: string; role: WorkspaceRole; logoUrl: string | null };
+
+async function _listUserWorkspaces(userId: string) {
   const memberships = await prisma.companyMembership.findMany({
     where: { userId, status: "ACTIVE" },
     include: {
@@ -67,5 +70,15 @@ export async function listUserWorkspaces(userId: string): Promise<
     name: m.company.name,
     role: m.role as WorkspaceRole,
     logoUrl: m.company.logoUrl,
-  }));
+  })) satisfies WorkspaceListEntry[];
 }
+
+export const listUserWorkspaces = cache(
+  (userId: string): Promise<WorkspaceListEntry[]> =>
+    process.env.NODE_ENV === "development"
+      ? _listUserWorkspaces(userId)
+      : unstable_cache(_listUserWorkspaces, [`${WORKSPACE_LIST_CACHE_TAG}-${userId}`], {
+          tags: [WORKSPACE_LIST_CACHE_TAG, `${WORKSPACE_LIST_CACHE_TAG}-${userId}`],
+          revalidate: 300,
+        })(userId),
+);

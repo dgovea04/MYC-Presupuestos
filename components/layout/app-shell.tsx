@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { Plus } from "lucide-react";
 import { AiViewContextBridge } from "@/hooks/use-ai-view-context";
 import { getAuthSession } from "@/lib/auth/session";
-import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
+import { getEffectiveWorkspaceLicense } from "@/lib/workspace/entitlements";
 import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode, type ViewMode } from "@/lib/budget/view-mode";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppBackButton } from "@/components/layout/app-back-button";
@@ -17,6 +17,8 @@ import {
 } from "@/lib/layout/sidebar-mode";
 import { LiveDataRefresh } from "@/components/layout/live-data-refresh";
 import { NotesDrawer } from "@/components/notes/notes-drawer";
+import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
+import { getActiveWorkspaceId, listUserWorkspaces } from "@/lib/workspace/active-workspace";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import { AppThemeProvider } from "@/components/layout/app-theme-provider";
 import { AppThemeToggle } from "@/components/layout/app-theme-toggle";
@@ -74,10 +76,30 @@ export async function AppShell({
     floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
   };
   const userId = session?.user?.id ?? currentUser?.id;
-  const [settings, license] = await Promise.all([
-    initialSettings ? Promise.resolve(initialSettings) : userId ? getUserSettings(userId) : Promise.resolve(fallbackSettings),
-    userId ? getEffectiveUserLicense({ userId }) : Promise.resolve(null),
+
+  // Prefer session-provided workspace list from the JWT token to avoid refetches.
+  // Always call getActiveWorkspaceId (cached per-request) for validated active workspace.
+  const sessionWorkspaces = session?.user?.workspaces ?? [];
+  const hasSessionWorkspaces = sessionWorkspaces.length > 0;
+
+  const activeWorkspaceId = userId ? await getActiveWorkspaceId(userId) : null;
+
+  const [settings, workspaces, license] = await Promise.all([
+    initialSettings
+      ? Promise.resolve(initialSettings)
+      : userId
+        ? getUserSettings(userId)
+        : Promise.resolve(fallbackSettings),
+    hasSessionWorkspaces
+      ? Promise.resolve(sessionWorkspaces as { id: string; name: string; role: string; logoUrl: string | null }[])
+      : userId
+        ? listUserWorkspaces(userId)
+        : Promise.resolve([]),
+    userId && activeWorkspaceId
+      ? getEffectiveWorkspaceLicense({ userId, companyId: activeWorkspaceId })
+      : Promise.resolve(null),
   ]);
+
   const cookieStore = await cookies();
   const storedViewModeCookie = cookieStore.get(APP_VIEW_MODE_COOKIE_NAME)?.value;
   const storedSidebarModeCookie = cookieStore.get(SIDEBAR_MODE_COOKIE_NAME)?.value;
@@ -122,6 +144,16 @@ export async function AppShell({
 
                 <div className="flex flex-col items-stretch gap-3 md:items-end">
                   <div className="flex flex-wrap items-end gap-3 md:justify-end">
+                    {/* Workspace switcher */}
+                    {activeWorkspaceId && workspaces.length > 0 ? (
+                      <div className="flex flex-col gap-1 md:items-end">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--app-text-muted)]">Workspace</p>
+                        <WorkspaceSwitcher
+                          activeWorkspaceId={activeWorkspaceId}
+                          workspaces={workspaces}
+                        />
+                      </div>
+                    ) : null}
                     <div className="flex flex-col gap-1 md:items-end">
                       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--app-text-muted)]">Tema</p>
                       <AppThemeToggle />

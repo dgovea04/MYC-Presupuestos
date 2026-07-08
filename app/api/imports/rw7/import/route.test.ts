@@ -8,8 +8,8 @@ vi.mock("@/lib/workspace/access", () => ({
   assertWorkspaceMembership: vi.fn(),
 }));
 
-vi.mock("@/lib/s10/import-preview", () => ({
-  parseS10ExportSnapshotJson: vi.fn(),
+vi.mock("@/lib/rw7/excel-import", () => ({
+  parseRw7WorkbookToS10Snapshot: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -25,17 +25,11 @@ vi.mock("@/lib/s10/import-persistence", () => ({
   importS10SnapshotToMyc: vi.fn(),
 }));
 
-import { POST } from "@/app/api/imports/s10/import/route";
+import { POST } from "@/app/api/imports/rw7/import/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
-import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
+import { parseRw7WorkbookToS10Snapshot } from "@/lib/rw7/excel-import";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
-
-const VALID_SNAPSHOT = { proyectos: [] };
-const VALID_BODY = {
-  snapshot: VALID_SNAPSHOT,
-  companyId: "company-1",
-};
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -44,7 +38,15 @@ function makeSession(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("POST /api/imports/s10/import", () => {
+function makeFormData(overrides: Record<string, unknown> = {}) {
+  const formData = new FormData();
+  const file = overrides.file ?? new File(["dummy"], "test.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  formData.append("file", file);
+  formData.append("companyId", (overrides.companyId as string) ?? "company-1");
+  return formData;
+}
+
+describe("POST /api/imports/rw7/import", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -53,10 +55,9 @@ describe("POST /api/imports/s10/import", () => {
     vi.mocked(getAuthSession).mockResolvedValue(null);
 
     const response = await POST(
-      new Request("http://localhost/api/imports/s10/import", {
+      new Request("http://localhost/api/imports/rw7/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(VALID_BODY),
+        body: makeFormData(),
       }),
     );
 
@@ -68,11 +69,13 @@ describe("POST /api/imports/s10/import", () => {
   it("returns 400 when companyId is missing", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(makeSession());
 
+    const formData = new FormData();
+    formData.append("file", new File(["dummy"], "test.xlsx"));
+
     const response = await POST(
-      new Request("http://localhost/api/imports/s10/import", {
+      new Request("http://localhost/api/imports/rw7/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot: VALID_SNAPSHOT }),
+        body: formData,
       }),
     );
 
@@ -81,15 +84,33 @@ describe("POST /api/imports/s10/import", () => {
     expect(body.error).toContain("empresa");
   });
 
+  it("returns 400 when file is not an Excel file", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    const formData = new FormData();
+    formData.append("file", new File(["dummy"], "test.txt"));
+    formData.append("companyId", "company-1");
+
+    const response = await POST(
+      new Request("http://localhost/api/imports/rw7/import", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("RW7");
+  });
+
   it("returns 400 when user has no workspace membership", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(makeSession());
     vi.mocked(assertWorkspaceMembership).mockRejectedValue(new Error("Workspace no disponible"));
 
     const response = await POST(
-      new Request("http://localhost/api/imports/s10/import", {
+      new Request("http://localhost/api/imports/rw7/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(VALID_BODY),
+        body: makeFormData(),
       }),
     );
 
@@ -105,10 +126,9 @@ describe("POST /api/imports/s10/import", () => {
     );
 
     const response = await POST(
-      new Request("http://localhost/api/imports/s10/import", {
+      new Request("http://localhost/api/imports/rw7/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(VALID_BODY),
+        body: makeFormData(),
       }),
     );
 
@@ -117,54 +137,19 @@ describe("POST /api/imports/s10/import", () => {
     expect(body.error).toContain("rol necesario");
   });
 
-  it("returns 400 when snapshot is missing from body", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
-
-    const response = await POST(
-      new Request("http://localhost/api/imports/s10/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId: "company-1" }),
-      }),
-    );
-
-    expect(response.status).toBe(400);
-  });
-
-  it("returns 400 when snapshot JSON is invalid", async () => {
+  it("calls assertWorkspaceMembership with correct params", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(makeSession());
     vi.mocked(assertWorkspaceMembership).mockResolvedValue(undefined as never);
-    vi.mocked(parseS10ExportSnapshotJson).mockImplementation(() => {
-      throw new Error("El snapshot S10 no es valido.");
-    });
-
-    const response = await POST(
-      new Request("http://localhost/api/imports/s10/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(VALID_BODY),
-      }),
-    );
-
-    expect(response.status).toBe(400);
-    const body = await response.json();
-    expect(body.error).toContain("snapshot S10");
-  });
-
-  it("calls assertWorkspaceMembership with correct params before parsing", async () => {
-    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
-    vi.mocked(assertWorkspaceMembership).mockResolvedValue(undefined as never);
-    vi.mocked(parseS10ExportSnapshotJson).mockReturnValue(VALID_SNAPSHOT as never);
+    vi.mocked(parseRw7WorkbookToS10Snapshot).mockResolvedValue({} as never);
     vi.mocked(importS10SnapshotToMyc).mockResolvedValue({
       projectId: "project-1",
       generalBudgetId: "budget-1",
     } as never);
 
     await POST(
-      new Request("http://localhost/api/imports/s10/import", {
+      new Request("http://localhost/api/imports/rw7/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(VALID_BODY),
+        body: makeFormData(),
       }),
     );
 
@@ -178,43 +163,40 @@ describe("POST /api/imports/s10/import", () => {
   it("calls assertWorkspaceMembership before parsing and importing", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(makeSession());
     vi.mocked(assertWorkspaceMembership).mockResolvedValue(undefined as never);
-    vi.mocked(parseS10ExportSnapshotJson).mockReturnValue(VALID_SNAPSHOT as never);
+    vi.mocked(parseRw7WorkbookToS10Snapshot).mockResolvedValue({} as never);
     vi.mocked(importS10SnapshotToMyc).mockResolvedValue({
       projectId: "project-1",
       generalBudgetId: "budget-1",
     } as never);
 
     await POST(
-      new Request("http://localhost/api/imports/s10/import", {
+      new Request("http://localhost/api/imports/rw7/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(VALID_BODY),
+        body: makeFormData(),
       }),
     );
 
-    // Membership check must happen before snapshot parsing
-    const assertCallOrder = vi.mocked(assertWorkspaceMembership).mock.invocationCallOrder[0];
-    const parseCallOrder = vi.mocked(parseS10ExportSnapshotJson).mock.invocationCallOrder[0];
-    const importCallOrder = vi.mocked(importS10SnapshotToMyc).mock.invocationCallOrder[0];
+    const assertOrder = vi.mocked(assertWorkspaceMembership).mock.invocationCallOrder[0];
+    const parseOrder = vi.mocked(parseRw7WorkbookToS10Snapshot).mock.invocationCallOrder[0];
+    const importOrder = vi.mocked(importS10SnapshotToMyc).mock.invocationCallOrder[0];
 
-    expect(assertCallOrder).toBeLessThan(parseCallOrder);
-    expect(assertCallOrder).toBeLessThan(importCallOrder);
+    expect(assertOrder).toBeLessThan(parseOrder);
+    expect(assertOrder).toBeLessThan(importOrder);
   });
 
   it("returns 201 on successful import", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(makeSession());
     vi.mocked(assertWorkspaceMembership).mockResolvedValue(undefined as never);
-    vi.mocked(parseS10ExportSnapshotJson).mockReturnValue(VALID_SNAPSHOT as never);
+    vi.mocked(parseRw7WorkbookToS10Snapshot).mockResolvedValue({} as never);
     vi.mocked(importS10SnapshotToMyc).mockResolvedValue({
       projectId: "project-1",
       generalBudgetId: "budget-1",
     } as never);
 
     const response = await POST(
-      new Request("http://localhost/api/imports/s10/import", {
+      new Request("http://localhost/api/imports/rw7/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(VALID_BODY),
+        body: makeFormData(),
       }),
     );
 

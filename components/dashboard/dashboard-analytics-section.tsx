@@ -6,6 +6,7 @@ import {
   getCostTrends,
   getDeviationAlerts,
 } from "@/lib/dashboard/analytics";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { CostByPhaseChart } from "@/components/dashboard/analytics/cost-by-phase-chart";
 import { BudgetComparisonChart } from "@/components/dashboard/analytics/budget-comparison-chart";
@@ -16,12 +17,13 @@ export async function DashboardAnalyticsSection() {
   const session = await getAuthSession();
   if (!session?.user?.id) return null;
 
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
   const [settings, costByPhase, budgetComparison, costTrends, deviationAlerts] = await Promise.all([
     getUserSettings(session.user.id),
-    getCostByPhaseAnalytics(session.user.id),
-    getBudgetComparison(session.user.id),
-    getCostTrends(session.user.id),
-    getDeviationAlerts(session.user.id),
+    getCostByPhaseAnalytics(session.user.id, activeWorkspaceId),
+    getBudgetComparison(session.user.id, activeWorkspaceId),
+    getCostTrends(session.user.id, activeWorkspaceId),
+    getDeviationAlerts(session.user.id, activeWorkspaceId),
   ]);
 
   return (

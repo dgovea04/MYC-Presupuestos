@@ -25,12 +25,12 @@ export async function GET(request: Request) {
   const query = parsed.data.q;
 
   try {
-    // Resolve the current user's company names to scope the search
-    const userCompanies = await prisma.company.findMany({
-      where: { userId: session.user.id },
-      select: { name: true },
+    // Resolve the current user's company names via memberships to scope the search
+    const userMemberships = await prisma.companyMembership.findMany({
+      where: { userId: session.user.id, status: "ACTIVE" },
+      select: { company: { select: { name: true } } },
     });
-    const companyNames = [...new Set(userCompanies.map((c) => c.name))];
+    const companyNames = [...new Set(userMemberships.map((m) => m.company.name))];
 
     // If the user has no companies, return empty — there is no "same company" to scope against
     if (companyNames.length === 0) {
@@ -44,9 +44,12 @@ export async function GET(request: Request) {
           { name: { contains: query, mode: "insensitive" } },
         ],
         id: { not: session.user.id },
-        companies: {
+        companyMemberships: {
           some: {
-            name: { in: companyNames },
+            status: "ACTIVE",
+            company: {
+              name: { in: companyNames },
+            },
           },
         },
       },

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { getAuthSession } from "@/lib/auth/session";
+import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
 import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
 
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
 
   try {
     const input = await readImportRequestInput(request);
+    await assertWorkspaceMembership({ userId: session.user.id, companyId: input.companyId, minimumRole: "EDITOR" });
     const snapshot = parseSnapshotOrThrow(input.snapshotJson);
     const result = await importS10SnapshotToMyc(session.user.id, snapshot, {
       budgetCode: input.budgetCode,

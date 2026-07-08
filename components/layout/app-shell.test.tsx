@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({
@@ -19,8 +19,8 @@ vi.mock("@/lib/data/settings", () => ({
   getUserSettings: vi.fn(),
 }));
 
-vi.mock("@/lib/billing/entitlements", () => ({
-  getEffectiveUserLicense: vi.fn(),
+vi.mock("@/lib/workspace/entitlements", () => ({
+  getEffectiveWorkspaceLicense: vi.fn(),
 }));
 
 vi.mock("@/components/layout/app-sidebar-client", () => ({
@@ -87,9 +87,32 @@ vi.mock("@/components/notes/notes-drawer", () => ({
   NotesDrawer: () => <button>Notas</button>,
 }));
 
+vi.mock("@/lib/workspace/active-workspace", () => ({
+  getActiveWorkspaceId: vi.fn(),
+  listUserWorkspaces: vi.fn(),
+}));
+
+vi.mock("@/components/layout/workspace-switcher", () => ({
+  WorkspaceSwitcher: ({
+    activeWorkspaceId,
+    workspaces,
+  }: {
+    activeWorkspaceId: string;
+    workspaces: Array<{ id: string; name: string }>;
+  }) => (
+    <div
+      data-testid="workspace-switcher"
+      data-active-id={activeWorkspaceId}
+      data-workspace-count={workspaces.length}
+      data-workspace-names={workspaces.map((w) => w.name).join(",")}
+    />
+  ),
+}));
+
 import { getAuthSession } from "@/lib/auth/session";
-import { getEffectiveUserLicense } from "@/lib/billing/entitlements";
+import { getEffectiveWorkspaceLicense } from "@/lib/workspace/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
+import { getActiveWorkspaceId, listUserWorkspaces } from "@/lib/workspace/active-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { cookies } from "next/headers";
 
@@ -123,16 +146,14 @@ describe("AppShell", () => {
       floatingKhipuPosition: "bottom-right",
       floatingKhipuTheme: "light",
     });
-    vi.mocked(getEffectiveUserLicense).mockResolvedValue({
+    vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue({
       availableFeatures: ["exports.basic"],
-      budgetLimit: 5,
-      budgetUsage: 0,
-      isInGracePeriod: false,
-      planName: "Starter",
       planSlug: "starter",
-      projectLimit: 3,
-      projectUsage: 0,
+      planName: "Starter",
+      role: "OWNER",
     });
+    vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-1");
+    vi.mocked(listUserWorkspaces).mockResolvedValue([]);
 
     const markup = renderToStaticMarkup(
       await AppShell({
@@ -150,16 +171,14 @@ describe("AppShell", () => {
   it("skips fetching the session when currentUser and settings are provided", async () => {
     vi.mocked(getAuthSession).mockReset();
     vi.mocked(getUserSettings).mockReset();
-    vi.mocked(getEffectiveUserLicense).mockResolvedValue({
+    vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue({
       availableFeatures: ["exports.basic", "ai.local", "partidas.similarity"],
-      budgetLimit: null,
-      budgetUsage: 0,
-      isInGracePeriod: false,
-      planName: "Empresa",
       planSlug: "empresa",
-      projectLimit: null,
-      projectUsage: 0,
+      planName: "Empresa",
+      role: "OWNER",
     });
+    vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-2");
+    vi.mocked(listUserWorkspaces).mockResolvedValue([]);
 
     const markup = renderToStaticMarkup(
       await AppShell({
@@ -199,22 +218,23 @@ describe("AppShell", () => {
     expect(markup).toContain('data-features="exports.basic,ai.local,partidas.similarity"');
     expect(getAuthSession).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
-    expect(getEffectiveUserLicense).toHaveBeenCalledWith({ userId: "user-2" });
+    expect(getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
+      userId: "user-2",
+      companyId: "company-2",
+    });
   });
 
   it("applies data-theme dark to the authenticated app shell when appTheme is dark", async () => {
     vi.mocked(getAuthSession).mockReset();
     vi.mocked(getUserSettings).mockReset();
-    vi.mocked(getEffectiveUserLicense).mockResolvedValue({
+    vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue({
       availableFeatures: ["exports.basic"],
-      budgetLimit: null,
-      budgetUsage: 0,
-      isInGracePeriod: false,
-      planName: "Pro",
       planSlug: "pro",
-      projectLimit: null,
-      projectUsage: 0,
+      planName: "Pro",
+      role: "OWNER",
     });
+    vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-3");
+    vi.mocked(listUserWorkspaces).mockResolvedValue([]);
 
     const markup = renderToStaticMarkup(
       await AppShell({
@@ -255,7 +275,9 @@ describe("AppShell", () => {
   it("prefers the stored app view mode cookie over the settings default", async () => {
     vi.mocked(getAuthSession).mockReset();
     vi.mocked(getUserSettings).mockReset();
-    vi.mocked(getEffectiveUserLicense).mockResolvedValue(null);
+    vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue(null);
+    vi.mocked(getActiveWorkspaceId).mockResolvedValue(null);
+    vi.mocked(listUserWorkspaces).mockResolvedValue([]);
     vi.mocked(cookies).mockResolvedValue({
       get: (name: string) => (name === "app_view_mode" ? { name, value: "excel" } : undefined),
     } as Awaited<ReturnType<typeof cookies>>);
@@ -299,7 +321,9 @@ describe("AppShell", () => {
   it("passes the stored sidebar mode cookie to the client sidebar to avoid refresh jumps", async () => {
     vi.mocked(getAuthSession).mockReset();
     vi.mocked(getUserSettings).mockReset();
-    vi.mocked(getEffectiveUserLicense).mockResolvedValue(null);
+    vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue(null);
+    vi.mocked(getActiveWorkspaceId).mockResolvedValue(null);
+    vi.mocked(listUserWorkspaces).mockResolvedValue([]);
     vi.mocked(cookies).mockResolvedValue({
       get: (name: string) => {
         if (name === "myc_sidebar_mode") {
@@ -343,5 +367,184 @@ describe("AppShell", () => {
     );
 
     expect(markup).toContain('data-initial-mode="mini"');
+  });
+
+  describe("workspace integration", () => {
+    beforeEach(() => {
+      vi.mocked(getAuthSession).mockReset();
+      vi.mocked(getUserSettings).mockReset();
+      vi.mocked(getEffectiveWorkspaceLicense).mockReset();
+      vi.mocked(getActiveWorkspaceId).mockReset();
+      vi.mocked(listUserWorkspaces).mockReset();
+    });
+
+    it("renders WorkspaceSwitcher when user has an active workspace", async () => {
+      vi.mocked(getAuthSession).mockResolvedValue({
+        user: { id: "user-1", name: "User", email: "user@test.com" },
+      });
+      vi.mocked(getUserSettings).mockResolvedValue({
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: "DD_MMM_YYYY",
+        appTheme: "light",
+        defaultViewMode: "modern",
+        excelShowFieldBorders: true,
+        excelRowHeight: 52,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: ["Estructuras"],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: "ollama",
+        floatingKhipuWidth: 600,
+        floatingKhipuHeight: 500,
+        floatingKhipuFontSize: "normal",
+        floatingKhipuPosition: "bottom-right",
+        floatingKhipuTheme: "light",
+      });
+      vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue({
+        availableFeatures: [],
+        planSlug: "pro",
+        planName: "Pro",
+        role: "OWNER",
+      });
+      vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-1");
+      vi.mocked(listUserWorkspaces).mockResolvedValue([
+        { id: "company-1", name: "MYC Ingenieria", role: "OWNER", logoUrl: null },
+      ]);
+
+      const markup = renderToStaticMarkup(
+        await AppShell({
+          children: <div>Contenido</div>,
+        }),
+      );
+
+      expect(markup).toContain('data-testid="workspace-switcher"');
+      expect(markup).toContain('data-active-id="company-1"');
+      expect(markup).toContain('data-workspace-count="1"');
+      expect(markup).toContain("Workspace");
+    });
+
+    it("does NOT render WorkspaceSwitcher when user has no active workspace", async () => {
+      vi.mocked(getAuthSession).mockResolvedValue({
+        user: { id: "user-2", name: "User 2", email: "user2@test.com" },
+      });
+      vi.mocked(getUserSettings).mockResolvedValue({
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: "DD_MMM_YYYY",
+        appTheme: "light",
+        defaultViewMode: "modern",
+        excelShowFieldBorders: true,
+        excelRowHeight: 52,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: ["Estructuras"],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: "ollama",
+        floatingKhipuWidth: 600,
+        floatingKhipuHeight: 500,
+        floatingKhipuFontSize: "normal",
+        floatingKhipuPosition: "bottom-right",
+        floatingKhipuTheme: "light",
+      });
+      vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue(null);
+      vi.mocked(getActiveWorkspaceId).mockResolvedValue(null);
+      vi.mocked(listUserWorkspaces).mockResolvedValue([]);
+
+      const markup = renderToStaticMarkup(
+        await AppShell({
+          children: <div>Contenido</div>,
+        }),
+      );
+
+      expect(markup).not.toContain('data-testid="workspace-switcher"');
+      expect(markup).not.toContain("Workspace");
+    });
+
+    it("renders WorkspaceSwitcher with multiple workspaces", async () => {
+      vi.mocked(getAuthSession).mockResolvedValue({
+        user: { id: "user-3", name: "User 3", email: "user3@test.com" },
+      });
+      vi.mocked(getUserSettings).mockResolvedValue({
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: "DD_MMM_YYYY",
+        appTheme: "light",
+        defaultViewMode: "modern",
+        excelShowFieldBorders: true,
+        excelRowHeight: 52,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: ["Estructuras"],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: "ollama",
+        floatingKhipuWidth: 600,
+        floatingKhipuHeight: 500,
+        floatingKhipuFontSize: "normal",
+        floatingKhipuPosition: "bottom-right",
+        floatingKhipuTheme: "light",
+      });
+      vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue(null);
+      vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-1");
+      vi.mocked(listUserWorkspaces).mockResolvedValue([
+        { id: "company-1", name: "MYC Ingenieria", role: "OWNER", logoUrl: null },
+        { id: "company-2", name: "Constructora Demo", role: "EDITOR", logoUrl: null },
+      ]);
+
+      const markup = renderToStaticMarkup(
+        await AppShell({
+          children: <div>Contenido</div>,
+        }),
+      );
+
+      expect(markup).toContain('data-testid="workspace-switcher"');
+      expect(markup).toContain('data-active-id="company-1"');
+      expect(markup).toContain('data-workspace-count="2"');
+      expect(markup).toContain("MYC Ingenieria");
+      expect(markup).toContain("Constructora Demo");
+    });
+
+    it("fetches workspace data and license for the authenticated user", async () => {
+      vi.mocked(getAuthSession).mockResolvedValue({
+        user: { id: "user-workspace", name: "WS User", email: "ws@test.com" },
+      });
+      vi.mocked(getUserSettings).mockResolvedValue({
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: "DD_MMM_YYYY",
+        appTheme: "light",
+        defaultViewMode: "modern",
+        excelShowFieldBorders: true,
+        excelRowHeight: 52,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: ["Estructuras"],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: "ollama",
+        floatingKhipuWidth: 600,
+        floatingKhipuHeight: 500,
+        floatingKhipuFontSize: "normal",
+        floatingKhipuPosition: "bottom-right",
+        floatingKhipuTheme: "light",
+      });
+      vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue(null);
+      vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-ws");
+      vi.mocked(listUserWorkspaces).mockResolvedValue([]);
+
+      await AppShell({
+        children: <div>Contenido</div>,
+      });
+
+      expect(getActiveWorkspaceId).toHaveBeenCalledWith("user-workspace");
+      expect(listUserWorkspaces).toHaveBeenCalledWith("user-workspace");
+      expect(getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
+        userId: "user-workspace",
+        companyId: "company-ws",
+      });
+    });
   });
 });

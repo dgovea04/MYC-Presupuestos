@@ -5,6 +5,7 @@ import { BudgetForm } from "@/components/budget/budget-form";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getProjectsByUser } from "@/lib/data/projects";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { getUserSettings } from "@/lib/data/settings";
 
 export default async function NewBudgetPage({
@@ -14,7 +15,11 @@ export default async function NewBudgetPage({
 }) {
   const session = await getAuthSession();
   const { projectId } = await searchParams;
-  const [projects, settings] = await Promise.all([getProjectsByUser(session!.user.id), getUserSettings(session!.user.id)]);
+  const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
+  const [projects, settings] = await Promise.all([
+    getProjectsByUser(session!.user.id, activeWorkspaceId),
+    getUserSettings(session!.user.id),
+  ]);
 
   return (
     <AppShell>

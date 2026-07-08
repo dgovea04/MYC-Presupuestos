@@ -2,13 +2,15 @@ import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-conte
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
 import { WorkSchedulePageContent } from "@/components/budget/work-schedule-page-content";
-import { getEffectiveUserLicense, hasFeatureAccess } from "@/lib/billing/entitlements";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { getWorkScheduleOverviewSection } from "@/lib/data/work-schedule";
 
 export default async function WorkSchedulePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
-  const license = await getEffectiveUserLicense({ userId: session.user.id });
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
   const hasAccess = hasFeatureAccess(license, "work_schedule.intelligent");
   const section = hasAccess ? await getWorkScheduleOverviewSection(id, session.user.id) : null;
 

@@ -2211,6 +2211,10 @@ body,
   transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
+[data-view-mode="excel"] .ui-button[aria-label="Workspace"] {
+  padding-inline: 0;
+}
+
 [data-view-mode="excel"] :is(.ui-button, .ui-select-trigger, .ui-select-item, [data-excel-field-trigger="true"]) svg {
   width: 1rem;
   height: 1rem;

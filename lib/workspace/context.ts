@@ -1,8 +1,11 @@
+import { cache } from "react";
 import { prisma } from "@/lib/db/prisma";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import type { WorkspaceContextEnvelope, WorkspaceRole } from "@/types/workspace";
 
-export async function getWorkspaceContextForUser(userId: string): Promise<WorkspaceContextEnvelope | null> {
+export const getWorkspaceContextForUser = cache(async function getWorkspaceContextForUser(
+  userId: string,
+): Promise<WorkspaceContextEnvelope | null> {
   const companyId = await getActiveWorkspaceId(userId);
   if (!companyId) return null;
 
@@ -33,4 +36,4 @@ export async function getWorkspaceContextForUser(userId: string): Promise<Worksp
     featureFlags: [],
     planSlug: (subscription?.membershipPlan?.slug as "starter" | "pro" | "empresa") ?? "starter",
   };
-}
+});
