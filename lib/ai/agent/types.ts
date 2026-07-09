@@ -176,6 +176,8 @@ export type AgentOrchestratorOutput = {
     approvalId: string;
     stepId?: string;
     reason: string;
+    /** Resumen legible del impacto esperado: qué proyecto/presupuesto/entidad se vería afectada. */
+    impactSummary?: string;
   };
   toolActivity: AgentToolActivitySummary[];
   warnings: string[];

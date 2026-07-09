@@ -410,11 +410,21 @@ function AgentRightPanel({
                 Aprobación pendiente
               </p>
             </div>
-            <div className="rounded-xl border border-amber-200 bg-white p-3">
+            <div className="rounded-xl border border-amber-200 bg-white p-3 space-y-2">
               <p className="text-sm font-semibold text-slate-800">
                 {execution.pendingApproval.reason}
               </p>
-              <p className="mt-1 text-[11px] text-slate-500">
+              {execution.pendingApproval.impactSummary && (
+                <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-600 mb-0.5">
+                    Impacto esperado
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    {execution.pendingApproval.impactSummary}
+                  </p>
+                </div>
+              )}
+              <p className="text-[11px] text-slate-400">
                 ID: {execution.pendingApproval.approvalId}
               </p>
             </div>
