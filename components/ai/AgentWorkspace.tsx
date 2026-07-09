@@ -13,6 +13,10 @@ import {
   Activity,
   Lightbulb,
   Zap,
+  BrainCircuit,
+  FolderKanban,
+  Hash,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -360,6 +364,7 @@ function ExecutionPlanPanel({
 function AgentRightPanel({
   streamExecution,
   streaming,
+  projectId,
   allTools,
   onApprove,
   onReject,
@@ -367,13 +372,76 @@ function AgentRightPanel({
 }: {
   streamExecution: ReturnType<typeof useAgentStream>["execution"];
   streaming: boolean;
+  projectId?: string;
   allTools: Array<{ name: string; description: string; risk: AgentToolRisk }>;
   onApprove: (toolName: string) => void;
   onReject: (toolName: string) => void;
   approving: boolean;
 }) {
+  const completedTools = streamExecution.toolActivity.filter((a) => a.success).length;
+  const failedTools = streamExecution.toolActivity.filter((a) => !a.success && a.latencyMs !== undefined).length;
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
+      {/* Context / Memory Panel */}
+      <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
+        <CardContent className="p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <BrainCircuit className="h-4 w-4 text-[var(--app-text-muted)]" />
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">
+              Contexto
+            </p>
+          </div>
+          <div className="space-y-2">
+            {projectId && (
+              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5">
+                <FolderKanban className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <p className="min-w-0 flex-1 text-[11px] text-slate-600">
+                  <span className="text-slate-400">Proyecto</span>{" "}
+                  <span className="font-mono font-medium">{projectId}</span>
+                </p>
+              </div>
+            )}
+            <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5">
+              <Hash className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <p className="min-w-0 flex-1 text-[11px] text-slate-600">
+                <span className="text-slate-400">Herramientas</span>{" "}
+                <span className="font-medium">{completedTools}</span>
+                {failedTools > 0 && (
+                  <span className="text-rose-500"> / {failedTools} fallos</span>
+                )}
+              </p>
+            </div>
+            {streamExecution.latencyMs && (
+              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5">
+                <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <p className="min-w-0 flex-1 text-[11px] text-slate-600">
+                  <span className="text-slate-400">Latencia</span>{" "}
+                  <span className="font-medium">{(streamExecution.latencyMs / 1000).toFixed(1)}s</span>
+                </p>
+              </div>
+            )}
+            {streamExecution.warnings.length > 0 && (
+              <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <p className="min-w-0 flex-1 text-[11px] text-amber-700">
+                  {streamExecution.warnings.length} advertencia{streamExecution.warnings.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+            )}
+            {streamExecution.summary && (
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                {streamExecution.summary.slice(0, 120)}
+                {streamExecution.summary.length > 120 ? "…" : ""}
+              </p>
+            )}
+            {!streaming && !streamExecution.state && (
+              <p className="text-[11px] text-slate-400 italic">Sin contexto activo. Envía un objetivo para comenzar.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Available Tools */}
       <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
         <CardContent className="p-4">
@@ -624,6 +692,7 @@ export function AgentWorkspace({
       <AgentRightPanel
         streamExecution={streamExec}
         streaming={streaming}
+        projectId={projectId}
         allTools={getAvailableTools()}
         onApprove={handleApprove}
         onReject={handleReject}
