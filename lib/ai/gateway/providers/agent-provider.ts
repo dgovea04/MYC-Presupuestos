@@ -8,6 +8,7 @@ import { createPolicyEngine } from "@/lib/ai/agent/policy-engine";
 import { createToolExecutor } from "@/lib/ai/agent/tool-executor";
 import { allTools } from "@/lib/ai/agent/tools";
 import type { AgentLoopMessage } from "@/lib/ai/agent/contracts";
+import { prisma } from "@/lib/db/prisma";
 
 export const DEFAULT_AGENT_MODEL = "deepseek/deepseek-chat-v3-0324:free";
 
@@ -338,6 +339,28 @@ export async function* streamAgentChat(
 
   yield { type: "delta", text: `🤖 Khipu Agente iniciando con ${getAgentModelShortLabel(requestedModel)}...\n\n` };
 
+  // ── Persist ledger: crear AgentExecution (solo si hay userId válido) ─────
+  let executionId: string | null = null;
+  if (request.userId) {
+    try {
+      const execution = await prisma.agentExecution.create({
+        data: {
+          userId: request.userId,
+        projectId: request.projectId ?? null,
+        mode: "chat",
+        state: "EXECUTING",
+        goal: request.messages.find((m) => m.role === "user")?.content.slice(0, 500) ?? "Chat",
+        provider: "openrouter",
+        model: requestedModel,
+          contextSnapshotJson: request.projectId ? { projectId: request.projectId } : null,
+        },
+      });
+      executionId = execution.id;
+    } catch {
+      // Non-blocking: ledger persistence failure should not break the agent
+    }
+  }
+
   while (iterations < MAX_AGENT_LOOP_ITERATIONS) {
     iterations++;
 
@@ -388,6 +411,15 @@ export async function* streamAgentChat(
           },
         },
       };
+      // Update ledger with failed state
+      if (executionId) {
+        try {
+          await prisma.agentExecution.update({
+            where: { id: executionId },
+            data: { state: "FAILED", lastError: errorMsg, finishedAt: new Date() },
+          });
+        } catch { /* non-blocking */ }
+      }
       return;
     }
 
@@ -419,6 +451,19 @@ export async function* streamAgentChat(
           },
         },
       };
+      // Update ledger with completed state
+      if (executionId) {
+        try {
+          await prisma.agentExecution.update({
+            where: { id: executionId },
+            data: {
+              state: "EXECUTED",
+              summary: finalAnswer?.slice(0, 500) ?? null,
+              finishedAt: new Date(),
+            },
+          });
+        } catch { /* non-blocking */ }
+      }
       return;
     }
 
@@ -433,13 +478,33 @@ export async function* streamAgentChat(
     for (const toolCall of output.toolCalls) {
       yield { type: "delta", text: `🔧 Ejecutando ${toolCall.name}...\n` };
 
+      const toolStartTime = Date.now();
       const result = await toolExecutor.execute({
         toolCall,
         userId: request.userId ?? "unknown",
         projectId: request.projectId,
-        executionId: `agent_${Date.now()}_${iterations}`,
+        executionId: executionId ?? `agent_${Date.now()}_${iterations}`,
         mode: "chat",
       });
+
+      // Persist tool invocation in ledger
+      if (executionId) {
+        try {
+          await prisma.agentToolInvocation.create({
+            data: {
+              executionId,
+              toolName: toolCall.name,
+              argumentsJson: toolCall.arguments as Record<string, unknown>,
+              resultJson: result.toolResult.output ? { output: result.toolResult.output } : null,
+              latencyMs: Date.now() - toolStartTime,
+              success: result.success,
+              errorMessage: result.success ? null : result.summary,
+            },
+          });
+        } catch {
+          // Non-blocking
+        }
+      }
 
       toolResults.push({
         toolName: toolCall.name,
@@ -480,6 +545,15 @@ export async function* streamAgentChat(
             },
           },
         };
+        // Update ledger with pending approval state
+        if (executionId) {
+          try {
+            await prisma.agentExecution.update({
+              where: { id: executionId },
+              data: { state: "PENDING_APPROVAL", summary: approvalMsg.slice(0, 500) },
+            });
+          } catch { /* non-blocking */ }
+        }
         return;
       }
     }
