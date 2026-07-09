@@ -28,6 +28,7 @@ import { TypingIndicator } from "@/components/ai/TypingIndicator";
 import { useDedupedHistory } from "@/components/ai/use-deduped-history";
 import { ContextSidebar } from "@/components/ai/ContextSidebar";
 import { PreviewDebugPanel } from "@/components/ai/debug-panel";
+import { AGENT_MODELS, COST_EMOJI, getAgentModelCostEmoji, getAgentModelShortLabel } from "@/lib/ai/agent/models";
 import type {
   AiAssistantControllerViewModel,
   AiFeedbackType,
@@ -362,7 +363,17 @@ export function AiAssistantPanel({
           >
             <KhipuSymbol className="h-6 w-6 shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900">Hola, soy Khipu</p>
+              <p className="text-sm font-semibold text-slate-900">
+                Hola, soy Khipu
+                {controller.provider === "agent" ? (
+                  <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                    · {getAgentModelShortLabel(controller.agentModel)}
+                    {getAgentModelCostEmoji(controller.agentModel) ? (
+                      <span className="ml-0.5 text-[10px]">{getAgentModelCostEmoji(controller.agentModel)}</span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </p>
               <p className="text-xs text-slate-600">¿En qué puedo ayudarte hoy?</p>
             </div>
           </motion.div>
@@ -644,7 +655,17 @@ export function AiAssistantPanel({
                     {providerStatus.label}
                   </span>
                 </div>
-                <p>{readProviderLabel(controller.provider)}</p>
+                <p>
+                  {readProviderLabel(controller.provider)}
+                  {controller.provider === "agent" ? (
+                    <span className="ml-1.5 text-[11px] font-medium text-[var(--app-text-muted)]">
+                      · {getAgentModelShortLabel(controller.agentModel)}
+                      {getAgentModelCostEmoji(controller.agentModel) ? (
+                        <span className="ml-0.5 text-[10px]">{getAgentModelCostEmoji(controller.agentModel)}</span>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </p>
                 <Button variant="outline" size="sm" className="w-fit gap-2" onClick={() => void controller.refreshHealth()}>
                   <RefreshCw className="h-4 w-4" />
                   Actualizar estado
@@ -710,13 +731,13 @@ export function AiAssistantPanel({
             <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
               <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"] as AssistantProvider[]).map((provider) => (
+                {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter", "agent"] as AssistantProvider[]).map((provider) => (
                   <button
                     key={provider}
                     className={cn(
                       "rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                       controller.provider === provider ? "border-blue-300 bg-[var(--app-primary-muted)] text-blue-800" : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)]",
-                      (provider === "openai" || provider === "gemini" || provider === "openrouter") && !controller.cloudConfigured[provider] ? "opacity-60" : "",
+                      (provider === "openai" || provider === "gemini" || provider === "openrouter" || provider === "agent") && !controller.cloudConfigured[provider] ? "opacity-60" : "",
                     )}
                     type="button"
                     aria-pressed={controller.provider === provider}
@@ -731,7 +752,23 @@ export function AiAssistantPanel({
                   Estado: {readBridgeStateLabel(controller.bridgeState)}
                 </p>
               ) : null}
-              {(controller.provider === "openai" || controller.provider === "gemini" || controller.provider === "openrouter") &&
+              {controller.provider === "agent" && controller.cloudConfigured.agent ? (
+                <div className="mt-3">
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">Modelo</label>
+                  <select
+                    className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm font-medium text-[var(--app-text-strong)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={controller.agentModel}
+                    onChange={(e) => controller.setAgentModel(e.target.value)}
+                  >
+                    {AGENT_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {COST_EMOJI[m.cost]}{` ${m.label}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {(controller.provider === "openai" || controller.provider === "gemini" || controller.provider === "openrouter" || controller.provider === "agent") &&
               !controller.cloudConfigured[controller.provider] ? (
                 <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                   {readProviderButtonLabel(controller.provider)} no configurado. Agrega tu API key en .env o Configuracion.
@@ -742,10 +779,10 @@ export function AiAssistantPanel({
             <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
               <p className="text-sm font-semibold text-[var(--app-text-strong)]">Accion activa</p>
               <p className="mt-1 text-sm text-[var(--app-text-muted)]">
-                Modelo solicitado: <span className="font-medium text-[var(--app-text-strong)]">{readActiveModelLabel(controller.provider, activeHealth)}</span>
+                Modelo solicitado: <span className="font-medium text-[var(--app-text-strong)]">{readActiveModelLabel(controller.provider, activeHealth, controller.agentModel)}</span>
               </p>
               <p className="mt-1 text-sm text-[var(--app-text-muted)]">
-                Modelo resuelto: <span className="font-medium text-[var(--app-text-strong)]">{readResolvedModelLabel(controller.provider, activeHealth)}</span>
+                Modelo resuelto: <span className="font-medium text-[var(--app-text-strong)]">{readResolvedModelLabel(controller.provider, activeHealth, controller.agentModel)}</span>
               </p>
               <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                 Ultima latencia: <span className="font-medium text-[var(--app-text-strong)]">{readLatencyLabel(controller.provider, controller.health?.metrics[controller.activeAction]?.latencyMs)}</span>
@@ -1229,6 +1266,7 @@ function readProviderStatus(
   if (provider === "openai") return cloudConfigured.openai ? { label: "OpenAI API listo", className: "bg-emerald-100 text-emerald-700" } : { label: "OpenAI sin key", className: "bg-amber-100 text-amber-800" };
   if (provider === "gemini") return cloudConfigured.gemini ? { label: "Gemini API listo", className: "bg-emerald-100 text-emerald-700" } : { label: "Gemini sin key", className: "bg-amber-100 text-amber-800" };
   if (provider === "openrouter") return cloudConfigured.openrouter ? { label: "OpenRouter listo", className: "bg-emerald-100 text-emerald-700" } : { label: "OpenRouter sin key", className: "bg-amber-100 text-amber-800" };
+  if (provider === "agent") return cloudConfigured.agent ? { label: "Agente listo", className: "bg-emerald-100 text-emerald-700" } : { label: "Agente sin key", className: "bg-amber-100 text-amber-800" };
   return { label: "Desconocido", className: "bg-slate-100 text-slate-600" };
 }
 
@@ -1250,6 +1288,7 @@ function readProviderLabel(provider: AssistantProvider) {
   if (provider === "openai") return "ChatGPT API";
   if (provider === "gemini") return "Gemini API";
   if (provider === "openrouter") return "OpenRouter";
+  if (provider === "agent") return "Khipu Agente";
   return provider;
 }
 
@@ -1259,31 +1298,34 @@ function readProviderButtonLabel(provider: AssistantProvider) {
   if (provider === "openai") return "ChatGPT";
   if (provider === "gemini") return "Gemini";
   if (provider === "openrouter") return "OpenRouter";
+  if (provider === "agent") return "Agente";
   return provider;
 }
 
-function readActiveModelLabel(provider: AssistantProvider, activeHealth: { requestedModel?: string } | null) {
+function readActiveModelLabel(provider: AssistantProvider, activeHealth: { requestedModel?: string } | null, agentModel?: string) {
   if (provider === "ollama") return activeHealth?.requestedModel ?? "Sin datos";
   if (provider === "chatgpt-bridge") return "ChatGPT web";
   if (provider === "openai") return "OpenAI API";
   if (provider === "gemini") return "Gemini API";
   if (provider === "openrouter") return "OpenRouter API";
+  if (provider === "agent") return getAgentModelShortLabel(agentModel ?? "");
   return "Sin datos";
 }
 
-function readResolvedModelLabel(provider: AssistantProvider, activeHealth: { model?: string } | null) {
+function readResolvedModelLabel(provider: AssistantProvider, activeHealth: { model?: string } | null, agentModel?: string) {
   if (provider === "ollama") return activeHealth?.model ?? "Sin datos";
   if (provider === "chatgpt-bridge") return "Pestana ChatGPT";
   if (provider === "openai") return "OpenAI API";
   if (provider === "gemini") return "Gemini API";
   if (provider === "openrouter") return "OpenRouter API";
+  if (provider === "agent") return getAgentModelShortLabel(agentModel ?? "");
   return "Sin datos";
 }
 
 function readLatencyLabel(provider: AssistantProvider, latencyMs: number | null | undefined) {
   if (provider === "ollama") return typeof latencyMs === "number" ? `${latencyMs} ms` : "Sin ejecuciones";
   if (provider === "chatgpt-bridge") return "Depende de ChatGPT";
-  if (provider === "openai" || provider === "gemini" || provider === "openrouter") return "Nube";
+  if (provider === "openai" || provider === "gemini" || provider === "openrouter" || provider === "agent") return "Nube";
   return "Sin ejecuciones";
 }
 
@@ -1303,6 +1345,7 @@ function readSubmitLabel(provider: AssistantProvider, loading: boolean, streamin
   if (provider === "openai") return loading ? "Consultando OpenAI" : "Enviar a OpenAI";
   if (provider === "gemini") return loading ? "Consultando Gemini" : "Enviar a Gemini";
   if (provider === "openrouter") return loading ? "Consultando OpenRouter" : "Enviar a OpenRouter";
+  if (provider === "agent") return loading ? "Consultando Agente" : "Enviar a Agente";
   if (streaming) return "Khipu respondiendo";
   return loading ? "Consultando IA local" : "Enviar a Ollama";
 }

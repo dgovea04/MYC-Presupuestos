@@ -175,11 +175,12 @@ function isSameHistoryScope(left: HistoryScope, right: HistoryScope) {
   return right.mode === "project" && left.projectId === right.projectId;
 }
 
-function toBackendProvider(frontend: "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter"): "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" {
+function toBackendProvider(frontend: "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter" | "agent"): "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" | "agent" {
   return frontend === "chatgpt-bridge" ? "chatgpt_bridge" : frontend;
 }
 
 export async function submitStreamingChatRequest({
+  agentModel,
   context,
   latestHistoryScope,
   provider,
@@ -189,9 +190,10 @@ export async function submitStreamingChatRequest({
   setResult,
   setStreaming,
 }: {
+  agentModel?: string;
   context: AiContext;
   latestHistoryScope: MutableRefObject<HistoryScope>;
-  provider: "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter";
+  provider: "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter" | "agent";
   request: AssistantRequest;
   requestHistoryScope: HistoryScope;
   setHistory: Dispatch<SetStateAction<AiHistoryEntry[]>>;
@@ -199,11 +201,17 @@ export async function submitStreamingChatRequest({
   setStreaming: (value: boolean) => void;
 }) {
   try {
-    const requestBody = JSON.stringify(
-      requestHistoryScope.mode === "project"
-        ? { ...request.payload, provider: toBackendProvider(provider), projectId: requestHistoryScope.projectId }
-        : { ...request.payload, provider: toBackendProvider(provider) },
-    );
+    const basePayload: Record<string, unknown> = {
+      ...request.payload,
+      provider: toBackendProvider(provider),
+    };
+    if (requestHistoryScope.mode === "project") {
+      basePayload.projectId = requestHistoryScope.projectId;
+    }
+    if (agentModel && provider === "agent") {
+      basePayload.modelPreference = agentModel;
+    }
+    const requestBody = JSON.stringify(basePayload);
 
     setStreaming(true);
     await waitForStreamPaint();

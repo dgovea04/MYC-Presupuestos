@@ -214,46 +214,49 @@ enum CompanyMembershipStatus {
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  name                String
-  email               String    @unique
-  emailVerifiedAt     DateTime?
-  avatarUrl           String?
-  phone               String?
-  jobTitle            String?
-  bio                 String?
-  role                UserRole  @default(USER)
-  status              UserStatus @default(ACTIVE)
-  membershipPlanId    String?
-  aiTokenExtraMonthly Int       @default(0)
-  passwordHash        String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  companies           Company[]
-  companyMemberships  CompanyMembership[]
-  settings            UserSettings?
-  activityEvents ActivityEvent[]
-  membershipPlan      MembershipPlan? @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
-  aiUsagePeriods      AiUsagePeriod[]
-  aiTokenLedger       AiTokenLedger[] @relation("AiTokenLedgerUser")
-  aiTokenAdjustments  AiTokenLedger[] @relation("AiTokenLedgerAdmin")
-  aiProjectHistoryEntries AiProjectHistoryEntry[]
-  aiSuggestionFeedbackEvents AiSuggestionFeedbackEvent[]
-  aiSessionFeedbackEvents   AiSessionFeedbackEvent[]
-  billingSubscriptions BillingSubscription[]
-  noteTasks           NoteTask[]
-  generatedPartidas   GeneratedPartida[]
-  metradoSheets       MetradoSheet[]
-  customMetradoFormulas CustomMetradoFormula[]
-  budgetTemplates     BudgetTemplate[]
-  emailVerificationTokens EmailVerificationToken[]
-  collaborationPresences   CollaborationPresence[]
-  collaborationEditSessions CollaborationEditSession[]
-  collaborationCommentsCreated CollaborationComment[] @relation("CommentCreatedBy")
-  collaborationCommentsResolved CollaborationComment[] @relation("CommentResolvedBy")
-  changeEvents           BudgetChangeEvent[]
-  versionSnapshots       BudgetVersionSnapshot[]
-  invitedMemberships     CompanyMembership[]    @relation("MembershipInviter")
+  id                            String                      @id @default(cuid())
+  name                          String
+  email                         String                      @unique
+  emailVerifiedAt               DateTime?
+  avatarUrl                     String?
+  phone                         String?
+  jobTitle                      String?
+  bio                           String?
+  role                          UserRole                    @default(USER)
+  status                        UserStatus                  @default(ACTIVE)
+  membershipPlanId              String?
+  aiTokenExtraMonthly           Int                         @default(0)
+  passwordHash                  String?
+  createdAt                     DateTime                    @default(now())
+  updatedAt                     DateTime                    @updatedAt
+  companies                     Company[]
+  companyMemberships            CompanyMembership[]
+  settings                      UserSettings?
+  activityEvents                ActivityEvent[]
+  membershipPlan                MembershipPlan?             @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
+  aiUsagePeriods                AiUsagePeriod[]
+  aiTokenLedger                 AiTokenLedger[]             @relation("AiTokenLedgerUser")
+  aiTokenAdjustments            AiTokenLedger[]             @relation("AiTokenLedgerAdmin")
+  aiProjectHistoryEntries       AiProjectHistoryEntry[]
+  aiSuggestionFeedbackEvents    AiSuggestionFeedbackEvent[]
+  aiSessionFeedbackEvents       AiSessionFeedbackEvent[]
+  billingSubscriptions          BillingSubscription[]
+  noteTasks                     NoteTask[]
+  generatedPartidas             GeneratedPartida[]
+  metradoSheets                 MetradoSheet[]
+  customMetradoFormulas         CustomMetradoFormula[]
+  budgetTemplates               BudgetTemplate[]
+  emailVerificationTokens       EmailVerificationToken[]
+  collaborationPresences        CollaborationPresence[]
+  collaborationEditSessions     CollaborationEditSession[]
+  collaborationCommentsCreated  CollaborationComment[]      @relation("CommentCreatedBy")
+  collaborationCommentsResolved CollaborationComment[]      @relation("CommentResolvedBy")
+  changeEvents                  BudgetChangeEvent[]
+  versionSnapshots              BudgetVersionSnapshot[]
+  invitedMemberships            CompanyMembership[]         @relation("MembershipInviter")
+  agentExecutions               AgentExecution[]
+  agentDecidedApprovals         AgentApproval[]             @relation("AgentApprovalDecidedBy")
+  agentRollbacks                AgentRollback[]             @relation("AgentRollbackCreatedBy")
 
   @@index([role])
   @@index([status])
@@ -261,12 +264,12 @@ model User {
 }
 
 model EmailVerificationToken {
-  id         String   @id
-  userId     String
-  tokenHash  String   @unique
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -274,19 +277,19 @@ model EmailVerificationToken {
 }
 
 model MembershipPlan {
-  id                String   @id @default(cuid())
-  name              String
-  slug              String   @unique
-  monthlyTokenLimit Int
-  billingMode       BillingMode @default(FREE)
-  stripePriceId     String?
-  projectLimit      Int?
-  budgetLimit       Int?
-  entitlements      String[] @default([])
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  users             User[]
+  id                   String                @id @default(cuid())
+  name                 String
+  slug                 String                @unique
+  monthlyTokenLimit    Int
+  billingMode          BillingMode           @default(FREE)
+  stripePriceId        String?
+  projectLimit         Int?
+  budgetLimit          Int?
+  entitlements         String[]              @default([])
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  users                User[]
   companySubscriptions CompanySubscription[]
 
   @@index([isActive])
@@ -320,7 +323,7 @@ model BillingWebhookEvent {
   stripeEventId String   @unique
   type          String
   processedAt   DateTime @default(now())
-  payload        Json
+  payload       Json
 
   @@index([type, processedAt(sort: Desc)])
 }
@@ -362,7 +365,7 @@ model AiTokenLedger {
 }
 
 model AiProjectHistoryEntry {
-  id             String   @id @default(cuid())
+  id             String                      @id @default(cuid())
   projectId      String
   userId         String
   action         String
@@ -372,16 +375,16 @@ model AiProjectHistoryEntry {
   structuredData Json?
   model          String
   requestedModel String
-  fallbackUsed   Boolean  @default(false)
-  warnings       String[] @default([])
+  fallbackUsed   Boolean                     @default(false)
+  warnings       String[]                    @default([])
   latencyMs      Int?
   provider       String?
   task           String?
   promptHash     String?
   responseHash   String?
-  createdAt      DateTime @default(now())
-  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                    @default(now())
+  project        Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   feedbackEvents AiSuggestionFeedbackEvent[]
 
   @@index([projectId, createdAt(sort: Desc)])
@@ -433,16 +436,16 @@ model ActivityEvent {
 }
 
 model SystemSettings {
-  id             String   @id @default(cuid())
-  singletonKey   String   @unique @default("system")
-  openaiApiKey   String?
-  geminiApiKey   String?
+  id               String   @id @default(cuid())
+  singletonKey     String   @unique @default("system")
+  openaiApiKey     String?
+  geminiApiKey     String?
   openrouterApiKey String?
-  openaiModel    String?
-  geminiModel    String?
-  openrouterModel String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  openaiModel      String?
+  geminiModel      String?
+  openrouterModel  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([singletonKey])
 }
@@ -482,34 +485,34 @@ model UserSettings {
 }
 
 model Company {
-  id         String     @id @default(cuid())
-  userId     String
-  name       String
-  ruc        String?
-  logoUrl    String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projects   Project[]
-  resources  Resource[]
-  collaborationPresence   CollaborationPresence[]
+  id                        String                     @id @default(cuid())
+  userId                    String
+  name                      String
+  ruc                       String?
+  logoUrl                   String?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects                  Project[]
+  resources                 Resource[]
+  collaborationPresence     CollaborationPresence[]
   collaborationEditSessions CollaborationEditSession[]
-  collaborationComments   CollaborationComment[]
-  budgetChangeEvents      BudgetChangeEvent[]
-  budgetVersionSnapshots  BudgetVersionSnapshot[]
-  memberships         CompanyMembership[]
-  subscription        CompanySubscription?
+  collaborationComments     CollaborationComment[]
+  budgetChangeEvents        BudgetChangeEvent[]
+  budgetVersionSnapshots    BudgetVersionSnapshot[]
+  memberships               CompanyMembership[]
+  subscription              CompanySubscription?
 
   @@index([userId])
 }
 
 model WorkCalendar {
-  id              String                    @id @default(cuid())
+  id              String                  @id @default(cuid())
   name            String
-  workDays        Int                       @default(31)
-  workHoursPerDay Decimal                   @default(8) @db.Decimal(6, 2)
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
+  workDays        Int                     @default(31)
+  workHoursPerDay Decimal                 @default(8) @db.Decimal(6, 2)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
   exceptions      WorkCalendarException[]
   projectLinks    ProjectWorkCalendar[]
 
@@ -532,14 +535,14 @@ model WorkCalendarException {
 }
 
 model ProjectWorkCalendar {
-  id              String       @id @default(cuid())
-  projectId       String
-  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workCalendarId  String
-  workCalendar    WorkCalendar @relation(fields: [workCalendarId], references: [id], onDelete: Cascade)
-  label           String?
-  sortOrder       Int          @default(0)
-  createdAt       DateTime     @default(now())
+  id             String       @id @default(cuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workCalendarId String
+  workCalendar   WorkCalendar @relation(fields: [workCalendarId], references: [id], onDelete: Cascade)
+  label          String?
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
 
   @@unique([projectId, workCalendarId])
   @@index([projectId])
@@ -548,32 +551,33 @@ model ProjectWorkCalendar {
 }
 
 model Project {
-  id              String        @id @default(cuid())
-  companyId       String
-  name            String
-  clientName      String?
-  location        String?
-  projectType     String?
-  startDate       DateTime?
-  endDate         DateTime?
-  status          ProjectStatus @default(PLANNING)
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  projectCalendars ProjectWorkCalendar[]
-  budgets         Budget[]
-  polynomialFormulas PolynomialFormula[]
-  noteTasks   NoteTask[]
-  metradoSheets MetradoSheet[]
-  budgetTemplates BudgetTemplate[]
-  aiProjectHistoryEntries AiProjectHistoryEntry[]
+  id                         String                      @id @default(cuid())
+  companyId                  String
+  name                       String
+  clientName                 String?
+  location                   String?
+  projectType                String?
+  startDate                  DateTime?
+  endDate                    DateTime?
+  status                     ProjectStatus               @default(PLANNING)
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  company                    Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  projectCalendars           ProjectWorkCalendar[]
+  budgets                    Budget[]
+  polynomialFormulas         PolynomialFormula[]
+  noteTasks                  NoteTask[]
+  metradoSheets              MetradoSheet[]
+  budgetTemplates            BudgetTemplate[]
+  aiProjectHistoryEntries    AiProjectHistoryEntry[]
   aiSuggestionFeedbackEvents AiSuggestionFeedbackEvent[]
-  aiMemory AiProjectMemory[]
-  collaborationPresence   CollaborationPresence[]
-  collaborationEditSessions CollaborationEditSession[]
-  collaborationComments   CollaborationComment[]
-  budgetChangeEvents      BudgetChangeEvent[]
-  budgetVersionSnapshots  BudgetVersionSnapshot[]
+  aiMemory                   AiProjectMemory[]
+  collaborationPresence      CollaborationPresence[]
+  collaborationEditSessions  CollaborationEditSession[]
+  collaborationComments      CollaborationComment[]
+  budgetChangeEvents         BudgetChangeEvent[]
+  budgetVersionSnapshots     BudgetVersionSnapshot[]
+  agentExecutions            AgentExecution[]
 
   @@index([companyId])
 }
@@ -617,49 +621,49 @@ model AiProjectMemory {
 }
 
 model Budget {
-  id                    String          @id @default(cuid())
-  projectId             String
-  parentBudgetId        String?
-  kind                  BudgetKind      @default(GENERAL)
-  name                  String
-  currency              String          @default("PEN")
-  igvRate               Decimal         @default(0.18) @db.Decimal(10, 4)
-  generalExpensesRate   Decimal         @default(0.10) @db.Decimal(10, 4)
-  utilityRate           Decimal         @default(0.08) @db.Decimal(10, 4)
-  totalDirectCost       Decimal         @default(0) @db.Decimal(18, 4)
-  totalGeneralExpenses  Decimal         @default(0) @db.Decimal(18, 4)
-  totalUtility          Decimal         @default(0) @db.Decimal(18, 4)
-  totalTax              Decimal         @default(0) @db.Decimal(18, 4)
-  totalAmount           Decimal         @default(0) @db.Decimal(18, 4)
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  project               Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentBudget          Budget?         @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id], onDelete: SetNull)
-  childBudgets          Budget[]        @relation("BudgetHierarchy")
-  levels                BudgetLevel[]
-  items                 BudgetItem[]
-  generalExpenses       GeneralExpense[]
-  generalExpenseGroups  GeneralExpenseGroup[]
-  footerRows            BudgetFooterRow[]
-  polynomialFormulas    PolynomialFormula[]
-  workSchedule         WorkSchedule?
-  valuations            Valuation[]
-  reports               Report[]
-  riskVariables         RiskVariable[]
-  riskCorrelations      RiskCorrelation[]
-  riskSimulationRuns    RiskSimulationRun[]
-  noteTasks             NoteTask[]
-  metradoSheets         MetradoSheet[]
-  budgetTemplates       BudgetTemplate[]
-  collaborationPresence   CollaborationPresence[]
+  id                        String                     @id @default(cuid())
+  projectId                 String
+  parentBudgetId            String?
+  kind                      BudgetKind                 @default(GENERAL)
+  name                      String
+  currency                  String                     @default("PEN")
+  igvRate                   Decimal                    @default(0.18) @db.Decimal(10, 4)
+  generalExpensesRate       Decimal                    @default(0.10) @db.Decimal(10, 4)
+  utilityRate               Decimal                    @default(0.08) @db.Decimal(10, 4)
+  totalDirectCost           Decimal                    @default(0) @db.Decimal(18, 4)
+  totalGeneralExpenses      Decimal                    @default(0) @db.Decimal(18, 4)
+  totalUtility              Decimal                    @default(0) @db.Decimal(18, 4)
+  totalTax                  Decimal                    @default(0) @db.Decimal(18, 4)
+  totalAmount               Decimal                    @default(0) @db.Decimal(18, 4)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  project                   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentBudget              Budget?                    @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id], onDelete: SetNull)
+  childBudgets              Budget[]                   @relation("BudgetHierarchy")
+  levels                    BudgetLevel[]
+  items                     BudgetItem[]
+  generalExpenses           GeneralExpense[]
+  generalExpenseGroups      GeneralExpenseGroup[]
+  footerRows                BudgetFooterRow[]
+  polynomialFormulas        PolynomialFormula[]
+  workSchedule              WorkSchedule?
+  valuations                Valuation[]
+  reports                   Report[]
+  riskVariables             RiskVariable[]
+  riskCorrelations          RiskCorrelation[]
+  riskSimulationRuns        RiskSimulationRun[]
+  noteTasks                 NoteTask[]
+  metradoSheets             MetradoSheet[]
+  budgetTemplates           BudgetTemplate[]
+  collaborationPresence     CollaborationPresence[]
   collaborationEditSessions CollaborationEditSession[]
-  collaborationComments   CollaborationComment[]
-  budgetChangeEvents      BudgetChangeEvent[]
-  budgetVersionSnapshots  BudgetVersionSnapshot[]
+  collaborationComments     CollaborationComment[]
+  budgetChangeEvents        BudgetChangeEvent[]
+  budgetVersionSnapshots    BudgetVersionSnapshot[]
 
+  @@unique([id, projectId])
   @@index([projectId])
   @@index([parentBudgetId])
-  @@unique([id, projectId])
 }
 
 model BudgetTemplate {
@@ -684,22 +688,22 @@ model BudgetTemplate {
 }
 
 model CollaborationPresence {
-  id        String                      @id @default(cuid())
-  companyId String
-  projectId String
-  budgetId  String
-  userId    String
-  route     String
-  module    String
-  status    CollaborationPresenceStatus @default(ACTIVE)
-  lastSeenAt DateTime                  @default(now())
+  id         String                      @id @default(cuid())
+  companyId  String
+  projectId  String
+  budgetId   String
+  userId     String
+  route      String
+  module     String
+  status     CollaborationPresenceStatus @default(ACTIVE)
+  lastSeenAt DateTime                    @default(now())
   expiresAt  DateTime
-  createdAt  DateTime                  @default(now())
-  updatedAt  DateTime                  @updatedAt
-  budget     Budget                    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  user       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project    Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  company    Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
+  budget     Budget                      @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  user       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project    Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company    Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([budgetId, userId])
   @@index([budgetId, expiresAt])
@@ -710,23 +714,23 @@ model CollaborationPresence {
 }
 
 model CollaborationEditSession {
-  id               String                   @id @default(cuid())
-  companyId        String
-  projectId        String
-  budgetId         String
-  userId           String
-  entityType       CollaborationEntityType
-  entityId         String
-  field            String
-  startedAt        DateTime                 @default(now())
-  lastHeartbeatAt  DateTime                 @default(now())
-  expiresAt        DateTime
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  budget           Budget                   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  company          Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id              String                  @id @default(cuid())
+  companyId       String
+  projectId       String
+  budgetId        String
+  userId          String
+  entityType      CollaborationEntityType
+  entityId        String
+  field           String
+  startedAt       DateTime                @default(now())
+  lastHeartbeatAt DateTime                @default(now())
+  expiresAt       DateTime
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  budget          Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([budgetId, entityType, entityId])
   @@index([expiresAt])
@@ -735,7 +739,7 @@ model CollaborationEditSession {
 }
 
 model CollaborationComment {
-  id              String                   @id @default(cuid())
+  id              String                  @id @default(cuid())
   companyId       String
   projectId       String
   budgetId        String
@@ -743,19 +747,19 @@ model CollaborationComment {
   entityId        String
   parentCommentId String?
   body            String
-  mentions        String[]                 @default([])
+  mentions        String[]                @default([])
   createdById     String
   resolvedAt      DateTime?
   resolvedById    String?
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  budget          Budget                   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  company         Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy       User                     @relation("CommentCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  resolvedBy      User?                    @relation("CommentResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
-  parentComment   CollaborationComment?    @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
-  replies         CollaborationComment[]   @relation("CommentReplies")
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  budget          Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  project         Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User                    @relation("CommentCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  resolvedBy      User?                   @relation("CommentResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  parentComment   CollaborationComment?   @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies         CollaborationComment[]  @relation("CommentReplies")
 
   @@index([budgetId, entityType, entityId, createdAt(sort: Desc)])
   @@index([parentCommentId])
@@ -765,7 +769,7 @@ model CollaborationComment {
 }
 
 model BudgetChangeEvent {
-  id          String                     @id @default(cuid())
+  id          String                    @id @default(cuid())
   companyId   String
   projectId   String
   budgetId    String
@@ -776,14 +780,14 @@ model BudgetChangeEvent {
   oldValue    String?
   newValue    String?
   diffSummary String?
-  source      CollaborationChangeSource  @default(USER)
+  source      CollaborationChangeSource @default(USER)
   userId      String?
   requestId   String?
-  createdAt   DateTime                   @default(now())
-  budget      Budget                     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  project     Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  company     Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user        User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime                  @default(now())
+  budget      Budget                    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  project     Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company     Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([entityType, entityId])
@@ -808,25 +812,25 @@ model BudgetVersionSnapshot {
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy     User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
+  @@unique([budgetId, versionNumber])
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([companyId])
-  @@unique([budgetId, versionNumber])
   @@map("budget_version_snapshots")
 }
 
 model BudgetLevel {
-  id        String        @id @default(cuid())
+  id        String          @id @default(cuid())
   budgetId  String
   parentId  String?
   type      BudgetLevelType
   code      String
   name      String
-  sortOrder Int           @default(0)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  budget    Budget        @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  parent    BudgetLevel?  @relation("BudgetLevelTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children  BudgetLevel[] @relation("BudgetLevelTree")
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  budget    Budget          @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  parent    BudgetLevel?    @relation("BudgetLevelTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  BudgetLevel[]   @relation("BudgetLevelTree")
   items     BudgetItem[]
 
   @@index([budgetId])
@@ -834,30 +838,30 @@ model BudgetLevel {
 }
 
 model BudgetItem {
-  id          String       @id @default(cuid())
-  budgetId    String
-  levelId     String?
-  code        String
-  description String
-  unit        String
-  quantity    Decimal      @default(0) @db.Decimal(18, 4)
-  unitPrice   Decimal      @default(0) @db.Decimal(18, 4)
-  partial     Decimal      @default(0) @db.Decimal(18, 4)
-  sortOrder   Int          @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  budget      Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  level       BudgetLevel? @relation(fields: [levelId], references: [id], onDelete: SetNull)
-  apu         Apu?
-  workScheduleItems WorkScheduleItem[]
+  id                           String                        @id @default(cuid())
+  budgetId                     String
+  levelId                      String?
+  code                         String
+  description                  String
+  unit                         String
+  quantity                     Decimal                       @default(0) @db.Decimal(18, 4)
+  unitPrice                    Decimal                       @default(0) @db.Decimal(18, 4)
+  partial                      Decimal                       @default(0) @db.Decimal(18, 4)
+  sortOrder                    Int                           @default(0)
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  budget                       Budget                        @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  level                        BudgetLevel?                  @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  apu                          Apu?
+  workScheduleItems            WorkScheduleItem[]
   polynomialMonomialComponents PolynomialMonomialComponent[]
-  riskVariables RiskVariable[]
-  noteTasks     NoteTask[]
-  metradoLinks  MetradoPartidaLink[]
+  riskVariables                RiskVariable[]
+  noteTasks                    NoteTask[]
+  metradoLinks                 MetradoPartidaLink[]
 
+  @@unique([id, budgetId])
   @@index([budgetId])
   @@index([levelId])
-  @@unique([id, budgetId])
 }
 
 model MetradoTemplate {
@@ -893,29 +897,29 @@ model MetradoFormula {
 }
 
 model MetradoSheet {
-  id            String              @id @default(cuid())
+  id            String               @id @default(cuid())
   userId        String
   projectId     String
   budgetId      String
   templateId    String
   name          String
-  status        MetradoSheetStatus  @default(DRAFT)
+  status        MetradoSheetStatus   @default(DRAFT)
   unit          String
-  totalQuantity Decimal             @default(0) @db.Decimal(18, 4)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  budget        Budget              @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
-  template      MetradoTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  totalQuantity Decimal              @default(0) @db.Decimal(18, 4)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget        Budget               @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  template      MetradoTemplate      @relation(fields: [templateId], references: [id], onDelete: Restrict)
   rows          MetradoRow[]
   partidaLinks  MetradoPartidaLink[]
 
+  @@unique([id, budgetId])
   @@index([userId, updatedAt(sort: Desc)])
   @@index([projectId])
   @@index([budgetId])
   @@index([templateId])
-  @@unique([id, budgetId])
   @@map("metrado_sheets")
 }
 
@@ -960,21 +964,21 @@ model MetradoPartidaLink {
 }
 
 model CustomMetradoFormula {
-  id             String   @id @default(cuid())
-  userId         String
-  name           String
-  description    String   @default("")
-  category       String   @default("Personalizado")
-  expression     String
-  requiredInputs String[] @default([])
-  resultUnit     String
-  showInSuggestions Boolean @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String
+  name              String
+  description       String   @default("")
+  category          String   @default("Personalizado")
+  expression        String
+  requiredInputs    String[] @default([])
+  resultUnit        String
+  showInSuggestions Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, category])
   @@unique([userId, name])
+  @@index([userId, category])
   @@map("custom_metrado_formulas")
 }
 
@@ -989,9 +993,9 @@ model CompanyMembership {
   joinedAt       DateTime                @default(now())
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt
-  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invitedBy   User?                   @relation("MembershipInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  company        Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy      User?                   @relation("MembershipInviter", fields: [invitedById], references: [id], onDelete: SetNull)
 
   @@unique([companyId, userId])
   @@index([userId])
@@ -1047,21 +1051,21 @@ model NoteTask {
 }
 
 model RiskVariable {
-  id               String               @id @default(cuid())
-  budgetId         String
-  budgetItemId     String
-  variableType     RiskVariableType     @default(QUANTITY)
-  distributionType RiskDistributionType @default(TRIANGULAR)
-  minimum          Decimal              @default(0) @db.Decimal(18, 4)
-  mostLikely       Decimal              @default(0) @db.Decimal(18, 4)
-  maximum          Decimal              @default(0) @db.Decimal(18, 4)
-  enabled          Boolean              @default(true)
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  budget           Budget               @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  budgetItem       BudgetItem           @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
-  sourceCorrelations RiskCorrelation[]  @relation("RiskCorrelationSource")
-  targetCorrelations RiskCorrelation[]  @relation("RiskCorrelationTarget")
+  id                 String               @id @default(cuid())
+  budgetId           String
+  budgetItemId       String
+  variableType       RiskVariableType     @default(QUANTITY)
+  distributionType   RiskDistributionType @default(TRIANGULAR)
+  minimum            Decimal              @default(0) @db.Decimal(18, 4)
+  mostLikely         Decimal              @default(0) @db.Decimal(18, 4)
+  maximum            Decimal              @default(0) @db.Decimal(18, 4)
+  enabled            Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  budget             Budget               @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budgetItem         BudgetItem           @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  sourceCorrelations RiskCorrelation[]    @relation("RiskCorrelationSource")
+  targetCorrelations RiskCorrelation[]    @relation("RiskCorrelationTarget")
 
   @@unique([budgetId, budgetItemId, variableType])
   @@index([budgetId])
@@ -1158,62 +1162,62 @@ model WorkScheduleDistribution {
 }
 
 model Resource {
-  id           String           @id @default(cuid())
-  companyId    String?
-  code         String
-  description  String
-  category     ResourceCategory
-  iu           String?
-  iuCurrent    String?
-  iuCurrentReviewStatus String?
-  subcategory  String?
-  unit         String
-  unitPrice    Decimal          @default(0) @db.Decimal(18, 4)
-  currency     String           @default("PEN")
-  source       String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  apuResources ApuResource[]
-  partidaRows  PartidaApuRow[]
+  id                      String                   @id @default(cuid())
+  companyId               String?
+  code                    String
+  description             String
+  category                ResourceCategory
+  iu                      String?
+  iuCurrent               String?
+  iuCurrentReviewStatus   String?
+  subcategory             String?
+  unit                    String
+  unitPrice               Decimal                  @default(0) @db.Decimal(18, 4)
+  currency                String                   @default("PEN")
+  source                  String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  company                 Company?                 @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  apuResources            ApuResource[]
+  partidaRows             PartidaApuRow[]
   generatedPartidaInsumos GeneratedPartidaInsumo[]
 
   @@index([companyId])
 }
 
 model CatalogPartida {
-  id              String          @id @default(cuid())
-  description     String
-  unit            String
-  unitPrice       Decimal         @default(0) @db.Decimal(18, 4)
-  currency        String          @default("PEN")
-  source          String?
-  performance     Decimal         @default(1) @db.Decimal(18, 4)
-  performanceUnit String?
-  performanceRate String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  apuRows         PartidaApuRow[]
-  usedAsSubpartidaRows PartidaApuRow[] @relation("CatalogSubpartidaRows")
-  budgetApuSubpartidaRows ApuResource[] @relation("BudgetApuCatalogSubpartida")
-  generatedAsResult GeneratedPartida[] @relation("GeneratedCatalogPartida")
-  generatedSources  GeneratedPartidaSource[] @relation("GeneratedPartidaSourceCatalog")
+  id                      String                   @id @default(cuid())
+  description             String
+  unit                    String
+  unitPrice               Decimal                  @default(0) @db.Decimal(18, 4)
+  currency                String                   @default("PEN")
+  source                  String?
+  performance             Decimal                  @default(1) @db.Decimal(18, 4)
+  performanceUnit         String?
+  performanceRate         String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  apuRows                 PartidaApuRow[]
+  usedAsSubpartidaRows    PartidaApuRow[]          @relation("CatalogSubpartidaRows")
+  budgetApuSubpartidaRows ApuResource[]            @relation("BudgetApuCatalogSubpartida")
+  generatedAsResult       GeneratedPartida[]       @relation("GeneratedCatalogPartida")
+  generatedSources        GeneratedPartidaSource[] @relation("GeneratedPartidaSourceCatalog")
 
   @@index([description])
 }
 
 model GeneratedPartida {
-  id                        String                    @id @default(cuid())
+  id                        String                   @id @default(cuid())
   sourceText                String
   generatedName             String
   unit                      String
-  similarityScore           Decimal                   @default(0) @db.Decimal(10, 4)
+  similarityScore           Decimal                  @default(0) @db.Decimal(10, 4)
   createdById               String
   generatedCatalogPartidaId String?
-  metadata                  Json                      @default("{}")
-  createdAt                 DateTime                  @default(now())
-  createdBy                 User                      @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  generatedCatalogPartida   CatalogPartida?           @relation("GeneratedCatalogPartida", fields: [generatedCatalogPartidaId], references: [id], onDelete: SetNull)
+  metadata                  Json                     @default("{}")
+  createdAt                 DateTime                 @default(now())
+  createdBy                 User                     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  generatedCatalogPartida   CatalogPartida?          @relation("GeneratedCatalogPartida", fields: [generatedCatalogPartidaId], references: [id], onDelete: SetNull)
   sources                   GeneratedPartidaSource[]
   insumos                   GeneratedPartidaInsumo[]
 
@@ -1259,24 +1263,24 @@ model GeneratedPartidaInsumo {
 }
 
 model PartidaApuRow {
-  id               String         @id @default(cuid())
-  catalogPartidaId String
-  resourceId       String?
+  id                  String          @id @default(cuid())
+  catalogPartidaId    String
+  resourceId          String?
   catalogSubpartidaId String?
-  description      String
-  unit             String
-  crew             Decimal?       @db.Decimal(18, 4)
-  quantity         Decimal        @default(0) @db.Decimal(18, 4)
-  unitPrice        Decimal        @default(0) @db.Decimal(18, 4)
-  subtotal         Decimal        @default(0) @db.Decimal(18, 4)
-  resourceType     String?
-  groupLabel       String?
-  sortOrder        Int            @default(0)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  catalogPartida   CatalogPartida @relation(fields: [catalogPartidaId], references: [id], onDelete: Cascade)
-  catalogSubpartida CatalogPartida? @relation("CatalogSubpartidaRows", fields: [catalogSubpartidaId], references: [id], onDelete: SetNull)
-  resource         Resource?      @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  description         String
+  unit                String
+  crew                Decimal?        @db.Decimal(18, 4)
+  quantity            Decimal         @default(0) @db.Decimal(18, 4)
+  unitPrice           Decimal         @default(0) @db.Decimal(18, 4)
+  subtotal            Decimal         @default(0) @db.Decimal(18, 4)
+  resourceType        String?
+  groupLabel          String?
+  sortOrder           Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  catalogPartida      CatalogPartida  @relation(fields: [catalogPartidaId], references: [id], onDelete: Cascade)
+  catalogSubpartida   CatalogPartida? @relation("CatalogSubpartidaRows", fields: [catalogSubpartidaId], references: [id], onDelete: SetNull)
+  resource            Resource?       @relation(fields: [resourceId], references: [id], onDelete: SetNull)
 
   @@index([catalogPartidaId])
   @@index([resourceId])
@@ -1297,21 +1301,21 @@ model Apu {
 }
 
 model ApuResource {
-  id           String    @id @default(cuid())
-  apuId        String
-  resourceId   String?
-  catalogPartidaId String?
-  resourceType String
-  crew         Decimal?  @db.Decimal(18, 4)
-  quantity     Decimal   @default(0) @db.Decimal(18, 4)
-  unitPrice    Decimal   @default(0) @db.Decimal(18, 4)
-  subtotal     Decimal   @default(0) @db.Decimal(18, 4)
-  nestedApuRows Json?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  apu          Apu       @relation(fields: [apuId], references: [id], onDelete: Cascade)
-  resource     Resource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  catalogPartida CatalogPartida? @relation("BudgetApuCatalogSubpartida", fields: [catalogPartidaId], references: [id], onDelete: SetNull)
+  id                           String                        @id @default(cuid())
+  apuId                        String
+  resourceId                   String?
+  catalogPartidaId             String?
+  resourceType                 String
+  crew                         Decimal?                      @db.Decimal(18, 4)
+  quantity                     Decimal                       @default(0) @db.Decimal(18, 4)
+  unitPrice                    Decimal                       @default(0) @db.Decimal(18, 4)
+  subtotal                     Decimal                       @default(0) @db.Decimal(18, 4)
+  nestedApuRows                Json?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  apu                          Apu                           @relation(fields: [apuId], references: [id], onDelete: Cascade)
+  resource                     Resource?                     @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  catalogPartida               CatalogPartida?               @relation("BudgetApuCatalogSubpartida", fields: [catalogPartidaId], references: [id], onDelete: SetNull)
   polynomialMonomialComponents PolynomialMonomialComponent[]
 
   @@index([apuId])
@@ -1334,30 +1338,30 @@ model GeneralExpense {
 }
 
 model GeneralExpenseGroup {
-  id         String                  @id @default(cuid())
-  budgetId   String
-  name       String
-  kind       GeneralExpenseGroupKind
-  sortOrder  Int                     @default(0)
-  createdAt  DateTime                @default(now())
-  updatedAt  DateTime                @updatedAt
-  budget     Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  titles     GeneralExpenseTitle[]
+  id        String                  @id @default(cuid())
+  budgetId  String
+  name      String
+  kind      GeneralExpenseGroupKind
+  sortOrder Int                     @default(0)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  budget    Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  titles    GeneralExpenseTitle[]
 
   @@index([budgetId])
 }
 
 model GeneralExpenseTitle {
-  id         String               @id @default(cuid())
-  groupId    String
-  code       String
-  name       String
-  category   GeneralExpenseItemCategory @default(STANDARD)
-  sortOrder  Int                  @default(0)
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  group      GeneralExpenseGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  items      GeneralExpenseItem[]
+  id        String                     @id @default(cuid())
+  groupId   String
+  code      String
+  name      String
+  category  GeneralExpenseItemCategory @default(STANDARD)
+  sortOrder Int                        @default(0)
+  createdAt DateTime                   @default(now())
+  updatedAt DateTime                   @updatedAt
+  group     GeneralExpenseGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  items     GeneralExpenseItem[]
 
   @@index([groupId])
 }
@@ -1411,7 +1415,7 @@ model Report {
 
 model PolynomialFormula {
   id              String                  @id @default(cuid())
-  projectId        String
+  projectId       String
   budgetId        String
   name            String
   baseMonth       Int
@@ -1426,55 +1430,55 @@ model PolynomialFormula {
   valuations      Valuation[]
   adjustments     AdjustmentCalculation[]
 
+  @@unique([id, budgetId])
   @@index([projectId])
   @@index([budgetId])
   @@index([baseYear, baseMonth])
-  @@unique([id, budgetId])
 }
 
 model PolynomialMonomial {
-  id                   String                       @id @default(cuid())
+  id                   String                        @id @default(cuid())
   formulaId            String
   code                 String
   name                 String
   costGroupKey         PolynomialCostGroup
-  amount               Decimal                      @default(0) @db.Decimal(18, 2)
-  coefficient          Decimal                      @default(0) @db.Decimal(12, 3)
+  amount               Decimal                       @default(0) @db.Decimal(18, 2)
+  coefficient          Decimal                       @default(0) @db.Decimal(12, 3)
   baseIndexCode        String
   baseIndexName        String
-  baseIndexValue       Decimal                      @default(0) @db.Decimal(18, 3)
+  baseIndexValue       Decimal                       @default(0) @db.Decimal(18, 3)
   adjustmentIndexCode  String?
   adjustmentIndexName  String?
-  adjustmentIndexValue Decimal?                     @db.Decimal(18, 3)
-  sortOrder            Int                          @default(0)
-  createdAt            DateTime                     @default(now())
-  updatedAt            DateTime                     @updatedAt
-  formula              PolynomialFormula            @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  adjustmentIndexValue Decimal?                      @db.Decimal(18, 3)
+  sortOrder            Int                           @default(0)
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+  formula              PolynomialFormula             @relation(fields: [formulaId], references: [id], onDelete: Cascade)
   components           PolynomialMonomialComponent[]
   adjustmentTerms      AdjustmentCalculationTerm[]
 
+  @@unique([formulaId, sortOrder])
   @@index([formulaId])
   @@index([costGroupKey])
-  @@unique([formulaId, sortOrder])
 }
 
 model PolynomialMonomialComponent {
-  id           String             @id @default(cuid())
-  monomialId   String
-  budgetItemId String?
-  apuResourceId String?
-  resourceType String?
-  amount       Decimal            @default(0) @db.Decimal(18, 2)
-  unifiedIndexCode            String?
-  unifiedIndexName            String?
-  iuFamily                    String?
-  participationPercentage     Decimal?           @db.Decimal(12, 6)
-  coefficientContribution     Decimal?           @db.Decimal(12, 6)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  monomial     PolynomialMonomial @relation(fields: [monomialId], references: [id], onDelete: Cascade)
-  budgetItem   BudgetItem?        @relation(fields: [budgetItemId], references: [id], onDelete: SetNull)
-  apuResource  ApuResource?       @relation(fields: [apuResourceId], references: [id], onDelete: SetNull)
+  id                      String             @id @default(cuid())
+  monomialId              String
+  budgetItemId            String?
+  apuResourceId           String?
+  resourceType            String?
+  amount                  Decimal            @default(0) @db.Decimal(18, 2)
+  unifiedIndexCode        String?
+  unifiedIndexName        String?
+  iuFamily                String?
+  participationPercentage Decimal?           @db.Decimal(12, 6)
+  coefficientContribution Decimal?           @db.Decimal(12, 6)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  monomial                PolynomialMonomial @relation(fields: [monomialId], references: [id], onDelete: Cascade)
+  budgetItem              BudgetItem?        @relation(fields: [budgetItemId], references: [id], onDelete: SetNull)
+  apuResource             ApuResource?       @relation(fields: [apuResourceId], references: [id], onDelete: SetNull)
 
   @@index([monomialId])
   @@index([budgetItemId])
@@ -1500,38 +1504,38 @@ model UnifiedIndex {
 }
 
 model Valuation {
-  id         String               @id @default(cuid())
-  budgetId   String
-  formulaId  String?
-  month      Int
-  year       Int
-  amount     Decimal              @default(0) @db.Decimal(18, 2)
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  budget     Budget               @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  formula    PolynomialFormula?   @relation(fields: [formulaId, budgetId], references: [id, budgetId], onDelete: Cascade)
+  id          String                  @id @default(cuid())
+  budgetId    String
+  formulaId   String?
+  month       Int
+  year        Int
+  amount      Decimal                 @default(0) @db.Decimal(18, 2)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  budget      Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  formula     PolynomialFormula?      @relation(fields: [formulaId, budgetId], references: [id, budgetId], onDelete: Cascade)
   adjustments AdjustmentCalculation[]
 
   @@unique([budgetId, year, month])
-  @@index([formulaId])
   @@unique([id, formulaId, year, month])
+  @@index([formulaId])
 }
 
 model AdjustmentCalculation {
-  id               String                       @id @default(cuid())
+  id               String                      @id @default(cuid())
   formulaId        String
   valuationId      String
   month            Int
   year             Int
-  originalAmount   Decimal                      @default(0) @db.Decimal(18, 2)
-  adjustedAmount   Decimal                      @default(0) @db.Decimal(18, 2)
-  adjustmentAmount Decimal                      @default(0) @db.Decimal(18, 2)
-  kRaw             Decimal                      @default(0) @db.Decimal(18, 6)
-  kRounded         Decimal                      @default(0) @db.Decimal(12, 3)
-  createdAt        DateTime                     @default(now())
-  updatedAt        DateTime                     @updatedAt
-  formula          PolynomialFormula            @relation(fields: [formulaId], references: [id], onDelete: Cascade)
-  valuation        Valuation                    @relation(fields: [valuationId, formulaId, year, month], references: [id, formulaId, year, month], onDelete: Cascade)
+  originalAmount   Decimal                     @default(0) @db.Decimal(18, 2)
+  adjustedAmount   Decimal                     @default(0) @db.Decimal(18, 2)
+  adjustmentAmount Decimal                     @default(0) @db.Decimal(18, 2)
+  kRaw             Decimal                     @default(0) @db.Decimal(18, 6)
+  kRounded         Decimal                     @default(0) @db.Decimal(12, 3)
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  formula          PolynomialFormula           @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  valuation        Valuation                   @relation(fields: [valuationId, formulaId, year, month], references: [id, formulaId, year, month], onDelete: Cascade)
   terms            AdjustmentCalculationTerm[]
 
   @@unique([formulaId, year, month])
@@ -1539,22 +1543,156 @@ model AdjustmentCalculation {
 }
 
 model AdjustmentCalculationTerm {
-  id                   String                 @id @default(cuid())
+  id                   String                @id @default(cuid())
   adjustmentId         String
   monomialId           String
   name                 String
-  coefficient          Decimal                @default(0) @db.Decimal(12, 3)
-  baseIndexValue       Decimal                @default(0) @db.Decimal(18, 3)
-  adjustmentIndexValue Decimal                @default(0) @db.Decimal(18, 3)
-  ratio                Decimal                @default(0) @db.Decimal(18, 6)
-  partial              Decimal                @default(0) @db.Decimal(18, 6)
-  sortOrder            Int                    @default(0)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  adjustment           AdjustmentCalculation  @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
-  monomial             PolynomialMonomial     @relation(fields: [monomialId], references: [id], onDelete: Cascade)
+  coefficient          Decimal               @default(0) @db.Decimal(12, 3)
+  baseIndexValue       Decimal               @default(0) @db.Decimal(18, 3)
+  adjustmentIndexValue Decimal               @default(0) @db.Decimal(18, 3)
+  ratio                Decimal               @default(0) @db.Decimal(18, 6)
+  partial              Decimal               @default(0) @db.Decimal(18, 6)
+  sortOrder            Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  adjustment           AdjustmentCalculation @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  monomial             PolynomialMonomial    @relation(fields: [monomialId], references: [id], onDelete: Cascade)
 
+  @@unique([adjustmentId, sortOrder])
   @@index([adjustmentId])
   @@index([monomialId])
-  @@unique([adjustmentId, sortOrder])
+}
+
+// ─── Khipu Agent Platform V2 ────────────────────────────────────────────────
+
+model AgentExecution {
+  id                  String                @id @default(cuid())
+  userId              String
+  projectId           String?
+  mode                String                @default("chat")
+  state               String                @default("READ")
+  goal                String
+  summary             String?
+  provider            String?
+  model               String?
+  startedAt           DateTime              @default(now())
+  finishedAt          DateTime?
+  lastError           String?
+  contextSnapshotJson Json?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project             Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  steps               AgentExecutionStep[]
+  toolInvocations     AgentToolInvocation[]
+  approvals           AgentApproval[]
+  rollbacks           AgentRollback[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([projectId])
+  @@index([state, createdAt(sort: Desc)])
+  @@map("agent_executions")
+}
+
+model AgentExecutionStep {
+  id               String                @id @default(cuid())
+  executionId      String
+  sequence         Int
+  title            String
+  objective        String
+  toolName         String?
+  status           String                @default("pending")
+  approvalRequired Boolean               @default(false)
+  inputJson        Json?
+  resultSummary    String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  execution        AgentExecution        @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  toolInvocations  AgentToolInvocation[]
+  approvals        AgentApproval[]
+  rollbacks        AgentRollback[]
+
+  @@index([executionId, sequence])
+  @@map("agent_execution_steps")
+}
+
+model AgentToolInvocation {
+  id            String              @id @default(cuid())
+  executionId   String
+  stepId        String?
+  toolName      String
+  argumentsJson Json
+  resultJson    Json?
+  latencyMs     Int?
+  success       Boolean             @default(true)
+  errorMessage  String?
+  createdAt     DateTime            @default(now())
+  execution     AgentExecution      @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step          AgentExecutionStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  @@index([executionId, createdAt(sort: Desc)])
+  @@index([stepId])
+  @@index([toolName, createdAt(sort: Desc)])
+  @@map("agent_tool_invocations")
+}
+
+model AgentApproval {
+  id              String              @id @default(cuid())
+  executionId     String
+  stepId          String?
+  decision        String?
+  reason          String?
+  requestedAt     DateTime            @default(now())
+  decidedAt       DateTime?
+  decidedByUserId String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  execution       AgentExecution      @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step            AgentExecutionStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  decidedBy       User?               @relation("AgentApprovalDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([executionId])
+  @@index([stepId])
+  @@index([decidedByUserId])
+  @@map("agent_approvals")
+}
+
+model AgentRollback {
+  id                 String              @id @default(cuid())
+  executionId        String
+  stepId             String?
+  rollbackToolName   String
+  rollbackInputJson  Json?
+  rollbackResultJson Json?
+  success            Boolean             @default(true)
+  errorMessage       String?
+  reason             String?
+  createdByUserId    String?
+  createdAt          DateTime            @default(now())
+  execution          AgentExecution      @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step               AgentExecutionStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  createdBy          User?               @relation("AgentRollbackCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([executionId])
+  @@index([stepId])
+  @@map("agent_rollbacks")
+}
+
+model AgentWorkflow {
+  id                  String   @id @default(cuid())
+  slug                String   @unique
+  name                String
+  description         String
+  initialGoalTemplate String
+  allowedToolsJson    Json?
+  defaultMode         String   @default("goal")
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("agent_workflows")
 }

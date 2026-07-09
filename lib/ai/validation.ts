@@ -17,7 +17,7 @@ const aiContextSchema = z.object({
 
 const projectIdSchema = z.string().trim().min(1).optional();
 
-export const aiProviderSchema = z.enum(["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"]);
+export const aiProviderSchema = z.enum(["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter", "agent"]);
 
 export const khipuAiTaskSchema = z.enum([
   "review_apu",
@@ -35,6 +35,7 @@ export const khipuAiTaskSchema = z.enum([
 export const aiChatRequestSchema = z.object({
   message: z.string().trim().min(1, "Ingresa una consulta para la IA."),
   provider: aiProviderSchema.default("auto"),
+  modelPreference: z.string().optional(),
   context: aiContextSchema.optional(),
   projectId: projectIdSchema,
 });
@@ -71,7 +72,7 @@ const aiEndpointResultSchema = z.object({
   warnings: z.array(z.string()).default([]),
   latencyMs: z.number().finite().nonnegative().optional(),
   structuredData: z.unknown().optional(),
-  provider: z.enum(["ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"]).optional(),
+  provider: z.enum(["ollama", "chatgpt_bridge", "openai", "gemini", "openrouter", "agent"]).optional(),
   task: khipuAiTaskSchema.optional(),
   promptHash: z.string().trim().min(1).optional(),
   responseHash: z.string().trim().min(1).optional(),

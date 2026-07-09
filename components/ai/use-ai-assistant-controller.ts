@@ -12,6 +12,7 @@ import type {
 
 // ─── Module imports ─────────────────────────────────────────────
 
+import { DEFAULT_AGENT_MODEL } from "@/lib/ai/agent/models";
 import { loadHealth, loadCloudStatus } from "@/components/ai/controller-health";
 import {
   readStoredHistory,
@@ -52,7 +53,7 @@ import {
 // ─── Types ──────────────────────────────────────────────────────
 
 export type AssistantAction = "chat" | "apu" | "review" | "autocomplete";
-export type AssistantProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter";
+export type AssistantProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter" | "agent";
 export type AiResult = AiEndpointResult;
 export type AiFeedbackType = "APPLIED" | "EDITED" | "DISMISSED";
 export type AiFeedbackState = Record<string, AiFeedbackType>;
@@ -90,7 +91,7 @@ export type AiHealth = {
       lastError: string | null;
     }
   >;
-  providers: Record<"ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter", {
+  providers: Record<"ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" | "agent", {
     configured: boolean;
     reachable: boolean | null;
   }>;
@@ -117,12 +118,14 @@ export type AssistantRequest = {
 export type AiAssistantControllerViewModel = {
   activeAction: AssistantAction;
   activeFeedbackEntry: AiHistoryEntry | null;
+  agentModel: string;
   clearHistory: () => void;
   bridgeState: MYCBridgeState | null;
   cloudConfigured: {
     openai: boolean;
     gemini: boolean;
     openrouter: boolean;
+    agent: boolean;
   };
   context: AiContext;
   error: string;
@@ -140,6 +143,7 @@ export type AiAssistantControllerViewModel = {
   retryLastRequest: () => Promise<void>;
   selectHistoryEntry: (entry: AiHistoryEntry) => void;
   setActiveAction: (action: AssistantAction) => void;
+  setAgentModel: (model: string) => void;
   setContext: Dispatch<SetStateAction<AiContext>>;
   setProvider: (provider: AssistantProvider) => void;
   streaming: boolean;
@@ -173,7 +177,7 @@ type ProjectFeedbackSummaryState = {
 
 // ─── Hook ───────────────────────────────────────────────────────
 
-const VALID_PROVIDERS = new Set(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"]);
+const VALID_PROVIDERS = new Set(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter", "agent"]);
 
 function readInitialProvider(raw?: string): AssistantProvider {
   if (typeof raw === "string" && VALID_PROVIDERS.has(raw)) return raw as AssistantProvider;
@@ -183,6 +187,31 @@ function readInitialProvider(raw?: string): AssistantProvider {
 
 function generateSyncSourceId() {
   return `khipu-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+const AGENT_MODEL_STORAGE_PREFIX = "myc-khipu-agent-model";
+
+function agentModelStorageKey(projectId?: string): string {
+  return projectId ? `${AGENT_MODEL_STORAGE_PREFIX}-${projectId}` : AGENT_MODEL_STORAGE_PREFIX;
+}
+
+function readStoredAgentModel(projectId?: string): string {
+  if (typeof window === "undefined") return DEFAULT_AGENT_MODEL;
+  try {
+    const key = agentModelStorageKey(projectId);
+    return window.localStorage.getItem(key) ?? DEFAULT_AGENT_MODEL;
+  } catch {
+    return DEFAULT_AGENT_MODEL;
+  }
+}
+
+function persistAgentModel(model: string, projectId?: string) {
+  try {
+    const key = agentModelStorageKey(projectId);
+    window.localStorage.setItem(key, model);
+  } catch {
+    // Best effort only
+  }
 }
 
 export function useAiAssistantController({
@@ -207,11 +236,13 @@ export function useAiAssistantController({
   const [streaming, setStreaming] = useState(false);
   const [lastRequest, setLastRequest] = useState<AssistantRequest | null>(null);
   const [health, setHealth] = useState<AiHealth | null>(null);
+  const [agentModel, setAgentModelState] = useState<string>(() => readStoredAgentModel(projectId));
   const [provider, setProviderState] = useState<AssistantProvider>(() => readInitialProvider(initialProvider));
-  const [cloudConfigured, setCloudConfigured] = useState<{ openai: boolean; gemini: boolean; openrouter: boolean }>({
+  const [cloudConfigured, setCloudConfigured] = useState<{ openai: boolean; gemini: boolean; openrouter: boolean; agent: boolean }>({
     openai: false,
     gemini: false,
     openrouter: false,
+    agent: false,
   });
   const [bridgeState, setBridgeState] = useState<MYCBridgeState | null>(null);
   const [sessionFeedbackByHistoryId, setSessionFeedbackByHistoryId] = useState<AiFeedbackState>(readStoredFeedback);
@@ -246,15 +277,23 @@ export function useAiAssistantController({
 
   const activeFeedbackEntry = result ? readFeedbackEntryForResult(result, history) : null;
 
+
+  // Reload agent model when project changes (per-project persistence)
+  useEffect(() => {
+    setAgentModelState(readStoredAgentModel(projectId));
+  }, [projectId]);
+
   useEffect(() => {
     latestHistoryScope.current = readHistoryScope(projectId);
   }, [projectId]);
+
 
   useEffect(() => {
     latestContext.current = context;
   }, [context]);
 
   const previousInitialContextRef = useRef(initialContext);
+
 
   useEffect(() => {
     setContext((current) => (
@@ -265,12 +304,14 @@ export function useAiAssistantController({
     previousInitialContextRef.current = initialContext;
   }, [initialContext]);
 
+
   useEffect(() => {
     void loadHealth(setHealth, setCloudConfigured);
     void loadCloudStatus(setCloudConfigured);
   }, []);
 
   // Sync history from other controller instances (floating ↔ page)
+
   useEffect(() => {
     function handleSync(event: Event) {
       const detail = (event as CustomEvent<KhipuHistorySyncedDetail>).detail;
@@ -294,11 +335,13 @@ export function useAiAssistantController({
     return () => window.removeEventListener(KHIPU_HISTORY_SYNCED_EVENT, handleSync);
   }, [projectId]);
 
+
   useEffect(() => {
     persistStoredHistoryAndSync(history, syncSourceId.current, projectId);
   }, [history, projectId]);
 
   // Sync feedback from other controller instances (floating ↔ page)
+
   useEffect(() => {
     function handleFeedbackSync(event: Event) {
       const detail = (event as CustomEvent<KhipuFeedbackSyncedDetail>).detail;
@@ -322,9 +365,11 @@ export function useAiAssistantController({
     return () => window.removeEventListener(KHIPU_FEEDBACK_SYNCED_EVENT, handleFeedbackSync);
   }, [projectId]);
 
+
   useEffect(() => {
     if (!projectId) persistStoredFeedbackAndSync(sessionFeedbackByHistoryId, syncSourceId.current);
   }, [projectId, sessionFeedbackByHistoryId]);
+
 
   useEffect(() => {
     let active = true;
@@ -345,6 +390,7 @@ export function useAiAssistantController({
     });
     return () => { active = false; };
   }, [projectId]);
+
 
   useEffect(() => {
     return subscribeBridgeEvents({
@@ -398,8 +444,9 @@ export function useAiAssistantController({
     }
 
     try {
-      if (request.action === "chat") {
+      if (request.action === "chat" && (provider === "ollama" || provider === "agent")) {
         const streamed = await submitStreamingChatRequest({
+          agentModel,
           context,
           provider,
           request,
@@ -463,6 +510,11 @@ export function useAiAssistantController({
   async function retryLastRequest() {
     if (!lastRequest) return;
     await submit(lastRequest);
+  }
+
+  function setAgentModel(model: string) {
+    setAgentModelState(model);
+    persistAgentModel(model, projectId);
   }
 
   function setProvider(nextProvider: AssistantProvider) {
@@ -579,7 +631,9 @@ export function useAiAssistantController({
     pendingFeedbackByHistoryId,
     provider,
     result,
+    agentModel,
     setActiveAction,
+    setAgentModel,
     setContext,
     setProvider,
     clearHistory() {

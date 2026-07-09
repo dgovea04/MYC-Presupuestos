@@ -39,7 +39,12 @@ describe("Khipu project history data service", () => {
       where: {
         id: "project-1",
         company: {
-          userId: "user-1",
+          memberships: {
+            some: {
+              userId: "user-1",
+              status: "ACTIVE",
+            },
+          },
         },
       },
       select: {

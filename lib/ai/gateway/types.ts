@@ -1,7 +1,7 @@
 import type { AiEndpointResult, AiMessage } from "@/lib/ai/types";
 import type { z } from "zod";
 
-export type AiProviderId = "auto" | "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter";
+export type AiProviderId = "auto" | "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" | "agent";
 
 export type KhipuAiTask =
   | "review_apu"
@@ -30,6 +30,7 @@ export type AiProviderRequest = {
   schema?: z.ZodType<unknown>;
   schemaName?: string;
   userId?: string;
+  projectId?: string;
   fetchImpl?: typeof fetch;
   apiKey?: string;
   modelPreference?: string;

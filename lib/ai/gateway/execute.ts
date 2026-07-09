@@ -3,6 +3,7 @@ import { stableHash } from "@/lib/ai/gateway/hash";
 import { getProviderFallbackChain, resolveAiProvider } from "@/lib/ai/gateway/router";
 import type { AiProviderId, AiProviderRequest, AiProviderResult, ExecuteAiTaskInput } from "@/lib/ai/gateway/types";
 import type { AiEndpointResult } from "@/lib/ai/types";
+import { executeAgentProvider } from "@/lib/ai/gateway/providers/agent-provider";
 import { executeBridgeProvider } from "@/lib/ai/gateway/providers/bridge-provider";
 import { executeGeminiProvider } from "@/lib/ai/gateway/providers/gemini-provider";
 import { executeOllamaProvider } from "@/lib/ai/gateway/providers/ollama-provider";
@@ -31,6 +32,7 @@ const DEFAULT_PROVIDERS: Record<ExecutableProviderId, AiProviderExecutor> = {
   gemini: executeGeminiProvider,
   openrouter: executeOpenRouterProvider,
   chatgpt_bridge: executeBridgeProvider,
+  agent: executeAgentProvider,
 };
 
 export async function executeAiTask({
@@ -53,6 +55,7 @@ export async function executeAiTask({
     payload,
     task,
     userId,
+    projectId,
   });
 
   // Inject user API keys and model preferences when targeting cloud providers
@@ -183,6 +186,28 @@ async function enrichProviderRequest(
     }
   }
 
+  if (resolvedProvider === "agent") {
+    // Agent usa OpenRouter como backend — enriquecer con su API key y modelo
+    if (userId) {
+      const [apiKey, settings] = await Promise.all([
+        getDecryptedOpenrouterApiKey(userId),
+        getAiProviderSettings(userId),
+      ]);
+      if (apiKey) {
+        return { ...request, apiKey, modelPreference: settings.openrouterModel || undefined };
+      }
+    }
+
+    const systemSettings = await getSystemSettings();
+    if (systemSettings.openrouterApiKey) {
+      return {
+        ...request,
+        apiKey: systemSettings.openrouterApiKey,
+        modelPreference: systemSettings.openrouterModel || request.modelPreference,
+      };
+    }
+  }
+
   return request;
 }
 
@@ -202,11 +227,15 @@ function buildProviderRequest({
   payload,
   task,
   userId,
-}: Parameters<typeof buildSkillProviderRequest>[0]): AiProviderRequest {
-  return buildSkillProviderRequest({
-    assembledContext,
-    task,
-    payload,
-    userId,
-  });
+  projectId,
+}: Parameters<typeof buildSkillProviderRequest>[0] & { projectId?: string }): AiProviderRequest {
+  return {
+    ...buildSkillProviderRequest({
+      assembledContext,
+      task,
+      payload,
+      userId,
+    }),
+    projectId,
+  };
 }

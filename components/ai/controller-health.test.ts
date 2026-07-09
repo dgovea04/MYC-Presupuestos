@@ -46,7 +46,7 @@ describe("loadHealth", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     let health: AiHealth | null = undefined as unknown as AiHealth | null;
-    let cloudConfig = { openai: false, gemini: false, openrouter: false };
+    let cloudConfig = { openai: false, gemini: false, openrouter: false, agent: false };
 
     await loadHealth(
       (h) => { health = h; },
@@ -57,6 +57,7 @@ describe("loadHealth", () => {
     expect(health!.status).toBe("ok");
     expect(health!.availableModels).toContain("llama3");
     expect(cloudConfig.openrouter).toBe(true);
+    expect(cloudConfig.agent).toBe(true);
   });
 
   it("sets health to null when response is not ok", async () => {
@@ -111,13 +112,14 @@ describe("loadHealth", () => {
     const fetchMock = vi.fn(() => createResponse(payload));
     vi.stubGlobal("fetch", fetchMock);
 
-    let cloudConfig = { openai: false, gemini: false, openrouter: false };
+    let cloudConfig = { openai: false, gemini: false, openrouter: false, agent: false };
     await loadHealth(
       () => {},
       (fn) => { cloudConfig = fn(cloudConfig); },
     );
 
     expect(cloudConfig.openrouter).toBe(false);
+    expect(cloudConfig.agent).toBe(false);
   });
 
   it("calls the correct health endpoint", async () => {
@@ -133,7 +135,7 @@ describe("loadHealth", () => {
     const fetchMock = vi.fn(() => createResponse(createHealthPayload()));
     vi.stubGlobal("fetch", fetchMock);
 
-    let cloudConfig = { openai: true, gemini: true, openrouter: false };
+    let cloudConfig = { openai: true, gemini: true, openrouter: false, agent: false };
     await loadHealth(
       () => {},
       (fn) => { cloudConfig = fn(cloudConfig); },
@@ -142,6 +144,7 @@ describe("loadHealth", () => {
     expect(cloudConfig.openai).toBe(true); // preserved
     expect(cloudConfig.gemini).toBe(true); // preserved
     expect(cloudConfig.openrouter).toBe(true); // updated by health
+    expect(cloudConfig.agent).toBe(true); // mirrors openrouter
   });
 });
 
@@ -156,12 +159,13 @@ describe("loadCloudStatus", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    let cloudConfig = { openai: false, gemini: false, openrouter: false };
+    let cloudConfig = { openai: false, gemini: false, openrouter: false, agent: false };
     await loadCloudStatus((fn) => { cloudConfig = fn(cloudConfig); });
 
     expect(cloudConfig.openai).toBe(true);
     expect(cloudConfig.gemini).toBe(true);
     expect(cloudConfig.openrouter).toBe(false);
+    expect(cloudConfig.agent).toBe(false);
   });
 
   it("preserves openrouter if it was already true", async () => {
@@ -172,40 +176,41 @@ describe("loadCloudStatus", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    let cloudConfig = { openai: false, gemini: false, openrouter: true };
+    let cloudConfig = { openai: false, gemini: false, openrouter: true, agent: false };
     await loadCloudStatus((fn) => { cloudConfig = fn(cloudConfig); });
 
     expect(cloudConfig.openrouter).toBe(true); // preserved from previous state
+    expect(cloudConfig.agent).toBe(true); // mirrors openrouter (shared API key)
   });
 
   it("does nothing when response is not ok", async () => {
     const fetchMock = vi.fn(() => createResponse({}, 500));
     vi.stubGlobal("fetch", fetchMock);
 
-    let cloudConfig = { openai: false, gemini: false, openrouter: false };
+    let cloudConfig = { openai: false, gemini: false, openrouter: false, agent: false };
     await loadCloudStatus((fn) => { cloudConfig = fn(cloudConfig); });
 
-    expect(cloudConfig).toEqual({ openai: false, gemini: false, openrouter: false });
+    expect(cloudConfig).toEqual({ openai: false, gemini: false, openrouter: false, agent: false });
   });
 
   it("does nothing when fetch throws", async () => {
     const fetchMock = vi.fn(() => Promise.reject(new Error("Offline")));
     vi.stubGlobal("fetch", fetchMock);
 
-    let cloudConfig = { openai: true, gemini: false, openrouter: false };
+    let cloudConfig = { openai: true, gemini: false, openrouter: false, agent: false };
     await loadCloudStatus((fn) => { cloudConfig = fn(cloudConfig); });
 
-    expect(cloudConfig).toEqual({ openai: true, gemini: false, openrouter: false });
+    expect(cloudConfig).toEqual({ openai: true, gemini: false, openrouter: false, agent: false });
   });
 
   it("does nothing when payload is not a record", async () => {
     const fetchMock = vi.fn(() => createResponse("not an object"));
     vi.stubGlobal("fetch", fetchMock);
 
-    let cloudConfig = { openai: false, gemini: false, openrouter: false };
+    let cloudConfig = { openai: false, gemini: false, openrouter: false, agent: false };
     await loadCloudStatus((fn) => { cloudConfig = fn(cloudConfig); });
 
-    expect(cloudConfig).toEqual({ openai: false, gemini: false, openrouter: false });
+    expect(cloudConfig).toEqual({ openai: false, gemini: false, openrouter: false, agent: false });
   });
 
   it("calls the settings endpoint", async () => {

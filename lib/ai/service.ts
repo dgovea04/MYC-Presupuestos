@@ -17,6 +17,7 @@ import { assertCanUseAi, recordAiUsage } from "@/lib/ai/usage";
 import { OPENAI_RESPONSES_URL, DEFAULT_OPENAI_MODEL } from "@/lib/ai/gateway/providers/openai-provider";
 import { buildGeminiRequestBody, DEFAULT_GEMINI_MODEL, isGemmaModel, resolveEffectiveGeminiModel, simplifyMessagesForGemma } from "@/lib/ai/gateway/providers/gemini-provider";
 import { DEFAULT_OPENROUTER_MODEL, streamOpenRouterChat } from "@/lib/ai/gateway/providers/openrouter-provider";
+import { DEFAULT_AGENT_MODEL, streamAgentChat } from "@/lib/ai/gateway/providers/agent-provider";
 
 type FetchLike = typeof fetch;
 
@@ -287,6 +288,36 @@ export async function* streamChatAiResponse({
         answer += text;
         yield { type: "delta", text };
       }
+    } else if (effectiveProvider === "agent") {
+      const openRouterApiKey = apiKey || process.env.OPENROUTER_API_KEY;
+      if (!openRouterApiKey) {
+        throw new AiRuntimeError("connection", "OPENROUTER_API_KEY no configurado. Se requiere para usar el agente.");
+      }
+      const model = modelPreference || process.env.OPENROUTER_MODEL || DEFAULT_AGENT_MODEL;
+      resolvedModel = model;
+      requestedModel = model;
+
+      // Agregar system prompt como mensaje si no viene en messages
+      const hasSystem = messages.some((m) => m.role === "system");
+      const agentMessages = hasSystem
+        ? messages
+        : [{ role: "system" as const, content: "Eres Khipu, un agente técnico especializado en presupuestos de construcción. Usa las herramientas disponibles para analizar, calcular y generar información precisa." }, ...messages];
+
+      for await (const event of streamAgentChat({
+        messages: agentMessages,
+        apiKey: openRouterApiKey,
+        modelPreference: model,
+        userId: userId ?? "anonymous",
+      })) {
+        if (event.type === "delta") {
+          yield { type: "delta", text: event.text };
+        } else {
+          // Final event — merge with the accumulated answer
+          answer = event.result.answer;
+          yield { type: "final", result: event.result };
+          return;
+        }
+      }
     } else {
       // Ollama (default)
       const availableModels = await listInstalledOllamaModels(fetchImpl);
@@ -382,10 +413,11 @@ export async function* streamChatAiResponse({
   }
 }
 
-function resolveStreamingProvider(provider?: string): "ollama" | "openai" | "gemini" | "openrouter" {
+function resolveStreamingProvider(provider?: string): "ollama" | "openai" | "gemini" | "openrouter" | "agent" {
   if (provider === "openai") return "openai";
   if (provider === "gemini") return "gemini";
   if (provider === "openrouter") return "openrouter";
+  if (provider === "agent") return "agent";
   return "ollama";
 }
 

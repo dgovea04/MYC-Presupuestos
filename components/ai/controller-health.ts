@@ -10,10 +10,11 @@ function readAiHealth(payload: unknown): AiHealth {
 
 export async function loadHealth(
   setHealth: (value: AiHealth | null) => void,
-  setCloudConfigured: (value: (current: { openai: boolean; gemini: boolean; openrouter: boolean }) => {
+  setCloudConfigured: (value: (current: { openai: boolean; gemini: boolean; openrouter: boolean; agent: boolean }) => {
     openai: boolean;
     gemini: boolean;
     openrouter: boolean;
+    agent: boolean;
   }) => void,
 ) {
   try {
@@ -25,10 +26,13 @@ export async function loadHealth(
     }
 
     const nextHealth = readAiHealth(payload);
+    const agentConfigured = nextHealth.providers?.agent?.configured === true ||
+      nextHealth.providers?.openrouter?.configured === true;
     setHealth(nextHealth);
     setCloudConfigured((current) => ({
       ...current,
       openrouter: nextHealth.providers?.openrouter?.configured === true,
+      agent: agentConfigured,
     }));
   } catch {
     setHealth(null);
@@ -36,10 +40,11 @@ export async function loadHealth(
 }
 
 export async function loadCloudStatus(
-  setCloudConfigured: (value: (current: { openai: boolean; gemini: boolean; openrouter: boolean }) => {
+  setCloudConfigured: (value: (current: { openai: boolean; gemini: boolean; openrouter: boolean; agent: boolean }) => {
     openai: boolean;
     gemini: boolean;
     openrouter: boolean;
+    agent: boolean;
   }) => void,
 ) {
   try {
@@ -51,6 +56,7 @@ export async function loadCloudStatus(
         openai: payload.openaiConfigured === true,
         gemini: payload.geminiConfigured === true,
         openrouter: payload.openrouterConfigured === true || current.openrouter,
+        agent: payload.openrouterConfigured === true || current.openrouter || current.agent,
       }));
     }
   } catch {

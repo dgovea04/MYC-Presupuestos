@@ -24,7 +24,7 @@ export const DEFAULT_APP_THEME: AppThemeOption = "light";
 export const DEFAULT_EXCEL_SHOW_FIELD_BORDERS = false;
 export const DEFAULT_EXCEL_ROW_HEIGHT = 40;
 
-export const AI_PROVIDER_OPTIONS = ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"] as const;
+export const AI_PROVIDER_OPTIONS = ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter", "agent"] as const;
 export type AiProviderPreference = (typeof AI_PROVIDER_OPTIONS)[number];
 
 export const FLOATING_KHIPU_POSITIONS = ["bottom-right", "bottom-left", "top-right", "top-left"] as const;

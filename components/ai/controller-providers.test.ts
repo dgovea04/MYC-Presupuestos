@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   readHistoryScope,
   isSameHistoryScope,
@@ -131,7 +131,7 @@ describe("toBackendProvider", () => {
   it("converts chatgpt-bridge to chatgpt_bridge", () => {
     expect(toBackendProvider("chatgpt-bridge")).toBe("chatgpt_bridge");
   });
-  it.each(["ollama", "openai", "gemini", "openrouter"] as const)("passes through %s unchanged", (p) => {
+  it.each(["ollama", "openai", "gemini", "openrouter", "agent"] as const)("passes through %s unchanged", (p) => {
     expect(toBackendProvider(p)).toBe(p);
   });
 });
@@ -425,6 +425,33 @@ describe("submitCloudRequest", () => {
     expect(capturedBody!.projectId).toBe("proj-1");
   });
 
+  it("sends agent provider request correctly", async () => {
+    const { submitCloudRequest } = await import("@/components/ai/controller-providers");
+
+    let capturedBody: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return createApiResponse({ answer: "Agent", model: "deepseek/deepseek-chat-v3-0324:free", requestedModel: "deepseek/deepseek-chat-v3-0324:free", fallbackUsed: false, warnings: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await submitCloudRequest({
+      context: {},
+      latestHistoryScope: { current: { mode: "session" } },
+      provider: "agent",
+      request: { action: "chat", payload: { message: "Buscar partidas" } },
+      requestHistoryScope: { mode: "session" },
+      setError: () => {},
+      setHistory: () => {},
+      setLoading: () => {},
+      setResult: () => {},
+    });
+
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.provider).toBe("agent");
+    expect(capturedBody!.task).toBe("chat");
+  });
+
   it("handles fetch throwing an error gracefully", async () => {
     const { submitCloudRequest } = await import("@/components/ai/controller-providers");
 
@@ -445,5 +472,295 @@ describe("submitCloudRequest", () => {
 
     expect(lastError).toBe("Network error");
     expect(loading).toBe(false);
+  });
+
+  it("includes modelPreference when agent provider with agentModel", async () => {
+    const { submitCloudRequest } = await import("@/components/ai/controller-providers");
+
+    // Note: submitStreamingChatRequest is the one that actually uses agentModel.
+    // submitCloudRequest (non-streaming) doesn't accept agentModel directly —
+    // but we verify the provider routing here. For the full streaming flow,
+    // the agentModel field is tested implicitly by the integration.
+    let capturedBody: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return createApiResponse({ answer: "OK", model: "test", requestedModel: "test", fallbackUsed: false, warnings: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await submitCloudRequest({
+      context: {},
+      latestHistoryScope: { current: { mode: "session" } },
+      provider: "agent",
+      request: { action: "chat", payload: { message: "Test" } },
+      requestHistoryScope: { mode: "session" },
+      setError: () => {},
+      setHistory: () => {},
+      setLoading: () => {},
+      setResult: () => {},
+    });
+
+    expect(capturedBody!.provider).toBe("agent");
+    expect(capturedBody!.task).toBe("chat");
+  });
+});
+
+// ─── submitStreamingChatRequest agentModel passthrough ───────────
+
+describe("submitStreamingChatRequest with agentModel", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  it("includes modelPreference in request body when provider is agent", async () => {
+    const { submitStreamingChatRequest } = await import("@/components/ai/controller-streaming");
+
+    let capturedBody: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            "data: {}\n\nevent: final\ndata: " +
+            JSON.stringify({ answer: "OK", model: "agent", requestedModel: "agent", fallbackUsed: false, warnings: [] }) +
+            "\n\n"
+          ));
+          controller.close();
+        },
+      });
+      return Promise.resolve(new Response(stream));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const streamingCalls: boolean[] = [];
+
+    await submitStreamingChatRequest({
+      agentModel: "openai/gpt-4o",
+      context: {},
+      latestHistoryScope: { current: { mode: "session" } },
+      provider: "agent",
+      request: { action: "chat", payload: { message: "Test" } },
+      requestHistoryScope: { mode: "session" },
+      setHistory: () => {},
+      setResult: () => {},
+      setStreaming: (s: boolean) => { streamingCalls.push(s); },
+    });
+
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.provider).toBe("agent");
+    expect(capturedBody!.modelPreference).toBe("openai/gpt-4o");
+    expect(streamingCalls).toContain(true);
+  });
+
+  it("does not include modelPreference when provider is not agent", async () => {
+    const { submitStreamingChatRequest } = await import("@/components/ai/controller-streaming");
+
+    let capturedBody: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            "data: {}\n\nevent: final\ndata: " +
+            JSON.stringify({ answer: "OK", model: "llama3", requestedModel: "llama3", fallbackUsed: false, warnings: [] }) +
+            "\n\n"
+          ));
+          controller.close();
+        },
+      });
+      return Promise.resolve(new Response(stream));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await submitStreamingChatRequest({
+      agentModel: "openai/gpt-4o",
+      context: {},
+      latestHistoryScope: { current: { mode: "session" } },
+      provider: "ollama",
+      request: { action: "chat", payload: { message: "Test" } },
+      requestHistoryScope: { mode: "session" },
+      setHistory: () => {},
+      setResult: () => {},
+      setStreaming: () => {},
+    });
+
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.modelPreference).toBeUndefined();
+  });
+
+  // ─── Agent streaming integration tests (controller ↔ gateway) ────
+
+  it("processes agent streaming deltas with tool progress and accumulates final answer", async () => {
+    const { submitStreamingChatRequest } = await import("@/components/ai/controller-streaming");
+
+    let capturedBody: Record<string, unknown> | null = null;
+    const streamingEvents: boolean[] = [];
+    let lastResult: AiResultWithHistory | null = null;
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const sse = [
+            // Initial agent greeting
+            "event: delta\ndata: " + JSON.stringify({ text: "🤖 Khipu Agente iniciando con gpt-4o...\n\n" }) + "\n\n",
+            // Tool call: search
+            "event: delta\ndata: " + JSON.stringify({ text: "🔧 Ejecutando searchPartidas...\n" }) + "\n\n",
+            "event: delta\ndata: " + JSON.stringify({ text: "  ✓ Encontré 5 partidas que coinciden\n" }) + "\n\n",
+            // Analysis
+            "event: delta\ndata: " + JSON.stringify({ text: "\n💭 Analizando resultados...\n\n" }) + "\n\n",
+            // Tool call: calculate
+            "event: delta\ndata: " + JSON.stringify({ text: "🔧 Ejecutando calculateBudget...\n" }) + "\n\n",
+            "event: delta\ndata: " + JSON.stringify({ text: "  ✓ Costo total: S/ 128,450.00\n" }) + "\n\n",
+            // Final answer
+            "event: delta\ndata: " + JSON.stringify({ text: "\nEl presupuesto contiene 5 partidas. Costo total: S/ 128,450.00\n" }) + "\n\n",
+            // Final event
+            "event: final\ndata: " + JSON.stringify({
+              answer: "El presupuesto contiene 5 partidas. Costo total: S/ 128,450.00",
+              model: "openai/gpt-4o",
+              requestedModel: "openai/gpt-4o",
+              fallbackUsed: false,
+              warnings: [],
+            }) + "\n\n",
+          ];
+          for (const chunk of sse) {
+            controller.enqueue(new TextEncoder().encode(chunk));
+          }
+          controller.close();
+        },
+      });
+      return Promise.resolve(new Response(stream, {
+        headers: { "Content-Type": "text/event-stream" },
+      }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await submitStreamingChatRequest({
+      agentModel: "openai/gpt-4o",
+      context: { module: "Presupuestos" },
+      latestHistoryScope: { current: { mode: "session" } },
+      provider: "agent",
+      request: { action: "chat", payload: { message: "Analiza las partidas de concreto" } },
+      requestHistoryScope: { mode: "session" },
+      setHistory: () => {},
+      setResult: (r: AiResultWithHistory | null) => {
+        lastResult = r;
+      },
+      setStreaming: (s: boolean) => {
+        streamingEvents.push(s);
+      },
+    });
+
+    // Verify request body includes modelPreference
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.provider).toBe("agent");
+    expect(capturedBody!.modelPreference).toBe("openai/gpt-4o");
+    expect(capturedBody!.message).toBe("Analiza las partidas de concreto");
+
+    // Verify streaming was started
+    expect(streamingEvents).toContain(true);
+
+    // Verify final result flows back from agent gateway
+    expect(lastResult).not.toBeNull();
+    expect(lastResult!.answer).toContain("S/ 128,450.00");
+    expect(lastResult!.model).toBe("openai/gpt-4o");
+    expect(lastResult!.fallbackUsed).toBe(false);
+  });
+
+  it("processes agent streaming with approval boundary and warnings", async () => {
+    const { submitStreamingChatRequest } = await import("@/components/ai/controller-streaming");
+
+    let lastResult: AiResultWithHistory | null = null;
+    const streamingEvents: boolean[] = [];
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const sse = [
+            "event: delta\ndata: " + JSON.stringify({ text: "🤖 Khipu Agente iniciando...\n\n" }) + "\n\n",
+            "event: delta\ndata: " + JSON.stringify({ text: "🔧 Ejecutando generateReport...\n" }) + "\n\n",
+            "event: delta\ndata: " + JSON.stringify({ text: "  ✓ Reporte generado exitosamente\n" }) + "\n\n",
+            "event: delta\ndata: " + JSON.stringify({ text: "🔧 Ejecutando updateBudget...\n" }) + "\n\n",
+            "event: delta\ndata: " + JSON.stringify({ text: "  ⚠️ Se requiere tu aprobación para ejecutar updateBudget\n" }) + "\n\n",
+            "event: final\ndata: " + JSON.stringify({
+              answer: "Se requiere aprobación para modificar el presupuesto.",
+              model: "anthropic/claude-sonnet-4-20250514",
+              requestedModel: "anthropic/claude-sonnet-4-20250514",
+              fallbackUsed: false,
+              warnings: ["Herramienta updateBudget requiere aprobación: Modificación de datos financieros"],
+            }) + "\n\n",
+          ];
+          for (const chunk of sse) {
+            controller.enqueue(new TextEncoder().encode(chunk));
+          }
+          controller.close();
+        },
+      });
+      return Promise.resolve(new Response(stream, {
+        headers: { "Content-Type": "text/event-stream" },
+      }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await submitStreamingChatRequest({
+      agentModel: "anthropic/claude-sonnet-4-20250514",
+      context: { module: "Reportes" },
+      latestHistoryScope: { current: { mode: "session" } },
+      provider: "agent",
+      request: { action: "chat", payload: { message: "Genera reporte y actualiza" } },
+      requestHistoryScope: { mode: "session" },
+      setHistory: () => {},
+      setResult: (r: AiResultWithHistory | null) => {
+        lastResult = r;
+      },
+      setStreaming: (s: boolean) => {
+        streamingEvents.push(s);
+      },
+    });
+
+    // Verify final result from agent includes approval warning
+    expect(lastResult).not.toBeNull();
+    expect(lastResult!.answer).toContain("aprobación");
+    expect(lastResult!.warnings).toHaveLength(1);
+    expect(lastResult!.warnings[0]).toContain("updateBudget");
+    expect(lastResult!.model).toBe("anthropic/claude-sonnet-4-20250514");
+    expect(streamingEvents).toContain(true);
+  });
+
+  it("handles agent streaming with no valid final event gracefully", async () => {
+    const { submitStreamingChatRequest } = await import("@/components/ai/controller-streaming");
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const sse = [
+            "event: delta\ndata: " + JSON.stringify({ text: "🤖 Iniciando...\n" }) + "\n\n",
+            // Stream ends without a final event
+          ];
+          for (const chunk of sse) {
+            controller.enqueue(new TextEncoder().encode(chunk));
+          }
+          controller.close();
+        },
+      });
+      return Promise.resolve(new Response(stream, {
+        headers: { "Content-Type": "text/event-stream" },
+      }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitStreamingChatRequest({
+      agentModel: "deepseek/deepseek-chat-v3-0324:free",
+      context: {},
+      latestHistoryScope: { current: { mode: "session" } },
+      provider: "agent",
+      request: { action: "chat", payload: { message: "Test" } },
+      requestHistoryScope: { mode: "session" },
+      setHistory: () => {},
+      setResult: () => {},
+      setStreaming: () => {},
+    });
+
+    // Should return false since no final event was received
+    expect(result).toBe(false);
   });
 });

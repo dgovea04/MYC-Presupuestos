@@ -61,6 +61,149 @@ describe("useAiAssistantController", () => {
     expect(result.current?.history).toHaveLength(1);
   });
 
+  it("streams agent request with modelPreference in body", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+
+      if (String(input) === "/api/ai/chat/stream") {
+        capturedBody = JSON.parse(init?.body as string);
+        return new Response(
+          "event: delta\ndata: {\"text\":\"Iniciando...\"}\n\n" +
+            "event: final\ndata: {\"answer\":\"Analisis completo\",\"model\":\"gpt-4o\",\"requestedModel\":\"gpt-4o\",\"fallbackUsed\":false,\"warnings\":[]}\n\n",
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      }
+
+      return new Response(JSON.stringify({ status: "ok", providers: {} }), { status: 200 });
+    }));
+
+    const result = await renderController({
+      projectId: undefined,
+      initialAction: "chat",
+      initialContext: { module: "Presupuestos" },
+    });
+
+    // Set agent provider and model
+    await act(async () => {
+      result.current?.setProvider("agent");
+      result.current?.setAgentModel("openai/gpt-4o");
+    });
+
+    await act(async () => {
+      await result.current?.submit({
+        action: "chat",
+        payload: { message: "Analiza este presupuesto", context: { module: "Presupuestos" } },
+      });
+    });
+
+    // Verify the streaming body includes modelPreference
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.provider).toBe("agent");
+    expect(capturedBody!.modelPreference).toBe("openai/gpt-4o");
+    expect(capturedBody!.message).toBe("Analiza este presupuesto");
+
+    // Verify the result is streamed back
+    expect(result.current?.result?.answer).toBe("Analisis completo");
+    expect(result.current?.result?.model).toBe("gpt-4o");
+  });
+
+  it("does not include modelPreference when streaming with non-agent provider", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+
+      if (String(input) === "/api/ai/chat/stream") {
+        capturedBody = JSON.parse(init?.body as string);
+        return new Response(
+          "event: final\ndata: {\"answer\":\"Ok\",\"model\":\"llama3\",\"requestedModel\":\"llama3\",\"fallbackUsed\":false,\"warnings\":[]}\n\n",
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      }
+
+      return new Response(JSON.stringify({ status: "ok", providers: {} }), { status: 200 });
+    }));
+
+    const result = await renderController({
+      projectId: undefined,
+      initialAction: "chat",
+      initialContext: { module: "Presupuestos" },
+    });
+
+    // Ollama (default) — agentModel should not be sent
+    await act(async () => {
+      result.current?.setAgentModel("openai/gpt-4o");
+    });
+
+    expect(result.current?.agentModel).toBe("openai/gpt-4o");
+
+    await act(async () => {
+      await result.current?.submit({
+        action: "chat",
+        payload: { message: "Hola", context: { module: "Presupuestos" } },
+      });
+    });
+
+    expect(capturedBody!.provider).toBe("ollama");
+    expect(capturedBody!.modelPreference).toBeUndefined();
+  });
+
+  it("persists agent model per project in localStorage", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/ai/health") {
+        return new Response(JSON.stringify(createHealthPayload()), { status: 200 });
+      }
+      if (String(input) === "/api/settings/ai-provider") {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    }));
+
+    // Render with project A and set agent model
+    const resultA = await renderController({
+      projectId: "project-a",
+      initialAction: "chat",
+      initialContext: { module: "Test" },
+    });
+
+    await act(async () => {
+      resultA.current?.setAgentModel("anthropic/claude-3.5-sonnet");
+    });
+
+    expect(resultA.current?.agentModel).toBe("anthropic/claude-3.5-sonnet");
+
+    // Verify it's stored under the project-scoped key
+    expect(window.localStorage.getItem("myc-khipu-agent-model-project-a")).toBe("anthropic/claude-3.5-sonnet");
+
+    // Render with project B — should get a different (default) model
+    window.localStorage.setItem("myc-khipu-agent-model-project-b", "openai/gpt-4o");
+
+    const resultB = await renderController({
+      projectId: "project-b",
+      initialAction: "chat",
+      initialContext: { module: "Test" },
+    });
+
+    expect(resultB.current?.agentModel).toBe("openai/gpt-4o");
+
+    // Project A still has its model
+    expect(resultA.current?.agentModel).toBe("anthropic/claude-3.5-sonnet");
+  });
+
   it("routes cloud requests through /api/ai/execute", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/ai/health") {

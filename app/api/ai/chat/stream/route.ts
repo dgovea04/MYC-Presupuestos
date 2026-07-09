@@ -45,6 +45,17 @@ export async function POST(request: Request) {
       ]);
       streamInput.apiKey = apiKey || systemSettings.openrouterApiKey || undefined;
       streamInput.modelPreference = settings.openrouterModel || systemSettings.openrouterModel || undefined;
+    } else if (data.provider === "agent") {
+      const [apiKey, systemSettings] = await Promise.all([
+        getDecryptedOpenrouterApiKey(session.user.id),
+        getSystemSettings(),
+      ]);
+      streamInput.apiKey = apiKey || systemSettings.openrouterApiKey || undefined;
+      // Preferir modelo seleccionado por el usuario, luego system settings, luego default
+      streamInput.modelPreference =
+        data.modelPreference ||
+        systemSettings.openrouterModel ||
+        undefined;
     }
 
     const stream = new ReadableStream<Uint8Array>({

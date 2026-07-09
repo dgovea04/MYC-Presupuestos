@@ -189,7 +189,7 @@ export function subscribeBridgeEvents({
 
 // ─── Cloud ──────────────────────────────────────────────────────
 
-export function toBackendProvider(frontend: "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter"): "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" {
+export function toBackendProvider(frontend: "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openrouter" | "agent"): "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" | "agent" {
   return frontend === "chatgpt-bridge" ? "chatgpt_bridge" : frontend;
 }
 
@@ -212,7 +212,7 @@ export async function submitCloudRequest({
 }: {
   context: AiContext;
   latestHistoryScope: MutableRefObject<HistoryScope>;
-  provider: "openai" | "gemini" | "openrouter";
+  provider: "openai" | "gemini" | "openrouter" | "agent";
   request: AssistantRequest;
   requestHistoryScope: HistoryScope;
   setError: (value: string) => void;

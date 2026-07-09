@@ -49,5 +49,9 @@ export function getProviderFallbackChain(input: ResolveAiProviderInput): Executa
     return ["openrouter"];
   }
 
+  if (resolvedProvider === "agent") {
+    return ["agent"];
+  }
+
   return [resolvedProvider];
 }
