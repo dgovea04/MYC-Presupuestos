@@ -13,6 +13,9 @@ vi.mock("@/lib/db/prisma", () => ({
     companySubscription: {
       findUnique: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -24,6 +27,9 @@ const mockPrisma = prisma as unknown as {
     findUnique: ReturnType<typeof vi.fn>;
   };
   companySubscription: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
+  user: {
     findUnique: ReturnType<typeof vi.fn>;
   };
 };
@@ -72,12 +78,13 @@ describe("getEffectiveWorkspaceLicense", () => {
     expect(result).toBeNull();
   });
 
-  it("returns license with starter features when no subscription exists", async () => {
+  it("returns license with starter features when no subscription and no user plan exist", async () => {
     mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
       role: "EDITOR",
       status: "ACTIVE",
     });
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce(null);
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
     const result = await getEffectiveWorkspaceLicense({
       userId: "user-1",
@@ -97,6 +104,31 @@ describe("getEffectiveWorkspaceLicense", () => {
     expect(result!.availableFeatures).not.toContain("exports.advanced");
   });
 
+  it("falls back to user personal plan when no company subscription exists", async () => {
+    mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
+      role: "EDITOR",
+      status: "ACTIVE",
+    });
+    mockPrisma.companySubscription.findUnique.mockResolvedValueOnce(null);
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      membershipPlan: { slug: "empresa", name: "Empresa" },
+    });
+
+    const result = await getEffectiveWorkspaceLicense({
+      userId: "user-1",
+      companyId: "company-1",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.planSlug).toBe("empresa");
+    expect(result!.planName).toBe("Empresa");
+    expect(result!.role).toBe("EDITOR");
+    // Empresa features should be available from user's personal plan
+    expect(result!.availableFeatures).toContain("ai.local");
+    expect(result!.availableFeatures).toContain("risk_analysis");
+    expect(result!.availableFeatures).toContain("desktop.native_bridge");
+  });
+
   it("returns license with pro features for pro plan", async () => {
     mockPrisma.companyMembership.findUnique.mockResolvedValueOnce({
       role: "ADMIN",
@@ -105,6 +137,7 @@ describe("getEffectiveWorkspaceLicense", () => {
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce({
       membershipPlan: { slug: "pro", name: "Pro" },
     });
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
     const result = await getEffectiveWorkspaceLicense({
       userId: "user-1",
@@ -136,6 +169,7 @@ describe("getEffectiveWorkspaceLicense", () => {
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce({
       membershipPlan: { slug: "empresa", name: "Empresa" },
     });
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
     const result = await getEffectiveWorkspaceLicense({
       userId: "user-1",
@@ -158,6 +192,7 @@ describe("getEffectiveWorkspaceLicense", () => {
       status: "ACTIVE",
     });
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce(null);
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
     await getEffectiveWorkspaceLicense({
       userId: "user-test",
@@ -198,7 +233,8 @@ describe("assertWorkspaceFeatureAccess", () => {
       role: "EDITOR",
       status: "ACTIVE",
     });
-    mockPrisma.companySubscription.findUnique.mockResolvedValueOnce(null); // starter plan
+    mockPrisma.companySubscription.findUnique.mockResolvedValueOnce(null); // no company subscription
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null); // no user plan → starter
 
     await expect(
       assertWorkspaceFeatureAccess({
@@ -217,6 +253,7 @@ describe("assertWorkspaceFeatureAccess", () => {
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce({
       membershipPlan: { slug: "pro", name: "Pro" },
     });
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
     await expect(
       assertWorkspaceFeatureAccess({
@@ -232,7 +269,8 @@ describe("assertWorkspaceFeatureAccess", () => {
       role: "EDITOR",
       status: "ACTIVE",
     });
-    mockPrisma.companySubscription.findUnique.mockResolvedValueOnce(null); // starter
+    mockPrisma.companySubscription.findUnique.mockResolvedValueOnce(null); // no company subscription
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null); // no user plan → starter
 
     await expect(
       assertWorkspaceFeatureAccess({

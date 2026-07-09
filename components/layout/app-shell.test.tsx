@@ -369,6 +369,93 @@ describe("AppShell", () => {
     expect(markup).toContain('data-initial-mode="mini"');
   });
 
+  describe("currentUser.id license resolution", () => {
+    const mockSettings = {
+      defaultCurrency: "PEN" as const,
+      currencyDecimals: 2,
+      dateFormat: "DD_MMM_YYYY" as const,
+      appTheme: "light" as const,
+      defaultViewMode: "modern" as const,
+      excelShowFieldBorders: true,
+      excelRowHeight: 52,
+      defaultIgvRate: 0.18,
+      defaultGeneralExpensesRate: 0.1,
+      defaultUtilityRate: 0.08,
+      defaultSubBudgetNames: ["Arquitectura"],
+      aiProviderPreference: "auto" as const,
+      floatingKhipuProvider: "ollama" as const,
+      floatingKhipuWidth: 600,
+      floatingKhipuHeight: 500,
+      floatingKhipuFontSize: "normal" as const,
+      floatingKhipuPosition: "bottom-right" as const,
+      floatingKhipuTheme: "light" as const,
+    };
+
+    beforeEach(() => {
+      vi.mocked(getAuthSession).mockReset();
+      vi.mocked(getUserSettings).mockReset();
+      vi.mocked(getEffectiveWorkspaceLicense).mockReset();
+      vi.mocked(getActiveWorkspaceId).mockReset();
+      vi.mocked(listUserWorkspaces).mockReset();
+    });
+
+    it("calls getEffectiveWorkspaceLicense when currentUser.id is present", async () => {
+      vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue({
+        availableFeatures: ["ai.local", "exports.basic"],
+        planSlug: "empresa",
+        planName: "Empresa",
+        role: "OWNER",
+      });
+      vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-id-present");
+      vi.mocked(listUserWorkspaces).mockResolvedValue([]);
+
+      const markup = renderToStaticMarkup(
+        await AppShell({
+          children: <div>Contenido</div>,
+          currentUser: {
+            id: "user-with-id",
+            email: "test@example.com",
+            name: "Test User",
+          },
+          settings: mockSettings,
+        }),
+      );
+
+      expect(getAuthSession).not.toHaveBeenCalled();
+      expect(getUserSettings).not.toHaveBeenCalled();
+      expect(getActiveWorkspaceId).toHaveBeenCalledWith("user-with-id");
+      expect(getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
+        userId: "user-with-id",
+        companyId: "company-id-present",
+      });
+      expect(markup).toContain('data-features="ai.local,exports.basic"');
+    });
+
+    it("does NOT call getEffectiveWorkspaceLicense when currentUser is passed without id", async () => {
+      vi.mocked(getActiveWorkspaceId).mockResolvedValue("some-company");
+      vi.mocked(listUserWorkspaces).mockResolvedValue([]);
+
+      const markup = renderToStaticMarkup(
+        await AppShell({
+          children: <div>Contenido</div>,
+          currentUser: {
+            email: "no-id@example.com",
+            name: "No ID User",
+          },
+          settings: mockSettings,
+        }),
+      );
+
+      expect(getAuthSession).not.toHaveBeenCalled();
+      expect(getUserSettings).not.toHaveBeenCalled();
+      expect(getActiveWorkspaceId).not.toHaveBeenCalled();
+      expect(listUserWorkspaces).not.toHaveBeenCalled();
+      expect(getEffectiveWorkspaceLicense).not.toHaveBeenCalled();
+      // Sidebar receives no features when license is not fetched
+      expect(markup).toContain('data-features=""');
+    });
+  });
+
   describe("workspace integration", () => {
     beforeEach(() => {
       vi.mocked(getAuthSession).mockReset();

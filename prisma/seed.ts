@@ -150,6 +150,20 @@ async function main() {
     create: { companyId: company.id, userId: user.id, role: "OWNER", status: "ACTIVE" },
   });
 
+  const empresaPlan = await prisma.membershipPlan.findUnique({ where: { slug: "empresa" } });
+  if (empresaPlan) {
+    await prisma.companySubscription.upsert({
+      where: { companyId: company.id },
+      update: { membershipPlanId: empresaPlan.id, provider: "MANUAL", status: "ACTIVE" },
+      create: {
+        companyId: company.id,
+        membershipPlanId: empresaPlan.id,
+        provider: "MANUAL",
+        status: "ACTIVE",
+      },
+    });
+  }
+
   await seedUnifiedIndicesFromWorkbook();
   await seedGeneralResourcesCatalog();
   await seedGeneralPartidasCatalog();

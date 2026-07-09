@@ -25,16 +25,24 @@ const _getEffectiveWorkspaceLicense = async (options: {
     return null;
   }
 
-  const subscription = await prisma.companySubscription.findUnique({
-    where: { companyId },
-    include: { membershipPlan: { select: { slug: true, name: true } } },
-  });
+  const [subscription, user] = await Promise.all([
+    prisma.companySubscription.findUnique({
+      where: { companyId },
+      include: { membershipPlan: { select: { slug: true, name: true } } },
+    }),
+    prisma.user.findUnique({
+      where: { id: options.userId },
+      select: { membershipPlan: { select: { slug: true, name: true } } },
+    }),
+  ]);
 
-  const planSlug = (subscription?.membershipPlan?.slug as "starter" | "pro" | "empresa") ?? "starter";
+  // Prefer the company subscription plan; fall back to the user's personal plan
+  const effectivePlan = subscription?.membershipPlan ?? user?.membershipPlan;
+  const planSlug = (effectivePlan?.slug as "starter" | "pro" | "empresa") ?? "starter";
 
   return {
     planSlug,
-    planName: subscription?.membershipPlan?.name ?? "Starter",
+    planName: effectivePlan?.name ?? "Starter",
     role: membership.role as WorkspaceRole,
     availableFeatures: getAvailableFeatures(planSlug),
   };

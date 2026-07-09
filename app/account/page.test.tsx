@@ -8,7 +8,17 @@ const mocks = vi.hoisted(() => ({
   getUserAccountMembership: vi.fn(),
   getActiveWorkspaceId: vi.fn(),
   getUserSettings: vi.fn(),
-  AppShell: ({ children }: { children: ReactNode }) => <div data-testid="app-shell">{children}</div>,
+  AppShell: ({
+    children,
+    currentUser,
+  }: {
+    children: ReactNode;
+    currentUser?: { id?: string | null; email?: string | null; name?: string | null; avatarUrl?: string | null; role?: string | null };
+  }) => (
+    <div data-testid="app-shell" data-current-user-id={currentUser?.id ?? ""} data-current-user-email={currentUser?.email ?? ""}>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -22,7 +32,7 @@ vi.mock("@/components/account/account-page-content", () => ({
 }));
 
 vi.mock("@/components/layout/app-shell", () => ({
-  AppShell: (props: { children: ReactNode }) => mocks.AppShell(props),
+  AppShell: (props: { children: ReactNode; currentUser?: Record<string, unknown> }) => mocks.AppShell(props),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -118,5 +128,13 @@ describe("AccountPage", () => {
     await AccountPage();
 
     expect(mocks.getUserAccountMembership).toHaveBeenCalledWith("user-1", null);
+  });
+
+  it("passes currentUser with id to AppShell", async () => {
+    const tree = await AccountPage();
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain('data-current-user-id="user-1"');
+    expect(markup).toContain('data-current-user-email="test@test.com"');
   });
 });

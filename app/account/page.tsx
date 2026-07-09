@@ -23,6 +23,7 @@ export default async function AccountPage() {
   return (
     <AppShell
       currentUser={{
+        id: session.user.id,
         avatarUrl: account.avatarUrl,
         email: account.email,
         name: account.name,
