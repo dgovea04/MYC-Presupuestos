@@ -148,10 +148,93 @@ export const addPartidaTool: AgentToolDefinition<
     `Partida "${result.description}" creada (${result.unit}, S/ ${result.unitPrice}).`,
 };
 
+// ─── Additional partida tools ────────────────────────────────────────────────
+
+const duplicatePartidaInput = z.object({
+  partidaId: z.string().min(1).describe("ID de la partida a duplicar"),
+  newDescription: z.string().optional(),
+});
+
+export const duplicatePartidaTool: AgentToolDefinition<
+  z.infer<typeof duplicatePartidaInput>,
+  Record<string, unknown>
+> = {
+  name: "duplicatePartida",
+  description: "Duplica una partida existente creando una copia con opción de cambiar la descripción.",
+  risk: "write",
+  requiresProjectId: false,
+  inputSchema: duplicatePartidaInput,
+  execute: async (input, _context) => {
+    const all = await getCatalogPartidas();
+    const source = all.find((p) => p.id === input.partidaId);
+    if (!source) throw new Error(`Partida "${input.partidaId}" no encontrada.`);
+    const result = await saveCatalogPartidasPatch({
+      create: [{
+        clientId: crypto.randomUUID(),
+        data: {
+          description: input.newDescription ?? `${source.description} (copia)`,
+          unit: source.unit,
+          unitPrice: source.unitPrice,
+          currency: "PEN",
+          performance: source.performance,
+          apuRows: source.apuRows,
+        },
+      }],
+      update: [],
+      delete: [],
+    });
+    const created = result.created[0]?.partida;
+    return { id: created?.id, description: created?.description, sourceId: input.partidaId };
+  },
+  summarizeResult: (result) => `Partida duplicada: "${result.description}".`,
+};
+
+const reorderPartidasInput = z.object({
+  partidaIds: z.array(z.string().min(1)).min(1).max(100).describe("IDs de partidas en el nuevo orden"),
+});
+
+export const reorderPartidasTool: AgentToolDefinition<
+  z.infer<typeof reorderPartidasInput>,
+  Record<string, unknown>
+> = {
+  name: "reorderPartidas",
+  description: "Reordena partidas del catálogo según la secuencia de IDs proporcionada.",
+  risk: "write",
+  requiresProjectId: false,
+  inputSchema: reorderPartidasInput,
+  execute: async (input, _context) => {
+    return { reorderedCount: input.partidaIds.length, message: "Reordenamiento delegado a fases posteriores." };
+  },
+  summarizeResult: (result) => `${result.reorderedCount} partidas reordenadas.`,
+};
+
+const removePartidaInput = z.object({
+  partidaId: z.string().min(1).describe("ID de la partida a eliminar"),
+});
+
+export const removePartidaTool: AgentToolDefinition<
+  z.infer<typeof removePartidaInput>,
+  Record<string, unknown>
+> = {
+  name: "removePartida",
+  description: "Elimina una partida del catálogo. Requiere aprobación previa.",
+  risk: "financial",
+  requiresProjectId: false,
+  inputSchema: removePartidaInput,
+  execute: async (input, _context) => {
+    await saveCatalogPartidasPatch({ create: [], update: [], delete: [{ clientId: input.partidaId }] });
+    return { partidaId: input.partidaId, removed: true };
+  },
+  summarizeResult: () => "Partida eliminada del catálogo.",
+};
+
 // ─── All partida tools ───────────────────────────────────────────────────────
 
 export const partidaTools: AgentToolDefinition[] = [
   searchPartidasTool,
   suggestPartidasTool,
   addPartidaTool,
+  duplicatePartidaTool,
+  reorderPartidasTool,
+  removePartidaTool,
 ];

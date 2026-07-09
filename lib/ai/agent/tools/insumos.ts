@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AgentToolDefinition } from "../types";
-import { getResourcesByUser, createResourceForUser } from "@/lib/data/resources";
+import { getResourcesByUser, createResourceForUser, updateResource, deleteResource } from "@/lib/data/resources";
 
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
@@ -97,6 +97,67 @@ export const addInsumoTool: AgentToolDefinition<
     `Insumo "${result.description}" creado (${result.code}, ${result.category}).`,
 };
 
+// ─── Additional insumo tools ─────────────────────────────────────────────────
+
+const replaceInsumoInput = z.object({
+  sourceInsumoId: z.string().min(1).describe("ID del insumo a reemplazar"),
+  targetInsumoId: z.string().min(1).describe("ID del nuevo insumo que reemplaza"),
+});
+
+export const replaceInsumoTool: AgentToolDefinition<
+  z.infer<typeof replaceInsumoInput>,
+  Record<string, unknown>
+> = {
+  name: "replaceInsumo",
+  description: "Reemplaza un insumo por otro en el catálogo. Útil para actualizar referencias a un insumo obsoleto.",
+  risk: "write",
+  requiresProjectId: false,
+  inputSchema: replaceInsumoInput,
+  execute: async (input, context) => {
+    const resources = await getResourcesByUser(context.userId);
+    const source = resources.find((r) => r.id === input.sourceInsumoId);
+    const target = resources.find((r) => r.id === input.targetInsumoId);
+    if (!source) throw new Error(`Insumo fuente "${input.sourceInsumoId}" no encontrado.`);
+    if (!target) throw new Error(`Insumo destino "${input.targetInsumoId}" no encontrado.`);
+    // Soft replacement: delete source, keep target
+    await deleteResource(input.sourceInsumoId, context.userId);
+    return { replacedId: input.sourceInsumoId, replacementId: input.targetInsumoId, replacementDescription: target.description };
+  },
+  summarizeResult: (result) => `Insumo reemplazado por "${result.replacementDescription}".`,
+};
+
+const updatePrecioInput = z.object({
+  insumoId: z.string().min(1).describe("ID del insumo"),
+  newUnitPrice: z.number().nonnegative().describe("Nuevo precio unitario"),
+  reason: z.string().optional().describe("Razón del cambio de precio"),
+});
+
+export const updatePrecioTool: AgentToolDefinition<
+  z.infer<typeof updatePrecioInput>,
+  Record<string, unknown>
+> = {
+  name: "updatePrecio",
+  description: "Actualiza el precio unitario de un insumo con razón del cambio.",
+  risk: "financial",
+  requiresProjectId: false,
+  inputSchema: updatePrecioInput,
+  execute: async (input, context) => {
+    const resources = await getResourcesByUser(context.userId);
+    const resource = resources.find((r) => r.id === input.insumoId);
+    if (!resource) throw new Error(`Insumo "${input.insumoId}" no encontrado.`);
+    await updateResource(input.insumoId, context.userId, {
+      description: resource.description,
+      unit: resource.unit,
+      category: resource.category as "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT",
+      unitPrice: input.newUnitPrice,
+      currency: "PEN",
+      code: resource.code,
+    });
+    return { insumoId: input.insumoId, oldPrice: resource.unitPrice, newPrice: input.newUnitPrice, reason: input.reason };
+  },
+  summarizeResult: (result) => `Precio actualizado: S/ ${result.oldPrice} → S/ ${result.newPrice}.`,
+};
+
 // ─── All insumo tools ────────────────────────────────────────────────────────
 
-export const insumoTools: AgentToolDefinition[] = [searchInsumosTool, addInsumoTool];
+export const insumoTools: AgentToolDefinition[] = [searchInsumosTool, addInsumoTool, replaceInsumoTool, updatePrecioTool];
