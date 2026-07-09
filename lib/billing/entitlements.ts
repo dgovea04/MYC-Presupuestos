@@ -2,6 +2,7 @@ import { prisma as defaultPrisma } from "@/lib/db/prisma";
 
 export const PRO_FEATURES = [
   "ai.local",
+  "khipu.agent",
   "partidas.similarity",
   "work_schedule.intelligent",
   "polynomial_formula.adjustments",

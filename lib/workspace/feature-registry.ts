@@ -1,5 +1,6 @@
 export const WORKSPACE_FEATURES = [
   { key: "ai.local", minimumPlan: "pro" as const },
+  { key: "khipu.agent", minimumPlan: "pro" as const },
   { key: "partidas.similarity", minimumPlan: "pro" as const },
   { key: "work_schedule.intelligent", minimumPlan: "pro" as const },
   { key: "polynomial_formula", minimumPlan: "starter" as const },

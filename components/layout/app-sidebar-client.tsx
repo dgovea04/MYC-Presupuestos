@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  Bot,
   FileSpreadsheet,
   FolderKanban,
   Import,
@@ -81,6 +82,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
     badge: <KhipuBadge compact variant="dark" />,
     requiredFeature: "ai.local",
   },
+  { href: "/dashboard/khipu-agent", label: "Khipu Agent", icon: Bot, requiredFeature: "khipu.agent" },
   {
     id: "catalogos",
     label: "Catalogos",
