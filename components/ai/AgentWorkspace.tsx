@@ -1,30 +1,28 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import {
   Bot,
   CheckCircle2,
-  Clock,
   AlertTriangle,
   XCircle,
   Send,
   Loader2,
-  ChevronRight,
   ShieldCheck,
   Wrench,
   Activity,
   Lightbulb,
-  Circle,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
+import { useAgentStream } from "@/hooks/use-agent-stream";
 import type {
   AgentExecutionState,
   AgentToolRisk,
-  AgentOrchestratorOutput,
 } from "@/lib/ai/agent/types";
 import { allTools } from "@/lib/ai/agent/tools";
 
@@ -36,23 +34,7 @@ type AgentWorkspaceProps = {
   initialObjective?: string;
 };
 
-type AgentExecutionView = AgentOrchestratorOutput & {
-  goal: string;
-};
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function stepStatusIcon(status: string) {
-  switch (status) {
-    case "completed": return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
-    case "running": return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
-    case "awaiting_approval": return <ShieldCheck className="h-4 w-4 text-amber-500" />;
-    case "failed": return <XCircle className="h-4 w-4 text-rose-500" />;
-    case "pending": return <Circle className="h-4 w-4 text-slate-300" />;
-    case "skipped": return <ChevronRight className="h-4 w-4 text-slate-400" />;
-    default: return <Clock className="h-4 w-4 text-slate-400" />;
-  }
-}
 
 function stateBadge(state: AgentExecutionState) {
   const map: Record<string, { label: string; className: string }> = {
@@ -227,11 +209,15 @@ function AgentChatPanel({
 }
 
 function ExecutionPlanPanel({
-  execution,
+  streaming,
+  streamExecution,
 }: {
-  execution: AgentExecutionView | null;
+  streaming: boolean;
+  streamExecution: ReturnType<typeof useAgentStream>["execution"];
 }) {
-  if (!execution) {
+  const isIdle = !streamExecution.state && !streaming;
+
+  if (isIdle) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">
         <Lightbulb className="mb-3 h-10 w-10 text-slate-300" />
@@ -243,15 +229,7 @@ function ExecutionPlanPanel({
     );
   }
 
-  const steps = execution.plan;
-  const completedIds = useMemo(
-    () => new Set(execution.completedSteps.map((s) => s.id)),
-    [execution.completedSteps],
-  );
-  const failedIds = useMemo(
-    () => new Set(execution.failedSteps.map((s) => s.id)),
-    [execution.failedSteps],
-  );
+  const toolCount = streamExecution.toolActivity.length;
 
   return (
     <div className="flex h-full flex-col">
@@ -260,99 +238,119 @@ function ExecutionPlanPanel({
         <div>
           <p className="text-sm font-semibold text-[var(--app-text-strong)]">Plan de Ejecución</p>
           <p className="text-[11px] text-[var(--app-text-muted)]">
-            {steps.length} paso{steps.length !== 1 ? "s" : ""}
-            {" · "}
-            {stateBadge(execution.state)}
+            {streamExecution.state
+              ? stateBadge(streamExecution.state)
+              : streaming
+                ? "Ejecutando..."
+                : "Sin estado"}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-[11px] text-[var(--app-text-muted)]">
-            {execution.completedSteps.length}/{steps.length} completados
-          </p>
-        </div>
+        {streaming && (
+          <div className="flex items-center gap-1.5 text-[11px] text-blue-600">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            En vivo
+          </div>
+        )}
       </div>
 
-      {/* Steps */}
+      {/* Streaming live view */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="relative space-y-0">
-          {steps.map((step, index) => {
-            const isCompleted = completedIds.has(step.id);
-            const isFailed = failedIds.has(step.id);
-            const isPending = !isCompleted && !isFailed;
-            let stepStatus: string;
-            if (isCompleted) stepStatus = "completed";
-            else if (isFailed) stepStatus = "failed";
-            else if (execution.pendingApproval?.stepId === step.id) stepStatus = "awaiting_approval";
-            else if (execution.state === "EXECUTING" && isPending && index === execution.completedSteps.length) stepStatus = "running";
-            else stepStatus = "pending";
+        {streaming && (
+          <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 p-3">
+            <div className="flex items-center gap-2 text-xs text-blue-700">
+              <Zap className="h-3.5 w-3.5" />
+              <span className="font-semibold">Ejecución en tiempo real</span>
+            </div>
+            <p className="mt-1 text-[11px] text-blue-600">
+              Khipu está procesando tu solicitud. Las herramientas ejecutadas aparecerán en el panel de actividad.
+            </p>
+          </div>
+        )}
 
-            return (
-              <div key={step.id} className="flex gap-3 pb-4">
-                {/* Timeline connector */}
+        {toolCount > 0 && (
+          <div className="space-y-0">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+              Herramientas ejecutadas ({toolCount})
+            </p>
+            {streamExecution.toolActivity.map((activity, i) => (
+              <div key={i} className="flex gap-3 pb-3">
                 <div className="flex flex-col items-center">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 bg-white shadow-sm"
+                  <div
+                    className="flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white"
                     style={{
-                      borderColor: isCompleted ? "#10b981" : isFailed ? "#ef4444" : index === execution.completedSteps.length && execution.state === "EXECUTING" ? "#3b82f6" : "#e2e8f0",
+                      borderColor: activity.success
+                        ? "#10b981"
+                        : activity.latencyMs === undefined
+                          ? "#3b82f6"
+                          : "#ef4444",
                     }}
                   >
-                    {stepStatusIcon(stepStatus)}
+                    {activity.latencyMs === undefined ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                    ) : activity.success ? (
+                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-rose-500" />
+                    )}
                   </div>
-                  {index < steps.length - 1 && (
-                    <div aria-hidden="true" className={cn("my-0.5 w-0.5 flex-1", isCompleted ? "bg-emerald-200" : "bg-slate-200")} />
+                  {i < toolCount - 1 && (
+                    <div
+                      aria-hidden="true"
+                      className={cn(
+                        "my-0.5 w-0.5 flex-1",
+                        activity.success ? "bg-emerald-200" : "bg-slate-200",
+                      )}
+                    />
                   )}
                 </div>
-
-                {/* Step content */}
-                <div className={cn(
-                  "flex-1 rounded-xl border p-3 transition",
-                  isCompleted ? "border-emerald-200 bg-emerald-50/30" :
-                  isFailed ? "border-rose-200 bg-rose-50/30" :
-                  stepStatus === "running" ? "border-blue-200 bg-blue-50/30" :
-                  "border-slate-200 bg-white",
-                )}>
-                  <div className="flex items-start justify-between gap-2">
+                <div
+                  className={cn(
+                    "flex-1 rounded-lg border px-2.5 py-2",
+                    activity.success
+                      ? "border-emerald-200 bg-emerald-50/30"
+                      : activity.latencyMs === undefined
+                        ? "border-blue-200 bg-blue-50/30"
+                        : "border-rose-200 bg-rose-50/30",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-semibold text-slate-400">{index + 1}</span>
-                        <p className="text-sm font-semibold text-[var(--app-text-strong)]">{step.title}</p>
-                      </div>
-                      <p className="mt-0.5 text-xs text-[var(--app-text-muted)]">{step.objective}</p>
+                      <span className="text-[10px] font-semibold text-slate-400">{i + 1}</span>
+                      <span className="ml-1.5 text-xs font-semibold text-slate-700">
+                        {activity.toolName}
+                      </span>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      {step.toolName && (
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">
-                          {step.toolName}
-                        </span>
-                      )}
-                      {step.approvalBoundary && (
-                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                          Requiere aprobación
-                        </span>
-                      )}
-                    </div>
+                    {activity.latencyMs !== undefined && (
+                      <span className="shrink-0 text-[10px] text-slate-400">
+                        {activity.latencyMs}ms
+                      </span>
+                    )}
                   </div>
-                  {step.dependsOn.length > 0 && (
-                    <p className="mt-1.5 text-[10px] text-slate-400">
-                      Depende de: {step.dependsOn.join(", ")}
-                    </p>
-                  )}
-                  {stepStatus === "running" && (
-                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-blue-600">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      En progreso...
-                    </div>
-                  )}
+                  <p className="mt-0.5 text-[11px] text-slate-500">{activity.summary}</p>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
+
+        {!streaming && toolCount === 0 && streamExecution.state && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <CheckCircle2 className="mb-2 h-8 w-8 text-slate-300" />
+            <p className="text-xs text-slate-400">
+              {streamExecution.state === "FAILED"
+                ? "La ejecución falló."
+                : streamExecution.state === "EXECUTED"
+                  ? "Ejecución completada."
+                  : `Estado: ${streamExecution.state}`}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Summary footer */}
-      {execution.summary && (
+      {streamExecution.summary && (
         <div className="border-t border-[var(--app-border)] px-5 py-3">
-          <p className="text-xs text-[var(--app-text-muted)]">{execution.summary}</p>
+          <p className="text-xs text-[var(--app-text-muted)]">{streamExecution.summary}</p>
         </div>
       )}
     </div>
@@ -360,16 +358,18 @@ function ExecutionPlanPanel({
 }
 
 function AgentRightPanel({
-  execution,
+  streamExecution,
+  streaming,
   allTools,
   onApprove,
   onReject,
   approving,
 }: {
-  execution: AgentExecutionView | null;
+  streamExecution: ReturnType<typeof useAgentStream>["execution"];
+  streaming: boolean;
   allTools: Array<{ name: string; description: string; risk: AgentToolRisk }>;
-  onApprove: (approvalId: string) => void;
-  onReject: (approvalId: string) => void;
+  onApprove: (toolName: string) => void;
+  onReject: (toolName: string) => void;
   approving: boolean;
 }) {
   return (
@@ -401,7 +401,7 @@ function AgentRightPanel({
       </Card>
 
       {/* Pending Approvals */}
-      {execution?.pendingApproval ? (
+      {streamExecution.pendingApproval ? (
         <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
           <CardContent className="p-4">
             <div className="mb-3 flex items-center gap-2">
@@ -412,28 +412,23 @@ function AgentRightPanel({
             </div>
             <div className="rounded-xl border border-amber-200 bg-white p-3 space-y-2">
               <p className="text-sm font-semibold text-slate-800">
-                {execution.pendingApproval.reason}
+                {streamExecution.pendingApproval.reason}
               </p>
-              {execution.pendingApproval.impactSummary && (
-                <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-600 mb-0.5">
-                    Impacto esperado
-                  </p>
-                  <p className="text-xs text-amber-800">
-                    {execution.pendingApproval.impactSummary}
-                  </p>
-                </div>
-              )}
-              <p className="text-[11px] text-slate-400">
-                ID: {execution.pendingApproval.approvalId}
-              </p>
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-600 mb-0.5">
+                  Herramienta
+                </p>
+                <p className="text-xs text-amber-800 font-mono">
+                  {streamExecution.pendingApproval.toolName}
+                </p>
+              </div>
             </div>
             <div className="mt-3 flex gap-2">
               <Button
                 size="sm"
                 className="flex-1 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
                 disabled={approving}
-                onClick={() => onApprove(execution.pendingApproval!.approvalId)}
+                onClick={() => onApprove(streamExecution.pendingApproval!.toolName)}
               >
                 {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                 Aprobar
@@ -443,7 +438,7 @@ function AgentRightPanel({
                 variant="outline"
                 className="flex-1 gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-50"
                 disabled={approving}
-                onClick={() => onReject(execution.pendingApproval!.approvalId)}
+                onClick={() => onReject(streamExecution.pendingApproval!.toolName)}
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Rechazar
@@ -474,14 +469,21 @@ function AgentRightPanel({
               Actividad
             </p>
           </div>
-          {execution?.toolActivity && execution.toolActivity.length > 0 ? (
+          {streamExecution.toolActivity.length > 0 ? (
             <div className="space-y-2">
-              {execution.toolActivity.map((activity, i) => (
+              {streamExecution.toolActivity.map((activity, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-2 rounded-lg border border-slate-100 px-2.5 py-2"
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-2.5 py-2 transition",
+                    activity.latencyMs === undefined
+                      ? "border-blue-200 bg-blue-50/30"
+                      : "border-slate-100",
+                  )}
                 >
-                  {activity.success ? (
+                  {activity.latencyMs === undefined ? (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
+                  ) : activity.success ? (
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                   ) : (
                     <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
@@ -503,7 +505,7 @@ function AgentRightPanel({
       </Card>
 
       {/* Warnings */}
-      {execution?.warnings && execution.warnings.length > 0 && (
+      {streamExecution.warnings.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
           <CardContent className="p-4">
             <div className="mb-2 flex items-center gap-2">
@@ -513,7 +515,7 @@ function AgentRightPanel({
               </p>
             </div>
             <ul className="space-y-1">
-              {execution.warnings.map((w, i) => (
+              {streamExecution.warnings.map((w, i) => (
                 <li key={i} className="text-[11px] text-amber-700">· {w}</li>
               ))}
             </ul>
@@ -540,70 +542,24 @@ export function AgentWorkspace({
   initialObjective = "",
 }: AgentWorkspaceProps) {
   const [objective, setObjective] = useState(initialObjective);
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant" | "system"; content: string }>>([]);
-  const [loading, setLoading] = useState(false);
-  const [streaming, setStreaming] = useState(false);
-  const [execution, setExecution] = useState<AgentExecutionView | null>(null);
   const [approving, setApproving] = useState(false);
 
-  const handleObjectiveSubmit = useCallback(async (obj: string) => {
-    if (!obj.trim()) return;
+  const {
+    status,
+    messages,
+    execution: streamExec,
+    connect,
+    disconnect,
+  } = useAgentStream();
+
+  const loading = status === "connecting";
+  const streaming = status === "streaming";
+
+  const handleObjectiveSubmit = useCallback((obj: string) => {
+    if (!obj.trim() || loading || streaming) return;
     setObjective("");
-    setMessages((prev) => [...prev, { role: "user", content: obj }]);
-    setLoading(true);
-    setStreaming(false);
-
-    try {
-      const response = await fetch("/api/ai/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: obj,
-          projectId: projectId ?? undefined,
-          mode: "goal",
-        }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: "Error de conexión" }));
-        throw new Error(typeof err.error === "string" ? err.error : "Error del agente");
-      }
-
-      const data: AgentExecutionView = await response.json();
-
-      setExecution(data);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: data.summary || `Ejecución iniciada: estado ${data.state}`,
-        },
-      ]);
-
-      if (data.pendingApproval) {
-        const approval = data.pendingApproval;
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "system",
-            content: `⏸️ Se requiere tu aprobación para continuar: ${approval.reason}`,
-          },
-        ]);
-      }
-    } catch (error) {
-      console.error("[AgentWorkspace] Error submitting objective:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          content: `❌ ${error instanceof Error ? error.message : "Error inesperado del agente."}`,
-        },
-      ]);
-    } finally {
-      setLoading(false);
-      setStreaming(false);
-    }
-  }, [projectId]);
+    connect({ message: obj.trim(), projectId, mode: "goal" });
+  }, [projectId, loading, streaming, connect]);
 
   const handleApprove = useCallback(async (approvalId: string) => {
     setApproving(true);
@@ -615,23 +571,9 @@ export function AgentWorkspace({
       });
 
       if (!response.ok) throw new Error("Error al aprobar");
-
-      const result = await response.json();
-      setMessages((prev) => [...prev, {
-        role: "system",
-        content: "✅ Aprobado. Continuando ejecución...",
-      }]);
-      setExecution((prev) => prev ? {
-        ...prev,
-        state: result.newState,
-        pendingApproval: undefined,
-      } : null);
+      await response.json();
     } catch {
       console.error("[AgentWorkspace] Error processing approval");
-      setMessages((prev) => [...prev, {
-        role: "system",
-        content: "❌ Error al procesar la aprobación.",
-      }]);
     } finally {
       setApproving(false);
     }
@@ -647,27 +589,14 @@ export function AgentWorkspace({
       });
 
       if (!response.ok) throw new Error("Error al rechazar");
-
-      const result = await response.json();
-      setMessages((prev) => [...prev, {
-        role: "system",
-        content: "✕ Ejecución rechazada.",
-      }]);
-      setExecution((prev) => prev ? {
-        ...prev,
-        state: result.newState,
-        pendingApproval: undefined,
-      } : null);
+      await response.json();
+      disconnect();
     } catch {
       console.error("[AgentWorkspace] Error processing rejection");
-      setMessages((prev) => [...prev, {
-        role: "system",
-        content: "❌ Error al procesar el rechazo.",
-      }]);
     } finally {
       setApproving(false);
     }
-  }, []);
+  }, [disconnect]);
 
   return (
     <div className={cn(
@@ -688,12 +617,13 @@ export function AgentWorkspace({
 
       {/* Center: Execution Plan */}
       <div className="border-r border-[var(--app-border)]">
-        <ExecutionPlanPanel execution={execution} />
+        <ExecutionPlanPanel streaming={streaming} streamExecution={streamExec} />
       </div>
 
       {/* Right: Tools + Approvals + Activity */}
       <AgentRightPanel
-        execution={execution}
+        streamExecution={streamExec}
+        streaming={streaming}
         allTools={getAvailableTools()}
         onApprove={handleApprove}
         onReject={handleReject}
