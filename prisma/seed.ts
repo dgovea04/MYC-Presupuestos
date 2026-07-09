@@ -445,11 +445,67 @@ async function main() {
 
   await refreshBudgetTotals(budget.id);
   await refreshGeneralBudgetTotals(generalBudget.id);
+  await seedAgentWorkflows();
+}
+
+async function seedAgentWorkflows() {
+  const workflows = [
+    {
+      slug: "crear-presupuesto-base",
+      name: "Crear presupuesto base",
+      description: "Crea un presupuesto nuevo con capítulos, partidas y APU desde cero, guiado paso a paso.",
+      initialGoalTemplate: "Crear un presupuesto para un proyecto de construcción. Empezar creando el presupuesto, luego agregar capítulos y partidas según el tipo de obra.",
+      allowedToolsJson: ["searchPartidas", "addPartida", "createBudget", "createChapter", "searchInsumos", "addInsumo", "calculateBudget"],
+      defaultMode: "goal",
+    },
+    {
+      slug: "revisar-apu-proyecto",
+      name: "Revisar APU del proyecto",
+      description: "Analiza los análisis de precios unitarios del presupuesto activo, detecta inconsistencias y sugiere mejoras.",
+      initialGoalTemplate: "Revisar los APU del presupuesto actual. Analizar rendimientos, costos de insumos y verificar que los precios unitarios sean consistentes con el mercado.",
+      allowedToolsJson: ["reviewAPU", "calculateAPU", "calculateBudget", "searchInsumos", "searchPartidas"],
+      defaultMode: "goal",
+    },
+    {
+      slug: "generar-cronograma",
+      name: "Generar cronograma de obra",
+      description: "Genera un cronograma completo con ruta crítica, dependencias y fechas estimadas basado en las partidas del presupuesto.",
+      initialGoalTemplate: "Generar un cronograma de obra para el presupuesto actual. Calcular duraciones basadas en rendimientos, establecer dependencias entre partidas y calcular la ruta crítica.",
+      allowedToolsJson: ["createSchedule", "updateTask", "linkPredecessor", "calculateCriticalPath", "calculateBudget"],
+      defaultMode: "goal",
+    },
+    {
+      slug: "exportar-reportes",
+      name: "Exportar reportes del proyecto",
+      description: "Exporta el presupuesto en PDF y Excel con todas las partidas, APU, cronograma y fórmula polinómica.",
+      initialGoalTemplate: "Exportar el presupuesto actual a PDF y Excel. Incluir todas las partidas con sus APU, el cronograma y la fórmula polinómica si está configurada.",
+      allowedToolsJson: ["exportPDF", "exportExcel", "calculateBudget", "exportS10", "dashboard"],
+      defaultMode: "goal",
+    },
+  ];
+
+  for (const wf of workflows) {
+    await prisma.agentWorkflow.upsert({
+      where: { slug: wf.slug },
+      update: {
+        name: wf.name,
+        description: wf.description,
+        initialGoalTemplate: wf.initialGoalTemplate,
+        allowedToolsJson: wf.allowedToolsJson,
+        defaultMode: wf.defaultMode,
+        isActive: true,
+      },
+      create: wf,
+    });
+  }
+
+  console.info(`Seeded ${workflows.length} agent workflows.`);
 }
 
 async function seedMembershipPlans() {
   const proEntitlements = [
     "ai.local",
+    "khipu.agent",
     "partidas.similarity",
     "work_schedule.intelligent",
     "polynomial_formula",

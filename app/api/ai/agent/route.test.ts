@@ -18,6 +18,13 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
+// ── Workflow mock ───────────────────────────────────────────────────────────
+vi.mock("@/lib/data/agent-workflows", () => ({
+  listActiveWorkflows: vi.fn().mockResolvedValue([]),
+  getWorkflowBySlug: vi.fn().mockResolvedValue(null),
+  getWorkflowById: vi.fn().mockResolvedValue(null),
+}));
+
 // ── Orchestrator mock ───────────────────────────────────────────────────────
 const mockRun = vi.fn();
 vi.mock("@/lib/ai/agent/orchestrator", () => ({
@@ -26,6 +33,7 @@ vi.mock("@/lib/ai/agent/orchestrator", () => ({
 
 import { POST } from "@/app/api/ai/agent/route";
 import { getAuthSession } from "@/lib/auth/session";
+import { getWorkflowBySlug } from "@/lib/data/agent-workflows";
 import { prisma } from "@/lib/db/prisma";
 
 const mockPrisma = prisma as unknown as {
@@ -246,6 +254,18 @@ describe("POST /api/ai/agent", () => {
   it("passes projectId and optional fields to orchestrator", async () => {
     authAs("user-1");
     mockRun.mockResolvedValue(makeOrchestratorOutput("exec-12", "EXECUTED"));
+    vi.mocked(getWorkflowBySlug).mockResolvedValue({
+      id: "wf-1",
+      slug: "wf-1",
+      name: "Test Workflow",
+      description: "Test",
+      initialGoalTemplate: "Crear presupuesto",
+      allowedToolsJson: [],
+      defaultMode: "goal",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     await post({
       message: "Analizar presupuesto",

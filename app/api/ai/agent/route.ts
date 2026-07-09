@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { aiAgentRequestSchema } from "@/lib/ai/agent/validation";
+import { getWorkflowBySlug } from "@/lib/data/agent-workflows";
 import { createAgentOrchestrator } from "@/lib/ai/agent/orchestrator";
 import { createPlanner } from "@/lib/ai/agent/planner";
 import { createToolRegistry } from "@/lib/ai/agent/tool-registry";
@@ -58,33 +59,86 @@ export async function POST(request: Request) {
       }
     }
 
-    // Inicializar machinery agéntica
+    // Inicializar machinery compartida
+    const policyEngine = createPolicyEngine();
+    const adapter = createVercelSdkAdapter();
+    const planner = createPlanner();
+    const approvalService = createApprovalService();
+
+    let mode = data.mode ?? "chat";
+    let message = data.message;
+
+    // Si se especifica un workflow, cargar su plantilla
+    if (data.workflowId) {
+      const workflow = await getWorkflowBySlug(data.workflowId);
+      if (!workflow) {
+        return Response.json(
+          { error: `Workflow "${data.workflowId}" no encontrado.` },
+          { status: 404 },
+        );
+      }
+
+      // Usar el goal template del workflow si no hay mensaje explícito del usuario
+      if (!data.message || data.message.trim().length === 0) {
+        message = workflow.initialGoalTemplate;
+      }
+
+      mode = workflow.defaultMode as typeof mode;
+
+      // Filtrar herramientas si el workflow las restringe
+      const rawTools = workflow.allowedToolsJson;
+      const allowedTools: string[] = Array.isArray(rawTools) ? (rawTools as string[]) : [];
+
+      if (allowedTools.length > 0) {
+        const filteredTools = allTools.filter((t) => allowedTools.includes(t.name));
+        const restrictedRegistry = createToolRegistry();
+        for (const tool of filteredTools) {
+          restrictedRegistry.register(tool);
+        }
+
+        const restrictedExecutor = createToolExecutor(restrictedRegistry, policyEngine);
+        const restrictedOrchestrator = createAgentOrchestrator(
+          planner,
+          policyEngine,
+          restrictedRegistry,
+          restrictedExecutor,
+          adapter,
+          undefined,
+        );
+
+        const result = await restrictedOrchestrator.run({
+          userId,
+          projectId: data.projectId,
+          message,
+          mode,
+          workflowId: data.workflowId,
+          executionId: data.executionId,
+        });
+
+        return Response.json(result, { status: 200 });
+      }
+    }
+
+    // Inicializar machinery con todas las herramientas (sin restricción de workflow)
     const registry = createToolRegistry();
     for (const tool of allTools) {
       registry.register(tool);
     }
 
-    const policyEngine = createPolicyEngine();
     const toolExecutor = createToolExecutor(registry, policyEngine);
-    const adapter = createVercelSdkAdapter();
-    const planner = createPlanner();
-    const approvalService = createApprovalService();
-
     const orchestrator = createAgentOrchestrator(
       planner,
-      registry,
       policyEngine,
+      registry,
       toolExecutor,
       adapter,
-      approvalService,
+      undefined,
     );
-
-    const mode = data.mode ?? "chat";
 
     const result = await orchestrator.run({
       userId,
       projectId: data.projectId,
-      message: data.message,
+      message,
       mode,
       workflowId: data.workflowId,
       executionId: data.executionId,
