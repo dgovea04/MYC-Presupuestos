@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type {
   AgentExecutionState,
   AgentToolActivitySummary,
@@ -153,6 +153,14 @@ export function useAgentStream() {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus("idle");
+  }, []);
+
+  // Cleanup on unmount: abort any active stream to prevent zombie connections
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
   }, []);
 
   // ── Event handler ──────────────────────────────────────────────────────────

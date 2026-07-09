@@ -6,33 +6,8 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 
 // ── Billing mock ────────────────────────────────────────────────────────────
-vi.mock("@/lib/billing/entitlements", () => {
-  class FeatureAccessError extends Error {
-    feature: string;
-    constructor(message: string) {
-      super(message);
-      this.name = "FeatureAccessError";
-      this.feature = "unknown";
-    }
-  }
-  class PlanLimitError extends Error {
-    resource: string;
-    limit: number;
-    usage: number;
-    constructor(message: string) {
-      super(message);
-      this.name = "PlanLimitError";
-      this.resource = "unknown";
-      this.limit = 0;
-      this.usage = 0;
-    }
-  }
-  return {
-    assertFeatureAccess: vi.fn().mockResolvedValue(undefined),
-    FeatureAccessError,
-    PlanLimitError,
-  };
-});
+import { createBillingMock } from "@/app/api/ai/__tests__/billing-mock";
+vi.mock("@/lib/billing/entitlements", () => createBillingMock());
 
 // ── Prisma mock ─────────────────────────────────────────────────────────────
 vi.mock("@/lib/db/prisma", () => ({
