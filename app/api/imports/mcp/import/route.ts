@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     revalidateTag("dashboard-stats");
     revalidateTag("dashboard-analytics");
     revalidateTag("projects-list");
+    revalidateTag("project-overview");
     revalidatePath("/projects");
     revalidatePath(`/projects/${result.projectId}`);
     revalidatePath("/budgets");

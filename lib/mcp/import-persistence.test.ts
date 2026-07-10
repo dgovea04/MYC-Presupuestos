@@ -567,6 +567,96 @@ describe("importProjectPackageToMyc", () => {
     ).rejects.toThrow("El paquete .mcp no contiene un presupuesto general.");
   });
 
+  it("maps old ApuResource IDs to new IDs via apuResourceIdMap", async () => {
+    // Set up fixture where polynomial formula references a real ApuResource
+    const formulaWithApuRef = {
+      formula: {
+        ...fixtureModules["polynomial-formula/formula.json"].formula,
+        monomials: [
+          {
+            ...fixtureModules["polynomial-formula/formula.json"].formula.monomials[0],
+            components: [
+              {
+                budgetItemId: "item-1",
+                apuResourceId: "apu-res-1", // references the first ApuResource created
+                resourceType: "MATERIAL",
+                amount: "294.0000",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const manifest = makeManifest();
+    const readModule = makeModuleReader({
+      ...fixtureModules,
+      "polynomial-formula/formula.json": formulaWithApuRef,
+    });
+
+    const result = await importProjectPackageToMyc("user-1", manifest, readModule, {
+      companyId: "company-1",
+      mode: "restore_as_new_project",
+    });
+
+    // The ApuResource with OLD id "apu-res-1" was created, and apuResourceCreate returned
+    // { id: "apu-res-created" }. The apuResourceIdMap should map "apu-res-1" → "apu-res-created".
+    expect(mocks.polynomialMonomialComponentCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        apuResourceId: "apu-res-created", // mapped through apuResourceIdMap
+      }),
+    });
+
+    // The import should succeed without warnings
+    expect(result.warnings).toEqual([]);
+    expect(result.projectId).toBe("project-created");
+    expect(result.apuCount).toBeGreaterThan(0);
+  });
+
+  it("falls back to null for unmapped ApuResource IDs to avoid FK violation", async () => {
+    // Set up fixture where polynomial formula references a NONEXISTENT ApuResource
+    const formulaWithBadRef = {
+      formula: {
+        ...fixtureModules["polynomial-formula/formula.json"].formula,
+        monomials: [
+          {
+            ...fixtureModules["polynomial-formula/formula.json"].formula.monomials[0],
+            components: [
+              {
+                budgetItemId: "item-1",
+                apuResourceId: "apu-res-nonexistent", // NOT in any APU resource — not in apuResourceIdMap
+                resourceType: "MATERIAL",
+                amount: "294.0000",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const manifest = makeManifest();
+    const readModule = makeModuleReader({
+      ...fixtureModules,
+      "polynomial-formula/formula.json": formulaWithBadRef,
+    });
+
+    const result = await importProjectPackageToMyc("user-1", manifest, readModule, {
+      companyId: "company-1",
+      mode: "restore_as_new_project",
+    });
+
+    // Unmapped "apu-res-nonexistent" should fall back to null via ??, preventing FK violation
+    expect(mocks.polynomialMonomialComponentCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        apuResourceId: null, // null because the ID wasn't in apuResourceIdMap
+      }),
+    });
+
+    // Should succeed — the null fallback prevents the FK violation that would abort the transaction
+    expect(result.warnings).toEqual([]);
+    expect(result.projectId).toBe("project-created");
+  });
+
   it("roundtrips a project package without losing budget, APU, and polynomial precision", async () => {
     // Step 1: Build a full .mcp package (simulates export)
     const buffer = buildFullProjectPackageBuffer();

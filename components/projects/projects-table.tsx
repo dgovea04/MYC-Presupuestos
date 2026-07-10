@@ -227,7 +227,7 @@ const ProjectTableRow = memo(function ProjectTableRow({
           />
           <ActionButton
             action="export"
-            label="Exportar .mcp"
+            label="Exportar"
             size="sm"
             variant="ghost"
             disabled={isPending}

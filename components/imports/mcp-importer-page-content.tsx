@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   FileArchive,
@@ -47,6 +48,15 @@ type McpImportResult = {
   warnings: string[];
 };
 
+type BillingErrorDetail = {
+  error: string;
+  resource?: string;
+  limit?: number;
+  usage?: number;
+  upgradeRequired?: boolean;
+  upgradeUrl?: string;
+};
+
 type McpImporterPageContentProps = {
   companies: CompanyOption[];
 };
@@ -60,6 +70,7 @@ export function McpImporterPageContent({ companies }: McpImporterPageContentProp
   const [importResult, setImportResult] = useState<McpImportResult | null>(null);
   const [analysisError, setAnalysisError] = useState("");
   const [importError, setImportError] = useState("");
+  const [billingError, setBillingError] = useState<BillingErrorDetail | null>(null);
 
   const presentModuleCount = useMemo(
     () => analysis?.modules.filter((module) => module.present).length ?? 0,
@@ -117,6 +128,7 @@ export function McpImporterPageContent({ companies }: McpImporterPageContentProp
 
     setImportState("loading");
     setImportError("");
+    setBillingError(null);
 
     const formData = new FormData();
     formData.set("file", mcpFile);
@@ -129,7 +141,13 @@ export function McpImporterPageContent({ companies }: McpImporterPageContentProp
       });
 
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        const body = (await response.json().catch(() => null)) as (BillingErrorDetail & { error?: string }) | null;
+
+        // Check if this is a billing/plan limit error with upgrade info
+        if (body?.upgradeRequired) {
+          setBillingError(body as BillingErrorDetail);
+        }
+
         throw new Error(body?.error ?? "No se pudo importar el proyecto .mcp.");
       }
 
@@ -232,7 +250,36 @@ export function McpImporterPageContent({ companies }: McpImporterPageContentProp
             </div>
           ) : null}
 
-          {importError ? <InlineMessage tone="error" message={importError} /> : null}
+          {importError && !billingError ? <InlineMessage tone="error" message={importError} /> : null}
+
+          {billingError ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                    Límite de {billingError.resource === "projects" ? "proyectos" : "presupuestos"} alcanzado
+                  </p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+                    {billingError.error}{" "}
+                    {billingError.limit !== undefined && billingError.usage !== undefined
+                      ? `Tienes ${billingError.usage} de ${billingError.limit} permitidos en tu plan actual.`
+                      : null}
+                  </p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+                    Elimina proyectos antiguos o actualiza a un plan superior para importar mas.
+                  </p>
+                  <a
+                    href={billingError.upgradeUrl ?? "/account"}
+                    className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70"
+                  >
+                    Ver planes disponibles
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {importResult ? (
             <div className="theme-status-success mt-4 rounded-xl border p-4">

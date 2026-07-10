@@ -114,7 +114,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               actions={
                 <>
                   <ExportPanel
-                    buttonLabel="Exportar .mcp"
+                    buttonLabel="Exportar"
                     defaultPreset="proyecto_completo_mcp"
                     definition={getExportDefinition("project_package")}
                     targetId={project.id}

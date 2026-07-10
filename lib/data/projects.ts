@@ -173,7 +173,7 @@ export const getUserCompanies = cache(
 
     return unstable_cache(
       async (uid: string) => _getUserCompanies(uid),
-      [USER_COMPANIES_CACHE_TAG],
+      [USER_COMPANIES_CACHE_TAG, userId],
       { tags: [USER_COMPANIES_CACHE_TAG] },
     )(userId);
   },
@@ -330,8 +330,8 @@ export const getProjectsListByUser = cache(
     const result = await unstable_cache(
       async (uid: string) => _getProjectsListByUser(uid, activeCompanyId),
       activeCompanyId
-        ? [PROJECTS_LIST_CACHE_TAG, activeCompanyId]
-        : [PROJECTS_LIST_CACHE_TAG],
+        ? [PROJECTS_LIST_CACHE_TAG, userId, activeCompanyId]
+        : [PROJECTS_LIST_CACHE_TAG, userId],
       { tags: [PROJECTS_LIST_CACHE_TAG] },
     )(userId);
     return normalizeProjectsListDates(result);
@@ -515,7 +515,7 @@ export const getProjectOverviewById = cache(
 
     const result = await unstable_cache(
       async (projectId: string, uid: string) => _getProjectOverviewById(projectId, uid),
-      [PROJECT_OVERVIEW_CACHE_TAG],
+      [PROJECT_OVERVIEW_CACHE_TAG, id, userId],
       { tags: [PROJECT_OVERVIEW_CACHE_TAG] },
     )(id, userId);
     return normalizeProjectOverviewDates(result);

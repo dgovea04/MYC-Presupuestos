@@ -13,6 +13,7 @@ type PersistenceContext = {
   levelIdMap: Map<string, string>;
   budgetItemIdMap: Map<string, string>;
   apuIdMap: Map<string, string>;
+  apuResourceIdMap: Map<string, string>;
   budgetIdMap: Map<string, string>;
 };
 
@@ -33,7 +34,7 @@ export async function importProjectPackageToMyc(
 
   const warnings: string[] = [];
 
-  return prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const ctx: PersistenceContext = {
       tx,
       manifest,
@@ -41,6 +42,7 @@ export async function importProjectPackageToMyc(
       levelIdMap: new Map(),
       budgetItemIdMap: new Map(),
       apuIdMap: new Map(),
+      apuResourceIdMap: new Map(),
       budgetIdMap: new Map(),
     };
 
@@ -279,7 +281,9 @@ export async function importProjectPackageToMyc(
                 budgetItemId: component.budgetItemId
                   ? ctx.budgetItemIdMap.get(component.budgetItemId) ?? null
                   : null,
-                apuResourceId: component.apuResourceId,
+                apuResourceId: component.apuResourceId
+                  ? ctx.apuResourceIdMap.get(component.apuResourceId) ?? null
+                  : null,
                 resourceType: component.resourceType,
                 amount: component.amount,
               },
@@ -303,6 +307,8 @@ export async function importProjectPackageToMyc(
       warnings,
     };
   }, importTransactionOptions);
+
+  return transactionResult;
 }
 
 function createBudgetCreateData(
@@ -381,22 +387,42 @@ async function persistBudgetStructure(
     }>;
   }>,
 ) {
-  const { tx, levelIdMap, budgetItemIdMap } = ctx;
+  const { tx, levelIdMap, budgetItemIdMap, apuResourceIdMap } = ctx;
 
-  // Create levels
-  for (const level of budgetData.levels) {
-    const createdLevel = await tx.budgetLevel.create({
-      data: {
-        budgetId: persistedBudgetId,
-        parentId: level.parentId,
-        type: level.type as never,
-        code: level.code,
-        name: level.name,
-        sortOrder: level.sortOrder,
-      },
-    });
+  // Create levels — handle out-of-order parent-child relationships
+  // by re-queuing levels whose parent hasn't been created yet
+  let pendingLevels = [...budgetData.levels];
 
-    levelIdMap.set(level.id, createdLevel.id);
+  while (pendingLevels.length > 0) {
+    const nextPendingLevels: typeof pendingLevels = [];
+    let createdLevels = 0;
+
+    for (const level of pendingLevels) {
+      if (level.parentId && !levelIdMap.has(level.parentId)) {
+        nextPendingLevels.push(level);
+        continue;
+      }
+
+      const createdLevel = await tx.budgetLevel.create({
+        data: {
+          budgetId: persistedBudgetId,
+          parentId: level.parentId ? levelIdMap.get(level.parentId) ?? null : null,
+          type: level.type as never,
+          code: level.code,
+          name: level.name,
+          sortOrder: level.sortOrder,
+        },
+      });
+
+      levelIdMap.set(level.id, createdLevel.id);
+      createdLevels += 1;
+    }
+
+    if (createdLevels === 0) {
+      throw new Error("No se pudo restaurar la jerarquia de niveles del presupuesto.");
+    }
+
+    pendingLevels = nextPendingLevels;
   }
 
   // Create items
@@ -432,7 +458,7 @@ async function persistBudgetStructure(
       });
 
       for (const resource of apu.resources) {
-        await tx.apuResource.create({
+        const createdResource = await tx.apuResource.create({
           data: {
             apuId: createdApu.id,
             resourceId: resource.resourceId,
@@ -443,6 +469,8 @@ async function persistBudgetStructure(
             subtotal: resource.subtotal,
           },
         });
+        // Track old ApuResource ID → new ApuResource ID for polynomial formula components
+        apuResourceIdMap.set(resource.id, createdResource.id);
       }
 
       apuCount++;
