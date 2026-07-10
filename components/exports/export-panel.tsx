@@ -5,6 +5,7 @@ import { Check, Download, Eye, FileArchive, FileSpreadsheet, FileText, Loader2, 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { downloadBlob, requestExportBlob } from "@/lib/exports/download";
 import type { ExportDefinition, ExportFormat, ExportOptions, ExportPreset, ExportRequest, ExportTarget } from "@/lib/exports/definitions";
 
 type ExportPanelProps = {
@@ -96,7 +97,7 @@ export function ExportPanel({
     setError("");
 
     try {
-      const result = visiblePreview ? { blob: visiblePreview.blob, fileName: visiblePreview.fileName } : await requestExportBlob(payload, preset.id, resolvedFormat);
+      const result = visiblePreview ? { blob: visiblePreview.blob, fileName: visiblePreview.fileName } : await requestExportBlob(payload);
       downloadBlob(result.fileName, result.blob);
       setStatus("idle");
       setOpen(false);
@@ -112,7 +113,7 @@ export function ExportPanel({
     setError("");
 
     try {
-      const result = await requestExportBlob(payload, preset.id, resolvedFormat);
+      const result = await requestExportBlob(payload);
       const url = URL.createObjectURL(result.blob);
       setPreview((current) => {
         if (current) {
@@ -339,35 +340,4 @@ function buildExportOptionSummary(options: Partial<ExportOptions>, target: Expor
   return summary;
 }
 
-function resolveDownloadFileName(response: Response, preset: ExportPreset, format: ExportFormat) {
-  const disposition = response.headers.get("Content-Disposition");
-  const match = disposition?.match(/filename="?([^"]+)"?/);
-  return match?.[1] ?? `${preset}.${format}`;
-}
 
-async function requestExportBlob(payload: ExportRequest, preset: ExportPreset, format: ExportFormat) {
-  const response = await fetch("/api/exports", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? "No se pudo generar la exportacion");
-  }
-
-  return {
-    blob: await response.blob(),
-    fileName: resolveDownloadFileName(response, preset, format),
-  };
-}
-
-function downloadBlob(fileName: string, blob: Blob) {
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(objectUrl);
-}

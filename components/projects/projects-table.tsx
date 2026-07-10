@@ -4,6 +4,7 @@ import { memo, useCallback, useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
+import { downloadBlob, requestExportBlob } from "@/lib/exports/download";
 import type { ProjectRecord } from "@/types/project";
 import { ActionButton } from "@/components/ui/action-button";
 import { ProjectStatusBadge } from "@/components/ui/context-badges";
@@ -60,6 +61,25 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
       broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], undefined, { locallyHandledPaths: ["/projects"] });
     } catch {
       setError("No se pudo eliminar el proyecto");
+    } finally {
+      setPendingId(null);
+    }
+  }, []);
+
+  const exportProjectMcp = useCallback(async (id: string, _name: string) => {
+    setPendingId(id);
+    setError("");
+
+    try {
+      const { blob, fileName } = await requestExportBlob({
+        target: "project_package",
+        targetId: id,
+        format: "mcp",
+        preset: "proyecto_completo_mcp",
+      });
+      downloadBlob(fileName, blob);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "No se pudo exportar el proyecto");
     } finally {
       setPendingId(null);
     }
@@ -142,6 +162,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                   isPending={pendingId === project.id}
                   onDuplicateProject={duplicateProject}
                   onRemoveProject={removeProject}
+                  onExportProjectMcp={exportProjectMcp}
                 />
               ))
             ) : (
@@ -167,12 +188,14 @@ const ProjectTableRow = memo(function ProjectTableRow({
   isPending,
   onDuplicateProject,
   onRemoveProject,
+  onExportProjectMcp,
 }: {
   project: ProjectRow;
   dateFormat: DateFormatOption;
   isPending: boolean;
   onDuplicateProject: (id: string) => Promise<void>;
   onRemoveProject: (id: string) => Promise<void>;
+  onExportProjectMcp: (id: string, name: string) => Promise<void>;
 }) {
   return (
     <TR className="hover:bg-[var(--app-surface-muted)]/80">
@@ -201,6 +224,14 @@ const ProjectTableRow = memo(function ProjectTableRow({
             data-project-action="duplicate"
             data-project-id={project.id}
             onClick={() => void onDuplicateProject(project.id)}
+          />
+          <ActionButton
+            action="export"
+            label="Exportar .mcp"
+            size="sm"
+            variant="ghost"
+            disabled={isPending}
+            onClick={() => void onExportProjectMcp(project.id, project.name)}
           />
           <ActionButton
             action="delete"

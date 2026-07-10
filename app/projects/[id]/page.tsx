@@ -7,6 +7,8 @@ import { ActionButton } from "@/components/ui/action-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContextBadge, ProjectStatusBadge } from "@/components/ui/context-badges";
 import { InfoCard } from "@/components/ui/info-cards";
+import { ExportPanel } from "@/components/exports/export-panel";
+import { getExportDefinition } from "@/lib/exports/definitions";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { listProjectActivityEvents } from "@/lib/data/activity-events";
@@ -111,6 +113,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               }
               actions={
                 <>
+                  <ExportPanel
+                    buttonLabel="Exportar .mcp"
+                    defaultPreset="proyecto_completo_mcp"
+                    definition={getExportDefinition("project_package")}
+                    targetId={project.id}
+                  />
                   <Link href={`/projects/${project.id}/edit`}>
                     <ActionButton action="edit" label="Editar proyecto" variant="outline" />
                   </Link>

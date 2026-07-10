@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { ExternalLink, Pencil, Trash2, Copy, Save, X } from "lucide-react";
+import { Download, ExternalLink, Pencil, Trash2, Copy, Save, X } from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type ActionKind = "open" | "edit" | "delete" | "duplicate" | "save" | "cancel";
+type ActionKind = "open" | "edit" | "delete" | "duplicate" | "save" | "cancel" | "export";
 
 const actionIconMap: Record<ActionKind, ReactNode> = {
   open: <ExternalLink className="h-4 w-4" />,
@@ -12,6 +12,7 @@ const actionIconMap: Record<ActionKind, ReactNode> = {
   duplicate: <Copy className="h-4 w-4" />,
   save: <Save className="h-4 w-4" />,
   cancel: <X className="h-4 w-4" />,
+  export: <Download className="h-4 w-4" />,
 };
 
 type ActionButtonProps = ButtonProps & {
