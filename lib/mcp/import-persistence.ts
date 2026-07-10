@@ -12,7 +12,6 @@ type PersistenceContext = {
   readModule: (path: string) => unknown;
   levelIdMap: Map<string, string>;
   budgetItemIdMap: Map<string, string>;
-  apuIdMap: Map<string, string>;
   apuResourceIdMap: Map<string, string>;
   budgetIdMap: Map<string, string>;
 };
@@ -41,7 +40,6 @@ export async function importProjectPackageToMyc(
       readModule,
       levelIdMap: new Map(),
       budgetItemIdMap: new Map(),
-      apuIdMap: new Map(),
       apuResourceIdMap: new Map(),
       budgetIdMap: new Map(),
     };
