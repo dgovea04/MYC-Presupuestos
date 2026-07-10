@@ -1183,6 +1183,67 @@ async function ensureProjectBudgetStructure(
   });
 }
 
+/**
+ * Loads the full project graph needed for .mcp package export.
+ * Includes budgets, levels, items, APUs with resources, general expenses,
+ * footer rows, and polynomial formulas with monomials and components.
+ */
+export async function getProjectForPackageExport(projectId: string, userId: string) {
+  return prisma.project.findFirst({
+    where: {
+      id: projectId,
+      company: {
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
+      },
+    },
+    include: {
+      budgets: {
+        include: {
+          levels: true,
+          items: {
+            include: {
+              apu: {
+                include: {
+                  resources: {
+                    include: {
+                      resource: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          generalExpenses: true,
+          generalExpenseGroups: {
+            include: {
+              titles: {
+                include: {
+                  items: true,
+                },
+              },
+            },
+          },
+          footerRows: true,
+        },
+      },
+      polynomialFormulas: {
+        include: {
+          monomials: {
+            include: {
+              components: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 async function refreshGeneralBudgetTotals(tx: Prisma.TransactionClient, generalBudgetId: string) {
   const generalBudget = await tx.budget.findUnique({
     where: { id: generalBudgetId },

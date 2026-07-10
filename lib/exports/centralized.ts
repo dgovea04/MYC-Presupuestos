@@ -25,6 +25,7 @@ import {
   type ExportRequest,
   type NormalizedExportRequest,
 } from "@/lib/exports/definitions";
+import { buildProjectPackageArchive, buildProjectPackageSnapshot } from "@/lib/mcp/export-snapshot";
 import type { BudgetRecord } from "@/types/budget";
 import type { ReportResponsibleMeta } from "@/types/report-meta";
 import type { ResourceCategory } from "@/types/resource";
@@ -59,6 +60,7 @@ const CONTENT_TYPES: Record<ExportFormat, string> = {
   pdf: "application/pdf",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   zip: "application/zip",
+  mcp: "application/octet-stream",
 };
 
 export function normalizeExportRequest(input: ExportRequest): NormalizedExportRequest {
@@ -121,7 +123,22 @@ export async function createCentralizedExport(input: ExportRequest, userId: stri
     return createPolynomialFormulaExport(request, userId);
   }
 
+  if (request.target === "project_package") {
+    return createProjectPackageExport(request, userId);
+  }
+
   return createWorkScheduleExport(request, userId);
+}
+
+async function createProjectPackageExport(request: NormalizedExportRequest, userId: string): Promise<ExportResult> {
+  const snapshot = await buildProjectPackageSnapshot(request.targetId, userId);
+  const archive = buildProjectPackageArchive(snapshot);
+
+  return {
+    content: archive.content,
+    contentType: CONTENT_TYPES.mcp,
+    fileName: archive.fileName,
+  };
 }
 
 export function createExportResponse(result: ExportResult) {

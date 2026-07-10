@@ -6,8 +6,9 @@ export type ExportTarget =
   | "general_expenses"
   | "budget_footer"
   | "polynomial_formula"
-  | "work_schedule";
-export type ExportFormat = "xlsx" | "pdf" | "csv" | "zip";
+  | "work_schedule"
+  | "project_package";
+export type ExportFormat = "xlsx" | "pdf" | "csv" | "zip" | "mcp";
 export type ExportScope = "current_view" | "full_module" | "visible_filtered";
 export type PdfOrientation = "portrait" | "landscape";
 export type ExportPreset =
@@ -22,7 +23,8 @@ export type ExportPreset =
   | "cronograma_partidas"
   | "calendario_valorizado"
   | "calendario_insumos"
-  | "curva_s";
+  | "curva_s"
+  | "proyecto_completo_mcp";
 
 export type ExportOptions = {
   scope: ExportScope;
@@ -224,6 +226,22 @@ export const EXPORT_DEFINITIONS: Record<ExportTarget, ExportDefinition> = {
         formats: ["xlsx", "pdf", "csv"],
         defaultFormat: "xlsx",
         defaultOptions: { sections: ["curve"], columns: [] },
+      },
+    ],
+  },
+  project_package: {
+    target: "project_package",
+    label: "Proyecto completo",
+    presets: [
+      {
+        id: "proyecto_completo_mcp",
+        label: "Proyecto completo .mcp",
+        description: "Snapshot completo del proyecto para respaldo, traslado e interoperabilidad.",
+        formats: ["mcp"],
+        defaultFormat: "mcp",
+        defaultOptions: {
+          sections: ["project", "budgets", "apu", "general_expenses", "footer", "polynomial_formula", "takeoffs", "work_schedule", "risk"],
+        },
       },
     ],
   },

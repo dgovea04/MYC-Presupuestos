@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   FolderKanban,
   Import,
+  PackageOpen,
   Sparkles,
   LayoutDashboard,
   Library,
@@ -64,6 +65,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
       { href: "/imports/s10", label: "S10", icon: Import },
       { href: "/imports/rw7", label: "RW7", icon: FileSpreadsheet },
       { href: "/imports/delphin", label: "Delphin Express", icon: FileSpreadsheet },
+      { href: "/imports/mcp", label: "MCP", icon: PackageOpen },
     ],
   },
   {

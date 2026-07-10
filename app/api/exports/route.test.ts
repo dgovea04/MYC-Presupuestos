@@ -92,6 +92,64 @@ describe("central exports route", () => {
     expect(assertFeatureAccess).not.toHaveBeenCalled();
   });
 
+  it("returns an .mcp package with correct Content-Disposition header", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    vi.mocked(createCentralizedExport).mockResolvedValue({
+      content: Buffer.from("mcp-zip-data"),
+      contentType: "application/octet-stream",
+      fileName: "hospital-norte.mcp",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/exports", {
+        method: "POST",
+        body: JSON.stringify({
+          target: "project_package",
+          targetId: "project-1",
+          format: "mcp",
+          preset: "proyecto_completo_mcp",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/octet-stream");
+    expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="hospital-norte.mcp"');
+    expect(createCentralizedExport).toHaveBeenCalledWith(
+      {
+        target: "project_package",
+        targetId: "project-1",
+        format: "mcp",
+        preset: "proyecto_completo_mcp",
+      },
+      "user-1",
+    );
+  });
+
+  it("requires advanced export entitlement for .mcp project packages", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    vi.mocked(createCentralizedExport).mockResolvedValue({
+      content: Buffer.from("mcp-zip-data"),
+      contentType: "application/octet-stream",
+      fileName: "test.mcp",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/exports", {
+        method: "POST",
+        body: JSON.stringify({
+          target: "project_package",
+          targetId: "project-1",
+          format: "mcp",
+          preset: "proyecto_completo_mcp",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "exports.advanced" });
+  });
+
   it("rejects unsupported export combinations with a 400 response", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(createCentralizedExport).mockRejectedValue(new Error("La combinacion de modulo, formato y preset no esta disponible"));

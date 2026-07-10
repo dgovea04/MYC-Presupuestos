@@ -21,6 +21,7 @@ const FORMAT_LABELS: Record<ExportFormat, string> = {
   pdf: "PDF",
   xlsx: "Excel",
   zip: "ZIP",
+  mcp: "MCP",
 };
 
 const FORMAT_ICONS: Record<ExportFormat, typeof FileText> = {

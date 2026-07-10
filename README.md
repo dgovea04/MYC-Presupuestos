@@ -263,6 +263,55 @@ Luego abre:
 http://localhost:3000
 ```
 
+## Paquete de proyecto .mcp
+
+El formato `.mcp` es el formato nativo de MC Presupuestos para exportar e importar proyectos completos como un solo archivo interoperable. Es un contenedor ZIP con extension `.mcp` que incluye todos los datos semanticos del proyecto.
+
+### Que incluye un .mcp
+
+- **manifest.json**: metadatos del paquete (formato, version, modulos, checksums)
+- **project.json**: datos del proyecto (nombre, cliente, ubicacion, moneda)
+- **budgets/**: arbol de presupuestos, partidas, niveles, APUs y recursos
+- **budgets/general-expenses.json**: gastos generales
+- **budgets/footer.json**: pie de presupuesto
+- **polynomial-formula/formula.json**: formula polinomica con coeficientes a 3 decimales
+- **takeoffs/sheets.json**: hojas de metrados
+- **schedule/work-schedule.json**: cronograma de obra
+- **risk/risk-analysis.json**: analisis de riesgo Monte Carlo
+- **checksums/sha256.json**: integridad criptografica del paquete
+
+### Exportar un .mcp
+
+1. Abre el proyecto que quieres exportar.
+2. Usa el panel de exportacion (`Exportar`) en el proyecto.
+3. Elige el preset "Proyecto completo .mcp".
+4. Descarga el archivo `.mcp`.
+
+El archivo se genera con `buildStoredZip` (sin compresion) para facilitar inspeccion, debug e interoperabilidad.
+
+### Importar un .mcp
+
+1. Ve a `/imports/mcp`.
+2. Selecciona el archivo `.mcp` y la empresa destino.
+3. Haz clic en "Analizar". El sistema valida el ZIP, el manifest, los checksums y la compatibilidad.
+4. Revisa el preview: modulos detectados, advertencias y errores.
+5. Haz clic en "Importar a MC" para restaurar el proyecto como un proyecto nuevo (`restore_as_new_project`).
+
+Todos los IDs son regenerados. El proyecto original no se modifica.
+
+### Precision y seguridad
+
+- Los montos, cantidades, rendimientos y coeficientes se serializan como `string` para preservar precision exacta.
+- Los coeficientes de formula polinomica mantienen 3 decimales.
+- El paquete usa checksums SHA-256 por archivo.
+- No se exportan credenciales, sesiones, API keys ni secretos del sistema.
+
+### Compatibilidad
+
+- V1 soporta `restore_as_new_project` (crea un proyecto nuevo con IDs nuevos).
+- No soporta merge ni overwrite en V1.
+- El formato sigue semver. Cambios incompatibles elevan el `major` del `formatVersion`.
+
 ## Importacion desde S10 local
 
 Si el usuario ya tiene S10 y SQL Server Express instalados, no es necesario restaurar un `.S2K` manualmente. Puedes leer una base S10 existente, listar sus presupuestos y exportar un snapshot JSON compatible con el importador MC.
@@ -332,6 +381,7 @@ Tambien puedes crear una cuenta desde `/register`.
 - `/budgets/[id]/polynomial-formula`: formula polinomica.
 - `/budgets/[id]/work-schedule`: programacion de obra.
 - `/budgets/[id]/risk-analysis`: riesgo Monte Carlo.
+- `/imports/mcp`: importador de proyectos .mcp.
 - `/metrados-avanzados`: metrados avanzados.
 - `/resources`: catalogo de insumos.
 - `/partidas`: catalogo de partidas.

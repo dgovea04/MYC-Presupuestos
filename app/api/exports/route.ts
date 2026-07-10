@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 }
 
 function requiresAdvancedExport(request: ExportRequest) {
-  if (request.format === "csv" || request.format === "zip") {
+  if (request.format === "csv" || request.format === "zip" || request.format === "mcp") {
     return true;
   }
 
