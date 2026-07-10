@@ -174,6 +174,8 @@ export type AgentOrchestratorOutput = {
   failedSteps: PlannedStep[];
   pendingApproval?: {
     approvalId: string;
+    /** Nombre de la herramienta que requiere aprobación. */
+    toolName?: string;
     stepId?: string;
     reason: string;
     /** Resumen legible del impacto esperado: qué proyecto/presupuesto/entidad se vería afectada. */

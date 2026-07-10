@@ -39,6 +39,8 @@ export type AgentStreamInput = {
   message: string;
   projectId?: string;
   mode?: "chat" | "goal" | "workflow";
+  /** Slug del workflow/bundle especialista a usar, ej: "crear-presupuesto-base" */
+  workflowId?: string;
 };
 
 const EMPTY_EXECUTION: AgentStreamExecution = {
@@ -88,6 +90,7 @@ export function useAgentStream() {
           message: input.message,
           projectId: input.projectId,
           mode: input.mode ?? "goal",
+          workflowId: input.workflowId,
         }),
         signal: controller.signal,
       });

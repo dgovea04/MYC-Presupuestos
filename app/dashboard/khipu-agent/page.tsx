@@ -45,7 +45,7 @@ export default async function KhipuAgentPage() {
   return (
     <AppShell currentUser={session.user} settings={settings}>
       <div className="p-4">
-        <AgentWorkspace className="h-[calc(100vh-5rem)]" />
+        <AgentWorkspace />
       </div>
     </AppShell>
   );

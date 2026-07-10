@@ -256,11 +256,9 @@ describe("executeAgentProvider", () => {
   // ─── API key missing ──────────────────────────────────────────────────────
 
   it("lanza error cuando no hay API key configurada", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
-
     await expect(
       executeAgentProvider(makeRequest({ apiKey: undefined })),
-    ).rejects.toThrow("Se requiere una API key de OpenRouter");
+    ).rejects.toThrow("No hay API key configurada");
   });
 
   // ─── Max iterations reached ───────────────────────────────────────────────

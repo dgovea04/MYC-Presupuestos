@@ -1,6 +1,11 @@
 import crypto from "crypto";
 import type { AgentExecutionState, AgentToolActivitySummary } from "./types";
 import { transition } from "./state-machine";
+import {
+  getBundleBySlug,
+  getWorkflowTemplate,
+  getBundleSystemPrompt,
+} from "./workflows";
 import type {
   AgentOrchestrator,
   AgentOrchestratorOutput,
@@ -9,6 +14,7 @@ import type {
   AgentToolRegistry,
   AgentToolExecutor,
   AgentVercelSdkAdapter,
+  AgentRollbackService,
   AgentLoopMessage,
 } from "./contracts";
 import type { RunAgentRequest, PlannedStep } from "./types";
@@ -33,6 +39,8 @@ export class AgentOrchestratorImpl implements AgentOrchestrator {
     private readonly languageModel: unknown,
     /** Nombre del provider (para auditoría). */
     private readonly providerName: string = "openrouter",
+    /** Rollback Service opcional — si se provee, intenta rollback automático en fallos de herramientas que lo soporten. */
+    private readonly rollbackService?: AgentRollbackService,
   ) {}
 
   async run(request: RunAgentRequest): Promise<AgentOrchestratorOutput> {
@@ -50,13 +58,28 @@ export class AgentOrchestratorImpl implements AgentOrchestrator {
       // ── 1. READ → PLAN ──────────────────────────────────────────────────
       state = transition(state, "PLAN");
 
+      // Si se proporciona un workflowId, resolver el bundle y filtrar
+      // las herramientas disponibles a las del bundle especialista.
+      let bundleSlug: string | undefined;
+      if (request.workflowId) {
+        const template = getWorkflowTemplate(request.workflowId);
+        if (template) {
+          bundleSlug = template.bundleSlug;
+        }
+      }
+
+      const allToolNames = this.registry.getToolNames();
+      const availableTools = bundleSlug
+        ? this.registry.getBundleToolNames(bundleSlug).filter((name) => allToolNames.includes(name))
+        : allToolNames;
+
       plan = await this.planner.plan({
         goal: request.message,
         projectId: request.projectId,
         userId: request.userId,
         mode: request.mode,
         workflowId: request.workflowId,
-        availableTools: this.registry.getToolNames(),
+        availableTools,
       });
 
       if (plan.length === 0) {
@@ -181,6 +204,27 @@ export class AgentOrchestratorImpl implements AgentOrchestrator {
 
             if (!result.success) {
               warnings.push(`Herramienta "${toolCall.name}" falló: ${result.summary}`);
+
+              // Intentar rollback automático si la herramienta lo soporta
+              if (this.rollbackService?.supportsRollback(toolCall.name)) {
+                try {
+                  const rollbackResult = await this.rollbackService.rollback({
+                    executionId,
+                    stepId: step.id,
+                    userId: request.userId,
+                    reason: `Rollback automático: herramienta "${toolCall.name}" falló. ${result.summary}`,
+                  });
+
+                  if (rollbackResult.success) {
+                    warnings.push(`↩️ Rollback automático completado (${rollbackResult.rollbackId}) para herramienta "${toolCall.name}".`);
+                  } else {
+                    warnings.push(`⚠️ Rollback automático falló para herramienta "${toolCall.name}": ${rollbackResult.errorMessage}`);
+                  }
+                } catch (rbError) {
+                  const rbMsg = rbError instanceof Error ? rbError.message : "Error desconocido";
+                  warnings.push(`⚠️ Rollback automático lanzó excepción para "${toolCall.name}": ${rbMsg}`);
+                }
+              }
             }
           }
 
@@ -190,6 +234,27 @@ export class AgentOrchestratorImpl implements AgentOrchestrator {
           failedSteps.push(step);
           const msg = stepError instanceof Error ? stepError.message : "Error desconocido";
           warnings.push(`Paso "${step.title}" falló: ${msg}`);
+
+          // Intentar rollback automático del paso completo
+          if (step.toolName && this.rollbackService?.supportsRollback(step.toolName)) {
+            try {
+              const rollbackResult = await this.rollbackService.rollback({
+                executionId,
+                stepId: step.id,
+                userId: request.userId,
+                reason: `Rollback automático: paso "${step.title}" falló. ${msg}`,
+              });
+
+              if (rollbackResult.success) {
+                warnings.push(`↩️ Rollback automático completado (${rollbackResult.rollbackId}) para paso "${step.title}".`);
+              } else {
+                warnings.push(`⚠️ Rollback automático falló para paso "${step.title}": ${rollbackResult.errorMessage}`);
+              }
+            } catch (rbError) {
+              const rbMsg = rbError instanceof Error ? rbError.message : "Error desconocido";
+              warnings.push(`⚠️ Rollback automático lanzó excepción para paso "${step.title}": ${rbMsg}`);
+            }
+          }
         }
       }
 
@@ -261,6 +326,7 @@ export function createAgentOrchestrator(
   adapter: AgentVercelSdkAdapter,
   languageModel: unknown,
   providerName?: string,
+  rollbackService?: AgentRollbackService,
 ): AgentOrchestratorImpl {
   return new AgentOrchestratorImpl(
     planner,
@@ -270,6 +336,7 @@ export function createAgentOrchestrator(
     adapter,
     languageModel,
     providerName,
+    rollbackService,
   );
 }
 
@@ -285,6 +352,19 @@ function buildStepSystemPrompt(
     `Objetivo del paso actual: ${step.objective}`,
     `Resultado esperado: ${step.expectedOutcome}`,
   ];
+
+  // Inyectar system prompt del specialist bundle si corresponde
+  if (request.workflowId) {
+    const template = getWorkflowTemplate(request.workflowId);
+    if (template) {
+      const bundlePrompt = getBundleSystemPrompt(template.bundleSlug);
+      if (bundlePrompt) {
+        lines.push("");
+        lines.push(`--- Especialidad: ${getBundleBySlug(template.bundleSlug)?.name ?? template.bundleSlug} ---`);
+        lines.push(bundlePrompt);
+      }
+    }
+  }
 
   if (request.projectId) {
     lines.push(`Proyecto: ${request.projectId}`);

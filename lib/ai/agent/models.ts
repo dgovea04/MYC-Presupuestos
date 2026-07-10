@@ -4,11 +4,11 @@
  */
 export const AGENT_MODELS = [
   {
-    id: "deepseek/deepseek-chat-v3-0324:free",
-    label: "DeepSeek V3 (gratis)",
+    id: "openrouter/free",
+    label: "OpenRouter Free (recomendado)",
     category: "Económico",
     cost: "free" as const,
-    description: "Rápido, gratuito, buen razonamiento general.",
+    description: "Ruta a modelos gratuitos disponibles en OpenRouter.",
   },
   {
     id: "openai/gpt-4o",
@@ -65,7 +65,7 @@ export type AgentModelId = (typeof AGENT_MODELS)[number]["id"];
 
 export type AgentModelCost = (typeof AGENT_MODELS)[number]["cost"];
 
-export const DEFAULT_AGENT_MODEL = "deepseek/deepseek-chat-v3-0324:free" satisfies AgentModelId;
+export const DEFAULT_AGENT_MODEL = "openrouter/free" satisfies AgentModelId;
 
 export const COST_EMOJI: Record<AgentModelCost, string> = {
   free: "🆓",

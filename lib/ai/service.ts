@@ -289,11 +289,14 @@ export async function* streamChatAiResponse({
         yield { type: "delta", text };
       }
     } else if (effectiveProvider === "agent") {
-      const openRouterApiKey = apiKey || process.env.OPENROUTER_API_KEY;
-      if (!openRouterApiKey) {
-        throw new AiRuntimeError("connection", "OPENROUTER_API_KEY no configurado. Se requiere para usar el agente.");
+      if (!apiKey) {
+        throw new AiRuntimeError(
+          "connection",
+          "No hay API key configurada para el agente. " +
+          "Ve a Configuración > IA > Proveedores Cloud IA y agrega tu API key de OpenRouter.",
+        );
       }
-      const model = modelPreference || process.env.OPENROUTER_MODEL || DEFAULT_AGENT_MODEL;
+      const model = modelPreference || DEFAULT_AGENT_MODEL;
       resolvedModel = model;
       requestedModel = model;
 

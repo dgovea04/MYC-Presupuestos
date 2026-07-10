@@ -40,6 +40,34 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ["pdfkit"],
+  webpack: (config, { isServer }) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const webpack = require("webpack");
+
+    if (!isServer) {
+      config.resolve = config.resolve ?? {};
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        events: false,
+        stream: false,
+        buffer: false,
+        os: false,
+        constants: false,
+        crypto: false,
+      };
+
+      // Convert "node:xxx" imports to plain "xxx" so resolve.fallback can handle them
+      config.plugins = config.plugins ?? [];
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+          resource.request = resource.request.replace(/^node:/, "");
+        }),
+      );
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

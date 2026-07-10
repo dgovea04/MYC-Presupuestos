@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { AgentToolDefinition } from "../types";
 import { getBudgetById, createBudget } from "@/lib/data/budgets";
+import { getUserSettings } from "@/lib/data/settings";
+import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
+import { prisma } from "@/lib/db/prisma";
 
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
@@ -108,33 +111,71 @@ export const createBudgetTool: AgentToolDefinition<
 > = {
   name: "createBudget",
   description:
-    "Crea un nuevo presupuesto en un proyecto con nombre, moneda, márgenes y ubicación. Requiere aprobación previa.",
+    "Crea un nuevo presupuesto en un proyecto con nombre, moneda, márgenes y ubicación. " +
+    "Automáticamente genera los sub-presupuestos (Estructuras, Arquitectura, etc.) basados en la configuración del usuario. " +
+    "Requiere aprobación previa.",
   risk: "write",
   requiresProjectId: true,
   inputSchema: createBudgetInput,
   execute: async (input, context) => {
+    // 1. Crear presupuesto principal
+    // Nota: Mapeamos los nombres de campos del tool (percentage, 0-100) a los
+    // nombres del schema/Prisma (Rate, 0-1). El schema budgetSchema espera
+    // generalExpensesRate, utilityRate e igvRate como decimales (0-1).
     const budget = await createBudget(context.userId, {
       name: input.name,
       projectId: input.projectId,
       currency: input.currency,
-      indirectCostPercentage: input.indirectCostPercentage,
-      utilityPercentage: input.utilityPercentage,
-      taxPercentage: input.taxPercentage,
-      region: input.location,
+      generalExpensesRate: input.indirectCostPercentage / 100,
+      utilityRate: input.utilityPercentage / 100,
+      igvRate: input.taxPercentage / 100,
     } as Parameters<typeof createBudget>[1]);
+
+    // 2. Obtener nombres de sub-presupuestos desde settings del usuario
+    const settings = await getUserSettings(context.userId);
+    const subBudgetNames =
+      settings.defaultSubBudgetNames.length > 0
+        ? settings.defaultSubBudgetNames
+        : [...DEFAULT_INITIAL_SUB_BUDGET_NAMES];
+
+    // 3. Crear sub-presupuestos con los mismos valores por defecto
+    const subBudgets = await Promise.all(
+      subBudgetNames.map((name) =>
+        prisma.budget.create({
+          data: {
+            projectId: budget.projectId,
+            parentBudgetId: budget.id,
+            kind: "SUB_BUDGET",
+            name,
+            currency: budget.currency,
+            igvRate: budget.igvRate,
+            generalExpensesRate: budget.generalExpensesRate,
+            utilityRate: budget.utilityRate,
+            totalDirectCost: 0,
+            totalGeneralExpenses: 0,
+            totalUtility: 0,
+            totalTax: 0,
+            totalAmount: 0,
+          },
+        }),
+      ),
+    );
 
     return {
       id: budget.id,
       name: budget.name,
       projectId: budget.projectId,
       currency: budget.currency,
-      indirectCostPercentage: Number(budget.indirectCostPercentage),
-      utilityPercentage: Number(budget.utilityPercentage),
-      taxPercentage: Number(budget.taxPercentage),
+      // Convertir decimales de Prisma (0-1) a porcentajes (0-100) para la UI
+      indirectCostPercentage: Number(budget.generalExpensesRate) * 100,
+      utilityPercentage: Number(budget.utilityRate) * 100,
+      taxPercentage: Number(budget.igvRate) * 100,
+      subBudgets: subBudgets.map((sb) => ({ id: sb.id, name: sb.name })),
+      subBudgetCount: subBudgets.length,
     };
   },
   summarizeResult: (result) =>
-    `Presupuesto "${result.name}" creado en proyecto ${result.projectId}.`,
+    `Presupuesto "${result.name}" creado con ${result.subBudgetCount} sub-presupuestos automáticos en proyecto ${result.projectId}.`,
 };  export const cloneBudgetTool: AgentToolDefinition<
   z.infer<typeof cloneBudgetInput>,
   Record<string, unknown>
@@ -239,6 +280,197 @@ export const compareBudgetsTool: AgentToolDefinition<
     `${result.count} presupuestos comparados. Diferencia: S/ ${result.difference}.`,
 };
 
+// ─── createBudgetGeneral: GENERAL budget with sub-budgets ────────────────────
+
+const createBudgetGeneralInput = z.object({
+  projectId: z.string().min(1).describe("ID del proyecto"),
+  name: z.string().min(3).default("Presupuesto General").describe("Nombre del presupuesto general"),
+  currency: z.enum(["PEN", "USD"]).default("PEN").describe("Moneda del presupuesto"),
+});
+
+export const createBudgetGeneralTool: AgentToolDefinition<
+  z.infer<typeof createBudgetGeneralInput>,
+  Record<string, unknown>
+> = {
+  name: "createBudgetGeneral",
+  description:
+    "Crea un Presupuesto General en un proyecto existente con sus sub-presupuestos automáticos " +
+    "(Estructuras, Arquitectura, etc.) basados en la configuración del usuario. " +
+    "Si el proyecto ya tiene un Presupuesto General, retorna un error. Requiere aprobación previa.",
+  risk: "write",
+  requiresProjectId: true,
+  inputSchema: createBudgetGeneralInput,
+  execute: async (input, context) => {
+    // 1. Verificar que no exista ya un Presupuesto General en el proyecto
+    const existingGeneral = await prisma.budget.findFirst({
+      where: {
+        projectId: input.projectId,
+        kind: "GENERAL",
+      },
+      select: { id: true, name: true },
+    });
+
+    if (existingGeneral) {
+      throw new Error(
+        `El proyecto ya tiene un Presupuesto General: "${existingGeneral.name}" (${existingGeneral.id}). ` +
+        `Usa createBudget para crear presupuestos adicionales.`,
+      );
+    }
+
+    // 2. Obtener settings del usuario para valores por defecto
+    const settings = await getUserSettings(context.userId);
+
+    // 3. Crear presupuesto GENERAL con márgenes del usuario
+    const budget = await createBudget(context.userId, {
+      name: input.name,
+      projectId: input.projectId,
+      currency: input.currency,
+    } as Parameters<typeof createBudget>[1]);
+
+    // 4. Actualizar kind a GENERAL (createBudget no permite establecer kind)
+    await prisma.budget.update({
+      where: { id: budget.id },
+      data: { kind: "GENERAL" },
+    });
+
+    // 5. Obtener nombres de sub-presupuestos
+    const subBudgetNames =
+      settings.defaultSubBudgetNames.length > 0
+        ? settings.defaultSubBudgetNames
+        : [...DEFAULT_INITIAL_SUB_BUDGET_NAMES];
+
+    // 6. Crear sub-presupuestos
+    const subBudgets = await Promise.all(
+      subBudgetNames.map((name) =>
+        prisma.budget.create({
+          data: {
+            projectId: budget.projectId,
+            parentBudgetId: budget.id,
+            kind: "SUB_BUDGET",
+            name,
+            currency: budget.currency,
+            igvRate: budget.igvRate,
+            generalExpensesRate: budget.generalExpensesRate,
+            utilityRate: budget.utilityRate,
+            totalDirectCost: 0,
+            totalGeneralExpenses: 0,
+            totalUtility: 0,
+            totalTax: 0,
+            totalAmount: 0,
+          },
+        }),
+      ),
+    );
+
+    return {
+      id: budget.id,
+      name: budget.name,
+      projectId: budget.projectId,
+      kind: "GENERAL",
+      currency: budget.currency,
+      subBudgets: subBudgets.map((sb) => ({ id: sb.id, name: sb.name })),
+      subBudgetCount: subBudgets.length,
+    };
+  },
+  summarizeResult: (result) =>
+    `Presupuesto General "${result.name}" creado con ${result.subBudgetCount} sub-presupuestos automáticos en proyecto ${result.projectId}.`,
+};
+
+// ─── createSubBudget: single sub-budget under a parent ───────────────────────
+
+const createSubBudgetInput = z.object({
+  parentBudgetId: z.string().min(1).describe("ID del presupuesto padre (GENERAL)"),
+  projectId: z.string().min(1).describe("ID del proyecto"),
+  name: z.string().min(3).describe("Nombre del sub-presupuesto"),
+  currency: z.enum(["PEN", "USD"]).default("PEN").describe("Moneda del sub-presupuesto"),
+});
+
+export const createSubBudgetTool: AgentToolDefinition<
+  z.infer<typeof createSubBudgetInput>,
+  Record<string, unknown>
+> = {
+  name: "createSubBudget",
+  description:
+    "Crea un sub-presupuesto (SUB_BUDGET) dentro de un Presupuesto General existente. " +
+    "Requiere aprobación previa.",
+  risk: "write",
+  requiresProjectId: true,
+  inputSchema: createSubBudgetInput,
+  execute: async (input, context) => {
+    // 1. Validar que el presupuesto padre existe y el usuario tiene acceso
+    const parent = await prisma.budget.findFirst({
+      where: {
+        id: input.parentBudgetId,
+        projectId: input.projectId,
+        project: {
+          company: {
+            memberships: {
+              some: {
+                userId: context.userId,
+                status: "ACTIVE",
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        currency: true,
+        igvRate: true,
+        generalExpensesRate: true,
+        utilityRate: true,
+      },
+    });
+
+    if (!parent) {
+      throw new Error(`Presupuesto padre "${input.parentBudgetId}" no encontrado o no tienes acceso.`);
+    }
+
+    // 2. Verificar que no exista un sub-presupuesto con el mismo nombre bajo el mismo padre
+    const existing = await prisma.budget.findFirst({
+      where: {
+        parentBudgetId: input.parentBudgetId,
+        name: input.name,
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new Error(`Ya existe un sub-presupuesto con el nombre "${input.name}" bajo este presupuesto padre.`);
+    }
+
+    // 3. Crear sub-presupuesto heredando tasas del padre
+    const subBudget = await prisma.budget.create({
+      data: {
+        projectId: input.projectId,
+        parentBudgetId: input.parentBudgetId,
+        kind: "SUB_BUDGET",
+        name: input.name,
+        currency: input.currency,
+        igvRate: parent.igvRate,
+        generalExpensesRate: parent.generalExpensesRate,
+        utilityRate: parent.utilityRate,
+        totalDirectCost: 0,
+        totalGeneralExpenses: 0,
+        totalUtility: 0,
+        totalTax: 0,
+        totalAmount: 0,
+      },
+    });
+
+    return {
+      id: subBudget.id,
+      name: subBudget.name,
+      projectId: subBudget.projectId,
+      parentBudgetId: subBudget.parentBudgetId,
+      kind: subBudget.kind,
+      currency: subBudget.currency,
+    };
+  },
+  summarizeResult: (result) =>
+    `Sub-presupuesto "${result.name}" creado bajo presupuesto ${result.parentBudgetId}.`,
+};
+
 // ─── All budget tools ────────────────────────────────────────────────────────
 
 export const budgetTools: AgentToolDefinition[] = [
@@ -249,4 +481,6 @@ export const budgetTools: AgentToolDefinition[] = [
   archiveBudgetTool,
   generateBudgetTool,
   compareBudgetsTool,
+  createBudgetGeneralTool,
+  createSubBudgetTool,
 ];

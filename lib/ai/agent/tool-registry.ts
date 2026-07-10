@@ -1,4 +1,8 @@
 import type { z } from "zod";
+import {
+  getBundleBySlug,
+  getToolsForBundle,
+} from "./workflows";
 import type {
   AgentSdkToolDefinition,
   AgentToolDefinition,
@@ -13,6 +17,7 @@ import type { AgentToolRegistry } from "./contracts";
  * - Buscar herramientas por nombre
  * - Listar todas las herramientas registradas
  * - Convertir a formato Vercel AI SDK (AgentSdkToolDefinition)
+ * - Filtrar herramientas por specialist bundle
  */
 export class ToolRegistry implements AgentToolRegistry {
   private readonly tools: Map<string, AgentToolDefinition> = new Map();
@@ -66,6 +71,33 @@ export class ToolRegistry implements AgentToolRegistry {
    */
   has(name: string): boolean {
     return this.tools.has(name);
+  }
+
+  // ─── Specialist Bundle Support ─────────────────────────────────────────
+
+  /**
+   * Retorna solo las herramientas que pertenecen a un specialist bundle.
+   * Si el bundle no existe, retorna lista vacía.
+   */
+  listByBundle(bundleSlug: string): AgentToolDefinition[] {
+    return getToolsForBundle(bundleSlug, this.list());
+  }
+
+  /**
+   * Retorna los nombres de herramientas de un specialist bundle.
+   */
+  getBundleToolNames(bundleSlug: string): string[] {
+    const bundle = getBundleBySlug(bundleSlug);
+    return bundle?.toolNames ?? [];
+  }
+
+  /**
+   * Verifica si un bundle existe y tiene herramientas registradas.
+   */
+  hasBundle(bundleSlug: string): boolean {
+    const bundle = getBundleBySlug(bundleSlug);
+    if (!bundle) return false;
+    return bundle.toolNames.some((name) => this.tools.has(name));
   }
 }
 

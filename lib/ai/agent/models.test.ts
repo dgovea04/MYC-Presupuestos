@@ -38,7 +38,7 @@ describe("AGENT_MODELS", () => {
 
 describe("getAgentModelLabel", () => {
   it("returns the label for a valid free model ID", () => {
-    expect(getAgentModelLabel("deepseek/deepseek-chat-v3-0324:free")).toBe("DeepSeek V3 (gratis)");
+    expect(getAgentModelLabel("openrouter/free")).toBe("OpenRouter Free (recomendado)");
   });
 
   it("returns the label for a valid paid model ID", () => {
@@ -65,8 +65,8 @@ describe("getAgentModelShortLabel", () => {
     expect(getAgentModelShortLabel("anthropic/claude-sonnet-4-20250514")).toBe("claude-sonnet-4-20250514");
   });
 
-  it("extracts short name from deepseek/deepseek-chat-v3-0324:free", () => {
-    expect(getAgentModelShortLabel("deepseek/deepseek-chat-v3-0324:free")).toBe("deepseek-chat-v3-0324:free");
+  it("extracts short name from openrouter/free", () => {
+    expect(getAgentModelShortLabel("openrouter/free")).toBe("free");
   });
 
   it("returns the ID unchanged if no slash", () => {
@@ -86,7 +86,7 @@ describe("getAgentModelShortLabel", () => {
 
 describe("getAgentModelCostEmoji", () => {
   it("returns 🆓 for free models", () => {
-    expect(getAgentModelCostEmoji("deepseek/deepseek-chat-v3-0324:free")).toBe("🆓");
+    expect(getAgentModelCostEmoji("openrouter/free")).toBe("🆓");
     expect(getAgentModelCostEmoji("google/gemini-2.5-pro-exp-03-25:free")).toBe("🆓");
     expect(getAgentModelCostEmoji("meta-llama/llama-4-maverick:free")).toBe("🆓");
   });

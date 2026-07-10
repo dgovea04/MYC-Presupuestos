@@ -7,15 +7,15 @@ import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import { createMetradoSheet, duplicateMetradoSheet } from "@/lib/data/metrados";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
 import { createApuWorkbook, createBudgetWorkbook } from "@/lib/exports/excel";
-import { createBudgetPdf } from "@/lib/exports/pdf";
 
 import { budgetTools } from "./budgets";
 import { partidaTools } from "./partidas";
 import { apuTools } from "./apu";
 import { insumoTools } from "./insumos";
+import { projectTools } from "./projects";
 
 // Re-export all domain tools for single-point registration
-export { budgetTools, partidaTools, apuTools, insumoTools };
+export { budgetTools, partidaTools, apuTools, insumoTools, projectTools };
 
 // ─── Takeoffs (Metrados) ─────────────────────────────────────────────────────
 
@@ -419,7 +419,8 @@ export const exportPDFTool: AgentToolDefinition<
   execute: async (input, context) => {
     const budget = await getBudgetById(input.budgetId, context.userId);
     if (!budget) throw new Error(`Presupuesto "${input.budgetId}" no encontrado.`);
-    const pdfBuffer = await createBudgetPdf({ budget } as Parameters<typeof createBudgetPdf>[0]);
+    const { createBudgetPdf: createBudgetPdfFn } = await import("@/lib/exports/pdf");
+    const pdfBuffer = await createBudgetPdfFn({ budget } as Parameters<typeof createBudgetPdfFn>[0]);
     return { budgetId: input.budgetId, size: pdfBuffer.byteLength, format: "pdf" };
   },
   summarizeResult: (result) => `PDF exportado (${Math.round(result.size / 1024)} KB).`,
@@ -499,5 +500,6 @@ export const allTools: AgentToolDefinition[] = [
   ...partidaTools,
   ...apuTools,
   ...insumoTools,
+  ...projectTools,
   ...remainingTools,
 ];

@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import type { AgentExecutionMode, PlannedStep } from "./types";
 import type { AgentPlanner, PlannerInput } from "./contracts";
+import {
+  getWorkflowTemplate,
+  getBundleBySlug,
+} from "./workflows";
 
 /**
  * Mapa de palabras clave → nombres de herramientas.
@@ -152,12 +156,31 @@ const KEYWORD_TOOLS: Array<{
  */
 export class AgentPlannerImpl implements AgentPlanner {
   async plan(params: PlannerInput): Promise<PlannedStep[]> {
-    const { goal, availableTools } = params;
-    const lowerGoal = goal.toLowerCase();
+    const { mode, workflowId } = params;
+
+    // Si se proporciona un workflowId, reemplazar el goal con la plantilla
+    // y limitar las herramientas disponibles al bundle correspondiente.
+    if (workflowId) {
+      const template = getWorkflowTemplate(workflowId);
+      if (template) {
+        const bundle = getBundleBySlug(template.bundleSlug);
+        if (bundle) {
+          // Usar el initialGoal del template como goal
+          params = {
+            ...params,
+            goal: template.initialGoal,
+            mode: template.defaultMode,
+          };
+        }
+      }
+    }
+
+    const { goal: resolvedGoal, availableTools: resolvedTools } = params;
+    const lowerGoal = resolvedGoal.toLowerCase();
 
     // Encontrar herramientas que matchean las palabras clave del goal
     // Y que estén disponibles (registradas en el ToolRegistry)
-    const availableSet = new Set(availableTools);
+    const availableSet = new Set(resolvedTools);
     const matched = KEYWORD_TOOLS.filter(
       (kt) =>
         kt.keywords.some((kw) => lowerGoal.includes(kw)) &&
@@ -171,7 +194,7 @@ export class AgentPlannerImpl implements AgentPlanner {
           id: crypto.randomUUID(),
           title: "Analizar solicitud",
           toolName: undefined,
-          objective: goal,
+          objective: resolvedGoal,
           expectedOutcome:
             "Respuesta conversacional basada en el contexto del proyecto.",
           dependsOn: [],

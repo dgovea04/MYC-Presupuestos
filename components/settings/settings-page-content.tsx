@@ -8,6 +8,7 @@ import { CompanyProfileCard } from "@/components/settings/company-profile-card";
 import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
 import { CloudAiSettingsCard } from "@/components/settings/cloud-ai-settings-card";
 import { FloatingKhipuSettingsCard } from "@/components/settings/floating-khipu-settings-card";
+import { KhipuAgentSettingsCard } from "@/components/settings/khipu-agent-settings-card";
 import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
@@ -297,6 +298,7 @@ export function SettingsPageContent({
                   window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: khipu }));
                 }}
               />
+              <KhipuAgentSettingsCard />
             </div>
 
             <div className="space-y-6">

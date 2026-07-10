@@ -10,7 +10,7 @@ import { allTools } from "@/lib/ai/agent/tools";
 import type { AgentLoopMessage } from "@/lib/ai/agent/contracts";
 import { prisma } from "@/lib/db/prisma";
 
-export const DEFAULT_AGENT_MODEL = "deepseek/deepseek-chat-v3-0324:free";
+export const DEFAULT_AGENT_MODEL = "openrouter/free";
 
 /** Máximo de iteraciones del loop agéntico externo. */
 const MAX_AGENT_LOOP_ITERATIONS = 5;
@@ -30,17 +30,17 @@ export async function executeAgentProvider(
   const startTime = Date.now();
 
   // ── 1. Resolver API key y modelo ──────────────────────────────────────────
-  const apiKey =
-    request.apiKey ||
-    process.env.OPENROUTER_API_KEY;
+  const apiKey = request.apiKey;
 
   if (!apiKey) {
-    throw new Error("Se requiere una API key de OpenRouter para usar el agente.");
+    throw new Error(
+      "No hay API key configurada para el agente. " +
+      "Ve a Configuración > IA > Proveedores Cloud IA y agrega tu API key de OpenRouter.",
+    );
   }
 
   const requestedModel =
     request.modelPreference ||
-    process.env.OPENROUTER_MODEL ||
     DEFAULT_AGENT_MODEL;
 
   // ── 2. Crear LanguageModel via OpenRouter ─────────────────────────────────
@@ -290,14 +290,16 @@ export async function* streamAgentChat(
   const startTime = Date.now();
 
   // ── 1. Resolver API key y modelo ──────────────────────────────────────────
-  const apiKey = request.apiKey || process.env.OPENROUTER_API_KEY;
+  const apiKey = request.apiKey;
   if (!apiKey) {
-    throw new Error("Se requiere una API key de OpenRouter para usar el agente.");
+    throw new Error(
+      "No hay API key configurada para el agente. " +
+      "Ve a Configuración > IA > Proveedores Cloud IA y agrega tu API key de OpenRouter.",
+    );
   }
 
   const requestedModel =
     request.modelPreference ||
-    process.env.OPENROUTER_MODEL ||
     DEFAULT_AGENT_MODEL;
 
   // ── 2. Crear LanguageModel via OpenRouter ─────────────────────────────────

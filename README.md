@@ -168,6 +168,12 @@ OPENAI_API_KEY="sk-..."
 GEMINI_API_KEY="AIza..."
 OPENROUTER_API_KEY="sk-or-..."
 OPENROUTER_MODEL="deepseek/deepseek-chat-v3-0324:free"
+
+# Opcional: habilita la sincronización automática de workflows de agentes en producción.
+# Los workflows se sincronizan automáticamente en desarrollo sin esta variable.
+# En producción, solo se sincronizan si AUTO_MIGRATE_WORKFLOWS=true.
+# Ver más en la sección "Migración de agent workflows".
+AUTO_MIGRATE_WORKFLOWS="true"
 ```
 
 ### 2. Crear base de datos
@@ -197,7 +203,42 @@ npm.cmd run prisma:seed
 
 El seed crea usuario demo, empresa, proyecto, presupuesto, insumos, partidas, APUs base, indices y datos iniciales.
 
-### 6. Levantar la app
+### 6. Migración de agent workflows (Khipu Agent Platform)
+
+Los templates de workflows de agentes especialistas (crear presupuesto, revisar APU, generar cronograma, etc.) se definen en `lib/ai/agent/workflows.ts` y se sincronizan a la base de datos automáticamente.
+
+**En desarrollo**: al ejecutar `npm run dev`, Next.js llama a `instrumentation.ts` que corre `seedAgentWorkflows()` automáticamente. No requiere acciones manuales.
+
+**En producción**: la sincronización automática está deshabilitada por defecto. Para habilitarla, agrega al `.env`:
+
+```env
+AUTO_MIGRATE_WORKFLOWS=true
+```
+
+**Migración manual (CLI)**: si necesitas sincronizar workflows sin reiniciar el servidor, ejecuta:
+
+```powershell
+npm.cmd run migrate:workflows
+```
+
+**Migración bajo demanda (API admin)**: también puedes invocar el endpoint protegido `POST /api/admin/ai/workflows/sync` para sincronizar workflows desde el panel de administración. Requiere sesión de administrador (rol `ADMIN`). Responde con:
+
+```json
+{
+  "ok": true,
+  "upserted": 7,
+  "errors": []
+}
+```
+
+Este endpoint es ideal para:
+- Sincronizar nuevos templates sin reiniciar el servidor ni acceder a la terminal
+- Reparar workflows después de una restauración de base de datos
+- Integrarlo en pipelines de CI/CD o scripts de despliegue
+
+Todas las opciones son idempotentes: solo afectan la tabla `agent_workflows` y es seguro ejecutarlas múltiples veces.
+
+### 7. Levantar la app
 
 ```powershell
 npm.cmd run dev
@@ -304,6 +345,7 @@ Tambien puedes crear una cuenta desde `/register`.
 - `/settings`: configuracion.
 - `/account`: cuenta y membresia.
 - `/admin`: administracion.
+- `POST /api/admin/ai/workflows/sync`: sincronización bajo demanda de workflows de agentes (admin).
 
 ## Flujo recomendado de prueba
 
@@ -332,6 +374,7 @@ npm.cmd run prisma:migrate
 npm.cmd run prisma:seed
 npm.cmd run prisma:normalize-resource-iu
 npm.cmd run prisma:repair-companies
+npm.cmd run migrate:workflows
 npm.cmd run s10:analyze
 npm.cmd run s10:inspect
 npm.cmd run s10:sqlserver

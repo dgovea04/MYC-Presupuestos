@@ -1,6 +1,7 @@
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { aiAgentRequestSchema } from "@/lib/ai/agent/validation";
 import { streamAgentChat } from "@/lib/ai/gateway/providers/agent-provider";
+import { getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
       "Responde en español, con tono profesional y técnico.",
     ].join("\n");
 
+    // Resolver API key y modelo desde la configuración del usuario
+    const settings = await getAiProviderSettings(session.user.id);
+    const apiKey = await getDecryptedOpenrouterApiKey(session.user.id);
+
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
@@ -55,6 +60,8 @@ export async function POST(request: Request) {
             ],
             userId: session.user.id,
             projectId: data.projectId,
+            apiKey,
+            modelPreference: settings.openrouterModel || undefined,
           })) {
             if (event.type === "delta") {
               const text = event.text;
