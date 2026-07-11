@@ -426,4 +426,172 @@ describe("executeAgentProvider", () => {
     expect(result.answer).toContain("No pude buscar");
     expect(mockRunLoop).toHaveBeenCalledTimes(2);
   });
+
+  // ─── Repeated failure detection ───────────────────────────────────────────
+
+  it("detiene el loop cuando la misma tool falla 2 veces con el mismo error", async () => {
+    // Iteración 1: createProject falla por falta de name
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Crea proyecto" },
+        { role: "assistant", content: "Creando proyecto..." },
+      ],
+      toolCalls: [
+        { id: "tc-1", name: "searchPartidas", arguments: {} as Record<string, unknown> },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    }));
+
+    // Iteración 2: mismo error — el LLM repite la misma llamada inválida
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Crea proyecto" },
+        { role: "assistant", content: "Creando proyecto..." },
+        { role: "user", content: "Resultados: falló searchPartidas..." },
+        { role: "assistant", content: "Reintentando..." },
+      ],
+      toolCalls: [
+        { id: "tc-2", name: "searchPartidas", arguments: {} as Record<string, unknown> },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 15, completionTokens: 5, totalTokens: 20 },
+    }));
+
+    const result = await executeAgentProvider(makeRequest());
+
+    // Debe detenerse tras 2 iteraciones, no seguir hasta 5
+    expect(mockRunLoop).toHaveBeenCalledTimes(2);
+    expect(result.warnings.some((w) => w.includes("2 veces seguidas") && w.includes("mismo error"))).toBe(true);
+    expect(result.requestBody).toMatchObject({
+      iterations: 2,
+    });
+  });
+
+  it("continúa el loop cuando la misma tool falla pero con errores diferentes", async () => {
+    // Iteración 1: searchPartidas falla por falta de query
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca" },
+        { role: "assistant", content: "Buscando..." },
+      ],
+      toolCalls: [
+        { id: "tc-1", name: "searchPartidas", arguments: {} as Record<string, unknown> },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    }));
+
+    // Iteración 2: searchPartidas falla pero con argumentos diferentes (el LLM intentó corregir)
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca" },
+        { role: "assistant", content: "Corrigiendo..." },
+      ],
+      toolCalls: [
+        { id: "tc-2", name: "searchPartidas", arguments: { query: "" } },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    }));
+
+    // Iteración 3: el LLM aprende y responde sin tools
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca" },
+        { role: "assistant", content: "Necesito más detalles para buscar." },
+      ],
+      toolCalls: [],
+      finishReason: "stop",
+      usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+    }));
+
+    const result = await executeAgentProvider(makeRequest());
+
+    // Debe continuar porque los errores son diferentes (distinto summary)
+    expect(mockRunLoop).toHaveBeenCalledTimes(3);
+    expect(result.answer).toContain("Necesito más detalles");
+    // No debe tener warning de fallo repetido
+    expect(result.warnings.some((w) => w.includes("veces seguidas"))).toBe(false);
+  });
+
+  it("resetea el tracker cuando una herramienta tiene éxito en la misma iteración", async () => {
+    // Iteración 1: searchPartidas falla
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca y calcula" },
+        { role: "assistant", content: "Procesando..." },
+      ],
+      toolCalls: [
+        { id: "tc-1", name: "searchPartidas", arguments: {} as Record<string, unknown> },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    }));
+
+    // Iteración 2: searchPartidas falla otra vez, pero calculateBudget SÍ funciona
+    // → el tracker debe resetearse porque hubo progreso
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca y calcula" },
+        { role: "assistant", content: "Reintentando..." },
+      ],
+      toolCalls: [
+        { id: "tc-2", name: "searchPartidas", arguments: {} as Record<string, unknown> },
+        { id: "tc-3", name: "calculateBudget", arguments: { budgetId: "b1" } },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 15, completionTokens: 10, totalTokens: 25 },
+    }));
+
+    // Iteración 3: modelo responde sin tools
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca y calcula" },
+        { role: "assistant", content: "Resultados parciales." },
+      ],
+      toolCalls: [],
+      finishReason: "stop",
+      usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+    }));
+
+    const result = await executeAgentProvider(makeRequest());
+
+    // Debe continuar hasta el final (3 iteraciones)
+    expect(mockRunLoop).toHaveBeenCalledTimes(3);
+    expect(result.answer).toContain("Resultados parciales");
+    expect(result.warnings.some((w) => w.includes("veces seguidas"))).toBe(false);
+  });
+
+  it("no detiene el loop si solo falla una vez (primera falla)", async () => {
+    // Iteración 1: searchPartidas falla
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca" },
+        { role: "assistant", content: "Buscando..." },
+      ],
+      toolCalls: [
+        { id: "tc-1", name: "searchPartidas", arguments: {} as Record<string, unknown> },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    }));
+
+    // Iteración 2: modelo corrige y responde sin tools
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Busca" },
+        { role: "assistant", content: "No puedo buscar sin query." },
+      ],
+      toolCalls: [],
+      finishReason: "stop",
+      usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+    }));
+
+    const result = await executeAgentProvider(makeRequest());
+
+    expect(mockRunLoop).toHaveBeenCalledTimes(2);
+    expect(result.answer).toContain("No puedo buscar");
+    expect(result.warnings.some((w) => w.includes("veces seguidas"))).toBe(false);
+  });
 });

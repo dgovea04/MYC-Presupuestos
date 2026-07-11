@@ -20,6 +20,7 @@ export type AgentStreamExecution = {
   state: AgentExecutionState | null;
   summary: string | null;
   pendingApproval: {
+    approvalId: string;
     toolName: string;
     reason: string;
   } | null;
@@ -37,7 +38,11 @@ export type AgentStreamState = {
 
 export type AgentStreamInput = {
   message: string;
+  /** Historial completo de la conversación para mantener contexto entre turnos */
+  messages?: AgentStreamMessage[];
   projectId?: string;
+  /** ID del workspace/empresa activa para pasar al agente como contexto */
+  workspaceId?: string;
   mode?: "chat" | "goal" | "workflow";
   /** Slug del workflow/bundle especialista a usar, ej: "crear-presupuesto-base" */
   workflowId?: string;
@@ -83,12 +88,20 @@ export function useAgentStream() {
     abortRef.current = controller;
 
     try {
+      // Incluir historial completo de mensajes para mantener contexto entre turnos
+      // Si no se provee messages, se envía solo el mensaje actual (compatibilidad)
+      const requestMessages = input.messages ?? [
+        { role: "user" as const, content: input.message },
+      ];
+
       const response = await fetch("/api/ai/agent/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: input.message,
+          messages: requestMessages,
           projectId: input.projectId,
+          workspaceId: input.workspaceId,
           mode: input.mode ?? "goal",
           workflowId: input.workflowId,
         }),
@@ -222,6 +235,7 @@ export function useAgentStream() {
           ...prev,
           state: "PENDING_APPROVAL",
           pendingApproval: {
+            approvalId: data.approvalId as string,
             toolName: data.toolName as string,
             reason: data.reason as string,
           },

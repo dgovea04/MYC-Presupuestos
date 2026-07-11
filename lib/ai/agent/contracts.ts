@@ -79,9 +79,12 @@ export type ToolExecutorInput = {
   toolCall: AgentToolCall;
   userId: string;
   projectId?: string;
+  workspaceId?: string;
   executionId: string;
   stepId?: string;
   mode: AgentExecutionMode;
+  /** Último mensaje del usuario en la conversación. */
+  lastUserMessage?: string;
 };
 
 export type ToolExecutorOutput = {

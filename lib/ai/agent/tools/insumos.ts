@@ -5,7 +5,7 @@ import { getResourcesByUser, createResourceForUser, updateResource, deleteResour
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
 const searchInsumosInput = z.object({
-  query: z.string().min(1).describe("Descripción o código del insumo a buscar"),
+  query: z.string().min(1).optional().describe("Descripción o código del insumo a buscar (opcional, lista todos si se omite)"),
   category: z
     .enum(["MATERIAL", "LABOR", "EQUIPMENT", "TOOLS", "SUBCONTRACT"])
     .optional()
@@ -35,8 +35,9 @@ export const searchInsumosTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: searchInsumosInput,
   execute: async (input, context) => {
+    const effectiveQuery = input.query ?? "";
     const resources = await getResourcesByUser(context.userId);
-    const lowerQuery = input.query.toLowerCase();
+    const lowerQuery = effectiveQuery.toLowerCase();
     const matches = resources
       .filter((r) => {
         const descMatch = r.description.toLowerCase().includes(lowerQuery);
@@ -55,7 +56,7 @@ export const searchInsumosTool: AgentToolDefinition<
       }));
 
     return {
-      query: input.query,
+      query: effectiveQuery,
       matchCount: matches.length,
       insumos: matches,
     };

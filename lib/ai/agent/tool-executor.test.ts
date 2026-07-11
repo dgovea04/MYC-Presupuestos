@@ -108,6 +108,128 @@ describe("ToolExecutor", () => {
       expect(output.success).toBe(false);
       expect(output.toolResult.output).toContain("Error de validación");
     });
+
+    it("incluye el nombre del campo inválido en el summary", async () => {
+      const { registry, executor } = setupExecutor();
+      registry.register({
+        name: "createProject",
+        description: "Crea proyecto",
+        risk: "write",
+        requiresProjectId: false,
+        inputSchema: z.object({
+          name: z.string().min(3),
+          companyId: z.string().min(1),
+        }),
+        execute: async () => ({ id: "p1" }),
+      });
+
+      const input = makeExecutorInput({
+        toolCall: makeToolCall({
+          name: "createProject",
+          arguments: {}, // vacío: faltan name y companyId
+        }),
+      });
+
+      const output = await executor.execute(input);
+      expect(output.success).toBe(false);
+      // El summary debe incluir el nombre de la tool y los campos que fallaron
+      expect(output.summary).toContain("createProject");
+      expect(output.summary).toContain("recibió input inválido");
+      expect(output.summary).toContain("name");
+      expect(output.summary).toContain("companyId");
+    });
+
+    it("incluye el nombre del campo con tipo incorrecto en el summary", async () => {
+      const { registry, executor } = setupExecutor();
+      registry.register({
+        name: "validateType",
+        description: "test",
+        risk: "read",
+        requiresProjectId: false,
+        inputSchema: z.object({ value: z.number() }),
+        execute: async () => ({ ok: true }),
+      });
+
+      const input = makeExecutorInput({
+        toolCall: makeToolCall({
+          name: "validateType",
+          arguments: { value: "no-es-numero" },
+        }),
+      });
+
+      const output = await executor.execute(input);
+      expect(output.success).toBe(false);
+      // El campo 'value' debe aparecer en el summary con su mensaje de error
+      expect(output.summary).toContain("validateType");
+      expect(output.summary).toContain("recibió input inválido");
+      expect(output.summary).toContain("value");
+      expect(output.summary).toContain("expected number");
+    });
+
+    it("muestra '(raíz)' cuando el input no es un objeto (path vacío)", async () => {
+      const { registry, executor } = setupExecutor();
+      registry.register({
+        name: "expectsObject",
+        description: "test",
+        risk: "read",
+        requiresProjectId: false,
+        inputSchema: z.object({ name: z.string() }),
+        execute: async () => ({ ok: true }),
+      });
+
+      const input = makeExecutorInput({
+        toolCall: makeToolCall({
+          name: "expectsObject",
+          // Forzamos un tipo incorrecto en la raíz para probar el path (raíz)
+          arguments: "no-soy-un-objeto" as unknown as Record<string, unknown>,
+        }),
+      });
+
+      const output = await executor.execute(input);
+      expect(output.success).toBe(false);
+      // Cuando el path está vacío, se muestra "(raíz)"
+      expect(output.summary).toContain("(raíz)");
+      expect(output.summary).toContain("recibió input inválido");
+      expect(output.summary).toContain("expected object");
+    });
+
+    it("incluye detalles de validación tanto en output como en summary", async () => {
+      const { registry, executor } = setupExecutor();
+      registry.register({
+        name: "createBudget",
+        description: "Crea presupuesto",
+        risk: "write",
+        requiresProjectId: false,
+        inputSchema: z.object({
+          name: z.string().min(3),
+          projectId: z.string().min(1),
+          currency: z.enum(["PEN", "USD"]),
+        }),
+        execute: async () => ({ budgetId: "b1" }),
+      });
+
+      const input = makeExecutorInput({
+        toolCall: makeToolCall({
+          name: "createBudget",
+          arguments: { name: "ab", currency: "EUR" },
+          // falta projectId, name muy corto, currency inválida
+        }),
+      });
+
+      const output = await executor.execute(input);
+      expect(output.success).toBe(false);
+      // output debe tener los detalles
+      expect(output.toolResult.output).toContain("Error de validación");
+      expect(output.toolResult.output).toContain("projectId");
+      expect(output.toolResult.output).toContain("name");
+      expect(output.toolResult.output).toContain("currency");
+      // summary también debe tener los detalles
+      expect(output.summary).toContain("createBudget");
+      expect(output.summary).toContain("recibió input inválido");
+      expect(output.summary).toContain("projectId");
+      expect(output.summary).toContain("name");
+      expect(output.summary).toContain("currency");
+    });
   });
 
   describe("projectId requerido", () => {

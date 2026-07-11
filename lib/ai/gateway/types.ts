@@ -31,6 +31,7 @@ export type AiProviderRequest = {
   schemaName?: string;
   userId?: string;
   projectId?: string;
+  workspaceId?: string;
   fetchImpl?: typeof fetch;
   apiKey?: string;
   modelPreference?: string;

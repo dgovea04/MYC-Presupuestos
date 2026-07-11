@@ -8,7 +8,7 @@ import { prisma } from "@/lib/db/prisma";
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
 const searchBudgetsInput = z.object({
-  query: z.string().min(1).describe("Texto para buscar presupuestos por nombre"),
+  query: z.string().min(1).optional().describe("Texto para buscar presupuestos por nombre (opcional, lista todos si se omite)"),
   projectId: z.string().optional().describe("Filtrar por proyecto"),
 });
 
@@ -59,16 +59,17 @@ export const searchBudgetsTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: searchBudgetsInput,
   execute: async (input, context) => {
+    const effectiveQuery = input.query ?? "";
     // Stub: En fases posteriores, delegar a un servicio de búsqueda real.
     // Por ahora, si se proporciona budgetId exacto, buscar directamente.
     if (input.projectId) {
       return {
-        message: `Búsqueda de presupuestos con query="${input.query}" en proyecto ${input.projectId}`,
+        message: `Búsqueda de presupuestos${effectiveQuery ? ` con query="${effectiveQuery}"` : " (sin filtro)"} en proyecto ${input.projectId}`,
         budgets: [],
       };
     }
     return {
-      message: `Búsqueda de presupuestos con query="${input.query}"`,
+      message: `Búsqueda de presupuestos${effectiveQuery ? ` con query="${effectiveQuery}"` : " (sin filtro)"}`,
       budgets: [],
     };
   },

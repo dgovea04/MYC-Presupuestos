@@ -4,6 +4,7 @@ import { AgentWorkspace } from "@/components/ai/AgentWorkspace";
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { getAuthSession } from "@/lib/auth/session";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getWorkspaceContextForUser } from "@/lib/workspace/context";
 import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 
@@ -20,6 +21,7 @@ export default async function KhipuAgentPage() {
 
   const settings = await getUserSettings(session.user.id);
   const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const workspaceCtx = await getWorkspaceContextForUser(session.user.id);
   const license = await getEffectiveWorkspaceLicense({
     userId: session.user.id,
     companyId: activeWorkspaceId,
@@ -45,7 +47,10 @@ export default async function KhipuAgentPage() {
   return (
     <AppShell currentUser={session.user} settings={settings}>
       <div className="p-4">
-        <AgentWorkspace />
+        <AgentWorkspace
+          workspaceId={activeWorkspaceId ?? undefined}
+          workspaceName={workspaceCtx?.workspace.name ?? undefined}
+        />
       </div>
     </AppShell>
   );

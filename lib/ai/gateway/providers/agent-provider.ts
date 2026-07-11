@@ -1,5 +1,5 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { getAgentModelShortLabel } from "@/lib/ai/agent/models";
+import { getAgentModelProvider, getAgentModelShortLabel } from "@/lib/ai/agent/models";
 import type { AiEndpointResult } from "@/lib/ai/types";
 import type { AiProviderRequest, AiProviderResult } from "@/lib/ai/gateway/types";
 import { createVercelSdkAdapter } from "@/lib/ai/agent/vercel-sdk-adapter";
@@ -80,15 +80,33 @@ export async function executeAgentProvider(
   const allWarnings: string[] = [];
   let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
+  /**
+   * Detecta cuando el LLM repite la misma tool fallida con el mismo error.
+   * Si ocurre 2 veces seguidas, detenemos el loop temprano para evitar
+   * gastar iteraciones en un ciclo sin progreso.
+   */
+  let lastFailedTool: { name: string; summary: string } | null = null;
+  let consecutiveRepeatFailures = 0;
+
+  // ── Derivar provider real del modelo seleccionado ───────────────────────
+  const provider = getAgentModelProvider(requestedModel) ?? "openrouter";
+
+  // Contador de reintentos para respuestas vacías del modelo
+  let emptyResponseRetries = 0;
+  const MAX_EMPTY_RETRIES = 2;
+
   while (iterations < MAX_AGENT_LOOP_ITERATIONS) {
     iterations++;
+
+    // Guardar mensajes antes de actualizar (para poder revertir si la respuesta es vacía)
+    const previousMessages = conversationMessages.map((m) => ({ ...m }));
 
     const output = await adapter.runLoop({
       system: systemPrompt,
       messages: conversationMessages,
       tools: registry.toSdkDefinitions(),
       stopWhen: "approval_boundary",
-      provider: "openrouter",
+      provider,
       resolvedModel: languageModel,
     });
 
@@ -125,11 +143,19 @@ export async function executeAgentProvider(
       };
     }
 
-    // Sin tool calls → respuesta final
+    // Sin tool calls → respuesta final (con reintento si está vacía)
     if (output.toolCalls.length === 0) {
       const finalAnswer = extractFinalAnswer(conversationMessages);
+      if (!finalAnswer && emptyResponseRetries < MAX_EMPTY_RETRIES) {
+        // Respuesta vacía: reintentar sin consumir una iteración del loop agéntico
+        emptyResponseRetries++;
+        iterations--; // no contar esta iteración
+        conversationMessages.length = 0;
+        conversationMessages.push(...previousMessages);
+        continue;
+      }
       return {
-        answer: finalAnswer || "El agente no generó una respuesta.",
+        answer: finalAnswer || "El agente no generó una respuesta tras varios intentos.",
         provider: "agent",
         model: requestedModel,
         requestedModel,
@@ -153,13 +179,20 @@ export async function executeAgentProvider(
       summary: string;
     }> = [];
 
+      // Último mensaje del usuario para heredar argumentos faltantes
+      const lastUserMessage = conversationMessages
+        .filter((m) => m.role === "user")
+        .pop()?.content;
+
     for (const toolCall of output.toolCalls) {
       const result = await toolExecutor.execute({
         toolCall,
         userId: request.userId ?? "unknown",
         projectId: request.projectId,
+        workspaceId: request.workspaceId,
         executionId: `agent_${Date.now()}_${iterations}`,
         mode: "chat",
+        lastUserMessage,
       });
 
       toolResults.push({
@@ -191,6 +224,36 @@ export async function executeAgentProvider(
       }
     }
 
+    // ── Detectar tool repetida fallida (mismo nombre + mismo error) ───────
+    const failedTools = toolResults.filter((r) => !r.success);
+    const hasRepeatedFailure =
+      failedTools.length === 1 &&
+      toolResults.length === 1 &&
+      lastFailedTool !== null &&
+      lastFailedTool.name === failedTools[0].toolName &&
+      lastFailedTool.summary === failedTools[0].summary;
+
+    if (hasRepeatedFailure) {
+      consecutiveRepeatFailures++;
+      if (consecutiveRepeatFailures >= 2) {
+        allWarnings.push(
+          `Herramienta "${failedTools[0].toolName}" falló ${consecutiveRepeatFailures} veces seguidas con el mismo error. Loop detenido para evitar gastar iteraciones.`,
+        );
+        break;
+      }
+    } else if (failedTools.length > 0) {
+      // Nueva falla (o distinta) — registrar para la próxima iteración
+      lastFailedTool = {
+        name: failedTools[0].toolName,
+        summary: failedTools[0].summary,
+      };
+      consecutiveRepeatFailures = 1;
+    } else {
+      // Alguna herramienta tuvo éxito → resetear tracker
+      lastFailedTool = null;
+      consecutiveRepeatFailures = 0;
+    }
+
     // Alimentar resultados de herramientas al modelo
     conversationMessages.push({
       role: "user",
@@ -198,11 +261,15 @@ export async function executeAgentProvider(
     });
   }
 
-  // ── Límite de iteraciones alcanzado ───────────────────────────────────────
+  // ── Límite de iteraciones alcanzado o loop detenido por fallo repetido ──
   const finalAnswer = extractFinalAnswer(conversationMessages);
-  allWarnings.push(
-    `Límite de ${MAX_AGENT_LOOP_ITERATIONS} iteraciones del agente alcanzado.`,
-  );
+  const limitReached = iterations >= MAX_AGENT_LOOP_ITERATIONS;
+
+  if (limitReached) {
+    allWarnings.push(
+      `Límite de ${MAX_AGENT_LOOP_ITERATIONS} iteraciones del agente alcanzado.`,
+    );
+  }
 
   return {
     answer: finalAnswer || "El agente alcanzó el límite máximo de iteraciones.",
@@ -217,7 +284,7 @@ export async function executeAgentProvider(
       iterations,
       totalToolCalls,
       usage: totalUsage,
-      limitReached: true,
+      limitReached,
     },
   };
 }
@@ -240,17 +307,22 @@ function buildToolResultsMessage(
       `- ${r.success ? "✓" : "✗"} ${r.toolName}: ${r.summary}`,
   );
 
+  const allSucceeded = results.every((r) => r.success);
+  const guidance = allSucceeded
+    ? "Continúa con el siguiente paso o proporciona tu respuesta final al usuario."
+    : "ALGUNAS HERRAMIENTAS FALLARON. Revisa los campos faltantes o inválidos indicados arriba y corrige SOLO esos campos al reintentar. NO repitas la misma llamada con los mismos argumentos inválidos.";
+
   return [
     "Resultados de las herramientas ejecutadas:",
     ...lines,
     "",
-    "Continúa con el siguiente paso o proporciona tu respuesta final al usuario.",
+    guidance,
   ].join("\n");
 }
 
 function buildApprovalMessage(
   allResults: Array<{ toolName: string; success: boolean; summary: string }>,
-  approval: { toolName: string; reason: string },
+  approval: { approvalId: string; toolName: string; reason: string },
 ): string {
   const completedLines = allResults
     .filter((r) => r.success)
@@ -267,6 +339,7 @@ function buildApprovalMessage(
   }
 
   sections.push(
+    `⏸️ approval_id=${approval.approvalId}`,
     `⚠️ **Se requiere tu aprobación** para ejecutar "${approval.toolName}":`,
     `> ${approval.reason}`,
   );
@@ -286,31 +359,44 @@ export type StreamAgentEvent =
  */
 export async function* streamAgentChat(
   request: AiProviderRequest,
+  /** LanguageModel pre-construido (opcional). Si se provee, se usa en vez de crear uno via OpenRouter. */
+  prebuiltModel?: unknown,
+  /** LanguageModel de respaldo para cuando el modelo principal devuelve vacío repetidamente. */
+  fallbackPrebuiltModel?: unknown,
+  /** ID del modelo de respaldo (para logging y metadata). */
+  fallbackModelId?: string,
 ): AsyncIterable<StreamAgentEvent> {
   const startTime = Date.now();
 
-  // ── 1. Resolver API key y modelo ──────────────────────────────────────────
-  const apiKey = request.apiKey;
-  if (!apiKey) {
-    throw new Error(
-      "No hay API key configurada para el agente. " +
-      "Ve a Configuración > IA > Proveedores Cloud IA y agrega tu API key de OpenRouter.",
-    );
-  }
-
-  const requestedModel =
+  let requestedModel =
     request.modelPreference ||
     DEFAULT_AGENT_MODEL;
 
-  // ── 2. Crear LanguageModel via OpenRouter ─────────────────────────────────
-  const fetchImpl: typeof fetch = request.fetchImpl ?? fetch;
-  const openrouter = createOpenRouter({
-    apiKey,
-    fetch: fetchImpl,
-    appName: "MC Presupuestos",
-    appUrl: process.env.NEXT_PUBLIC_APP_URL || "https://myc-presupuestos.local",
-  });
-  const languageModel = openrouter.chat(requestedModel);
+  // ── 1. Resolver LanguageModel ────────────────────────────────────────────
+  let languageModel: unknown;
+
+  if (prebuiltModel) {
+    // Usar modelo pre-construido (ej: Ollama via openai-compatible)
+    languageModel = prebuiltModel;
+  } else {
+    // OpenRouter (default)
+    const apiKey = request.apiKey;
+    if (!apiKey) {
+      throw new Error(
+        "No hay API key configurada para el agente. " +
+        "Ve a Configuración > IA > Proveedores Cloud IA y agrega tu API key de OpenRouter.",
+      );
+    }
+
+    const fetchImpl: typeof fetch = request.fetchImpl ?? fetch;
+    const openrouter = createOpenRouter({
+      apiKey,
+      fetch: fetchImpl,
+      appName: "MC Presupuestos",
+      appUrl: process.env.NEXT_PUBLIC_APP_URL || "https://myc-presupuestos.local",
+    });
+    languageModel = openrouter.chat(requestedModel);
+  }
 
   // ── 3. Inicializar machinery agéntica ─────────────────────────────────────
   const registry = createToolRegistry();
@@ -339,6 +425,22 @@ export async function* streamAgentChat(
   const allWarnings: string[] = [];
   let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
+  /**
+   * Detecta cuando el LLM repite la misma tool fallida con el mismo error.
+   * Si ocurre 2 veces seguidas, detenemos el loop temprano para evitar
+   * gastar iteraciones en un ciclo sin progreso.
+   */
+  let lastFailedTool: { name: string; summary: string } | null = null;
+  let consecutiveRepeatFailures = 0;
+
+  // Contador de reintentos para respuestas vacías del modelo
+  let emptyResponseRetries = 0;
+  const MAX_EMPTY_RETRIES = 2;
+  let fallbackUsed = false; // flag para evitar entrar en bucle de fallbacks
+
+  // ── Derivar provider real del modelo seleccionado ───────────────────────
+  let provider = getAgentModelProvider(requestedModel) ?? "openrouter";
+
   yield { type: "delta", text: `🤖 Khipu Agente iniciando con ${getAgentModelShortLabel(requestedModel)}...\n\n` };
 
   // ── Persist ledger: crear AgentExecution (solo si hay userId válido) ─────
@@ -352,9 +454,9 @@ export async function* streamAgentChat(
         mode: "chat",
         state: "EXECUTING",
         goal: request.messages.find((m) => m.role === "user")?.content.slice(0, 500) ?? "Chat",
-        provider: "openrouter",
+        provider,
         model: requestedModel,
-          contextSnapshotJson: request.projectId ? { projectId: request.projectId } : null,
+          contextSnapshotJson: (request.projectId ? { projectId: request.projectId } : null) as any,
         },
       });
       executionId = execution.id;
@@ -366,12 +468,15 @@ export async function* streamAgentChat(
   while (iterations < MAX_AGENT_LOOP_ITERATIONS) {
     iterations++;
 
+    // Guardar mensajes antes de actualizar (para poder revertir si la respuesta es vacía)
+    const previousMessages = conversationMessages.map((m) => ({ ...m }));
+
     const output = await adapter.runLoop({
       system: systemPrompt,
       messages: conversationMessages,
       tools: registry.toSdkDefinitions(),
       stopWhen: "approval_boundary",
-      provider: "openrouter",
+      provider,
       resolvedModel: languageModel,
     });
 
@@ -425,16 +530,72 @@ export async function* streamAgentChat(
       return;
     }
 
-    // Sin tool calls → respuesta final
+    // Sin tool calls → respuesta final (con reintento si está vacía)
     if (output.toolCalls.length === 0) {
       const finalAnswer = extractFinalAnswer(conversationMessages);
+      if (!finalAnswer && emptyResponseRetries < MAX_EMPTY_RETRIES && !fallbackUsed) {
+        // Respuesta vacía: reintentar con el mismo modelo
+        emptyResponseRetries++;
+        iterations--;
+        yield { type: "delta", text: "\n🔄 Reintentando...\n" };
+        conversationMessages.length = 0;
+        conversationMessages.push(...previousMessages);
+        continue;
+      }
+
+      // Reintentos agotados → intentar fallback si está disponible
+      if (!finalAnswer && fallbackPrebuiltModel && fallbackModelId && !fallbackUsed) {
+        fallbackUsed = true;
+        emptyResponseRetries = 0;
+        languageModel = fallbackPrebuiltModel;
+        requestedModel = fallbackModelId;
+        provider = getAgentModelProvider(fallbackModelId) ?? "openrouter";
+        yield {
+          type: "delta",
+          text: `\n⚠️ El modelo principal no respondió. Cambiando a modelo de respaldo ${getAgentModelShortLabel(fallbackModelId)}...\n\n`,
+        };
+        // Restaurar mensajes originales y reintentar
+        conversationMessages.length = 0;
+        conversationMessages.push(...previousMessages);
+        continue;
+      }
+
       if (finalAnswer) {
         yield { type: "delta", text: `\n${finalAnswer}\n` };
+        // Update ledger with completed state
+        if (executionId) {
+          try {
+            await prisma.agentExecution.update({
+              where: { id: executionId },
+              data: {
+                state: "EXECUTED",
+                summary: finalAnswer?.slice(0, 500) ?? null,
+                finishedAt: new Date(),
+              },
+            });
+          } catch { /* non-blocking */ }
+        }
+      } else {
+        const errorMsg = "El agente no generó una respuesta tras varios intentos.";
+        yield { type: "delta", text: `\n❌ ${errorMsg}\n` };
+        // Update ledger with failed state
+        if (executionId) {
+          try {
+            await prisma.agentExecution.update({
+              where: { id: executionId },
+              data: {
+                state: "FAILED",
+                lastError: errorMsg,
+                finishedAt: new Date(),
+              },
+            });
+          } catch { /* non-blocking */ }
+        }
       }
       yield {
         type: "final",
         result: {
-          answer: finalAnswer || "El agente no generó una respuesta.",
+          answer: finalAnswer || "El agente no generó una respuesta tras varios intentos.",
           model: requestedModel,
           requestedModel,
           fallbackUsed: false,
@@ -453,19 +614,6 @@ export async function* streamAgentChat(
           },
         },
       };
-      // Update ledger with completed state
-      if (executionId) {
-        try {
-          await prisma.agentExecution.update({
-            where: { id: executionId },
-            data: {
-              state: "EXECUTED",
-              summary: finalAnswer?.slice(0, 500) ?? null,
-              finishedAt: new Date(),
-            },
-          });
-        } catch { /* non-blocking */ }
-      }
       return;
     }
 
@@ -477,6 +625,11 @@ export async function* streamAgentChat(
       summary: string;
     }> = [];
 
+      // Último mensaje del usuario para heredar argumentos faltantes
+      const lastUserMessage = conversationMessages
+        .filter((m) => m.role === "user")
+        .pop()?.content;
+
     for (const toolCall of output.toolCalls) {
       yield { type: "delta", text: `🔧 Ejecutando ${toolCall.name}...\n` };
 
@@ -485,8 +638,10 @@ export async function* streamAgentChat(
         toolCall,
         userId: request.userId ?? "unknown",
         projectId: request.projectId,
+        workspaceId: request.workspaceId,
         executionId: executionId ?? `agent_${Date.now()}_${iterations}`,
         mode: "chat",
+        lastUserMessage,
       });
 
       // Persist tool invocation in ledger
@@ -496,8 +651,8 @@ export async function* streamAgentChat(
             data: {
               executionId,
               toolName: toolCall.name,
-              argumentsJson: toolCall.arguments as Record<string, unknown>,
-              resultJson: result.toolResult.output ? { output: result.toolResult.output } : null,
+              argumentsJson: (toolCall.arguments ?? {}) as any,
+              resultJson: (result.toolResult.output ? { output: result.toolResult.output } : null) as any,
               latencyMs: Date.now() - toolStartTime,
               success: result.success,
               errorMessage: result.success ? null : result.summary,
@@ -560,6 +715,75 @@ export async function* streamAgentChat(
       }
     }
 
+    // ── Detectar tool repetida fallida (mismo nombre + mismo error) ───────
+    const failedTools = toolResults.filter((r) => !r.success);
+    const hasRepeatedFailure =
+      failedTools.length === 1 &&
+      toolResults.length === 1 &&
+      lastFailedTool !== null &&
+      lastFailedTool.name === failedTools[0].toolName &&
+      lastFailedTool.summary === failedTools[0].summary;
+
+    if (hasRepeatedFailure) {
+      consecutiveRepeatFailures++;
+      if (consecutiveRepeatFailures >= 2) {
+        const repeatMsg = `⚠️ Herramienta "${failedTools[0].toolName}" falló ${consecutiveRepeatFailures} veces seguidas con el mismo error. Loop detenido para evitar gastar iteraciones.\n`;
+        yield { type: "delta", text: `\n${repeatMsg}\n` };
+        allWarnings.push(repeatMsg.trim());
+
+        const stuckAnswer = extractFinalAnswer(conversationMessages);
+        yield {
+          type: "final",
+          result: {
+            answer: stuckAnswer || `La herramienta "${failedTools[0].toolName}" sigue fallando con el mismo error.`,
+            model: requestedModel,
+            requestedModel,
+            fallbackUsed: false,
+            warnings: allWarnings,
+            latencyMs: Date.now() - startTime,
+            debug: {
+              structuredParseStatus: "not_requested",
+              rawAnswer: stuckAnswer,
+              validationWarnings: allWarnings,
+              requestBody: {
+                systemPrompt: systemPrompt.slice(0, 200),
+                iterations,
+                totalToolCalls,
+                usage: totalUsage,
+                repeatedFailure: true,
+                failedTool: failedTools[0].toolName,
+              },
+            },
+          },
+        };
+        // Update ledger with failed state
+        if (executionId) {
+          try {
+            await prisma.agentExecution.update({
+              where: { id: executionId },
+              data: {
+                state: "FAILED",
+                lastError: repeatMsg.trim(),
+                finishedAt: new Date(),
+              },
+            });
+          } catch { /* non-blocking */ }
+        }
+        return;
+      }
+    } else if (failedTools.length > 0) {
+      // Nueva falla (o distinta) — registrar para la próxima iteración
+      lastFailedTool = {
+        name: failedTools[0].toolName,
+        summary: failedTools[0].summary,
+      };
+      consecutiveRepeatFailures = 1;
+    } else {
+      // Alguna herramienta tuvo éxito → resetear tracker
+      lastFailedTool = null;
+      consecutiveRepeatFailures = 0;
+    }
+
     // Alimentar resultados al modelo y continuar
     conversationMessages.push({
       role: "user",
@@ -571,14 +795,20 @@ export async function* streamAgentChat(
 
   // ── Límite de iteraciones ─────────────────────────────────────────────────
   const finalAnswer = extractFinalAnswer(conversationMessages);
-  allWarnings.push(
-    `Límite de ${MAX_AGENT_LOOP_ITERATIONS} iteraciones del agente alcanzado.`,
-  );
+  const limitReached = iterations >= MAX_AGENT_LOOP_ITERATIONS;
 
-  yield {
-    type: "delta",
-    text: `\n⚠️ ${allWarnings[allWarnings.length - 1]}\n`,
-  };
+  if (limitReached) {
+    allWarnings.push(
+      `Límite de ${MAX_AGENT_LOOP_ITERATIONS} iteraciones del agente alcanzado.`,
+    );
+  }
+
+  if (limitReached) {
+    yield {
+      type: "delta",
+      text: `\n⚠️ ${allWarnings[allWarnings.length - 1]}\n`,
+    };
+  }
   yield {
     type: "final",
     result: {
@@ -597,7 +827,7 @@ export async function* streamAgentChat(
           iterations,
           totalToolCalls,
           usage: totalUsage,
-          limitReached: true,
+          limitReached,
         },
       },
     },

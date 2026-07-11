@@ -5,8 +5,8 @@ import { createProject, getUserCompanies } from "@/lib/data/projects";
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
 const createProjectInput = z.object({
-  companyId: z.string().min(1).describe("ID de la empresa propietaria del proyecto"),
-  name: z.string().min(3).describe("Nombre del proyecto/obra"),
+  companyId: z.string().min(1).optional().describe("ID de la empresa propietaria del proyecto (se hereda del workspace si no se provee)"),
+  name: z.string().min(3).optional().describe("Nombre del proyecto/obra (se hereda del último mensaje del usuario si no se provee)"),
   clientName: z.string().optional().describe("Nombre del cliente o contratante"),
   location: z.string().optional().describe("Ubicación física de la obra"),
   projectType: z.string().optional().describe("Tipo de proyecto (Edificacion, Carretera, etc.)"),
@@ -36,14 +36,25 @@ export const createProjectTool: AgentToolDefinition<
   name: "createProject",
   description:
     "Crea un proyecto completo con Presupuesto General y sub-presupuestos automáticos (Estructuras, Arquitectura, Inst. Sanitarias, Inst. Eléctricas). " +
-    "Es el mismo flujo que crear un proyecto manualmente en la plataforma. Requiere aprobación previa.",
+    "SOLO requiere name. El companyId se obtiene automáticamente del contexto de la conversación. " +
+    "Todos los demás campos (clientName, location, projectType, startDate, endDate, status, workCalendarId) son OPCIONALES y no deben pedirse a menos que el usuario los mencione explícitamente. " +
+    "El sistema maneja la aprobación automáticamente, no necesitas esperar confirmación.",
   risk: "write",
   requiresProjectId: false,
   inputSchema: createProjectInput,
   execute: async (input, context) => {
+    const effectiveCompanyId = input.companyId ?? context.workspaceId;
+    if (!effectiveCompanyId) {
+      throw new Error("Se requiere companyId para crear un proyecto. No se encontró en los argumentos ni en el contexto del workspace.");
+    }
+    // Si el modelo no pasa name, heredar del último mensaje del usuario
+    const effectiveName = input.name || context.lastUserMessage?.trim();
+    if (!effectiveName || effectiveName.length < 3) {
+      throw new Error("Se requiere un nombre válido (mínimo 3 caracteres) para crear el proyecto. El nombre se hereda del último mensaje del usuario.");
+    }
     const project = await createProject(context.userId, {
-      companyId: input.companyId,
-      name: input.name,
+      companyId: effectiveCompanyId,
+      name: effectiveName,
       clientName: input.clientName,
       location: input.location,
       projectType: input.projectType,

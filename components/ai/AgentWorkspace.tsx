@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import {
   ArrowLeft,
   Bot,
+  Building2,
   CheckCircle2,
   AlertTriangle,
   XCircle,
@@ -116,6 +117,10 @@ type AgentWorkspaceProps = {
   initialObjective?: string;
   /** Slug del workflow/bundle a usar por defecto */
   defaultBundleSlug?: string;
+  /** ID del workspace/empresa activa para pasar al agente como contexto */
+  workspaceId?: string;
+  /** Nombre del workspace/empresa activa */
+  workspaceName?: string;
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -329,7 +334,7 @@ function AgentChatPanel({
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-2.5">
               {[
-                "Crear presupuesto para hospital",
+                "Crear presupuesto para vivienda",
                 "Revisar APU de concreto armado",
                 "Generar cronograma del proyecto",
                 "Comparar presupuestos activos",
@@ -630,6 +635,8 @@ function AgentRightPanel({
   streamExecution,
   streaming,
   projectId,
+  workspaceId,
+  workspaceName,
   allTools,
   onApprove,
   onReject,
@@ -638,6 +645,8 @@ function AgentRightPanel({
   streamExecution: ReturnType<typeof useAgentStream>["execution"];
   streaming: boolean;
   projectId?: string;
+  workspaceId?: string;
+  workspaceName?: string;
   allTools: Array<{ name: string; description: string; risk: AgentToolRisk }>;
   onApprove: (toolName: string) => void;
   onReject: (toolName: string) => void;
@@ -653,6 +662,15 @@ function AgentRightPanel({
         <CardContent className="p-5">
           <CardSectionHeader icon={BrainCircuit} label="Contexto" />
           <div className="space-y-2.5">
+            {workspaceId && workspaceName && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3.5 py-2.5">
+                <Building2 className="h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
+                <p className="min-w-0 flex-1 text-xs text-[var(--app-text)]">
+                  <span className="text-[var(--app-text-muted)]">Empresa</span>{" "}
+                  <span className="font-medium text-[var(--app-text-strong)]">{workspaceName}</span>
+                </p>
+              </div>
+            )}
             {projectId && (
               <div className="flex items-center gap-2.5 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3.5 py-2.5">
                 <FolderKanban className="h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
@@ -744,7 +762,7 @@ function AgentRightPanel({
                 size="sm"
                 className="flex-1 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
                 disabled={approving}
-                onClick={() => onApprove(streamExecution.pendingApproval!.toolName)}
+                onClick={() => onApprove(streamExecution.pendingApproval!.approvalId)}
               >
                 {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                 Aprobar
@@ -845,6 +863,8 @@ export function AgentWorkspace({
   className,
   initialObjective = "",
   defaultBundleSlug,
+  workspaceId,
+  workspaceName,
 }: AgentWorkspaceProps) {
   const [objective, setObjective] = useState(initialObjective);
   const [approving, setApproving] = useState(false);
@@ -870,11 +890,14 @@ export function AgentWorkspace({
     setObjective("");
     connect({
       message: obj.trim(),
+      // Enviar historial completo para mantener contexto entre turnos
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
       projectId,
+      workspaceId,
       mode: selectedBundleSlug ? "workflow" : "goal",
       workflowId: selectedBundleSlug ?? undefined,
     });
-  }, [projectId, loading, streaming, connect, selectedBundleSlug]);
+  }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
 
   const handleApprove = useCallback(async (approvalId: string) => {
     setApproving(true);
@@ -943,6 +966,8 @@ export function AgentWorkspace({
         streamExecution={streamExec}
         streaming={streaming}
         projectId={projectId}
+        workspaceId={workspaceId}
+        workspaceName={workspaceName}
         allTools={getAvailableTools()}
         onApprove={handleApprove}
         onReject={handleReject}

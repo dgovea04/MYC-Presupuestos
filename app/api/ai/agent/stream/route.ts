@@ -1,7 +1,17 @@
 import { withAiRoute } from "@/lib/ai/route-handler";
+import type { AiMessage } from "@/lib/ai/types";
 import { aiAgentRequestSchema } from "@/lib/ai/agent/validation";
 import { streamAgentChat } from "@/lib/ai/gateway/providers/agent-provider";
-import { getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import { getDecryptedOpenrouterApiKey, getDecryptedGeminiApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import {
+  getWorkflowTemplate,
+  getBundleBySlug,
+  getBundleSystemPrompt,
+} from "@/lib/ai/agent/workflows";
+import { getAgentModelProvider, getModelFallback } from "@/lib/ai/agent/models";
+import { prisma } from "@/lib/db/prisma";
+import { createOllama } from "ollama-ai-provider-v2";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -34,16 +44,144 @@ export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiAgentRequestSchema.parse(await request.json());
 
-    const systemPrompt = [
+    // ── Resolver contexto del workspace ────────────────────────────────────
+    let workspaceName: string | null = null;
+    if (data.workspaceId) {
+      try {
+        const company = await prisma.company.findUnique({
+          where: { id: data.workspaceId },
+          select: { name: true },
+        });
+        workspaceName = company?.name ?? null;
+      } catch {
+        // non-blocking
+      }
+    }
+
+    // ── Resolver bundle y workflow prompts ─────────────────────────────────
+    let workflowGuidance = "";
+    if (data.workflowId) {
+      const template = getWorkflowTemplate(data.workflowId);
+      if (template) {
+        const bundle = getBundleBySlug(template.bundleSlug);
+        if (bundle) {
+          workflowGuidance = [
+            "",
+            "--- ESPECIALIDAD ACTIVA ---",
+            `Rol: ${bundle.name} — ${bundle.description}`,
+            bundle.systemPrompt,
+            "",
+            "--- OBJETIVO DEL WORKFLOW ---",
+            template.initialGoal,
+          ].join("\n");
+        }
+      }
+    }
+
+    const systemPromptLines = [
       "Eres Khipu, un asistente técnico de construcción y presupuestos de obra en Perú.",
       "Ayudas a ingenieros y contratistas con presupuestos, APU, cronogramas, metrados y reportes.",
       "Siempre usa herramientas cuando necesites datos concretos del proyecto.",
-      "Responde en español, con tono profesional y técnico.",
-    ].join("\n");
+    ];
 
-    // Resolver API key y modelo desde la configuración del usuario
+    // Inyectar contexto del workspace activo si está disponible
+    if (workspaceName && data.workspaceId) {
+      systemPromptLines.push(
+        "",
+        "--- WORKSPACE ACTUAL ---",
+        `Estás trabajando en la empresa "${workspaceName}" (ID: ${data.workspaceId}).`,
+        "NO uses searchCompanies para preguntar al usuario qué empresa usar.",
+        "Usa searchCompanies SOLO si necesitas listar TODAS las empresas del usuario (ej: para cambiar de empresa).",
+        `Si el usuario pide crear un proyecto o presupuesto, usa directamente este companyId: "${data.workspaceId}".`,
+      );
+    }
+
+    // Inyectar guía del workflow/bundle si existe
+    if (workflowGuidance) {
+      systemPromptLines.push(workflowGuidance);
+    }
+
+    systemPromptLines.push(
+      "",
+      "Responde en español, con tono profesional y técnico.",
+      "",
+      "--- INSTRUCCIONES ---",
+      "",
+      "CREAR PROYECTO NUEVO:",
+      "1. El usuario pide crear proyecto/presupuesto → pregúntale: ¿nuevo o existente?",
+      "2. El usuario responde 'nuevo' (o similar) → pregúntale: ¿cuál es el nombre?",
+      "3. El usuario da el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
+      "   • No preguntes por location, clientName, projectType ni fechas (son opcionales).",
+      "   • No pidas confirmación extra. El sistema ya maneja la aprobación.",
+      "   • El companyId ya está configurado, no lo incluyas.",
+      "4. El usuario dice 'existente' → usa searchBudgets para listar presupuestos.",
+      "",
+      "CONSEJOS:",
+      "- Puedes generar texto de forma natural mientras ejecutas herramientas.",
+      "- Cuando tengas los datos necesarios, llama la herramienta sin demora.",
+      "- No uses searchCompanies. Ya sabes cuál es la empresa del usuario.",
+    );
+
+    // ── Resolver modelo y provider desde la configuración del usuario ─────
     const settings = await getAiProviderSettings(session.user.id);
-    const apiKey = await getDecryptedOpenrouterApiKey(session.user.id);
+    const modelPreference = settings.openrouterModel || undefined;
+
+    // ── Determinar provider y resolver API key ────────────────────────────
+    const provider = modelPreference ? getAgentModelProvider(modelPreference) : undefined;
+
+    let apiKey: string | undefined;
+    let geminiApiKey: string | undefined;
+
+    if (provider === "google") {
+      geminiApiKey = await getDecryptedGeminiApiKey(session.user.id);
+    } else if (provider !== "ollama") {
+      apiKey = await getDecryptedOpenrouterApiKey(session.user.id);
+    }
+
+    // ── Sección extra para modelos locales (Ollama) ───────────────────────
+    if (provider === "ollama") {
+      systemPromptLines.push(
+        "",
+        "--- MODO LOCAL ---",
+        "Eres un modelo local. Sé MÁS DIRECTO que un modelo cloud. NO preguntes, EJECUTA.",
+        "El usuario espera acción inmediata. Si entiendes la intención, USA LA HERRAMIENTA YA.",
+        "Ejemplo: si el usuario dice 'crear presupuesto para X', extrae X como nombre y crea el proyecto.",
+      );
+    }
+
+    const systemPrompt = systemPromptLines.join("\n");
+
+    // ── Construir LanguageModel según el provider del modelo ──────────────
+    let prebuiltModel: unknown = undefined;
+    // Modelo de respaldo para cuando el principal devuelve vacío repetidamente
+    let fallbackPrebuiltModel: unknown = undefined;
+    let fallbackModelId: string | undefined;
+
+    if (provider === "google" && modelPreference && geminiApiKey) {
+      const googleProvider = createGoogleGenerativeAI({ apiKey: geminiApiKey });
+      // Extraer nombre del modelo: "google/gemini-2.5-flash-lite" → "gemini-2.5-flash-lite"
+      const googleModelName = modelPreference.split("/").slice(1).join("/");
+      prebuiltModel = googleProvider(googleModelName);
+
+      // Crear modelo de respaldo si existe un fallback configurado
+      const fallbackId = getModelFallback(modelPreference);
+      if (fallbackId) {
+        const fallbackModelName = fallbackId.split("/").slice(1).join("/");
+        fallbackPrebuiltModel = googleProvider(fallbackModelName);
+        fallbackModelId = fallbackId;
+      }
+    } else if (provider === "ollama" && modelPreference) {
+      // Usar Ollama local via ollama-ai-provider-v2 (especificación v2 del AI SDK)
+      const ollamaConfig: { baseURL?: string } = {};
+      if (process.env.OLLAMA_BASE_URL) {
+        // El provider espera la URL completa incluyendo /api
+        ollamaConfig.baseURL = `${process.env.OLLAMA_BASE_URL.replace(/\/$/, "")}/api`;
+      }
+      const ollamaProvider = createOllama(ollamaConfig);
+      // Extraer nombre del modelo: "ollama/llama3.1" → "llama3.1"
+      const ollamaModelName = modelPreference.split("/").slice(1).join("/");
+      prebuiltModel = ollamaProvider(ollamaModelName);
+    }
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -52,17 +190,30 @@ export async function POST(request: Request) {
 
           const toolLatencies = new Map<string, number>();
 
+          // Usar el historial completo si se provee (mantiene contexto entre turnos).
+          // Si no hay historial, construir solo con el mensaje actual (compatibilidad).
+          const conversationMessages: AiMessage[] = data.messages && data.messages.length > 0
+            ? [
+                { role: "system" as const, content: systemPrompt },
+                ...data.messages.map((m) => ({
+                  role: m.role as AiMessage["role"],
+                  content: m.content,
+                })),
+              ]
+            : [
+                { role: "system" as const, content: systemPrompt },
+                { role: "user" as const, content: data.message },
+              ];
+
           for await (const event of streamAgentChat({
             task: "review_budget",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: data.message },
-            ],
+            messages: conversationMessages,
             userId: session.user.id,
             projectId: data.projectId,
+            workspaceId: data.workspaceId,
             apiKey,
-            modelPreference: settings.openrouterModel || undefined,
-          })) {
+            modelPreference: modelPreference,
+          }, prebuiltModel, fallbackPrebuiltModel, fallbackModelId)) {
             if (event.type === "delta") {
               const text = event.text;
 
@@ -96,8 +247,10 @@ export async function POST(request: Request) {
               // Detectar aprobación: "⚠️ **Se requiere tu aprobación**"
               if (text.includes("Se requiere tu aprobación")) {
                 const approvalMatch = text.match(/"(\w+)":\s*\n>\s*(.+)/);
+                const idMatch = text.match(/approval_id=([^\s]+)/);
                 if (approvalMatch) {
                   writeEvent(controller, "approval_required", {
+                    approvalId: idMatch?.[1] ?? "unknown",
                     toolName: approvalMatch[1],
                     reason: approvalMatch[2].trim(),
                   });

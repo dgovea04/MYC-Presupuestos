@@ -71,6 +71,9 @@ export class VercelSdkAdapter implements AgentVercelSdkAdapter {
     } = input;
 
     const warnings: string[] = [];
+    // Pasar system prompt como parámetro separado 'system' de generateText,
+    // NO como mensaje con role "system" en el array messages,
+    // para evitar el warning de seguridad del AI SDK.
     const modelMessages = buildModelMessages(system, messages);
     const sdkTools = buildSdkTools(tools);
     const maxSteps = computeMaxSteps(stopWhen);
@@ -78,10 +81,23 @@ export class VercelSdkAdapter implements AgentVercelSdkAdapter {
     try {
       const result = (await generateText({
         model: resolvedModel as LanguageModel,
+        system,
         messages: modelMessages,
         tools: sdkTools as Record<string, { description: string; inputSchema: z.ZodType<Record<string, unknown>> }>,
         maxSteps,
       })) as GenerateTextToolResult;
+
+      // 🐛 Debug: log si el modelo devuelve respuesta vacía (sin texto, sin tool calls)
+      const hasEmptyResponse = !result.text && (!result.toolCalls || result.toolCalls.length === 0);
+      if (hasEmptyResponse) {
+        console.warn(
+          '[ADAPTER-DEBUG] generateText returned EMPTY |',
+          `finishReason=${result.finishReason}`,
+          `toolCalls=${result.toolCalls?.length ?? 0}`,
+          `steps=${result.steps?.length ?? 0}`,
+          `provider=${provider}`,
+        );
+      }
 
       const toolCalls = extractToolCalls(result);
       const finishReason = determineFinishReason(result.finishReason, toolCalls, stopWhen);
@@ -128,16 +144,15 @@ export function createVercelSdkAdapter(): AgentVercelSdkAdapter {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildModelMessages(
-  system: string,
+  _system: string,
   messages: AgentLoopMessage[],
 ): ModelMessage[] {
-  return [
-    { role: "system" as const, content: system },
-    ...messages.map((m) => ({
-      role: m.role as "system" | "user" | "assistant" | "tool",
-      content: m.content,
-    })),
-  ];
+  // NOTA: el system prompt se pasa como parámetro 'system' de generateText(),
+  // NO como mensaje en el array. Solo devolvemos los mensajes de conversación.
+  return messages.map((m) => ({
+    role: m.role as "user" | "assistant" | "tool",
+    content: m.content,
+  }));
 }
 
 function buildSdkTools(
@@ -193,7 +208,7 @@ function extractToolCalls(result: GenerateTextToolResult): AgentToolCall[] {
       toolCalls.push({
         id: call.toolCallId,
         name: call.toolName,
-        arguments: call.args,
+        arguments: call.args ?? {},
       });
     }
   }
@@ -206,7 +221,7 @@ function extractToolCalls(result: GenerateTextToolResult): AgentToolCall[] {
           toolCalls.push({
             id: call.toolCallId,
             name: call.toolName,
-            arguments: call.args,
+            arguments: call.args ?? {},
           });
         }
       }

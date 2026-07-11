@@ -99,8 +99,11 @@ export const agentStepStatusSchema = z.enum(AGENT_STEP_STATUS_VALUES);
 export type AgentToolContext = {
   userId: string;
   projectId?: string;
+  workspaceId?: string;
   executionId: string;
   stepId?: string;
+  /** Último mensaje del usuario en la conversación (para fallback cuando el modelo no pasa todos los args). */
+  lastUserMessage?: string;
 };
 
 /** Definición canónica de una herramienta agentica. */

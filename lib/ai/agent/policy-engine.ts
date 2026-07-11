@@ -22,9 +22,9 @@ export class PolicyEngine implements AgentPolicyEngine {
 
       case "write":
         if (isChatMode) {
-          return this.requireApproval(
+          return this.allow(
             toolName,
-            "Escritura en modo chat — requiere aprobación explícita."
+            "Escritura en modo chat — el usuario está conversando activamente, no requiere aprobación adicional."
           );
         }
         // isGoalOrWorkflow cubre todos los modos restantes

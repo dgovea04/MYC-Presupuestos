@@ -29,7 +29,7 @@ export class ToolExecutor implements AgentToolExecutor {
   ) {}
 
   async execute(input: ToolExecutorInput): Promise<ToolExecutorOutput> {
-    const { toolCall, userId, projectId, executionId, stepId, mode } = input;
+    const { toolCall, userId, projectId, workspaceId, executionId, stepId, mode } = input;
     const startTime = Date.now();
 
     // 1. Buscar herramienta en registry
@@ -52,16 +52,16 @@ export class ToolExecutor implements AgentToolExecutor {
     if (!parseResult.success) {
       const latencyMs = Date.now() - startTime;
       const errorDetails = parseResult.error.issues
-        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-        .join(", ");
+        .map((issue) => `${issue.path.join(".") || "(raíz)"}: ${issue.message}`)
+        .join("\n  ");
       return {
         toolResult: {
           toolCallId: toolCall.id,
-          output: `Error de validación: ${errorDetails}`,
+          output: `Error de validación:\n  ${errorDetails}`,
         },
         success: false,
         latencyMs,
-        summary: `Tool "${toolCall.name}" recibió input inválido.`,
+        summary: `Tool "${toolCall.name}" recibió input inválido:\n  ${errorDetails}`,
       };
     }
 
@@ -127,8 +127,10 @@ export class ToolExecutor implements AgentToolExecutor {
       const result = await tool.execute(validatedInput, {
         userId,
         projectId,
+        workspaceId,
         executionId,
         stepId,
+        lastUserMessage: input.lastUserMessage,
       });
 
       const latencyMs = Date.now() - startTime;

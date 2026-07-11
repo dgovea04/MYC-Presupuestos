@@ -6,7 +6,7 @@ import { getCatalogPartidas, saveCatalogPartidasPatch } from "@/lib/data/partida
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
 const searchPartidasInput = z.object({
-  query: z.string().min(1).describe("Descripción o palabra clave para buscar partidas"),
+  query: z.string().min(1).optional().describe("Descripción o palabra clave para buscar partidas (opcional, lista todas si se omite)"),
   unit: z.string().optional().describe("Unidad de medida para filtrar"),
 });
 
@@ -34,8 +34,9 @@ export const searchPartidasTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: searchPartidasInput,
   execute: async (input, _context) => {
+    const effectiveQuery = input.query ?? "";
     const allPartidas = await getCatalogPartidas();
-    const lowerQuery = input.query.toLowerCase();
+    const lowerQuery = effectiveQuery.toLowerCase();
     const matches = allPartidas
       .filter((p) => {
         const descMatch = p.description.toLowerCase().includes(lowerQuery);
@@ -53,7 +54,7 @@ export const searchPartidasTool: AgentToolDefinition<
       }));
 
     return {
-      query: input.query,
+      query: effectiveQuery,
       matchCount: matches.length,
       partidas: matches,
     };
