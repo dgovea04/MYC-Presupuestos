@@ -32,7 +32,7 @@ export const PROJECT_TYPE_SYNONYMS: Record<string, string[]> = {
     "residencial", "condominio", "multifamiliar", "unifamiliar",
   ],
   edificio: [
-    "edificio", "oficina", "comercial", "corporativo", "torre",
+    "edificio", "edificación", "oficina", "comercial", "corporativo", "torre",
   ],
   hospital: [
     "hospital", "clinica", "posta", "salud", "medico", "sanitario",
@@ -48,7 +48,47 @@ export const PROJECT_TYPE_SYNONYMS: Record<string, string[]> = {
   ],
 };
 
-// ─── Location patterns (Peruvian cities/departments) ────────────────────────
+// ─── Related type groups (cross-type affinity) ────────────────────────────
+// When a candidate belongs to one group and the query targets another group
+// in the same affinity set, give partial credit (0.6) instead of 0.
+// Example: "edificación" (edificio) ↔ "vivienda" queries
+export const RELATED_TYPE_GROUPS: Array<Set<string>> = [
+  new Set(["vivienda", "edificio"]),
+];
+
+/**
+ * Returns the related type score (0.6) if the candidate's canonical type
+ * and any of the detected types belong to the same affinity group.
+ */
+export function getRelatedTypeScore(
+  candidateCanonicalType: string,
+  detectedTypes: string[],
+): number {
+  for (const group of RELATED_TYPE_GROUPS) {
+    if (group.has(candidateCanonicalType)) {
+      for (const detected of detectedTypes) {
+        if (group.has(detected) && detected !== candidateCanonicalType) {
+          return 0.6;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+/**
+ * Finds the canonical project type key for a given type string.
+ * E.g., "edificación" → "edificio", "casa" → "vivienda".
+ * Returns null if no match is found.
+ */
+export function findCanonicalType(normalizedType: string): string | null {
+  for (const [key, synonyms] of Object.entries(PROJECT_TYPE_SYNONYMS)) {
+    if (normalizedType === key || synonyms.some((s) => normalizedType.includes(s))) {
+      return key;
+    }
+  }
+  return null;
+}
 
 const LOCATION_PATTERNS: Array<{ regex: RegExp; city: string }> = [
   { regex: /\b(lima|san\s+miguel|miraflores|san\s+isidro|surco|la\s+molina|san\s+borja|barranco|chorrillos|callao|san\s+juan\s+de\s+lurigancho|san\s+juan\s+de\s+miraflores|villa\s+el\s+salvador|villa\s+maria\s+del\s+triunfo|comas|los\s+olivos|independencia|san\s+martin\s+de\s+porres|puente\s+piedra|carabayllo|ancon|santa\s+rosa|ventanilla)\b/i, city: "Lima" },

@@ -1,6 +1,6 @@
 import { searchStoredPackages } from "@/lib/data/stored-project-packages";
 import { normalizePartidaText, uniqueTokens, jaccardSimilarity } from "@/lib/partida-generation/text";
-import { PROJECT_TYPE_SYNONYMS, detectProjectTypes } from "./generation-intent";
+import { PROJECT_TYPE_SYNONYMS, detectProjectTypes, getRelatedTypeScore, findCanonicalType } from "./generation-intent";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -166,8 +166,17 @@ function computeTypeScore(
     }
   }
 
+  // Cross-type affinity: related groups (e.g., edificio ↔ vivienda)
+  const canonicalType = findCanonicalType(normalizedType);
+  if (canonicalType) {
+    const relatedScore = getRelatedTypeScore(canonicalType, detectedTypes);
+    if (relatedScore > 0) return relatedScore;
+  }
+
   return 0.3;
 }
+
+
 
 function roundScore(value: number): number {
   return Math.round((value + Number.EPSILON) * 10000) / 10000;

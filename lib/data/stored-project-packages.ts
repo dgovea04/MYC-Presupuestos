@@ -52,6 +52,31 @@ function toStoredPackage(
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
+export async function findExistingPackage(
+  companyId: string,
+  projectName: string,
+): Promise<{ id: string; projectName: string; projectType: string; createdAt: string } | null> {
+  const existing = await prisma.storedProjectPackage.findFirst({
+    where: { companyId, projectName },
+    select: { id: true, projectName: true, projectType: true, createdAt: true },
+  });
+
+  if (!existing) return null;
+
+  return {
+    id: existing.id,
+    projectName: existing.projectName,
+    projectType: existing.projectType,
+    createdAt: existing.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Stores or updates a .mcp package in the database.
+ * Deduplicates by (companyId, projectName): if a package with the same name
+ * already exists in the same company, it updates the content instead of
+ * creating a duplicate.
+ */
 export async function storeProjectPackage(
   input: {
     projectName: string;
@@ -61,7 +86,24 @@ export async function storeProjectPackage(
     companyId: string;
     userId: string;
   },
-): Promise<StoredProjectPackage> {
+): Promise<StoredProjectPackage & { updated: boolean }> {
+  const existing = await findExistingPackage(input.companyId, input.projectName);
+
+  if (existing) {
+    const record = await prisma.storedProjectPackage.update({
+      where: { id: existing.id },
+      data: {
+        projectType: input.projectType,
+        description: input.description,
+        mcpContent: input.content.toString("base64"),
+        userId: input.userId,
+      },
+      select: PACKAGE_SELECT,
+    });
+
+    return { ...toStoredPackage(record), updated: true };
+  }
+
   const record = await prisma.storedProjectPackage.create({
     data: {
       companyId: input.companyId,
@@ -74,7 +116,7 @@ export async function storeProjectPackage(
     select: PACKAGE_SELECT,
   });
 
-  return toStoredPackage(record);
+  return { ...toStoredPackage(record), updated: false };
 }
 
 export async function storeProjectPackageFromExport(
@@ -84,7 +126,25 @@ export async function storeProjectPackageFromExport(
   projectType: string,
   companyId: string,
   content: Buffer,
-): Promise<StoredProjectPackage> {
+): Promise<StoredProjectPackage & { updated: boolean }> {
+  const existing = await findExistingPackage(companyId, projectName);
+
+  if (existing) {
+    const record = await prisma.storedProjectPackage.update({
+      where: { id: existing.id },
+      data: {
+        sourceProjectId: projectId,
+        projectType,
+        description: `Proyecto exportado: ${projectName} (${projectType || "Sin tipo"})`,
+        mcpContent: content.toString("base64"),
+        userId,
+      },
+      select: PACKAGE_SELECT,
+    });
+
+    return { ...toStoredPackage(record), updated: true };
+  }
+
   const record = await prisma.storedProjectPackage.create({
     data: {
       companyId,
@@ -98,7 +158,7 @@ export async function storeProjectPackageFromExport(
     select: PACKAGE_SELECT,
   });
 
-  return toStoredPackage(record);
+  return { ...toStoredPackage(record), updated: false };
 }
 
 /**
