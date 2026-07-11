@@ -221,7 +221,7 @@ export const applyBudgetFromMcpTemplateTool: AgentToolDefinition<
 
 // ─── Tool array ─────────────────────────────────────────────────────────────
 
-export const mcpBudgetTools: AgentToolDefinition[] = [
+export const mcpBudgetTools: AgentToolDefinition<any, any>[] = [
   searchMcpTemplatesTool,
   previewBudgetFromMcpTemplateTool,
   applyBudgetFromMcpTemplateTool,

@@ -28,11 +28,12 @@ export async function GET() {
   const companyId = membership.companyId;
   console.log("[DB-CHECK] Company:", companyId, membership.company.name);
 
+  const tests: Array<Record<string, unknown>> = [];
   const results: Record<string, unknown> = {
     user: { id: session.user.id, email: session.user.email },
     company: { id: companyId, name: membership.company.name },
     timestamp: new Date().toISOString(),
-    tests: [] as Array<Record<string, unknown>>,
+    tests,
   };
 
   // Test 1: Direct project creation
@@ -55,7 +56,7 @@ export async function GET() {
 
     if (found) {
       console.log("[DB-CHECK] Direct creation VERIFIED: project found in DB");
-      results.tests.push({
+      tests.push({
         name: "direct-creation",
         passed: true,
         projectId: created.id,
@@ -63,7 +64,7 @@ export async function GET() {
       });
     } else {
       console.error("[DB-CHECK] Direct creation FAILED: project NOT FOUND in DB after create!");
-      results.tests.push({
+      tests.push({
         name: "direct-creation",
         passed: false,
         error: "Project was created but immediately not found in DB",
@@ -75,7 +76,7 @@ export async function GET() {
     console.log("[DB-CHECK] Cleaned up direct test project");
   } catch (error) {
     console.error("[DB-CHECK] Test 1 error:", error);
-    results.tests.push({
+    tests.push({
       name: "direct-creation",
       passed: false,
       error: error instanceof Error ? error.message : String(error),
@@ -131,7 +132,7 @@ export async function GET() {
 
     if (foundProject && foundBudget) {
       console.log("[DB-CHECK] Transaction VERIFIED: project and budget found in DB");
-      results.tests.push({
+      tests.push({
         name: "transaction-creation",
         passed: true,
         projectId: txResult.projectId,
@@ -140,7 +141,7 @@ export async function GET() {
       });
     } else {
       console.error("[DB-CHECK] Transaction FAILED: project or budget NOT FOUND in DB!");
-      results.tests.push({
+      tests.push({
         name: "transaction-creation",
         passed: false,
         error: `Project found: ${!!foundProject}, Budget found: ${!!foundBudget}`,
@@ -158,7 +159,7 @@ export async function GET() {
     console.log("[DB-CHECK] Cleaned up transaction test project");
   } catch (error) {
     console.error("[DB-CHECK] Test 2 error:", error);
-    results.tests.push({
+    tests.push({
       name: "transaction-creation",
       passed: false,
       error: error instanceof Error ? error.message : String(error),
@@ -231,7 +232,7 @@ export async function GET() {
     }
 
     if (foundProject && foundBudget) {
-      results.tests.push({
+      tests.push({
         name: "transaction-with-options",
         passed: true,
         projectId: txResult.projectId,
@@ -240,7 +241,7 @@ export async function GET() {
       });
     } else {
       console.error("[DB-CHECK] Transaction with options FAILED: NOT FOUND after all retries!");
-      results.tests.push({
+      tests.push({
         name: "transaction-with-options",
         passed: false,
         error: `Project found: ${!!foundProject}, Budget found: ${!!foundBudget} (after 5 retries with backoff)`,
@@ -259,7 +260,7 @@ export async function GET() {
     console.log("[DB-CHECK] Cleaned up transaction with options test project");
   } catch (error) {
     console.error("[DB-CHECK] Test 2b error:", error);
-    results.tests.push({
+    tests.push({
       name: "transaction-with-options",
       passed: false,
       error: error instanceof Error ? error.message : String(error),
@@ -286,14 +287,14 @@ export async function GET() {
 
     if (v1 && v2) {
       console.log("[DB-CHECK] Sequential verification PASSED");
-      results.tests.push({
+      tests.push({
         name: "sequential-verification",
         passed: true,
         projectId: p1.id,
       });
     } else {
       console.error("[DB-CHECK] Sequential verification FAILED");
-      results.tests.push({
+      tests.push({
         name: "sequential-verification",
         passed: false,
         error: `v1: ${!!v1}, v2: ${!!v2}`,
@@ -303,7 +304,7 @@ export async function GET() {
     await prisma.project.delete({ where: { id: p1.id } });
   } catch (error) {
     console.error("[DB-CHECK] Test 3 error:", error);
-    results.tests.push({
+    tests.push({
       name: "sequential-verification",
       passed: false,
       error: error instanceof Error ? error.message : String(error),
@@ -311,15 +312,15 @@ export async function GET() {
   }
 
   // Summary
-  const allPassed = (results.tests as Array<Record<string, unknown>>).every(
-    (t: Record<string, unknown>) => t.passed === true,
+  const allPassed = tests.every(
+    (t) => t.passed === true,
   );
 
   results.summary = {
     allPassed,
-    total: (results.tests as Array<Record<string, unknown>>).length,
-    passed: (results.tests as Array<Record<string, unknown>>).filter((t) => t.passed === true).length,
-    failed: (results.tests as Array<Record<string, unknown>>).filter((t) => t.passed === false).length,
+    total: tests.length,
+    passed: tests.filter((t) => t.passed === true).length,
+    failed: tests.filter((t) => t.passed === false).length,
   };
 
   console.log("[DB-CHECK] Summary:", JSON.stringify(results.summary));

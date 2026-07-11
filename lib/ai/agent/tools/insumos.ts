@@ -161,4 +161,4 @@ export const updatePrecioTool: AgentToolDefinition<
 
 // ─── All insumo tools ────────────────────────────────────────────────────────
 
-export const insumoTools: AgentToolDefinition[] = [searchInsumosTool, addInsumoTool, replaceInsumoTool, updatePrecioTool];
+export const insumoTools: AgentToolDefinition<any, any>[] = [searchInsumosTool, addInsumoTool, replaceInsumoTool, updatePrecioTool];

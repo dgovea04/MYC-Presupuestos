@@ -231,7 +231,7 @@ export const removePartidaTool: AgentToolDefinition<
 
 // ─── All partida tools ───────────────────────────────────────────────────────
 
-export const partidaTools: AgentToolDefinition[] = [
+export const partidaTools: AgentToolDefinition<any, any>[] = [
   searchPartidasTool,
   suggestPartidasTool,
   addPartidaTool,

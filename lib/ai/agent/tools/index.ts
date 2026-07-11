@@ -483,12 +483,12 @@ export const dashboardTool: AgentToolDefinition<
 
 // ─── Tool arrays ─────────────────────────────────────────────────────────────
 
-export const takeoffTools: AgentToolDefinition[] = [reviewTakeoffTool, createTakeoffTool, importTakeoffTool];
-export const scheduleTools: AgentToolDefinition[] = [createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
-export const reportTools: AgentToolDefinition[] = [exportReportTool, exportPDFTool, exportExcelTool, exportS10Tool, dashboardTool];
-export const chapterTools: AgentToolDefinition[] = [createChapterTool, moveChapterTool, deleteChapterTool];
+export const takeoffTools: AgentToolDefinition<any, any>[] = [reviewTakeoffTool, createTakeoffTool, importTakeoffTool];
+export const scheduleTools: AgentToolDefinition<any, any>[] = [createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
+export const reportTools: AgentToolDefinition<any, any>[] = [exportReportTool, exportPDFTool, exportExcelTool, exportS10Tool, dashboardTool];
+export const chapterTools: AgentToolDefinition<any, any>[] = [createChapterTool, moveChapterTool, deleteChapterTool];
 
-export const remainingTools: AgentToolDefinition[] = [
+export const remainingTools: AgentToolDefinition<any, any>[] = [
   ...takeoffTools,
   ...scheduleTools,
   ...reportTools,
@@ -496,7 +496,7 @@ export const remainingTools: AgentToolDefinition[] = [
 ];
 
 /** Todas las herramientas agenticas registrables en el ToolRegistry (33 herramientas). */
-export const allTools: AgentToolDefinition[] = [
+export const allTools: AgentToolDefinition<any, any>[] = [
   ...budgetTools,
   ...partidaTools,
   ...apuTools,

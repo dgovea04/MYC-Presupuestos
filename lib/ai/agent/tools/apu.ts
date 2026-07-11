@@ -246,4 +246,4 @@ export const optimizeAPUTool: AgentToolDefinition<
 
 // ─── All APU tools ───────────────────────────────────────────────────────────
 
-export const apuTools: AgentToolDefinition[] = [reviewAPUTool, calculateAPUTool, createAPUTool, updateAPUTool, generateAPUTool, optimizeAPUTool];
+export const apuTools: AgentToolDefinition<any, any>[] = [reviewAPUTool, calculateAPUTool, createAPUTool, updateAPUTool, generateAPUTool, optimizeAPUTool];

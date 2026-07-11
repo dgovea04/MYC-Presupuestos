@@ -182,10 +182,10 @@ export async function importProjectPackageToMyc(
       warnings.push("No se pudieron leer los APUs del presupuesto.");
     }
 
-    const apuById = new Map(apusData?.apus.map((apu) => [apu.budgetItemId, apu]) ?? []);
+    const apuById = new Map<string, { id: string; name: string; unit: string; performance: string | number; totalUnitCost: string | number; resources: Array<{ id: string; resourceId: string | null; resourceType: string; crew: string | number | null; quantity: string | number; unitPrice: string | number; subtotal: string | number; resourceDescription: string | null }> }>(apusData?.apus.map((apu) => [apu.budgetItemId, apu] as [string, typeof apu]) ?? []);
 
     // Build items-by-budget lookup
-    const itemsByBudgetId = new Map<string, typeof budgetItemsData.budgets[number]>();
+    const itemsByBudgetId = new Map<string, (typeof budgetItemsData) extends { budgets: Array<infer T> } ? T : never>();
     if (budgetItemsData) {
       for (const budgetItems of budgetItemsData.budgets) {
         itemsByBudgetId.set(budgetItems.budgetId, budgetItems);
@@ -259,7 +259,7 @@ export async function importProjectPackageToMyc(
               formulaId: createdFormula.id,
               code: monomial.code,
               name: monomial.name,
-              costGroupKey: monomial.costGroupKey as Prisma.PolynomialCostGroup,
+              costGroupKey: monomial.costGroupKey as unknown as Prisma.PolynomialCostGroup,
               amount: monomial.amount,
               coefficient: monomial.coefficient,
               baseIndexCode: monomial.baseIndexCode,

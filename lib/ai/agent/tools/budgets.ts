@@ -185,7 +185,7 @@ export const createBudgetTool: AgentToolDefinition<
       generalExpensesRate: input.indirectCostPercentage / 100,
       utilityRate: input.utilityPercentage / 100,
       igvRate: input.taxPercentage / 100,
-    } as Parameters<typeof createBudget>[1]);
+    } as any);
 
     // 2. Obtener nombres de sub-presupuestos desde settings del usuario
     const settings = await getUserSettings(context.userId);
@@ -878,7 +878,7 @@ export const createBudgetGeneralTool: AgentToolDefinition<
       name: input.name,
       projectId: input.projectId,
       currency: input.currency,
-    } as Parameters<typeof createBudget>[1]);
+    } as any);
 
     // 4. Actualizar kind a GENERAL (createBudget no permite establecer kind)
     await prisma.budget.update({
@@ -1026,7 +1026,7 @@ export const createSubBudgetTool: AgentToolDefinition<
 
 // ─── All budget tools ────────────────────────────────────────────────────────
 
-export const budgetTools: AgentToolDefinition[] = [
+export const budgetTools: AgentToolDefinition<any, any>[] = [
   searchBudgetsTool,
   calculateBudgetTool,
   createBudgetTool,

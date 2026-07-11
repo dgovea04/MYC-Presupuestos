@@ -204,7 +204,7 @@ export const searchCompaniesTool: AgentToolDefinition<
 
 // ─── All project tools ───────────────────────────────────────────────────────
 
-export const projectTools: AgentToolDefinition[] = [
+export const projectTools: AgentToolDefinition<any, any>[] = [
   searchProjectsTool,
   searchCompaniesTool,
   createProjectTool,
