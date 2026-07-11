@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db/prisma";
-import { normalizePartidaText, uniqueTokens, jaccardSimilarity } from "@/lib/partida-generation/text";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -14,10 +13,42 @@ export type StoredProjectPackage = {
   sourceProjectId: string | null;
 };
 
-export type StoredPackageSearchResult = StoredProjectPackage & {
-  score: number;
-  matchedKeywords: string[];
-};
+// ─── Shared select for all queries ──────────────────────────────────────────
+
+const PACKAGE_SELECT = {
+  id: true,
+  companyId: true,
+  userId: true,
+  sourceProjectId: true,
+  projectName: true,
+  projectType: true,
+  description: true,
+  createdAt: true,
+} as const;
+
+function toStoredPackage(
+  record: {
+    id: string;
+    companyId: string;
+    userId: string;
+    sourceProjectId: string | null;
+    projectName: string;
+    projectType: string;
+    description: string;
+    createdAt: Date;
+  },
+): StoredProjectPackage {
+  return {
+    id: record.id,
+    projectName: record.projectName,
+    projectType: record.projectType,
+    description: record.description,
+    createdAt: record.createdAt.toISOString(),
+    companyId: record.companyId,
+    userId: record.userId,
+    sourceProjectId: record.sourceProjectId,
+  };
+}
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -40,28 +71,10 @@ export async function storeProjectPackage(
       description: input.description,
       mcpContent: input.content.toString("base64"),
     },
-    select: {
-      id: true,
-      companyId: true,
-      userId: true,
-      sourceProjectId: true,
-      projectName: true,
-      projectType: true,
-      description: true,
-      createdAt: true,
-    },
+    select: PACKAGE_SELECT,
   });
 
-  return {
-    id: record.id,
-    projectName: record.projectName,
-    projectType: record.projectType,
-    description: record.description,
-    createdAt: record.createdAt.toISOString(),
-    companyId: record.companyId,
-    userId: record.userId,
-    sourceProjectId: record.sourceProjectId,
-  };
+  return toStoredPackage(record);
 }
 
 export async function storeProjectPackageFromExport(
@@ -82,89 +95,38 @@ export async function storeProjectPackageFromExport(
       description: `Proyecto exportado: ${projectName} (${projectType || "Sin tipo"})`,
       mcpContent: content.toString("base64"),
     },
-    select: {
-      id: true,
-      companyId: true,
-      userId: true,
-      sourceProjectId: true,
-      projectName: true,
-      projectType: true,
-      description: true,
-      createdAt: true,
-    },
+    select: PACKAGE_SELECT,
   });
 
-  return {
-    id: record.id,
-    projectName: record.projectName,
-    projectType: record.projectType,
-    description: record.description,
-    createdAt: record.createdAt.toISOString(),
-    companyId: record.companyId,
-    userId: record.userId,
-    sourceProjectId: record.sourceProjectId,
-  };
+  return toStoredPackage(record);
 }
 
+/**
+ * Returns the most recently stored packages that belong to companies
+ * where the given user is an active member.
+ * Filtering and scoring are done by the caller (project-similarity.ts)
+ * using the same weighted formula applied to internal projects.
+ * The `_query` parameter is kept for caller compatibility.
+ */
 export async function searchStoredPackages(
-  query: string,
+  _query: string,
+  userId: string,
   limit = 10,
-): Promise<StoredPackageSearchResult[]> {
-  // Fetch all packages (scoring is done in-memory via Jaccard)
-  // Take a generous batch; per-company package counts are expected to be low
-  const packages = await prisma.storedProjectPackage.findMany({
-    select: {
-      id: true,
-      companyId: true,
-      userId: true,
-      sourceProjectId: true,
-      projectName: true,
-      projectType: true,
-      description: true,
-      createdAt: true,
+): Promise<StoredProjectPackage[]> {
+  const records = await prisma.storedProjectPackage.findMany({
+    where: {
+      company: {
+        memberships: {
+          some: { userId, status: "ACTIVE" },
+        },
+      },
     },
+    select: PACKAGE_SELECT,
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: limit,
   });
 
-  if (packages.length === 0) return [];
-
-  const normalizedQuery = normalizePartidaText(query);
-  const queryTokens = uniqueTokens(query);
-
-  const scored = packages.map((pkg) => {
-    const pkgText = [pkg.projectName, pkg.projectType, pkg.description]
-      .filter(Boolean)
-      .join(" ");
-    const pkgTokens = uniqueTokens(pkgText);
-    const score = jaccardSimilarity(queryTokens, pkgTokens);
-
-    // Boost for exact name match
-    const nameBoost =
-      normalizePartidaText(pkg.projectName) === normalizedQuery ? 0.3 : 0;
-
-    const matchedKeywords = queryTokens.filter((token) =>
-      pkgTokens.includes(token),
-    );
-
-    return {
-      id: pkg.id,
-      projectName: pkg.projectName,
-      projectType: pkg.projectType,
-      description: pkg.description,
-      createdAt: pkg.createdAt.toISOString(),
-      companyId: pkg.companyId,
-      userId: pkg.userId,
-      sourceProjectId: pkg.sourceProjectId,
-      score: Math.min(1, score + nameBoost),
-      matchedKeywords,
-    };
-  });
-
-  return scored
-    .filter((s) => s.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  return records.map(toStoredPackage);
 }
 
 export async function getStoredPackageById(
@@ -172,64 +134,35 @@ export async function getStoredPackageById(
 ): Promise<StoredProjectPackage | null> {
   const record = await prisma.storedProjectPackage.findUnique({
     where: { id },
-    select: {
-      id: true,
-      companyId: true,
-      userId: true,
-      sourceProjectId: true,
-      projectName: true,
-      projectType: true,
-      description: true,
-      createdAt: true,
-    },
+    select: PACKAGE_SELECT,
   });
 
   if (!record) return null;
 
-  return {
-    id: record.id,
-    projectName: record.projectName,
-    projectType: record.projectType,
-    description: record.description,
-    createdAt: record.createdAt.toISOString(),
-    companyId: record.companyId,
-    userId: record.userId,
-    sourceProjectId: record.sourceProjectId,
-  };
+  return toStoredPackage(record);
 }
 
 export async function deleteStoredPackage(id: string): Promise<boolean> {
-  // deleteMany doesn't throw on not-found, avoiding try/catch for missing records
   const result = await prisma.storedProjectPackage.deleteMany({ where: { id } });
   return result.count > 0;
 }
 
 export async function listStoredPackages(
+  userId: string,
   companyId?: string,
 ): Promise<StoredProjectPackage[]> {
   const records = await prisma.storedProjectPackage.findMany({
-    where: companyId ? { companyId } : undefined,
-    select: {
-      id: true,
-      companyId: true,
-      userId: true,
-      sourceProjectId: true,
-      projectName: true,
-      projectType: true,
-      description: true,
-      createdAt: true,
+    where: {
+      company: {
+        memberships: {
+          some: { userId, status: "ACTIVE" },
+        },
+        ...(companyId ? { id: companyId } : {}),
+      },
     },
+    select: PACKAGE_SELECT,
     orderBy: { createdAt: "desc" },
   });
 
-  return records.map((r) => ({
-    id: r.id,
-    projectName: r.projectName,
-    projectType: r.projectType,
-    description: r.description,
-    createdAt: r.createdAt.toISOString(),
-    companyId: r.companyId,
-    userId: r.userId,
-    sourceProjectId: r.sourceProjectId,
-  }));
+  return records.map(toStoredPackage);
 }

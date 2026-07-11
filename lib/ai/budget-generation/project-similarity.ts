@@ -105,8 +105,8 @@ export async function searchSimilarProjects(
     orderBy: { updatedAt: "desc" },
   });
 
-  // Fetch stored .mcp packages (repo)
-  const storedPackages = await searchStoredPackages(input.description, 10);
+  // Fetch stored .mcp packages (repo) — scoped to user's companies
+  const storedPackages = await searchStoredPackages(input.description, input.userId, 10);
 
   if (projects.length === 0 && storedPackages.length === 0) {
     return [];
