@@ -257,6 +257,7 @@ model User {
   agentExecutions               AgentExecution[]
   agentDecidedApprovals         AgentApproval[]             @relation("AgentApprovalDecidedBy")
   agentRollbacks                AgentRollback[]             @relation("AgentRollbackCreatedBy")
+  storedProjectPackages         StoredProjectPackage[]
 
   @@index([role])
   @@index([status])
@@ -502,6 +503,7 @@ model Company {
   budgetVersionSnapshots    BudgetVersionSnapshot[]
   memberships               CompanyMembership[]
   subscription              CompanySubscription?
+  storedProjectPackages     StoredProjectPackage[]
 
   @@index([userId])
 }
@@ -578,6 +580,7 @@ model Project {
   budgetChangeEvents         BudgetChangeEvent[]
   budgetVersionSnapshots     BudgetVersionSnapshot[]
   agentExecutions            AgentExecution[]
+  storedProjectPackages      StoredProjectPackage[]
 
   @@index([companyId])
 }
@@ -1561,6 +1564,28 @@ model AdjustmentCalculationTerm {
   @@unique([adjustmentId, sortOrder])
   @@index([adjustmentId])
   @@index([monomialId])
+}
+
+// ─── Stored Project Packages (.mcp repo) ──────────────────────────────────
+
+model StoredProjectPackage {
+  id              String   @id @default(cuid())
+  companyId       String
+  userId          String
+  sourceProjectId String?
+  projectName     String
+  projectType     String   @default("")
+  description     String   @default("")
+  mcpContent      String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceProject   Project? @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@map("stored_project_packages")
 }
 
 // ─── Khipu Agent Platform V2 ────────────────────────────────────────────────

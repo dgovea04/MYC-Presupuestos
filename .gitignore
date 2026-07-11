@@ -48,3 +48,6 @@ next-env.d.ts
 presupuesto-ejemplo/**/*.sqlite
 presupuesto-ejemplo/*.S2K
 presupuesto-ejemplo/s10/*.S2K
+
+# legacy file-based mcp repo (migrated to DB)
+.mcp-repo/

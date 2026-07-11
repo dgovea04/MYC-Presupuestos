@@ -1,9 +1,19 @@
 import { z } from "zod";
+import crypto from "crypto";
 import type { AgentToolDefinition } from "../types";
 import { getBudgetById, createBudget } from "@/lib/data/budgets";
 import { getUserSettings } from "@/lib/data/settings";
 import { DEFAULT_INITIAL_SUB_BUDGET_NAMES } from "@/types/settings";
 import { prisma } from "@/lib/db/prisma";
+import { getCatalogPartidas } from "@/lib/data/partidas";
+import { searchSimilarPartidas } from "@/lib/partida-generation/similarity";
+import { searchSimilarProjects } from "@/lib/ai/budget-generation/project-similarity";
+import { applyTemplateToSubBudget } from "@/lib/ai/budget-generation/template-applicator";
+import { estimateQuantity } from "@/lib/ai/budget-generation/quantity-estimator";
+import {
+  createUserBudgetTemplateFromBudget,
+  applyUserBudgetTemplateToProject,
+} from "@/lib/data/budget-templates";
 
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
@@ -59,22 +69,61 @@ export const searchBudgetsTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: searchBudgetsInput,
   execute: async (input, context) => {
-    const effectiveQuery = input.query ?? "";
-    // Stub: En fases posteriores, delegar a un servicio de búsqueda real.
-    // Por ahora, si se proporciona budgetId exacto, buscar directamente.
+    const where: Record<string, unknown> = {
+      project: {
+        company: {
+          memberships: {
+            some: {
+              userId: context.userId,
+              status: "ACTIVE",
+            },
+          },
+        },
+      },
+    };
+
     if (input.projectId) {
-      return {
-        message: `Búsqueda de presupuestos${effectiveQuery ? ` con query="${effectiveQuery}"` : " (sin filtro)"} en proyecto ${input.projectId}`,
-        budgets: [],
-      };
+      where.projectId = input.projectId;
     }
+
+    if (input.query) {
+      where.name = { contains: input.query, mode: "insensitive" };
+    }
+
+    const budgets = await prisma.budget.findMany({
+      where,
+      select: {
+        id: true,
+        projectId: true,
+        name: true,
+        kind: true,
+        currency: true,
+        totalAmount: true,
+        totalDirectCost: true,
+        project: { select: { name: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    });
+
     return {
-      message: `Búsqueda de presupuestos${effectiveQuery ? ` con query="${effectiveQuery}"` : " (sin filtro)"}`,
-      budgets: [],
+      query: input.query ?? "",
+      projectId: input.projectId ?? null,
+      count: budgets.length,
+      budgets: budgets.map((b) => ({
+        id: b.id,
+        projectId: b.projectId,
+        projectName: b.project.name,
+        name: b.name,
+        kind: b.kind,
+        currency: b.currency,
+        totalAmount: Number(b.totalAmount),
+        totalDirectCost: Number(b.totalDirectCost),
+      })),
     };
   },
   summarizeResult: (result) =>
-    `Búsqueda completada: ${(result.budgets as unknown[]).length} presupuestos encontrados.`,
+    `${result.count} presupuesto${result.count === 1 ? "" : "s"} encontrado${result.count === 1 ? "" : "s"}.`,
 };
 
 export const calculateBudgetTool: AgentToolDefinition<
@@ -183,18 +232,52 @@ export const createBudgetTool: AgentToolDefinition<
 > = {
   name: "cloneBudget",
   description:
-    "Clona un presupuesto existente creando una copia completa con nuevo nombre. Nota: actualmente clona el proyecto completo.",
+    "Clona un presupuesto existente creando una copia completa con nuevo nombre en el mismo proyecto.",
   risk: "write",
   requiresProjectId: false,
   inputSchema: cloneBudgetInput,
   execute: async (input, context) => {
     const source = await getBudgetById(input.budgetId, context.userId);
     if (!source) throw new Error(`Presupuesto "${input.budgetId}" no encontrado.`);
-    // Stub: clonar solo el presupuesto, no el proyecto entero
-    return { sourceId: input.budgetId, newName: input.newName, message: "Clonación de presupuesto delegada a fases posteriores.", pending: true };
+
+    // Crear una plantilla temporal desde el presupuesto fuente
+    const template = await createUserBudgetTemplateFromBudget(context.userId, {
+      budgetId: source.id,
+      name: input.newName,
+      description: `Clonado desde ${source.name}`,
+    });
+
+    try {
+      // Aplicar la plantilla al mismo proyecto con el nuevo nombre
+      const applied = await applyUserBudgetTemplateToProject(
+        template.id,
+        context.userId,
+        {
+          projectId: source.projectId,
+          name: input.newName,
+        },
+      );
+
+      return {
+        sourceId: input.budgetId,
+        sourceName: source.name,
+        newId: applied.id,
+        newName: applied.name,
+        projectId: applied.projectId,
+        message: `Presupuesto "${source.name}" clonado como "${applied.name}".`,
+      };
+    } finally {
+      // Limpiar la plantilla temporal (best-effort)
+      try {
+        const { deleteUserBudgetTemplate } = await import("@/lib/data/budget-templates");
+        await deleteUserBudgetTemplate(template.id, context.userId);
+      } catch {
+        // La plantilla temporal queda pero no afecta al resultado
+      }
+    }
   },
   summarizeResult: (result) =>
-    `Presupuesto "${result.newName}" clonado desde ${result.sourceId}.`,
+    `Presupuesto "${result.sourceName}" clonado como "${result.newName}".`,
 };
 
 export const archiveBudgetTool: AgentToolDefinition<
@@ -214,28 +297,360 @@ export const archiveBudgetTool: AgentToolDefinition<
   summarizeResult: () => "Presupuesto archivado correctamente.",
 };
 
+// ─── Helpers for generateBudget ──────────────────────────────────────────────
+
+const SUB_BUDGET_CATEGORY_KEYWORDS: Array<{
+  keywords: string[];
+  budgetName: string;
+}> = [
+  {
+    keywords: ["concreto", "acero", "encofrado", "columna", "viga", "losa", "zapata", "cimentacion", "solado", "falso piso", "cimiento", "estructura"],
+    budgetName: "Estructuras",
+  },
+  {
+    keywords: ["tarrajeo", "piso", "cielo raso", "muro", "ladrillo", "puerta", "ventana", "pintura", "contrapiso", "revoque", "ceramico", "enchape", "arquitectura"],
+    budgetName: "Arquitectura",
+  },
+  {
+    keywords: ["tuberia", "desague", "agua", "sanitaria", "lavatorio", "inodoro", "ducha", "grifo", "hidraulico", "fontaneria"],
+    budgetName: "Instalaciones Sanitarias",
+  },
+  {
+    keywords: ["cable", "interruptor", "tomacorriente", "luz", "electrico", "alumbrado", "tablero", "conductor", "iluminacion", "electrica"],
+    budgetName: "Instalaciones Eléctricas",
+  },
+];
+
+function assignToSubBudget(
+  description: string,
+  subBudgets: Array<{ id: string; name: string }>,
+): string {
+  const descLower = description.toLowerCase();
+  for (const group of SUB_BUDGET_CATEGORY_KEYWORDS) {
+    if (group.keywords.some((kw) => descLower.includes(kw))) {
+      const match = subBudgets.find((sb) =>
+        sb.name.toLowerCase().includes(group.budgetName.toLowerCase()),
+      );
+      if (match) return match.id;
+    }
+  }
+  return subBudgets[0].id;
+}
+
+function prepareItemsFromCatalogResults(
+  results: Array<{
+    partida: { description: string; unit: string; unitPrice: number };
+    similarity?: number;
+    score?: number;
+  }>,
+  subBudgets: Array<{ id: string; name: string }>,
+  description: string,
+): Array<{
+  id: string;
+  budgetId: string;
+  code: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  partial: number;
+  sortOrder: number;
+}> {
+  return results.map((result, index) => {
+    const qty = estimateQuantity(description, result.partida.unit);
+    const quantity = qty.value;
+    const partial = result.partida.unitPrice * quantity;
+
+    return {
+      id: crypto.randomUUID(),
+      budgetId: assignToSubBudget(result.partida.description, subBudgets),
+      code: `GEN-${String(index + 1).padStart(3, "0")}`,
+      description: result.partida.description,
+      unit: result.partida.unit,
+      quantity,
+      unitPrice: result.partida.unitPrice,
+      partial,
+      sortOrder: index,
+    };
+  });
+}
+
+async function persistItemsAndRefreshTotals(
+  itemsToCreate: Array<{
+    id: string;
+    budgetId: string;
+    code: string;
+    description: string;
+    unit: string;
+    quantity: number;
+    unitPrice: number;
+    partial: number;
+    sortOrder: number;
+  }>,
+  projectId: string,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    for (const item of itemsToCreate) {
+      await tx.budgetItem.create({ data: item });
+    }
+
+    const totalsByBudget = new Map<string, number>();
+    for (const item of itemsToCreate) {
+      const current = totalsByBudget.get(item.budgetId) ?? 0;
+      totalsByBudget.set(item.budgetId, current + item.partial);
+    }
+
+    for (const [budgetId, totalDirectCost] of totalsByBudget) {
+      const subBudget = await tx.budget.findUnique({
+        where: { id: budgetId },
+        select: {
+          generalExpensesRate: true,
+          utilityRate: true,
+          igvRate: true,
+        },
+      });
+      if (!subBudget) continue;
+
+      const genExp = totalDirectCost * Number(subBudget.generalExpensesRate);
+      const util = totalDirectCost * Number(subBudget.utilityRate);
+      const subtotal = totalDirectCost + genExp + util;
+      const tax = subtotal * Number(subBudget.igvRate);
+      const total = subtotal + tax;
+
+      await tx.budget.update({
+        where: { id: budgetId },
+        data: {
+          totalDirectCost,
+          totalGeneralExpenses: genExp,
+          totalUtility: util,
+          totalTax: tax,
+          totalAmount: total,
+        },
+      });
+    }
+
+    const parentBudget = await tx.budget.findFirst({
+      where: { projectId, kind: "GENERAL" },
+      select: { id: true },
+    });
+    if (parentBudget) {
+      const childBudgets = await tx.budget.findMany({
+        where: { parentBudgetId: parentBudget.id },
+        select: {
+          totalDirectCost: true,
+          totalGeneralExpenses: true,
+          totalUtility: true,
+          totalTax: true,
+          totalAmount: true,
+        },
+      });
+
+      const consolidated = childBudgets.reduce(
+        (acc, child) => ({
+          totalDirectCost: acc.totalDirectCost + Number(child.totalDirectCost),
+          totalGeneralExpenses: acc.totalGeneralExpenses + Number(child.totalGeneralExpenses),
+          totalUtility: acc.totalUtility + Number(child.totalUtility),
+          totalTax: acc.totalTax + Number(child.totalTax),
+          totalAmount: acc.totalAmount + Number(child.totalAmount),
+        }),
+        { totalDirectCost: 0, totalGeneralExpenses: 0, totalUtility: 0, totalTax: 0, totalAmount: 0 },
+      );
+
+      await tx.budget.update({
+        where: { id: parentBudget.id },
+        data: consolidated,
+      });
+    }
+  });
+}
+
+// ─── generateBudget ─────────────────────────────────────────────────────────
+
 export const generateBudgetTool: AgentToolDefinition<
   z.infer<typeof generateBudgetInput>,
   Record<string, unknown>
 > = {
   name: "generateBudget",
   description:
-    "Genera un presupuesto preliminar para una obra basado en una descripción técnica. Crea capítulos y partidas sugeridas automáticamente.",
+    "Genera un presupuesto preliminar para una obra basado en una descripción técnica. " +
+    "Usa 3 niveles: (1) busca proyectos similares del usuario, " +
+    "(2) aplica plantillas de sub-presupuestos de proyectos similares, " +
+    "(3) busca partidas en el catálogo como respaldo. " +
+    "Requiere un projectId. Si no lo tienes, usa searchProjects primero para encontrar el proyecto por nombre.",
   risk: "write",
   requiresProjectId: true,
   inputSchema: generateBudgetInput,
   execute: async (input, context) => {
-    // Stub: en fases posteriores delegar a AI budget generation service
+    // ── 1. Obtener sub-presupuestos del proyecto ────────────────────────────
+    const subBudgets = await prisma.budget.findMany({
+      where: {
+        projectId: input.projectId,
+        kind: "SUB_BUDGET",
+        project: {
+          company: {
+            memberships: {
+              some: {
+                userId: context.userId,
+                status: "ACTIVE",
+              },
+            },
+          },
+        },
+      },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (subBudgets.length === 0) {
+      throw new Error(
+        "El proyecto no tiene sub-presupuestos. Crea un Presupuesto General primero.",
+      );
+    }
+
+    const levelResults: string[] = [];
+    let itemsFromTemplates = 0;
+    let itemsFromCatalog = 0;
+    let templatesApplied: string[] = [];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL 1: Buscar proyectos similares del usuario
+    // ═══════════════════════════════════════════════════════════════════════
+    const similarProjects = await searchSimilarProjects({
+      description: input.description,
+      projectType: input.templateType,
+      userId: context.userId,
+    });
+
+    const goodMatch = similarProjects.filter((p) => p.score >= 0.3);
+
+    if (goodMatch.length > 0) {
+      levelResults.push(
+        `Nivel 1: ${goodMatch.length} proyecto${goodMatch.length === 1 ? "" : "s"} similar${goodMatch.length === 1 ? "" : "es"} encontrado${goodMatch.length === 1 ? "" : "s"} (top: "${goodMatch[0].projectName}", score: ${goodMatch[0].score.toFixed(2)})`,
+      );
+    } else {
+      levelResults.push("Nivel 1: No se encontraron proyectos similares.");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL 2: Aplicar plantillas de sub-presupuestos de proyectos similares
+    // ═══════════════════════════════════════════════════════════════════════
+    for (const match of goodMatch.filter((p) => p.score >= 0.5)) {
+      if (match.budgetTemplates.length === 0) continue;
+
+      // Usar la primera plantilla del proyecto similar
+      const templateToApply = match.budgetTemplates[0];
+
+      // Determinar a qué sub-presupuesto mapear la plantilla
+      // basado en el tipo de proyecto similar y los sub-budgets disponibles
+      const targetBudgetName =
+        subBudgets.find((sb) =>
+          sb.name.toLowerCase().includes(
+            match.projectType?.toLowerCase() ?? "",
+          ),
+        )?.name ?? subBudgets[0].name;
+
+      try {
+        const result = await applyTemplateToSubBudget({
+          templateId: templateToApply.id,
+          projectId: input.projectId,
+          targetSubBudgetName: targetBudgetName,
+          userId: context.userId,
+        });
+
+        itemsFromTemplates += result.itemsAdded;
+        templatesApplied.push(`${templateToApply.name} → ${targetBudgetName} (${result.itemsAdded} partidas)`);
+        levelResults.push(
+          `Nivel 2: Plantilla "${templateToApply.name}" aplicada a ${targetBudgetName}: ${result.itemsAdded} partidas, ${result.apusCreated} APUs.`,
+        );
+      } catch (err) {
+        levelResults.push(
+          `Nivel 2: Error al aplicar plantilla "${templateToApply.name}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    if (templatesApplied.length === 0) {
+      levelResults.push("Nivel 2: No se aplicaron plantillas (score < 0.5 o sin plantillas disponibles).");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL 3: Catálogo (fallback / complemento)
+    // ═══════════════════════════════════════════════════════════════════════
+    // Si no hay suficientes partidas desde plantillas (menos de 5), buscar en catálogo
+    if (itemsFromTemplates < 5) {
+      const allPartidas = await getCatalogPartidas();
+
+      // Usar searchSimilarPartidas (mejor scoring con variables técnicas)
+      const matched = searchSimilarPartidas({
+        query: input.description,
+        partidas: allPartidas,
+        limit: 25,
+      });
+
+      if (matched.length > 0) {
+        const itemsToCreate = prepareItemsFromCatalogResults(
+          matched as Array<{
+            partida: { description: string; unit: string; unitPrice: number };
+            similarity?: number;
+            score?: number;
+          }>,
+          subBudgets,
+          input.description,
+        );
+
+        await persistItemsAndRefreshTotals(itemsToCreate, input.projectId);
+        itemsFromCatalog = itemsToCreate.length;
+        levelResults.push(
+          `Nivel 3: ${itemsToCreate.length} partidas agregadas desde el catálogo (searchSimilarPartidas).`,
+        );
+      } else {
+        levelResults.push("Nivel 3: No se encontraron partidas en el catálogo.");
+      }
+    } else {
+      levelResults.push(
+        `Nivel 3: Omitido — ya se agregaron ${itemsFromTemplates} partidas desde plantillas.`,
+      );
+    }
+
+    // ── Resumen final ──────────────────────────────────────────────────────
+    const totalItems = itemsFromTemplates + itemsFromCatalog;
+
+    // Recalcular totales consolidados para el resumen
+    const finalSubBudgets = await prisma.budget.findMany({
+      where: {
+        projectId: input.projectId,
+        kind: "SUB_BUDGET",
+      },
+      select: {
+        id: true,
+        name: true,
+        totalDirectCost: true,
+        _count: { select: { items: true } },
+      },
+    });
+
+    const byBudget = finalSubBudgets.map((sb) => ({
+      budgetId: sb.id,
+      budgetName: sb.name,
+      itemCount: sb._count.items,
+      subtotal: Number(sb.totalDirectCost),
+    }));
+
     return {
       projectId: input.projectId,
       description: input.description,
       templateType: input.templateType ?? "edificio",
-      message: `Generación de presupuesto para "${input.description}" delegada a fases posteriores.`,
-      pending: true,
+      totalItemsAdded: totalItems,
+      fromTemplates: itemsFromTemplates,
+      fromCatalog: itemsFromCatalog,
+      templatesApplied,
+      levels: levelResults,
+      byBudget,
+      message: levelResults.join(" | "),
     };
   },
   summarizeResult: (result) =>
-    `Presupuesto generado para "${result.description}" (tipo: ${result.templateType}).`,
+    `Presupuesto generado: ${result.totalItemsAdded} partidas (${result.fromTemplates} desde plantillas, ${result.fromCatalog} desde catálogo).`,
 };
 
 export const compareBudgetsTool: AgentToolDefinition<
@@ -261,9 +676,9 @@ export const compareBudgetsTool: AgentToolDefinition<
     const comparison = valid.map((b) => ({
       id: b!.id,
       name: b!.name,
-      totalAmount: b!.totalAmount,
-      directCost: b!.totalDirectCost,
-      indirectCost: b!.indirectCostAmount,
+      totalAmount: Number(b!.totalAmount),
+      directCost: Number(b!.totalDirectCost),
+      indirectCost: Number(b!.totalAmount) - Number(b!.totalDirectCost),
     }));
 
     const maxTotal = Math.max(...comparison.map((c) => Number(c.totalAmount)));

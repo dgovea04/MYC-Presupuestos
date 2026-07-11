@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db/prisma";
 import { getUserAccount } from "@/lib/data/account";
 import { getBudgetById } from "@/lib/data/budgets";
 import { getBudgetFooterStructure, getBudgetGeneralExpenses, getGeneralBudgetResourceSummary } from "@/lib/data/budgets";
@@ -26,6 +27,7 @@ import {
   type NormalizedExportRequest,
 } from "@/lib/exports/definitions";
 import { buildProjectPackageArchive, buildProjectPackageSnapshot } from "@/lib/mcp/export-snapshot";
+import { storeProjectPackage } from "@/lib/data/stored-project-packages";
 import type { BudgetRecord } from "@/types/budget";
 import type { ReportResponsibleMeta } from "@/types/report-meta";
 import type { ResourceCategory } from "@/types/resource";
@@ -133,6 +135,26 @@ export async function createCentralizedExport(input: ExportRequest, userId: stri
 async function createProjectPackageExport(request: NormalizedExportRequest, userId: string): Promise<ExportResult> {
   const snapshot = await buildProjectPackageSnapshot(request.targetId, userId);
   const archive = buildProjectPackageArchive(snapshot);
+
+  // Store a copy in the .mcp repo for future budget generation (best-effort)
+  try {
+    const projectMeta = await prisma.project.findFirst({
+      where: { id: request.targetId },
+      select: { companyId: true, name: true, projectType: true },
+    });
+    if (projectMeta) {
+      await storeProjectPackage({
+        projectName: projectMeta.name,
+        projectType: projectMeta.projectType ?? "",
+        description: `Proyecto exportado: ${projectMeta.name} (${projectMeta.projectType || "Sin tipo"})`,
+        content: archive.content,
+        companyId: projectMeta.companyId,
+        userId,
+      });
+    }
+  } catch {
+    // Best-effort: don't fail the export if repo storage fails
+  }
 
   return {
     content: archive.content,

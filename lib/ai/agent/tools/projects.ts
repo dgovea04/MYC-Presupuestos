@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AgentToolDefinition } from "../types";
 import { createProject, getUserCompanies } from "@/lib/data/projects";
+import { prisma } from "@/lib/db/prisma";
 
 // ─── Input schemas ───────────────────────────────────────────────────────────
 
@@ -28,6 +29,79 @@ const createProjectInput = z.object({
 });
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
+
+const searchProjectsInput = z.object({
+  query: z.string().min(1).describe("Texto para buscar proyectos por nombre"),
+  limit: z.number().int().min(1).max(50).default(10).describe("Cantidad máxima de resultados"),
+});
+
+export const searchProjectsTool: AgentToolDefinition<
+  z.infer<typeof searchProjectsInput>,
+  Record<string, unknown>
+> = {
+  name: "searchProjects",
+  description:
+    "Busca proyectos del usuario por nombre o palabra clave. Retorna ID, nombre, ubicación, tipo y estado de cada proyecto. " +
+    "Útil cuando el usuario pide trabajar en un proyecto existente pero no recuerda el ID exacto. " +
+    "Si el usuario menciona un nombre, usa esta herramienta para encontrar el projectId. " +
+    "Después de obtener el projectId, pásalo a generateBudget o createBudget para trabajar en ese proyecto.",
+  risk: "read",
+  requiresProjectId: false,
+  inputSchema: searchProjectsInput,
+  execute: async (input, context) => {
+    const projects = await prisma.project.findMany({
+      where: {
+        company: {
+          memberships: {
+            some: {
+              userId: context.userId,
+              status: "ACTIVE",
+            },
+          },
+        },
+        name: {
+          contains: input.query,
+          mode: "insensitive",
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        clientName: true,
+        location: true,
+        projectType: true,
+        status: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            budgets: {
+              where: { kind: "GENERAL" },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: input.limit,
+    });
+
+    return {
+      query: input.query,
+      count: projects.length,
+      projects: projects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        clientName: p.clientName,
+        location: p.location,
+        projectType: p.projectType,
+        status: p.status,
+        hasBudget: p._count.budgets > 0,
+        updatedAt: p.updatedAt.toISOString(),
+      })),
+    };
+  },
+  summarizeResult: (result) =>
+    `${result.count} proyecto${result.count === 1 ? "" : "s"} encontrado${result.count === 1 ? "" : "s"} para "${result.query}".`,
+};
 
 export const createProjectTool: AgentToolDefinition<
   z.infer<typeof createProjectInput>,
@@ -131,6 +205,7 @@ export const searchCompaniesTool: AgentToolDefinition<
 // ─── All project tools ───────────────────────────────────────────────────────
 
 export const projectTools: AgentToolDefinition[] = [
+  searchProjectsTool,
   searchCompaniesTool,
   createProjectTool,
 ];
