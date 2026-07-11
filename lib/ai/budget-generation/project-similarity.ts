@@ -306,7 +306,7 @@ function computeTypeScore(
   for (const type of detectedTypes) {
     if (
       normalizedType.includes(type) ||
-      PROJECT_TYPE_SYNONYMS[type]?.some((s) => normalizedType.includes(s))
+      PROJECT_TYPE_SYNONYMS[type]?.some((s) => normalizedType.includes(normalizePartidaText(s)))
     ) {
       return { score: 1, matched: true };
     }
@@ -316,11 +316,11 @@ function computeTypeScore(
   for (const [key, synonyms] of Object.entries(PROJECT_TYPE_SYNONYMS)) {
     if (
       normalizedType === key ||
-      synonyms.some((s) => normalizedType.includes(s))
+      synonyms.some((s) => normalizedType.includes(normalizePartidaText(s)))
     ) {
       if (
         detectedTypes.includes(key) ||
-        queryTokens.some((t) => synonyms.includes(t))
+        queryTokens.some((t) => synonyms.some((s) => normalizePartidaText(s).includes(t)))
       ) {
         return { score: 0.8, matched: true };
       }

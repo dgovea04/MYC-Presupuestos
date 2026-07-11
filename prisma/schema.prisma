@@ -1618,6 +1618,7 @@ model StoredProjectPackage {
   sourceProject   Project? @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
   budgetItemGenSources BudgetItemGenerationSource[]
 
+  @@unique([companyId, projectName])
   @@index([companyId, createdAt(sort: Desc)])
   @@index([userId])
   @@map("stored_project_packages")

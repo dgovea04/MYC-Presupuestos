@@ -68,7 +68,7 @@ export function getRelatedTypeScore(
     if (group.has(candidateCanonicalType)) {
       for (const detected of detectedTypes) {
         if (group.has(detected) && detected !== candidateCanonicalType) {
-          return 0.6;
+          return 0.8;
         }
       }
     }
@@ -83,7 +83,7 @@ export function getRelatedTypeScore(
  */
 export function findCanonicalType(normalizedType: string): string | null {
   for (const [key, synonyms] of Object.entries(PROJECT_TYPE_SYNONYMS)) {
-    if (normalizedType === key || synonyms.some((s) => normalizedType.includes(s))) {
+    if (normalizedType === key || synonyms.some((s) => normalizedType.includes(normalizePartidaText(s)))) {
       return key;
     }
   }
@@ -211,9 +211,9 @@ function mapToProjectType(value: string): BudgetGenerationProjectType | null {
   const normalized = normalizePartidaText(value);
   // Check if the value is already a valid type
   if (isValidProjectType(normalized)) return normalized as BudgetGenerationProjectType;
-  // Check synonyms
+  // Check synonyms (normalize synonyms too to avoid accent mismatches)
   for (const [type, synonyms] of Object.entries(PROJECT_TYPE_SYNONYMS)) {
-    if (synonyms.includes(normalized)) return type as BudgetGenerationProjectType;
+    if (synonyms.some((s) => normalizePartidaText(s) === normalized)) return type as BudgetGenerationProjectType;
   }
   return null;
 }

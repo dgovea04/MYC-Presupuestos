@@ -41,12 +41,12 @@ describe("searchMcpTemplateCandidates", () => {
   });
 
   describe("thresholds", () => {
-    it("MCP_TEMPLATE_STRONG_MATCH is 0.7", () => {
-      expect(MCP_TEMPLATE_STRONG_MATCH).toBe(0.7);
+    it("MCP_TEMPLATE_STRONG_MATCH is 0.50", () => {
+      expect(MCP_TEMPLATE_STRONG_MATCH).toBe(0.50);
     });
 
-    it("MCP_TEMPLATE_REVIEW_MATCH is 0.45", () => {
-      expect(MCP_TEMPLATE_REVIEW_MATCH).toBe(0.45);
+    it("MCP_TEMPLATE_REVIEW_MATCH is 0.35", () => {
+      expect(MCP_TEMPLATE_REVIEW_MATCH).toBe(0.35);
     });
   });
 

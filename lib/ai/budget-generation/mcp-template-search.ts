@@ -16,8 +16,8 @@ export type McpTemplateCandidate = {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-export const MCP_TEMPLATE_STRONG_MATCH = 0.7;
-export const MCP_TEMPLATE_REVIEW_MATCH = 0.45;
+export const MCP_TEMPLATE_STRONG_MATCH = 0.50;
+export const MCP_TEMPLATE_REVIEW_MATCH = 0.35;
 
 // ─── Main function ──────────────────────────────────────────────────────────
 
@@ -50,11 +50,11 @@ export async function searchMcpTemplateCandidates(input: {
         .join(" "),
     );
 
-    // 1. Type match score (0-1, weight 0.35)
-    const typeScore = computeTypeScore(pkg.projectType, detectedTypes);
+    // 1. Type match score (0-1, weight 0.50) — includes projectName check
+    const typeScore = computeTypeScore(pkg.projectType, pkg.projectName, detectedTypes);
 
-    // 2. Text similarity (0-1, weight 0.30)
-    // Combine description tokens with package name/type for richer matching
+    // 2. Text similarity (0-1, weight 0.15)
+    // Note: descriptions are auto-generated, so we weight text lower
     const combinedQueryTokens = uniqueTokens(
       [input.description, input.projectType].filter(Boolean).join(" "),
     );
@@ -98,10 +98,10 @@ export async function searchMcpTemplateCandidates(input: {
     // 6. Package quality (weight 0.05)
     const qualityScore = pkg.description.length > 20 ? 0.8 : 0.4;
 
-    // Combined weighted score
+    // Combined weighted score (type-heavy: type is the strongest signal for templates)
     const score = roundScore(
-      typeScore * 0.35 +
-      textScore * 0.30 +
+      typeScore * 0.50 +
+      textScore * 0.15 +
       keywordScore * 0.15 +
       areaScore * 0.10 +
       locationScore * 0.05 +
@@ -141,17 +141,27 @@ export async function searchMcpTemplateCandidates(input: {
 
 function computeTypeScore(
   candidateType: string | null,
+  candidateName: string,
   detectedTypes: string[],
 ): number {
   if (!candidateType || detectedTypes.length === 0) return 0.5;
 
   const normalizedType = normalizePartidaText(candidateType);
+  const normalizedName = normalizePartidaText(candidateName);
+
+  // Strongest signal: the project name itself contains a detected type
+  // e.g., "Vivienda Template" matches detected type "vivienda"
+  for (const type of detectedTypes) {
+    if (normalizedName.includes(type)) {
+      return 1;
+    }
+  }
 
   // Direct match: detected type appears in candidate type
   for (const type of detectedTypes) {
     if (
       normalizedType.includes(type) ||
-      PROJECT_TYPE_SYNONYMS[type]?.some((s) => normalizedType.includes(s))
+      PROJECT_TYPE_SYNONYMS[type]?.some((s) => normalizedType.includes(normalizePartidaText(s)))
     ) {
       return 1;
     }
@@ -159,7 +169,7 @@ function computeTypeScore(
 
   // Reverse match: candidate type appears in detected synonyms
   for (const [key, synonyms] of Object.entries(PROJECT_TYPE_SYNONYMS)) {
-    if (normalizedType === key || synonyms.some((s) => normalizedType.includes(s))) {
+    if (normalizedType === key || synonyms.some((s) => normalizedType.includes(normalizePartidaText(s)))) {
       if (detectedTypes.includes(key)) {
         return 0.8;
       }
