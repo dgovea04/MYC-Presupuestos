@@ -142,19 +142,6 @@ export const AGENT_MODELS: readonly AgentModelEntry[] = [
 
 export type AgentModelId = (typeof AGENT_MODELS)[number]["id"];
 
-/**
- * Mapa de modelos de respaldo (fallback) para modelos que tienen problemas
- * de tool calling o respuesta vacía. Cuando un modelo devuelve vacío
- * repetidamente, el agente cambia automáticamente al modelo de respaldo.
- */
-export const MODEL_FALLBACKS: Readonly<Record<string, string>> = {
-  "google/gemini-3.1-flash-lite": "google/gemini-2.5-flash-lite",
-};
-
-export function getModelFallback(modelId: string): string | undefined {
-  return MODEL_FALLBACKS[modelId];
-}
-
 export type AgentModelCost = (typeof AGENT_MODELS)[number]["cost"];
 
 export const DEFAULT_AGENT_MODEL = "openrouter/free" satisfies AgentModelId;

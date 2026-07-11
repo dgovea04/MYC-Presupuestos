@@ -50,6 +50,26 @@ const { mockChat, mockCreateOpenRouter, mockRunLoop, testTools } = vi.hoisted(()
       }),
       summarizeResult: () => "Presupuesto calculado.",
     },
+    {
+      name: "generateBudget",
+      description: "Genera un presupuesto preliminar",
+      risk: "write" as const,
+      requiresProjectId: true,
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        description: z.string().min(10),
+        templateType: z.enum(["edificio", "carretera", "hospital", "colegio", "vivienda", "industrial"]).optional(),
+        templateSource: z.enum(["auto", "mcp", "project", "catalog"]).default("auto"),
+        previewOnly: z.boolean().default(false),
+      }),
+      execute: async (input: { projectId: string; description: string }) => ({
+        projectId: input.projectId,
+        description: input.description,
+        totalItemsAdded: 25,
+        message: "Presupuesto generado exitosamente.",
+      }),
+      summarizeResult: () => "Presupuesto generado: 25 partidas.",
+    },
   ];
 
   return {
@@ -593,5 +613,96 @@ describe("executeAgentProvider", () => {
     expect(mockRunLoop).toHaveBeenCalledTimes(2);
     expect(result.answer).toContain("No puedo buscar");
     expect(result.warnings.some((w) => w.includes("veces seguidas"))).toBe(false);
+  });
+
+  // ─── TOOL_CALL_LIMITS: generateBudget ─────────────────────────────────----
+
+  it("retorna error de validación cuando generateBudget recibe argumentos inválidos", async () => {
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Genera presupuesto" },
+        { role: "assistant", content: "Generando..." },
+      ],
+      // Argumentos vacíos → Zod validation falla
+      toolCalls: [
+        { id: "tc-bad", name: "generateBudget", arguments: {} as Record<string, unknown> },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 20, completionTokens: 5, totalTokens: 25 },
+    }))
+    .mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Genera presupuesto" },
+        { role: "assistant", content: "Corrigiendo..." },
+        { role: "user", content: "Resultados: error de validación..." },
+        { role: "assistant", content: "Necesito el projectId y la descripción." },
+      ],
+      toolCalls: [],
+      finishReason: "stop",
+      usage: { promptTokens: 30, completionTokens: 15, totalTokens: 45 },
+    }));
+
+    const result = await executeAgentProvider(makeRequest());
+
+    expect(result.provider).toBe("agent");
+    expect(result.answer).toContain("Necesito el projectId");
+    expect(mockRunLoop).toHaveBeenCalledTimes(2);
+  });
+
+  it("bloquea generateBudget cuando excede el límite de 2 llamadas por conversación", async () => {
+    // Las primeras 2 llamadas con argumentos válidos deberían ejecutarse
+    for (let i = 0; i < 2; i++) {
+      mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+        messages: [
+          { role: "user", content: `Intento ${i + 1}` },
+          { role: "assistant", content: `Ejecutando intento ${i + 1}...` },
+        ],
+        toolCalls: [
+          {
+            id: `tc-ok-${i}`,
+            name: "generateBudget",
+            arguments: { projectId: "proj-1", description: "vivienda unifamiliar de 2 pisos 120m2" },
+          },
+        ],
+        finishReason: "approval_boundary",
+        usage: { promptTokens: 15, completionTokens: 10, totalTokens: 25 },
+      }));
+    }
+
+    // La 3ra llamada debe ser bloqueada por TOOL_CALL_LIMITS
+    mockRunLoop.mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Intento 3" },
+        { role: "assistant", content: "Ejecutando intento 3..." },
+      ],
+      toolCalls: [
+        {
+          id: "tc-limit",
+          name: "generateBudget",
+          arguments: { projectId: "proj-1", description: "vivienda unifamiliar de 2 pisos 120m2" },
+        },
+      ],
+      finishReason: "approval_boundary",
+      usage: { promptTokens: 15, completionTokens: 10, totalTokens: 25 },
+    }))
+    .mockResolvedValueOnce(makeLoopOutput({
+      messages: [
+        { role: "user", content: "Intento 3" },
+        { role: "assistant", content: "Ejecutando..." },
+        { role: "user", content: "Resultados: límite alcanzado..." },
+        { role: "assistant", content: "Entendido, ya no llamaré más generateBudget." },
+      ],
+      toolCalls: [],
+      finishReason: "stop",
+      usage: { promptTokens: 20, completionTokens: 10, totalTokens: 30 },
+    }));
+
+    const result = await executeAgentProvider(makeRequest({ projectId: "proj-1" }));
+
+    // 2 ejecuciones exitosas + 1 bloqueada + 1 respuesta final = 4 iteraciones de loop
+    expect(mockRunLoop).toHaveBeenCalledTimes(4);
+    expect(result.answer).toContain("Entendido");
+    // El warning debe mencionar el límite de generateBudget (ahora se agrega a allWarnings)
+    expect(result.warnings.some((w) => w.includes("generateBudget") && w.includes("Límite"))).toBe(true);
   });
 });

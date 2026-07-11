@@ -50,8 +50,8 @@ const archiveBudgetInput = z.object({
 });
 
 const generateBudgetInput = z.object({
-  projectId: z.string().min(1).describe("ID del proyecto"),
-  description: z.string().min(10).describe("Descripción de la obra para generar el presupuesto"),
+  projectId: z.string().min(1).optional().describe("ID del proyecto (opcional, se hereda del contexto si no se provee)"),
+  description: z.string().min(10).optional().describe("Descripción de la obra para generar el presupuesto (opcional, se hereda del último mensaje del usuario si no se provee)"),
   templateType: z.enum(["edificio", "carretera", "hospital", "colegio", "vivienda", "industrial"]).optional().describe("Tipo de plantilla a usar"),
   templateSource: z.enum(["auto", "mcp", "project", "catalog"]).default("auto").describe("Fuente de plantilla: auto (busca .mcp primero), mcp (solo .mcp), project (proyectos similares), catalog (solo catálogo)"),
   previewOnly: z.boolean().default(false).describe("Si es true, solo muestra preview sin escribir en DB"),
@@ -305,6 +305,85 @@ export const archiveBudgetTool: AgentToolDefinition<
 
 // ─── Helpers for generateBudget ──────────────────────────────────────────────
 
+/**
+ * Lista de palabras delimitadoras por defecto que indican el final del nombre
+ * del proyecto en un mensaje del usuario.
+ * Ej: "proyecto Santa Monica **de** 120m2" → el nombre es "Santa Monica".
+ */
+export const DEFAULT_DELIMITERS = [
+  "en",
+  "de",
+  "con",
+  "para",
+  "tipo",
+  "área",
+  "metros",
+  "m²",
+  "m2",
+  "m³",
+  "m3",
+  "mts",
+  "cm²",
+  "cm2",
+  "cm³",
+  "cm3",
+  "km",
+  "has",
+] as const;
+
+/**
+ * Construye el patrón regex para extraer el nombre del proyecto
+ * a partir de una lista configurable de palabras delimitadoras.
+ */
+function buildProjectNamePattern(delimiters: readonly string[]): RegExp {
+  // Escapar caracteres especiales de regex en los delimitadores
+  const escaped = delimiters.map((d) =>
+    d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+
+  // Construir la parte del lookahead para delimitadores después de whitespace
+  const wordLookahead =
+    escaped.length > 0
+      ? `|\\s+(?:${escaped.join("|")})`
+      : "";
+
+  return new RegExp(
+    `(?:(?:proyecto|obra)\\s+(?:llamado\\s+)?|llamado\\s+)["']?([^"'.,!?;]+?)["']?(?:$|,|\\.|!|\\?|;${wordLookahead})`,
+    "i",
+  );
+}
+
+/**
+ * Extrae el nombre de un proyecto desde un mensaje del usuario.
+ * Busca patrones como "proyecto Santa Monica", "obra Los Olivos",
+ * "proyecto llamado Mi Proyecto", o "llamado Proyecto X".
+ * Retorna el nombre extraído o null si no se encuentra.
+ *
+ * Usa lazy matching +? para detenerse en el primer delimitador conocido:
+ * - Signos de puntuación (.,!?;)
+ * - Palabras vacías que introducen especificaciones (en, de, con, para, tipo, área, metros…)
+ * - Fin del mensaje
+ *
+ * @param message Mensaje del usuario
+ * @param delimiters Lista opcional de palabras delimitadoras (usa DEFAULT_DELIMITERS si se omite)
+ */
+export function extractProjectNameFromMessage(
+  message: string,
+  delimiters: readonly string[] = DEFAULT_DELIMITERS,
+): string | null {
+  const pattern = buildProjectNamePattern(delimiters);
+  const match = message.match(pattern);
+  if (!match) return null;
+
+  let name = match[1].trim();
+
+  // Descartar si el nombre empieza con palabras que nunca iniciarían un proyecto real
+  // NOTA: el, la, los, las NO se filtran porque son comunes en nombres (Los Olivos, La Molina)
+  if (/^(?:de|en|con|para|por|un|una)\s/i.test(name)) return null;
+
+  return name || null;
+}
+
 const SUB_BUDGET_CATEGORY_KEYWORDS: Array<{
   keywords: string[];
   budgetName: string;
@@ -504,15 +583,57 @@ export const generateBudgetTool: AgentToolDefinition<
     "Usa 3 niveles: (1) busca proyectos similares del usuario, " +
     "(2) aplica plantillas de sub-presupuestos de proyectos similares, " +
     "(3) busca partidas en el catálogo como respaldo. " +
-    "Requiere un projectId. Si no lo tienes, usa searchProjects primero para encontrar el proyecto por nombre.",
+    "Requiere un projectId (obtenlo de la lista de proyectos disponibles en tu contexto del sistema). " +
+    "Requiere una description (mínimo 10 caracteres) con la descripción de la obra que el usuario proporcionó.",
   risk: "write",
-  requiresProjectId: true,
+  requiresProjectId: false,
   inputSchema: generateBudgetInput,
   execute: async (input, context) => {
+    // ── Heredar valores del contexto si el modelo no los pasó ───────────────
+    let effectiveProjectId = input.projectId ?? context.projectId;
+    const effectiveDescription = input.description ?? context.lastUserMessage;
+
+    // ── Si no hay projectId, intentar buscar el proyecto por nombre en el mensaje ─
+    if (!effectiveProjectId && context.lastUserMessage) {
+      const extractedName = extractProjectNameFromMessage(context.lastUserMessage);
+      if (extractedName) {
+        const foundProject = await prisma.project.findFirst({
+          where: {
+            name: { contains: extractedName, mode: "insensitive" },
+            company: {
+              memberships: {
+                some: {
+                  userId: context.userId,
+                  status: "ACTIVE",
+                },
+              },
+            },
+          },
+          select: { id: true, name: true },
+        });
+        if (foundProject) {
+          effectiveProjectId = foundProject.id;
+        }
+      }
+    }
+
+    if (!effectiveProjectId) {
+      throw new Error(
+        "No se pudo determinar el proyecto. " +
+        "Especifica el nombre del proyecto en tu mensaje, por ejemplo: 'genera un presupuesto para una obra de 120m2 en el proyecto Santa Monica'.",
+      );
+    }
+    if (!effectiveDescription || effectiveDescription.length < 10) {
+      throw new Error(
+        "Se requiere una descripción de la obra (mínimo 10 caracteres) para generar el presupuesto. " +
+        "No se encontró en los argumentos ni en el último mensaje del usuario.",
+      );
+    }
+
     // ── 1. Obtener sub-presupuestos del proyecto ────────────────────────────
     const subBudgets = await prisma.budget.findMany({
       where: {
-        projectId: input.projectId,
+        projectId: effectiveProjectId,
         kind: "SUB_BUDGET",
         project: {
           company: {
@@ -544,7 +665,7 @@ export const generateBudgetTool: AgentToolDefinition<
     // NIVEL 1: Buscar proyectos similares del usuario
     // ═══════════════════════════════════════════════════════════════════════
     const similarProjects = await searchSimilarProjects({
-      description: input.description,
+      description: effectiveDescription,
       projectType: input.templateType,
       userId: context.userId,
     });
@@ -575,12 +696,12 @@ export const generateBudgetTool: AgentToolDefinition<
         mcpCandidate = { packageId: targetPackageId, projectName: "", score: 1 };
       } else {
         // Buscar paquetes .mcp compatibles
-        const pkg = await getProjectCompanyId(input.projectId, context.userId);
+        const pkg = await getProjectCompanyId(effectiveProjectId, context.userId);
         if (pkg) {
           const mcpResults = await searchMcpTemplateCandidates({
             userId: context.userId,
             companyId: pkg,
-            description: input.description,
+            description: effectiveDescription,
             projectType: input.templateType,
             limit: 3,
           });
@@ -596,21 +717,21 @@ export const generateBudgetTool: AgentToolDefinition<
         try {
           if (input.previewOnly) {
             // Solo preview
-            const companyId = await getProjectCompanyId(input.projectId, context.userId);
+            const companyId = await getProjectCompanyId(effectiveProjectId, context.userId);
             if (companyId) {
               const preview = await previewBudgetFromMcpTemplate({
                 userId: context.userId,
-                projectId: input.projectId,
+                projectId: effectiveProjectId,
                 packageId: mcpCandidate.packageId,
-                description: input.description,
+                description: effectiveDescription,
               });
               levelResults.push(
                 `Nivel 1.5 (Preview): Plantilla .mcp "${preview.sourceProjectName}" — ${preview.subBudgets.length} sub-presupuestos, ${preview.totals.matchedItems} partidas OK, ${preview.totals.reviewRequiredItems} requieren revisión.`,
               );
               // En modo preview, no escribir nada pero retornar el preview
               return {
-                projectId: input.projectId,
-                description: input.description,
+                projectId: effectiveProjectId,
+                description: effectiveDescription,
                 templateType: input.templateType ?? "edificio",
                 totalItemsAdded: 0,
                 fromTemplates: 0,
@@ -630,14 +751,14 @@ export const generateBudgetTool: AgentToolDefinition<
             }
           } else {
             // Aplicar la plantilla .mcp
-            const companyId = await getProjectCompanyId(input.projectId, context.userId);
+            const companyId = await getProjectCompanyId(effectiveProjectId, context.userId);
             if (companyId) {
               const result = await applyMcpBudgetBlueprintToProject({
                 userId: context.userId,
                 companyId,
-                projectId: input.projectId,
+                projectId: effectiveProjectId,
                 packageId: mcpCandidate.packageId,
-                description: input.description,
+                description: effectiveDescription,
                 mode: "review_required",
               });
 
@@ -688,7 +809,7 @@ export const generateBudgetTool: AgentToolDefinition<
       try {
         const result = await applyTemplateToSubBudget({
           templateId: templateToApply.id,
-          projectId: input.projectId,
+          projectId: effectiveProjectId,
           targetSubBudgetName: targetBudgetName,
           userId: context.userId,
         });
@@ -719,7 +840,7 @@ export const generateBudgetTool: AgentToolDefinition<
 
       // Usar searchSimilarPartidas (mejor scoring con variables técnicas)
       const matched = searchSimilarPartidas({
-        query: input.description,
+        query: effectiveDescription,
         partidas: allPartidas,
         limit: 25,
       });
@@ -732,10 +853,10 @@ export const generateBudgetTool: AgentToolDefinition<
             score?: number;
           }>,
           subBudgets,
-          input.description,
+          effectiveDescription,
         );
 
-        await persistItemsAndRefreshTotals(itemsToCreate, input.projectId);
+        await persistItemsAndRefreshTotals(itemsToCreate, effectiveProjectId);
         itemsFromCatalog = itemsToCreate.length;
         levelResults.push(
           `Nivel 3: ${itemsToCreate.length} partidas agregadas desde el catálogo (searchSimilarPartidas).`,
@@ -755,7 +876,7 @@ export const generateBudgetTool: AgentToolDefinition<
     // Recalcular totales consolidados para el resumen
     const finalSubBudgets = await prisma.budget.findMany({
       where: {
-        projectId: input.projectId,
+        projectId: effectiveProjectId,
         kind: "SUB_BUDGET",
       },
       select: {
@@ -774,8 +895,8 @@ export const generateBudgetTool: AgentToolDefinition<
     }));
 
     return {
-      projectId: input.projectId,
-      description: input.description,
+      projectId: effectiveProjectId,
+      description: effectiveDescription,
       templateType: input.templateType ?? "edificio",
       totalItemsAdded: totalItems,
       fromTemplates: itemsFromTemplates,

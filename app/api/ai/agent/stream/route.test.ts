@@ -14,6 +14,7 @@ vi.mock("@/lib/ai/gateway/providers/agent-provider", () => ({
   streamAgentChat: mocks.streamAgentChat,
 }));
 
+import { prisma } from "@/lib/db/prisma";
 import { POST } from "@/app/api/ai/agent/stream/route";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -389,9 +390,74 @@ describe("POST /api/ai/agent/stream", () => {
           }),
         ]),
       }),
+      undefined, // prebuiltModel ya no tiene parámetros de fallback
     );
   });
 
+  // ── Project injection into system prompt ─────────────────────────────────
+
+  it("injects projects into system prompt when workspaceId is provided", async () => {
+    const mockProjects = [
+      {
+        id: "proj-santa",
+        name: "Santa Monica",
+        clientName: "Cliente Ejemplo",
+        location: "Lima, Perú",
+        status: "IN_PROGRESS",
+        updatedAt: new Date("2025-06-01"),
+      },
+      {
+        id: "proj-olivos",
+        name: "Los Olivos",
+        clientName: null,
+        location: null,
+        status: "PLANNING",
+        updatedAt: new Date("2025-05-15"),
+      },
+    ];
+    const projectSpy = vi.spyOn(prisma.project, "findMany").mockResolvedValue(mockProjects as any);
+    mockStreamYield([makeFinal()]);
+
+    await post({
+      message: "Trabajar en proyecto Santa Monica",
+      workspaceId: "ws-1",
+    });
+
+    const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
+    expect(systemPrompt).toContain("--- PROYECTOS DISPONIBLES ---");
+    expect(systemPrompt).toContain("Santa Monica");
+    expect(systemPrompt).toContain("proj-santa");
+    expect(systemPrompt).toContain("Los Olivos");
+    expect(systemPrompt).toContain("proj-olivos");
+    expect(systemPrompt).toContain("Cliente Ejemplo");
+    expect(systemPrompt).toContain("Lima, Perú");
+
+    projectSpy.mockRestore();
+  });
+
+  it("does not inject projects section when there are no projects", async () => {
+    const projectSpy = vi.spyOn(prisma.project, "findMany").mockResolvedValue([]);
+    mockStreamYield([makeFinal()]);
+
+    await post({
+      message: "Hola",
+      workspaceId: "ws-1",
+    });
+
+    const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
+    expect(systemPrompt).not.toContain("--- PROYECTOS DISPONIBLES ---");
+
+    projectSpy.mockRestore();
+  });
+
+  it("does not inject projects when workspaceId is missing", async () => {
+    mockStreamYield([makeFinal()]);
+
+    await post({ message: "Hola" });
+
+    const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
+    expect(systemPrompt).not.toContain("--- PROYECTOS DISPONIBLES ---");
+  });
 
 });
 

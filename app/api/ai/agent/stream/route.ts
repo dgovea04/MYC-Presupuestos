@@ -8,7 +8,7 @@ import {
   getBundleBySlug,
   getBundleSystemPrompt,
 } from "@/lib/ai/agent/workflows";
-import { getAgentModelProvider, getModelFallback } from "@/lib/ai/agent/models";
+import { getAgentModelProvider } from "@/lib/ai/agent/models";
 import { prisma } from "@/lib/db/prisma";
 import { createOllama } from "ollama-ai-provider-v2";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
@@ -58,6 +58,55 @@ export async function POST(request: Request) {
       }
     }
 
+    // ── Resolver proyectos recientes del usuario ─────────────────────────
+    let recentProjectsList = "";
+    if (data.workspaceId) {
+      try {
+        const projects = await prisma.project.findMany({
+          where: {
+            companyId: data.workspaceId,
+            company: {
+              memberships: {
+                some: {
+                  userId: session.user.id,
+                  status: "ACTIVE",
+                },
+              },
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+            clientName: true,
+            location: true,
+            status: true,
+            updatedAt: true,
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 8,
+        });
+
+        if (projects.length > 0) {
+          const projectLines = projects.map(
+            (p) =>
+              `  - "${p.name}" (ID: ${p.id})` +
+              (p.clientName ? `, Cliente: ${p.clientName}` : "") +
+              (p.location ? `, Ubicación: ${p.location}` : ""),
+          );
+          recentProjectsList = [
+            "",
+            "--- PROYECTOS DISPONIBLES ---",
+            "Estos son los proyectos más recientes del usuario. USA SUS IDs directamente cuando necesites trabajar en un proyecto existente.",
+            ...projectLines,
+            "",
+            `Total: ${projects.length} proyectos listados. Si el proyecto que busca el usuario no está aquí, indícale que no se encontró.`,
+          ].join("\n");
+        }
+      } catch {
+        // non-blocking
+      }
+    }
+
     // ── Resolver bundle y workflow prompts ─────────────────────────────────
     let workflowGuidance = "";
     if (data.workflowId) {
@@ -96,6 +145,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // Inyectar proyectos recientes en el prompt (para evitar searchProjects)
+    if (recentProjectsList) {
+      systemPromptLines.push(recentProjectsList);
+    }
+
     // Inyectar guía del workflow/bundle si existe
     if (workflowGuidance) {
       systemPromptLines.push(workflowGuidance);
@@ -108,13 +162,38 @@ export async function POST(request: Request) {
       "--- INSTRUCCIONES ---",
       "",
       "CREAR PROYECTO NUEVO:",
-      "1. El usuario pide crear proyecto/presupuesto → pregúntale: ¿nuevo o existente?",
+      "1. El usuario pide crear proyecto/presupuesto → si no está en la lista de PROYECTOS DISPONIBLES, pregúntale: ¿nuevo o existente?",
       "2. El usuario responde 'nuevo' (o similar) → pregúntale: ¿cuál es el nombre?",
       "3. El usuario da el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
       "   • No preguntes por location, clientName, projectType ni fechas (son opcionales).",
       "   • No pidas confirmación extra. El sistema ya maneja la aprobación.",
       "   • El companyId ya está configurado, no lo incluyas.",
-      "4. El usuario dice 'existente' → usa searchBudgets para listar presupuestos.",
+      "",
+      "PROYECTO EXISTENTE (BUSCAR EN LA LISTA DE ARRIBA):",
+      "1. El usuario dice 'existente' (o similar) y da un nombre → BUSCA en la sección PROYECTOS DISPONIBLES (arriba) si el proyecto ya está listado.",
+      "   • Los proyectos ya están listados con sus IDs. USA EL ID directamente, NO llames searchProjects.",
+      "   • Ejemplo: si el usuario dice 'Santa Monica', revisa la lista de PROYECTOS DISPONIBLES. Si ves 'Santa Monica' ahí, usa su ID.",
+      "2. Si el proyecto NO está en la lista de PROYECTOS DISPONIBLES, USA searchProjects({ query: nombreDelProyecto }) PARA BUSCARLO.",
+      "   • PASA EL NOMBRE como query. NUNCA llames searchProjects sin query.",
+      "3. searchProjects retorna resultados. ENCUENTRA el que coincide por nombre y usa su ID.",
+      "4. Si el proyecto no se encuentra en los resultados, INFORMÁLE al usuario.",
+      "",
+      "GENERAR PRESUPUESTO:",
+      "1. Cuando el usuario pide generar un presupuesto para un proyecto existente, USA generateBudget INMEDIATAMENTE.",
+      "2. generateBudget requiere DOS parámetros OBLIGATORIOS:",
+      "   • projectId: el ID del proyecto (SACADO de la lista PROYECTOS DISPONIBLES arriba). Ejemplo: 'proj-santa'.",
+      "   • description: la descripción completa de la obra que el usuario proporcionó. Ejemplo: 'vivienda unifamiliar de 2 pisos, 120m2'.",
+      "   EJEMPLO CORRECTO: generateBudget({ projectId: 'proj-santa', description: 'vivienda unifamiliar de 2 pisos, 120m2' })",
+      "3. NO llames generateBudget sin projectId o sin description. Ambos son obligatorios.",
+      "4. description debe tener al menos 10 caracteres. Si el usuario no dio suficiente detalle, usa el contexto completo.",
+      "5. Los parámetros opcionales (templateType, templateSource, previewOnly) NO son necesarios.",
+      "",
+      "REGLAS IMPORTANTES:",
+      "- NUNCA llames searchProjects() sin pasar el parámetro query con el nombre del proyecto.",
+      "- Si el proyecto ya está en la lista de PROYECTOS DISPONIBLES, USA SU ID DIRECTO. No necesitas searchProjects.",
+      "- NO uses searchBudgets para buscar proyectos. searchBudgets busca presupuestos dentro de un proyecto.",
+      "- Si ya tienes la información que necesitas, responde al usuario en lugar de llamar más herramientas.",
+      "- El sistema bloquea herramientas que se llaman más de 2 veces, así que úsalas con cuidado.",
       "",
       "CONSEJOS:",
       "- Puedes generar texto de forma natural mientras ejecutas herramientas.",
@@ -153,23 +232,12 @@ export async function POST(request: Request) {
 
     // ── Construir LanguageModel según el provider del modelo ──────────────
     let prebuiltModel: unknown = undefined;
-    // Modelo de respaldo para cuando el principal devuelve vacío repetidamente
-    let fallbackPrebuiltModel: unknown = undefined;
-    let fallbackModelId: string | undefined;
 
     if (provider === "google" && modelPreference && geminiApiKey) {
       const googleProvider = createGoogleGenerativeAI({ apiKey: geminiApiKey });
       // Extraer nombre del modelo: "google/gemini-2.5-flash-lite" → "gemini-2.5-flash-lite"
       const googleModelName = modelPreference.split("/").slice(1).join("/");
       prebuiltModel = googleProvider(googleModelName);
-
-      // Crear modelo de respaldo si existe un fallback configurado
-      const fallbackId = getModelFallback(modelPreference);
-      if (fallbackId) {
-        const fallbackModelName = fallbackId.split("/").slice(1).join("/");
-        fallbackPrebuiltModel = googleProvider(fallbackModelName);
-        fallbackModelId = fallbackId;
-      }
     } else if (provider === "ollama" && modelPreference) {
       // Usar Ollama local via ollama-ai-provider-v2 (especificación v2 del AI SDK)
       const ollamaConfig: { baseURL?: string } = {};
@@ -213,7 +281,7 @@ export async function POST(request: Request) {
             workspaceId: data.workspaceId,
             apiKey,
             modelPreference: modelPreference,
-          }, prebuiltModel, fallbackPrebuiltModel, fallbackModelId)) {
+          }, prebuiltModel)) {
             if (event.type === "delta") {
               const text = event.text;
 

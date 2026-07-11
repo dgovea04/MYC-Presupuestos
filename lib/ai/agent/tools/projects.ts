@@ -31,7 +31,7 @@ const createProjectInput = z.object({
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
 const searchProjectsInput = z.object({
-  query: z.string().min(1).describe("Texto para buscar proyectos por nombre"),
+  query: z.string().optional().default("").describe("Texto para buscar proyectos por nombre. Si se omite, retorna los proyectos más recientes del usuario."),
   limit: z.number().int().min(1).max(50).default(10).describe("Cantidad máxima de resultados"),
 });
 
@@ -59,10 +59,14 @@ export const searchProjectsTool: AgentToolDefinition<
             },
           },
         },
-        name: {
-          contains: input.query,
-          mode: "insensitive",
-        },
+        ...(input.query
+          ? {
+              name: {
+                contains: input.query,
+                mode: "insensitive",
+              },
+            }
+          : {}),
       },
       select: {
         id: true,

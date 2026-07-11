@@ -16,6 +16,16 @@ export const DEFAULT_AGENT_MODEL = "openrouter/free";
 const MAX_AGENT_LOOP_ITERATIONS = 5;
 
 /**
+ * Límite de llamadas por herramienta dentro de una misma conversación.
+ * Si una herramienta excede este límite, se bloquea y se informa al modelo
+ * para que no la vuelva a llamar. Previene loops infinitos.
+ */
+const TOOL_CALL_LIMITS: Partial<Record<string, number>> = {
+  searchProjects: 2,
+  generateBudget: 2,
+};
+
+/**
  * Agent Provider — ejecuta el loop agéntico usando el Vercel AI SDK adapter
  * con tool registry, policy engine y tool executor.
  *
@@ -79,6 +89,9 @@ export async function executeAgentProvider(
   let totalToolCalls = 0;
   const allWarnings: string[] = [];
   let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+
+  // Contador de llamadas por herramienta para evitar loops
+  const toolCallCounts = new Map<string, number>();
 
   /**
    * Detecta cuando el LLM repite la misma tool fallida con el mismo error.
@@ -185,6 +198,23 @@ export async function executeAgentProvider(
         .pop()?.content;
 
     for (const toolCall of output.toolCalls) {
+      // ── Verificar límite de llamadas para esta herramienta ────────────────
+      const maxCalls = TOOL_CALL_LIMITS[toolCall.name];
+      if (maxCalls !== undefined) {
+        const currentCount = toolCallCounts.get(toolCall.name) ?? 0;
+        if (currentCount >= maxCalls) {
+          const limitMsg = `⚠️ Límite de ${maxCalls} llamadas a "${toolCall.name}" alcanzado en esta conversación. Usa los resultados que ya tienes o pide más información al usuario. No llames esta herramienta de nuevo.`;
+          toolResults.push({
+            toolName: toolCall.name,
+            success: false,
+            summary: limitMsg,
+          });
+          allWarnings.push(limitMsg);
+          continue; // Saltar la ejecución de la herramienta
+        }
+        toolCallCounts.set(toolCall.name, currentCount + 1);
+      }
+
       const result = await toolExecutor.execute({
         toolCall,
         userId: request.userId ?? "unknown",
@@ -361,10 +391,6 @@ export async function* streamAgentChat(
   request: AiProviderRequest,
   /** LanguageModel pre-construido (opcional). Si se provee, se usa en vez de crear uno via OpenRouter. */
   prebuiltModel?: unknown,
-  /** LanguageModel de respaldo para cuando el modelo principal devuelve vacío repetidamente. */
-  fallbackPrebuiltModel?: unknown,
-  /** ID del modelo de respaldo (para logging y metadata). */
-  fallbackModelId?: string,
 ): AsyncIterable<StreamAgentEvent> {
   const startTime = Date.now();
 
@@ -425,6 +451,9 @@ export async function* streamAgentChat(
   const allWarnings: string[] = [];
   let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
+  // Contador de llamadas por herramienta para evitar loops
+  const toolCallCounts = new Map<string, number>();
+
   /**
    * Detecta cuando el LLM repite la misma tool fallida con el mismo error.
    * Si ocurre 2 veces seguidas, detenemos el loop temprano para evitar
@@ -436,7 +465,6 @@ export async function* streamAgentChat(
   // Contador de reintentos para respuestas vacías del modelo
   let emptyResponseRetries = 0;
   const MAX_EMPTY_RETRIES = 2;
-  let fallbackUsed = false; // flag para evitar entrar en bucle de fallbacks
 
   // ── Derivar provider real del modelo seleccionado ───────────────────────
   let provider = getAgentModelProvider(requestedModel) ?? "openrouter";
@@ -533,28 +561,11 @@ export async function* streamAgentChat(
     // Sin tool calls → respuesta final (con reintento si está vacía)
     if (output.toolCalls.length === 0) {
       const finalAnswer = extractFinalAnswer(conversationMessages);
-      if (!finalAnswer && emptyResponseRetries < MAX_EMPTY_RETRIES && !fallbackUsed) {
+      if (!finalAnswer && emptyResponseRetries < MAX_EMPTY_RETRIES) {
         // Respuesta vacía: reintentar con el mismo modelo
         emptyResponseRetries++;
         iterations--;
         yield { type: "delta", text: "\n🔄 Reintentando...\n" };
-        conversationMessages.length = 0;
-        conversationMessages.push(...previousMessages);
-        continue;
-      }
-
-      // Reintentos agotados → intentar fallback si está disponible
-      if (!finalAnswer && fallbackPrebuiltModel && fallbackModelId && !fallbackUsed) {
-        fallbackUsed = true;
-        emptyResponseRetries = 0;
-        languageModel = fallbackPrebuiltModel;
-        requestedModel = fallbackModelId;
-        provider = getAgentModelProvider(fallbackModelId) ?? "openrouter";
-        yield {
-          type: "delta",
-          text: `\n⚠️ El modelo principal no respondió. Cambiando a modelo de respaldo ${getAgentModelShortLabel(fallbackModelId)}...\n\n`,
-        };
-        // Restaurar mensajes originales y reintentar
         conversationMessages.length = 0;
         conversationMessages.push(...previousMessages);
         continue;
@@ -631,6 +642,23 @@ export async function* streamAgentChat(
         .pop()?.content;
 
     for (const toolCall of output.toolCalls) {
+      // ── Verificar límite de llamadas para esta herramienta ────────────────
+      const maxCalls = TOOL_CALL_LIMITS[toolCall.name];
+      if (maxCalls !== undefined) {
+        const currentCount = toolCallCounts.get(toolCall.name) ?? 0;
+        if (currentCount >= maxCalls) {
+          const limitMsg = `⚠️ Límite de ${maxCalls} llamadas a "${toolCall.name}" alcanzado. No puedes volver a usar esta herramienta. Analiza los resultados anteriores o pide más información al usuario.`;
+          yield { type: "delta", text: `  ✗ ${limitMsg}\n` };
+          toolResults.push({
+            toolName: toolCall.name,
+            success: false,
+            summary: limitMsg,
+          });
+          continue; // Saltar la ejecución de la herramienta
+        }
+        toolCallCounts.set(toolCall.name, currentCount + 1);
+      }
+
       yield { type: "delta", text: `🔧 Ejecutando ${toolCall.name}...\n` };
 
       const toolStartTime = Date.now();
