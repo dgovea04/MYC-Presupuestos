@@ -22,11 +22,43 @@ export function useBudgetCollaborationStream({
 }: UseBudgetCollaborationStreamOptions) {
   const [connected, setConnected] = useState(false);
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
   const abortRef = useRef<AbortController | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const mountedRef = useRef(false);
+  const connectRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+
+  const clearReconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      window.clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleReconnect = useCallback(() => {
+    if (!mountedRef.current) return;
+    clearReconnect();
+    reconnectTimeoutRef.current = window.setTimeout(() => {
+      connectRef.current?.();
+    }, reconnectInterval);
+  }, [clearReconnect, reconnectInterval]);
+
+  const handleDisconnect = useCallback(
+    (controller: AbortController) => {
+      if (controller.signal.aborted || !mountedRef.current) return;
+      setConnected(false);
+      scheduleReconnect();
+    },
+    [scheduleReconnect],
+  );
 
   const connect = useCallback(() => {
+    if (!mountedRef.current) return;
+    clearReconnect();
+
     if (abortRef.current) {
       abortRef.current.abort();
     }
@@ -38,7 +70,9 @@ export function useBudgetCollaborationStream({
       signal: controller.signal,
       headers: { Accept: "text/event-stream" },
     })
-      .then((response) => {
+      .then(async (response) => {
+        if (controller.signal.aborted || !mountedRef.current) return;
+
         if (!response.ok || !response.body) {
           throw new Error("Stream connection failed");
         }
@@ -47,77 +81,65 @@ export function useBudgetCollaborationStream({
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let currentData = "";
 
-        function processChunk({ done, value }: ReadableStreamReadResult<Uint8Array>) {
-          if (done) {
-            setConnected(false);
-            scheduleReconnect();
-            return;
-          }
+        try {
+          while (mountedRef.current && !controller.signal.aborted) {
+            const { done, value } = await reader.read();
+            if (done) {
+              handleDisconnect(controller);
+              return;
+            }
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
 
-          let currentEventType = "";
-          let currentData = "";
-
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              currentEventType = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              currentData = line.slice(6);
-            } else if (line === "" && currentData) {
-              try {
-                const parsed = JSON.parse(currentData) as CollaborationStreamEvent;
-                if (parsed.type !== "ping") {
-                  onEventRef.current?.(parsed);
+            for (const rawLine of lines) {
+              const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+              if (line.startsWith("data: ")) {
+                currentData += line.slice(6);
+              } else if (line === "" && currentData) {
+                try {
+                  const parsed = JSON.parse(currentData) as CollaborationStreamEvent;
+                  if (parsed.type !== "ping") {
+                    onEventRef.current?.(parsed);
+                  }
+                } catch {
+                  // skip unparseable events
                 }
-              } catch {
-                // skip unparseable events
+                currentData = "";
               }
-              currentEventType = "";
-              currentData = "";
             }
           }
-
-          reader.read().then(processChunk).catch(() => {
-            setConnected(false);
-            scheduleReconnect();
-          });
+        } catch {
+          handleDisconnect(controller);
+        } finally {
+          reader.releaseLock();
         }
-
-        reader.read().then(processChunk).catch(() => {
-          setConnected(false);
-          scheduleReconnect();
-        });
       })
       .catch(() => {
-        setConnected(false);
-        scheduleReconnect();
+        handleDisconnect(controller);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [budgetId, reconnectInterval]);
-
-  const scheduleReconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      window.clearTimeout(reconnectTimeoutRef.current);
-    }
-    reconnectTimeoutRef.current = window.setTimeout(connect, reconnectInterval);
-  }, [connect, reconnectInterval]);
+  }, [budgetId, clearReconnect, handleDisconnect]);
 
   useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
+  useEffect(() => {
+    mountedRef.current = true;
     connect();
 
     return () => {
+      mountedRef.current = false;
+      clearReconnect();
       if (abortRef.current) {
         abortRef.current.abort();
-      }
-      if (reconnectTimeoutRef.current) {
-        window.clearTimeout(reconnectTimeoutRef.current);
+        abortRef.current = null;
       }
     };
-  }, [connect]);
+  }, [clearReconnect, connect]);
 
   return { connected };
 }

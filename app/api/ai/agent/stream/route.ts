@@ -178,15 +178,26 @@ export async function POST(request: Request) {
       "3. searchProjects retorna resultados. ENCUENTRA el que coincide por nombre y usa su ID.",
       "4. Si el proyecto no se encuentra en los resultados, INFORMÁLE al usuario.",
       "",
-      "GENERAR PRESUPUESTO:",
-      "1. Cuando el usuario pide generar un presupuesto para un proyecto existente, USA generateBudget INMEDIATAMENTE.",
-      "2. generateBudget requiere DOS parámetros OBLIGATORIOS:",
-      "   • projectId: el ID del proyecto (SACADO de la lista PROYECTOS DISPONIBLES arriba). Ejemplo: 'proj-santa'.",
-      "   • description: la descripción completa de la obra que el usuario proporcionó. Ejemplo: 'vivienda unifamiliar de 2 pisos, 120m2'.",
-      "   EJEMPLO CORRECTO: generateBudget({ projectId: 'proj-santa', description: 'vivienda unifamiliar de 2 pisos, 120m2' })",
-      "3. NO llames generateBudget sin projectId o sin description. Ambos son obligatorios.",
-      "4. description debe tener al menos 10 caracteres. Si el usuario no dio suficiente detalle, usa el contexto completo.",
-      "5. Los parámetros opcionales (templateType, templateSource, previewOnly) NO son necesarios.",
+      "GENERAR PRESUPUESTO (FLUJO EN 2 PASOS):",
+      "PASO 1 — VISTA PREVIA (SIEMPRE primero):",
+      "1. Llama previewBudgetGeneration con projectId y description para obtener el preview.",
+      "2. previewBudgetGeneration es SOLO LECTURA, no requiere aprobación, y muestra:",
+      "   • Proyectos similares encontrados",
+      "   • Plantilla .mcp seleccionada y su score",
+      "   • Matching con catálogo: partidas OK, revisión requerida y sin match",
+      "   • Costo directo estimado por sub-presupuesto",
+      "3. MUÉSTRALE al usuario un resumen claro del preview con conteos y advertencias.",
+      "4. PREGUNTA al usuario: '¿Quieres que proceda con la generación?'",
+      "",
+      "PASO 2 — GENERAR (solo si el usuario confirma):",
+      "5. Si el usuario confirma, llama generateBudget con los mismos projectId y description.",
+      "6. generateBudget puede requerir aprobación (dependiendo del modo).",
+      "7. NO llames generateBudget sin haber llamado previewBudgetGeneration primero.",
+      "",
+      "EJEMPLO:",
+      "  previewBudgetGeneration({ projectId: 'proj-santa', description: 'vivienda unifamiliar de 2 pisos, 120m2' })",
+      "  → Muestra preview al usuario → espera confirmación",
+      "  → generateBudget({ projectId: 'proj-santa', description: 'vivienda unifamiliar de 2 pisos, 120m2' })",
       "",
       "REGLAS IMPORTANTES:",
       "- NUNCA llames searchProjects() sin pasar el parámetro query con el nombre del proyecto.",
@@ -294,7 +305,8 @@ export async function POST(request: Request) {
               }
 
               // Detectar resultado: "  ✓ <summary>" o "  ✗ <summary>"
-              const toolResultMatch = text.match(/^\s{2}([✓✗])\s+(.+)/m);
+              // Capturar texto completo multi-línea (Nivel 1, Nivel 1.5, etc.)
+              const toolResultMatch = text.match(/^ {2}([✓✗]) ([\s\S]+)$/);
               if (toolResultMatch) {
                 const success = toolResultMatch[1] === "✓";
                 const summary = toolResultMatch[2].trim();

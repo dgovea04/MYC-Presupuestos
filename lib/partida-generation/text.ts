@@ -47,7 +47,7 @@ export function uniqueTokens(value: string) {
 export function jaccardSimilarity(left: string[], right: string[]) {
   const leftSet = new Set(left);
   const rightSet = new Set(right);
-  if (leftSet.size === 0 && rightSet.size === 0) return 1;
+  if (leftSet.size === 0 && rightSet.size === 0) return 0;
   if (leftSet.size === 0 || rightSet.size === 0) return 0;
 
   let intersection = 0;

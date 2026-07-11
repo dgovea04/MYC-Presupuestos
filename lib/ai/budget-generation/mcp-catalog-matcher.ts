@@ -181,6 +181,6 @@ export async function matchBlueprintItemsToCatalog(input: {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function buildMatchKey(description: string, unit: string): string {
+export function buildMatchKey(description: string, unit: string): string {
   return `${normalizePartidaText(description)}|${normalizePartidaText(unit)}`;
 }

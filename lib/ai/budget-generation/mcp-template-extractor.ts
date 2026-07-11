@@ -99,6 +99,38 @@ export function extractBudgetBlueprintFromMcpModules(input: {
     }>;
   };
 
+  // ── Parse project resources (optional for MVP) ────────────────────────────
+  let projectResources: McpBudgetBlueprint["projectResources"] = [];
+
+  try {
+    const resourcesData = input.readModule("budgets/project-resources.json") as {
+      resources: Array<{
+        id: string;
+        code: string;
+        description: string;
+        category: string;
+        unit: string;
+        currency: string;
+        unitPrice: string | number;
+        iu: string | null;
+        iuCurrent: string | null;
+      }>;
+    };
+    projectResources = resourcesData.resources.map((r) => ({
+      id: r.id,
+      code: r.code,
+      description: r.description,
+      category: r.category,
+      unit: r.unit,
+      currency: r.currency,
+      unitPrice: String(r.unitPrice),
+      iu: r.iu,
+      iuCurrent: r.iuCurrent,
+    }));
+  } catch {
+    warnings.push("No se encontraron project resources en el paquete .mcp (budgets/project-resources.json). Los insumos de los APU no tendrán referencia a la tabla Resource.");
+  }
+
   // ── Parse APUs (optional for MVP) ────────────────────────────────────────
   let apuById: Map<
     string,
@@ -217,6 +249,7 @@ export function extractBudgetBlueprintFromMcpModules(input: {
     assumptions,
     warnings,
     subBudgets,
+    projectResources,
   };
 }
 
@@ -262,6 +295,7 @@ function mapApuResourceBlueprint(resource: {
   unitPrice: string | number;
   subtotal: string | number;
   resourceDescription: string | null;
+  resourceId?: string | null;
 }): McpApuResourceBlueprint {
   return {
     resourceType: resource.resourceType,
@@ -270,5 +304,6 @@ function mapApuResourceBlueprint(resource: {
     unitPrice: String(resource.unitPrice),
     subtotal: String(resource.subtotal),
     resourceDescription: resource.resourceDescription ?? null,
+    resourceSourceId: resource.resourceId ?? null,
   };
 }

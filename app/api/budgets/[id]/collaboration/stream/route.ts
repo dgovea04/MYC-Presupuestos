@@ -25,16 +25,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     );
   }
 
+  let cleanupStream: (() => void) | null = null;
+
   const stream = new ReadableStream({
     start(controller) {
       writePreamble(controller);
+      let cleanedUp = false;
 
       // Periodic ping to keep connection alive
       const pingInterval = setInterval(() => {
         try {
           writeEvent(controller, "ping", { timestamp: new Date().toISOString() });
         } catch {
-          clearInterval(pingInterval);
+          cleanup();
         }
       }, SSE_PING_INTERVAL_MS);
 
@@ -44,16 +47,34 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           writeEvent(controller, event.type, event);
         } catch {
           // Connection likely closed
+          cleanup();
         }
       });
 
-      // Cleanup on abort
-      const abortHandler = () => {
+      function cleanup(closeController = false) {
+        if (cleanedUp) return;
+        cleanedUp = true;
         clearInterval(pingInterval);
         unsubscribe();
-      };
+        request.signal.removeEventListener("abort", abortHandler);
+        if (closeController) {
+          try {
+            controller.close();
+          } catch {
+            // stream may already be closed by the runtime
+          }
+        }
+      }
+
+      // Cleanup on abort
+      const abortHandler = () => cleanup(true);
+      cleanupStream = () => cleanup();
 
       request.signal.addEventListener("abort", abortHandler, { once: true });
+    },
+    cancel() {
+      cleanupStream?.();
+      cleanupStream = null;
     },
   });
 

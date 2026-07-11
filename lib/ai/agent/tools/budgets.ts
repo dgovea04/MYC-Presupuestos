@@ -593,9 +593,27 @@ export const generateBudgetTool: AgentToolDefinition<
     let effectiveProjectId = input.projectId ?? context.projectId;
     const effectiveDescription = input.description ?? context.lastUserMessage;
 
-    // ── Si no hay projectId, intentar buscar el proyecto por nombre en el mensaje ─
-    if (!effectiveProjectId && context.lastUserMessage) {
-      const extractedName = extractProjectNameFromMessage(context.lastUserMessage);
+    // ── Si no hay projectId, intentar buscar el proyecto por nombre primero en lastUserMessage, luego en mensajes anteriores ─
+    if (!effectiveProjectId) {
+      // 1. Buscar en el último mensaje del usuario
+      let extractedName: string | null = null;
+      if (context.lastUserMessage) {
+        extractedName = extractProjectNameFromMessage(context.lastUserMessage);
+      }
+
+      // 2. Si no se encontró, buscar en mensajes ANTERIORES (para cuando el usuario confirma sin repetir el nombre del proyecto)
+      if (!extractedName && context.messages) {
+        for (const msg of context.messages) {
+          if (msg.role === "user") {
+            const name = extractProjectNameFromMessage(msg.content);
+            if (name) {
+              extractedName = name;
+              break;
+            }
+          }
+        }
+      }
+
       if (extractedName) {
         const foundProject = await prisma.project.findFirst({
           where: {
@@ -685,6 +703,7 @@ export const generateBudgetTool: AgentToolDefinition<
     // ═══════════════════════════════════════════════════════════════════════
     let mcpItemsAdded = 0;
     let mcpApplied = false;
+    let mcpMatchStats: { matched: number; reviewRequired: number; unmatched: number; total: number } | null = null;
     const useMcpSource = input.templateSource === "auto" || input.templateSource === "mcp";
 
     if (useMcpSource) {
@@ -759,7 +778,7 @@ export const generateBudgetTool: AgentToolDefinition<
                 projectId: effectiveProjectId,
                 packageId: mcpCandidate.packageId,
                 description: effectiveDescription,
-                mode: "review_required",
+                mode: "auto",
               });
 
               const totalItems = result.subBudgets.reduce(
@@ -768,9 +787,15 @@ export const generateBudgetTool: AgentToolDefinition<
               );
               mcpItemsAdded = totalItems;
               mcpApplied = true;
+              mcpMatchStats = result.matchStats;
+
+              const stats = result.matchStats;
+              const matchDetails = stats
+                ? `  Catálogo: ${stats.matched} match exacto, ${stats.reviewRequired} match parcial, ${stats.unmatched} sin match → usando datos originales del .mcp`
+                : "";
 
               levelResults.push(
-                `Nivel 1.5: Plantilla .mcp "${result.sourceProjectName}" aplicada: ${result.subBudgets.length} sub-presupuestos, ${totalItems} partidas (${result.skippedItems.length} omitidas).`,
+                `Nivel 1.5: Plantilla .mcp "${result.sourceProjectName}" aplicada: ${result.subBudgets.length} sub-presupuestos, ${totalItems} partidas (${result.skippedItems.length} omitidas).${matchDetails ? "\n" + matchDetails : ""}`,
               );
             }
           }
@@ -834,8 +859,8 @@ export const generateBudgetTool: AgentToolDefinition<
     // ═══════════════════════════════════════════════════════════════════════
     // NIVEL 3: Catálogo (fallback / complemento)
     // ═══════════════════════════════════════════════════════════════════════
-    // Si no hay suficientes partidas desde plantillas (menos de 5), buscar en catálogo
-    if (itemsFromTemplates < 5) {
+    // Si no hay suficientes partidas desde plantillas o .mcp (menos de 5), buscar en catálogo
+    if (itemsFromTemplates < 5 && mcpItemsAdded < 5) {
       const allPartidas = await getCatalogPartidas();
 
       // Usar searchSimilarPartidas (mejor scoring con variables técnicas)
@@ -866,12 +891,12 @@ export const generateBudgetTool: AgentToolDefinition<
       }
     } else {
       levelResults.push(
-        `Nivel 3: Omitido — ya se agregaron ${itemsFromTemplates} partidas desde plantillas.`,
+        `Nivel 3: Omitido — ya se agregaron ${itemsFromTemplates || mcpItemsAdded} partidas desde ${mcpApplied ? ".mcp" : "plantillas"}.`,
       );
     }
 
     // ── Resumen final ──────────────────────────────────────────────────────
-    const totalItems = itemsFromTemplates + itemsFromCatalog;
+    const totalItems = mcpItemsAdded + itemsFromTemplates + itemsFromCatalog;
 
     // Recalcular totales consolidados para el resumen
     const finalSubBudgets = await prisma.budget.findMany({
@@ -899,16 +924,27 @@ export const generateBudgetTool: AgentToolDefinition<
       description: effectiveDescription,
       templateType: input.templateType ?? "edificio",
       totalItemsAdded: totalItems,
+      fromMcp: mcpItemsAdded,
       fromTemplates: itemsFromTemplates,
       fromCatalog: itemsFromCatalog,
+      mcpMatchStats,
       templatesApplied,
       levels: levelResults,
       byBudget,
       message: levelResults.join(" | "),
     };
   },
-  summarizeResult: (result) =>
-    `Presupuesto generado: ${result.totalItemsAdded} partidas (${result.fromTemplates} desde plantillas, ${result.fromCatalog} desde catálogo).`,
+  summarizeResult: (result) => {
+    const parts = [`Presupuesto generado: ${result.totalItemsAdded} partidas`];
+    if (typeof result.fromMcp === "number" && result.fromMcp > 0) parts.push(`${result.fromMcp} desde .mcp`);
+    if (typeof result.fromTemplates === "number" && result.fromTemplates > 0) parts.push(`${result.fromTemplates} desde plantillas`);
+    if (typeof result.fromCatalog === "number" && result.fromCatalog > 0) parts.push(`${result.fromCatalog} desde catálogo`);
+    const levelLines = Array.isArray(result.levels)
+      ? (result.levels as string[]).map((l: string) => `  • ${l}`).join("\n")
+      : "";
+    if (levelLines) parts.push(`\nProceso:\n${levelLines}`);
+    return parts.join(", ");
+  },
 };
 
 export const compareBudgetsTool: AgentToolDefinition<
@@ -1145,6 +1181,287 @@ export const createSubBudgetTool: AgentToolDefinition<
     `Sub-presupuesto "${result.name}" creado bajo presupuesto ${result.parentBudgetId}.`,
 };
 
+// ─── previewBudgetGeneration: read-only preview ───────────────────────────
+
+const previewBudgetGenerationInput = z.object({
+  projectId: z.string().min(1).optional().describe("ID del proyecto"),
+  description: z.string().min(10).optional().describe("Descripción de la obra para generar el presupuesto (opcional, se hereda del último mensaje del usuario si no se provee)"),
+  templateType: z.enum(["edificio", "carretera", "hospital", "colegio", "vivienda", "industrial"]).optional().describe("Tipo de plantilla a usar"),
+  templateSource: z.enum(["auto", "mcp", "project", "catalog"]).default("auto").describe("Fuente de plantilla: auto (busca .mcp primero), mcp (solo .mcp), project (proyectos similares), catalog (solo catálogo)"),
+  mcpPackageId: z.string().optional().describe("ID de un paquete .mcp específico a usar como plantilla (si se conoce)"),
+});
+
+export const previewBudgetGenerationTool: AgentToolDefinition<
+  z.infer<typeof previewBudgetGenerationInput>,
+  Record<string, unknown>
+> = {
+  name: "previewBudgetGeneration",
+  description:
+    "Genera una vista previa del presupuesto que se crearía, mostrando proyectos similares, " +
+    "plantillas .mcp disponibles y coincidencias con catálogo (partidas matched, review_required, unmatched). " +
+    "Solo lectura — NO escribe en la base de datos. " +
+    "Usa esto ANTES de generateBudget para revisar qué se va a generar y pedir confirmación al usuario.",
+  risk: "read",
+  requiresProjectId: false,
+  inputSchema: previewBudgetGenerationInput,
+  execute: async (input, context) => {
+    // ── Heredar valores del contexto ───────────────────────────────────────
+    let effectiveProjectId = input.projectId ?? context.projectId;
+    const effectiveDescription = input.description ?? context.lastUserMessage;
+
+    // ── Si no hay projectId, intentar buscar proyecto por nombre primero en lastUserMessage, luego en mensajes anteriores ─
+    if (!effectiveProjectId) {
+      let extractedName: string | null = null;
+      if (context.lastUserMessage) {
+        extractedName = extractProjectNameFromMessage(context.lastUserMessage);
+      }
+
+      // Buscar también en mensajes ANTERIORES
+      if (!extractedName && context.messages) {
+        for (const msg of context.messages) {
+          if (msg.role === "user") {
+            const name = extractProjectNameFromMessage(msg.content);
+            if (name) {
+              extractedName = name;
+              break;
+            }
+          }
+        }
+      }
+
+      if (extractedName) {
+        const foundProject = await prisma.project.findFirst({
+          where: {
+            name: { contains: extractedName, mode: "insensitive" },
+            company: {
+              memberships: {
+                some: { userId: context.userId, status: "ACTIVE" },
+              },
+            },
+          },
+          select: { id: true, name: true },
+        });
+        if (foundProject) {
+          effectiveProjectId = foundProject.id;
+        }
+      }
+    }
+
+    if (!effectiveProjectId) {
+      throw new Error(
+        "No se pudo determinar el proyecto. " +
+        "Especifica el nombre del proyecto en tu mensaje.",
+      );
+    }
+    if (!effectiveDescription || effectiveDescription.length < 10) {
+      throw new Error(
+        "Se requiere una descripción de la obra (mínimo 10 caracteres) para generar la vista previa.",
+      );
+    }
+
+    const levelResults: string[] = [];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL 1: Buscar proyectos similares del usuario
+    // ═══════════════════════════════════════════════════════════════════════
+    const similarProjects = await searchSimilarProjects({
+      description: effectiveDescription,
+      projectType: input.templateType,
+      userId: context.userId,
+    });
+
+    const goodMatch = similarProjects.filter((p) => p.score >= 0.3);
+
+    if (goodMatch.length > 0) {
+      levelResults.push(
+        `Nivel 1: ${goodMatch.length} proyecto${goodMatch.length === 1 ? "" : "s"} similar${goodMatch.length === 1 ? "" : "es"} encontrado${goodMatch.length === 1 ? "" : "s"} (top: "${goodMatch[0].projectName}", score: ${goodMatch[0].score.toFixed(2)})`,
+      );
+    } else {
+      levelResults.push("Nivel 1: No se encontraron proyectos similares.");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL 1.5: Buscar plantillas .mcp y obtener preview
+    // ═══════════════════════════════════════════════════════════════════════
+    let mcpPreview: Record<string, unknown> | null = null;
+    let mcpMatchStats: { matched: number; reviewRequired: number; unmatched: number; total: number } | null = null;
+    const useMcpSource = input.templateSource === "auto" || input.templateSource === "mcp";
+
+    if (useMcpSource) {
+      const targetPackageId = input.mcpPackageId;
+      let mcpCandidate: { packageId: string; projectName: string; score: number } | null = null;
+
+      if (targetPackageId) {
+        mcpCandidate = { packageId: targetPackageId, projectName: "", score: 1 };
+      } else {
+        const companyId = await getProjectCompanyId(effectiveProjectId, context.userId);
+        if (companyId) {
+          const mcpResults = await searchMcpTemplateCandidates({
+            userId: context.userId,
+            companyId,
+            description: effectiveDescription,
+            projectType: input.templateType,
+            limit: 3,
+          });
+
+          const bestMcp = mcpResults.find((c) => c.score >= MCP_TEMPLATE_STRONG_MATCH);
+          if (bestMcp) {
+            mcpCandidate = bestMcp;
+          }
+        }
+      }
+
+      if (mcpCandidate) {
+        try {
+          const companyId = await getProjectCompanyId(effectiveProjectId, context.userId);
+          if (companyId) {
+            const preview = await previewBudgetFromMcpTemplate({
+              userId: context.userId,
+              projectId: effectiveProjectId,
+              packageId: mcpCandidate.packageId,
+              description: effectiveDescription,
+            });
+
+            const totals = preview.totals;
+            mcpMatchStats = {
+              matched: totals.matchedItems,
+              reviewRequired: totals.reviewRequiredItems,
+              unmatched: totals.unmatchedItems,
+              total: totals.matchedItems + totals.reviewRequiredItems + totals.unmatchedItems,
+            };
+
+            mcpPreview = {
+              packageId: preview.packageId,
+              sourceProjectName: preview.sourceProjectName,
+              templateScore: preview.templateScore,
+              subBudgets: preview.subBudgets.map((sb) => ({
+                name: sb.name,
+                itemCount: sb.itemCount,
+                matchedCatalogItems: sb.matchedCatalogItems,
+                reviewRequiredItems: sb.reviewRequiredItems,
+                unmatchedItems: sb.unmatchedItems,
+                estimatedDirectCost: sb.estimatedDirectCost,
+              })),
+              totals: {
+                estimatedDirectCost: totals.estimatedDirectCost,
+                matchedItems: totals.matchedItems,
+                reviewRequiredItems: totals.reviewRequiredItems,
+                unmatchedItems: totals.unmatchedItems,
+              },
+              warnings: preview.warnings,
+              assumptions: preview.assumptions,
+            };
+
+            levelResults.push(
+              `Nivel 1.5: Plantilla .mcp "${preview.sourceProjectName}" encontrada (score: ${preview.templateScore})`,
+            );
+            levelResults.push(
+              `  Sub-presupuestos: ${preview.subBudgets.length}`,
+            );
+            levelResults.push(
+              `  Partidas: ${totals.matchedItems} match exacto, ${totals.reviewRequiredItems} revisión requerida, ${totals.unmatchedItems} sin match`,
+            );
+            levelResults.push(
+              `  Costo directo estimado: S/ ${totals.estimatedDirectCost}`,
+            );
+          }
+        } catch (err) {
+          levelResults.push(
+            `Nivel 1.5: Error al obtener preview .mcp: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      } else if (input.templateSource === "mcp") {
+        levelResults.push("Nivel 1.5: No se encontraron paquetes .mcp compatibles.");
+      } else {
+        levelResults.push("Nivel 1.5: No hay paquetes .mcp con score suficiente.");
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL 3: Catálogo (preview de cuántas partidas se encontrarían)
+    // ═══════════════════════════════════════════════════════════════════════
+    let catalogPreview: { foundItems: number } | null = null;
+
+    if (input.templateSource === "catalog" || (input.templateSource === "auto" && !mcpPreview)) {
+      const allPartidas = await getCatalogPartidas();
+      const matched = searchSimilarPartidas({
+        query: effectiveDescription,
+        partidas: allPartidas,
+        limit: 25,
+      });
+
+      if (matched.length > 0) {
+        catalogPreview = { foundItems: matched.length };
+        levelResults.push(
+          `Nivel 3: ${matched.length} partidas potenciales desde el catálogo.`,
+        );
+      } else {
+        levelResults.push("Nivel 3: No se encontraron partidas en el catálogo.");
+      }
+    } else if (mcpPreview) {
+      levelResults.push(
+        `Nivel 3: No necesario — ${mcpMatchStats?.total ?? 0} partidas disponibles desde .mcp.`,
+      );
+    }
+
+    return {
+      projectId: effectiveProjectId,
+      description: effectiveDescription,
+      templateType: input.templateType ?? "edificio",
+      similarProjects: goodMatch.map((p) => ({
+        projectName: p.projectName,
+        projectType: p.projectType,
+        score: p.score,
+      })),
+      mcpPreview,
+      mcpMatchStats,
+      catalogPreview,
+      levels: levelResults,
+      warnings: mcpPreview?.warnings ?? [],
+      canGenerate: !!mcpPreview || !!catalogPreview,
+    };
+  },
+  summarizeResult: (result) => {
+    const parts = [`📋 Vista previa de generación`];
+
+    if (result.mcpPreview) {
+      const mcp = result.mcpPreview as Record<string, unknown>;
+      const totals = mcp.totals as Record<string, unknown>;
+      const subBudgets = mcp.subBudgets as Array<Record<string, unknown>>;
+      parts.push(`\nPlantilla .mcp: "${mcp.sourceProjectName}"`);
+      parts.push(`Sub-presupuestos: ${subBudgets.length}`);
+      parts.push(`Costo directo estimado: S/ ${totals.estimatedDirectCost}`);
+      parts.push(`\n📊 Matching con catálogo:`);
+
+      if (result.mcpMatchStats) {
+        const stats = result.mcpMatchStats as { matched: number; reviewRequired: number; unmatched: number };
+        parts.push(`  • Match exacto: ${stats.matched}`);
+        parts.push(`  • Revisión requerida: ${stats.reviewRequired}`);
+        parts.push(`  • Sin match: ${stats.unmatched}`);
+      }
+
+      parts.push(`\nDetalle por sub-presupuesto:`);
+      for (const sb of subBudgets) {
+        parts.push(
+          `  • ${sb.name}: ${sb.itemCount} partidas (${sb.matchedCatalogItems} OK, ${sb.reviewRequiredItems} revisar, ${sb.unmatchedItems} sin match) — S/ ${sb.estimatedDirectCost}`,
+        );
+      }
+    } else if (result.catalogPreview) {
+      const cp = result.catalogPreview as { foundItems: number };
+      parts.push(`\n📊 Catálogo: ${cp.foundItems} partidas potenciales encontradas.`);
+    } else {
+      parts.push("\nNo se encontraron plantillas ni partidas para generar.");
+    }
+
+    const levelLines = Array.isArray(result.levels)
+      ? (result.levels as string[]).join("\n")
+      : "";
+    if (levelLines) parts.push(`\nProceso:\n${levelLines}`);
+
+    return parts.join("\n");
+  },
+};
+
 // ─── All budget tools ────────────────────────────────────────────────────────
 
 export const budgetTools: AgentToolDefinition<any, any>[] = [
@@ -1154,6 +1471,7 @@ export const budgetTools: AgentToolDefinition<any, any>[] = [
   cloneBudgetTool,
   archiveBudgetTool,
   generateBudgetTool,
+  previewBudgetGenerationTool,
   compareBudgetsTool,
   createBudgetGeneralTool,
   createSubBudgetTool,

@@ -565,7 +565,10 @@ function ExecutionPlanPanel({
                     )}
                   </div>
                   {activity.summary && (
-                    <p className="mt-1 truncate text-[11px] leading-relaxed text-[var(--app-text-muted)]">{activity.summary}</p>
+                    <p className={cn(
+                      "mt-1 text-[11px] leading-relaxed text-[var(--app-text-muted)]",
+                      activity.summary.includes("\n") ? "whitespace-pre-wrap" : "truncate",
+                    )}>{activity.summary}</p>
                   )}
                 </div>
               </div>
@@ -814,7 +817,10 @@ function AgentRightPanel({
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-[var(--app-text-strong)]">{activity.toolName}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-[var(--app-text-muted)]">{activity.summary}</p>
+                    <p className={cn(
+                      "mt-0.5 text-[11px] leading-relaxed text-[var(--app-text-muted)]",
+                      activity.summary.includes("\n") ? "whitespace-pre-wrap" : "truncate",
+                    )}>{activity.summary}</p>
                   </div>
                   {activity.latencyMs && (
                     <span className="shrink-0 text-[10px] font-medium tabular-nums text-[var(--app-text-muted)]">{activity.latencyMs}ms</span>

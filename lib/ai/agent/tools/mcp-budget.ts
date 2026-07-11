@@ -190,6 +190,7 @@ export const applyBudgetFromMcpTemplateTool: AgentToolDefinition<
         name: sb.name,
         levelsCreated: sb.levelsCreated,
         itemsCreated: sb.itemsCreated,
+        itemsCleaned: sb.itemsCleaned,
         apusCreated: sb.apusCreated,
         directCost: sb.directCost,
       })),

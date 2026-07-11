@@ -104,6 +104,8 @@ export type AgentToolContext = {
   stepId?: string;
   /** Último mensaje del usuario en la conversación (para fallback cuando el modelo no pasa todos los args). */
   lastUserMessage?: string;
+  /** Todos los mensajes de la conversación actual. Útil para herramientas que necesitan buscar contexto en mensajes anteriores. */
+  messages?: Array<{ role: string; content: string }>;
 };
 
 /** Definición canónica de una herramienta agentica. */

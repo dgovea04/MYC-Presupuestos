@@ -1,14 +1,26 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Prisma } from "@prisma/client";
+import { getProjectForPackageExport } from "@/lib/data/projects";
 import { serializePolynomialFormula } from "./serializers/polynomial-formula";
 import { serializeBudgetItems } from "./serializers/apus";
-import { serializeBudgetTree } from "./serializers/budgets";
+import { serializeBudgetTree, serializeProjectResources } from "./serializers/budgets";
 import { serializeProject } from "./serializers/project";
 import { serializeWorkSchedule } from "./serializers/work-schedule";
 import { serializeRiskAnalysis } from "./serializers/risk";
 import { createMcpManifest, buildMcpFileName, validateManifestVersion } from "./manifest";
 import { createSha256Checksums, createSha256Hash, validateChecksums } from "./checksums";
+import { buildProjectPackageSnapshot } from "./export-snapshot";
 import type { McpManifest } from "./types";
+
+vi.mock("@/lib/data/projects", () => ({
+  getProjectForPackageExport: vi.fn(),
+}));
+
+const getProjectForPackageExportMock = vi.mocked(getProjectForPackageExport);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("MCP serializers", () => {
   describe("serializePolynomialFormula", () => {
@@ -107,6 +119,31 @@ describe("MCP serializers", () => {
     });
   });
 
+  describe("serializeProjectResources", () => {
+    it("serializes resource prices as strings", () => {
+      const result = serializeProjectResources([
+        {
+          id: "res-1",
+          code: "MAT-001",
+          description: "Cemento Portland",
+          category: "MATERIAL",
+          unit: "BLS",
+          currency: "PEN",
+          unitPrice: new Prisma.Decimal("32.5000"),
+          iu: "21",
+          iuCurrent: "21",
+        },
+      ]);
+
+      expect(result.resources[0]).toMatchObject({
+        id: "res-1",
+        code: "MAT-001",
+        unitPrice: "32.5",
+        iu: "21",
+      });
+    });
+  });
+
   describe("serializeProject", () => {
     it("serializes project core data", () => {
       const result = serializeProject({
@@ -185,6 +222,174 @@ describe("MCP serializers", () => {
       expect(result.variables[0]?.minimum).toBe("100");
       expect(result.variables[0]?.enabled).toBe(true);
     });
+  });
+});
+
+describe("MCP project package export", () => {
+  it("includes project resources for every module declared in the manifest", async () => {
+    const sharedResource = {
+      id: "res-1",
+      companyId: "company-1",
+      code: "MAT-001",
+      description: "Cemento Portland",
+      category: "MATERIAL" as const,
+      iu: "21",
+      iuCurrent: "21",
+      iuCurrentReviewStatus: null,
+      subcategory: null,
+      unit: "BLS",
+      unitPrice: new Prisma.Decimal("32.5000"),
+      currency: "PEN",
+      source: "CATALOG",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+
+    getProjectForPackageExportMock.mockResolvedValue({
+      id: "project-1",
+      companyId: "company-1",
+      name: "Hospital Norte",
+      clientName: "Cliente",
+      location: "Lima",
+      projectType: "Edificacion",
+      startDate: null,
+      endDate: null,
+      status: "PLANNING",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      budgets: [
+        {
+          id: "budget-general",
+          projectId: "project-1",
+          parentBudgetId: null,
+          kind: "GENERAL",
+          name: "Presupuesto General",
+          currency: "PEN",
+          igvRate: new Prisma.Decimal("0.18"),
+          generalExpensesRate: new Prisma.Decimal("0.10"),
+          utilityRate: new Prisma.Decimal("0.08"),
+          totalDirectCost: new Prisma.Decimal("0"),
+          totalGeneralExpenses: new Prisma.Decimal("0"),
+          totalUtility: new Prisma.Decimal("0"),
+          totalTax: new Prisma.Decimal("0"),
+          totalAmount: new Prisma.Decimal("0"),
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          levels: [],
+          items: [],
+          generalExpenses: [],
+          generalExpenseGroups: [],
+          footerRows: [],
+        },
+        {
+          id: "budget-sub",
+          projectId: "project-1",
+          parentBudgetId: "budget-general",
+          kind: "SUB_BUDGET",
+          name: "Estructuras",
+          currency: "PEN",
+          igvRate: new Prisma.Decimal("0.18"),
+          generalExpensesRate: new Prisma.Decimal("0.10"),
+          utilityRate: new Prisma.Decimal("0.08"),
+          totalDirectCost: new Prisma.Decimal("65"),
+          totalGeneralExpenses: new Prisma.Decimal("0"),
+          totalUtility: new Prisma.Decimal("0"),
+          totalTax: new Prisma.Decimal("0"),
+          totalAmount: new Prisma.Decimal("65"),
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          levels: [],
+          items: [
+            {
+              id: "item-1",
+              budgetId: "budget-sub",
+              levelId: null,
+              code: "01.01",
+              description: "Concreto",
+              unit: "m3",
+              quantity: new Prisma.Decimal("1"),
+              unitPrice: new Prisma.Decimal("65"),
+              partial: new Prisma.Decimal("65"),
+              sortOrder: 1,
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+              apu: {
+                id: "apu-1",
+                budgetItemId: "item-1",
+                name: "Concreto",
+                unit: "m3",
+                performance: new Prisma.Decimal("10"),
+                totalUnitCost: new Prisma.Decimal("65"),
+                createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+                resources: [
+                  {
+                    id: "apu-resource-1",
+                    apuId: "apu-1",
+                    resourceId: "res-1",
+                    resourceType: "MATERIAL",
+                    crew: null,
+                    quantity: new Prisma.Decimal("2"),
+                    unitPrice: new Prisma.Decimal("32.5"),
+                    subtotal: new Prisma.Decimal("65"),
+                    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+                    resource: sharedResource,
+                  },
+                  {
+                    id: "apu-resource-2",
+                    apuId: "apu-1",
+                    resourceId: "res-1",
+                    resourceType: "MATERIAL",
+                    crew: null,
+                    quantity: new Prisma.Decimal("1"),
+                    unitPrice: new Prisma.Decimal("32.5"),
+                    subtotal: new Prisma.Decimal("32.5"),
+                    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+                    resource: sharedResource,
+                  },
+                ],
+              },
+            },
+          ],
+          generalExpenses: [],
+          generalExpenseGroups: [],
+          footerRows: [],
+        },
+      ],
+      polynomialFormulas: [],
+    });
+
+    const snapshot = await buildProjectPackageSnapshot("project-1", "user-1");
+    const fileNames = new Set(snapshot.files.map((file) => file.fileName));
+
+    for (const manifestModule of snapshot.manifest.modules) {
+      expect(fileNames.has(manifestModule.path)).toBe(true);
+    }
+
+    expect(snapshot.manifest.checksums["budgets/project-resources.json"]).toBeTruthy();
+
+    const projectResourcesFile = snapshot.files.find((file) => file.fileName === "budgets/project-resources.json");
+    expect(projectResourcesFile).toBeTruthy();
+
+    const projectResources = JSON.parse(String(projectResourcesFile?.content)) as {
+      resources: Array<{ id: string; code: string; unitPrice: string }>;
+    };
+
+    expect(projectResources.resources).toEqual([
+      {
+        id: "res-1",
+        code: "MAT-001",
+        description: "Cemento Portland",
+        category: "MATERIAL",
+        unit: "BLS",
+        currency: "PEN",
+        unitPrice: "32.5",
+        iu: "21",
+        iuCurrent: "21",
+      },
+    ]);
   });
 });
 

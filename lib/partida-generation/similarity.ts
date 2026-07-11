@@ -28,14 +28,7 @@ export function searchSimilarPartidas(input: SearchSimilarPartidasInput): Simila
     .map((partida) => {
       const variables = extractPartidaVariables(partida.description, partida.unit);
       const breakdown = calculateSimilarityBreakdown(queryVariables, variables);
-      const score = roundScore(
-        breakdown.element * WEIGHTS.element +
-        breakdown.technical * WEIGHTS.technical +
-        breakdown.material * WEIGHTS.material +
-        breakdown.unit * WEIGHTS.unit +
-        breakdown.category * WEIGHTS.category +
-        breakdown.text * WEIGHTS.text,
-      );
+      const score = roundScore(computeAdaptiveScore(breakdown, queryVariables, variables));
       const compositionSimilarity = calculateCompositionSimilarity(partida, referenceResourceTokens);
 
       return {
@@ -72,14 +65,14 @@ function calculateSimilarityBreakdown(query: PartidaTechnicalVariables, candidat
 const RELATED_STRUCTURAL_ELEMENTS = new Set(["columnas", "placas", "vigas", "losas"]);
 
 function elementSimilarity(left: string | null, right: string | null) {
-  if (!left && !right) return 1;
+  if (!left && !right) return 0;
   if (!left || !right) return 0;
   if (left === right) return 1;
   return RELATED_STRUCTURAL_ELEMENTS.has(left) && RELATED_STRUCTURAL_ELEMENTS.has(right) ? 0.45 : 0;
 }
 
 function exactFieldSimilarity(left: string | null, right: string | null) {
-  if (!left && !right) return 1;
+  if (!left && !right) return 0;
   if (!left || !right) return 0;
   return left === right ? 1 : 0;
 }
@@ -110,6 +103,48 @@ function calculateCompositionSimilarity(partida: CatalogPartidaRecord, reference
 
 function roundScore(value: number) {
   return Math.round((value + Number.EPSILON) * 10000) / 10000;
+}
+
+/**
+ * Computes a weighted similarity score with adaptive weight redistribution.
+ *
+ * When both query and candidate lack extracted metadata for a component
+ * (both values are null/empty), that component is marked "absent" and its
+ * weight is excluded from the total. The remaining valid weights are
+ * proportionally redistributed, so the score only reflects available evidence.
+ *
+ * This prevents artificially low scores when the variable extractor can't
+ * find structured data (element, material, category) for either item.
+ */
+export function computeAdaptiveScore(
+  breakdown: SimilarityBreakdown,
+  query: PartidaTechnicalVariables,
+  candidate: PartidaTechnicalVariables,
+): number {
+  const isAbsent: Record<keyof SimilarityBreakdown, boolean> = {
+    element: !query.element && !candidate.element,
+    technical:
+      !query.resistance &&
+      !candidate.resistance &&
+      !query.technicalSpecs.length &&
+      !candidate.technicalSpecs.length,
+    material: !query.material && !candidate.material,
+    unit: !query.unit && !candidate.unit,
+    category: !query.category && !candidate.category,
+    text: !query.keywords.length && !candidate.keywords.length,
+  };
+
+  let validWeightTotal = 0;
+  let rawScore = 0;
+
+  for (const key of Object.keys(WEIGHTS) as Array<keyof SimilarityBreakdown>) {
+    if (!isAbsent[key]) {
+      validWeightTotal += WEIGHTS[key];
+      rawScore += breakdown[key] * WEIGHTS[key];
+    }
+  }
+
+  return validWeightTotal === 0 ? 0 : rawScore / validWeightTotal;
 }
 
 export function buildPartidaSearchTokens(value: string) {

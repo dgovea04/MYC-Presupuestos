@@ -1,11 +1,12 @@
 import { getProjectForPackageExport } from "@/lib/data/projects";
+import type { Prisma } from "@prisma/client";
 import type { McpProjectPackageSnapshot } from "./types";
 import type { McpModuleId } from "./types";
 import { createMcpManifest, buildMcpFileName } from "./manifest";
 import { createSha256Checksums } from "./checksums";
 import { buildStoredZip } from "./archive";
 import { serializeProject } from "./serializers/project";
-import { serializeBudgetTree } from "./serializers/budgets";
+import { serializeBudgetTree, serializeProjectResources } from "./serializers/budgets";
 import { serializeBudgetItems } from "./serializers/apus";
 import { serializePolynomialFormula } from "./serializers/polynomial-formula";
 
@@ -107,6 +108,54 @@ export async function buildProjectPackageSnapshot(
 
   const apusJson = JSON.stringify({ apus: apusData }, null, 2);
 
+  const projectResourcesById = new Map<
+    string,
+    {
+      id: string;
+      code: string;
+      description: string;
+      category: string;
+      unit: string;
+      currency: string;
+      unitPrice: Prisma.Decimal | string | number;
+      iu: string | null;
+      iuCurrent: string | null;
+    }
+  >();
+
+  for (const budget of project.budgets) {
+    if (budget.kind !== "SUB_BUDGET") {
+      continue;
+    }
+
+    for (const item of budget.items) {
+      for (const apuResource of item.apu?.resources ?? []) {
+        const resource = apuResource.resource;
+        if (!resource) {
+          continue;
+        }
+
+        projectResourcesById.set(resource.id, {
+          id: resource.id,
+          code: resource.code,
+          description: resource.description,
+          category: resource.category,
+          unit: resource.unit,
+          currency: resource.currency,
+          unitPrice: resource.unitPrice,
+          iu: resource.iu,
+          iuCurrent: resource.iuCurrent,
+        });
+      }
+    }
+  }
+
+  const projectResourcesJson = JSON.stringify(
+    serializeProjectResources(Array.from(projectResourcesById.values())),
+    null,
+    2,
+  );
+
   // Serialize general expenses
   const generalExpensesData = project.budgets
     .filter((budget) => budget.kind === "SUB_BUDGET")
@@ -207,6 +256,7 @@ export async function buildProjectPackageSnapshot(
     { path: "budgets/budget-tree.json", content: JSON.stringify(budgetTree, null, 2) },
     { path: "budgets/budget-items.json", content: JSON.stringify(budgetItemsJson, null, 2) },
     { path: "budgets/apus.json", content: apusJson },
+    { path: "budgets/project-resources.json", content: projectResourcesJson },
     { path: "budgets/general-expenses.json", content: generalExpensesJson },
     { path: "budgets/footer.json", content: footerJson },
     { path: "polynomial-formula/formula.json", content: formulaJson },
@@ -271,5 +321,3 @@ export function buildProjectPackageArchive(
 export function getAppVersion(): string {
   return "0.1.0";
 }
-
-

@@ -223,6 +223,7 @@ export async function executeAgentProvider(
         executionId: `agent_${Date.now()}_${iterations}`,
         mode: "chat",
         lastUserMessage,
+        messages: conversationMessages.map((m) => ({ role: m.role, content: m.content })),
       });
 
       toolResults.push({
@@ -670,6 +671,7 @@ export async function* streamAgentChat(
         executionId: executionId ?? `agent_${Date.now()}_${iterations}`,
         mode: "chat",
         lastUserMessage,
+        messages: conversationMessages.map((m) => ({ role: m.role, content: m.content })),
       });
 
       // Persist tool invocation in ledger

@@ -131,6 +131,7 @@ export class ToolExecutor implements AgentToolExecutor {
         executionId,
         stepId,
         lastUserMessage: input.lastUserMessage,
+        messages: input.messages,
       });
 
       const latencyMs = Date.now() - startTime;

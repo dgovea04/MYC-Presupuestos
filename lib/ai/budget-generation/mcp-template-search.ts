@@ -98,15 +98,19 @@ export async function searchMcpTemplateCandidates(input: {
     // 6. Package quality (weight 0.05)
     const qualityScore = pkg.description.length > 20 ? 0.8 : 0.4;
 
-    // Combined weighted score (type-heavy: type is the strongest signal for templates)
-    const score = roundScore(
-      typeScore * 0.50 +
-      textScore * 0.15 +
-      keywordScore * 0.15 +
-      areaScore * 0.10 +
-      locationScore * 0.05 +
-      qualityScore * 0.05,
-    );
+    // Combined weighted score (type-heavy: type is the strongest signal for templates).
+    // When the template name contains a detected type keyword (typeScore=1),
+    // it's a perfect match — the other factors are noise.
+    const score = typeScore >= 1
+      ? 1
+      : roundScore(
+          typeScore * 0.50 +
+          textScore * 0.15 +
+          keywordScore * 0.15 +
+          areaScore * 0.10 +
+          locationScore * 0.05 +
+          qualityScore * 0.05,
+        );
 
     // Build reasons
     const reasons: string[] = [];

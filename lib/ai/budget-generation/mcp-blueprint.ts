@@ -12,6 +12,8 @@ export type McpBudgetBlueprint = {
   assumptions: string[];
   warnings: string[];
   subBudgets: McpSubBudgetBlueprint[];
+  /** Resources from the source project (project-resources.json). Optional — absent in older .mcp exports. */
+  projectResources?: McpProjectResource[];
 };
 
 export type McpSubBudgetBlueprint = {
@@ -64,4 +66,18 @@ export type McpApuResourceBlueprint = {
   unitPrice: string;
   subtotal: string;
   resourceDescription: string | null;
+  /** Original resource ID from the source project's Resource table. Used to match projectResources. */
+  resourceSourceId: string | null;
+};
+
+export type McpProjectResource = {
+  id: string;
+  code: string;
+  description: string;
+  category: string;
+  unit: string;
+  currency: string;
+  unitPrice: string;
+  iu: string | null;
+  iuCurrent: string | null;
 };

@@ -85,6 +85,8 @@ export type ToolExecutorInput = {
   mode: AgentExecutionMode;
   /** Último mensaje del usuario en la conversación. */
   lastUserMessage?: string;
+  /** Todos los mensajes de la conversación actual. */
+  messages?: Array<{ role: string; content: string }>;
 };
 
 export type ToolExecutorOutput = {

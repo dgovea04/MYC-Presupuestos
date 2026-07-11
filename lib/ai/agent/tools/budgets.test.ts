@@ -241,7 +241,7 @@ vi.mock("@/lib/ai/budget-generation/quantity-estimator", () => ({
 // ─── Context helper ──────────────────────────────────────────────────────────
 
 import type { AgentToolContext } from "../types";
-import { generateBudgetTool } from "./budgets";
+import { generateBudgetTool, previewBudgetGenerationTool } from "./budgets";
 
 function makeContext(overrides: Partial<AgentToolContext> = {}): AgentToolContext {
   return {
@@ -392,5 +392,218 @@ describe("generateBudgetTool — integración: resolución de projectId por nomb
         }),
       ),
     ).rejects.toThrow("No se pudo determinar el proyecto");
+  });
+
+  // ─── Búsqueda en mensajes anteriores ───────────────────────────────────
+
+  it("busca en mensajes anteriores cuando lastUserMessage no contiene nombre del proyecto", async () => {
+    // Simula el flujo real: usuario primero menciona el proyecto, luego confirma sin repetir el nombre
+    // El proyecto "Perez Mateos" existe en la DB
+    budgetToolMocks.projectFindFirst
+      .mockResolvedValueOnce({ id: "proj-perez-mateos", name: "Perez Mateos" }) // find by name desde messages
+      .mockResolvedValueOnce({ companyId: "company-1" }); // getProjectCompanyId
+
+    // Sub-budgets existen
+    budgetToolMocks.budgetFindMany
+      .mockResolvedValueOnce([
+        { id: "sb-1", name: "Estructuras" },
+        { id: "sb-2", name: "Arquitectura" },
+        { id: "sb-3", name: "Instalaciones Sanitarias" },
+        { id: "sb-4", name: "Instalaciones Eléctricas" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "sb-1", name: "Estructuras", totalDirectCost: 0, _count: { items: 0 } },
+        { id: "sb-2", name: "Arquitectura", totalDirectCost: 0, _count: { items: 0 } },
+        { id: "sb-3", name: "Instalaciones Sanitarias", totalDirectCost: 0, _count: { items: 0 } },
+        { id: "sb-4", name: "Instalaciones Eléctricas", totalDirectCost: 0, _count: { items: 0 } },
+      ]);
+
+    const result = await generateBudgetTool.execute(
+      { description: "vivienda unifamiliar 2 pisos 120m2", templateSource: "auto", previewOnly: false },
+      makeContext({
+        // lastUserMessage NO contiene el nombre del proyecto (simula la confirmación del usuario)
+        lastUserMessage: "procede con la generacion del presupuesto",
+        // messages contiene el historial completo, incluyendo el mensaje original con el proyecto
+        messages: [
+          { role: "user", content: "genera un presupuesto para vivienda unifamiliar de 2 pisos, 120m2 en el proyecto Perez Mateos" },
+          { role: "assistant", content: "🔧 Ejecutando previewBudgetGeneration...\n  ✓ 📋 Vista previa...\n\n💭 Analizando resultados...\n\nHe generado la vista previa... ¿Deseas que proceda?" },
+          { role: "user", content: "procede con la generacion del presupuesto" },
+        ],
+      }),
+    );
+
+    // Debió resolver el projectId desde el primer mensaje en messages
+    expect(result.projectId).toBe("proj-perez-mateos");
+
+    // Verificar que buscó por nombre "Perez Mateos" (extraído del mensaje anterior)
+    expect(budgetToolMocks.projectFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          name: { contains: "Perez Mateos", mode: "insensitive" },
+        }),
+      }),
+    );
+
+    // Debió continuar el flujo: obtener sub-budgets del proyecto
+    expect(budgetToolMocks.budgetFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          projectId: "proj-perez-mateos",
+          kind: "SUB_BUDGET",
+        }),
+      }),
+    );
+  });
+
+  it("lanza error cuando ni lastUserMessage ni mensajes anteriores contienen nombre del proyecto", async () => {
+    // Solo user messages sin "proyecto", "obra" ni "llamado"
+    budgetToolMocks.projectFindFirst.mockResolvedValue(null);
+
+    await expect(
+      generateBudgetTool.execute(
+        { description: "vivienda unifamiliar 2 pisos 120m2", templateSource: "auto", previewOnly: false },
+        makeContext({
+          lastUserMessage: "procede con la generacion",
+          messages: [
+            { role: "user", content: "genera un presupuesto" },
+            { role: "assistant", content: "Claro, ¿para qué proyecto?" },
+            { role: "user", content: "procede con la generacion" },
+          ],
+        }),
+      ),
+    ).rejects.toThrow("No se pudo determinar el proyecto");
+  });
+
+  it("solo busca en mensajes con role=user, ignorando assistant y tool messages", async () => {
+    // Mensajes assistant que contienen "proyecto" NO deben ser considerados
+    budgetToolMocks.projectFindFirst.mockResolvedValue(null);
+
+    await expect(
+      generateBudgetTool.execute(
+        { description: "vivienda unifamiliar 2 pisos 120m2", templateSource: "auto", previewOnly: false },
+        makeContext({
+          lastUserMessage: "procede con la generacion",
+          messages: [
+            { role: "assistant", content: "Usando el proyecto Perez Mateos para generar..." },
+            { role: "user", content: "procede con la generacion" },
+          ],
+        }),
+      ),
+    ).rejects.toThrow("No se pudo determinar el proyecto");
+
+    // Verificar que projectFindFirst NO fue llamado con ningún nombre de proyecto
+    // (el mensaje assistant no debe activar la búsqueda)
+    const findByNameCalls = budgetToolMocks.projectFindFirst.mock.calls.filter(
+      (call) => call[0]?.where?.name?.contains,
+    );
+    expect(findByNameCalls).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// previewBudgetGenerationTool — Integración: resolución de projectId por nombre
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("previewBudgetGenerationTool — integración: resolución de projectId por nombre", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Reset mocks
+    budgetToolMocks.projectFindFirst.mockReset();
+    budgetToolMocks.budgetFindMany.mockReset();
+    budgetToolMocks.searchSimilarProjects.mockReset();
+    budgetToolMocks.searchMcpTemplateCandidates.mockReset();
+    budgetToolMocks.getCatalogPartidas.mockReset();
+    budgetToolMocks.searchSimilarPartidas.mockReset();
+
+    // Default: sin proyectos similares, sin MCP, sin catálogo
+    budgetToolMocks.searchSimilarProjects.mockResolvedValue([]);
+    budgetToolMocks.searchMcpTemplateCandidates.mockResolvedValue([]);
+    budgetToolMocks.getCatalogPartidas.mockResolvedValue([]);
+    budgetToolMocks.searchSimilarPartidas.mockReturnValue([]);
+    budgetToolMocks.projectFindFirst.mockResolvedValue(null);
+    budgetToolMocks.budgetFindMany.mockResolvedValue([]);
+  });
+
+  it("busca en mensajes anteriores cuando lastUserMessage no contiene nombre del proyecto", async () => {
+    // El proyecto "Perez Mateos" existe en la DB
+    // projectFindFirst se llama: 1) para resolver por nombre, 2) para getProjectCompanyId
+    budgetToolMocks.projectFindFirst
+      .mockResolvedValueOnce({ id: "proj-perez-mateos", name: "Perez Mateos" })
+      .mockResolvedValueOnce({ companyId: "company-1" });
+
+    const result = await previewBudgetGenerationTool.execute(
+      { description: "vivienda unifamiliar 2 pisos 120m2", templateSource: "auto" },
+      makeContext({
+        // lastUserMessage NO contiene el nombre del proyecto
+        lastUserMessage: "procede con la generacion del presupuesto",
+        // messages contiene el historial completo
+        messages: [
+          { role: "user", content: "genera un presupuesto para vivienda unifamiliar de 2 pisos, 120m2 en el proyecto Perez Mateos" },
+          { role: "assistant", content: "🔧 Ejecutando previewBudgetGeneration...\n  ✓ 📋 Vista previa..." },
+          { role: "user", content: "procede con la generacion del presupuesto" },
+        ],
+      }),
+    );
+
+    // Debió resolver el projectId desde el primer mensaje en messages
+    expect(result.projectId).toBe("proj-perez-mateos");
+
+    // Verificar que buscó por nombre "Perez Mateos"
+    expect(budgetToolMocks.projectFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          name: { contains: "Perez Mateos", mode: "insensitive" },
+        }),
+      }),
+    );
+
+    // Debió llamar a searchSimilarProjects con el projectId resuelto
+    expect(budgetToolMocks.searchSimilarProjects).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1" }),
+    );
+  });
+
+  it("lanza error cuando ni lastUserMessage ni mensajes anteriores contienen nombre del proyecto", async () => {
+    // Solo user messages sin "proyecto", "obra" ni "llamado"
+    budgetToolMocks.projectFindFirst.mockResolvedValue(null);
+
+    await expect(
+      previewBudgetGenerationTool.execute(
+        { description: "vivienda unifamiliar 2 pisos 120m2", templateSource: "auto" },
+        makeContext({
+          lastUserMessage: "procede con la generacion",
+          messages: [
+            { role: "user", content: "genera un presupuesto" },
+            { role: "assistant", content: "¿Para qué proyecto?" },
+            { role: "user", content: "procede con la generacion" },
+          ],
+        }),
+      ),
+    ).rejects.toThrow("No se pudo determinar el proyecto");
+  });
+
+  it("solo busca en mensajes con role=user, ignorando assistant y tool messages", async () => {
+    // Mensajes assistant que contienen "proyecto" NO deben ser considerados
+    budgetToolMocks.projectFindFirst.mockResolvedValue(null);
+
+    await expect(
+      previewBudgetGenerationTool.execute(
+        { description: "vivienda unifamiliar 2 pisos 120m2", templateSource: "auto" },
+        makeContext({
+          lastUserMessage: "procede con la generacion",
+          messages: [
+            { role: "assistant", content: "Usando el proyecto Perez Mateos para generar..." },
+            { role: "user", content: "procede con la generacion" },
+          ],
+        }),
+      ),
+    ).rejects.toThrow("No se pudo determinar el proyecto");
+
+    // Verificar que projectFindFirst NO fue llamado con ningún nombre de proyecto
+    const findByNameCalls = budgetToolMocks.projectFindFirst.mock.calls.filter(
+      (call) => call[0]?.where?.name?.contains,
+    );
+    expect(findByNameCalls).toHaveLength(0);
   });
 });
