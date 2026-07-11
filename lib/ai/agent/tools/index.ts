@@ -13,9 +13,10 @@ import { partidaTools } from "./partidas";
 import { apuTools } from "./apu";
 import { insumoTools } from "./insumos";
 import { projectTools } from "./projects";
+import { mcpBudgetTools } from "./mcp-budget";
 
 // Re-export all domain tools for single-point registration
-export { budgetTools, partidaTools, apuTools, insumoTools, projectTools };
+export { budgetTools, partidaTools, apuTools, insumoTools, projectTools, mcpBudgetTools };
 
 // ─── Takeoffs (Metrados) ─────────────────────────────────────────────────────
 
@@ -494,12 +495,13 @@ export const remainingTools: AgentToolDefinition[] = [
   ...chapterTools,
 ];
 
-/** Todas las herramientas agenticas registrables en el ToolRegistry (30 herramientas). */
+/** Todas las herramientas agenticas registrables en el ToolRegistry (33 herramientas). */
 export const allTools: AgentToolDefinition[] = [
   ...budgetTools,
   ...partidaTools,
   ...apuTools,
   ...insumoTools,
   ...projectTools,
+  ...mcpBudgetTools,
   ...remainingTools,
 ];

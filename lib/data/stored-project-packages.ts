@@ -131,9 +131,19 @@ export async function searchStoredPackages(
 
 export async function getStoredPackageById(
   id: string,
+  userId: string,
 ): Promise<StoredProjectPackage | null> {
-  const record = await prisma.storedProjectPackage.findUnique({
-    where: { id },
+  // Use findFirst with compound where for multi-tenant isolation.
+  // findUnique only accepts the unique field(s), so we can't add a tenant filter.
+  const record = await prisma.storedProjectPackage.findFirst({
+    where: {
+      id,
+      company: {
+        memberships: {
+          some: { userId, status: "ACTIVE" },
+        },
+      },
+    },
     select: PACKAGE_SELECT,
   });
 
@@ -142,9 +152,44 @@ export async function getStoredPackageById(
   return toStoredPackage(record);
 }
 
-export async function deleteStoredPackage(id: string): Promise<boolean> {
-  const result = await prisma.storedProjectPackage.deleteMany({ where: { id } });
+export async function deleteStoredPackage(
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  const result = await prisma.storedProjectPackage.deleteMany({
+    where: {
+      id,
+      company: {
+        memberships: {
+          some: { userId, status: "ACTIVE" },
+        },
+      },
+    },
+  });
   return result.count > 0;
+}
+
+export async function getStoredPackageContent(
+  packageId: string,
+  userId: string,
+): Promise<Buffer> {
+  const record = await prisma.storedProjectPackage.findFirst({
+    where: {
+      id: packageId,
+      company: {
+        memberships: {
+          some: { userId, status: "ACTIVE" },
+        },
+      },
+    },
+    select: { mcpContent: true },
+  });
+
+  if (!record) {
+    throw new Error(`Paquete "${packageId}" no encontrado o no tienes acceso.`);
+  }
+
+  return Buffer.from(record.mcpContent, "base64");
 }
 
 export async function listStoredPackages(

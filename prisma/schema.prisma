@@ -181,6 +181,12 @@ enum CollaborationChangeSource {
   KHIPU
 }
 
+enum BudgetItemGenerationSourceType {
+  MCP_TEMPLATE
+  CATALOG_MATCH
+  AI_DESCRIPTION
+}
+
 enum MetradoTemplateType {
   CONCRETE
   REBAR
@@ -645,6 +651,7 @@ model Budget {
   childBudgets              Budget[]                   @relation("BudgetHierarchy")
   levels                    BudgetLevel[]
   items                     BudgetItem[]
+  itemGenerationSources     BudgetItemGenerationSource[]
   generalExpenses           GeneralExpense[]
   generalExpenseGroups      GeneralExpenseGroup[]
   footerRows                BudgetFooterRow[]
@@ -856,6 +863,7 @@ model BudgetItem {
   budget                       Budget                        @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   level                        BudgetLevel?                  @relation(fields: [levelId], references: [id], onDelete: SetNull)
   apu                          Apu?
+  generationSource             BudgetItemGenerationSource?
   workScheduleItems            WorkScheduleItem[]
   polynomialMonomialComponents PolynomialMonomialComponent[]
   riskVariables                RiskVariable[]
@@ -1188,6 +1196,31 @@ model Resource {
   @@index([companyId])
 }
 
+model BudgetItemGenerationSource {
+  id                     String                          @id @default(cuid())
+  budgetItemId           String                          @unique
+  budgetId               String
+  sourceType             BudgetItemGenerationSourceType
+  sourcePackageId        String?
+  sourceCatalogPartidaId String?
+  sourceItemId           String?
+  catalogMatchScore      Decimal?                        @db.Decimal(10, 4)
+  quantityConfidence     String?
+  metadata               Json                            @default("{}")
+  createdAt              DateTime                        @default(now())
+  // budgetId is denormalized from budgetItem for query convenience
+  // (find all generated items for a budget without joining through BudgetItem)
+  budgetItem             BudgetItem                      @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  budget                 Budget                          @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  sourcePackage          StoredProjectPackage?           @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
+  sourceCatalogPartida   CatalogPartida?                 @relation(fields: [sourceCatalogPartidaId], references: [id], onDelete: SetNull)
+
+  @@index([budgetId, createdAt(sort: Desc)])
+  @@index([sourceType])
+  @@index([sourcePackageId])
+  @@map("budget_item_generation_sources")
+}
+
 model CatalogPartida {
   id                      String                   @id @default(cuid())
   description             String
@@ -1205,6 +1238,7 @@ model CatalogPartida {
   budgetApuSubpartidaRows ApuResource[]            @relation("BudgetApuCatalogSubpartida")
   generatedAsResult       GeneratedPartida[]       @relation("GeneratedCatalogPartida")
   generatedSources        GeneratedPartidaSource[] @relation("GeneratedPartidaSourceCatalog")
+  budgetItemGenSources    BudgetItemGenerationSource[]
 
   @@index([description])
 }
@@ -1582,6 +1616,7 @@ model StoredProjectPackage {
   company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sourceProject   Project? @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
+  budgetItemGenSources BudgetItemGenerationSource[]
 
   @@index([companyId, createdAt(sort: Desc)])
   @@index([userId])

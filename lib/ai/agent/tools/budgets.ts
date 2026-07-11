@@ -10,6 +10,9 @@ import { searchSimilarPartidas } from "@/lib/partida-generation/similarity";
 import { searchSimilarProjects } from "@/lib/ai/budget-generation/project-similarity";
 import { applyTemplateToSubBudget } from "@/lib/ai/budget-generation/template-applicator";
 import { estimateQuantity } from "@/lib/ai/budget-generation/quantity-estimator";
+import { searchMcpTemplateCandidates, MCP_TEMPLATE_STRONG_MATCH } from "@/lib/ai/budget-generation/mcp-template-search";
+import { previewBudgetFromMcpTemplate } from "@/lib/ai/budget-generation/mcp-budget-preview";
+import { applyMcpBudgetBlueprintToProject } from "@/lib/ai/budget-generation/mcp-budget-applicator";
 import {
   createUserBudgetTemplateFromBudget,
   applyUserBudgetTemplateToProject,
@@ -50,6 +53,9 @@ const generateBudgetInput = z.object({
   projectId: z.string().min(1).describe("ID del proyecto"),
   description: z.string().min(10).describe("Descripción de la obra para generar el presupuesto"),
   templateType: z.enum(["edificio", "carretera", "hospital", "colegio", "vivienda", "industrial"]).optional().describe("Tipo de plantilla a usar"),
+  templateSource: z.enum(["auto", "mcp", "project", "catalog"]).default("auto").describe("Fuente de plantilla: auto (busca .mcp primero), mcp (solo .mcp), project (proyectos similares), catalog (solo catálogo)"),
+  previewOnly: z.boolean().default(false).describe("Si es true, solo muestra preview sin escribir en DB"),
+  mcpPackageId: z.string().optional().describe("ID de un paquete .mcp específico a usar como plantilla (si se conoce)"),
 });
 
 const compareBudgetsInput = z.object({
@@ -321,6 +327,28 @@ const SUB_BUDGET_CATEGORY_KEYWORDS: Array<{
   },
 ];
 
+async function getProjectCompanyId(
+  projectId: string,
+  userId: string,
+): Promise<string | null> {
+  const project = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      company: {
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
+      },
+    },
+    select: { companyId: true },
+  });
+
+  return project?.companyId ?? null;
+}
+
 function assignToSubBudget(
   description: string,
   subBudgets: Array<{ id: string; name: string }>,
@@ -532,9 +560,117 @@ export const generateBudgetTool: AgentToolDefinition<
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL 1.5: Buscar y aplicar plantillas .mcp
+    // ═══════════════════════════════════════════════════════════════════════
+    let mcpItemsAdded = 0;
+    let mcpApplied = false;
+    const useMcpSource = input.templateSource === "auto" || input.templateSource === "mcp";
+
+    if (useMcpSource) {
+      // Si se proporcionó un packageId específico, usarlo directamente
+      const targetPackageId = input.mcpPackageId;
+      let mcpCandidate: { packageId: string; projectName: string; score: number } | null = null;
+
+      if (targetPackageId) {
+        mcpCandidate = { packageId: targetPackageId, projectName: "", score: 1 };
+      } else {
+        // Buscar paquetes .mcp compatibles
+        const pkg = await getProjectCompanyId(input.projectId, context.userId);
+        if (pkg) {
+          const mcpResults = await searchMcpTemplateCandidates({
+            userId: context.userId,
+            companyId: pkg,
+            description: input.description,
+            projectType: input.templateType,
+            limit: 3,
+          });
+
+          const bestMcp = mcpResults.find((c) => c.score >= MCP_TEMPLATE_STRONG_MATCH);
+          if (bestMcp) {
+            mcpCandidate = bestMcp;
+          }
+        }
+      }
+
+      if (mcpCandidate) {
+        try {
+          if (input.previewOnly) {
+            // Solo preview
+            const companyId = await getProjectCompanyId(input.projectId, context.userId);
+            if (companyId) {
+              const preview = await previewBudgetFromMcpTemplate({
+                userId: context.userId,
+                projectId: input.projectId,
+                packageId: mcpCandidate.packageId,
+                description: input.description,
+              });
+              levelResults.push(
+                `Nivel 1.5 (Preview): Plantilla .mcp "${preview.sourceProjectName}" — ${preview.subBudgets.length} sub-presupuestos, ${preview.totals.matchedItems} partidas OK, ${preview.totals.reviewRequiredItems} requieren revisión.`,
+              );
+              // En modo preview, no escribir nada pero retornar el preview
+              return {
+                projectId: input.projectId,
+                description: input.description,
+                templateType: input.templateType ?? "edificio",
+                totalItemsAdded: 0,
+                fromTemplates: 0,
+                fromCatalog: 0,
+                mcpPreview: {
+                  packageId: preview.packageId,
+                  sourceProjectName: preview.sourceProjectName,
+                  subBudgets: preview.subBudgets,
+                  totals: preview.totals,
+                  warnings: preview.warnings,
+                },
+                templatesApplied: [],
+                levels: levelResults,
+                byBudget: [],
+                message: levelResults.join(" | "),
+              };
+            }
+          } else {
+            // Aplicar la plantilla .mcp
+            const companyId = await getProjectCompanyId(input.projectId, context.userId);
+            if (companyId) {
+              const result = await applyMcpBudgetBlueprintToProject({
+                userId: context.userId,
+                companyId,
+                projectId: input.projectId,
+                packageId: mcpCandidate.packageId,
+                description: input.description,
+                mode: "review_required",
+              });
+
+              const totalItems = result.subBudgets.reduce(
+                (sum, sb) => sum + sb.itemsCreated,
+                0,
+              );
+              mcpItemsAdded = totalItems;
+              mcpApplied = true;
+
+              levelResults.push(
+                `Nivel 1.5: Plantilla .mcp "${result.sourceProjectName}" aplicada: ${result.subBudgets.length} sub-presupuestos, ${totalItems} partidas (${result.skippedItems.length} omitidas).`,
+              );
+            }
+          }
+        } catch (err) {
+          levelResults.push(
+            `Nivel 1.5: Error al usar .mcp: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      } else if (input.templateSource === "mcp") {
+        levelResults.push("Nivel 1.5: No se encontraron paquetes .mcp compatibles (templateSource=mcp).");
+      } else {
+        levelResults.push("Nivel 1.5: No hay paquetes .mcp con score suficiente.");
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // NIVEL 2: Aplicar plantillas de sub-presupuestos de proyectos similares
     // ═══════════════════════════════════════════════════════════════════════
-    for (const match of goodMatch.filter((p) => p.score >= 0.5)) {
+    const skipProjectTemplates = mcpApplied || input.templateSource === "mcp" || input.templateSource === "catalog";
+    if (!skipProjectTemplates) {
+      for (const match of goodMatch.filter((p) => p.score >= 0.5)) {
       if (match.budgetTemplates.length === 0) continue;
 
       // Usar la primera plantilla del proyecto similar
@@ -558,19 +694,20 @@ export const generateBudgetTool: AgentToolDefinition<
         });
 
         itemsFromTemplates += result.itemsAdded;
-        templatesApplied.push(`${templateToApply.name} → ${targetBudgetName} (${result.itemsAdded} partidas)`);
+          templatesApplied.push(`${templateToApply.name} → ${targetBudgetName} (${result.itemsAdded} partidas)`);
         levelResults.push(
           `Nivel 2: Plantilla "${templateToApply.name}" aplicada a ${targetBudgetName}: ${result.itemsAdded} partidas, ${result.apusCreated} APUs.`,
         );
-      } catch (err) {
-        levelResults.push(
-          `Nivel 2: Error al aplicar plantilla "${templateToApply.name}": ${err instanceof Error ? err.message : String(err)}`,
-        );
+        } catch (err) {
+          levelResults.push(
+            `Nivel 2: Error al aplicar plantilla "${templateToApply.name}": ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
-    }
 
-    if (templatesApplied.length === 0) {
-      levelResults.push("Nivel 2: No se aplicaron plantillas (score < 0.5 o sin plantillas disponibles).");
+      if (templatesApplied.length === 0) {
+        levelResults.push("Nivel 2: No se aplicaron plantillas (score < 0.5 o sin plantillas disponibles).");
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════════

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { normalizePartidaText, uniqueTokens, jaccardSimilarity } from "@/lib/partida-generation/text";
 import { listUserBudgetTemplates, type UserBudgetTemplateRecord } from "@/lib/data/budget-templates";
 import { searchStoredPackages } from "@/lib/data/stored-project-packages";
+import { PROJECT_TYPE_SYNONYMS, detectProjectTypes } from "./generation-intent";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -38,16 +39,7 @@ export type ProjectCandidate = {
   budgetTemplateIds: string[];
 };
 
-// ─── Project type synonyms ──────────────────────────────────────────────────
-
-const PROJECT_TYPE_SYNONYMS: Record<string, string[]> = {
-  vivienda: ["casa", "departamento", "vivienda", "habitacional", "residencial", "condominio", "multifamiliar", "unifamiliar"],
-  edificio: ["edificio", "oficina", "comercial", "corporativo", "torre"],
-  hospital: ["hospital", "clinica", "posta", "salud", "medico", "sanitario"],
-  colegio: ["colegio", "escuela", "instituto", "universidad", "aula", "educativo"],
-  carretera: ["carretera", "pista", "pavimento", "via", "camino", "autopista", "tramo"],
-  industrial: ["industrial", "fabrica", "planta", "almacen", "galpon", "nave"],
-};
+// ─── Structural keywords ────────────────────────────────────────────────────
 
 const STRUCTURAL_KEYWORDS = [
   "concreto", "armado", "acero", "albañileria", "drywall", "metalica",
@@ -336,26 +328,6 @@ function computeTypeScore(
   }
 
   return { score: 0, matched: false };
-}
-
-function detectProjectTypes(
-  description: string,
-  explicitType?: string,
-): string[] {
-  const normalized = normalizePartidaText(description);
-  const types: string[] = [];
-
-  if (explicitType) {
-    types.push(normalizePartidaText(explicitType));
-  }
-
-  for (const [type, synonyms] of Object.entries(PROJECT_TYPE_SYNONYMS)) {
-    if (synonyms.some((s) => normalized.includes(s))) {
-      types.push(type);
-    }
-  }
-
-  return [...new Set(types)];
 }
 
 function roundScore(value: number): number {
