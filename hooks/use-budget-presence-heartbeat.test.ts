@@ -8,6 +8,8 @@ import {
   useBudgetPresenceHeartbeat,
 } from "@/hooks/use-budget-presence-heartbeat";
 
+const INITIAL_HEARTBEAT_DELAY_MS = 2_500;
+
 describe("useBudgetPresenceHeartbeat", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -30,7 +32,7 @@ describe("useBudgetPresenceHeartbeat", () => {
   }
 
   describe("initial heartbeat", () => {
-    it("sends a POST heartbeat on mount with correct payload", async () => {
+    it("sends a delayed POST heartbeat with correct payload", async () => {
       resolveFetchOk();
 
       renderHook(() =>
@@ -42,7 +44,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       expect(fetch).toHaveBeenCalledWith(
@@ -101,10 +104,11 @@ describe("useBudgetPresenceHeartbeat", () => {
         }),
       );
 
+      expect(window.setInterval).not.toHaveBeenCalled();
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
-
       expect(window.setInterval).toHaveBeenCalledWith(
         expect.any(Function),
         15_000,
@@ -124,7 +128,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       vi.mocked(fetch).mockClear();
@@ -152,7 +157,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       vi.mocked(fetch).mockClear();
@@ -176,7 +182,7 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
         await Promise.resolve();
       });
 
@@ -201,11 +207,6 @@ describe("useBudgetPresenceHeartbeat", () => {
         }),
       );
 
-      await act(async () => {
-        vi.advanceTimersByTime(0);
-        await Promise.resolve();
-      });
-
       unmount();
 
       renderHook(() =>
@@ -217,7 +218,7 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
         await Promise.resolve();
       });
 
@@ -238,7 +239,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       // Subsequent ticks fail
@@ -283,7 +285,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       expect(document.addEventListener).toHaveBeenCalledWith(
@@ -401,7 +404,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       vi.mocked(fetch).mockClear();
@@ -425,7 +429,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       const intervalId = (
@@ -453,7 +458,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       await act(async () => {
@@ -508,7 +514,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       vi.mocked(fetch).mockClear();
@@ -577,7 +584,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       expect(fetch).toHaveBeenCalledWith(
@@ -588,6 +596,11 @@ describe("useBudgetPresenceHeartbeat", () => {
       // Rerender with new budgetId — old presence expires naturally and new presence starts
       await act(async () => {
         rerender({ budgetId: "budget-2" });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       expect(fetch).toHaveBeenCalledWith(
@@ -611,13 +624,19 @@ describe("useBudgetPresenceHeartbeat", () => {
       );
 
       await act(async () => {
-        vi.advanceTimersByTime(0);
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       vi.mocked(fetch).mockClear();
 
       await act(async () => {
         rerender({ route: "/updated" });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(INITIAL_HEARTBEAT_DELAY_MS);
+        await Promise.resolve();
       });
 
       // The initial heartbeat for the new deps should use the updated route

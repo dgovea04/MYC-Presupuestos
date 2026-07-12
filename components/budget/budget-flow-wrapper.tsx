@@ -14,6 +14,8 @@ type EditorCatalogsPayload = {
 
 const editorCatalogsCache = new Map<string, Promise<EditorCatalogsPayload>>();
 const templateTraceabilityCache = new Map<string, Promise<BudgetTemplateCreationTraceability | null>>();
+const EDITOR_CATALOGS_LOAD_DELAY_MS = 600;
+const TEMPLATE_TRACEABILITY_LOAD_DELAY_MS = 4_000;
 
 async function fetchEditorCatalogs(budgetId: string): Promise<EditorCatalogsPayload> {
   const cached = editorCatalogsCache.get(budgetId);
@@ -96,6 +98,7 @@ export function BudgetFlowWrapper({
     if (!catalogBudgetId) return;
 
     let active = true;
+    let timeoutId: number | null = null;
 
     async function loadCatalogs() {
       try {
@@ -109,10 +112,15 @@ export function BudgetFlowWrapper({
       }
     }
 
-    void loadCatalogs();
+    timeoutId = window.setTimeout(() => {
+      void loadCatalogs();
+    }, EDITOR_CATALOGS_LOAD_DELAY_MS);
 
     return () => {
       active = false;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [catalogBudgetId]);
 
@@ -120,6 +128,7 @@ export function BudgetFlowWrapper({
     if (!templateTraceabilityBudgetId || templateTraceability) return;
 
     let active = true;
+    let timeoutId: number | null = null;
 
     async function loadTemplateTraceability() {
       try {
@@ -132,10 +141,15 @@ export function BudgetFlowWrapper({
       }
     }
 
-    void loadTemplateTraceability();
+    timeoutId = window.setTimeout(() => {
+      void loadTemplateTraceability();
+    }, TEMPLATE_TRACEABILITY_LOAD_DELAY_MS);
 
     return () => {
       active = false;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [templateTraceability, templateTraceabilityBudgetId]);
 

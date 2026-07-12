@@ -11,6 +11,7 @@ import { useBudgetCollaborationStream, type CollaborationStreamEvent } from "@/h
 import type { CollaborationPresenceRecord } from "@/types/collaboration";
 
 type SheetKind = "comments" | "history" | "versions" | null;
+const INITIAL_PRESENCE_FETCH_DELAY_MS = 2_500;
 
 interface BudgetCollaborationWrapperProps {
   budgetId: string;
@@ -98,9 +99,14 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   useEffect(() => {
     if (!collaborationAvailable) return;
 
-    fetchPresence();
+    const timeoutId = window.setTimeout(() => {
+      fetchPresenceRef.current();
+    }, INITIAL_PRESENCE_FETCH_DELAY_MS);
     const interval = setInterval(() => fetchPresenceRef.current(), 30_000);
-    return () => clearInterval(interval);
+    return () => {
+      window.clearTimeout(timeoutId);
+      clearInterval(interval);
+    };
   }, [budgetId, collaborationAvailable, fetchPresence]);
 
   const handleSaveVersion = useCallback(async () => {

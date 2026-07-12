@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 const HEARTBEAT_INTERVAL = 15_000;
+const INITIAL_HEARTBEAT_DELAY_MS = 2_500;
 const TERMINAL_COLLABORATION_STATUSES = new Set([401, 403, 404]);
 const MIN_HEARTBEAT_GAP_MS = 2_000;
 const lastHeartbeatByKey = new Map<string, number>();
@@ -23,6 +24,7 @@ export function useBudgetPresenceHeartbeat({
   module,
 }: UseBudgetPresenceHeartbeatOptions) {
   const intervalRef = useRef<number | null>(null);
+  const initialHeartbeatTimeoutRef = useRef<number | null>(null);
   const isActiveRef = useRef(false);
   const disabledRef = useRef(false);
 
@@ -33,6 +35,10 @@ export function useBudgetPresenceHeartbeat({
     if (intervalRef.current) {
       window.clearInterval(intervalRef.current);
       intervalRef.current = null;
+    }
+    if (initialHeartbeatTimeoutRef.current) {
+      window.clearTimeout(initialHeartbeatTimeoutRef.current);
+      initialHeartbeatTimeoutRef.current = null;
     }
   }, []);
 
@@ -68,15 +74,17 @@ export function useBudgetPresenceHeartbeat({
     disabledRef.current = false;
     isActiveRef.current = true;
 
-    // Send initial heartbeat
-    sendHeartbeat();
-
-    // Set up interval
-    intervalRef.current = window.setInterval(() => {
+    initialHeartbeatTimeoutRef.current = window.setTimeout(() => {
+      initialHeartbeatTimeoutRef.current = null;
       if (isActiveRef.current) {
         sendHeartbeat();
+        intervalRef.current = window.setInterval(() => {
+          if (isActiveRef.current) {
+            sendHeartbeat();
+          }
+        }, HEARTBEAT_INTERVAL);
       }
-    }, HEARTBEAT_INTERVAL);
+    }, INITIAL_HEARTBEAT_DELAY_MS);
 
     // Handle page visibility changes
     const handleVisibilityChange = () => {
@@ -110,6 +118,10 @@ export function useBudgetPresenceHeartbeat({
       if (intervalRef.current) {
         window.clearInterval(intervalRef.current);
         intervalRef.current = null;
+      }
+      if (initialHeartbeatTimeoutRef.current) {
+        window.clearTimeout(initialHeartbeatTimeoutRef.current);
+        initialHeartbeatTimeoutRef.current = null;
       }
 
       document.removeEventListener("visibilitychange", handleVisibilityChange);
