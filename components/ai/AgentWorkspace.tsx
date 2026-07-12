@@ -32,6 +32,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
 import { useAgentStream } from "@/hooks/use-agent-stream";
+import { formatAiText } from "@/lib/ai/formatting";
+import { renderMarkdownLite } from "@/components/ai/AIMessage";
 import type {
   AgentExecutionState,
   AgentToolRisk,
@@ -384,7 +386,7 @@ function AgentChatPanel({
                     msg.role === "system" && "border-amber-200 bg-amber-50 text-amber-800 text-xs",
                   )}
                 >
-                  {msg.content}
+                  {renderMarkdownLite(formatAiText(msg.content))}
                 </div>
               </div>
             ))}
