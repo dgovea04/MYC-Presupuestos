@@ -189,15 +189,16 @@ export async function POST(request: Request) {
       "3. MUÉSTRALE al usuario un resumen claro del preview con conteos y advertencias.",
       "4. PREGUNTA al usuario: '¿Quieres que proceda con la generación?'",
       "",
-      "PASO 2 — GENERAR (solo si el usuario confirma):",
-      "5. Si el usuario confirma, llama generateBudget con los mismos projectId y description.",
-      "6. generateBudget puede requerir aprobación (dependiendo del modo).",
-      "7. NO llames generateBudget sin haber llamado previewBudgetGeneration primero.",
-      "",
-      "EJEMPLO:",
-      "  previewBudgetGeneration({ projectId: 'proj-santa', description: 'vivienda unifamiliar de 2 pisos, 120m2' })",
-      "  → Muestra preview al usuario → espera confirmación",
-      "  → generateBudget({ projectId: 'proj-santa', description: 'vivienda unifamiliar de 2 pisos, 120m2' })",
+      "PASO 2 — GENERAR (el usuario confirma o hace clic en botón):",
+      "5. En cuanto el usuario responda ALGO afirmativo, llama generateBudget INMEDIATAMENTE.",
+      "   CONSIDERA CONFIRMACIÓN VÁLIDA cuando el usuario diga:",
+      '   • "si", "sí", "confirmado", "si confirmado", "ok", "okay", "dale", "procede", "adelante", "vamos", "hazlo", "correcto", "de acuerdo"',
+      '   • Cualquier respuesta positiva o afirmativa en español o inglés',
+      '   • Incluso si el usuario solo dice "si" sin más contexto',
+      "   • SI el usuario ya respondió afirmativamente, NO le preguntes de nuevo. Llama generateBudget DIRECTAMENTE.",
+      "   • NO preguntes '¿Quieres que proceda?' si el usuario YA dijo que sí en su mensaje anterior.",
+      "6. Si el usuario responde con algo negativo o pide cambios, responde apropiadamente sin llamar generateBudget.",
+      "7. generateBudget puede requerir aprobación (dependiendo del modo).",
       "",
       "REGLAS IMPORTANTES:",
       "- NUNCA llames searchProjects() sin pasar el parámetro query con el nombre del proyecto.",
@@ -267,8 +268,6 @@ export async function POST(request: Request) {
         try {
           writePreamble(controller);
 
-          const toolLatencies = new Map<string, number>();
-
           // Usar el historial completo si se provee (mantiene contexto entre turnos).
           // Si no hay historial, construir solo con el mensaje actual (compatibilidad).
           const conversationMessages: AiMessage[] = data.messages && data.messages.length > 0
@@ -293,52 +292,30 @@ export async function POST(request: Request) {
             apiKey,
             modelPreference: modelPreference,
           }, prebuiltModel)) {
+            if (event.type === "tool_start") {
+              writeEvent(controller, "tool_start", { toolName: event.toolName });
+            }
+
+            if (event.type === "tool_result") {
+              writeEvent(controller, "tool_result", {
+                toolName: event.toolName,
+                success: event.success,
+                summary: event.summary,
+                latencyMs: event.latencyMs,
+              });
+            }
+
+            if (event.type === "approval_required") {
+              writeEvent(controller, "approval_required", {
+                approvalId: event.approvalId,
+                toolName: event.toolName,
+                reason: event.reason,
+              });
+            }
+
             if (event.type === "delta") {
-              const text = event.text;
-
-              // Detectar inicio de herramienta: "🔧 Ejecutando <name>..."
-              const toolStartMatch = text.match(/🔧\s*Ejecutando\s+(\w+)/);
-              if (toolStartMatch) {
-                const toolName = toolStartMatch[1];
-                toolLatencies.set(toolName, Date.now());
-                writeEvent(controller, "tool_start", { toolName });
-              }
-
-              // Detectar resultado: "  ✓ <summary>" o "  ✗ <summary>"
-              // Capturar texto completo multi-línea (Nivel 1, Nivel 1.5, etc.)
-              const toolResultMatch = text.match(/^ {2}([✓✗]) ([\s\S]+)$/);
-              if (toolResultMatch) {
-                const success = toolResultMatch[1] === "✓";
-                const summary = toolResultMatch[2].trim();
-                // Buscar la última herramienta iniciada sin resultado
-                const lastTool = [...toolLatencies.keys()].pop();
-                if (lastTool) {
-                  const startTime = toolLatencies.get(lastTool) ?? Date.now();
-                  toolLatencies.delete(lastTool);
-                  writeEvent(controller, "tool_result", {
-                    toolName: lastTool,
-                    success,
-                    summary,
-                    latencyMs: Date.now() - startTime,
-                  });
-                }
-              }
-
-              // Detectar aprobación: "⚠️ **Se requiere tu aprobación**"
-              if (text.includes("Se requiere tu aprobación")) {
-                const approvalMatch = text.match(/"(\w+)":\s*\n>\s*(.+)/);
-                const idMatch = text.match(/approval_id=([^\s]+)/);
-                if (approvalMatch) {
-                  writeEvent(controller, "approval_required", {
-                    approvalId: idMatch?.[1] ?? "unknown",
-                    toolName: approvalMatch[1],
-                    reason: approvalMatch[2].trim(),
-                  });
-                }
-              }
-
               // Siempre emitir el delta de texto para el chat
-              writeEvent(controller, "delta", { text });
+              writeEvent(controller, "delta", { text: event.text });
             }
 
             if (event.type === "final") {

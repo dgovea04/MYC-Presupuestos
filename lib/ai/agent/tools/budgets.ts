@@ -303,6 +303,27 @@ export const archiveBudgetTool: AgentToolDefinition<
   summarizeResult: () => "Presupuesto archivado correctamente.",
 };
 
+// ─── Description quality check ───────────────────────────────────────────────
+
+/** Palabras clave que indican que un mensaje contiene una descripción técnica de obra. */
+const CONSTRUCTION_KEYWORDS = [
+  "vivienda", "casa", "edificio", "departamento", "oficina", "local", "nave",
+  "hospital", "clínica", "colegio", "escuela", "universidad",
+  "carretera", "camino", "puente", "pista", "vereda",
+  "m²", "m2", "m³", "m3", "metros", "metros2", "metros cuadrados",
+  "piso", "pisos", "nivel", "niveles", "sótano", "azotea",
+  "construcción", "obra", "proyecto", "edificación",
+  "concreto", "acero", "estructura", "arquitectura",
+  "ambi", "dormitorio", "baño", "cocina", "sala", "comedor",
+  "lote", "terreno", "área", "area",
+] as const;
+
+function looksLikeConstructionDescription(text: string | null | undefined): boolean {
+  if (!text || text.length < 15) return false;
+  const lower = text.toLowerCase();
+  return CONSTRUCTION_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
 // ─── Helpers for generateBudget ──────────────────────────────────────────────
 
 /**
@@ -591,7 +612,17 @@ export const generateBudgetTool: AgentToolDefinition<
   execute: async (input, context) => {
     // ── Heredar valores del contexto si el modelo no los pasó ───────────────
     let effectiveProjectId = input.projectId ?? context.projectId;
-    const effectiveDescription = input.description ?? context.lastUserMessage;
+    let effectiveDescription = input.description ?? context.lastUserMessage;
+
+    // ── Si la descripción parece un mensaje de confirmación (no contiene términos técnicos), buscar en mensajes anteriores ─
+    if (!looksLikeConstructionDescription(effectiveDescription) && context.messages) {
+      for (const msg of context.messages) {
+        if (msg.role === "user" && looksLikeConstructionDescription(msg.content)) {
+          effectiveDescription = msg.content;
+          break;
+        }
+      }
+    }
 
     // ── Si no hay projectId, intentar buscar el proyecto por nombre primero en lastUserMessage, luego en mensajes anteriores ─
     if (!effectiveProjectId) {
@@ -935,7 +966,11 @@ export const generateBudgetTool: AgentToolDefinition<
     };
   },
   summarizeResult: (result) => {
-    const parts = [`Presupuesto generado: ${result.totalItemsAdded} partidas`];
+    const total = result.totalItemsAdded as number;
+    if (total === 0) {
+      return `⚠️ Presupuesto generado pero SIN PARTIDAS. Ningún nivel de generación (MCP, plantillas, catálogo) produjo resultados. Revisa la descripción de la obra o el catálogo.`;
+    }
+    const parts = [`Presupuesto generado: ${total} partidas`];
     if (typeof result.fromMcp === "number" && result.fromMcp > 0) parts.push(`${result.fromMcp} desde .mcp`);
     if (typeof result.fromTemplates === "number" && result.fromTemplates > 0) parts.push(`${result.fromTemplates} desde plantillas`);
     if (typeof result.fromCatalog === "number" && result.fromCatalog > 0) parts.push(`${result.fromCatalog} desde catálogo`);
@@ -1207,7 +1242,17 @@ export const previewBudgetGenerationTool: AgentToolDefinition<
   execute: async (input, context) => {
     // ── Heredar valores del contexto ───────────────────────────────────────
     let effectiveProjectId = input.projectId ?? context.projectId;
-    const effectiveDescription = input.description ?? context.lastUserMessage;
+    let effectiveDescription = input.description ?? context.lastUserMessage;
+
+    // ── Si la descripción parece un mensaje de confirmación, buscar en mensajes anteriores ─
+    if (!looksLikeConstructionDescription(effectiveDescription) && context.messages) {
+      for (const msg of context.messages) {
+        if (msg.role === "user" && looksLikeConstructionDescription(msg.content)) {
+          effectiveDescription = msg.content;
+          break;
+        }
+      }
+    }
 
     // ── Si no hay projectId, intentar buscar proyecto por nombre primero en lastUserMessage, luego en mensajes anteriores ─
     if (!effectiveProjectId) {

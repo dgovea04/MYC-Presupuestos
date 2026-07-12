@@ -382,6 +382,9 @@ function buildApprovalMessage(
 
 export type StreamAgentEvent =
   | { type: "delta"; text: string }
+  | { type: "tool_start"; toolName: string }
+  | { type: "tool_result"; toolName: string; success: boolean; summary: string; latencyMs: number }
+  | { type: "approval_required"; approvalId: string; toolName: string; reason: string }
   | { type: "final"; result: AiEndpointResult };
 
 /**
@@ -660,6 +663,7 @@ export async function* streamAgentChat(
         toolCallCounts.set(toolCall.name, currentCount + 1);
       }
 
+      yield { type: "tool_start", toolName: toolCall.name };
       yield { type: "delta", text: `🔧 Ejecutando ${toolCall.name}...\n` };
 
       const toolStartTime = Date.now();
@@ -700,11 +704,24 @@ export async function* streamAgentChat(
       });
 
       yield {
+        type: "tool_result",
+        toolName: toolCall.name,
+        success: result.success,
+        summary: result.summary,
+        latencyMs: Date.now() - toolStartTime,
+      };
+      yield {
         type: "delta",
         text: `  ${result.success ? "✓" : "✗"} ${result.summary}\n`,
       };
 
       if (result.approvalRequired) {
+        yield {
+          type: "approval_required",
+          approvalId: result.approvalRequired.approvalId,
+          toolName: toolCall.name,
+          reason: result.approvalRequired.reason,
+        };
         const approvalMsg = buildApprovalMessage(toolResults, result.approvalRequired);
         yield { type: "delta", text: `\n${approvalMsg}\n` };
         yield {

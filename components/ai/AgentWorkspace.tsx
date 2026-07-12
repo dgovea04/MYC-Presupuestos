@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   ArrowLeft,
   Bot,
@@ -252,6 +252,9 @@ function AgentChatPanel({
   selectedBundle,
   onSelectBundle,
   onClearBundle,
+  showConfirmation,
+  onConfirmProceed,
+  onCancelProceed,
 }: {
   objective: string;
   setObjective: (v: string) => void;
@@ -262,6 +265,9 @@ function AgentChatPanel({
   selectedBundle: (typeof BUNDLE_CONFIG)[number] | null;
   onSelectBundle: (slug: (typeof BUNDLE_CONFIG)[number]["slug"]) => void;
   onClearBundle: () => void;
+  showConfirmation: boolean;
+  onConfirmProceed: () => void;
+  onCancelProceed: () => void;
 }) {
   return (
     <div className="flex h-full flex-col">
@@ -353,32 +359,60 @@ function AgentChatPanel({
             </div>
           </div>
         ) : (
-          messages.map((msg, i) => (
-            <div
-              key={i}
-              className={cn(
-                "flex gap-3",
-                msg.role === "user" ? "justify-end" : "justify-start",
-              )}
-            >
-              {msg.role !== "user" && (
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                  <Bot className="h-4 w-4" />
-                </div>
-              )}
+          <>
+            {messages.map((msg, i) => (
               <div
+                key={i}
                 className={cn(
-                  "max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
-                  msg.role === "user"
-                    ? "bg-blue-600 text-white"
-                    : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)]",
-                  msg.role === "system" && "border-amber-200 bg-amber-50 text-amber-800 text-xs",
+                  "flex gap-3",
+                  msg.role === "user" ? "justify-end" : "justify-start",
                 )}
               >
-                {msg.content}
+                {msg.role !== "user" && (
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    "max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                    msg.role === "user"
+                      ? "bg-blue-600 text-white"
+                      : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)]",
+                    msg.role === "system" && "border-amber-200 bg-amber-50 text-amber-800 text-xs",
+                  )}
+                >
+                  {msg.content}
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+            {/* Confirmation buttons after preview */}
+            {showConfirmation && (
+              <div className="flex justify-start gap-2">
+                <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 shadow-sm">
+                  <span className="text-xs font-medium text-emerald-800">¿Generar presupuesto?</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={onConfirmProceed}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md active:scale-[0.97]"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Proceder
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onCancelProceed}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 active:scale-[0.97]"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
         {streaming && (
           <div className="flex items-center gap-2 text-xs text-[var(--app-text-muted)]">
@@ -887,6 +921,18 @@ export function AgentWorkspace({
   const loading = status === "connecting";
   const streaming = status === "streaming";
 
+  // Determinar si mostrar botón de confirmación después del preview
+  const showConfirmation =
+    !streaming &&
+    status === "done" &&
+    streamExec.toolActivity.length > 0 &&
+    streamExec.toolActivity.some(
+      (a) => a.toolName === "previewBudgetGeneration" && a.success === true,
+    ) &&
+    !streamExec.toolActivity.some(
+      (a) => a.toolName === "generateBudget",
+    );
+
   const selectedBundle = selectedBundleSlug
     ? BUNDLE_CONFIG.find((b) => b.slug === selectedBundleSlug) ?? null
     : null;
@@ -904,6 +950,49 @@ export function AgentWorkspace({
       workflowId: selectedBundleSlug ?? undefined,
     });
   }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
+
+  // Encontrar la última descripción técnica del proyecto en el historial
+  const lastConstructionDescription = useMemo(() => {
+    // Buscar de atrás hacia adelante el último mensaje de usuario
+    // que contenga una descripción de obra (no confirmación genérica)
+    const nonConfirmationMsgs = messages.filter(
+      (m) =>
+        m.role === "user" &&
+        !m.content.startsWith("Confirmado") &&
+        !m.content.startsWith("No por ahora") &&
+        !m.content.startsWith("¡SÍ") &&
+        m.content.length > 30,
+    );
+    return nonConfirmationMsgs[nonConfirmationMsgs.length - 1]?.content ?? "";
+  }, [messages]);
+
+  const handleConfirmProceed = useCallback(() => {
+    if (loading || streaming) return;
+    // Extraer un fragmento descriptivo de la descripción original
+    let descriptionHint = "";
+    if (lastConstructionDescription) {
+      // Tomar primeros 120 caracteres como pista
+      const clean = lastConstructionDescription.length > 120
+        ? lastConstructionDescription.substring(0, 120) + "..."
+        : lastConstructionDescription;
+      descriptionHint = ` Descripción: "${clean}".`;
+    }
+
+    handleObjectiveSubmit(
+      "¡SÍ! CONFIRMADO. EJECUTA generateBudget AHORA MISMO." +
+      descriptionHint +
+      " SOLO llama la herramienta generateBudget. NO generes texto de respuesta. " +
+      "NO preguntes de nuevo. USA los mismos projectId y description que en previewBudgetGeneration. " +
+      "LLAMA generateBudget INMEDIATAMENTE.",
+    );
+  }, [handleObjectiveSubmit, loading, streaming, lastConstructionDescription]);
+
+  const handleCancelProceed = useCallback(() => {
+    if (loading || streaming) return;
+    handleObjectiveSubmit(
+      "No por ahora. Cancelemos la generación del presupuesto.",
+    );
+  }, [handleObjectiveSubmit, loading, streaming]);
 
   const handleApprove = useCallback(async (approvalId: string) => {
     setApproving(true);
@@ -959,6 +1048,9 @@ export function AgentWorkspace({
           selectedBundle={selectedBundle}
           onSelectBundle={(slug) => setSelectedBundleSlug(slug)}
           onClearBundle={() => setSelectedBundleSlug(null)}
+          showConfirmation={showConfirmation}
+          onConfirmProceed={handleConfirmProceed}
+          onCancelProceed={handleCancelProceed}
         />
       </div>
 
