@@ -5,6 +5,7 @@ import type {
   AgentExecutionState,
   AgentToolActivitySummary,
 } from "@/lib/ai/agent/types";
+import type { AgentIntent, AgentPendingAction } from "@/lib/ai/agent/intent-router";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ export type AgentStreamState = {
   messages: AgentStreamMessage[];
   execution: AgentStreamExecution;
   error: string | null;
+  intent: AgentIntent | null;
+  pendingAction: AgentPendingAction | null;
 };
 
 export type AgentStreamInput = {
@@ -69,6 +72,8 @@ export function useAgentStream() {
   const [messages, setMessages] = useState<AgentStreamMessage[]>([]);
   const [execution, setExecution] = useState<AgentStreamExecution>(EMPTY_EXECUTION);
   const [error, setError] = useState<string | null>(null);
+  const [intent, setIntent] = useState<AgentIntent | null>(null);
+  const [pendingAction, setPendingAction] = useState<AgentPendingAction | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -76,6 +81,8 @@ export function useAgentStream() {
     // Reset state
     setStatus("connecting");
     setError(null);
+    setIntent(null);
+    setPendingAction(null);
 
     // Si skipMessageAdd está activo, NO mostrar el mensaje en la UI
     // (útil para comandos internos como la confirmación de presupuesto)
@@ -274,6 +281,16 @@ export function useAgentStream() {
         break;
       }
 
+      case "intent": {
+        setIntent(data as unknown as AgentIntent);
+        break;
+      }
+
+      case "pending_action": {
+        setPendingAction(data ? (data as unknown as AgentPendingAction) : null);
+        break;
+      }
+
       case "error": {
         setStatus("error");
         setError(data.message as string);
@@ -292,6 +309,8 @@ export function useAgentStream() {
     messages,
     execution,
     error,
+    intent,
+    pendingAction,
     connect,
     disconnect,
   } as const;

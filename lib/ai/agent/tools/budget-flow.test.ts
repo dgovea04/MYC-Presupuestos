@@ -66,6 +66,7 @@ vi.mock("@/lib/db/prisma", () => {
       budget: {
         create: createSubBudget,
         findFirst: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
         update: vi.fn(),
       },
     },

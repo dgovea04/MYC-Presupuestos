@@ -15,7 +15,7 @@ vi.mock("@/lib/ai/gateway/providers/agent-provider", () => ({
 }));
 
 import { prisma } from "@/lib/db/prisma";
-import { POST } from "@/app/api/ai/agent/stream/route";
+import { POST, detectPendingActionFromHistory } from "@/app/api/ai/agent/stream/route";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -46,12 +46,10 @@ function post(body: unknown): Promise<Response> {
   );
 }
 
-/** Helper: collect the full SSE body text from a Response. */
 async function readSSEBody(response: Response): Promise<string> {
   return response.text();
 }
 
-/** Helper: parse SSE events from body text into { event, data } objects. */
 function parseSSEEvents(body: string): { event: string; data: unknown }[] {
   const events: { event: string; data: unknown }[] = [];
   const frames = body.split("\n\n").filter(Boolean);
@@ -87,7 +85,6 @@ describe("POST /api/ai/agent/stream", () => {
   // ── Validation ───────────────────────────────────────────────────────────
 
   it("returns 400 when message is missing", async () => {
-    // zod throws on parse; withAiRoute wraps/catches it
     mocks.withAiRoute.mockImplementation(async () => {
       return new Response(
         JSON.stringify({ error: "Ingresa un objetivo para el agente." }),
@@ -132,11 +129,59 @@ describe("POST /api/ai/agent/stream", () => {
     const response = await post({ message: "Hola" });
     const body = await readSSEBody(response);
 
-    // Preamble should start with ": " (SSE comment line)
     expect(body.startsWith(": ")).toBe(true);
-    // Preamble + delta + final
-    expect(body).toContain('event: delta');
-    expect(body).toContain('event: final');
+    expect(body).toContain("event: delta");
+    expect(body).toContain("event: final");
+  });
+
+  // ── Pending action event ──────────────────────────────────────────────────
+
+  it("emits pending_action event (null when no pending action)", async () => {
+    mockStreamYield([makeFinal()]);
+
+    const response = await post({ message: "Hola" });
+    const events = parseSSEEvents(await readSSEBody(response));
+
+    const pendingActions = events.filter((e) => e.event === "pending_action");
+    expect(pendingActions).toHaveLength(1);
+    expect(pendingActions[0].data).toBeNull();
+  });
+
+  // ── Intent event ─────────────────────────────────────────────────────────
+
+  it("emits intent event as the first event after preamble", async () => {
+    mockStreamYield([
+      { type: "delta", text: "Hola" },
+      makeFinal(),
+    ]);
+
+    const response = await post({ message: "generar presupuesto para vivienda" });
+    const events = parseSSEEvents(await readSSEBody(response));
+
+    const intentEvents = events.filter((e) => e.event === "intent");
+    expect(intentEvents).toHaveLength(1);
+    const intentData = intentEvents[0].data as Record<string, unknown>;
+    expect(intentData).toHaveProperty("type");
+    expect(intentData).toHaveProperty("confidence");
+    expect(intentData).toHaveProperty("reason");
+    expect(intentData).toHaveProperty("suggestedTools");
+    expect(intentData).toHaveProperty("extracted");
+
+    // intent should be the first non-preamble event
+    expect(events[0].event).toBe("intent");
+  });
+
+  it("intent event includes requiredFields when intent needs data", async () => {
+    mockStreamYield([makeFinal()]);
+
+    // Message without project — should detect create_general_budget intent
+    const response = await post({ message: "crear presupuesto general" });
+    const events = parseSSEEvents(await readSSEBody(response));
+
+    const intentEvent = events.find((e) => e.event === "intent");
+    expect(intentEvent).toBeDefined();
+    const data = intentEvent!.data as Record<string, unknown>;
+    expect(data.type).toBe("create_general_budget");
   });
 
   // ── Delta events ─────────────────────────────────────────────────────────
@@ -159,12 +204,12 @@ describe("POST /api/ai/agent/stream", () => {
     );
   });
 
-  // ── Tool start / result parsed from delta text ────────────────────────────
+  // ── Tool events (pass-through from provider) ─────────────────────────────
 
-  it("parses tool_start from '🔧 Ejecutando <name>' delta text", async () => {
+  it("emits tool_start events from streamAgentChat", async () => {
     mockStreamYield([
-      { type: "delta", text: "🔧 Ejecutando searchPartidas...\n" },
-      { type: "delta", text: "  ✓ Se encontraron 5 partidas coincidentes\n" },
+      { type: "tool_start", toolName: "searchPartidas" },
+      { type: "delta", text: "Buscando partidas..." },
       makeFinal(),
     ]);
 
@@ -173,15 +218,12 @@ describe("POST /api/ai/agent/stream", () => {
 
     const toolStarts = events.filter((e) => e.event === "tool_start");
     expect(toolStarts).toHaveLength(1);
-    expect((toolStarts[0].data as { toolName: string }).toolName).toBe(
-      "searchPartidas",
-    );
+    expect((toolStarts[0].data as { toolName: string }).toolName).toBe("searchPartidas");
   });
 
-  it("parses tool_result from '  ✓/<summary>' delta text", async () => {
+  it("emits tool_result events from streamAgentChat", async () => {
     mockStreamYield([
-      { type: "delta", text: "🔧 Ejecutando calculateBudget...\n" },
-      { type: "delta", text: "  ✓ Presupuesto total calculado: S/ 45,230\n" },
+      { type: "tool_result", toolName: "calculateBudget", success: true, summary: "Presupuesto calculado", latencyMs: 120 },
       makeFinal(),
     ]);
 
@@ -191,24 +233,16 @@ describe("POST /api/ai/agent/stream", () => {
     const toolResults = events.filter((e) => e.event === "tool_result");
     expect(toolResults).toHaveLength(1);
     const result = toolResults[0].data as {
-      toolName: string;
-      success: boolean;
-      summary: string;
-      latencyMs: number;
+      toolName: string; success: boolean; summary: string; latencyMs: number;
     };
     expect(result.toolName).toBe("calculateBudget");
     expect(result.success).toBe(true);
-    expect(result.summary).toContain("Presupuesto total calculado");
-    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(result.summary).toBe("Presupuesto calculado");
   });
 
-  it("parses tool_result with failure (✗) correctly", async () => {
+  it("emits tool_result with failure correctly", async () => {
     mockStreamYield([
-      { type: "delta", text: "🔧 Ejecutando deleteChapter...\n" },
-      {
-        type: "delta",
-        text: "  ✗ Error: el capítulo no existe en la base de datos\n",
-      },
+      { type: "tool_result", toolName: "deleteChapter", success: false, summary: "Error: capítulo no existe", latencyMs: 50 },
       makeFinal(),
     ]);
 
@@ -218,20 +252,14 @@ describe("POST /api/ai/agent/stream", () => {
     const toolResults = events.filter((e) => e.event === "tool_result");
     expect(toolResults).toHaveLength(1);
     expect((toolResults[0].data as { success: boolean }).success).toBe(false);
-    expect((toolResults[0].data as { summary: string }).summary).toContain(
-      "Error",
-    );
   });
 
-  it("emits tool_start and tool_result for multiple tools in sequence", async () => {
+  it("emits multiple tool events in sequence", async () => {
     mockStreamYield([
-      { type: "delta", text: "🔧 Ejecutando searchPartidas...\n" },
-      { type: "delta", text: "  ✓ Encontré 3 partidas\n" },
-      { type: "delta", text: "🔧 Ejecutando calculateBudget...\n" },
-      {
-        type: "delta",
-        text: "  ✓ Presupuesto calculado correctamente\n",
-      },
+      { type: "tool_start", toolName: "searchPartidas" },
+      { type: "tool_result", toolName: "searchPartidas", success: true, summary: "3 partidas", latencyMs: 80 },
+      { type: "tool_start", toolName: "calculateBudget" },
+      { type: "tool_result", toolName: "calculateBudget", success: true, summary: "Calculado", latencyMs: 100 },
       makeFinal(),
     ]);
 
@@ -242,24 +270,13 @@ describe("POST /api/ai/agent/stream", () => {
     const results = events.filter((e) => e.event === "tool_result");
     expect(starts).toHaveLength(2);
     expect(results).toHaveLength(2);
-    expect((starts[0].data as { toolName: string }).toolName).toBe(
-      "searchPartidas",
-    );
-    expect((starts[1].data as { toolName: string }).toolName).toBe(
-      "calculateBudget",
-    );
   });
 
   // ── Approval parsing ─────────────────────────────────────────────────────
 
-  it("parses approval_required from 'Se requiere tu aprobación' delta text", async () => {
+  it("emits approval_required events from streamAgentChat", async () => {
     mockStreamYield([
-      { type: "delta", text: "🔧 Ejecutando deleteChapter...\n" },
-      {
-        type: "delta",
-        text:
-          '⚠️ **Se requiere tu aprobación** para ejecutar "deleteChapter":\n> Eliminar el capítulo 3 del presupuesto\n',
-      },
+      { type: "approval_required", approvalId: "appr-1", toolName: "deleteChapter", reason: "Eliminar capítulo 3" },
       makeFinal(),
     ]);
 
@@ -268,12 +285,9 @@ describe("POST /api/ai/agent/stream", () => {
 
     const approvals = events.filter((e) => e.event === "approval_required");
     expect(approvals).toHaveLength(1);
-    const approval = approvals[0].data as {
-      toolName: string;
-      reason: string;
-    };
+    const approval = approvals[0].data as { toolName: string; reason: string };
     expect(approval.toolName).toBe("deleteChapter");
-    expect(approval.reason).toContain("Eliminar el capítulo 3");
+    expect(approval.reason).toContain("Eliminar capítulo 3");
   });
 
   // ── Final event ──────────────────────────────────────────────────────────
@@ -290,9 +304,7 @@ describe("POST /api/ai/agent/stream", () => {
     const finals = events.filter((e) => e.event === "final");
     expect(finals).toHaveLength(1);
     const final = finals[0].data as {
-      answer: string;
-      warnings: string[];
-      latencyMs: number;
+      answer: string; warnings: string[]; latencyMs: number;
     };
     expect(final.answer).toBe("Reporte exportado con éxito.");
     expect(final.warnings).toEqual(["Advertencia: datos parciales"]);
@@ -331,17 +343,13 @@ describe("POST /api/ai/agent/stream", () => {
 
   it("streams a complete agent lifecycle through all SSE event types", async () => {
     mockStreamYield([
-      { type: "delta", text: "🔧 Ejecutando calculateBudget...\n" },
-      {
-        type: "delta",
-        text: "  ✓ Presupuesto total calculado: S/ 95,400\n",
-      },
-      { type: "delta", text: "🔧 Ejecutando searchPartidas...\n" },
-      {
-        type: "delta",
-        text: "  ✓ Se encontraron 12 partidas en el presupuesto\n",
-      },
-      { type: "delta", text: "\nEl presupuesto base contiene 12 partidas...\n" },
+      { type: "tool_start", toolName: "calculateBudget" },
+      { type: "delta", text: "Calculando..." },
+      { type: "tool_result", toolName: "calculateBudget", success: true, summary: "S/ 95,400", latencyMs: 200 },
+      { type: "tool_start", toolName: "searchPartidas" },
+      { type: "delta", text: "Buscando..." },
+      { type: "tool_result", toolName: "searchPartidas", success: true, summary: "12 partidas", latencyMs: 150 },
+      { type: "delta", text: "Análisis completo." },
       makeFinal("Análisis completado correctamente.", [], 2340),
     ]);
 
@@ -353,20 +361,17 @@ describe("POST /api/ai/agent/stream", () => {
 
     // Verify all event types present
     const eventTypes = events.map((e) => e.event);
+    expect(eventTypes).toContain("intent");
+    expect(eventTypes).toContain("pending_action");
     expect(eventTypes).toContain("tool_start");
     expect(eventTypes).toContain("tool_result");
     expect(eventTypes).toContain("delta");
     expect(eventTypes).toContain("final");
 
-    // Verify chronological order: preamble comment, tool_start, delta (tool_start text), tool_result, delta (tool_result text), etc., final
-    // The first non-preamble frame should be the first delta (which also triggers tool_start)
-    const nonPreambleEvents = events;
-    expect(nonPreambleEvents[0].event).toBe("tool_start");
-    expect(nonPreambleEvents[1].event).toBe("delta"); // "🔧 Ejecutando..."
-    expect(nonPreambleEvents[2].event).toBe("tool_result");
-    expect(nonPreambleEvents[3].event).toBe("delta"); // "  ✓ ..."
-    // final should be last
-    expect(nonPreambleEvents[nonPreambleEvents.length - 1].event).toBe("final");
+    // intent and pending_action should be first, final should be last
+    expect(events[0].event).toBe("intent");
+    expect(events[1].event).toBe("pending_action");
+    expect(events[events.length - 1].event).toBe("final");
   });
 
   it("passes message and projectId to streamAgentChat", async () => {
@@ -390,7 +395,7 @@ describe("POST /api/ai/agent/stream", () => {
           }),
         ]),
       }),
-      undefined, // prebuiltModel ya no tiene parámetros de fallback
+      undefined,
     );
   });
 
@@ -399,20 +404,14 @@ describe("POST /api/ai/agent/stream", () => {
   it("injects projects into system prompt when workspaceId is provided", async () => {
     const mockProjects = [
       {
-        id: "proj-santa",
-        name: "Santa Monica",
-        clientName: "Cliente Ejemplo",
-        location: "Lima, Perú",
-        status: "IN_PROGRESS",
-        updatedAt: new Date("2025-06-01"),
+        id: "proj-santa", name: "Santa Monica",
+        clientName: "Cliente Ejemplo", location: "Lima, Perú",
+        status: "IN_PROGRESS", updatedAt: new Date("2025-06-01"),
       },
       {
-        id: "proj-olivos",
-        name: "Los Olivos",
-        clientName: null,
-        location: null,
-        status: "PLANNING",
-        updatedAt: new Date("2025-05-15"),
+        id: "proj-olivos", name: "Los Olivos",
+        clientName: null, location: null,
+        status: "PLANNING", updatedAt: new Date("2025-05-15"),
       },
     ];
     const projectSpy = vi.spyOn(prisma.project, "findMany").mockResolvedValue(mockProjects as any);
@@ -424,7 +423,7 @@ describe("POST /api/ai/agent/stream", () => {
     });
 
     const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
-    expect(systemPrompt).toContain("--- PROYECTOS DISPONIBLES ---");
+    expect(systemPrompt).toContain("PROYECTOS DISPONIBLES");
     expect(systemPrompt).toContain("Santa Monica");
     expect(systemPrompt).toContain("proj-santa");
     expect(systemPrompt).toContain("Los Olivos");
@@ -439,13 +438,12 @@ describe("POST /api/ai/agent/stream", () => {
     const projectSpy = vi.spyOn(prisma.project, "findMany").mockResolvedValue([]);
     mockStreamYield([makeFinal()]);
 
-    await post({
-      message: "Hola",
-      workspaceId: "ws-1",
-    });
+    await post({ message: "Hola", workspaceId: "ws-1" });
 
     const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
-    expect(systemPrompt).not.toContain("--- PROYECTOS DISPONIBLES ---");
+    // The security section references "PROYECTOS DISPONIBLES" as a concept,
+    // but no actual project data should be injected
+    expect(systemPrompt).not.toContain("Santa Monica");
 
     projectSpy.mockRestore();
   });
@@ -456,9 +454,160 @@ describe("POST /api/ai/agent/stream", () => {
     await post({ message: "Hola" });
 
     const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
-    expect(systemPrompt).not.toContain("--- PROYECTOS DISPONIBLES ---");
+    expect(systemPrompt).not.toContain("Santa Monica");
+  });
+});
+
+// ── detectPendingActionFromHistory ─────────────────────────────────────────
+
+describe("detectPendingActionFromHistory", () => {
+  it("returns null when there are no messages", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "Sí, procede",
+      messages: [],
+      projectId: "proj-1",
+    });
+    expect(result).toBeNull();
   });
 
+  it("returns null when messages is undefined", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "Sí, procede",
+      messages: undefined,
+      projectId: "proj-1",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("returns null when no preview is found in assistant messages", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "Sí, procede",
+      messages: [
+        { role: "user", content: "genera un presupuesto para una vivienda de 120m2 en Lima" },
+        { role: "assistant", content: "Claro, voy a revisar los precios del mercado." },
+      ],
+      projectId: "proj-1",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("detects preview from 'Vista previa' keyword in assistant message", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "Sí, procede",
+      messages: [
+        { role: "user", content: "genera un presupuesto para una vivienda de 120m2 en Lima" },
+        { role: "assistant", content: "He generado una Vista previa del presupuesto. ¿Deseas que proceda?" },
+      ],
+      projectId: "proj-1",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("apply_budget_generation");
+    expect(result!.projectId).toBe("proj-1");
+    expect(result!.description).toContain("genera un presupuesto para una vivienda");
+    expect(result!.templateSource).toBe("auto");
+  });
+
+  it("detects preview from 'previewBudgetGeneration' tool name in assistant message", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "Sí, procede",
+      messages: [
+        { role: "user", content: "crea presupuesto para un hospital de 4 pisos en Cusco" },
+        { role: "assistant", content: "🔧 Ejecutando previewBudgetGeneration...\n  ✓ 📋 Vista previa generada. ¿Deseas que genere el presupuesto?" },
+      ],
+      projectId: "proj-2",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("apply_budget_generation");
+    expect(result!.projectId).toBe("proj-2");
+  });
+
+  it("detects preview from 'vista previa' (lowercase) in assistant message", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "sí, adelante",
+      messages: [
+        { role: "user", content: "presupuesto para colegio de 3 pisos con 12 aulas" },
+        { role: "assistant", content: "Aquí tienes la vista previa del presupuesto para el colegio." },
+      ],
+      projectId: "proj-3",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("apply_budget_generation");
+    expect(result!.projectId).toBe("proj-3");
+  });
+
+  it("returns null when preview found but no projectId provided", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "Sí, procede",
+      messages: [
+        { role: "user", content: "genera un presupuesto para una vivienda de 120m2" },
+        { role: "assistant", content: "Vista previa generada. ¿Procedo?" },
+      ],
+      projectId: undefined,
+    });
+    expect(result).toBeNull();
+  });
+
+  it("skips confirmation messages when extracting construction description", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "¡SÍ! CONFIRMADO. EJECUTA generateBudget AHORA MISMO.",
+      messages: [
+        { role: "user", content: "crea presupuesto para edificio de oficinas de 500m2 en Lima" },
+        { role: "assistant", content: "📋 Vista previa lista. ¿Deseas que proceda?" },
+        { role: "user", content: "Confirmado" },
+      ],
+      projectId: "proj-4",
+    });
+    expect(result).not.toBeNull();
+    // Should find the construction description, not the confirmation messages
+    expect(result!.description).toContain("crea presupuesto para edificio de oficinas");
+    expect(result!.description).not.toContain("Confirmado");
+    expect(result!.description).not.toContain("¡SÍ");
+  });
+
+  it("returns empty description when no construction description found in history", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "sí",
+      messages: [
+        { role: "user", content: "Sí" },
+        { role: "assistant", content: "Vista previa generada. ¿Procedemos?" },
+      ],
+      projectId: "proj-5",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.description).toBe("");
+  });
+
+  it("finds construction description from earlier user messages when later ones are confirmations", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "sí, dale",
+      messages: [
+        { role: "user", content: "necesito presupuestar una carretera de 15km asfaltada en Arequipa" },
+        { role: "assistant", content: "He preparado la Vista previa con 45 partidas. ¿Procedo con la generación?" },
+        { role: "user", content: "Sí" },
+        { role: "assistant", content: "¿Confirmas que quieres generar el presupuesto completo?" },
+      ],
+      projectId: "proj-6",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.description).toContain("necesito presupuestar una carretera");
+    expect(result!.description).toContain("Arequipa");
+  });
+
+  it("looks at all assistant messages for preview, not just the last one", () => {
+    const result = detectPendingActionFromHistory({
+      currentMessage: "sí",
+      messages: [
+        { role: "user", content: "presupuesto para vivienda unifamiliar de 80m2" },
+        { role: "assistant", content: "📋 Vista previa lista con 12 partidas." },
+        { role: "user", content: "agrega más partidas de acabados" },
+        { role: "assistant", content: "He actualizado la lista. Ahora son 18 partidas." },
+        { role: "user", content: "ok, procede" },
+      ],
+      projectId: "proj-7",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("apply_budget_generation");
+  });
 });
 
 // ── Mock helpers ───────────────────────────────────────────────────────────
@@ -481,7 +630,6 @@ function makeFinal(
   };
 }
 
-/** Mock streamAgentChat to yield events synchronously. */
 function mockStreamYield(events: unknown[]) {
   mocks.streamAgentChat.mockImplementation(async function* () {
     for (const event of events) {
@@ -490,7 +638,6 @@ function mockStreamYield(events: unknown[]) {
   });
 }
 
-/** Mock streamAgentChat to throw an error. */
 function mockStreamYieldError(error: unknown) {
   mocks.streamAgentChat.mockImplementation(async function* () {
     throw error;

@@ -6,18 +6,21 @@ import { getDecryptedOpenrouterApiKey, getDecryptedGeminiApiKey, getAiProviderSe
 import {
   getWorkflowTemplate,
   getBundleBySlug,
-  getBundleSystemPrompt,
 } from "@/lib/ai/agent/workflows";
 import { getAgentModelProvider } from "@/lib/ai/agent/models";
 import { prisma } from "@/lib/db/prisma";
 import { createOllama } from "ollama-ai-provider-v2";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { detectAgentIntent, type AgentIntent, type AgentPendingAction } from "@/lib/ai/agent/intent-router";
+import { buildAgentSystemPrompt } from "@/lib/ai/agent/prompt-builder";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
 
 /** Tipos de eventos SSE que emite este endpoint. */
 type AgentStreamEvent =
+  | { type: "intent"; intent: Pick<AgentIntent, "type" | "confidence" | "reason" | "extracted" | "suggestedTools" | "requiredFields"> }
+  | { type: "pending_action"; pendingAction: AgentPendingAction | null }
   | { type: "delta"; text: string }
   | { type: "tool_start"; toolName: string }
   | { type: "tool_result"; toolName: string; success: boolean; summary: string; latencyMs: number }
@@ -33,6 +36,8 @@ type AgentStreamEvent =
  * (Chat, Plan de Ejecución, Herramientas/Aprobaciones/Actividad).
  *
  * Eventos emitidos:
+ *   intent          — clasificación de la intención del usuario
+ *   pending_action  — acción pendiente de confirmación (si existe)
  *   delta           — texto incremental para el chat
  *   tool_start      — una herramienta empezó a ejecutarse
  *   tool_result     — resultado de una herramienta (éxito/fallo)
@@ -59,7 +64,12 @@ export async function POST(request: Request) {
     }
 
     // ── Resolver proyectos recientes del usuario ─────────────────────────
-    let recentProjectsList = "";
+    const recentProjectRecords: Array<{
+      id: string;
+      name: string;
+      clientName?: string | null;
+      location?: string | null;
+    }> = [];
     if (data.workspaceId) {
       try {
         const projects = await prisma.project.findMany({
@@ -79,147 +89,84 @@ export async function POST(request: Request) {
             name: true,
             clientName: true,
             location: true,
-            status: true,
-            updatedAt: true,
           },
           orderBy: { updatedAt: "desc" },
           take: 8,
         });
-
-        if (projects.length > 0) {
-          const projectLines = projects.map(
-            (p) =>
-              `  - "${p.name}" (ID: ${p.id})` +
-              (p.clientName ? `, Cliente: ${p.clientName}` : "") +
-              (p.location ? `, Ubicación: ${p.location}` : ""),
-          );
-          recentProjectsList = [
-            "",
-            "--- PROYECTOS DISPONIBLES ---",
-            "Estos son los proyectos más recientes del usuario. USA SUS IDs directamente cuando necesites trabajar en un proyecto existente.",
-            ...projectLines,
-            "",
-            `Total: ${projects.length} proyectos listados. Si el proyecto que busca el usuario no está aquí, indícale que no se encontró.`,
-          ].join("\n");
-        }
+        recentProjectRecords.push(...projects);
       } catch {
         // non-blocking
       }
     }
 
     // ── Resolver bundle y workflow prompts ─────────────────────────────────
-    let workflowGuidance = "";
+    let workflowContext: {
+      id: string;
+      name: string;
+      bundleSlug: string;
+      bundleName: string;
+      bundleDescription: string;
+      systemPrompt: string;
+      initialGoal: string;
+    } | null = null;
     if (data.workflowId) {
       const template = getWorkflowTemplate(data.workflowId);
       if (template) {
         const bundle = getBundleBySlug(template.bundleSlug);
         if (bundle) {
-          workflowGuidance = [
-            "",
-            "--- ESPECIALIDAD ACTIVA ---",
-            `Rol: ${bundle.name} — ${bundle.description}`,
-            bundle.systemPrompt,
-            "",
-            "--- OBJETIVO DEL WORKFLOW ---",
-            template.initialGoal,
-          ].join("\n");
+          workflowContext = {
+            id: template.slug,
+            name: template.name,
+            bundleSlug: template.bundleSlug,
+            bundleName: bundle.name,
+            bundleDescription: bundle.description,
+            systemPrompt: bundle.systemPrompt,
+            initialGoal: template.initialGoal,
+          };
         }
       }
     }
 
-    const systemPromptLines = [
-      "Eres Khipu, un asistente técnico de construcción y presupuestos de obra en Perú.",
-      "Ayudas a ingenieros y contratistas con presupuestos, APU, cronogramas, metrados y reportes.",
-      "Siempre usa herramientas cuando necesites datos concretos del proyecto.",
-    ];
-
-    // Inyectar contexto del workspace activo si está disponible
-    if (workspaceName && data.workspaceId) {
-      systemPromptLines.push(
-        "",
-        "--- WORKSPACE ACTUAL ---",
-        `Estás trabajando en la empresa "${workspaceName}" (ID: ${data.workspaceId}).`,
-        "NO uses searchCompanies para preguntar al usuario qué empresa usar.",
-        "Usa searchCompanies SOLO si necesitas listar TODAS las empresas del usuario (ej: para cambiar de empresa).",
-        `Si el usuario pide crear un proyecto o presupuesto, usa directamente este companyId: "${data.workspaceId}".`,
-      );
-    }
-
-    // Inyectar proyectos recientes en el prompt (para evitar searchProjects)
-    if (recentProjectsList) {
-      systemPromptLines.push(recentProjectsList);
-    }
-
-    // Inyectar guía del workflow/bundle si existe
-    if (workflowGuidance) {
-      systemPromptLines.push(workflowGuidance);
-    }
-
-    systemPromptLines.push(
-      "",
-      "Responde en español, con tono profesional y técnico.",
-      "",
-      "--- INSTRUCCIONES ---",
-      "",
-      "CREAR PROYECTO NUEVO:",
-      "1. El usuario pide crear proyecto/presupuesto → si no está en la lista de PROYECTOS DISPONIBLES, pregúntale: ¿nuevo o existente?",
-      "2. El usuario responde 'nuevo' (o similar) → pregúntale: ¿cuál es el nombre?",
-      "3. El usuario da el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
-      "   • No preguntes por location, clientName, projectType ni fechas (son opcionales).",
-      "   • No pidas confirmación extra. El sistema ya maneja la aprobación.",
-      "   • El companyId ya está configurado, no lo incluyas.",
-      "",
-      "PROYECTO EXISTENTE (BUSCAR EN LA LISTA DE ARRIBA):",
-      "1. El usuario dice 'existente' (o similar) y da un nombre → BUSCA en la sección PROYECTOS DISPONIBLES (arriba) si el proyecto ya está listado.",
-      "   • Los proyectos ya están listados con sus IDs. USA EL ID directamente, NO llames searchProjects.",
-      "   • Ejemplo: si el usuario dice 'Santa Monica', revisa la lista de PROYECTOS DISPONIBLES. Si ves 'Santa Monica' ahí, usa su ID.",
-      "2. Si el proyecto NO está en la lista de PROYECTOS DISPONIBLES, USA searchProjects({ query: nombreDelProyecto }) PARA BUSCARLO.",
-      "   • PASA EL NOMBRE como query. NUNCA llames searchProjects sin query.",
-      "3. searchProjects retorna resultados. ENCUENTRA el que coincide por nombre y usa su ID.",
-      "4. Si el proyecto no se encuentra en los resultados, INFORMÁLE al usuario.",
-      "",
-      "GENERAR PRESUPUESTO (FLUJO EN 2 PASOS):",
-      "PASO 1 — VISTA PREVIA (SIEMPRE primero):",
-      "1. Llama previewBudgetGeneration con projectId y description para obtener el preview.",
-      "2. previewBudgetGeneration es SOLO LECTURA, no requiere aprobación, y muestra:",
-      "   • Proyectos similares encontrados",
-      "   • Plantilla .mcp seleccionada y su score",
-      "   • Matching con catálogo: partidas OK, revisión requerida y sin match",
-      "   • Costo directo estimado por sub-presupuesto",
-      "3. MUÉSTRALE al usuario un resumen claro del preview con conteos y advertencias.",
-      "4. PREGUNTA al usuario: '¿Quieres que proceda con la generación?'",
-      "",
-      "PASO 2 — GENERAR (el usuario confirma o hace clic en botón):",
-      "5. En cuanto el usuario responda ALGO afirmativo, llama generateBudget INMEDIATAMENTE.",
-      "   CONSIDERA CONFIRMACIÓN VÁLIDA cuando el usuario diga:",
-      '   • "si", "sí", "confirmado", "si confirmado", "ok", "okay", "dale", "procede", "adelante", "vamos", "hazlo", "correcto", "de acuerdo"',
-      '   • Cualquier respuesta positiva o afirmativa en español o inglés',
-      '   • Incluso si el usuario solo dice "si" sin más contexto',
-      "   • SI el usuario ya respondió afirmativamente, NO le preguntes de nuevo. Llama generateBudget DIRECTAMENTE.",
-      "   • NO preguntes '¿Quieres que proceda?' si el usuario YA dijo que sí en su mensaje anterior.",
-      "6. Si el usuario responde con algo negativo o pide cambios, responde apropiadamente sin llamar generateBudget.",
-      "7. generateBudget puede requerir aprobación (dependiendo del modo).",
-      "",
-      "REGLAS IMPORTANTES:",
-      "- NUNCA llames searchProjects() sin pasar el parámetro query con el nombre del proyecto.",
-      "- Si el proyecto ya está en la lista de PROYECTOS DISPONIBLES, USA SU ID DIRECTO. No necesitas searchProjects.",
-      "- NO uses searchBudgets para buscar proyectos. searchBudgets busca presupuestos dentro de un proyecto.",
-      "- Si ya tienes la información que necesitas, responde al usuario en lugar de llamar más herramientas.",
-      "- El sistema bloquea herramientas que se llaman más de 2 veces, así que úsalas con cuidado.",
-      "",
-      "CONSEJOS:",
-      "- Puedes generar texto de forma natural mientras ejecutas herramientas.",
-      "- Cuando tengas los datos necesarios, llama la herramienta sin demora.",
-      "- No uses searchCompanies. Ya sabes cuál es la empresa del usuario.",
-    );
-
     // ── Resolver modelo y provider desde la configuración del usuario ─────
     const settings = await getAiProviderSettings(session.user.id);
     const modelPreference = settings.openrouterModel || undefined;
-
-    // ── Determinar provider y resolver API key ────────────────────────────
     const provider = modelPreference ? getAgentModelProvider(modelPreference) : undefined;
 
+    // ── Detectar intención del usuario ─────────────────────────────────────
+    const msgHistory = data.messages?.map((m) => ({
+      role: m.role as "user" | "assistant" | "system",
+      content: m.content,
+    }));
+
+    // Detectar si hay una acción pendiente (ej: previewBudgetGeneration ya ejecutado)
+    const pendingAction = detectPendingActionFromHistory({
+      currentMessage: data.message,
+      messages: msgHistory,
+      projectId: data.projectId,
+    });
+
+    const intent = detectAgentIntent({
+      message: data.message,
+      messages: msgHistory,
+      mode: data.mode ?? "chat",
+      workflowId: data.workflowId,
+      projectId: data.projectId,
+      workspaceId: data.workspaceId,
+      pendingAction,
+    });
+
+    // ── Construir prompt modular ──────────────────────────────────────────
+    const systemPrompt = buildAgentSystemPrompt({
+      intent,
+      workspace: workspaceName && data.workspaceId
+        ? { id: data.workspaceId, name: workspaceName }
+        : null,
+      recentProjects: recentProjectRecords,
+      workflow: workflowContext,
+      provider: provider ?? "unknown",
+    });
+
+    // ── Resolver API key según provider ────────────────────────────────────
     let apiKey: string | undefined;
     let geminiApiKey: string | undefined;
 
@@ -229,36 +176,19 @@ export async function POST(request: Request) {
       apiKey = await getDecryptedOpenrouterApiKey(session.user.id);
     }
 
-    // ── Sección extra para modelos locales (Ollama) ───────────────────────
-    if (provider === "ollama") {
-      systemPromptLines.push(
-        "",
-        "--- MODO LOCAL ---",
-        "Eres un modelo local. Sé MÁS DIRECTO que un modelo cloud. NO preguntes, EJECUTA.",
-        "El usuario espera acción inmediata. Si entiendes la intención, USA LA HERRAMIENTA YA.",
-        "Ejemplo: si el usuario dice 'crear presupuesto para X', extrae X como nombre y crea el proyecto.",
-      );
-    }
-
-    const systemPrompt = systemPromptLines.join("\n");
-
     // ── Construir LanguageModel según el provider del modelo ──────────────
     let prebuiltModel: unknown = undefined;
 
     if (provider === "google" && modelPreference && geminiApiKey) {
       const googleProvider = createGoogleGenerativeAI({ apiKey: geminiApiKey });
-      // Extraer nombre del modelo: "google/gemini-2.5-flash-lite" → "gemini-2.5-flash-lite"
       const googleModelName = modelPreference.split("/").slice(1).join("/");
       prebuiltModel = googleProvider(googleModelName);
     } else if (provider === "ollama" && modelPreference) {
-      // Usar Ollama local via ollama-ai-provider-v2 (especificación v2 del AI SDK)
       const ollamaConfig: { baseURL?: string } = {};
       if (process.env.OLLAMA_BASE_URL) {
-        // El provider espera la URL completa incluyendo /api
         ollamaConfig.baseURL = `${process.env.OLLAMA_BASE_URL.replace(/\/$/, "")}/api`;
       }
       const ollamaProvider = createOllama(ollamaConfig);
-      // Extraer nombre del modelo: "ollama/llama3.1" → "llama3.1"
       const ollamaModelName = modelPreference.split("/").slice(1).join("/");
       prebuiltModel = ollamaProvider(ollamaModelName);
     }
@@ -268,8 +198,21 @@ export async function POST(request: Request) {
         try {
           writePreamble(controller);
 
+          // Emitir la intención detectada para que el frontend pueda mostrarla
+          writeEvent(controller, "intent", {
+            type: intent.type,
+            confidence: intent.confidence,
+            reason: intent.reason,
+            extracted: intent.extracted,
+            suggestedTools: intent.suggestedTools,
+            requiredFields: intent.requiredFields,
+          });
+
+          // Emitir acción pendiente detectada (o null si no hay ninguna)
+          // El frontend puede usar esto para mostrar/ocultar banners de confirmación
+          writeEvent(controller, "pending_action", pendingAction);
+
           // Usar el historial completo si se provee (mantiene contexto entre turnos).
-          // Si no hay historial, construir solo con el mensaje actual (compatibilidad).
           const conversationMessages: AiMessage[] = data.messages && data.messages.length > 0
             ? [
                 { role: "system" as const, content: systemPrompt },
@@ -314,7 +257,6 @@ export async function POST(request: Request) {
             }
 
             if (event.type === "delta") {
-              // Siempre emitir el delta de texto para el chat
               writeEvent(controller, "delta", { text: event.text });
             }
 
@@ -350,6 +292,59 @@ export async function POST(request: Request) {
 
 function writePreamble(controller: ReadableStreamDefaultController<Uint8Array>) {
   controller.enqueue(encoder.encode(STREAM_PREAMBLE));
+}
+
+// ─── Pending action detection from history ─────────────────────────────────
+
+/**
+ * Escanea el historial de mensajes para detectar si hay una acción pendiente
+ * (ej: el agente ejecutó previewBudgetGeneration y el usuario está confirmando).
+ */
+export function detectPendingActionFromHistory(input: {
+  currentMessage: string;
+  messages?: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+  projectId?: string;
+}): import("@/lib/ai/agent/intent-router").AgentPendingAction | null {
+  if (!input.messages || input.messages.length === 0) return null;
+
+  // Buscar si el último mensaje del assistant contiene resultados de preview
+  let previewFound = false;
+  let lastConstructionDesc = "";
+
+  for (let i = input.messages.length - 1; i >= 0; i--) {
+    const msg = input.messages[i];
+    if (msg.role === "assistant" && (
+      msg.content.includes("previewBudgetGeneration") ||
+      msg.content.includes("Vista previa") ||
+      msg.content.includes("vista previa")
+    )) {
+      previewFound = true;
+      break;
+    }
+  }
+
+  if (!previewFound) return null;
+
+  // Buscar la última descripción de construcción del usuario
+  for (let i = input.messages.length - 1; i >= 0; i--) {
+    const msg = input.messages[i];
+    if (msg.role === "user" && msg.content.length > 30 &&
+      !msg.content.startsWith("Confirmado") &&
+      !msg.content.startsWith("No por ahora") &&
+      !msg.content.startsWith("¡SÍ")) {
+      lastConstructionDesc = msg.content;
+      break;
+    }
+  }
+
+  if (!input.projectId) return null;
+
+  return {
+    type: "apply_budget_generation",
+    projectId: input.projectId,
+    description: lastConstructionDesc,
+    templateSource: "auto",
+  };
 }
 
 function writeEvent(

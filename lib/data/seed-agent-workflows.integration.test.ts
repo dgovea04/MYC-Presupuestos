@@ -189,10 +189,10 @@ describe("seedAgentWorkflows integration", () => {
       expect(result.errors.every((e) => typeof e === "string")).toBe(true);
     });
 
-    it("handles all 7 templates without errors (happy path for the CLI)", async () => {
+    it("handles all 8 templates without errors (happy path for the CLI)", async () => {
       const result = await seedAgentWorkflows(mockPrisma);
 
-      expect(result.upserted).toBe(7);
+      expect(result.upserted).toBe(8);
       expect(result.errors).toHaveLength(0);
     });
   });

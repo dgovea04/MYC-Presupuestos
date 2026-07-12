@@ -77,6 +77,13 @@ describe("useAgentStream", () => {
       expect(result.current.error).toBeNull();
       expect(result.current.execution.pendingApproval).toBeNull();
     });
+
+    it("starts with null intent and null pendingAction", () => {
+      const { result } = renderHook(() => useAgentStream());
+
+      expect(result.current.intent).toBeNull();
+      expect(result.current.pendingAction).toBeNull();
+    });
   });
 
   // ─── connect ────────────────────────────────────────────────────────────
@@ -387,6 +394,39 @@ describe("useAgentStream", () => {
 
       expect(result.current.status).toBe("error");
     });
+
+    // ─── intent / pendingAction reset ────────────────────────────────────
+
+    it("resets intent and pendingAction to null on new connect", async () => {
+      const stream1 = makeSseStream([
+        { event: "intent", data: { type: "preview_budget_generation", confidence: "medium", reason: "test", suggestedTools: [], extracted: {}, requiredFields: [] } },
+        { event: "pending_action", data: { type: "apply_budget_generation", projectId: "proj-1", description: "test", templateSource: "auto" } },
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      const stream2 = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream1);
+
+      const { result } = renderHook(() => useAgentStream());
+
+      // First stream: sets intent and pendingAction
+      await act(async () => {
+        await result.current.connect(connectInput());
+      });
+
+      expect(result.current.intent).not.toBeNull();
+      expect(result.current.pendingAction).not.toBeNull();
+
+      // Second stream: should reset intent and pendingAction
+      mockFetchOk(stream2);
+      await act(async () => {
+        await result.current.connect(connectInput({ message: "otro mensaje" }));
+      });
+
+      expect(result.current.intent).toBeNull();
+      expect(result.current.pendingAction).toBeNull();
+    });
   });
 
   // ─── SSE event handling ─────────────────────────────────────────────────
@@ -573,6 +613,169 @@ describe("useAgentStream", () => {
       expect(result.current.execution.toolActivity[0].toolName).toBe("searchPartidas");
       expect(result.current.execution.toolActivity[1].toolName).toBe("calculateBudget");
       expect(result.current.execution.state).toBe("EXECUTED");
+    });
+  });
+
+  // ─── Intent event ────────────────────────────────────────────────────────
+
+  describe("intent event", () => {
+    it("sets intent state when intent SSE event is received", async () => {
+      const stream = makeSseStream([
+        {
+          event: "intent",
+          data: {
+            type: "preview_budget_generation",
+            confidence: "high",
+            reason: "Palabra clave detectada",
+            suggestedTools: ["previewBudgetGeneration", "createBudgetGeneral"],
+            extracted: { projectName: "Santa Monica", templateSource: "auto" },
+            requiredFields: [],
+          },
+        },
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput());
+      });
+
+      expect(result.current.intent).not.toBeNull();
+      expect(result.current.intent!.type).toBe("preview_budget_generation");
+      expect(result.current.intent!.confidence).toBe("high");
+      expect(result.current.intent!.reason).toBe("Palabra clave detectada");
+      expect(result.current.intent!.suggestedTools).toContain("previewBudgetGeneration");
+      expect(result.current.intent!.extracted.projectName).toBe("Santa Monica");
+    });
+
+    it("sets intent for general_chat with low confidence", async () => {
+      const stream = makeSseStream([
+        {
+          event: "intent",
+          data: {
+            type: "general_chat",
+            confidence: "low",
+            reason: "No se detectó intención específica",
+            suggestedTools: [],
+            extracted: {},
+            requiredFields: [],
+          },
+        },
+        { event: "final", data: { answer: "Hola", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput());
+      });
+
+      expect(result.current.intent).not.toBeNull();
+      expect(result.current.intent!.type).toBe("general_chat");
+      expect(result.current.intent!.confidence).toBe("low");
+    });
+  });
+
+  // ─── Pending action event ────────────────────────────────────────────────
+
+  describe("pending_action event", () => {
+    it("sets pendingAction when pending_action SSE event is received", async () => {
+      const stream = makeSseStream([
+        {
+          event: "pending_action",
+          data: {
+            type: "apply_budget_generation",
+            projectId: "proj-42",
+            description: "vivienda de 120m2 en Lima",
+            templateSource: "auto",
+          },
+        },
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput());
+      });
+
+      expect(result.current.pendingAction).not.toBeNull();
+      expect(result.current.pendingAction!.type).toBe("apply_budget_generation");
+      expect(result.current.pendingAction!.projectId).toBe("proj-42");
+      expect(result.current.pendingAction!.description).toBe("vivienda de 120m2 en Lima");
+      expect(result.current.pendingAction!.templateSource).toBe("auto");
+    });
+
+    it("sets pendingAction to null when data is null", async () => {
+      const stream = makeSseStream([
+        { event: "pending_action", data: null as unknown as Record<string, unknown> },
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput());
+      });
+
+      expect(result.current.pendingAction).toBeNull();
+    });
+
+    it("handles pending_action for MCP template application", async () => {
+      const stream = makeSseStream([
+        {
+          event: "pending_action",
+          data: {
+            type: "apply_mcp_template",
+            projectId: "proj-99",
+            packageId: "pkg-mcp-001",
+            description: "hospital de 4 pisos",
+            mode: "auto",
+          },
+        },
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput());
+      });
+
+      expect(result.current.pendingAction).not.toBeNull();
+      expect(result.current.pendingAction!.type).toBe("apply_mcp_template");
+      expect(result.current.pendingAction!.projectId).toBe("proj-99");
+    });
+
+    it("emits intent and pending_action events in order before tool events", async () => {
+      const stream = makeSseStream([
+        {
+          event: "intent",
+          data: { type: "preview_budget_generation", confidence: "medium", reason: "test", suggestedTools: ["previewBudgetGeneration"], extracted: {}, requiredFields: [] },
+        },
+        {
+          event: "pending_action",
+          data: { type: "apply_budget_generation", projectId: "proj-1", description: "test", templateSource: "auto" },
+        },
+        { event: "tool_start", data: { toolName: "previewBudgetGeneration" } },
+        { event: "tool_result", data: { toolName: "previewBudgetGeneration", success: true, summary: "ok", latencyMs: 100 } },
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput());
+      });
+
+      // Intent and pendingAction should be set
+      expect(result.current.intent).not.toBeNull();
+      expect(result.current.pendingAction).not.toBeNull();
+      // Tool activity should also be recorded
+      expect(result.current.execution.toolActivity).toHaveLength(1);
+      expect(result.current.execution.toolActivity[0].toolName).toBe("previewBudgetGeneration");
+      expect(result.current.execution.toolActivity[0].success).toBe(true);
     });
   });
 

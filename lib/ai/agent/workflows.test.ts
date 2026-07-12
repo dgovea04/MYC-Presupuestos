@@ -60,6 +60,11 @@ describe("SpecialistBundles", () => {
     // Presupuestos
     expect(bundle!.toolNames).toContain("createBudget");
     expect(bundle!.toolNames).toContain("createBudgetGeneral");
+    // Preview y MCP
+    expect(bundle!.toolNames).toContain("previewBudgetGeneration");
+    expect(bundle!.toolNames).toContain("searchMcpTemplates");
+    expect(bundle!.toolNames).toContain("previewBudgetFromMcpTemplate");
+    expect(bundle!.toolNames).toContain("applyBudgetFromMcpTemplate");
     // Partidas
     expect(bundle!.toolNames).toContain("searchPartidas");
     // APU
@@ -77,7 +82,7 @@ describe("SpecialistBundles", () => {
     expect(bundle!.toolNames).toContain("dashboard");
   });
 
-  it("budget-agent tiene herramientas de presupuestos, partidas, capítulos e insumos", () => {
+  it("budget-agent tiene herramientas de presupuestos, partidas, capítulos, MCP e insumos", () => {
     const bundle = getBundleBySlug("budget-agent");
     expect(bundle).toBeDefined();
     expect(bundle!.toolNames).toContain("createBudget");
@@ -85,6 +90,11 @@ describe("SpecialistBundles", () => {
     expect(bundle!.toolNames).toContain("createChapter");
     expect(bundle!.toolNames).toContain("addInsumo");
     expect(bundle!.toolNames).toContain("exportPDF");
+    // MCP tools
+    expect(bundle!.toolNames).toContain("previewBudgetGeneration");
+    expect(bundle!.toolNames).toContain("searchMcpTemplates");
+    expect(bundle!.toolNames).toContain("previewBudgetFromMcpTemplate");
+    expect(bundle!.toolNames).toContain("applyBudgetFromMcpTemplate");
   });
 
   it("apu-agent tiene herramientas de APU, búsqueda y cálculo", () => {
@@ -134,7 +144,7 @@ describe("SpecialistBundles", () => {
   describe("consistencia systemPrompt con toolNames", () => {
     it("cada bundle que menciona toolNames explícitos en su systemPrompt los tiene registrados en toolNames", () => {
       const allKnownTools = collectAllToolNames();
-      const bundlesWithoutExplicitTools = ["khipu-agent", "review-agent"];
+      const bundlesWithoutExplicitTools = ["review-agent"];
 
       for (const bundle of SPECIALIST_BUNDLES) {
         const mentionedTools = extractKnownToolNames(bundle.systemPrompt, allKnownTools);
@@ -190,9 +200,13 @@ describe("SpecialistBundles", () => {
       expect(prompt).toContain("dashboards");
     });
 
-    it("khipu-agent y review-agent usan lenguaje natural sin toolNames explícitos", () => {
+    it("khipu-agent y review-agent usan lenguaje natural con pocos toolNames explícitos", () => {
       const allKnownTools = collectAllToolNames();
-      expect(extractKnownToolNames(getBundleSystemPrompt("khipu-agent")!, allKnownTools)).toHaveLength(0);
+      // khipu-agent now mentions previewBudgetGeneration and generateBudget in its systemPrompt
+      const khipuMentions = extractKnownToolNames(getBundleSystemPrompt("khipu-agent")!, allKnownTools);
+      expect(khipuMentions).toContain("previewBudgetGeneration");
+      expect(khipuMentions).toContain("generateBudget");
+      // review-agent still uses pure natural language
       expect(extractKnownToolNames(getBundleSystemPrompt("review-agent")!, allKnownTools)).toHaveLength(0);
     });
   });
@@ -245,19 +259,24 @@ describe("WorkflowTemplates", () => {
     expect(template!.defaultMode).toBe("goal");
   });
 
-  it("crear-proyecto-desde-cero tiene un initialGoal que menciona searchCompanies y createProject", () => {
+    it("crear-proyecto-desde-cero tiene un initialGoal que menciona searchCompanies y createProject", () => {
     const template = getWorkflowTemplate("crear-proyecto-desde-cero");
     expect(template).toBeDefined();
     expect(template!.initialGoal).toContain("searchCompanies");
     expect(template!.initialGoal).toContain("createProject");
-    expect(template!.initialGoal).toContain("Presupuesto General");
-    expect(template!.initialGoal).toContain("sub-presupuestos automáticos");
+    expect(template!.initialGoal).toContain("estructura base");
   });
 
   it("crear-proyecto-desde-cero indica que NO se deben agregar partidas ni APUs", () => {
     const template = getWorkflowTemplate("crear-proyecto-desde-cero");
     expect(template).toBeDefined();
     expect(template!.initialGoal).toContain("sin agregar capítulos, partidas ni APUs");
+  });
+
+  it("crear-proyecto-desde-cero menciona la estructura base del proyecto", () => {
+    const template = getWorkflowTemplate("crear-proyecto-desde-cero");
+    expect(template).toBeDefined();
+    expect(template!.initialGoal).toContain("estructura base");
   });
 
   it("budget-agent (bundle de crear-proyecto-desde-cero) tiene searchCompanies y createProject", () => {

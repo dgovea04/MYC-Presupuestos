@@ -757,6 +757,8 @@ function AgentRightPanel({
   onApprove,
   onReject,
   approving,
+  intent,
+  pendingAction,
 }: {
   streamExecution: ReturnType<typeof useAgentStream>["execution"];
   streaming: boolean;
@@ -767,6 +769,8 @@ function AgentRightPanel({
   onApprove: (toolName: string) => void;
   onReject: (toolName: string) => void;
   approving: boolean;
+  intent: ReturnType<typeof useAgentStream>["intent"];
+  pendingAction: ReturnType<typeof useAgentStream>["pendingAction"];
 }) {
   const completedTools = streamExecution.toolActivity.filter((a) => a.success).length;
   const failedTools = streamExecution.toolActivity.filter((a) => !a.success && a.latencyMs !== undefined).length;
@@ -813,6 +817,32 @@ function AgentRightPanel({
                   <span className="text-[var(--app-text-muted)]">Latencia</span>{" "}
                   <span className="font-semibold text-[var(--app-text-strong)]">{(streamExecution.latencyMs / 1000).toFixed(1)}s</span>
                 </p>
+              </div>
+            )}
+            {intent && intent.type !== "general_chat" && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50/50 px-3.5 py-2.5">
+                <BrainCircuit className="h-4 w-4 shrink-0 text-blue-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-[0.05em]">Intención</p>
+                  <p className="mt-0.5 text-xs text-blue-700">
+                    {intent.type}
+                    <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                      {intent.confidence}
+                    </span>
+                  </p>
+                  {intent.reason && (
+                    <p className="mt-0.5 text-[10px] text-blue-500 truncate">{intent.reason}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {pendingAction && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/50 px-3.5 py-2.5">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-[0.05em]">Acción pendiente</p>
+                  <p className="mt-0.5 text-xs text-amber-700">{pendingAction.type}</p>
+                </div>
               </div>
             )}
             {streamExecution.warnings.length > 0 && (
@@ -1008,6 +1038,8 @@ export function AgentWorkspace({
     status,
     messages,
     execution: streamExec,
+    intent,
+    pendingAction,
     connect,
     disconnect,
   } = useAgentStream();
@@ -1293,6 +1325,8 @@ export function AgentWorkspace({
         onApprove={handleApprove}
         onReject={handleReject}
         approving={approving}
+        intent={intent}
+        pendingAction={pendingAction}
       />
     </div>
   );

@@ -98,6 +98,8 @@ function makeDefaultHookReturn() {
       latencyMs: null,
     },
     error: null,
+    intent: null,
+    pendingAction: null,
     connect: vi.fn(),
     disconnect: vi.fn(),
   };

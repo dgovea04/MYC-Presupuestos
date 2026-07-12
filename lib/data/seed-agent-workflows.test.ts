@@ -18,13 +18,13 @@ describe("seedAgentWorkflows", () => {
     vi.resetAllMocks();
   });
 
-  it("upserts all 7 workflow templates", async () => {
+  it("upserts all 8 workflow templates", async () => {
     mockUpsert.mockResolvedValue({});
 
     const result = await seedAgentWorkflows(mockPrisma);
 
-    expect(result.upserted).toBe(7);
-    expect(mockUpsert).toHaveBeenCalledTimes(7);
+    expect(result.upserted).toBe(8);
+    expect(mockUpsert).toHaveBeenCalledTimes(8);
   });
 
   it("upserts with correct slug and bundle toolNames", async () => {
@@ -79,7 +79,7 @@ describe("seedAgentWorkflows", () => {
     const result = await seedAgentWorkflows(mockPrisma);
 
     expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.upserted).toBeLessThan(7);
+    expect(result.upserted).toBeLessThan(8);
   });
 
   it("returns correct upserted count when some fail", async () => {
@@ -91,6 +91,6 @@ describe("seedAgentWorkflows", () => {
     const result = await seedAgentWorkflows(mockPrisma);
 
     expect(result.upserted).toBe(1);
-    expect(result.errors.length).toBe(6);
+    expect(result.errors.length).toBe(7);
   });
 });

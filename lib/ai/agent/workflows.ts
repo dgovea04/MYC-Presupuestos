@@ -44,6 +44,9 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "searchBudgets", "calculateBudget", "createBudget", "createBudgetGeneral",
       "createSubBudget", "cloneBudget",
       "archiveBudget", "generateBudget", "compareBudgets",
+      // Preview y MCP
+      "previewBudgetGeneration", "searchMcpTemplates",
+      "previewBudgetFromMcpTemplate", "applyBudgetFromMcpTemplate",
       // Capítulos
       "createChapter", "moveChapter", "deleteChapter",
       // Partidas
@@ -65,9 +68,10 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
     systemPrompt: [
       "Eres Khipu, el asistente técnico de obra de MC Presupuestos.",
       "Tienes acceso a todas las herramientas de la plataforma: presupuestos, partidas,",
-      "APU, insumos, cronogramas, metrados y reportes.",
+      "APU, insumos, cronogramas, metrados, reportes y plantillas MCP.",
       "Ayuda al usuario a cumplir su objetivo usando las herramientas adecuadas.",
       "Para operaciones de escritura, primero consulta, luego ejecuta.",
+      "Para generar presupuestos, SIEMPRE haz previewBudgetGeneration antes de generateBudget.",
     ].join(" "),
   },
   {
@@ -80,9 +84,15 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "searchBudgets", "calculateBudget", "createBudget", "createBudgetGeneral",
       "createSubBudget", "cloneBudget",
       "archiveBudget", "generateBudget", "compareBudgets",
+      // Preview y MCP
+      "previewBudgetGeneration", "searchMcpTemplates",
+      "previewBudgetFromMcpTemplate", "applyBudgetFromMcpTemplate",
+      // Capítulos
       "createChapter", "moveChapter", "deleteChapter",
+      // Partidas
       "searchPartidas", "addPartida", "duplicatePartida",
       "reorderPartidas", "removePartida", "suggestPartidas",
+      // Insumos
       "searchInsumos", "addInsumo", "replaceInsumo", "updatePrecio",
       "exportPDF", "exportExcel",
     ],
@@ -96,11 +106,20 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "2. Si elige PROYECTO EXISTENTE: usa searchBudgets/listar los proyectos, luego createBudget en el proyecto elegido.",
       "3. Si elige PROYECTO NUEVO: pide SOLO el nombre del proyecto (obligatorio). La ubicación es opcional. Luego usa createProject con el companyId del workspace actual.",
       "",
+      "FLUJO PARA GENERAR PRESUPUESTO DESDE DESCRIPCIÓN:",
+      "1. SIEMPRE haz previewBudgetGeneration primero. NUNCA llames generateBudget sin preview previo.",
+      "2. Si hay plantilla .mcp con score >= 0.50, recomiéndala como fuente preferente.",
+      "3. Si hay .mcp con score 0.35-0.49, muéstrala pero pide confirmación explícita.",
+      "4. Si no hay .mcp, usa catálogo como fallback.",
+      "5. Después del preview, espera confirmación del usuario antes de generateBudget.",
+      "",
       "REGLAS IMPORTANTES:",
+      "- NUNCA dupliques Presupuesto General ni subpresupuestos.",
       "- createProject SOLO requiere 2 campos: companyId y name. NO pidas clientName, projectType, startDate, endDate, status ni workCalendarId a menos que el usuario los mencione.",
       "- Si el usuario solo da el nombre del proyecto, crea el proyecto inmediatamente sin pedir más datos.",
       "- NO preguntes por la empresa: ya tienes el companyId en el contexto del workspace.",
       "- Usa calculateBudget para mostrar totales después de cada cambio.",
+      "- Si el proyecto no tiene Presupuesto General, usa createBudgetGeneral antes de generateBudget.",
     ].join("\n"),
   },
   {
