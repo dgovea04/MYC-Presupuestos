@@ -826,6 +826,285 @@ describe("AgentWorkspace", () => {
       expect(screen.getByText(/projectId es requerido/)).toBeTruthy();
     });
 
+    // ── Edge cases: sin projectId ──────────────────────────────────────
+
+    it("muestra error cuando no hay projectId en el componente", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: "projectId es requerido" }),
+      });
+
+      // Renderizar SIN projectId
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // El fallback debe mostrar el error de projectId faltante
+      await waitFor(() => {
+        expect(screen.getByText(/Fallback falló/)).toBeTruthy();
+      });
+      expect(screen.getByText(/projectId es requerido/)).toBeTruthy();
+    });
+
+    it("fallback envia projectId vacio al API cuando no se provee como prop", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 10,
+          fromMcp: 5,
+          fromTemplates: 3,
+          fromCatalog: 2,
+        }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />); // sin projectId
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+
+      // Verificar que fetch fue llamado con projectId vacío y description correcta
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.projectId).toBe("");
+      expect(body.description).toContain("genera presupuesto para casa");
+    });
+
+    // ── Edge cases: sin lastConstructionDescription ───────────────────────
+
+    it("fallback envia description vacia al API cuando no hay mensajes de usuario", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 10,
+          fromMcp: 5,
+          fromTemplates: 3,
+          fromCatalog: 2,
+        }),
+      });
+
+      // Solo mensajes del asistente, ningún mensaje de usuario
+      const noUserMessagesState = {
+        ...makeDefaultHookReturn(),
+        status: "done" as const,
+        messages: [
+          { role: "assistant" as const, content: "Aquí tienes la vista previa del presupuesto con 77 partidas." },
+        ],
+        execution: {
+          executionId: "exec-1",
+          state: "EXECUTED" as const,
+          summary: "Vista previa completada",
+          pendingApproval: null,
+          toolActivity: [
+            { toolName: "previewBudgetGeneration", success: true, latencyMs: 500, summary: "Vista previa: 77 partidas" },
+          ],
+          warnings: [],
+          latencyMs: 500,
+        },
+      };
+
+      mockUseAgentStream.mockReturnValue(noUserMessagesState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace projectId="project-99" />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+
+      // Verificar que fetch fue llamado con description vacía
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.description).toBe("");
+      // projectId sí se envía porque se pasó como prop
+      expect(body.projectId).toBe("project-99");
+    });
+
+    it("fallback envia description vacia cuando solo hay mensajes cortos (< 30 chars)", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 10,
+          fromMcp: 5,
+          fromTemplates: 3,
+          fromCatalog: 2,
+        }),
+      });
+
+      // Mensaje de usuario pero demasiado corto (< 30 chars)
+      const shortMessageState = {
+        ...makeDefaultHookReturn(),
+        status: "done" as const,
+        messages: [
+          { role: "user" as const, content: "Hola" },
+          { role: "assistant" as const, content: "Preview completa con 77 partidas" },
+        ],
+        execution: {
+          executionId: "exec-1",
+          state: "EXECUTED" as const,
+          summary: "Vista previa completada",
+          pendingApproval: null,
+          toolActivity: [
+            { toolName: "previewBudgetGeneration", success: true, latencyMs: 500, summary: "Vista previa: 77 partidas" },
+          ],
+          warnings: [],
+          latencyMs: 500,
+        },
+      };
+
+      mockUseAgentStream.mockReturnValue(shortMessageState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace projectId="project-99" />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+
+      // Verificar description vacía en el fetch
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.description).toBe("");
+    });
+
+    // ── Edge cases: workspaceId presente sin projectId ────────────────
+
+    it("fallback envia workspaceId al API cuando está presente, aunque falte projectId", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 10,
+          fromMcp: 5,
+          fromTemplates: 3,
+          fromCatalog: 2,
+        }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      // Renderizar con workspaceId pero SIN projectId
+      render(<AgentWorkspace workspaceId="workspace-42" />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      // workspaceId debe pasarse al API
+      expect(body.workspaceId).toBe("workspace-42");
+      // projectId vacío porque no se proveyó como prop
+      expect(body.projectId).toBe("");
+      // description sí está presente (desde los mensajes)
+      expect(body.description).toContain("genera presupuesto para casa");
+    });
+
+    it("muestra error cuando workspaceId está presente y projectId no, API devuelve 400", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: "projectId es requerido" }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace workspaceId="workspace-42" />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Fallback falló/)).toBeTruthy();
+      });
+      expect(screen.getByText(/projectId es requerido/)).toBeTruthy();
+    });
+
+    // ── Edge cases: workspaceId y projectId ambos presentes ──────────────
+
+    it("fallback envia workspaceId y projectId al API cuando ambos están presentes", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 77,
+          fromMcp: 50,
+          fromTemplates: 20,
+          fromCatalog: 7,
+        }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace workspaceId="workspace-42" projectId="project-99" />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+
+      // Verificar que fetch envía ambos IDs
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.projectId).toBe("project-99");
+      expect(body.workspaceId).toBe("workspace-42");
+      expect(body.description).toContain("genera presupuesto para casa");
+    });
+
+    it("fallback exitoso muestra resultado cuando workspaceId y projectId están presentes", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 77,
+          fromMcp: 50,
+          fromTemplates: 20,
+          fromCatalog: 7,
+          message: "Presupuesto generado exitosamente.",
+        }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace workspaceId="workspace-42" projectId="project-99" />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // Verificar resultado exitoso en el panel central
+      await waitFor(() => {
+        expect(screen.getByText(/Presupuesto generado/)).toBeTruthy();
+      });
+      const partidasElements = screen.getAllByText(/77 partidas/);
+      expect(partidasElements.length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText(/50 desde .mcp/)).toBeTruthy();
+    });
+
+    it("fallback con ambos IDs oculta botones de confirmación durante la ejecución", async () => {
+      // Promesa sin resolver para mantener el fallback en ejecución
+      let resolvePromise!: (value: unknown) => void;
+      globalThis.fetch = vi.fn().mockReturnValue(new Promise((resolve) => {
+        resolvePromise = resolve;
+      }));
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace workspaceId="workspace-42" projectId="project-99" />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // Los botones de confirmación deben desaparecer durante el fallback
+      await waitFor(() => {
+        expect(screen.queryByText("Proceder")).toBeNull();
+        expect(screen.queryByText("Cancelar")).toBeNull();
+      });
+
+      // El spinner debe estar visible
+      const spinner = document.querySelector('[data-testid="icon-loader"]');
+      expect(spinner).toBeTruthy();
+
+      // Resolver para limpiar
+      resolvePromise!({ ok: true, json: async () => ({ totalItemsAdded: 10 }) });
+    });
+
     it("no activa fallback si el modelo SI ejecutó generateBudget", async () => {
       const successState = {
         ...confirmedState,
