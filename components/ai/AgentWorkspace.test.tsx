@@ -187,7 +187,7 @@ describe("AgentWorkspace", () => {
       // Now suggestion buttons should appear
       const suggestionBtns = screen.getAllByRole("button");
       const suggestions = suggestionBtns.filter(
-        (b) => b.textContent === "Crear presupuesto para hospital"
+        (b) => b.textContent === "Crear presupuesto para vivienda"
       );
       expect(suggestions.length).toBeGreaterThan(0);
     });
@@ -272,7 +272,9 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto",
+        messages: [],
         projectId: undefined,
+        workspaceId: undefined,
         mode: "workflow",
         workflowId: "crear-presupuesto-base",
       });
@@ -296,8 +298,11 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto",
+        messages: [],
         projectId: undefined,
+        workspaceId: undefined,
         mode: "goal",
+        workflowId: undefined,
       });
     });
 
@@ -330,8 +335,11 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto para hospital",
+        messages: [],
         projectId: undefined,
+        workspaceId: undefined,
         mode: "goal",
+        workflowId: undefined,
       });
     });
 
@@ -348,11 +356,13 @@ describe("AgentWorkspace", () => {
       await clickBundleCard("Presupuestos");
 
       // Click a suggestion
-      await clickSuggestionButton("Crear presupuesto para hospital");
+      await clickSuggestionButton("Crear presupuesto para vivienda");
 
       expect(connect).toHaveBeenCalledWith({
-        message: "Crear presupuesto para hospital",
+        message: "Crear presupuesto para vivienda",
+        messages: [],
         projectId: undefined,
+        workspaceId: undefined,
         mode: "workflow",
         workflowId: "crear-presupuesto-base",
       });
@@ -652,9 +662,198 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto para hospital",
+        messages: [],
         projectId: "project-99",
+        workspaceId: undefined,
         mode: "goal",
+        workflowId: undefined,
       });
+    });
+  });
+
+  // ─── Confirmation buttons (Proceder / Cancelar) ─────────────────────────
+
+  describe("confirmation buttons", () => {
+    const confirmedState = {
+      ...makeDefaultHookReturn(),
+      status: "done" as const,
+      messages: [
+        { role: "user" as const, content: "genera presupuesto para casa de 120m2 en el proyecto Perez" },
+        { role: "assistant" as const, content: "Preview: 77 partidas" },
+      ],
+      execution: {
+        executionId: "exec-1",
+        state: "EXECUTED" as const,
+        summary: "Vista previa completada",
+        pendingApproval: null,
+        toolActivity: [
+          { toolName: "previewBudgetGeneration", success: true, latencyMs: 500, summary: "Vista previa: 77 partidas" },
+        ],
+        warnings: [],
+        latencyMs: 500,
+      },
+    };
+
+    it("does NOT show confirmation buttons when idle (no tool activity)", () => {
+      mockUseAgentStream.mockReturnValue(makeDefaultHookReturn() as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto?")).toBeNull();
+      expect(screen.queryByText("Proceder")).toBeNull();
+      expect(screen.queryByText("Cancelar")).toBeNull();
+    });
+
+    it("shows confirmation buttons when previewBudgetGeneration succeeded", () => {
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      expect(screen.getByText("¿Generar presupuesto?")).toBeTruthy();
+      expect(screen.getByText("Proceder")).toBeTruthy();
+      expect(screen.getByText("Cancelar")).toBeTruthy();
+    });
+
+    it("does NOT show confirmation buttons when generateBudget already ran", () => {
+      mockUseAgentStream.mockReturnValue({
+        ...confirmedState,
+        execution: {
+          ...confirmedState.execution,
+          toolActivity: [
+            { toolName: "previewBudgetGeneration", success: true, latencyMs: 500, summary: "Vista previa" },
+            { toolName: "generateBudget", success: true, latencyMs: 2000, summary: "Generado" },
+          ],
+        },
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto?")).toBeNull();
+    });
+
+    it("does NOT show confirmation buttons while streaming", () => {
+      mockUseAgentStream.mockReturnValue({
+        ...confirmedState,
+        status: "streaming",
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto?")).toBeNull();
+    });
+
+    it("calls connect with displayMessage and skipMessageAdd when Proceder is clicked", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...confirmedState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      expect(connect).toHaveBeenCalledTimes(1);
+      const callArgs = connect.mock.calls[0][0];
+
+      // Debe incluir el comando interno como message
+      expect(callArgs.message).toContain("EJECUTA generateBudget");
+      expect(callArgs.message).toContain("Descripción: \"genera presupuesto para casa");
+
+      // Debe mostrar "Sí confirmado" en la UI
+      expect(callArgs.displayMessage).toBe("Sí confirmado");
+
+      // No debe agregar el mensaje automaticamente
+      expect(callArgs.skipMessageAdd).toBe(true);
+
+      // Debe incluir el comando interno en el messages array
+      const lastMsg = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMsg.role).toBe("user");
+      expect(lastMsg.content).toBe(callArgs.message);
+
+      // Debe pasar el projectId (undefined en este caso)
+      expect(callArgs.projectId).toBeUndefined();
+    });
+
+    it("does NOT call connect when loading and Proceder is clicked", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...confirmedState,
+        status: "connecting",
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      // Los botones no se muestran cuando loading, asi que no deberian existir
+      expect(screen.queryByText("Proceder")).toBeNull();
+      expect(connect).not.toHaveBeenCalled();
+    });
+
+    it("calls connect with displayMessage 'No, cancelar' when Cancelar is clicked", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...confirmedState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Cancelar"));
+
+      expect(connect).toHaveBeenCalledTimes(1);
+      const callArgs = connect.mock.calls[0][0];
+
+      expect(callArgs.displayMessage).toBe("No, cancelar");
+      expect(callArgs.message).toBe("No por ahora. Cancela la generación del presupuesto.");
+      expect(callArgs.skipMessageAdd).toBe(true);
+
+      const lastMsg = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMsg.role).toBe("user");
+      expect(lastMsg.content).toBe("No por ahora. Cancela la generación del presupuesto.");
+    });
+
+    it("uses last non-confirmation user message as description hint", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...makeDefaultHookReturn(),
+        status: "done",
+        messages: [
+          { role: "user", content: "genera presupuesto para casa de 120m2" },
+          { role: "assistant", content: "Preview." },
+        ],
+        execution: confirmedState.execution,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      const callArgs = connect.mock.calls[0][0];
+      expect(callArgs.message).toContain("Descripción: \"genera presupuesto para casa de 120m2\"");
+    });
+
+    it("does not include confirmation messages themselves in description hint", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...makeDefaultHookReturn(),
+        status: "done",
+        messages: [
+          { role: "user", content: "genera presupuesto para casa de 120m2" },
+          { role: "assistant", content: "Preview." },
+          { role: "user", content: "Confirmado. Procede." },
+        ],
+        execution: confirmedState.execution,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      const callArgs = connect.mock.calls[0][0];
+      // The hint should use the construction message, not the confirmation one
+      expect(callArgs.message).toContain("Descripción: \"genera presupuesto para casa de 120m2\"");
+      expect(callArgs.message).not.toContain("Confirmado. Procede.");
     });
   });
 });
