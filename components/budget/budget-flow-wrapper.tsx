@@ -7,6 +7,42 @@ import type { BudgetRecord } from "@/types/budget";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
 
+type EditorCatalogsPayload = {
+  partidasCatalog: CatalogPartidaRecord[];
+  resourcesCatalog: ResourceRecord[];
+};
+
+const editorCatalogsCache = new Map<string, Promise<EditorCatalogsPayload>>();
+
+async function fetchEditorCatalogs(budgetId: string): Promise<EditorCatalogsPayload> {
+  const cached = editorCatalogsCache.get(budgetId);
+  if (cached) return cached;
+
+  const request = fetch(`/api/budgets/${budgetId}/editor-catalogs`)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error("No se pudieron cargar los catalogos del editor");
+      }
+
+      const payload = await response.json() as {
+        partidasCatalog?: CatalogPartidaRecord[];
+        resourcesCatalog?: ResourceRecord[];
+      };
+
+      return {
+        partidasCatalog: payload.partidasCatalog ?? [],
+        resourcesCatalog: payload.resourcesCatalog ?? [],
+      };
+    })
+    .catch((error: unknown) => {
+      editorCatalogsCache.delete(budgetId);
+      throw error;
+    });
+
+  editorCatalogsCache.set(budgetId, request);
+  return request;
+}
+
 export function BudgetFlowWrapper({
   budget,
   projectName,
@@ -30,35 +66,24 @@ export function BudgetFlowWrapper({
   useEffect(() => {
     if (!catalogBudgetId) return;
 
-    const controller = new AbortController();
+    let active = true;
 
     async function loadCatalogs() {
       try {
-        const response = await fetch(`/api/budgets/${catalogBudgetId}/editor-catalogs`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) return;
-
-        const payload = await response.json() as {
-          partidasCatalog?: CatalogPartidaRecord[];
-          resourcesCatalog?: ResourceRecord[];
-        };
-
-        setCatalogs({
-          partidasCatalog: payload.partidasCatalog ?? [],
-          resourcesCatalog: payload.resourcesCatalog ?? [],
-        });
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
+        const payload = await fetchEditorCatalogs(catalogBudgetId);
+        if (active) {
+          setCatalogs(payload);
         }
+      } catch {
+        // Keep the editor usable with empty catalogs; actions that need catalog
+        // data will simply show no suggestions until the next navigation/retry.
       }
     }
 
     void loadCatalogs();
 
     return () => {
-      controller.abort();
+      active = false;
     };
   }, [catalogBudgetId]);
 

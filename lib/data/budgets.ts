@@ -297,6 +297,33 @@ export async function getBudgetHeaderById(id: string, userId: string) {
   });
 }
 
+export async function getBudgetCatalogScopeById(id: string, userId: string) {
+  return measureAsync("data.budgets.catalogScope", () => prisma.budget.findFirst({
+    where: {
+      id,
+      project: {
+        company: {
+          memberships: {
+            some: {
+              userId,
+              status: "ACTIVE",
+            },
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      projectId: true,
+      project: {
+        select: {
+          companyId: true,
+        },
+      },
+    },
+  }), { budgetId: id });
+}
+
 export async function getGeneralBudgetResourceSummary(budgetId: string, userId: string): Promise<GeneralBudgetResourceSummaryResult> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
 

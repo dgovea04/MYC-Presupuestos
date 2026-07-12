@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
-import { getBudgetById } from "@/lib/data/budgets";
+import { getBudgetCatalogScopeById } from "@/lib/data/budgets";
 import { getCatalogPartidas } from "@/lib/data/partidas";
-import { getProjectBudgetOverviewById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { measureAsync } from "@/lib/platform/performance";
@@ -15,19 +14,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
   try {
     const { id: budgetId } = await params;
-    const budget = await getBudgetById(budgetId, session.user.id);
-    if (!budget) {
+    const scope = await getBudgetCatalogScopeById(budgetId, session.user.id);
+    if (!scope) {
       return NextResponse.json({ error: "No tienes permisos para ver este presupuesto" }, { status: 404 });
-    }
-
-    const project = await getProjectBudgetOverviewById(budget.projectId, session.user.id);
-    if (!project) {
-      return NextResponse.json({ error: "No tienes permisos para ver este proyecto" }, { status: 404 });
     }
 
     const [resources, partidasCatalog] = await measureAsync(
       "api.budgetEditorCatalogs.load",
-      () => Promise.all([getResourcesByUser(session.user.id, project.companyId), getCatalogPartidas()]),
+      () => Promise.all([getResourcesByUser(session.user.id, scope.project.companyId), getCatalogPartidas()]),
       { budgetId },
     );
 

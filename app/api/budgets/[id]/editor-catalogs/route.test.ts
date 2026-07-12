@@ -5,15 +5,11 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 
 vi.mock("@/lib/data/budgets", () => ({
-  getBudgetById: vi.fn(),
+  getBudgetCatalogScopeById: vi.fn(),
 }));
 
 vi.mock("@/lib/data/partidas", () => ({
   getCatalogPartidas: vi.fn(),
-}));
-
-vi.mock("@/lib/data/projects", () => ({
-  getProjectBudgetOverviewById: vi.fn(),
 }));
 
 vi.mock("@/lib/data/resources", () => ({
@@ -30,9 +26,8 @@ vi.mock("@/lib/platform/performance", () => ({
 
 import { GET } from "@/app/api/budgets/[id]/editor-catalogs/route";
 import { getAuthSession } from "@/lib/auth/session";
-import { getBudgetById } from "@/lib/data/budgets";
+import { getBudgetCatalogScopeById } from "@/lib/data/budgets";
 import { getCatalogPartidas } from "@/lib/data/partidas";
-import { getProjectBudgetOverviewById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
 
 describe("budget editor catalogs route", () => {
@@ -53,7 +48,7 @@ describe("budget editor catalogs route", () => {
       expires: new Date().toISOString(),
       user: { id: "user-1" },
     });
-    vi.mocked(getBudgetById).mockResolvedValue(null);
+    vi.mocked(getBudgetCatalogScopeById).mockResolvedValue(null);
 
     const response = await GET(
       new Request("http://localhost/api/budgets/budget-1/editor-catalogs"),
@@ -69,31 +64,12 @@ describe("budget editor catalogs route", () => {
       expires: new Date().toISOString(),
       user: { id: "user-1" },
     });
-    vi.mocked(getBudgetById).mockResolvedValue({
+    vi.mocked(getBudgetCatalogScopeById).mockResolvedValue({
       id: "budget-1",
       projectId: "project-1",
-      parentBudgetId: null,
-      kind: "SUB_BUDGET",
-      name: "Estructuras",
-      currency: "PEN",
-      igvRate: 0.18,
-      generalExpensesRate: 0.1,
-      utilityRate: 0.08,
-      totalDirectCost: 0,
-      totalGeneralExpenses: 0,
-      totalUtility: 0,
-      totalTax: 0,
-      totalAmount: 0,
-      levels: [],
-      items: [],
-    });
-    vi.mocked(getProjectBudgetOverviewById).mockResolvedValue({
-      id: "project-1",
-      companyId: "company-1",
-      name: "Proyecto Demo",
-      clientName: "Cliente Demo",
-      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
-      budgets: [],
+      project: {
+        companyId: "company-1",
+      },
     });
     vi.mocked(getResourcesByUser).mockResolvedValue([
       {
