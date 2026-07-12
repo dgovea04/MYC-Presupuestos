@@ -968,31 +968,56 @@ export function AgentWorkspace({
 
   const handleConfirmProceed = useCallback(() => {
     if (loading || streaming) return;
-    // Extraer un fragmento descriptivo de la descripción original
+
+    // Construir comando interno ultrasexplícito (lo ve el modelo)
     let descriptionHint = "";
     if (lastConstructionDescription) {
-      // Tomar primeros 120 caracteres como pista
       const clean = lastConstructionDescription.length > 120
         ? lastConstructionDescription.substring(0, 120) + "..."
         : lastConstructionDescription;
       descriptionHint = ` Descripción: "${clean}".`;
     }
-
-    handleObjectiveSubmit(
+    const forcefulCommand =
       "¡SÍ! CONFIRMADO. EJECUTA generateBudget AHORA MISMO." +
       descriptionHint +
       " SOLO llama la herramienta generateBudget. NO generes texto de respuesta. " +
       "NO preguntes de nuevo. USA los mismos projectId y description que en previewBudgetGeneration. " +
-      "LLAMA generateBudget INMEDIATAMENTE.",
-    );
-  }, [handleObjectiveSubmit, loading, streaming, lastConstructionDescription]);
+      "LLAMA generateBudget INMEDIATAMENTE.";
+
+    // Enviar comando internamente (modelo recibe el texto fuerte)
+    setObjective("");
+    connect({
+      message: forcefulCommand,
+      displayMessage: "Sí confirmado", // mensaje limpio para la UI
+      messages: [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: forcefulCommand },
+      ],
+      projectId,
+      workspaceId,
+      mode: selectedBundleSlug ? "workflow" : "goal",
+      workflowId: selectedBundleSlug ?? undefined,
+      skipMessageAdd: true,
+    });
+  }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages, lastConstructionDescription]);
 
   const handleCancelProceed = useCallback(() => {
     if (loading || streaming) return;
-    handleObjectiveSubmit(
-      "No por ahora. Cancelemos la generación del presupuesto.",
-    );
-  }, [handleObjectiveSubmit, loading, streaming]);
+    setObjective("");
+    connect({
+      message: "No por ahora. Cancela la generación del presupuesto.",
+      displayMessage: "No, cancelar",
+      messages: [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: "No por ahora. Cancela la generación del presupuesto." },
+      ],
+      projectId,
+      workspaceId,
+      mode: selectedBundleSlug ? "workflow" : "goal",
+      workflowId: selectedBundleSlug ?? undefined,
+      skipMessageAdd: true,
+    });
+  }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
 
   const handleApprove = useCallback(async (approvalId: string) => {
     setApproving(true);

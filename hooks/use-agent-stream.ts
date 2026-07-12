@@ -46,6 +46,10 @@ export type AgentStreamInput = {
   mode?: "chat" | "goal" | "workflow";
   /** Slug del workflow/bundle especialista a usar, ej: "crear-presupuesto-base" */
   workflowId?: string;
+  /** Si es true, no agrega el mensaje al estado de UI (útil para enviar comandos internos) */
+  skipMessageAdd?: boolean;
+  /** Mensaje limpio para mostrar en la UI cuando skipMessageAdd=true */
+  displayMessage?: string;
 };
 
 const EMPTY_EXECUTION: AgentStreamExecution = {
@@ -73,8 +77,15 @@ export function useAgentStream() {
     setStatus("connecting");
     setError(null);
 
-    const userMessage: AgentStreamMessage = { role: "user", content: input.message };
-    setMessages((prev) => [...prev, userMessage]);
+    // Si skipMessageAdd está activo, NO mostrar el mensaje en la UI
+    // (útil para comandos internos como la confirmación de presupuesto)
+    if (!input.skipMessageAdd) {
+      const userMessage: AgentStreamMessage = { role: "user", content: input.message };
+      setMessages((prev) => [...prev, userMessage]);
+    } else if (input.displayMessage) {
+      // Mostrar un mensaje limpio en la UI mientras el comando real va internamente
+      setMessages((prev) => [...prev, { role: "user", content: input.displayMessage }]);
+    }
 
     setExecution((prev) => ({
       ...EMPTY_EXECUTION,
