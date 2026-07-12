@@ -82,6 +82,208 @@ describe("useAgentStream", () => {
   // ─── connect ────────────────────────────────────────────────────────────
 
   describe("connect", () => {
+    // ─── skipMessageAdd / displayMessage ─────────────────────────────────
+
+    it("adds message to UI state normally when skipMessageAdd is not set", async () => {
+      const stream = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput({ message: "Hola" }));
+      });
+
+      expect(result.current.messages[0]).toEqual({ role: "user", content: "Hola" });
+    });
+
+    it("does NOT add message to UI state when skipMessageAdd=true", async () => {
+      const stream = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput({
+          message: "COMANDO INTERNO",
+          skipMessageAdd: true,
+        }));
+      });
+
+      // Solo debe tener el placeholder del assistant (no el mensaje de usuario)
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0].role).toBe("assistant");
+      // El mensaje "COMANDO INTERNO" NO debe estar en la UI
+      expect(result.current.messages[0].content).not.toContain("COMANDO INTERNO");
+    });
+
+    it("shows displayMessage in UI instead of internal message when both are set", async () => {
+      const stream = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput({
+          message: "COMANDO INTERNO EJECUTA generateBudget AHORA",
+          displayMessage: "Sí confirmado",
+          skipMessageAdd: true,
+        }));
+      });
+
+      // El mensaje visible debe ser el displayMessage, no el comando interno
+      const userMessages = result.current.messages.filter((m) => m.role === "user");
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].content).toBe("Sí confirmado");
+      expect(userMessages[0].content).not.toContain("COMANDO INTERNO");
+    });
+
+    it("sends internal message to API even when skipMessageAdd=true", async () => {
+      const stream = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      await act(async () => {
+        await result.current.connect(connectInput({
+          message: "COMANDO INTERNO",
+          displayMessage: "Sí confirmado",
+          skipMessageAdd: true,
+          projectId: "proj-1",
+          mode: "goal",
+        }));
+      });
+
+      // Verificar que la petición contiene el comando interno, no el displayMessage
+      const fetchCall = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]?.body as string);
+      expect(body.message).toBe("COMANDO INTERNO");
+      expect(body.message).not.toBe("Sí confirmado");
+    });
+
+    it("includes previous messages plus internal command in request when messages array provided", async () => {
+      const stream = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      const prevMessages = [
+        { role: "user" as const, content: "genera presupuesto" },
+        { role: "assistant" as const, content: "Preview..." },
+      ];
+
+      await act(async () => {
+        await result.current.connect({
+          message: "COMANDO INTERNO",
+          displayMessage: "Sí confirmado",
+          messages: [
+            ...prevMessages,
+            { role: "user", content: "COMANDO INTERNO" },
+          ],
+          skipMessageAdd: true,
+          projectId: "proj-1",
+          mode: "goal",
+        });
+      });
+
+      // Verificar que la petición incluye el comando interno en messages
+      const fetchCall = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]?.body as string);
+      const lastMsg = body.messages[body.messages.length - 1];
+      expect(lastMsg.content).toBe("COMANDO INTERNO");
+      expect(body.messages).toHaveLength(3);
+      // La UI solo debe mostrar "Sí confirmado", no el comando interno
+      const userMessages = result.current.messages.filter((m) => m.role === "user");
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].content).toBe("Sí confirmado");
+    });
+
+    // ─── Cancelar flow (mismo patron que handleCancelProceed) ───────────
+
+    it("cancelar: muestra 'No, cancelar' en la UI y envia comando interno a la API", async () => {
+      const stream = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+      const prevMessages = [
+        { role: "user" as const, content: "genera presupuesto para casa" },
+        { role: "assistant" as const, content: "Preview..." },
+      ];
+
+      await act(async () => {
+        await result.current.connect({
+          message: "No por ahora. Cancela la generación del presupuesto.",
+          displayMessage: "No, cancelar",
+          messages: [
+            ...prevMessages,
+            { role: "user", content: "No por ahora. Cancela la generación del presupuesto." },
+          ],
+          skipMessageAdd: true,
+          projectId: "proj-1",
+          mode: "goal",
+        });
+      });
+
+      // UI must show clean message
+      const userMessages = result.current.messages.filter((m) => m.role === "user");
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].content).toBe("No, cancelar");
+
+      // API request must contain the internal cancellation command
+      const fetchCall = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]?.body as string);
+      expect(body.message).toBe("No por ahora. Cancela la generación del presupuesto.");
+
+      // messages array must include the internal command
+      const bodyLastMsg = body.messages[body.messages.length - 1];
+      expect(bodyLastMsg.content).toBe("No por ahora. Cancela la generación del presupuesto.");
+      expect(body.messages).toHaveLength(3);
+    });
+
+    it("cancelar: no filtra mensajes que empiezan con 'No por ahora' en el historial", async () => {
+      const stream = makeSseStream([
+        { event: "final", data: { answer: "Ok", warnings: [], latencyMs: 50 } },
+      ]);
+      mockFetchOk(stream);
+
+      const { result } = renderHook(() => useAgentStream());
+
+      const prevMessages = [
+        { role: "user" as const, content: "No por ahora. Cancelemos." },
+        { role: "assistant" as const, content: "Entendido." },
+        { role: "user" as const, content: "genera presupuesto para casa" },
+        { role: "assistant" as const, content: "Preview lista." },
+      ];
+
+      await act(async () => {
+        await result.current.connect({
+          message: "No por ahora. Cancela.",
+          displayMessage: "No, cancelar",
+          messages: [
+            ...prevMessages,
+            { role: "user", content: "No por ahora. Cancela." },
+          ],
+          skipMessageAdd: true,
+        });
+      });
+
+      // El historial completo (4 mensajes + 1 nuevo) debe ir en la peticion
+      const fetchCall = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]?.body as string);
+      expect(body.messages).toHaveLength(5);
+
+      // UI must show clean message
+      const userMessages = result.current.messages.filter((m) => m.role === "user");
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].content).toBe("No, cancelar");
+    });
     it("sets status to connecting immediately", async () => {
       const { result } = renderHook(() => useAgentStream());
 
@@ -135,13 +337,15 @@ describe("useAgentStream", () => {
         expect.objectContaining({
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: "Crea presupuesto para hospital",
-            projectId: "project-42",
-            mode: "goal",
-          }),
+          body: expect.stringContaining('"message":"Crea presupuesto para hospital"'),
         }),
       );
+
+      const callBody = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
+      expect(callBody.message).toBe("Crea presupuesto para hospital");
+      expect(callBody.projectId).toBe("project-42");
+      expect(callBody.mode).toBe("goal");
+      expect(callBody.messages).toBeDefined();
     });
 
     it("transitions to streaming when response body starts arriving", async () => {
