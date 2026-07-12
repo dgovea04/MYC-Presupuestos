@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentWorkspace } from "@/components/ai/AgentWorkspace";
@@ -696,6 +696,7 @@ describe("AgentWorkspace", () => {
 
     afterEach(() => {
       vi.restoreAllMocks();
+      vi.useRealTimers();
     });
 
     it("muestra mensaje de fallback en el chat cuando el modelo no ejecuta generateBudget", async () => {
@@ -1103,6 +1104,103 @@ describe("AgentWorkspace", () => {
 
       // Resolver para limpiar
       resolvePromise!({ ok: true, json: async () => ({ totalItemsAdded: 10 }) });
+    });
+
+    // ── Edge cases: concurrencia (doble click en Proceder) ─────────────────
+
+    it("doble click rapido en Proceder solo ejecuta una llamada fetch", async () => {
+      // Promesa sin resolver para mantener el fallback en ejecución
+      let resolvePromise!: (value: unknown) => void;
+      globalThis.fetch = vi.fn().mockReturnValue(new Promise((resolve) => {
+        resolvePromise = resolve;
+      }));
+
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...confirmedState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      // Usar fireEvent.click para ambos clics (síncrono) para simular
+      // doble click rápido sin re-render intermedio
+      const procederBtn = screen.getByText("Proceder");
+      fireEvent.click(procederBtn);
+      fireEvent.click(procederBtn);
+
+      // Verificar que fetch fue llamado SOLO una vez (guardado por fallbackTriggeredRef)
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      // connect() se llamó al menos 1 vez (dependiendo del batching de React
+      // en el entorno jsdom, ambos fireEvent.click pueden ser procesados
+      // en el mismo lote y el segundo puede ser absorbido por React)
+      expect(connect).toHaveBeenCalledTimes(1);
+
+      // Resolver promesa para limpiar
+      resolvePromise!({ ok: true, json: async () => ({ totalItemsAdded: 10 }) });
+    });
+
+    it("boton Proceder se oculta durante la ejecucion del fallback", async () => {
+      // Promesa sin resolver
+      let resolvePromise!: (value: unknown) => void;
+      globalThis.fetch = vi.fn().mockReturnValue(new Promise((resolve) => {
+        resolvePromise = resolve;
+      }));
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      // Click en Proceder una vez
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // El botón de Proceder desaparece inmediatamente (showConfirmation incluye fallbackStatus === 'idle')
+      await waitFor(() => {
+        expect(screen.queryByText("Proceder")).toBeNull();
+        expect(screen.queryByText("Cancelar")).toBeNull();
+      });
+
+      // Spinner visible
+      const spinner = document.querySelector('[data-testid="icon-loader"]');
+      expect(spinner).toBeTruthy();
+
+      // fetch fue llamado exactamente una vez
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      // Resolver promesa
+      resolvePromise!({ ok: true, json: async () => ({ totalItemsAdded: 10 }) });
+    });
+
+    // ── Edge cases: timeout ────────────────────────────────────────────
+
+    it("muestra mensaje de timeout cuando el fallback excede 30 segundos", async () => {
+      // Simular que fetch rechaza con AbortError (como haría AbortController
+      // al abortar después del timeout de 30s). No usamos fake timers porque
+      // interfieren con waitFor y React act().
+      globalThis.fetch = vi.fn().mockRejectedValueOnce(
+        new DOMException("The operation was aborted", "AbortError"),
+      );
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      // Click en Proceder
+      fireEvent.click(screen.getByText("Proceder"));
+
+      // El fallback arranca (mensaje en el chat)
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+
+      // El mensaje específico de timeout debe aparecer
+      await waitFor(() => {
+        expect(screen.getByText(/excedió el tiempo de espera/)).toBeTruthy();
+        expect(screen.getByText(/Fallback falló/)).toBeTruthy();
+      });
     });
 
     it("no activa fallback si el modelo SI ejecutó generateBudget", async () => {

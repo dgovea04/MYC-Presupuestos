@@ -1075,11 +1075,15 @@ export function AgentWorkspace({
       summary: "Ejecutando generación directa...",
     });
 
-    try {
-      // Extraer projectId y description del historial
-      const desc = lastConstructionDescription || "";
-      const projId = projectId || "";
+    // Extraer projectId y description del historial
+    const desc = lastConstructionDescription || "";
+    const projId = projectId || "";
 
+    // Timeout de 30s para evitar que el fallback cuelgue indefinidamente
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 30000);
+
+    try {
       const response = await fetch("/api/ai/agent/generate-budget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1089,6 +1093,7 @@ export function AgentWorkspace({
           workspaceId,
           templateSource: "auto",
         }),
+        signal: abortController.signal,
       });
 
       const latencyMs = Date.now() - fallbackStartTime;
@@ -1109,13 +1114,18 @@ export function AgentWorkspace({
       });
     } catch (error) {
       const elapsedMs = Date.now() - fallbackStartTime;
+      const isTimeout = error instanceof DOMException && error.name === "AbortError";
       setFallbackStatus("failed");
       setFallbackActivity({
         toolName: "generateBudget (fallback)",
         success: false,
         latencyMs: elapsedMs,
-        summary: `❌ Fallback falló: ${error instanceof Error ? error.message : "Error desconocido"}`,
+        summary: isTimeout
+          ? `❌ Fallback falló: La solicitud excedió el tiempo de espera (30s)`
+          : `❌ Fallback falló: ${error instanceof Error ? error.message : "Error desconocido"}`,
       });
+    } finally {
+      clearTimeout(timeoutId);
     }
   }, [projectId, workspaceId, lastConstructionDescription]);
 
