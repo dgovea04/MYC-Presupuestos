@@ -18,9 +18,7 @@ import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-event
 import { getBudgetById } from "@/lib/data/budgets";
 import { BudgetFlowWrapper } from "@/components/budget/budget-flow-wrapper";
 import { BudgetCollaborationWrapper } from "@/components/budget/budget-collaboration-wrapper";
-import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getProjectBudgetOverviewById } from "@/lib/data/projects";
-import { getResourcesByUser } from "@/lib/data/resources";
 import { getUserSettings } from "@/lib/data/settings";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { decimalToNumber } from "@/lib/db/serializers";
@@ -263,10 +261,6 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     );
   }
 
-  const [resources, partidasCatalog] = await measureAsync("page.budgetDetail.editorCatalogs", () => Promise.all([getResourcesByUser(session.user.id, project.companyId), getCatalogPartidas()]), {
-    budgetId: budget.id,
-  });
-
   return (
     <AppShell
       currentUser={session.user}
@@ -288,21 +282,9 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         budget={budget}
         projectName={project.name}
         templateTraceability={templateTraceability}
-        partidasCatalog={partidasCatalog}
-        resourcesCatalog={resources.map((resource) => ({
-          id: resource.id,
-          companyId: resource.companyId ?? undefined,
-          code: resource.code,
-          description: resource.description,
-          category: resource.category,
-          iu: resource.iu ?? undefined,
-          iuCurrent: resource.iuCurrent ?? undefined,
-          subcategory: resource.subcategory ?? undefined,
-          unit: resource.unit,
-          unitPrice: decimalToNumber(resource.unitPrice),
-          currency: resource.currency,
-          source: resource.source ?? undefined,
-        }))}
+        catalogBudgetId={budget.id}
+        partidasCatalog={[]}
+        resourcesCatalog={[]}
       />
       </BudgetCollaborationWrapper>
     </AppShell>

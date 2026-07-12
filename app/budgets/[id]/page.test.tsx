@@ -208,24 +208,20 @@ describe("BudgetDetailPage", () => {
         projectName: "Proyecto Demo",
         templateTraceability: null,
         partidasCatalog: [],
-        resourcesCatalog: [
-          expect.objectContaining({
-            id: "resource-1",
-            unitPrice: 19.23,
-          }),
-        ],
+        resourcesCatalog: [],
       }),
     );
     expect(mocks.notFound).not.toHaveBeenCalled();
   });
 
-  it("loads the project overview without recreating missing default sub budgets", async () => {
+  it("loads the project overview without recreating missing default sub budgets or blocking on editor catalogs", async () => {
     await BudgetDetailPage({
       params: Promise.resolve({ id: "budget-1" }),
     });
 
     expect(mocks.getProjectBudgetOverviewById).toHaveBeenCalledWith("project-1", "user-1");
-    expect(mocks.getResourcesByUser).toHaveBeenCalledWith("user-1", "company-1");
+    expect(mocks.getResourcesByUser).not.toHaveBeenCalled();
+    expect(mocks.getCatalogPartidas).not.toHaveBeenCalled();
     expect(mocks.getProjectById).not.toHaveBeenCalled();
   });
 
