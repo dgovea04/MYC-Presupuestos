@@ -5,6 +5,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { createProject } from "@/lib/data/projects";
+import { DASHBOARD_ANALYTICS_CACHE_TAG, getDashboardAnalyticsCacheTag } from "@/lib/dashboard/analytics";
 import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 
 export async function POST(request: Request) {
@@ -19,7 +20,8 @@ export async function POST(request: Request) {
     await safelyRecordProjectCreatedActivity(project.id, project.name, session.user.id, getRequestTemplateId(body));
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("dashboard-analytics", "max");
+    revalidateTag(DASHBOARD_ANALYTICS_CACHE_TAG, "max");
+    revalidateTag(getDashboardAnalyticsCacheTag(project.companyId), "max");
     revalidateTag("projects-list", "max");
     revalidatePath("/projects");
     revalidatePath(`/projects/${project.id}`);

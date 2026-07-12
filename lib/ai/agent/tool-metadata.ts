@@ -1,0 +1,58 @@
+import type { AgentToolRisk } from "@/lib/ai/agent/types";
+
+export type AgentToolMetadata = {
+  name: string;
+  description: string;
+  risk: AgentToolRisk;
+};
+
+export const agentToolMetadata: AgentToolMetadata[] = [
+  { name: "searchBudgets", description: "Busca presupuestos existentes por proyecto, nombre o estado.", risk: "read" },
+  { name: "calculateBudget", description: "Calcula totales de presupuesto, costos directos, gastos, utilidad e IGV.", risk: "read" },
+  { name: "createBudget", description: "Crea un nuevo presupuesto asociado a un proyecto.", risk: "write" },
+  { name: "cloneBudget", description: "Clona un presupuesto existente con una nueva denominacion.", risk: "write" },
+  { name: "archiveBudget", description: "Archiva un presupuesto que ya no debe estar activo.", risk: "financial" },
+  { name: "generateBudget", description: "Genera una estructura inicial de presupuesto asistida por IA.", risk: "write" },
+  { name: "compareBudgets", description: "Compara presupuestos y resume diferencias de costo y estructura.", risk: "read" },
+  { name: "createBudgetGeneral", description: "Crea el presupuesto general base de un proyecto.", risk: "write" },
+  { name: "createSubBudget", description: "Crea un subpresupuesto dentro de un presupuesto general.", risk: "write" },
+  { name: "previewBudgetGeneration", description: "Previsualiza una propuesta de generacion de presupuesto.", risk: "read" },
+  { name: "searchProjects", description: "Busca proyectos del workspace por nombre o datos principales.", risk: "read" },
+  { name: "createProject", description: "Crea un proyecto de obra con datos generales.", risk: "write" },
+  { name: "searchCompanies", description: "Busca empresas disponibles para asociar proyectos.", risk: "read" },
+  { name: "searchPartidas", description: "Busca partidas del catalogo por texto, codigo o especialidad.", risk: "read" },
+  { name: "suggestPartidas", description: "Sugiere partidas candidatas para un presupuesto.", risk: "read" },
+  { name: "addPartida", description: "Agrega una partida al presupuesto.", risk: "financial" },
+  { name: "duplicatePartida", description: "Duplica una partida existente dentro del presupuesto.", risk: "write" },
+  { name: "reorderPartidas", description: "Reordena partidas dentro de la estructura del presupuesto.", risk: "write" },
+  { name: "removePartida", description: "Elimina una partida del presupuesto.", risk: "financial" },
+  { name: "searchInsumos", description: "Busca insumos y recursos del catalogo.", risk: "read" },
+  { name: "addInsumo", description: "Agrega un insumo a un APU o catalogo.", risk: "financial" },
+  { name: "replaceInsumo", description: "Reemplaza un insumo por otro equivalente.", risk: "financial" },
+  { name: "updatePrecio", description: "Actualiza el precio unitario de un insumo.", risk: "financial" },
+  { name: "reviewAPU", description: "Revisa consistencia tecnica y economica de un APU.", risk: "read" },
+  { name: "calculateAPU", description: "Calcula el precio unitario de un APU.", risk: "read" },
+  { name: "createAPU", description: "Crea un APU para una partida.", risk: "financial" },
+  { name: "updateAPU", description: "Actualiza recursos, rendimientos o costos de un APU.", risk: "financial" },
+  { name: "generateAPU", description: "Genera una propuesta de APU asistida por IA.", risk: "financial" },
+  { name: "optimizeAPU", description: "Propone mejoras de rendimiento o composicion para un APU.", risk: "read" },
+  { name: "createSchedule", description: "Crea o regenera el cronograma de obra.", risk: "write" },
+  { name: "updateTask", description: "Actualiza duracion o fechas de una tarea del cronograma.", risk: "write" },
+  { name: "linkPredecessor", description: "Vincula dependencias entre tareas del cronograma.", risk: "write" },
+  { name: "moveTask", description: "Mueve una tarea del cronograma a una nueva fecha.", risk: "write" },
+  { name: "calculateCriticalPath", description: "Calcula ruta critica, holguras y duracion del cronograma.", risk: "read" },
+  { name: "reviewTakeoff", description: "Revisa una hoja de metrado y su consistencia.", risk: "read" },
+  { name: "createTakeoff", description: "Crea una hoja de metrado para un proyecto.", risk: "write" },
+  { name: "importTakeoff", description: "Importa o duplica metrados desde una fuente existente.", risk: "write" },
+  { name: "createChapter", description: "Crea un capitulo en la estructura del presupuesto.", risk: "write" },
+  { name: "moveChapter", description: "Mueve un capitulo dentro de la estructura.", risk: "write" },
+  { name: "deleteChapter", description: "Elimina un capitulo de presupuesto.", risk: "financial" },
+  { name: "exportReport", description: "Solicita exportacion de reporte en PDF o Excel.", risk: "export" },
+  { name: "exportPDF", description: "Exporta un presupuesto a PDF.", risk: "export" },
+  { name: "exportExcel", description: "Exporta un presupuesto a Excel.", risk: "export" },
+  { name: "exportS10", description: "Exporta un presupuesto en formato compatible con S10.", risk: "export" },
+  { name: "dashboard", description: "Genera un resumen ejecutivo del proyecto.", risk: "read" },
+  { name: "searchMcpTemplates", description: "Busca plantillas MCP disponibles para generar presupuestos.", risk: "read" },
+  { name: "previewBudgetFromMcpTemplate", description: "Previsualiza un presupuesto desde una plantilla MCP.", risk: "read" },
+  { name: "applyBudgetFromMcpTemplate", description: "Aplica una plantilla MCP para crear o completar presupuesto.", risk: "financial" },
+];

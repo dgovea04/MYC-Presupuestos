@@ -237,4 +237,27 @@ describe("collaboration presence route", () => {
       error: "No tienes permisos",
     });
   });
+
+  it("treats aborted POST presence requests as quiet cancellations", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({
+      expires: new Date().toISOString(),
+      user: { id: "user-1" },
+    });
+    const abortError = Object.assign(new Error("aborted"), { code: "ECONNRESET" });
+    vi.mocked(upsertPresenceHeartbeat).mockRejectedValue(abortError);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await POST(
+      new Request("http://localhost/api/budgets/budget-1/collaboration/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ route: "/budgets/budget-1", module: "budget" }),
+      }),
+      { params: Promise.resolve({ id: "budget-1" }) },
+    );
+
+    expect(response.status).toBe(204);
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
 });

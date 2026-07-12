@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   createResourceForUser: vi.fn(),
   saveResourcesPatch: vi.fn(),
   resourcePatchTouchesGlobalCatalog: vi.fn(),
+  clearResourcesProcessCache: vi.fn(),
   getAuthSession: vi.fn(),
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
@@ -22,7 +23,9 @@ vi.mock("@/lib/data/resources", () => ({
   createResourceForUser: mocks.createResourceForUser,
   saveResourcesPatch: mocks.saveResourcesPatch,
   resourcePatchTouchesGlobalCatalog: mocks.resourcePatchTouchesGlobalCatalog,
+  clearResourcesProcessCache: mocks.clearResourcesProcessCache,
   GLOBAL_RESOURCES_CACHE_TAG: "global-resources-v2",
+  RESOURCES_BY_USER_CACHE_TAG: "resources-by-user",
 }));
 
 import { POST, PATCH } from "@/app/api/resources/route";
@@ -33,6 +36,7 @@ describe("POST /api/resources", () => {
     mocks.getAuthSession.mockReset();
     mocks.revalidatePath.mockReset();
     mocks.revalidateTag.mockReset();
+    mocks.clearResourcesProcessCache.mockReset();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -83,6 +87,7 @@ describe("POST /api/resources", () => {
     await expect(response.json()).resolves.toEqual(resource);
     expect(mocks.createResourceForUser).toHaveBeenCalledWith("user-1", expect.any(Object));
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/resources");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("resources-by-user", "max");
   });
 
   it("creates a global resource (no companyId) and revalidates global cache", async () => {
@@ -110,6 +115,7 @@ describe("PATCH /api/resources", () => {
     mocks.getAuthSession.mockReset();
     mocks.revalidatePath.mockReset();
     mocks.revalidateTag.mockReset();
+    mocks.clearResourcesProcessCache.mockReset();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -175,6 +181,7 @@ describe("PATCH /api/resources", () => {
     await expect(response.json()).resolves.toEqual(result);
     expect(mocks.saveResourcesPatch).toHaveBeenCalledWith("user-1", expect.any(Object));
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/resources");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("resources-by-user", "max");
   });
 
   it("revalidates global catalog tag when patch touches global resources", async () => {

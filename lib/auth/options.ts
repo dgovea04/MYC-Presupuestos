@@ -16,6 +16,8 @@ const authSecret =
   process.env.AUTH_SECRET ??
   (process.env.NODE_ENV === "production" ? undefined : "myc-presupuestos-dev-auth-secret");
 const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith("https://") ?? process.env.NODE_ENV === "production";
+const AUTH_USER_PROCESS_CACHE_TTL_MS = 5_000;
+const shouldUseAuthUserProcessCache = process.env.NODE_ENV !== "production" && process.env.VITEST !== "true";
 
 const authUserSchema = z.object({
   id: z.string(),
@@ -32,6 +34,12 @@ const authUserSchema = z.object({
 });
 
 type AuthUserRecord = z.infer<typeof authUserSchema>;
+type AuthUserCacheEntry = {
+  expiresAt: number;
+  value: Promise<AuthUserRecord | null>;
+};
+
+const authUserByIdCache = new Map<string, AuthUserCacheEntry>();
 
 function normalizeAuthUser(row: unknown): AuthUserRecord | null {
   const parsedUser = authUserSchema.safeParse(row);
@@ -70,6 +78,29 @@ async function getAuthUserByEmail(email: string) {
 }
 
 async function getAuthUserById(userId: string) {
+  if (shouldUseAuthUserProcessCache) {
+    const existing = authUserByIdCache.get(userId);
+    if (existing && existing.expiresAt > Date.now()) {
+      return existing.value;
+    }
+  }
+
+  const value = getAuthUserByIdFromDatabase(userId);
+
+  if (shouldUseAuthUserProcessCache) {
+    authUserByIdCache.set(userId, {
+      expiresAt: Date.now() + AUTH_USER_PROCESS_CACHE_TTL_MS,
+      value: value.catch((error: unknown) => {
+        authUserByIdCache.delete(userId);
+        throw error;
+      }),
+    });
+  }
+
+  return value;
+}
+
+async function getAuthUserByIdFromDatabase(userId: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
     SELECT "id", "name", "email", "role", "status"

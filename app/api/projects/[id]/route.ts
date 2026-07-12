@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { deleteProject, getProjectHeaderById, PROJECT_OVERVIEW_CACHE_TAG, PROJECTS_LIST_CACHE_TAG, updateProject, USER_COMPANIES_CACHE_TAG } from "@/lib/data/projects";
+import { DASHBOARD_ANALYTICS_CACHE_TAG, getDashboardAnalyticsCacheTag } from "@/lib/dashboard/analytics";
+import { deleteProject, getProjectHeaderById, getProjectOverviewCacheTag, PROJECT_OVERVIEW_CACHE_TAG, PROJECTS_LIST_CACHE_TAG, updateProject, USER_COMPANIES_CACHE_TAG } from "@/lib/data/projects";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -21,7 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       detail: project.name,
       href: `/projects/${project.id}`,
     });
-    revalidateProjectPaths(id);
+    revalidateProjectPaths(id, project.companyId);
     return NextResponse.json(project);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo actualizar el proyecto" }, { status: 400 });
@@ -42,19 +43,21 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     }
 
     await deleteProject(id, session.user.id);
-    revalidateProjectPaths(project.id);
+    revalidateProjectPaths(project.id, project.companyId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo eliminar el proyecto" }, { status: 400 });
   }
 }
 
-function revalidateProjectPaths(projectId: string) {
+function revalidateProjectPaths(projectId: string, companyId: string) {
   revalidatePath("/dashboard");
   revalidateTag("dashboard-stats", "max");
-  revalidateTag("dashboard-analytics", "max");
+  revalidateTag(DASHBOARD_ANALYTICS_CACHE_TAG, "max");
+  revalidateTag(getDashboardAnalyticsCacheTag(companyId), "max");
   revalidateTag(PROJECTS_LIST_CACHE_TAG, "max");
   revalidateTag(PROJECT_OVERVIEW_CACHE_TAG, "max");
+  revalidateTag(getProjectOverviewCacheTag(projectId), "max");
   revalidateTag(USER_COMPANIES_CACHE_TAG, "max");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);

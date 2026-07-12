@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
-import { deleteResource, GLOBAL_RESOURCES_CACHE_TAG, resourceMutationTouchesGlobalCatalog, updateResource } from "@/lib/data/resources";
+import { clearResourcesProcessCache, deleteResource, GLOBAL_RESOURCES_CACHE_TAG, RESOURCES_BY_USER_CACHE_TAG, resourceMutationTouchesGlobalCatalog, updateResource } from "@/lib/data/resources";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -17,6 +17,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (shouldRevalidateGlobalCatalog || resource.companyId == null) {
       revalidateTag(GLOBAL_RESOURCES_CACHE_TAG, "max");
     }
+    clearResourcesProcessCache();
+    revalidateTag(RESOURCES_BY_USER_CACHE_TAG, "max");
     revalidatePath("/resources");
     return NextResponse.json(resource);
   } catch (error) {
@@ -37,6 +39,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     if (shouldRevalidateGlobalCatalog) {
       revalidateTag(GLOBAL_RESOURCES_CACHE_TAG, "max");
     }
+    clearResourcesProcessCache();
+    revalidateTag(RESOURCES_BY_USER_CACHE_TAG, "max");
     revalidatePath("/resources");
     return NextResponse.json({ ok: true });
   } catch (error) {

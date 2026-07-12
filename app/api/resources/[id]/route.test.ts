@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   updateResource: vi.fn(),
   deleteResource: vi.fn(),
   resourceMutationTouchesGlobalCatalog: vi.fn(),
+  clearResourcesProcessCache: vi.fn(),
   getAuthSession: vi.fn(),
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
@@ -22,7 +23,9 @@ vi.mock("@/lib/data/resources", () => ({
   updateResource: mocks.updateResource,
   deleteResource: mocks.deleteResource,
   resourceMutationTouchesGlobalCatalog: mocks.resourceMutationTouchesGlobalCatalog,
+  clearResourcesProcessCache: mocks.clearResourcesProcessCache,
   GLOBAL_RESOURCES_CACHE_TAG: "global-resources-v2",
+  RESOURCES_BY_USER_CACHE_TAG: "resources-by-user",
 }));
 
 import { PATCH, DELETE } from "@/app/api/resources/[id]/route";
@@ -34,6 +37,7 @@ describe("PATCH /api/resources/[id]", () => {
     mocks.getAuthSession.mockReset();
     mocks.revalidatePath.mockReset();
     mocks.revalidateTag.mockReset();
+    mocks.clearResourcesProcessCache.mockReset();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -87,6 +91,7 @@ describe("PATCH /api/resources/[id]", () => {
     await expect(response.json()).resolves.toEqual(resource);
     expect(mocks.updateResource).toHaveBeenCalledWith("resource-1", "user-1", expect.any(Object));
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/resources");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("resources-by-user", "max");
   });
 
   it("revalidates global catalog when updating a global resource", async () => {
@@ -116,6 +121,7 @@ describe("DELETE /api/resources/[id]", () => {
     mocks.getAuthSession.mockReset();
     mocks.revalidatePath.mockReset();
     mocks.revalidateTag.mockReset();
+    mocks.clearResourcesProcessCache.mockReset();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -173,6 +179,7 @@ describe("DELETE /api/resources/[id]", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
     expect(mocks.deleteResource).toHaveBeenCalledWith("resource-1", "user-1");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("resources-by-user", "max");
   });
 
   it("revalidates global catalog when deleting a global resource", async () => {

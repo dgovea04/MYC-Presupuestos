@@ -39,7 +39,47 @@ type ColumnSupportFlags = {
   floatingKhipuTheme?: boolean;
 };
 
-function mockUserSettingsColumnSupport({
+function buildSupportedColumnRows({
+  defaultSubBudgetNames = true,
+  dateFormat = true,
+  appTheme = true,
+  defaultViewMode = true,
+  excelShowFieldBorders = true,
+  excelRowHeight = true,
+  aiProviderPreference = false,
+  floatingKhipuProvider = false,
+  floatingKhipuWidth = false,
+  floatingKhipuHeight = false,
+  floatingKhipuFontSize = false,
+  floatingKhipuPosition = false,
+  floatingKhipuTheme = false,
+}: ColumnSupportFlags) {
+  const flags = {
+    defaultSubBudgetNames,
+    dateFormat,
+    appTheme,
+    defaultViewMode,
+    excelShowFieldBorders,
+    excelRowHeight,
+    aiProviderPreference,
+    floatingKhipuProvider,
+    floatingKhipuWidth,
+    floatingKhipuHeight,
+    floatingKhipuFontSize,
+    floatingKhipuPosition,
+    floatingKhipuTheme,
+  };
+
+  return Object.entries(flags)
+    .filter(([, enabled]) => enabled)
+    .map(([columnName]) => ({ columnName }));
+}
+
+function mockUserSettingsColumnSupport(flags: ColumnSupportFlags) {
+  queryRawMock.mockResolvedValueOnce(buildSupportedColumnRows(flags));
+}
+
+function mockUserSettingsColumnChecks({
   defaultSubBudgetNames = true,
   dateFormat = true,
   appTheme = true,
@@ -108,8 +148,8 @@ describe("user settings data", () => {
       ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
     expect(settings).not.toBe(defaultUserSettings);
-    expect(queryRawMock).toHaveBeenCalledTimes(14);
-    expect(queryRawMock.mock.calls[13]?.[8]).toBe("user-1");
+    expect(queryRawMock).toHaveBeenCalledTimes(2);
+    expect(queryRawMock.mock.calls[1]?.[8]).toBe("user-1");
     expect(defaultUserSettings).toEqual({
       defaultCurrency: "PEN",
       currencyDecimals: 2,
@@ -238,7 +278,7 @@ describe("user settings data", () => {
       aiProviderPreference: "auto",
       ...DEFAULT_FLOATING_KHIPU_FIELDS,
     });
-    expect(queryRawMock).toHaveBeenCalledTimes(14);
+    expect(queryRawMock).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to default date format when the legacy database has no dateFormat column", async () => {
@@ -561,7 +601,7 @@ describe("user settings data", () => {
   it("falls back to in-memory defaults for missing columns when update writes to a legacy table", async () => {
     const customSubBudgets = ["Obra", "Drenajes"];
 
-    mockUserSettingsColumnSupport({
+    mockUserSettingsColumnChecks({
       defaultSubBudgetNames: false,
       dateFormat: false,
       defaultViewMode: false,
@@ -619,7 +659,7 @@ describe("user settings data", () => {
   });
 
   it("persists and returns all settings fields", async () => {
-    mockUserSettingsColumnSupport({});
+    mockUserSettingsColumnChecks({});
     queryRawMock.mockImplementationOnce(
         async (
           _query,
@@ -761,7 +801,7 @@ describe("user settings data", () => {
   it("normalizes Prisma.Decimal-backed rate fields from write returns", async () => {
     const customSubBudgets = ["Obra", "Arquitectura"];
 
-    mockUserSettingsColumnSupport({});
+    mockUserSettingsColumnChecks({});
     queryRawMock.mockResolvedValueOnce([
         {
           defaultCurrency: "USD",
@@ -816,7 +856,7 @@ describe("user settings data", () => {
   });
 
   it("throws when updateUserSettings does not receive a returned row", async () => {
-    mockUserSettingsColumnSupport({});
+    mockUserSettingsColumnChecks({});
     queryRawMock.mockResolvedValueOnce([]);
 
     await expect(
@@ -846,7 +886,7 @@ describe("user settings data", () => {
   // ─── updateUserSettings: floating Khipu persistence ──────────
 
   it("persists and returns custom floating Khipu values", async () => {
-    mockUserSettingsColumnSupport({
+    mockUserSettingsColumnChecks({
       floatingKhipuProvider: true,
       floatingKhipuWidth: true,
       floatingKhipuHeight: true,
@@ -917,7 +957,7 @@ describe("user settings data", () => {
   });
 
   it("returns defaults for floating Khipu fields when write columns are missing", async () => {
-    mockUserSettingsColumnSupport({
+    mockUserSettingsColumnChecks({
       floatingKhipuProvider: false,
       floatingKhipuWidth: false,
       floatingKhipuHeight: false,
@@ -1077,7 +1117,7 @@ describe("user settings data", () => {
   });
 
   it("persists dark theme via updateUserSettings", async () => {
-    mockUserSettingsColumnSupport({ floatingKhipuTheme: true });
+    mockUserSettingsColumnChecks({ floatingKhipuTheme: true });
     queryRawMock.mockResolvedValueOnce([
       {
         defaultCurrency: "PEN",

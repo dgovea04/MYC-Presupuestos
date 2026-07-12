@@ -4,7 +4,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { BUDGETS_LIST_CACHE_TAG, createBudget } from "@/lib/data/budgets";
-import { PROJECT_OVERVIEW_CACHE_TAG } from "@/lib/data/projects";
+import { getProjectOverviewCacheTag, PROJECT_OVERVIEW_CACHE_TAG } from "@/lib/data/projects";
 
 export async function POST(request: Request) {
   const session = await getAuthSession();
@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     revalidateTag("dashboard-analytics", "max");
     revalidateTag(BUDGETS_LIST_CACHE_TAG, "max");
     revalidateTag(PROJECT_OVERVIEW_CACHE_TAG, "max");
+    revalidateTag(getProjectOverviewCacheTag(budget.projectId), "max");
     revalidatePath("/budgets");
     revalidatePath("/projects");
     revalidatePath(`/projects/${budget.projectId}`);

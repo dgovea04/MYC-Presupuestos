@@ -70,6 +70,13 @@ describe("GeneralBudgetOverview", () => {
     expect(getByText("Trazabilidad del consolidado")).toBeTruthy();
     expect(getByText("2 Sub Presupuestos conectados")).toBeTruthy();
     expect(getByText("Detalle completo para recalculo")).toBeTruthy();
+    expect(getByText("Mostrar detalle consolidado")).toBeTruthy();
+    expect(queryByText("Movimiento de tierras")).toBeNull();
+
+    await act(async () => {
+      clickButton("Mostrar detalle consolidado");
+    });
+
     expect(getByText("Movimiento de tierras")).toBeTruthy();
     expect(getByText("Acero fy=4200")).toBeTruthy();
     expect(getLinkByText("Revisar con IA").getAttribute("href")).toContain("/ai?action=review");

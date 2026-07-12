@@ -15,15 +15,16 @@ import { OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
-import { getBudgetById, getProjectSubBudgetDetails, getProjectSubBudgetSummaries } from "@/lib/data/budgets";
+import { getBudgetById } from "@/lib/data/budgets";
 import { BudgetFlowWrapper } from "@/components/budget/budget-flow-wrapper";
 import { BudgetCollaborationWrapper } from "@/components/budget/budget-collaboration-wrapper";
 import { getCatalogPartidas } from "@/lib/data/partidas";
-import { getProjectOverviewById } from "@/lib/data/projects";
+import { getProjectBudgetOverviewById } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { getUserSettings } from "@/lib/data/settings";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { measureAsync } from "@/lib/platform/performance";
 import { cn, ensureDate, formatCurrency, formatDate } from "@/lib/utils";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -49,24 +50,27 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function BudgetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getAuthSession();
+  const session = await measureAsync("page.budgetDetail.session", () => getAuthSession(), { budgetId: id });
   if (!session) {
     console.error("BudgetDetailPage missing session", { budgetId: id });
     notFound();
   }
 
-  const [budget, settings, templateTraceability] = await Promise.all([
+  const [budget, settings, templateTraceability] = await measureAsync("page.budgetDetail.initialData", () => Promise.all([
     getBudgetById(id, session.user.id),
     getUserSettings(session.user.id),
     getBudgetTemplateCreationTraceability({ userId: session.user.id, budgetId: id }),
-  ]);
+  ]), { budgetId: id });
 
   if (!budget) {
     console.error("BudgetDetailPage budget not found", { budgetId: id, userId: session.user.id });
     notFound();
   }
 
-  const project = await getProjectOverviewById(budget.projectId, session.user.id);
+  const project = await measureAsync("page.budgetDetail.projectOverview", () => getProjectBudgetOverviewById(budget.projectId, session.user.id), {
+    budgetId: budget.id,
+    projectId: budget.projectId,
+  });
 
   if (!project) {
     console.error("BudgetDetailPage project not found", { budgetId: budget.id, projectId: budget.projectId, userId: session.user.id });
@@ -74,11 +78,6 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
   }
 
   if (budget.kind === "GENERAL") {
-    const [subBudgetSummaries, subBudgetDetails] = await Promise.all([
-      getProjectSubBudgetSummaries(project.id, session.user.id),
-      getProjectSubBudgetDetails(project.id, session.user.id),
-    ]);
-
     const subBudgets = orderSubBudgetsBySpecialty(project.budgets.filter((item) => item.kind === "SUB_BUDGET"));
 
     return (
@@ -242,7 +241,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           <GeneralBudgetOverview
             projectId={project.id}
             generalBudgetId={budget.id}
-            subBudgets={subBudgetSummaries.map((subBudget) => ({
+            subBudgets={subBudgets.map((subBudget) => ({
               id: subBudget.id,
               projectId: subBudget.projectId,
               parentBudgetId: subBudget.parentBudgetId ?? undefined,
@@ -257,7 +256,6 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
               levelsCount: subBudget._count.levels,
               itemsCount: subBudget._count.items,
             }))}
-            subBudgetDetails={subBudgetDetails}
           />
         </div>
         </BudgetCollaborationWrapper>
@@ -265,7 +263,9 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     );
   }
 
-  const [resources, partidasCatalog] = await Promise.all([getResourcesByUser(session.user.id), getCatalogPartidas()]);
+  const [resources, partidasCatalog] = await measureAsync("page.budgetDetail.editorCatalogs", () => Promise.all([getResourcesByUser(session.user.id, project.companyId), getCatalogPartidas()]), {
+    budgetId: budget.id,
+  });
 
   return (
     <AppShell

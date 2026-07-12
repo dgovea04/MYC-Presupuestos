@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { BUDGETS_LIST_CACHE_TAG, BUDGET_DETAIL_CACHE_TAG, deleteBudget, getBudgetHeaderById, getBudgetLiveUpdateSummaries, saveBudgetPatch, getBudgetById } from "@/lib/data/budgets";
+import { BUDGETS_LIST_CACHE_TAG, BUDGET_DETAIL_CACHE_TAG, deleteBudget, getBudgetDetailCacheTag, getBudgetHeaderById, getBudgetLiveUpdateSummaries, saveBudgetPatch, getBudgetById } from "@/lib/data/budgets";
+import { getProjectOverviewCacheTag, PROJECT_OVERVIEW_CACHE_TAG } from "@/lib/data/projects";
 import { recordBudgetChangeEvents } from "@/lib/collaboration/audit";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -77,6 +78,9 @@ function revalidateBudgetPaths(projectId: string, budgetId: string) {
   revalidateTag("dashboard-analytics", "max");
   revalidateTag(BUDGETS_LIST_CACHE_TAG, "max");
   revalidateTag(BUDGET_DETAIL_CACHE_TAG, "max");
+  revalidateTag(getBudgetDetailCacheTag(budgetId), "max");
+  revalidateTag(PROJECT_OVERVIEW_CACHE_TAG, "max");
+  revalidateTag(getProjectOverviewCacheTag(projectId), "max");
   revalidatePath("/budgets");
   revalidatePath(`/budgets/${budgetId}`);
   revalidatePath("/projects");

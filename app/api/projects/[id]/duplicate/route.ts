@@ -2,7 +2,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
-import { duplicateProject, PROJECT_OVERVIEW_CACHE_TAG, PROJECTS_LIST_CACHE_TAG, USER_COMPANIES_CACHE_TAG } from "@/lib/data/projects";
+import { DASHBOARD_ANALYTICS_CACHE_TAG, getDashboardAnalyticsCacheTag } from "@/lib/dashboard/analytics";
+import { duplicateProject, getProjectOverviewCacheTag, PROJECT_OVERVIEW_CACHE_TAG, PROJECTS_LIST_CACHE_TAG, USER_COMPANIES_CACHE_TAG } from "@/lib/data/projects";
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -16,7 +17,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
 
     await safelyRecordDuplicateActivity(project.id, project.name, session.user.id);
 
-    revalidateProjectPaths(project.id);
+    revalidateProjectPaths(project.id, project.companyId);
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
@@ -27,12 +28,14 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
   }
 }
 
-function revalidateProjectPaths(projectId: string) {
+function revalidateProjectPaths(projectId: string, companyId: string) {
   revalidatePath("/dashboard");
   revalidateTag("dashboard-stats", "max");
-  revalidateTag("dashboard-analytics", "max");
+  revalidateTag(DASHBOARD_ANALYTICS_CACHE_TAG, "max");
+  revalidateTag(getDashboardAnalyticsCacheTag(companyId), "max");
   revalidateTag(PROJECTS_LIST_CACHE_TAG, "max");
   revalidateTag(PROJECT_OVERVIEW_CACHE_TAG, "max");
+  revalidateTag(getProjectOverviewCacheTag(projectId), "max");
   revalidateTag(USER_COMPANIES_CACHE_TAG, "max");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);

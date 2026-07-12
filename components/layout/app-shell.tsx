@@ -25,6 +25,7 @@ import { AppThemeToggle } from "@/components/layout/app-theme-toggle";
 import { AppViewModeProvider } from "@/components/view-mode/app-view-mode-provider";
 import { ViewModeToggle } from "@/components/budget/view-mode-toggle";
 import { Button } from "@/components/ui/button";
+import { measureAsync } from "@/lib/platform/performance";
 import {
   DEFAULT_APP_THEME,
   DEFAULT_DATE_FORMAT,
@@ -47,14 +48,17 @@ export async function AppShell({
   children: ReactNode;
   currentUser?: {
     id?: string | null;
+    activeCompanyId?: string | null;
     avatarUrl?: string | null;
+    companyId?: string | null;
     email?: string | null;
     name?: string | null;
+    workspaces?: { id: string; name: string; role: string; logoUrl: string | null }[] | null;
     role?: "ADMIN" | "USER" | null;
   };
   settings?: UserSettingsRecord;
 }) {
-  const session = currentUser && initialSettings ? null : await getAuthSession();
+  const session = currentUser ? null : await measureAsync("appShell.session", () => getAuthSession());
   const fallbackSettings: UserSettingsRecord = {
     defaultCurrency: "PEN",
     currencyDecimals: 2,
@@ -79,12 +83,14 @@ export async function AppShell({
 
   // Prefer session-provided workspace list from the JWT token to avoid refetches.
   // Always call getActiveWorkspaceId (cached per-request) for validated active workspace.
-  const sessionWorkspaces = session?.user?.workspaces ?? [];
+  const sessionWorkspaces = session?.user?.workspaces ?? currentUser?.workspaces ?? [];
   const hasSessionWorkspaces = sessionWorkspaces.length > 0;
 
-  const activeWorkspaceId = userId ? await getActiveWorkspaceId(userId) : null;
+  const activeWorkspaceId = currentUser?.activeCompanyId ?? currentUser?.companyId ?? (
+    userId ? await measureAsync("appShell.activeWorkspace", () => getActiveWorkspaceId(userId), { userId }) : null
+  );
 
-  const [settings, workspaces, license] = await Promise.all([
+  const [settings, workspaces, license] = await measureAsync("appShell.shellData", () => Promise.all([
     initialSettings
       ? Promise.resolve(initialSettings)
       : userId
@@ -98,9 +104,9 @@ export async function AppShell({
     userId && activeWorkspaceId
       ? getEffectiveWorkspaceLicense({ userId, companyId: activeWorkspaceId })
       : Promise.resolve(null),
-  ]);
+  ]), { userId, activeWorkspaceId: activeWorkspaceId ?? undefined });
 
-  const cookieStore = await cookies();
+  const cookieStore = await measureAsync("appShell.cookies", () => cookies());
   const storedViewModeCookie = cookieStore.get(APP_VIEW_MODE_COOKIE_NAME)?.value;
   const storedSidebarModeCookie = cookieStore.get(SIDEBAR_MODE_COOKIE_NAME)?.value;
   const initialViewMode: ViewMode =

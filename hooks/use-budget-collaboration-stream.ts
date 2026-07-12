@@ -9,6 +9,8 @@ export type CollaborationStreamEvent = {
   payload: unknown;
 };
 
+const TERMINAL_COLLABORATION_STATUSES = new Set([401, 403, 404]);
+
 interface UseBudgetCollaborationStreamOptions {
   budgetId: string;
   onEvent?: (event: CollaborationStreamEvent) => void;
@@ -25,6 +27,7 @@ export function useBudgetCollaborationStream({
   const abortRef = useRef<AbortController | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const mountedRef = useRef(false);
+  const disabledRef = useRef(false);
   const connectRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -39,7 +42,7 @@ export function useBudgetCollaborationStream({
   }, []);
 
   const scheduleReconnect = useCallback(() => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || disabledRef.current) return;
     clearReconnect();
     reconnectTimeoutRef.current = window.setTimeout(() => {
       connectRef.current?.();
@@ -56,7 +59,7 @@ export function useBudgetCollaborationStream({
   );
 
   const connect = useCallback(() => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || disabledRef.current) return;
     clearReconnect();
 
     if (abortRef.current) {
@@ -72,6 +75,12 @@ export function useBudgetCollaborationStream({
     })
       .then(async (response) => {
         if (controller.signal.aborted || !mountedRef.current) return;
+
+        if (TERMINAL_COLLABORATION_STATUSES.has(response.status)) {
+          disabledRef.current = true;
+          setConnected(false);
+          return;
+        }
 
         if (!response.ok || !response.body) {
           throw new Error("Stream connection failed");
@@ -129,6 +138,7 @@ export function useBudgetCollaborationStream({
 
   useEffect(() => {
     mountedRef.current = true;
+    disabledRef.current = false;
     connect();
 
     return () => {

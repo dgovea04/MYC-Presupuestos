@@ -4,9 +4,13 @@ import { serializeCatalogPartida } from "@/lib/db/serializers";
 import { ensureDate } from "@/lib/utils";
 import { calculateApuRows, calculateApuTotalUnitCost } from "@/lib/calculations/apu";
 import { catalogPartidaStatePatchSchema, catalogPartidaSchema, type CatalogPartidaApuRowInput, type CatalogPartidaInput } from "@/lib/validations/partida";
+import { measureAsync } from "@/lib/platform/performance";
 import type { CatalogPartidaPatchResult, CatalogPartidaRecord, CatalogPartidaStatePatch } from "@/types/partida";
 
 export const CATALOG_PARTIDAS_CACHE_TAG = "catalog-partidas";
+const shouldUseCatalogPartidasProcessCache = process.env.NODE_ENV !== "production" && process.env.VITEST !== "true";
+const CATALOG_PARTIDAS_PROCESS_CACHE_TTL_MS = 5_000;
+let catalogPartidasProcessCache: { expiresAt: number; value: Promise<CatalogPartidaRecord[]> } | null = null;
 
 function normalizeCatalogPartidasDates<T extends { createdAt?: Date | string | null; updatedAt?: Date | string | null }>(items: T[]): T[] {
   return items.map((item) => ({
@@ -20,7 +24,23 @@ export const getCatalogPartidas = cache(
   async () => {
     // This catalog exceeds Next's 2 MB data-cache item limit, so we only memoize
     // within the current render/request and avoid unstable_cache here.
-    const result = await getCatalogPartidasFromDatabase();
+    const result = shouldUseCatalogPartidasProcessCache && catalogPartidasProcessCache && catalogPartidasProcessCache.expiresAt > Date.now()
+      ? await measureAsync("data.partidas.catalog.processCache", () => catalogPartidasProcessCache?.value ?? getCatalogPartidasFromDatabase())
+      : await (() => {
+          const value = measureAsync("data.partidas.catalog.query", () => getCatalogPartidasFromDatabase()).catch((error: unknown) => {
+            catalogPartidasProcessCache = null;
+            throw error;
+          });
+
+          if (shouldUseCatalogPartidasProcessCache) {
+            catalogPartidasProcessCache = {
+              expiresAt: Date.now() + CATALOG_PARTIDAS_PROCESS_CACHE_TTL_MS,
+              value,
+            };
+          }
+
+          return value;
+        })();
     return normalizeCatalogPartidasDates(result);
   },
 );
@@ -48,6 +68,7 @@ async function getCatalogPartidasFromDatabase() {
 }
 
 export async function saveCatalogPartidasPatch(patchInput: CatalogPartidaStatePatch): Promise<CatalogPartidaPatchResult> {
+  catalogPartidasProcessCache = null;
   const patch = catalogPartidaStatePatchSchema.parse(patchInput);
 
   return prisma.$transaction(async (tx) => {

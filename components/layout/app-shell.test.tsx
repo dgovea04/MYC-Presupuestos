@@ -171,6 +171,8 @@ describe("AppShell", () => {
   it("skips fetching the session when currentUser and settings are provided", async () => {
     vi.mocked(getAuthSession).mockReset();
     vi.mocked(getUserSettings).mockReset();
+    vi.mocked(getActiveWorkspaceId).mockReset();
+    vi.mocked(listUserWorkspaces).mockReset();
     vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue({
       availableFeatures: ["exports.basic", "ai.local", "partidas.similarity"],
       planSlug: "empresa",
@@ -185,9 +187,11 @@ describe("AppShell", () => {
         children: <div>Contenido</div>,
         currentUser: {
           id: "user-2",
+          activeCompanyId: "company-2",
           avatarUrl: "/uploads/avatars/user-2.webp",
           email: "ana@example.com",
           name: "Ana",
+          workspaces: [{ id: "company-2", name: "Empresa Ana", role: "OWNER", logoUrl: null }],
         },
         settings: {
           defaultCurrency: "PEN",
@@ -218,6 +222,8 @@ describe("AppShell", () => {
     expect(markup).toContain('data-features="exports.basic,ai.local,partidas.similarity"');
     expect(getAuthSession).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
+    expect(getActiveWorkspaceId).not.toHaveBeenCalled();
+    expect(listUserWorkspaces).not.toHaveBeenCalled();
     expect(getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
       userId: "user-2",
       companyId: "company-2",
@@ -414,8 +420,10 @@ describe("AppShell", () => {
           children: <div>Contenido</div>,
           currentUser: {
             id: "user-with-id",
+            activeCompanyId: "company-id-present",
             email: "test@example.com",
             name: "Test User",
+            workspaces: [{ id: "company-id-present", name: "Workspace Token", role: "OWNER", logoUrl: null }],
           },
           settings: mockSettings,
         }),
@@ -423,7 +431,8 @@ describe("AppShell", () => {
 
       expect(getAuthSession).not.toHaveBeenCalled();
       expect(getUserSettings).not.toHaveBeenCalled();
-      expect(getActiveWorkspaceId).toHaveBeenCalledWith("user-with-id");
+      expect(getActiveWorkspaceId).not.toHaveBeenCalled();
+      expect(listUserWorkspaces).not.toHaveBeenCalled();
       expect(getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
         userId: "user-with-id",
         companyId: "company-id-present",

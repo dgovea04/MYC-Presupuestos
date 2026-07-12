@@ -2,9 +2,10 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryRawMock, companyFindFirstMock, userFindUniqueMock, verifyPasswordMock } = vi.hoisted(() => ({
+const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
   companyFindFirstMock: vi.fn(),
+  companyMembershipFindManyMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
   verifyPasswordMock: vi.fn(),
 }));
@@ -13,6 +14,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     $queryRaw: queryRawMock,
     company: { findFirst: companyFindFirstMock },
+    companyMembership: { findMany: companyMembershipFindManyMock },
     user: { findUnique: userFindUniqueMock },
   },
 }));
@@ -51,6 +53,7 @@ describe("authOptions callbacks", () => {
   beforeEach(() => {
     queryRawMock.mockReset();
     companyFindFirstMock.mockReset();
+    companyMembershipFindManyMock.mockReset();
     userFindUniqueMock.mockReset();
     verifyPasswordMock.mockReset();
     resetUserProfileColumnSupportCacheForTests();
@@ -176,6 +179,8 @@ describe("authOptions callbacks", () => {
       role: "USER",
       status: "ACTIVE",
       companyId: null,
+      activeCompanyId: null,
+      workspaces: [],
       plan: null,
     });
   });
@@ -227,6 +232,8 @@ describe("authOptions callbacks", () => {
       role: "USER",
       status: "ACTIVE",
       companyId: "company-1",
+      activeCompanyId: null,
+      workspaces: [],
       plan: "pro",
     });
   });
@@ -275,6 +282,8 @@ describe("authOptions callbacks", () => {
       role: "USER",
       status: "ACTIVE",
       companyId: "company-demo",
+      activeCompanyId: null,
+      workspaces: [],
       plan: "starter",
     });
   });
@@ -360,6 +369,13 @@ describe("authOptions callbacks", () => {
         ]);
 
       companyFindFirstMock.mockResolvedValue({ id: "company-google" });
+      companyMembershipFindManyMock.mockResolvedValue([
+        {
+          companyId: "company-google",
+          role: "OWNER",
+          company: { name: "Google Company", logoUrl: null },
+        },
+      ]);
       userFindUniqueMock.mockResolvedValue({
         membershipPlan: { slug: "starter" },
       });
@@ -387,6 +403,15 @@ describe("authOptions callbacks", () => {
       expect(token.role).toBe("USER");
       expect(token.status).toBe("ACTIVE");
       expect(token.companyId).toBe("company-google");
+      expect(token.activeCompanyId).toBe("company-google");
+      expect(token.workspaces).toEqual([
+        {
+          id: "company-google",
+          name: "Google Company",
+          role: "OWNER",
+          logoUrl: null,
+        },
+      ]);
       expect(token.plan).toBe("starter");
     });
   });

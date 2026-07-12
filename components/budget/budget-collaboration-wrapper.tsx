@@ -29,7 +29,8 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
 }: BudgetCollaborationWrapperProps) {
   const [activeSheet, setActiveSheet] = useState<SheetKind>(null);
   const [presence, setPresence] = useState<CollaborationPresenceRecord[]>([]);
-  const [activeCommentCount, setActiveCommentCount] = useState(0);
+  const [activeCommentCount] = useState(0);
+  const [collaborationAvailable, setCollaborationAvailable] = useState(true);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   // Presence heartbeat
@@ -41,15 +42,22 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
 
   // Collaboration stream
   const fetchPresence = useCallback(async () => {
+    if (!collaborationAvailable) return;
+
     try {
       const response = await fetch(`/api/budgets/${budgetId}/collaboration/presence`);
+      if ([401, 403, 404].includes(response.status)) {
+        setCollaborationAvailable(false);
+        setPresence([]);
+        return;
+      }
       if (!response.ok) return;
       const data = (await response.json()) as { presence: CollaborationPresenceRecord[] };
       setPresence(data.presence);
     } catch {
       // silent
     }
-  }, [budgetId]);
+  }, [budgetId, collaborationAvailable]);
 
   const fetchPresenceRef = useRef(fetchPresence);
   fetchPresenceRef.current = fetchPresence;
@@ -84,10 +92,16 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   });
 
   useEffect(() => {
+    setCollaborationAvailable(true);
+  }, [budgetId]);
+
+  useEffect(() => {
+    if (!collaborationAvailable) return;
+
     fetchPresence();
     const interval = setInterval(() => fetchPresenceRef.current(), 30_000);
     return () => clearInterval(interval);
-  }, [budgetId]);
+  }, [budgetId, collaborationAvailable, fetchPresence]);
 
   const handleSaveVersion = useCallback(async () => {
     try {

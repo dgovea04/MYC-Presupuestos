@@ -10,10 +10,14 @@ import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 import { ensureDate } from "@/lib/utils";
 import { serializeBudgetForClientForm } from "@/lib/data/serializers";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { measureAsync } from "@/lib/platform/performance";
 
 export const PROJECTS_LIST_CACHE_TAG = "projects-list";
 export const PROJECT_OVERVIEW_CACHE_TAG = "project-overview";
 export const USER_COMPANIES_CACHE_TAG = "user-companies";
+export function getProjectOverviewCacheTag(projectId: string) {
+  return `${PROJECT_OVERVIEW_CACHE_TAG}:${projectId}`;
+}
 
 const defaultBudgetTotals = {
   totalDirectCost: 0,
@@ -320,6 +324,8 @@ function normalizeProjectsListDates(
 }
 
 const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
+const shouldUseProjectProcessCache = process.env.NODE_ENV !== "production" && process.env.VITEST !== "true";
+const PROJECT_BUDGET_OVERVIEW_PROCESS_CACHE_TTL_MS = 5_000;
 
 export const getProjectsListByUser = cache(
   async (userId: string, activeCompanyId?: string | null) => {
@@ -403,7 +409,7 @@ function serializeProjectForClientForm(
 }
 
 const _getProjectOverviewById = async (id: string, userId: string) => {
-  return prisma.project.findFirst({
+  return measureAsync("data.projects.overview.query", () => prisma.project.findFirst({
     where: {
       id,
       company: {
@@ -464,16 +470,81 @@ const _getProjectOverviewById = async (id: string, userId: string) => {
           kind: true,
           name: true,
           currency: true,
+          totalDirectCost: true,
+          totalGeneralExpenses: true,
+          totalUtility: true,
+          totalTax: true,
           totalAmount: true,
           updatedAt: true,
+          _count: {
+            select: {
+              levels: true,
+              items: true,
+            },
+          },
         },
         orderBy: {
           createdAt: "asc",
         },
       },
     },
-  });
+  }), { projectId: id });
 }
+
+const _getProjectBudgetOverviewById = async (id: string, userId: string) => {
+  return measureAsync("data.projects.budgetOverview.query", () => prisma.project.findFirst({
+    where: {
+      id,
+      company: {
+        memberships: {
+          some: {
+            userId,
+            status: "ACTIVE",
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      companyId: true,
+      name: true,
+      clientName: true,
+      updatedAt: true,
+      budgets: {
+        select: {
+          id: true,
+          projectId: true,
+          parentBudgetId: true,
+          kind: true,
+          name: true,
+          currency: true,
+          totalDirectCost: true,
+          totalGeneralExpenses: true,
+          totalUtility: true,
+          totalTax: true,
+          totalAmount: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              levels: true,
+              items: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+    },
+  }), { projectId: id });
+};
+
+type ProjectBudgetOverviewCacheEntry = {
+  expiresAt: number;
+  value: Promise<Awaited<ReturnType<typeof _getProjectBudgetOverviewById>>>;
+};
+
+const projectBudgetOverviewProcessCache = new Map<string, ProjectBudgetOverviewCacheEntry>();
 
 function normalizeProjectOverviewDates(
   project: Awaited<ReturnType<typeof _getProjectOverviewById>>,
@@ -507,18 +578,68 @@ function normalizeProjectOverviewDates(
   };
 }
 
+function normalizeProjectBudgetOverviewDates(
+  project: Awaited<ReturnType<typeof _getProjectBudgetOverviewById>>,
+) {
+  if (!project) return null;
+
+  return {
+    ...project,
+    updatedAt: ensureDate(project.updatedAt),
+    budgets: project.budgets.map((budget) => ({
+      ...budget,
+      updatedAt: ensureDate(budget.updatedAt),
+    })),
+  };
+}
+
 export const getProjectOverviewById = cache(
   async (id: string, userId: string) => {
     if (shouldBypassPersistentCache) {
-      return normalizeProjectOverviewDates(await _getProjectOverviewById(id, userId));
+      const result = await _getProjectOverviewById(id, userId);
+      return measureAsync("data.projects.overview.normalize", async () => normalizeProjectOverviewDates(result), { projectId: id });
     }
 
-    const result = await unstable_cache(
+    const result = await measureAsync("data.projects.overview.cached", () => unstable_cache(
       async (projectId: string, uid: string) => _getProjectOverviewById(projectId, uid),
       [PROJECT_OVERVIEW_CACHE_TAG, id, userId],
-      { tags: [PROJECT_OVERVIEW_CACHE_TAG] },
-    )(id, userId);
-    return normalizeProjectOverviewDates(result);
+      { tags: [PROJECT_OVERVIEW_CACHE_TAG, getProjectOverviewCacheTag(id)] },
+    )(id, userId), { projectId: id });
+    return measureAsync("data.projects.overview.normalize", async () => normalizeProjectOverviewDates(result), { projectId: id });
+  },
+);
+
+export const getProjectBudgetOverviewById = cache(
+  async (id: string, userId: string) => {
+    if (shouldBypassPersistentCache) {
+      const cacheKey = `${id}:${userId}`;
+      const existing = projectBudgetOverviewProcessCache.get(cacheKey);
+      const result = shouldUseProjectProcessCache && existing && existing.expiresAt > Date.now()
+        ? await existing.value
+        : await (() => {
+            const value = _getProjectBudgetOverviewById(id, userId).catch((error: unknown) => {
+              projectBudgetOverviewProcessCache.delete(cacheKey);
+              throw error;
+            });
+
+            if (shouldUseProjectProcessCache) {
+              projectBudgetOverviewProcessCache.set(cacheKey, {
+                expiresAt: Date.now() + PROJECT_BUDGET_OVERVIEW_PROCESS_CACHE_TTL_MS,
+                value,
+              });
+            }
+
+            return value;
+          })();
+      return measureAsync("data.projects.budgetOverview.normalize", async () => normalizeProjectBudgetOverviewDates(result), { projectId: id });
+    }
+
+    const result = await measureAsync("data.projects.budgetOverview.cached", () => unstable_cache(
+      async (projectId: string, uid: string) => _getProjectBudgetOverviewById(projectId, uid),
+      [`${PROJECT_OVERVIEW_CACHE_TAG}:budget-page`, id, userId],
+      { tags: [PROJECT_OVERVIEW_CACHE_TAG, getProjectOverviewCacheTag(id)] },
+    )(id, userId), { projectId: id });
+    return measureAsync("data.projects.budgetOverview.normalize", async () => normalizeProjectBudgetOverviewDates(result), { projectId: id });
   },
 );
 
@@ -650,7 +771,9 @@ export async function updateProject(id: string, userId: string, input: Partial<P
         }
       : undefined;
 
-  const { workCalendarId: _wcId, templateId: _tid, ...prismaData } = data;
+  const prismaData = { ...data };
+  delete prismaData.workCalendarId;
+  delete prismaData.templateId;
 
   return prisma.project.update({
     where: { id },

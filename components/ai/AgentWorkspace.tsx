@@ -38,7 +38,7 @@ import type {
   AgentExecutionState,
   AgentToolRisk,
 } from "@/lib/ai/agent/types";
-import { allTools } from "@/lib/ai/agent/tools";
+import { agentToolMetadata } from "@/lib/ai/agent/tool-metadata";
 
 // ─── Bundle config ────────────────────────────────────────────────────────────
 
@@ -971,7 +971,7 @@ function AgentRightPanel({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 function getAvailableTools() {
-  return allTools.map((t) => ({
+  return agentToolMetadata.map((t) => ({
     name: t.name,
     description: t.description,
     risk: t.risk,

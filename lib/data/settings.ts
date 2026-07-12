@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { userSettingsSchema, type UserSettingsInput } from "@/lib/validations/settings";
@@ -18,8 +19,20 @@ import {
   type UserSettingsRecord,
 } from "@/types/settings";
 import { z } from "zod";
+import { measureAsync } from "@/lib/platform/performance";
 
 export const USER_SETTINGS_CACHE_TAG = "user-settings";
+const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
+const shouldUseProcessCache = process.env.NODE_ENV !== "production" && process.env.VITEST !== "true";
+const PROCESS_SETTINGS_CACHE_TTL_MS = 5_000;
+
+type ProcessSettingsCacheEntry = {
+  expiresAt: number;
+  value: Promise<UserSettingsRecord>;
+};
+
+const processUserSettingsCache = new Map<string, ProcessSettingsCacheEntry>();
+let processColumnSupportCache: { expiresAt: number; value: Promise<UserSettingsColumnSupport> } | null = null;
 
 export const defaultUserSettings: UserSettingsRecord = {
   defaultCurrency: "PEN",
@@ -231,6 +244,10 @@ const columnExistsRowSchema = z.object({
   exists: z.boolean(),
 });
 
+const columnNameRowSchema = z.object({
+  columnName: z.string(),
+});
+
 const _hasUserSettingsColumn = async (columnName: string) => {
   const [result] = await prisma.$queryRaw<Array<unknown>>`
     SELECT EXISTS (
@@ -252,6 +269,63 @@ const _hasUserSettingsColumn = async (columnName: string) => {
 // column metadata causes false negatives like "column does not exist" when it
 // already exists in the database.
 const hasUserSettingsColumn = cache(async (columnName: string) => _hasUserSettingsColumn(columnName));
+
+const userSettingsOptionalColumns = [
+  "defaultSubBudgetNames",
+  "dateFormat",
+  "appTheme",
+  "defaultViewMode",
+  "excelShowFieldBorders",
+  "excelRowHeight",
+  "aiProviderPreference",
+  "floatingKhipuProvider",
+  "floatingKhipuWidth",
+  "floatingKhipuHeight",
+  "floatingKhipuFontSize",
+  "floatingKhipuPosition",
+  "floatingKhipuTheme",
+] as const;
+
+type UserSettingsOptionalColumn = (typeof userSettingsOptionalColumns)[number];
+type UserSettingsColumnSupport = Record<UserSettingsOptionalColumn, boolean>;
+
+async function getUserSettingsColumnSupport(): Promise<UserSettingsColumnSupport> {
+  if (shouldUseProcessCache && processColumnSupportCache && processColumnSupportCache.expiresAt > Date.now()) {
+    return processColumnSupportCache.value;
+  }
+
+  const value = getUserSettingsColumnSupportFromDatabase();
+
+  if (shouldUseProcessCache) {
+    processColumnSupportCache = {
+      expiresAt: Date.now() + PROCESS_SETTINGS_CACHE_TTL_MS,
+      value,
+    };
+  }
+
+  return value;
+}
+
+async function getUserSettingsColumnSupportFromDatabase(): Promise<UserSettingsColumnSupport> {
+  const rows = await prisma.$queryRaw<Array<unknown>>`
+    SELECT column_name AS "columnName"
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+    AND table_name = 'UserSettings'
+    AND column_name IN (${Prisma.join(userSettingsOptionalColumns)})
+  `;
+
+  const supportedColumns = new Set(
+    rows
+      .map((row) => columnNameRowSchema.safeParse(row))
+      .filter((result) => result.success)
+      .map((result) => result.data.columnName),
+  );
+
+  return Object.fromEntries(
+    userSettingsOptionalColumns.map((column) => [column, supportedColumns.has(column)]),
+  ) as UserSettingsColumnSupport;
+}
 
 const aiProviderColumns = [
   "openaiApiKey",
@@ -490,29 +564,25 @@ export async function updateAiProviderSettings(
 }
 
 const _getUserSettings = async (userId: string): Promise<UserSettingsRecord> => {
-  const [
-    supportsDefaultSubBudgetNames, supportsDateFormat, supportsAppTheme, supportsDefaultViewMode,
-    supportsExcelShowFieldBorders, supportsExcelRowHeight, supportsAiProviderPreference,
-    supportsFloatingKhipuProvider, supportsFloatingKhipuWidth, supportsFloatingKhipuHeight,
-    supportsFloatingKhipuFontSize,    supportsFloatingKhipuPosition, supportsFloatingKhipuTheme,
-  ] = await Promise.all([
-    hasUserSettingsColumn("defaultSubBudgetNames"),
-    hasUserSettingsColumn("dateFormat"),
-    hasUserSettingsColumn("appTheme"),
-    hasUserSettingsColumn("defaultViewMode"),
-    hasUserSettingsColumn("excelShowFieldBorders"),
-    hasUserSettingsColumn("excelRowHeight"),
-    hasUserSettingsColumn("aiProviderPreference"),
-    hasUserSettingsColumn("floatingKhipuProvider"),
-    hasUserSettingsColumn("floatingKhipuWidth"),
-    hasUserSettingsColumn("floatingKhipuHeight"),
-    hasUserSettingsColumn("floatingKhipuFontSize"),
-    hasUserSettingsColumn("floatingKhipuPosition"),
-    hasUserSettingsColumn("floatingKhipuTheme"),
-  ]);
+  const columnSupport = await measureAsync("data.settings.columnSupport", () => getUserSettingsColumnSupport(), { userId });
+  const {
+    defaultSubBudgetNames: supportsDefaultSubBudgetNames,
+    dateFormat: supportsDateFormat,
+    appTheme: supportsAppTheme,
+    defaultViewMode: supportsDefaultViewMode,
+    excelShowFieldBorders: supportsExcelShowFieldBorders,
+    excelRowHeight: supportsExcelRowHeight,
+    aiProviderPreference: supportsAiProviderPreference,
+    floatingKhipuProvider: supportsFloatingKhipuProvider,
+    floatingKhipuWidth: supportsFloatingKhipuWidth,
+    floatingKhipuHeight: supportsFloatingKhipuHeight,
+    floatingKhipuFontSize: supportsFloatingKhipuFontSize,
+    floatingKhipuPosition: supportsFloatingKhipuPosition,
+    floatingKhipuTheme: supportsFloatingKhipuTheme,
+  } = columnSupport;
 
   if (supportsDefaultSubBudgetNames && supportsDateFormat && supportsAppTheme && supportsDefaultViewMode && supportsExcelShowFieldBorders && supportsExcelRowHeight) {
-    const [settings] = await prisma.$queryRaw<Array<unknown>>`
+    const [settings] = await measureAsync("data.settings.query.full", () => prisma.$queryRaw<Array<unknown>>`
       SELECT "defaultCurrency", "currencyDecimals", "dateFormat", "appTheme", "defaultViewMode", "excelShowFieldBorders", "excelRowHeight", "defaultIgvRate", "defaultGeneralExpensesRate", "defaultUtilityRate"
       , "defaultSubBudgetNames"
       ${supportsAiProviderPreference ? Prisma.sql`, "aiProviderPreference"` : Prisma.empty}
@@ -525,12 +595,12 @@ const _getUserSettings = async (userId: string): Promise<UserSettingsRecord> => 
       FROM "UserSettings"
       WHERE "userId" = ${userId}
       LIMIT 1
-    `;
+    `, { userId });
 
     return normalizeUserSettingsRow(settings);
   }
 
-  const [settings] = await prisma.$queryRaw<Array<unknown>>`
+  const [settings] = await measureAsync("data.settings.query.compat", () => prisma.$queryRaw<Array<unknown>>`
     SELECT "defaultCurrency", "currencyDecimals"
     ${supportsDateFormat ? Prisma.sql`, "dateFormat"` : Prisma.empty}
     ${supportsAppTheme ? Prisma.sql`, "appTheme"` : Prisma.empty}
@@ -549,7 +619,7 @@ const _getUserSettings = async (userId: string): Promise<UserSettingsRecord> => 
     FROM "UserSettings"
     WHERE "userId" = ${userId}
     LIMIT 1
-  `;
+  `, { userId });
 
   if (!settings) {
     return {
@@ -582,11 +652,40 @@ const _getUserSettings = async (userId: string): Promise<UserSettingsRecord> => 
 
 export const getUserSettings = cache(
   async (userId: string): Promise<UserSettingsRecord> => {
-    return _getUserSettings(userId);
+    if (shouldBypassPersistentCache) {
+      if (!shouldUseProcessCache) {
+        return _getUserSettings(userId);
+      }
+
+      const existing = processUserSettingsCache.get(userId);
+      if (existing && existing.expiresAt > Date.now()) {
+        return existing.value;
+      }
+
+      const value = _getUserSettings(userId).catch((error: unknown) => {
+        processUserSettingsCache.delete(userId);
+        throw error;
+      });
+
+      processUserSettingsCache.set(userId, {
+        expiresAt: Date.now() + PROCESS_SETTINGS_CACHE_TTL_MS,
+        value,
+      });
+
+      return value;
+    }
+
+    return unstable_cache(
+      async (uid: string) => _getUserSettings(uid),
+      [USER_SETTINGS_CACHE_TAG, userId],
+      { tags: [USER_SETTINGS_CACHE_TAG, `${USER_SETTINGS_CACHE_TAG}:${userId}`] },
+    )(userId);
   },
 );
 
 export async function updateUserSettings(userId: string, input: UserSettingsInput): Promise<UserSettingsRecord> {
+  processUserSettingsCache.delete(userId);
+
   const data = userSettingsSchema.parse(input);
   const [
     supportsDefaultSubBudgetNames, supportsDateFormat, supportsAppTheme, supportsDefaultViewMode,

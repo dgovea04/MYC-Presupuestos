@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { listNoteTasks } from "@/lib/data/notes";
+import { measureAsync } from "@/lib/platform/performance";
 import type { NoteTaskPriority, NoteTaskRecord } from "@/types/notes";
 
 type DashboardPendingType =
@@ -276,13 +277,13 @@ async function _getDashboardStats(userId: string, activeCompanyId?: string | nul
 
 const getCachedDashboardStats = cache(
   async (userId: string, activeCompanyId?: string | null) => {
-    const result = await unstable_cache(
-      async (uid: string) => _getDashboardStats(uid, activeCompanyId),
+    const result = await measureAsync("data.dashboard.stats.cached", () => unstable_cache(
+      async (uid: string) => measureAsync("data.dashboard.stats.query", () => _getDashboardStats(uid, activeCompanyId), { activeCompanyId }),
       activeCompanyId
         ? ["dashboard-stats", activeCompanyId]
         : ["dashboard-stats"],
       { revalidate: 30, tags: ["dashboard-stats"] },
-    )(userId);
+    )(userId), { activeCompanyId });
     return normalizeDashboardDates(result);
   },
 );

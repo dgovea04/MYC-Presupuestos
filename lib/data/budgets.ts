@@ -35,9 +35,13 @@ import { Prisma } from "@prisma/client";
 import type { BudgetLiveUpdateSummary } from "@/lib/client/live-updates";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
+import { measureAsync } from "@/lib/platform/performance";
 
 export const BUDGETS_LIST_CACHE_TAG = "budgets-list";
 export const BUDGET_DETAIL_CACHE_TAG = "budget-detail";
+export function getBudgetDetailCacheTag(budgetId: string) {
+  return `${BUDGET_DETAIL_CACHE_TAG}:${budgetId}`;
+}
 
 const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
 
@@ -95,7 +99,7 @@ export const getBudgetsByUser = cache(
 );
 
 export async function getProjectSubBudgetSummaries(projectId: string, userId: string) {
-  return prisma.budget.findMany({
+  return measureAsync("data.budgets.subBudgetSummaries", () => prisma.budget.findMany({
     where: {
       projectId,
       kind: "SUB_BUDGET",
@@ -132,11 +136,11 @@ export async function getProjectSubBudgetSummaries(projectId: string, userId: st
     orderBy: {
       createdAt: "asc",
     },
-  });
+  }), { projectId });
 }
 
 export async function getProjectSubBudgetDetails(projectId: string, userId: string) {
-  const budgets = await prisma.budget.findMany({
+  const budgets = await measureAsync("data.budgets.subBudgetDetails.query", () => prisma.budget.findMany({
     where: {
       projectId,
       kind: "SUB_BUDGET",
@@ -180,13 +184,17 @@ export async function getProjectSubBudgetDetails(projectId: string, userId: stri
     orderBy: {
       createdAt: "asc",
     },
-  });
+  }), { projectId });
 
-  return Promise.all(budgets.map((budget) => enrichBudgetSubpartidaCatalogLinks(serializeBudget(budget))));
+  return measureAsync(
+    "data.budgets.subBudgetDetails.serialize",
+    () => Promise.all(budgets.map((budget) => enrichBudgetSubpartidaCatalogLinks(serializeBudget(budget)))),
+    { projectId, budgets: budgets.length },
+  );
 }
 
 const _getBudgetById = async (id: string, userId: string) => {
-  const budget = await prisma.budget.findFirst({
+  const budget = await measureAsync("data.budgets.detail.query", () => prisma.budget.findFirst({
     where: {
       id,
       project: {
@@ -227,14 +235,18 @@ const _getBudgetById = async (id: string, userId: string) => {
         },
       },
     },
-  });
+  }), { budgetId: id });
 
   if (!budget) return null;
 
-  return {
-    ...(await enrichBudgetSubpartidaCatalogLinks(serializeBudget(budget))),
-    project: budget.project,
-  };
+  return measureAsync(
+    "data.budgets.detail.serialize",
+    async () => ({
+      ...(await enrichBudgetSubpartidaCatalogLinks(serializeBudget(budget))),
+      project: budget.project,
+    }),
+    { budgetId: id, items: budget.items.length, levels: budget.levels.length },
+  );
 }
 
 export const getBudgetById = cache(
@@ -245,8 +257,8 @@ export const getBudgetById = cache(
 
     return unstable_cache(
       async (budgetId: string, uid: string) => _getBudgetById(budgetId, uid),
-      [BUDGET_DETAIL_CACHE_TAG],
-      { tags: [BUDGET_DETAIL_CACHE_TAG] },
+      [BUDGET_DETAIL_CACHE_TAG, id, userId],
+      { tags: [BUDGET_DETAIL_CACHE_TAG, getBudgetDetailCacheTag(id)] },
     )(id, userId);
   },
 );

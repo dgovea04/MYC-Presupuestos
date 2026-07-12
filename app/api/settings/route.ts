@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
-import { getUserSettings, updateUserSettings } from "@/lib/data/settings";
+import { getUserSettings, updateUserSettings, USER_SETTINGS_CACHE_TAG } from "@/lib/data/settings";
 import { userSettingsSchema } from "@/lib/validations/settings";
 
 const updateSettingsRequestSchema = userSettingsSchema.strict();
@@ -34,7 +34,8 @@ export async function PATCH(request: Request) {
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
-    revalidateTag("user-settings", "max");
+    revalidateTag(USER_SETTINGS_CACHE_TAG, "max");
+    revalidateTag(`${USER_SETTINGS_CACHE_TAG}:${session.user.id}`, "max");
     revalidatePath("/projects");
     revalidatePath("/budgets");
     revalidatePath("/resources");

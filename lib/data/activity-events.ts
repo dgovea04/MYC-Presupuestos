@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { measureAsync } from "@/lib/platform/performance";
 import type { ActivityEventType } from "@prisma/client";
 
 type ActivityEventInput = {
@@ -112,7 +113,7 @@ export async function getBudgetTemplateCreationTraceability({
     return null;
   }
 
-  const event = await prisma.activityEvent.findFirst({
+  const event = await measureAsync("data.activityEvents.budgetTemplateTraceability", () => prisma.activityEvent.findFirst({
     where: {
       userId,
       type: "BUDGET_CREATED",
@@ -120,7 +121,7 @@ export async function getBudgetTemplateCreationTraceability({
       href: `/budgets/${budgetId}`,
     },
     orderBy: { createdAt: "desc" },
-  });
+  }), { budgetId });
 
   if (!event) {
     return null;

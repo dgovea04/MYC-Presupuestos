@@ -21,6 +21,11 @@ vi.mock("@/lib/data/projects", () => ({
   createProject: mocks.createProject,
 }));
 
+vi.mock("@/lib/dashboard/analytics", () => ({
+  DASHBOARD_ANALYTICS_CACHE_TAG: "dashboard-analytics",
+  getDashboardAnalyticsCacheTag: (companyId: string) => `dashboard-analytics:${companyId}`,
+}));
+
 vi.mock("@/lib/data/activity-events", () => ({
   recordActivityEvent: mocks.recordActivityEvent,
 }));
@@ -46,7 +51,7 @@ describe("POST /api/projects", () => {
   });
 
   it("creates a project and records template activity when a budget template is used", async () => {
-    const project = { id: "project-1", name: "Hospital Norte" };
+    const project = { id: "project-1", name: "Hospital Norte", companyId: "company-1" };
     const body = {
       companyId: "company-1",
       name: "Hospital Norte",
@@ -76,10 +81,11 @@ describe("POST /api/projects", () => {
     });
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/projects/project-1");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("dashboard-analytics:company-1", "max");
   });
 
   it("keeps a successful creation when activity logging fails", async () => {
-    const project = { id: "project-1", name: "Hospital Norte" };
+    const project = { id: "project-1", name: "Hospital Norte", companyId: "company-1" };
 
     mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
     mocks.createProject.mockResolvedValue(project);

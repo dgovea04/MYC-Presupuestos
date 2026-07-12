@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   getBudgetTemplateCreationTraceability: vi.fn(),
   getCatalogPartidas: vi.fn(),
   getProjectById: vi.fn(),
-  getProjectOverviewById: vi.fn(),
+  getProjectBudgetOverviewById: vi.fn(),
   getProjectSubBudgetDetails: vi.fn(),
   getProjectSubBudgetSummaries: vi.fn(),
   getResourcesByUser: vi.fn(),
@@ -109,7 +109,7 @@ vi.mock("@/lib/data/partidas", () => ({
 
 vi.mock("@/lib/data/projects", () => ({
   getProjectById: mocks.getProjectById,
-  getProjectOverviewById: mocks.getProjectOverviewById,
+  getProjectBudgetOverviewById: mocks.getProjectBudgetOverviewById,
 }));
 
 vi.mock("@/lib/data/resources", () => ({
@@ -125,6 +125,8 @@ vi.mock("@/lib/db/serializers", () => ({
 }));
 
 vi.mock("@/lib/utils", () => ({
+  cn: vi.fn((...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ")),
+  ensureDate: vi.fn((value: Date | string) => value instanceof Date ? value : new Date(value)),
   formatCurrency: vi.fn(() => "S/ 0.00"),
   formatDate: vi.fn(() => "2026-05-11"),
 }));
@@ -176,8 +178,9 @@ describe("BudgetDetailPage", () => {
       name: "Proyecto Demo",
       budgets: [],
     });
-    mocks.getProjectOverviewById.mockResolvedValue({
+    mocks.getProjectBudgetOverviewById.mockResolvedValue({
       id: "project-1",
+      companyId: "company-1",
       name: "Proyecto Demo",
       clientName: "Cliente Demo",
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
@@ -221,7 +224,8 @@ describe("BudgetDetailPage", () => {
       params: Promise.resolve({ id: "budget-1" }),
     });
 
-    expect(mocks.getProjectOverviewById).toHaveBeenCalledWith("project-1", "user-1");
+    expect(mocks.getProjectBudgetOverviewById).toHaveBeenCalledWith("project-1", "user-1");
+    expect(mocks.getResourcesByUser).toHaveBeenCalledWith("user-1", "company-1");
     expect(mocks.getProjectById).not.toHaveBeenCalled();
   });
 
@@ -247,5 +251,60 @@ describe("BudgetDetailPage", () => {
         }),
       }),
     );
+  });
+
+  it("uses project overview budgets for the general budget summaries", async () => {
+    mocks.getBudgetById.mockResolvedValue({
+      id: "general-1",
+      projectId: "project-1",
+      parentBudgetId: null,
+      kind: "GENERAL",
+      name: "Presupuesto General",
+      currency: "PEN",
+      igvRate: 0.18,
+      generalExpensesRate: 0.1,
+      utilityRate: 0.08,
+      totalDirectCost: 100,
+      totalGeneralExpenses: 10,
+      totalUtility: 8,
+      totalTax: 21.24,
+      totalAmount: 139.24,
+      levels: [],
+      items: [],
+    });
+    mocks.getProjectBudgetOverviewById.mockResolvedValue({
+      id: "project-1",
+      companyId: "company-1",
+      name: "Proyecto Demo",
+      clientName: "Cliente Demo",
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+      budgets: [
+        {
+          id: "sub-1",
+          projectId: "project-1",
+          parentBudgetId: "general-1",
+          kind: "SUB_BUDGET",
+          name: "Estructuras",
+          currency: "PEN",
+          totalDirectCost: 100,
+          totalGeneralExpenses: 10,
+          totalUtility: 8,
+          totalTax: 21.24,
+          totalAmount: 139.24,
+          updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+          _count: { levels: 2, items: 3 },
+        },
+      ],
+    });
+
+    const tree = await BudgetDetailPage({
+      params: Promise.resolve({ id: "general-1" }),
+    });
+
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain('data-testid="general-budget-overview"');
+    expect(mocks.getProjectSubBudgetSummaries).not.toHaveBeenCalled();
+    expect(mocks.getProjectSubBudgetDetails).not.toHaveBeenCalled();
   });
 });

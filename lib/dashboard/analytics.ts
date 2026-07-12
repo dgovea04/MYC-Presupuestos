@@ -3,8 +3,18 @@ import { unstable_cache } from "next/cache";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { prisma } from "@/lib/db/prisma";
 import { ensureDate } from "@/lib/utils";
+import { measureAsync } from "@/lib/platform/performance";
 
 export const DASHBOARD_ANALYTICS_CACHE_TAG = "dashboard-analytics";
+export function getDashboardAnalyticsCacheTag(companyId: string) {
+  return `${DASHBOARD_ANALYTICS_CACHE_TAG}:${companyId}`;
+}
+
+function getDashboardAnalyticsCacheTags(activeCompanyId?: string | null) {
+  return activeCompanyId
+    ? [DASHBOARD_ANALYTICS_CACHE_TAG, getDashboardAnalyticsCacheTag(activeCompanyId)]
+    : [DASHBOARD_ANALYTICS_CACHE_TAG];
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -299,49 +309,49 @@ function normalizeBudgetComparisonDates(items: BudgetComparisonItem[]): BudgetCo
 
 export const getCostByPhaseAnalytics = cache(
   async (userId: string, activeCompanyId?: string | null) => {
-    return unstable_cache(
-      async (uid: string) => _getCostByPhaseAnalytics(uid, activeCompanyId),
+    return measureAsync("dashboard.analytics.costByPhase.cached", () => unstable_cache(
+      async (uid: string) => measureAsync("dashboard.analytics.costByPhase.query", () => _getCostByPhaseAnalytics(uid, activeCompanyId), { activeCompanyId }),
       activeCompanyId
         ? ["dashboard-analytics-cost-by-phase", activeCompanyId]
         : ["dashboard-analytics-cost-by-phase"],
-      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
-    )(userId);
+      { tags: getDashboardAnalyticsCacheTags(activeCompanyId) },
+    )(userId), { activeCompanyId });
   },
 );
 
 export const getBudgetComparison = cache(
   async (userId: string, activeCompanyId?: string | null) => {
-    const result = await unstable_cache(
-      async (uid: string) => _getBudgetComparison(uid, activeCompanyId),
+    const result = await measureAsync("dashboard.analytics.budgetComparison.cached", () => unstable_cache(
+      async (uid: string) => measureAsync("dashboard.analytics.budgetComparison.query", () => _getBudgetComparison(uid, activeCompanyId), { activeCompanyId }),
       activeCompanyId
         ? ["dashboard-analytics-budget-comparison", activeCompanyId]
         : ["dashboard-analytics-budget-comparison"],
-      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
-    )(userId);
+      { tags: getDashboardAnalyticsCacheTags(activeCompanyId) },
+    )(userId), { activeCompanyId });
     return normalizeBudgetComparisonDates(result);
   },
 );
 
 export const getCostTrends = cache(
   async (userId: string, activeCompanyId?: string | null) => {
-    return unstable_cache(
-      async (uid: string) => _getCostTrends(uid, activeCompanyId),
+    return measureAsync("dashboard.analytics.costTrends.cached", () => unstable_cache(
+      async (uid: string) => measureAsync("dashboard.analytics.costTrends.query", () => _getCostTrends(uid, activeCompanyId), { activeCompanyId }),
       activeCompanyId
         ? ["dashboard-analytics-cost-trends", activeCompanyId]
         : ["dashboard-analytics-cost-trends"],
-      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
-    )(userId);
+      { tags: getDashboardAnalyticsCacheTags(activeCompanyId) },
+    )(userId), { activeCompanyId });
   },
 );
 
 export const getDeviationAlerts = cache(
   async (userId: string, activeCompanyId?: string | null) => {
-    return unstable_cache(
-      async (uid: string) => _getDeviationAlerts(uid, activeCompanyId),
+    return measureAsync("dashboard.analytics.deviationAlerts.cached", () => unstable_cache(
+      async (uid: string) => measureAsync("dashboard.analytics.deviationAlerts.query", () => _getDeviationAlerts(uid, activeCompanyId), { activeCompanyId }),
       activeCompanyId
         ? ["dashboard-analytics-deviation-alerts", activeCompanyId]
         : ["dashboard-analytics-deviation-alerts"],
-      { tags: [DASHBOARD_ANALYTICS_CACHE_TAG] },
-    )(userId);
+      { tags: getDashboardAnalyticsCacheTags(activeCompanyId) },
+    )(userId), { activeCompanyId });
   },
 );

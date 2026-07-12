@@ -71,6 +71,26 @@ describe("useBudgetCollaborationStream", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("does not reconnect when collaboration stream is unavailable", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response("Not found", { status: 404 }));
+
+    renderHook(() =>
+      useBudgetCollaborationStream({
+        budgetId: "budget-1",
+        reconnectInterval: 100,
+      }),
+    );
+
+    await flushPromises();
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("parses SSE data split across chunks", async () => {
     const onEvent = vi.fn();
     const event: CollaborationStreamEvent = {

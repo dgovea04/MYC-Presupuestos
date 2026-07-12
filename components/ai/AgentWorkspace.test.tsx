@@ -12,9 +12,9 @@ vi.mock("@/hooks/use-agent-stream", () => ({
   useAgentStream: vi.fn(),
 }));
 
-// Mock allTools for deterministic testing
-vi.mock("@/lib/ai/agent/tools", () => ({
-  allTools: [
+// Mock tool metadata for deterministic testing
+vi.mock("@/lib/ai/agent/tool-metadata", () => ({
+  agentToolMetadata: [
     { name: "searchPartidas", description: "Busca partidas del catálogo", risk: "read" as const },
     { name: "createBudget", description: "Crea un nuevo presupuesto", risk: "write" as const },
     { name: "archiveBudget", description: "Archiva un presupuesto", risk: "financial" as const },

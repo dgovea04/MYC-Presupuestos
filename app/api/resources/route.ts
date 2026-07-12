@@ -3,7 +3,9 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import {
   createResourceForUser,
+  clearResourcesProcessCache,
   GLOBAL_RESOURCES_CACHE_TAG,
+  RESOURCES_BY_USER_CACHE_TAG,
   resourcePatchTouchesGlobalCatalog,
   saveResourcesPatch,
 } from "@/lib/data/resources";
@@ -20,6 +22,8 @@ export async function POST(request: Request) {
     if (resource.companyId == null) {
       revalidateTag(GLOBAL_RESOURCES_CACHE_TAG, "max");
     }
+    clearResourcesProcessCache();
+    revalidateTag(RESOURCES_BY_USER_CACHE_TAG, "max");
     revalidatePath("/resources");
     return NextResponse.json(resource, { status: 201 });
   } catch (error) {
@@ -40,6 +44,8 @@ export async function PATCH(request: Request) {
     if (shouldRevalidateGlobalCatalog) {
       revalidateTag(GLOBAL_RESOURCES_CACHE_TAG, "max");
     }
+    clearResourcesProcessCache();
+    revalidateTag(RESOURCES_BY_USER_CACHE_TAG, "max");
     revalidatePath("/resources");
     return NextResponse.json(result);
   } catch (error) {

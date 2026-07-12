@@ -6,6 +6,7 @@ import { ensureDate } from "@/lib/utils";
 import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { resourceSchema, resourceStatePatchSchema, type ResourceInput } from "@/lib/validations/resource";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { measureAsync } from "@/lib/platform/performance";
 import type {
   ResourceCategory,
   ResourcePatchFields,
@@ -23,6 +24,20 @@ const resourceCodePrefixes: Record<ResourceCategory, string> = {
   SUBCONTRACT: "SUB",
 };
 export const GLOBAL_RESOURCES_CACHE_TAG = "global-resources-v2";
+export const RESOURCES_BY_USER_CACHE_TAG = "resources-by-user";
+const shouldUseResourcesProcessCache = process.env.NODE_ENV !== "production" && process.env.VITEST !== "true";
+const RESOURCES_PROCESS_CACHE_TTL_MS = 5_000;
+
+type ResourcesProcessCacheEntry = {
+  expiresAt: number;
+  value: Promise<ResourceRecord[]>;
+};
+
+const resourcesProcessCache = new Map<string, ResourcesProcessCacheEntry>();
+
+export function clearResourcesProcessCache() {
+  resourcesProcessCache.clear();
+}
 
 function normalizeResourcesDates<T extends { createdAt?: Date | string | null; updatedAt?: Date | string | null }>(items: T[]): T[] {
   return items.map((item) => ({
@@ -34,16 +49,34 @@ function normalizeResourcesDates<T extends { createdAt?: Date | string | null; u
 
 export const getResourcesByUser = cache(
   async (userId: string, activeCompanyId?: string | null) => {
-    const result = await unstable_cache(
+    const processCacheKey = `${userId}:${activeCompanyId ?? "all"}`;
+    const existing = resourcesProcessCache.get(processCacheKey);
+    if (shouldUseResourcesProcessCache && existing && existing.expiresAt > Date.now()) {
+      const cachedResult = await measureAsync("data.resources.byUser.processCache", () => existing.value, { activeCompanyId });
+      return normalizeResourcesDates(cachedResult);
+    }
+
+    const result = await measureAsync("data.resources.byUser.cached", () => unstable_cache(
       async (uid: string) => {
-        const [globalResources, userResources] = await Promise.all([getCachedGlobalResources(), getUserOwnedResources(uid, activeCompanyId)]);
+        const [globalResources, userResources] = await measureAsync(
+          "data.resources.byUser.query",
+          () => Promise.all([getCachedGlobalResources(), getUserOwnedResources(uid, activeCompanyId)]),
+          { activeCompanyId },
+        );
         return mergeVisibleResourcesForCatalog(globalResources, userResources).sort(compareResourcesForCatalog);
       },
       activeCompanyId
-        ? ["resources-by-user", activeCompanyId]
-        : ["resources-by-user"],
-      { revalidate: 60, tags: ["resources-by-user"] },
-    )(userId);
+        ? [RESOURCES_BY_USER_CACHE_TAG, activeCompanyId]
+        : [RESOURCES_BY_USER_CACHE_TAG],
+      { revalidate: 60, tags: [RESOURCES_BY_USER_CACHE_TAG] },
+    )(userId), { activeCompanyId });
+
+    if (shouldUseResourcesProcessCache) {
+      resourcesProcessCache.set(processCacheKey, {
+        expiresAt: Date.now() + RESOURCES_PROCESS_CACHE_TTL_MS,
+        value: Promise.resolve(result),
+      });
+    }
 
     return normalizeResourcesDates(result);
   },

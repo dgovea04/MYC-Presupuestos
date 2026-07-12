@@ -75,7 +75,7 @@ async function _listUserWorkspaces(userId: string) {
 
 export const listUserWorkspaces = cache(
   (userId: string): Promise<WorkspaceListEntry[]> =>
-    process.env.NODE_ENV === "development"
+    process.env.NODE_ENV === "development" || process.env.VITEST === "true"
       ? _listUserWorkspaces(userId)
       : unstable_cache(_listUserWorkspaces, [`${WORKSPACE_LIST_CACHE_TAG}-${userId}`], {
           tags: [WORKSPACE_LIST_CACHE_TAG, `${WORKSPACE_LIST_CACHE_TAG}-${userId}`],

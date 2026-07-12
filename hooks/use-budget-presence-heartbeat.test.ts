@@ -3,11 +3,15 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
+import {
+  resetBudgetPresenceHeartbeatDedupeForTests,
+  useBudgetPresenceHeartbeat,
+} from "@/hooks/use-budget-presence-heartbeat";
 
 describe("useBudgetPresenceHeartbeat", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetBudgetPresenceHeartbeatDedupeForTests();
     vi.stubGlobal("fetch", vi.fn());
     vi.spyOn(window, "clearInterval");
     vi.spyOn(window, "setInterval");
@@ -158,6 +162,66 @@ describe("useBudgetPresenceHeartbeat", () => {
       });
 
       expect(fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it("stops heartbeats when collaboration presence is unavailable", async () => {
+      vi.mocked(fetch).mockResolvedValue(new Response("Not found", { status: 404 }));
+
+      renderHook(() =>
+        useBudgetPresenceHeartbeat({
+          budgetId: "budget-1",
+          route: "/test",
+          module: "test",
+        }),
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+        await Promise.resolve();
+      });
+
+      vi.mocked(fetch).mockClear();
+
+      await act(async () => {
+        vi.advanceTimersByTime(45_000);
+        await Promise.resolve();
+      });
+
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("deduplicates immediate remount heartbeats for the same budget", async () => {
+      vi.mocked(fetch).mockResolvedValue(new Response("{}", { status: 200 }));
+
+      const { unmount } = renderHook(() =>
+        useBudgetPresenceHeartbeat({
+          budgetId: "budget-1",
+          route: "/test",
+          module: "test",
+        }),
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+        await Promise.resolve();
+      });
+
+      unmount();
+
+      renderHook(() =>
+        useBudgetPresenceHeartbeat({
+          budgetId: "budget-1",
+          route: "/test",
+          module: "test",
+        }),
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+        await Promise.resolve();
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -325,9 +389,8 @@ describe("useBudgetPresenceHeartbeat", () => {
   });
 
   describe("cleanup", () => {
-    it("calls removePresence (DELETE) on unmount", async () => {
+    it("does not DELETE presence on unmount because presence expires naturally", async () => {
       resolveFetchOk(); // initial POST
-      resolveFetchOk(); // DELETE on cleanup
 
       const { unmount } = renderHook(() =>
         useBudgetPresenceHeartbeat({
@@ -347,10 +410,7 @@ describe("useBudgetPresenceHeartbeat", () => {
         unmount();
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/budgets/budget-1/collaboration/presence",
-        expect.objectContaining({ method: "DELETE" }),
-      );
+      expect(fetch).not.toHaveBeenCalled();
     });
 
     it("clears the heartbeat interval on unmount", async () => {
@@ -374,8 +434,6 @@ describe("useBudgetPresenceHeartbeat", () => {
 
       window.clearInterval.mockClear();
 
-      resolveFetchOk(); // DELETE response
-
       await act(async () => {
         unmount();
       });
@@ -397,8 +455,6 @@ describe("useBudgetPresenceHeartbeat", () => {
       await act(async () => {
         vi.advanceTimersByTime(0);
       });
-
-      resolveFetchOk(); // DELETE
 
       await act(async () => {
         unmount();
@@ -425,8 +481,6 @@ describe("useBudgetPresenceHeartbeat", () => {
         vi.advanceTimersByTime(0);
       });
 
-      resolveFetchOk(); // DELETE on cleanup
-
       await act(async () => {
         unmount();
       });
@@ -442,9 +496,8 @@ describe("useBudgetPresenceHeartbeat", () => {
       expect(fetch).not.toHaveBeenCalled();
     });
 
-    it("handles DELETE failure on cleanup silently", async () => {
+    it("does not perform network cleanup when unmounted immediately", async () => {
       resolveFetchOk(); // initial POST
-      vi.mocked(fetch).mockRejectedValueOnce(new Error("Network down")); // DELETE fails
 
       const { unmount } = renderHook(() =>
         useBudgetPresenceHeartbeat({
@@ -458,10 +511,13 @@ describe("useBudgetPresenceHeartbeat", () => {
         vi.advanceTimersByTime(0);
       });
 
-      // Should not throw
+      vi.mocked(fetch).mockClear();
+
       await act(async () => {
         unmount();
       });
+
+      expect(fetch).not.toHaveBeenCalled();
     });
   });
 
@@ -508,7 +564,6 @@ describe("useBudgetPresenceHeartbeat", () => {
   describe("props updates", () => {
     it("reacts to budgetId changes by restarting presence", async () => {
       resolveFetchOk(); // initial POST for budget-1
-      resolveFetchOk(); // DELETE for budget-1 cleanup
       resolveFetchOk(); // initial POST for budget-2
 
       const { rerender } = renderHook(
@@ -530,15 +585,11 @@ describe("useBudgetPresenceHeartbeat", () => {
         expect.any(Object),
       );
 
-      // Rerender with new budgetId — should remove old presence and start new
+      // Rerender with new budgetId — old presence expires naturally and new presence starts
       await act(async () => {
         rerender({ budgetId: "budget-2" });
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/budgets/budget-1/collaboration/presence",
-        expect.objectContaining({ method: "DELETE" }),
-      );
       expect(fetch).toHaveBeenCalledWith(
         "/api/budgets/budget-2/collaboration/presence",
         expect.objectContaining({ method: "POST" }),

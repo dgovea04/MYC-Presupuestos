@@ -23,6 +23,7 @@ vi.mock("@/lib/data/projects", () => ({
   updateProject: mocks.updateProject,
   getProjectHeaderById: mocks.getProjectHeaderById,
   deleteProject: mocks.deleteProject,
+  getProjectOverviewCacheTag: (projectId: string) => `project-overview:${projectId}`,
   PROJECT_OVERVIEW_CACHE_TAG: "project-overview",
   PROJECTS_LIST_CACHE_TAG: "projects-list",
   USER_COMPANIES_CACHE_TAG: "user-companies",
@@ -30,6 +31,11 @@ vi.mock("@/lib/data/projects", () => ({
 
 vi.mock("@/lib/data/activity-events", () => ({
   recordActivityEvent: mocks.recordActivityEvent,
+}));
+
+vi.mock("@/lib/dashboard/analytics", () => ({
+  DASHBOARD_ANALYTICS_CACHE_TAG: "dashboard-analytics",
+  getDashboardAnalyticsCacheTag: (companyId: string) => `dashboard-analytics:${companyId}`,
 }));
 
 import { PATCH, DELETE } from "@/app/api/projects/[id]/route";
@@ -91,7 +97,7 @@ describe("PATCH /api/projects/[id]", () => {
   });
 
   it("updates a project successfully and records activity", async () => {
-    const project = { id: "project-1", name: "Updated Name" };
+    const project = { id: "project-1", name: "Updated Name", companyId: "company-1" };
 
     mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
     mocks.updateProject.mockResolvedValue(project);
@@ -115,6 +121,7 @@ describe("PATCH /api/projects/[id]", () => {
       detail: "Updated Name",
       href: "/projects/project-1",
     });
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("dashboard-analytics:company-1", "max");
   });
 });
 
@@ -194,5 +201,6 @@ describe("DELETE /api/projects/[id]", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
     expect(mocks.deleteProject).toHaveBeenCalledWith("project-1", "user-1");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("dashboard-analytics:company-1", "max");
   });
 });

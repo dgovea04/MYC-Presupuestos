@@ -5,10 +5,12 @@ const mocks = vi.hoisted(() => ({
   duplicateProject: vi.fn(),
   recordActivityEvent: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -17,10 +19,19 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/data/projects", () => ({
   duplicateProject: mocks.duplicateProject,
+  getProjectOverviewCacheTag: (projectId: string) => `project-overview:${projectId}`,
+  PROJECT_OVERVIEW_CACHE_TAG: "project-overview",
+  PROJECTS_LIST_CACHE_TAG: "projects-list",
+  USER_COMPANIES_CACHE_TAG: "user-companies",
 }));
 
 vi.mock("@/lib/data/activity-events", () => ({
   recordActivityEvent: mocks.recordActivityEvent,
+}));
+
+vi.mock("@/lib/dashboard/analytics", () => ({
+  DASHBOARD_ANALYTICS_CACHE_TAG: "dashboard-analytics",
+  getDashboardAnalyticsCacheTag: (companyId: string) => `dashboard-analytics:${companyId}`,
 }));
 
 import { POST } from "@/app/api/projects/[id]/duplicate/route";
@@ -31,6 +42,7 @@ describe("POST /api/projects/[id]/duplicate", () => {
     mocks.duplicateProject.mockReset();
     mocks.recordActivityEvent.mockReset();
     mocks.revalidatePath.mockReset();
+    mocks.revalidateTag.mockReset();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -48,6 +60,7 @@ describe("POST /api/projects/[id]/duplicate", () => {
     const duplicatedProject = {
       id: "project-copy",
       name: "Hospital Norte (copia)",
+      companyId: "company-1",
     };
 
     mocks.getAuthSession.mockResolvedValue({
@@ -75,12 +88,15 @@ describe("POST /api/projects/[id]/duplicate", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/projects");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/projects/project-copy");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/budgets");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("project-overview:project-copy", "max");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("dashboard-analytics:company-1", "max");
   });
 
   it("returns success when activity logging fails after duplication succeeds", async () => {
     const duplicatedProject = {
       id: "project-copy",
       name: "Hospital Norte (copia)",
+      companyId: "company-1",
     };
 
     mocks.getAuthSession.mockResolvedValue({

@@ -64,18 +64,23 @@ export function GeneralBudgetOverview({
   projectId,
   generalBudgetId,
   subBudgets,
-  subBudgetDetails,
+  subBudgetDetails: initialSubBudgetDetails = [],
 }: {
   projectId: string;
   generalBudgetId: string;
   subBudgets: SubBudgetOverview[];
-  subBudgetDetails: BudgetRecord[];
+  subBudgetDetails?: BudgetRecord[];
 }) {
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
   const router = useRouter();
   const [optimisticTotals, setOptimisticTotals] = useState<Record<string, { totalAmount: number; updatedAt: string }>>({});
   const [activeSubBudgetDetailView, setActiveSubBudgetDetailView] = useState<"items" | "subpartidas">("items");
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+  const [showGeneralDetail, setShowGeneralDetail] = useState(false);
+  const [subBudgetDetails, setSubBudgetDetails] = useState<BudgetRecord[]>(initialSubBudgetDetails);
+  const [isLoadingSubBudgetDetails, setIsLoadingSubBudgetDetails] = useState(false);
+  const [subBudgetDetailsError, setSubBudgetDetailsError] = useState("");
   const [createdSubpartidasByResourceId, setCreatedSubpartidasByResourceId] = useState<Record<string, CatalogPartidaRecord>>({});
   const [creatingSubpartidaKey, setCreatingSubpartidaKey] = useState<string | null>(null);
   const [subpartidaCreationError, setSubpartidaCreationError] = useState("");
@@ -161,25 +166,33 @@ export function GeneralBudgetOverview({
   );
 
   const currency = orderedSubBudgets[0]?.currency ?? "PEN";
-  const calculatedSubBudgetDetails = useMemo(() => {
-    const calculatedById = new Map(
-      subBudgetDetails.map((budget) => {
-        const calculatedBudget = calculateBudgetRecord(budget);
-
-        return [
-          budget.id,
-          {
-            ...calculatedBudget,
-            displayRows: buildDisplayRows(calculatedBudget),
-          },
-        ] as const;
-      }),
-    );
+  const subBudgetDetailsById = useMemo(
+    () => new Map(subBudgetDetails.map((budget) => [budget.id, budget] as const)),
+    [subBudgetDetails],
+  );
+  const comparisonBudgets = useMemo(() => {
+    if (!isComparisonOpen) return [];
 
     return orderedSubBudgets
-      .map((budget) => calculatedById.get(budget.id))
-      .filter((budget): budget is NonNullable<typeof budget> => budget !== undefined);
-  }, [orderedSubBudgets, subBudgetDetails]);
+      .map((budget) => subBudgetDetailsById.get(budget.id))
+      .filter((budget): budget is BudgetRecord => budget !== undefined)
+      .map((budget) => calculateBudgetRecord(budget));
+  }, [isComparisonOpen, orderedSubBudgets, subBudgetDetailsById]);
+  const generalDetailBudgets = useMemo(() => {
+    if (!showGeneralDetail) return [];
+
+    return orderedSubBudgets
+      .map((budget) => subBudgetDetailsById.get(budget.id))
+      .filter((budget): budget is BudgetRecord => budget !== undefined)
+      .map((budget) => {
+        const calculatedBudget = calculateBudgetRecord(budget);
+
+        return {
+          ...calculatedBudget,
+          displayRows: buildDisplayRows(calculatedBudget),
+        };
+      });
+  }, [orderedSubBudgets, showGeneralDetail, subBudgetDetailsById]);
   const budgetTabs = useMemo(
     () => [
       {
@@ -196,13 +209,22 @@ export function GeneralBudgetOverview({
   const resolvedActiveBudgetId = budgetTabs.some((tab) => tab.id === activeBudgetId) ? activeBudgetId : GENERAL_TAB_ID;
   const isGeneralTabActive = resolvedActiveBudgetId === GENERAL_TAB_ID;
   const activeBudget = useMemo(
-    () => orderedSubBudgets.find((budget) => budget.id === resolvedActiveBudgetId) ?? orderedSubBudgets[0] ?? null,
-    [orderedSubBudgets, resolvedActiveBudgetId],
+    () => (isGeneralTabActive ? null : orderedSubBudgets.find((budget) => budget.id === resolvedActiveBudgetId) ?? null),
+    [isGeneralTabActive, orderedSubBudgets, resolvedActiveBudgetId],
   );
-  const activeBudgetDetail = useMemo(
-    () => calculatedSubBudgetDetails.find((budget) => budget.id === activeBudget?.id) ?? null,
-    [activeBudget, calculatedSubBudgetDetails],
-  );
+  const activeBudgetDetail = useMemo(() => {
+    if (!activeBudget) return null;
+
+    const detail = subBudgetDetailsById.get(activeBudget.id);
+    if (!detail) return null;
+
+    const calculatedBudget = calculateBudgetRecord(detail);
+
+    return {
+      ...calculatedBudget,
+      displayRows: buildDisplayRows(calculatedBudget),
+    };
+  }, [activeBudget, subBudgetDetailsById]);
   const activeBudgetRows = useMemo(
     () => (activeBudgetDetail ? buildDisplayRows(activeBudgetDetail) : []),
     [activeBudgetDetail],
@@ -220,11 +242,33 @@ export function GeneralBudgetOverview({
     () =>
       buildGeneralBudgetTraceability({
         subBudgetCount: orderedSubBudgets.length,
-        detailCount: calculatedSubBudgetDetails.length,
+        detailCount: subBudgetDetails.length,
         latestUpdatedAt,
       }),
-    [calculatedSubBudgetDetails.length, latestUpdatedAt, orderedSubBudgets.length],
+    [latestUpdatedAt, orderedSubBudgets.length, subBudgetDetails.length],
   );
+
+  async function loadSubBudgetDetails() {
+    if (subBudgetDetails.length > 0 || isLoadingSubBudgetDetails) return;
+
+    setIsLoadingSubBudgetDetails(true);
+    setSubBudgetDetailsError("");
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/sub-budget-details`);
+      const payload = (await response.json()) as { budgets?: BudgetRecord[]; error?: string };
+
+      if (!response.ok || !payload.budgets) {
+        throw new Error(payload.error ?? "No se pudo cargar el detalle de sub presupuestos.");
+      }
+
+      setSubBudgetDetails(payload.budgets);
+    } catch (error) {
+      setSubBudgetDetailsError(error instanceof Error ? error.message : "No se pudo cargar el detalle de sub presupuestos.");
+    } finally {
+      setIsLoadingSubBudgetDetails(false);
+    }
+  }
 
   async function createCatalogPartidaForSubpartida(subpartida: SubBudgetSubpartidaRow) {
     if (!activeBudget) return;
@@ -305,11 +349,39 @@ export function GeneralBudgetOverview({
             {traceability.warning ? <p className="mt-2 text-xs leading-5 text-amber-700">{traceability.warning}</p> : null}
           </div>
 
-          <BudgetComparisonPanel
-            budgets={calculatedSubBudgetDetails}
-            currencyDecimals={currencyDecimals}
-            isExcelMode={isExcelMode}
-          />
+          {subBudgetDetailsError ? (
+            <p className="theme-status-error rounded-xl border px-3 py-2 text-sm">{subBudgetDetailsError}</p>
+          ) : null}
+
+          {isComparisonOpen ? (
+            <BudgetComparisonPanel
+              budgets={comparisonBudgets}
+              currencyDecimals={currencyDecimals}
+              isExcelMode={isExcelMode}
+            />
+          ) : (
+            <div className={cn("border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--app-text-strong)]">Comparador tecnico</p>
+                  <p className="mt-1 text-xs text-[var(--app-text-muted)]">
+                    Activalo solo cuando necesites comparar partidas entre Sub Presupuestos.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isLoadingSubBudgetDetails}
+                  onClick={() => {
+                    setIsComparisonOpen(true);
+                    void loadSubBudgetDetails();
+                  }}
+                >
+                  {isLoadingSubBudgetDetails ? "Cargando..." : "Comparar subpresupuestos"}
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
             {orderedSubBudgets.map((budget) => {
@@ -483,7 +555,12 @@ export function GeneralBudgetOverview({
                 <button
                   key={budgetTab.id}
                   type="button"
-                  onClick={() => setActiveBudgetId(budgetTab.id)}
+                  onClick={() => {
+                    setActiveBudgetId(budgetTab.id);
+                    if (budgetTab.id !== GENERAL_TAB_ID) {
+                      void loadSubBudgetDetails();
+                    }
+                  }}
                   className={
                     budgetTab.id === resolvedActiveBudgetId
                       ? cn("theme-filter-button-active inline-flex border px-3 py-1.5 text-sm transition", isExcelMode ? "rounded-sm" : "rounded-full")
@@ -563,6 +640,11 @@ export function GeneralBudgetOverview({
                   </div>
                 </div>
 
+                {showGeneralDetail && isLoadingSubBudgetDetails && generalDetailBudgets.length === 0 ? (
+                  <div className={cn("border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4 text-sm text-[var(--app-text-muted)]", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+                    Cargando detalle consolidado...
+                  </div>
+                ) : showGeneralDetail ? (
                 <div className={getTableFrameClassName(isExcelMode, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")} data-testid="general-budget-tab-table">
                   <Table className="[&_thead_tr]:border-b-[color:var(--app-border-strong)] [&_tbody_tr]:border-b-[color:var(--app-border-strong)] [&_thead_th]:border-r [&_thead_th]:border-[var(--app-border)] [&_thead_th:last-child]:border-r-0 [&_tbody_td]:border-r [&_tbody_td]:border-[var(--app-border)] [&_tbody_td:last-child]:border-r-0">
                     <THead>
@@ -576,7 +658,7 @@ export function GeneralBudgetOverview({
                       </TR>
                     </THead>
                     <TBody>
-                      {calculatedSubBudgetDetails.map((budgetDetail) => (
+                      {generalDetailBudgets.map((budgetDetail) => (
                         [
                           <TR key={`${budgetDetail.id}-group`} className="bg-[var(--app-surface-strong)]/80 hover:bg-[var(--app-surface-strong)]/80">
                             <TD colSpan={6} className="font-semibold text-[var(--app-text-strong)]">
@@ -635,6 +717,26 @@ export function GeneralBudgetOverview({
                     </TBody>
                   </Table>
                 </div>
+                ) : (
+                  <div className={cn("border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4 text-sm", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-[var(--app-text-muted)]">
+                        El detalle consolidado se calcula al abrirlo para mantener ligera la carga inicial.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isLoadingSubBudgetDetails}
+                        onClick={() => {
+                          setShowGeneralDetail(true);
+                          void loadSubBudgetDetails();
+                        }}
+                      >
+                        {isLoadingSubBudgetDetails ? "Cargando..." : "Mostrar detalle consolidado"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-2">
                   <Button size="sm" variant="ghost" className="gap-2" disabled>
@@ -646,7 +748,11 @@ export function GeneralBudgetOverview({
                     variant="ghost"
                     className="gap-2"
                     disabled={orderedSubBudgets.length === 0}
-                    onClick={() => orderedSubBudgets[0] && setActiveBudgetId(orderedSubBudgets[0].id)}
+                    onClick={() => {
+                      if (!orderedSubBudgets[0]) return;
+                      setActiveBudgetId(orderedSubBudgets[0].id);
+                      void loadSubBudgetDetails();
+                    }}
                   >
                     Siguiente
                     <ChevronRight className="h-4 w-4" />
@@ -689,6 +795,12 @@ export function GeneralBudgetOverview({
                     </Link>
                   </div>
                 </div>
+
+                {!activeBudgetDetail && isLoadingSubBudgetDetails ? (
+                  <div className={cn("border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4 text-sm text-[var(--app-text-muted)]", isExcelMode ? "rounded-md" : "rounded-2xl")}>
+                    Cargando detalle del Sub Presupuesto...
+                  </div>
+                ) : null}
 
                 <div
                   className={cn(getTableFrameClassName(isExcelMode, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]"), activeSubBudgetDetailView === "subpartidas" && "hidden")}
@@ -845,7 +957,13 @@ export function GeneralBudgetOverview({
                           variant="ghost"
                           className="gap-2"
                           disabled={!previousBudget}
-                          onClick={() => previousBudget && setActiveBudgetId(previousBudget.id)}
+                          onClick={() => {
+                            if (!previousBudget) return;
+                            setActiveBudgetId(previousBudget.id);
+                            if (previousBudget.id !== GENERAL_TAB_ID) {
+                              void loadSubBudgetDetails();
+                            }
+                          }}
                         >
                           <ChevronLeft className="h-4 w-4" />
                           Anterior
@@ -855,7 +973,13 @@ export function GeneralBudgetOverview({
                           variant="ghost"
                           className="gap-2"
                           disabled={!nextBudget}
-                          onClick={() => nextBudget && setActiveBudgetId(nextBudget.id)}
+                          onClick={() => {
+                            if (!nextBudget) return;
+                            setActiveBudgetId(nextBudget.id);
+                            if (nextBudget.id !== GENERAL_TAB_ID) {
+                              void loadSubBudgetDetails();
+                            }
+                          }}
                         >
                           Siguiente
                           <ChevronRight className="h-4 w-4" />
