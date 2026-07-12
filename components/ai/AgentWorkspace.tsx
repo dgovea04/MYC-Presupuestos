@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   ArrowLeft,
   Bot,
@@ -253,6 +253,7 @@ function AgentChatPanel({
   onSelectBundle,
   onClearBundle,
   showConfirmation,
+  fallbackChatMessage,
   onConfirmProceed,
   onCancelProceed,
 }: {
@@ -266,6 +267,7 @@ function AgentChatPanel({
   onSelectBundle: (slug: (typeof BUNDLE_CONFIG)[number]["slug"]) => void;
   onClearBundle: () => void;
   showConfirmation: boolean;
+  fallbackChatMessage?: string | null;
   onConfirmProceed: () => void;
   onCancelProceed: () => void;
 }) {
@@ -386,6 +388,14 @@ function AgentChatPanel({
                 </div>
               </div>
             ))}
+            {/* Fallback message when model didn't execute generateBudget */}
+            {fallbackChatMessage && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800 shadow-sm">
+                  <span className="font-semibold">⚠️</span> {fallbackChatMessage}
+                </div>
+              </div>
+            )}
             {/* Confirmation buttons after preview */}
             {showConfirmation && (
               <div className="flex justify-start gap-2">
@@ -472,9 +482,18 @@ function AgentChatPanel({
 function ExecutionPlanPanel({
   streaming,
   streamExecution,
+  fallbackStatus,
+  fallbackActivity,
 }: {
   streaming: boolean;
   streamExecution: ReturnType<typeof useAgentStream>["execution"];
+  fallbackStatus?: "idle" | "executing" | "done" | "failed";
+  fallbackActivity?: {
+    toolName: string;
+    success: boolean;
+    latencyMs?: number;
+    summary: string;
+  } | null;
 }) {
   const isIdle = !streamExecution.state && !streaming;
 
@@ -535,6 +554,65 @@ function ExecutionPlanPanel({
             <p className="mt-1.5 text-xs leading-relaxed text-[var(--app-text-muted)]">
               Khipu está procesando tu solicitud. Las herramientas ejecutadas aparecerán a continuación.
             </p>
+          </div>
+        )}
+
+        {/* Fallback activity (cuando el modelo no llama generateBudget) */}
+        {fallbackActivity && (
+          <div className="mb-4 space-y-0">
+            <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-600">
+              ⚠️ Fallback — Generación directa
+            </p>
+            <div className="group flex gap-3 pb-4 last:pb-0">
+              <div className="flex flex-col items-center">
+                <div
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full border-2 bg-[var(--app-surface)] transition-colors",
+                    fallbackStatus === "executing"
+                      ? "border-amber-400"
+                      : fallbackActivity.success
+                        ? "border-emerald-400"
+                        : "border-rose-400",
+                  )}
+                >
+                  {fallbackStatus === "executing" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
+                  ) : fallbackActivity.success ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-rose-500" />
+                  )}
+                </div>
+              </div>
+              <div
+                className={cn(
+                  "flex-1 rounded-xl border px-3.5 py-2.5 transition-colors",
+                  fallbackStatus === "executing"
+                    ? "border-amber-100 bg-amber-50/20"
+                    : fallbackActivity.success
+                      ? "border-emerald-100 bg-emerald-50/20"
+                      : "border-rose-100 bg-rose-50/20",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="truncate text-xs font-semibold text-[var(--app-text-strong)]">
+                      {fallbackActivity.toolName}
+                    </span>
+                  </div>
+                  {fallbackActivity.latencyMs && (
+                    <span className="shrink-0 text-[10px] font-medium tabular-nums text-[var(--app-text-muted)]">
+                      {fallbackActivity.latencyMs}ms
+                    </span>
+                  )}
+                </div>
+                {fallbackActivity.summary && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--app-text-muted)] whitespace-pre-wrap">
+                    {fallbackActivity.summary}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -910,6 +988,21 @@ export function AgentWorkspace({
   const [approving, setApproving] = useState(false);
   const [selectedBundleSlug, setSelectedBundleSlug] = useState<string | null>(defaultBundleSlug ?? null);
 
+
+  // ── Fallback directo cuando el modelo no llama generateBudget ───────────
+  const [fallbackChatMessage, setFallbackChatMessage] = useState<string | null>(null);
+  const [fallbackStatus, setFallbackStatus] = useState<
+    "idle" | "executing" | "done" | "failed"
+  >("idle");
+  const [fallbackActivity, setFallbackActivity] = useState<{
+    toolName: string;
+    success: boolean;
+    latencyMs?: number;
+    summary: string;
+  } | null>(null);
+  const [forcefulCommandSent, setForcefulCommandSent] = useState(false);
+  const fallbackTriggeredRef = useRef(false);
+
   const {
     status,
     messages,
@@ -921,10 +1014,11 @@ export function AgentWorkspace({
   const loading = status === "connecting";
   const streaming = status === "streaming";
 
-  // Determinar si mostrar botón de confirmación después del preview
+  // ── Determinar si mostrar botón de confirmación después del preview ────
   const showConfirmation =
     !streaming &&
     status === "done" &&
+    fallbackStatus === "idle" &&
     streamExec.toolActivity.length > 0 &&
     streamExec.toolActivity.some(
       (a) => a.toolName === "previewBudgetGeneration" && a.success === true,
@@ -966,6 +1060,91 @@ export function AgentWorkspace({
     return nonConfirmationMsgs[nonConfirmationMsgs.length - 1]?.content ?? "";
   }, [messages]);
 
+  // ── Fallback: ejecutar generateBudget directamente sin pasar por el modelo ─
+  const triggerFallback = useCallback(async () => {
+    if (fallbackTriggeredRef.current) return;
+    fallbackTriggeredRef.current = true;
+
+    const fallbackStartTime = Date.now();
+
+    setFallbackChatMessage("⚠️ El modelo no ejecutó generateBudget automáticamente. Usando fallback directo...");
+    setFallbackStatus("executing");
+    setFallbackActivity({
+      toolName: "generateBudget (fallback)",
+      success: false,
+      summary: "Ejecutando generación directa...",
+    });
+
+    try {
+      // Extraer projectId y description del historial
+      const desc = lastConstructionDescription || "";
+      const projId = projectId || "";
+
+      const response = await fetch("/api/ai/agent/generate-budget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: projId,
+          description: desc,
+          workspaceId,
+          templateSource: "auto",
+        }),
+      });
+
+      const latencyMs = Date.now() - fallbackStartTime;
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: "Error desconocido" }));
+        throw new Error(errorBody.error || `Error HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      setFallbackStatus("done");
+      setFallbackActivity({
+        toolName: "generateBudget (fallback)",
+        success: true,
+        latencyMs,
+        summary: `✅ Presupuesto generado: ${result.totalItemsAdded} partidas (${result.fromMcp || 0} desde .mcp, ${result.fromTemplates || 0} desde plantillas, ${result.fromCatalog || 0} desde catálogo)`,
+      });
+    } catch (error) {
+      const elapsedMs = Date.now() - fallbackStartTime;
+      setFallbackStatus("failed");
+      setFallbackActivity({
+        toolName: "generateBudget (fallback)",
+        success: false,
+        latencyMs: elapsedMs,
+        summary: `❌ Fallback falló: ${error instanceof Error ? error.message : "Error desconocido"}`,
+      });
+    }
+  }, [projectId, workspaceId, lastConstructionDescription]);
+
+  // ── Detectar cuándo el modelo falló en llamar generateBudget ────────────
+  // Si el stream terminó, aún se muestra confirmación (el modelo no ejecutó
+  // generateBudget), y habíamos enviado el comando forceful → activar fallback.
+  useEffect(() => {
+    if (
+      status === "done" &&
+      !streaming &&
+      showConfirmation &&
+      forcefulCommandSent &&
+      !fallbackTriggeredRef.current
+    ) {
+      triggerFallback();
+    }
+  }, [status, streaming, showConfirmation, forcefulCommandSent, triggerFallback]);
+
+  // ── Resetear fallback cuando comienza un nuevo stream ───────────────────
+  useEffect(() => {
+    if (status === "streaming" || status === "connecting") {
+      setFallbackChatMessage(null);
+      setFallbackStatus("idle");
+      setFallbackActivity(null);
+      fallbackTriggeredRef.current = false;
+      setForcefulCommandSent(false);
+    }
+  }, [status]);
+
   const handleConfirmProceed = useCallback(() => {
     if (loading || streaming) return;
 
@@ -983,6 +1162,8 @@ export function AgentWorkspace({
       " SOLO llama la herramienta generateBudget. NO generes texto de respuesta. " +
       "NO preguntes de nuevo. USA los mismos projectId y description que en previewBudgetGeneration. " +
       "LLAMA generateBudget INMEDIATAMENTE.";
+
+    setForcefulCommandSent(true);
 
     // Enviar comando internamente (modelo recibe el texto fuerte)
     setObjective("");
@@ -1074,6 +1255,7 @@ export function AgentWorkspace({
           onSelectBundle={(slug) => setSelectedBundleSlug(slug)}
           onClearBundle={() => setSelectedBundleSlug(null)}
           showConfirmation={showConfirmation}
+          fallbackChatMessage={fallbackChatMessage}
           onConfirmProceed={handleConfirmProceed}
           onCancelProceed={handleCancelProceed}
         />
@@ -1081,7 +1263,12 @@ export function AgentWorkspace({
 
       {/* Center: Execution Plan */}
       <div className="border-r border-[var(--app-border)]">
-        <ExecutionPlanPanel streaming={streaming} streamExecution={streamExec} />
+        <ExecutionPlanPanel
+          streaming={streaming}
+          streamExecution={streamExec}
+          fallbackStatus={fallbackStatus}
+          fallbackActivity={fallbackActivity}
+        />
       </div>
 
       {/* Right: Tools + Approvals + Activity */}

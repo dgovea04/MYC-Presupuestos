@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentWorkspace } from "@/components/ai/AgentWorkspace";
@@ -668,6 +668,182 @@ describe("AgentWorkspace", () => {
         mode: "goal",
         workflowId: undefined,
       });
+    });
+  });
+
+  // ─── Fallback directo (cuando el modelo no llama generateBudget) ──────
+
+  describe("fallback directo", () => {
+    const confirmedState = {
+      ...makeDefaultHookReturn(),
+      status: "done" as const,
+      messages: [
+        { role: "user" as const, content: "genera presupuesto para casa de 120m2 en el proyecto Perez" },
+        { role: "assistant" as const, content: "Preview: 77 partidas" },
+      ],
+      execution: {
+        executionId: "exec-1",
+        state: "EXECUTED" as const,
+        summary: "Vista previa completada",
+        pendingApproval: null,
+        toolActivity: [
+          { toolName: "previewBudgetGeneration", success: true, latencyMs: 500, summary: "Vista previa: 77 partidas" },
+        ],
+        warnings: [],
+        latencyMs: 500,
+      },
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("muestra mensaje de fallback en el chat cuando el modelo no ejecuta generateBudget", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 10,
+          fromMcp: 5,
+          fromTemplates: 3,
+          fromCatalog: 2,
+        }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      // Click "Proceder" → esto activa el ref y luego el useEffect de fallback
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // El botón de Proceder desaparece inmediatamente
+      expect(screen.queryByText("Proceder")).toBeNull();
+
+      // Aparece el mensaje de fallback en el chat
+      await waitFor(() => {
+        expect(screen.getByText(/Usando fallback directo/)).toBeTruthy();
+      });
+    });
+
+    it("muestra la actividad de fallback en el panel central de ejecución", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 10,
+          fromMcp: 5,
+          fromTemplates: 3,
+          fromCatalog: 2,
+        }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // El panel central debe mostrar la sección de fallback
+      await waitFor(() => {
+        expect(screen.getByText(/Fallback — Generación directa/)).toBeTruthy();
+      });
+      expect(screen.getByText("generateBudget (fallback)")).toBeTruthy();
+    });
+
+    it("muestra spinner de carga mientras el fallback se ejecuta", async () => {
+      // Mantener la promesa sin resolver para ver el estado "executing"
+      let resolvePromise!: (value: unknown) => void;
+      globalThis.fetch = vi.fn().mockReturnValue(new Promise((resolve) => {
+        resolvePromise = resolve;
+      }));
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // El spinner debe aparecer (Loader2 con animate-spin)
+      await waitFor(() => {
+        const spinner = document.querySelector('[data-testid="icon-loader"]');
+        expect(spinner).toBeTruthy();
+      });
+
+      // Resolver la promesa para limpiar
+      resolvePromise!({ ok: true, json: async () => ({ totalItemsAdded: 10 }) });
+    });
+
+    it("muestra resultado exitoso cuando el fallback completa", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          totalItemsAdded: 77,
+          fromMcp: 50,
+          fromTemplates: 20,
+          fromCatalog: 7,
+        }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      // Esperar a que el fallback se complete exitosamente
+      await waitFor(() => {
+        expect(screen.getByText(/Presupuesto generado/)).toBeTruthy();
+      });
+      const partidasElements = screen.getAllByText(/77 partidas/);
+      expect(partidasElements.length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText(/50 desde .mcp/)).toBeTruthy();
+    });
+
+    it("muestra error cuando el fallback falla", async () => {
+      globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error("Error de conexión"));
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Fallback falló/)).toBeTruthy();
+      });
+      expect(screen.getByText(/Error de conexión/)).toBeTruthy();
+    });
+
+    it("muestra error HTTP cuando el endpoint responde con error", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: "projectId es requerido" }),
+      });
+
+      mockUseAgentStream.mockReturnValue(confirmedState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Proceder"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Fallback falló/)).toBeTruthy();
+      });
+      expect(screen.getByText(/projectId es requerido/)).toBeTruthy();
+    });
+
+    it("no activa fallback si el modelo SI ejecutó generateBudget", async () => {
+      const successState = {
+        ...confirmedState,
+        execution: {
+          ...confirmedState.execution,
+          toolActivity: [
+            { toolName: "previewBudgetGeneration", success: true, latencyMs: 500, summary: "Vista previa" },
+            { toolName: "generateBudget", success: true, latencyMs: 2000, summary: "Generado" },
+          ],
+        },
+      };
+
+      mockUseAgentStream.mockReturnValue(successState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      // Botón de Proceder no aparece porque generateBudget ya se ejecutó
+      expect(screen.queryByText("Proceder")).toBeNull();
+      expect(screen.queryByText(/Fallback/)).toBeNull();
     });
   });
 
