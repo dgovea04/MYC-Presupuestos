@@ -54,10 +54,9 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  const [budget, settings, templateTraceability] = await measureAsync("page.budgetDetail.initialData", () => Promise.all([
+  const [budget, settings] = await measureAsync("page.budgetDetail.initialData", () => Promise.all([
     getBudgetById(id, session.user.id),
     getUserSettings(session.user.id),
-    getBudgetTemplateCreationTraceability({ userId: session.user.id, budgetId: id }),
   ]), { budgetId: id });
 
   if (!budget) {
@@ -76,6 +75,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
   }
 
   if (budget.kind === "GENERAL") {
+    const templateTraceability = await getBudgetTemplateCreationTraceability({ userId: session.user.id, budgetId: budget.id });
     const subBudgets = orderSubBudgetsBySpecialty(project.budgets.filter((item) => item.kind === "SUB_BUDGET"));
 
     return (
@@ -281,7 +281,8 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       <BudgetFlowWrapper
         budget={budget}
         projectName={project.name}
-        templateTraceability={templateTraceability}
+        templateTraceability={null}
+        templateTraceabilityBudgetId={budget.id}
         catalogBudgetId={budget.id}
         partidasCatalog={[]}
         resourcesCatalog={[]}

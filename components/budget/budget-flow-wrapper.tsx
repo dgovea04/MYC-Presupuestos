@@ -13,6 +13,7 @@ type EditorCatalogsPayload = {
 };
 
 const editorCatalogsCache = new Map<string, Promise<EditorCatalogsPayload>>();
+const templateTraceabilityCache = new Map<string, Promise<BudgetTemplateCreationTraceability | null>>();
 
 async function fetchEditorCatalogs(budgetId: string): Promise<EditorCatalogsPayload> {
   const cached = editorCatalogsCache.get(budgetId);
@@ -43,10 +44,36 @@ async function fetchEditorCatalogs(budgetId: string): Promise<EditorCatalogsPayl
   return request;
 }
 
+async function fetchTemplateTraceability(budgetId: string): Promise<BudgetTemplateCreationTraceability | null> {
+  const cached = templateTraceabilityCache.get(budgetId);
+  if (cached) return cached;
+
+  const request = fetch(`/api/budgets/${budgetId}/template-traceability`)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error("No se pudo cargar la trazabilidad de plantilla");
+      }
+
+      const payload = await response.json() as {
+        traceability?: BudgetTemplateCreationTraceability | null;
+      };
+
+      return payload.traceability ?? null;
+    })
+    .catch((error: unknown) => {
+      templateTraceabilityCache.delete(budgetId);
+      throw error;
+    });
+
+  templateTraceabilityCache.set(budgetId, request);
+  return request;
+}
+
 export function BudgetFlowWrapper({
   budget,
   projectName,
   templateTraceability,
+  templateTraceabilityBudgetId,
   partidasCatalog,
   resourcesCatalog,
   catalogBudgetId,
@@ -54,6 +81,7 @@ export function BudgetFlowWrapper({
   budget: BudgetRecord;
   projectName?: string;
   templateTraceability?: BudgetTemplateCreationTraceability | null;
+  templateTraceabilityBudgetId?: string;
   partidasCatalog: CatalogPartidaRecord[];
   resourcesCatalog: ResourceRecord[];
   catalogBudgetId?: string;
@@ -62,6 +90,7 @@ export function BudgetFlowWrapper({
     partidasCatalog,
     resourcesCatalog,
   });
+  const [resolvedTemplateTraceability, setResolvedTemplateTraceability] = useState<BudgetTemplateCreationTraceability | null>(null);
 
   useEffect(() => {
     if (!catalogBudgetId) return;
@@ -87,11 +116,34 @@ export function BudgetFlowWrapper({
     };
   }, [catalogBudgetId]);
 
+  useEffect(() => {
+    if (!templateTraceabilityBudgetId || templateTraceability) return;
+
+    let active = true;
+
+    async function loadTemplateTraceability() {
+      try {
+        const payload = await fetchTemplateTraceability(templateTraceabilityBudgetId);
+        if (active) {
+          setResolvedTemplateTraceability(payload);
+        }
+      } catch {
+        // The banner is informational; keep the editor path fast if it fails.
+      }
+    }
+
+    void loadTemplateTraceability();
+
+    return () => {
+      active = false;
+    };
+  }, [templateTraceability, templateTraceabilityBudgetId]);
+
   return (
     <BudgetFlow
       budget={budget}
       projectName={projectName}
-      templateTraceability={templateTraceability}
+      templateTraceability={templateTraceability ?? resolvedTemplateTraceability}
       partidasCatalog={catalogs.partidasCatalog}
       resourcesCatalog={catalogs.resourcesCatalog}
     />

@@ -225,7 +225,7 @@ describe("BudgetDetailPage", () => {
     expect(mocks.getProjectById).not.toHaveBeenCalled();
   });
 
-  it("passes template traceability to the budget flow", async () => {
+  it("defers template traceability in the sub-budget branch", async () => {
     mocks.getBudgetTemplateCreationTraceability.mockResolvedValue({
       title: "Presupuesto creado desde plantilla",
       detail: "Arquitectura desde Base tecnica",
@@ -241,12 +241,10 @@ describe("BudgetDetailPage", () => {
 
     expect(mocks.budgetFlowSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        templateTraceability: expect.objectContaining({
-          title: "Presupuesto creado desde plantilla",
-          detail: "Arquitectura desde Base tecnica",
-        }),
+        templateTraceability: null,
       }),
     );
+    expect(mocks.getBudgetTemplateCreationTraceability).not.toHaveBeenCalled();
   });
 
   it("uses project overview budgets for the general budget summaries", async () => {
@@ -300,6 +298,7 @@ describe("BudgetDetailPage", () => {
     const markup = renderToStaticMarkup(tree);
 
     expect(markup).toContain('data-testid="general-budget-overview"');
+    expect(mocks.getBudgetTemplateCreationTraceability).toHaveBeenCalledWith({ userId: "user-1", budgetId: "general-1" });
     expect(mocks.getProjectSubBudgetSummaries).not.toHaveBeenCalled();
     expect(mocks.getProjectSubBudgetDetails).not.toHaveBeenCalled();
   });
