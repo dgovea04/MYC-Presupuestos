@@ -274,10 +274,11 @@ describe("ToolExecutor", () => {
           arguments: { name: "Estructuras" },
         }),
         projectId: "project_1",
+        mode: "goal", // write requiere aprobación en modo goal
       });
 
       const output = await executor.execute(input);
-      // write risk → requiere aprobación → success=false con approvalRequired
+      // write risk en modo goal → requiere aprobación → success=false con approvalRequired
       expect(output.success).toBe(false);
       expect(output.approvalRequired).toBeDefined();
       expect(output.approvalRequired!.toolName).toBe("createChapter");

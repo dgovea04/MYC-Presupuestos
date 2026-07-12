@@ -1,19 +1,32 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { getAgentModelProvider, getAgentModelShortLabel } from "@/lib/ai/agent/models";
 import type { AiEndpointResult } from "@/lib/ai/types";
-import type { AiProviderRequest, AiProviderResult } from "@/lib/ai/gateway/types";
+import type { AiProviderRequest, AiProviderResult, KhipuAiTask } from "@/lib/ai/gateway/types";
 import { createVercelSdkAdapter } from "@/lib/ai/agent/vercel-sdk-adapter";
 import { createToolRegistry } from "@/lib/ai/agent/tool-registry";
 import { createPolicyEngine } from "@/lib/ai/agent/policy-engine";
 import { createToolExecutor } from "@/lib/ai/agent/tool-executor";
 import { allTools } from "@/lib/ai/agent/tools";
 import type { AgentLoopMessage } from "@/lib/ai/agent/contracts";
+import type { AgentExecutionMode } from "@/lib/ai/agent/types";
 import { prisma } from "@/lib/db/prisma";
 
 export const DEFAULT_AGENT_MODEL = "openrouter/free";
 
 /** Máximo de iteraciones del loop agéntico externo. */
 const MAX_AGENT_LOOP_ITERATIONS = 5;
+
+/**
+ * Convierte un KhipuAiTask en un AgentExecutionMode para el policy engine.
+ *
+ * - "chat" y "autocomplete" → modo "chat" (escritura permitida sin aprobación)
+ * - Cualquier otra tarea (generate_apu, review_budget, etc.) → modo "goal"
+ *   (herramientas write requieren aprobación del usuario)
+ */
+function taskToExecutionMode(task: KhipuAiTask): AgentExecutionMode {
+  if (task === "chat" || task === "autocomplete") return "chat";
+  return "goal";
+}
 
 /**
  * Límite de llamadas por herramienta dentro de una misma conversación.
@@ -221,7 +234,7 @@ export async function executeAgentProvider(
         projectId: request.projectId,
         workspaceId: request.workspaceId,
         executionId: `agent_${Date.now()}_${iterations}`,
-        mode: "chat",
+        mode: taskToExecutionMode(request.task),
         lastUserMessage,
         messages: conversationMessages.map((m) => ({ role: m.role, content: m.content })),
       });
@@ -483,7 +496,7 @@ export async function* streamAgentChat(
         data: {
           userId: request.userId,
         projectId: request.projectId ?? null,
-        mode: "chat",
+        mode: taskToExecutionMode(request.task),
         state: "EXECUTING",
         goal: request.messages.find((m) => m.role === "user")?.content.slice(0, 500) ?? "Chat",
         provider,
@@ -673,7 +686,7 @@ export async function* streamAgentChat(
         projectId: request.projectId,
         workspaceId: request.workspaceId,
         executionId: executionId ?? `agent_${Date.now()}_${iterations}`,
-        mode: "chat",
+        mode: taskToExecutionMode(request.task),
         lastUserMessage,
         messages: conversationMessages.map((m) => ({ role: m.role, content: m.content })),
       });

@@ -221,7 +221,8 @@ describe("executeAgentProvider", () => {
       usage: { promptTokens: 30, completionTokens: 10, totalTokens: 40 },
     }));
 
-    const result = await executeAgentProvider(makeRequest());
+    // Usar task="generate_apu" → taskToExecutionMode → "goal" → write requiere aprobación
+    const result = await executeAgentProvider(makeRequest({ task: "generate_apu" }));
 
     expect(result.provider).toBe("agent");
     expect(result.answer).toContain("Se requiere tu aprobación");
@@ -247,7 +248,8 @@ describe("executeAgentProvider", () => {
       usage: { promptTokens: 30, completionTokens: 15, totalTokens: 45 },
     }));
 
-    const result = await executeAgentProvider(makeRequest());
+    // Usar task="review_budget" → taskToExecutionMode → "goal" → write requiere aprobación
+    const result = await executeAgentProvider(makeRequest({ task: "review_budget" }));
 
     // searchPartidas (read) should execute, addPartida (write) should trigger approval
     expect(result.answer).toContain("addPartida");

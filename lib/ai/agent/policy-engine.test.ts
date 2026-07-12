@@ -37,14 +37,14 @@ describe("PolicyEngine", () => {
   });
 
   describe("risk: write", () => {
-    it("requiere aprobación en modo chat", () => {
+    it("permitido sin aprobación en modo chat", () => {
       const engine = new PolicyEngine();
       const result = engine.evaluate(
         makePolicyInput({ toolRisk: "write", executionMode: "chat" })
       );
       expect(result.allowed).toBe(true);
-      expect(result.approvalRequirement).toBe("pre_execute");
-      expect(result.policyReason).toContain("chat");
+      expect(result.approvalRequirement).toBe("none");
+      expect(result.policyReason).toContain("Escritura en modo chat");
     });
 
     it("requiere aprobación en modo goal", () => {
