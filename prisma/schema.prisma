@@ -14,6 +14,36 @@ enum ProjectStatus {
   ON_HOLD
 }
 
+enum ProjectCategory {
+  EDIFICACION
+  INFRAESTRUCTURA_VIAL
+  SANEAMIENTO
+  ELECTRICO
+  MINERO
+  INDUSTRIAL
+  HABILITACION_URBANA
+  OTRO
+}
+
+enum BuildingSubtype {
+  UNIFAMILIAR
+  MULTIFAMILIAR
+  COMERCIAL
+  OFICINAS
+  EDUCACIONAL
+  HOSPITALARIO
+  HOTELERO
+  MIXTO
+  OTRO
+}
+
+enum ContractType {
+  SUMA_ALZADA
+  PRECIOS_UNITARIOS
+  MIXTO
+  ADMINISTRACION
+}
+
 enum BudgetLevelType {
   TITLE
   SUBTITLE
@@ -73,6 +103,15 @@ enum PolynomialCostGroup {
   CEMENT
   MASONRY
   INSTALLATIONS
+}
+
+enum ProjectAttachmentCategory {
+  PLANO
+  ESPECIFICACION
+  CONTRATO
+  MEMORIA
+  FOTO
+  OTRO
 }
 
 enum ActivityEventType {
@@ -264,6 +303,7 @@ model User {
   agentDecidedApprovals         AgentApproval[]             @relation("AgentApprovalDecidedBy")
   agentRollbacks                AgentRollback[]             @relation("AgentRollbackCreatedBy")
   storedProjectPackages         StoredProjectPackage[]
+  projectAttachments            ProjectAttachment[]
 
   @@index([role])
   @@index([status])
@@ -565,6 +605,23 @@ model Project {
   clientName                 String?
   location                   String?
   projectType                String?
+  projectCategory            ProjectCategory?
+  buildingSubtype            BuildingSubtype?
+  contractType               ContractType?
+  builtArea                  Decimal?                    @db.Decimal(14, 4)
+  landArea                   Decimal?                    @db.Decimal(14, 4)
+  floors                     Int?
+  basements                  Int?
+  buildingHeight             Decimal?                    @db.Decimal(10, 4)
+  contractAmount             Decimal?                    @db.Decimal(18, 4)
+  referenceBudget            Decimal?                    @db.Decimal(18, 4)
+  region                     String?
+  province                   String?
+  district                   String?
+  executiveSummary           String?                     @db.Text
+  projectManager             String?
+  ownerEntity                String?
+  supervisor                 String?
   startDate                  DateTime?
   endDate                    DateTime?
   status                     ProjectStatus               @default(PLANNING)
@@ -585,8 +642,9 @@ model Project {
   collaborationComments      CollaborationComment[]
   budgetChangeEvents         BudgetChangeEvent[]
   budgetVersionSnapshots     BudgetVersionSnapshot[]
-  agentExecutions            AgentExecution[]
-  storedProjectPackages      StoredProjectPackage[]
+  agentExecutions               AgentExecution[]
+  storedProjectPackages         StoredProjectPackage[]
+  attachments                   ProjectAttachment[]
 
   @@index([companyId])
 }
@@ -1756,4 +1814,24 @@ model AgentWorkflow {
   @@index([slug])
   @@index([isActive])
   @@map("agent_workflows")
+}
+
+model ProjectAttachment {
+  id        String                     @id @default(cuid())
+  projectId String
+  fileName  String
+  fileType  String
+  fileSize  Int
+  filePath  String
+  category  ProjectAttachmentCategory  @default(OTRO)
+  userId    String
+  createdAt DateTime                   @default(now())
+  updatedAt DateTime                   @updatedAt
+  project   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@index([category])
+  @@map("project_attachments")
 }

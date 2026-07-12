@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, MapPin, Save } from "lucide-react";
+import { CalendarDays, ChevronDown, MapPin, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatWorkDaysLabel } from "@/lib/work-schedule/calendar";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
@@ -10,6 +10,15 @@ import { Input } from "@/components/ui/input";
 import { FormActionBar, FormSectionPanel } from "@/components/ui/operational-surfaces";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  buildingSubtypeValues,
+  contractTypeValues,
+  projectCategoryValues,
+} from "@/lib/validations/project";
+import { buildingSubtypeLabel, contractTypeLabel, projectCategoryLabel } from "@/lib/projects/labels";
+import { LocationSelects } from "@/components/ui/location-selects";
+import type { ProjectCategory, BuildingSubtype, ContractType } from "@/types/project";
 import type { TemplateLibraryItem } from "@/lib/templates/template-library";
 
 type CompanyOption = {
@@ -36,6 +45,23 @@ type ProjectFormProps = {
     clientName?: string | null;
     location?: string | null;
     projectType?: string | null;
+    projectCategory?: ProjectCategory | null;
+    buildingSubtype?: BuildingSubtype | null;
+    contractType?: ContractType | null;
+    builtArea?: number | null;
+    landArea?: number | null;
+    floors?: number | null;
+    basements?: number | null;
+    buildingHeight?: number | null;
+    contractAmount?: number | null;
+    referenceBudget?: number | null;
+    region?: string | null;
+    province?: string | null;
+    district?: string | null;
+    executiveSummary?: string | null;
+    projectManager?: string | null;
+    ownerEntity?: string | null;
+    supervisor?: string | null;
     startDate?: string | Date | null;
     endDate?: string | Date | null;
     status: string;
@@ -124,7 +150,17 @@ export function ProjectForm({ companies, workCalendars, project, selectedTemplat
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Field id="name" label="Nombre de obra" defaultValue={project?.name} required />
-          <Field id="projectType" label="Tipo de obra" defaultValue={project?.projectType ?? ""} />
+          <div className="space-y-2">
+            <Label htmlFor="projectCategory">Tipo de obra</Label>
+            <Select id="projectCategory" name="projectCategory" defaultValue={project?.projectCategory ?? ""}>
+              <option value="">Seleccionar tipo...</option>
+              {projectCategoryValues.map((category) => (
+                <option key={category} value={category}>
+                  {projectCategoryLabel(category)}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
       </FormSectionPanel>
 
@@ -173,6 +209,26 @@ export function ProjectForm({ companies, workCalendars, project, selectedTemplat
       </FormSectionPanel>
 
       {error ? <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
+
+      <ProjectAdvancedSection
+        projectCategory={project?.projectCategory ?? null}
+        buildingSubtype={project?.buildingSubtype ?? null}
+        contractType={project?.contractType ?? null}
+        builtArea={project?.builtArea ?? null}
+        landArea={project?.landArea ?? null}
+        floors={project?.floors ?? null}
+        basements={project?.basements ?? null}
+        buildingHeight={project?.buildingHeight ?? null}
+        contractAmount={project?.contractAmount ?? null}
+        referenceBudget={project?.referenceBudget ?? null}
+        region={project?.region ?? null}
+        province={project?.province ?? null}
+        district={project?.district ?? null}
+        executiveSummary={project?.executiveSummary ?? null}
+        projectManager={project?.projectManager ?? null}
+        ownerEntity={project?.ownerEntity ?? null}
+        supervisor={project?.supervisor ?? null}
+      />
 
       <FormActionBar>
         <Button type="submit" disabled={loading} className="gap-2 shadow-sm shadow-sky-950/10">
@@ -231,6 +287,146 @@ function getProjectStatusLabel(status: string) {
     default:
       return "Planificación";
   }
+}
+
+
+
+type AdvancedSectionProps = {
+  projectCategory: ProjectCategory | null;
+  buildingSubtype: BuildingSubtype | null;
+  contractType: ContractType | null;
+  builtArea: number | null;
+  landArea: number | null;
+  floors: number | null;
+  basements: number | null;
+  buildingHeight: number | null;
+  contractAmount: number | null;
+  referenceBudget: number | null;
+  region: string | null;
+  province: string | null;
+  district: string | null;
+  executiveSummary: string | null;
+  projectManager: string | null;
+  ownerEntity: string | null;
+  supervisor: string | null;
+};
+
+export function ProjectAdvancedSection(props: AdvancedSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between px-5 py-4 text-left"
+      >
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--app-text-strong)]">Configuración avanzada</h3>
+          <p className="mt-0.5 text-xs text-[var(--app-text-muted)]">
+            Datos técnicos, contractuales y resumen ejecutivo del proyecto.
+          </p>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 text-[var(--app-text-muted)] transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* LocationSelects always rendered — hidden inputs persist when collapsed */}
+      <div className={expanded ? "border-t border-[var(--app-border)] px-5 pt-4" : "px-5"}>
+        <LocationSelects
+          initialDepartment={props.region}
+          initialProvince={props.province}
+          initialDistrict={props.district}
+          compact={!expanded}
+        />
+      </div>
+
+      {expanded ? (
+        <div className="space-y-5 border-t border-[var(--app-border)] px-5 pb-5 pt-4">
+          {/* Clasificación técnica */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="buildingSubtype">Subtipo de edificación</Label>
+              <Select id="buildingSubtype" name="buildingSubtype" defaultValue={props.buildingSubtype ?? ""}>
+                <option value="">No especificado</option>
+                {buildingSubtypeValues.map((subtype) => (
+                  <option key={subtype} value={subtype}>
+                    {buildingSubtypeLabel(subtype)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contractType">Tipo de contrato</Label>
+              <Select id="contractType" name="contractType" defaultValue={props.contractType ?? ""}>
+                <option value="">No especificado</option>
+                {contractTypeValues.map((contractType) => (
+                  <option key={contractType} value={contractType}>
+                    {contractTypeLabel(contractType)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          {/* Parámetros físicos */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
+              Parámetros físicos
+            </Label>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <Field id="builtArea" label="Área construida (m²)" type="number" defaultValue={numberOrEmpty(props.builtArea)} />
+              <Field id="landArea" label="Área de terreno (m²)" type="number" defaultValue={numberOrEmpty(props.landArea)} />
+              <Field id="floors" label="N° de pisos" type="number" defaultValue={numberOrEmpty(props.floors)} />
+              <Field id="basements" label="N° de sótanos" type="number" defaultValue={numberOrEmpty(props.basements)} />
+              <Field id="buildingHeight" label="Altura total (m)" type="number" defaultValue={numberOrEmpty(props.buildingHeight)} />
+            </div>
+          </div>
+
+          {/* Información contractual */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
+              Información contractual
+            </Label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field id="contractAmount" label="Monto contractual" type="number" defaultValue={numberOrEmpty(props.contractAmount)} />
+              <Field id="referenceBudget" label="Presupuesto referencial" type="number" defaultValue={numberOrEmpty(props.referenceBudget)} />
+            </div>
+          </div>
+
+          {/* Contactos / Stakeholders */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
+              Stakeholders
+            </Label>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Field id="projectManager" label="Ing. Residente / PM" defaultValue={props.projectManager ?? ""} />
+              <Field id="ownerEntity" label="Entidad contratante" defaultValue={props.ownerEntity ?? ""} />
+              <Field id="supervisor" label="Supervisión" defaultValue={props.supervisor ?? ""} />
+            </div>
+          </div>
+
+          {/* Resumen ejecutivo */}
+          <div className="space-y-2">
+            <Label htmlFor="executiveSummary">Resumen ejecutivo</Label>
+            <Textarea
+              id="executiveSummary"
+              name="executiveSummary"
+              defaultValue={props.executiveSummary ?? ""}
+              placeholder="Describe el alcance, objetivos y características principales del proyecto..."
+              rows={4}
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function numberOrEmpty(value: number | null | undefined) {
+  if (value == null) return "";
+  return String(value);
 }
 
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { FolderKanban } from "lucide-react";
+import { Building2, FolderKanban } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { ActionButton } from "@/components/ui/action-button";
@@ -10,7 +10,9 @@ import { InfoCard } from "@/components/ui/info-cards";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
+import { ProjectAttachmentUpload } from "@/components/projects/project-attachment-upload";
 import { getAuthSession } from "@/lib/auth/session";
+import { getProjectAttachments } from "@/lib/data/attachments";
 import { listProjectActivityEvents } from "@/lib/data/activity-events";
 import { getProjectOverviewById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
@@ -18,8 +20,10 @@ import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectActivityHistory } from "@/components/projects/project-activity-history";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
 import { getProjectOtherSections } from "@/lib/projects/other-sections";
+import { buildingSubtypeLabel, contractTypeLabel, projectCategoryLabel } from "@/lib/projects/labels";
 import { formatWorkDaysLabel } from "@/lib/work-schedule/calendar";
 import { ensureDate, formatDate } from "@/lib/utils";
+import type { ProjectAttachmentCategory } from "@/types/project";
 
 const projectSections = [
   {
@@ -36,6 +40,11 @@ const projectSections = [
     id: "otras-secciones",
     title: "Otras secciones",
     description: "APU, lista de insumos, gastos generales, pie de presupuesto y fórmula polinómica del proyecto.",
+  },
+  {
+    id: "archivos",
+    title: "Archivos",
+    description: "Planos, especificaciones, contratos y documentos adjuntos del proyecto.",
   },
   {
     id: "historial",
@@ -79,6 +88,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const generalBudgetsCount = generalBudget ? 1 : 0;
   const subBudgets = project.budgets.filter((budget) => budget.kind === "SUB_BUDGET");
   const otherSections = getProjectOtherSections(generalBudget?.id ?? null);
+  const attachments = await getProjectAttachments(project.id);
   const activityEvents = await listProjectActivityEvents({
     userId: session!.user.id,
     projectId: project.id,
@@ -135,7 +145,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
               <InfoCard label="Cliente" value={project.clientName || "Pendiente"} />
               <InfoCard label="Ubicación" value={project.location || "Pendiente"} />
-              <InfoCard label="Tipo de obra" value={project.projectType || "Pendiente"} />
+              <InfoCard label="Categoría" value={projectCategoryLabel(project.projectCategory) || "Pendiente"} />
               <InfoCard
                 label="Calendario laboral"
                 value={
@@ -158,6 +168,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 </a>
               ))}
             </div>
+
+            {hasAdvancedData(project) ? (
+              <ProjectAdvancedOverview project={project} />
+            ) : null}
           </CardContent>
         </Card>
 
@@ -214,6 +228,32 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </Card>
         </section>
 
+        <section id="archivos">
+          <Card className="theme-surface-card rounded-2xl">
+            <CardHeader>
+              <CardTitle>Archivos adjuntos</CardTitle>
+              <CardDescription>
+                Planos, especificaciones, contratos, memorias y otros documentos del proyecto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProjectAttachmentUpload
+                projectId={project.id}
+                initialAttachments={attachments.map((a: Awaited<ReturnType<typeof getProjectAttachments>>[number]) => ({
+                  id: a.id,
+                  fileName: a.fileName,
+                  fileType: a.fileType,
+                  fileSize: a.fileSize,
+                  filePath: a.filePath,
+                  category: a.category as ProjectAttachmentCategory,
+                  createdAt: a.createdAt.toISOString(),
+                  user: a.user ? { name: a.user.name } : null,
+                }))}
+              />
+            </CardContent>
+          </Card>
+        </section>
+
         <ProjectActivityHistory events={activityEvents} dateFormat={settings.dateFormat} />
       </div>
     </AppShell>
@@ -231,3 +271,98 @@ function SectionCard({ title, detail, href }: { title: string; detail: string; h
     </Link>
   );
 }
+
+function hasAdvancedData(project: NonNullable<Awaited<ReturnType<typeof getProjectOverviewById>>>) {
+  return !!(
+    project.buildingSubtype ||
+    project.contractType ||
+    project.builtArea ||
+    project.landArea ||
+    project.floors ||
+    project.basements ||
+    project.buildingHeight ||
+    project.contractAmount ||
+    project.referenceBudget ||
+    project.region ||
+    project.province ||
+    project.district ||
+    project.projectManager ||
+    project.ownerEntity ||
+    project.supervisor ||
+    project.executiveSummary
+  );
+}
+
+function ProjectAdvancedOverview({
+  project,
+}: {
+  project: NonNullable<Awaited<ReturnType<typeof getProjectOverviewById>>>;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+      <h4 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
+        <Building2 className="h-3.5 w-3.5" />
+        Datos avanzados
+      </h4>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        {project.buildingSubtype ? (
+          <InfoCard label="Subtipo" value={buildingSubtypeLabel(project.buildingSubtype) ?? ""} />
+        ) : null}
+        {project.contractType ? (
+          <InfoCard label="Contrato" value={contractTypeLabel(project.contractType) ?? ""} />
+        ) : null}
+        {project.builtArea ? (
+          <InfoCard label="Área construida" value={`${formatNumber(project.builtArea)} m²`} />
+        ) : null}
+        {project.landArea ? (
+          <InfoCard label="Área de terreno" value={`${formatNumber(project.landArea)} m²`} />
+        ) : null}
+        {project.floors != null ? (
+          <InfoCard label="Pisos" value={String(project.floors)} />
+        ) : null}
+        {project.basements != null ? (
+          <InfoCard label="Sótanos" value={String(project.basements)} />
+        ) : null}
+        {project.buildingHeight ? (
+          <InfoCard label="Altura total" value={`${formatNumber(project.buildingHeight)} m`} />
+        ) : null}
+        {project.contractAmount ? (
+          <InfoCard label="Monto contractual" value={`S/ ${formatNumber(project.contractAmount)}`} />
+        ) : null}
+        {project.referenceBudget ? (
+          <InfoCard label="Presupuesto referencial" value={`S/ ${formatNumber(project.referenceBudget)}`} />
+        ) : null}
+        {project.region ? (
+          <InfoCard label="Región" value={project.region} />
+        ) : null}
+        {project.province ? (
+          <InfoCard label="Provincia" value={project.province} />
+        ) : null}
+        {project.district ? (
+          <InfoCard label="Distrito" value={project.district} />
+        ) : null}          {project.projectManager ? (
+          <InfoCard label="Ing. Residente / PM" value={project.projectManager} />
+        ) : null}
+        {project.ownerEntity ? (
+          <InfoCard label="Entidad contratante" value={project.ownerEntity} />
+        ) : null}
+        {project.supervisor ? (
+          <InfoCard label="Supervisión" value={project.supervisor} />
+        ) : null}
+      </div>
+      {project.executiveSummary ? (
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
+            Resumen ejecutivo
+          </p>
+          <p className="text-sm leading-relaxed text-[var(--app-text-strong)]">{project.executiveSummary}</p>
+        </div>      ) : null}
+    </div>
+  );
+}
+
+function formatNumber(value: number) {
+  return value.toLocaleString("es-PE", { maximumFractionDigits: 2 });
+}
+
+

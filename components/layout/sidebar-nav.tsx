@@ -13,6 +13,7 @@ export type SidebarNavLink = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   requiredFeature?: FeatureKey;
+  requiredFeatures?: FeatureKey[];
   badge?: ReactNode;
 };
 
@@ -42,6 +43,14 @@ function getActiveGroupIds(items: SidebarNavItem[], pathname: string) {
     .filter((item): item is SidebarNavGroup => isSidebarNavGroup(item))
     .filter((item) => item.children.some((child) => isActivePath(pathname, child.href)))
     .map((item) => item.id);
+}
+
+function isLocked(requiredFeature: FeatureKey | undefined, requiredFeatures: FeatureKey[] | undefined, unlockedFeatures: FeatureKey[]) {
+  if (requiredFeatures && requiredFeatures.length > 0) {
+    return !requiredFeatures.some((feature) => unlockedFeatures.includes(feature));
+  }
+
+  return requiredFeature ? !unlockedFeatures.includes(requiredFeature) : false;
 }
 
 export function SidebarNav({
@@ -157,7 +166,7 @@ export function SidebarNav({
                     {item.children.map((child) => {
                       const ChildIcon = child.icon;
                       const childActive = isActivePath(pathname, child.href);
-                      const childLocked = child.requiredFeature ? !unlockedFeatures.includes(child.requiredFeature) : false;
+                      const childLocked = isLocked(child.requiredFeature, child.requiredFeatures, unlockedFeatures);
 
                       return (
                         <Link
@@ -189,7 +198,7 @@ export function SidebarNav({
                       {item.children.map((child) => {
                         const ChildIcon = child.icon;
                         const childActive = isActivePath(pathname, child.href);
-                        const childLocked = child.requiredFeature ? !unlockedFeatures.includes(child.requiredFeature) : false;
+                        const childLocked = isLocked(child.requiredFeature, child.requiredFeatures, unlockedFeatures);
 
                         return (
                           <Link
@@ -221,7 +230,7 @@ export function SidebarNav({
         }
 
         const active = isActivePath(pathname, item.href);
-        const locked = item.requiredFeature ? !unlockedFeatures.includes(item.requiredFeature) : false;
+        const locked = isLocked(item.requiredFeature, item.requiredFeatures, unlockedFeatures);
 
         return (
           <Link

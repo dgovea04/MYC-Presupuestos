@@ -3,7 +3,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   ArrowLeft,
-  Bot,
   Building2,
   CheckCircle2,
   AlertTriangle,
@@ -182,8 +181,8 @@ function BundleSelector({
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8">
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/20">
-          <Bot className="h-7 w-7 text-white" />
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-lg shadow-blue-500/20">
+          <KhipuSymbol className="h-14 w-14" />
         </div>
         <h2 className="text-lg font-display font-bold text-[var(--app-text-strong)]">
           Khipu Agente
@@ -278,12 +277,12 @@ function AgentChatPanel({
       {/* Header */}
       <div className="relative flex items-center gap-4 border-b border-[var(--app-border)] px-6 py-5">
         <div className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm",
+          "flex h-10 w-10 shrink-0 items-center justify-center shadow-sm",
           selectedBundle
-            ? `bg-gradient-to-br ${selectedBundle.color}`
-            : "bg-gradient-to-br from-blue-500 to-blue-600",
+            ? `rounded-xl bg-gradient-to-br text-white ${selectedBundle.color}`
+            : "overflow-hidden rounded-full bg-transparent",
         )}>
-          {selectedBundle ? <selectedBundle.icon className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
+          {selectedBundle ? <selectedBundle.icon className="h-5 w-5" /> : <KhipuSymbol className="h-10 w-10" />}
         </div>
         <div className="flex-1 pr-8">
           <div className="flex items-center gap-2.5">
@@ -373,8 +372,8 @@ function AgentChatPanel({
                 )}
               >
                 {msg.role !== "user" && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                    <Bot className="h-4 w-4" />
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full">
+                    <KhipuSymbol className="h-7 w-7" />
                   </div>
                 )}
                 <div

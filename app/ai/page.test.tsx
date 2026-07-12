@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   getActiveWorkspaceId: vi.fn(),
   getEffectiveWorkspaceLicense: vi.fn(),
+  getWorkspaceContextForUser: vi.fn(),
   hasFeatureAccess: vi.fn(),
   getUserSettings: vi.fn(),
   AppShell: ({ children }: { children: ReactNode }) => <div data-testid="app-shell">{children}</div>,
@@ -21,8 +22,8 @@ vi.mock("@/components/layout/app-shell", () => ({
   AppShell: (props: { children: ReactNode }) => mocks.AppShell(props),
 }));
 
-vi.mock("@/components/ai/AIWorkspace", () => ({
-  AIWorkspace: () => <div data-testid="ai-workspace" />,
+vi.mock("@/components/ai/KhipuWorkspace", () => ({
+  KhipuWorkspace: () => <div data-testid="khipu-workspace" />,
 }));
 
 vi.mock("@/components/billing/upgrade-cta", () => ({
@@ -40,6 +41,10 @@ vi.mock("@/lib/workspace/active-workspace", () => ({
 vi.mock("@/lib/workspace/entitlements", () => ({
   getEffectiveWorkspaceLicense: mocks.getEffectiveWorkspaceLicense,
   hasFeatureAccess: mocks.hasFeatureAccess,
+}));
+
+vi.mock("@/lib/workspace/context", () => ({
+  getWorkspaceContextForUser: mocks.getWorkspaceContextForUser,
 }));
 
 vi.mock("@/lib/data/settings", () => ({
@@ -60,11 +65,15 @@ describe("AIPage", () => {
       planSlug: "pro",
       planName: "Pro",
       role: "OWNER",
-      availableFeatures: ["ai.local", "exports.advanced"],
+      availableFeatures: ["ai.local", "khipu.agent", "exports.advanced"],
     });
     mocks.hasFeatureAccess.mockImplementation(
       (_license: unknown, feature: string) => feature === "ai.local",
     );
+    mocks.getWorkspaceContextForUser.mockResolvedValue({
+      workspace: { id: "ws-1", name: "MYC Ingenieria", logoUrl: null },
+      subscription: null,
+    });
     mocks.getUserSettings.mockResolvedValue({
       currencyDecimals: 2,
       defaultCurrency: "PEN",
@@ -87,14 +96,14 @@ describe("AIPage", () => {
 
     expect(markup).toContain("data-testid=\"upgrade-cta\"");
     expect(markup).toContain("Khipu disponible en Pro");
-    expect(markup).not.toContain("data-testid=\"ai-workspace\"");
+    expect(markup).not.toContain("data-testid=\"khipu-workspace\"");
   });
 
-  it("renders AIWorkspace when license has ai.local", async () => {
+  it("renders KhipuWorkspace when license has ai.local", async () => {
     const tree = await AIPage({ searchParams: Promise.resolve({}) });
     const markup = renderToStaticMarkup(tree);
 
-    expect(markup).toContain("data-testid=\"ai-workspace\"");
+    expect(markup).toContain("data-testid=\"khipu-workspace\"");
     expect(markup).not.toContain("data-testid=\"upgrade-cta\"");
   });
 
@@ -109,6 +118,10 @@ describe("AIPage", () => {
     expect(mocks.hasFeatureAccess).toHaveBeenCalledWith(
       expect.objectContaining({ planSlug: "pro" }),
       "ai.local",
+    );
+    expect(mocks.hasFeatureAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ planSlug: "pro" }),
+      "khipu.agent",
     );
   });
 
@@ -127,12 +140,30 @@ describe("AIPage", () => {
     });
   });
 
-  it("passes searchParams to AIWorkspace", async () => {
+  it("passes searchParams to KhipuWorkspace", async () => {
     const tree = await AIPage({
       searchParams: Promise.resolve({ action: "apu", unit: "m2" }),
     });
     const markup = renderToStaticMarkup(tree);
 
-    expect(markup).toContain("data-testid=\"ai-workspace\"");
+    expect(markup).toContain("data-testid=\"khipu-workspace\"");
+  });
+
+  it("renders KhipuWorkspace when license only has khipu.agent", async () => {
+    mocks.getEffectiveWorkspaceLicense.mockResolvedValue({
+      planSlug: "pro",
+      planName: "Pro",
+      role: "OWNER",
+      availableFeatures: ["khipu.agent"],
+    });
+    mocks.hasFeatureAccess.mockImplementation(
+      (_license: unknown, feature: string) => feature === "khipu.agent",
+    );
+
+    const tree = await AIPage({ searchParams: Promise.resolve({ mode: "agent" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain("data-testid=\"khipu-workspace\"");
+    expect(markup).not.toContain("data-testid=\"upgrade-cta\"");
   });
 });

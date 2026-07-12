@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { AIWorkspace } from "@/components/ai/AIWorkspace";
+import { KhipuWorkspace } from "@/components/ai/KhipuWorkspace";
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { getAuthSession } from "@/lib/auth/session";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getWorkspaceContextForUser } from "@/lib/workspace/context";
 import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { getUserSettings } from "@/lib/data/settings";
 
@@ -20,17 +21,23 @@ export default async function AIPage({
   const resolvedSearchParams = await searchParams;
   const settings = await getUserSettings(session.user.id);
   const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
-  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
-  if (!hasFeatureAccess(license, "ai.local")) {
+  const [license, workspaceCtx] = await Promise.all([
+    getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId }),
+    getWorkspaceContextForUser(session.user.id),
+  ]);
+  const canUseAssistant = hasFeatureAccess(license, "ai.local");
+  const canUseAgent = hasFeatureAccess(license, "khipu.agent");
+
+  if (!canUseAssistant && !canUseAgent) {
     return (
       <AppShell currentUser={session.user} settings={settings}>
         <UpgradeCTA
           title="Khipu disponible en Pro"
-          description="Activa Khipu para chat tecnico, generacion de APU, revision de presupuesto y autocompletado asistido."
+          description="Activa Khipu para chat tecnico, generacion de APU, revision de presupuesto y flujos agenticos con aprobaciones."
           benefits={[
             "Chat tecnico con contexto de obra",
             "Generacion y revision asistida de APU",
-            "Autocompletado sin enviar datos externos",
+            "Agente con herramientas, simulacion y auditoria",
           ]}
         />
       </AppShell>
@@ -38,6 +45,7 @@ export default async function AIPage({
   }
 
   const initialAction = readActionParam(readStringParam(resolvedSearchParams.action)) ?? "chat";
+  const initialMode = readModeParam(readStringParam(resolvedSearchParams.mode));
   const selectedItem = readStringParam(resolvedSearchParams.selectedItem) ?? readStringParam(resolvedSearchParams.item);
   const unit = readStringParam(resolvedSearchParams.unit) ?? readStringParam(resolvedSearchParams.apuUnit);
   const initialContext = {
@@ -51,7 +59,9 @@ export default async function AIPage({
 
   return (
     <AppShell currentUser={session.user} settings={settings}>
-      <AIWorkspace
+      <KhipuWorkspace
+        availableFeatures={license?.availableFeatures ?? []}
+        initialMode={initialMode}
         initialAction={initialAction}
         initialContext={initialContext}
         initialChatMessage={readStringParam(resolvedSearchParams.message) ?? "Genera recomendaciones para revisar este APU."}
@@ -62,6 +72,8 @@ export default async function AIPage({
           "Partida 01.02 Concreto f'c=210 m3 S/ 420. Partida 01.03 Concreto f'c=210 m2 S/ 415."
         }
         initialAutocompleteInput={readStringParam(resolvedSearchParams.input) ?? "Excavacion manual en"}
+        workspaceId={activeWorkspaceId ?? undefined}
+        workspaceName={workspaceCtx?.workspace.name ?? undefined}
       />
     </AppShell>
   );
@@ -79,6 +91,14 @@ function readNumericParam(value: string | undefined) {
 
 function readActionParam(value: string | undefined) {
   if (value === "chat" || value === "apu" || value === "review" || value === "autocomplete") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function readModeParam(value: string | undefined) {
+  if (value === "assistant" || value === "agent" || value === "metrics") {
     return value;
   }
 
