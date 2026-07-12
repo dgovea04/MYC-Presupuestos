@@ -95,8 +95,77 @@ vi.mock("@/lib/ai/agent/tools", () => ({
 }));
 
 // Must import after mocks
-import { executeAgentProvider } from "@/lib/ai/gateway/providers/agent-provider";
-import type { AiProviderRequest } from "@/lib/ai/gateway/types";
+import { executeAgentProvider, taskToExecutionMode } from "@/lib/ai/gateway/providers/agent-provider";
+import type { AiProviderRequest, KhipuAiTask } from "@/lib/ai/gateway/types";
+
+// ─── taskToExecutionMode unit tests ──────────────────────────────────────────
+
+describe("taskToExecutionMode", () => {
+  // ─── Conversational tasks → "chat" mode ───────────────────────────────────
+
+  describe("conversational tasks return 'chat'", () => {
+    it("maps 'chat' to 'chat' mode", () => {
+      expect(taskToExecutionMode("chat")).toBe("chat");
+    });
+
+    it("maps 'autocomplete' to 'chat' mode", () => {
+      expect(taskToExecutionMode("autocomplete")).toBe("chat");
+    });
+  });
+
+  // ─── Goal-oriented tasks → "goal" mode ───────────────────────────────────
+
+  describe("goal-oriented tasks return 'goal'", () => {
+    const goalTasks = [
+      "review_apu",
+      "generate_apu",
+      "suggest_insumos",
+      "review_budget",
+      "generate_partida",
+      "review_formula_polinomica",
+      "review_quantity_takeoff",
+      "montecarlo_risk_analysis",
+    ] as const;
+
+    for (const task of goalTasks) {
+      it(`maps '${task}' to 'goal' mode`, () => {
+        expect(taskToExecutionMode(task)).toBe("goal");
+      });
+    }
+  });
+
+  // ─── Exhaustiveness: all 10 KhipuAiTask values are covered ───────────────
+
+  it("covers all KhipuAiTask values without returning undefined or throwing", () => {
+    const allTasks = [
+      "chat",
+      "autocomplete",
+      "review_apu",
+      "generate_apu",
+      "suggest_insumos",
+      "review_budget",
+      "generate_partida",
+      "review_formula_polinomica",
+      "review_quantity_takeoff",
+      "montecarlo_risk_analysis",
+    ] as const;
+
+    expect(allTasks).toHaveLength(10);
+
+    for (const task of allTasks) {
+      const mode = taskToExecutionMode(task);
+      expect(["chat", "goal"]).toContain(mode);
+    }
+  });
+
+  // ─── Default behavior for unknown/future tasks ────────────────────────────
+
+  it("defaults to 'goal' for unknown task strings (future-proof)", () => {
+    // Use a type assertion to simulate an unknown future task value
+    const unknownTask = "future_task_type" as unknown as KhipuAiTask;
+    expect(taskToExecutionMode(unknownTask)).toBe("goal");
+  });
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

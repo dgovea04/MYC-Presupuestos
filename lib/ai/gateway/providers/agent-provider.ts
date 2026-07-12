@@ -23,7 +23,7 @@ const MAX_AGENT_LOOP_ITERATIONS = 5;
  * - Cualquier otra tarea (generate_apu, review_budget, etc.) → modo "goal"
  *   (herramientas write requieren aprobación del usuario)
  */
-function taskToExecutionMode(task: KhipuAiTask): AgentExecutionMode {
+export function taskToExecutionMode(task: KhipuAiTask): AgentExecutionMode {
   if (task === "chat" || task === "autocomplete") return "chat";
   return "goal";
 }
