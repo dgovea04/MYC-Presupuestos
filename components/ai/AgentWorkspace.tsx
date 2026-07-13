@@ -257,6 +257,9 @@ function AgentChatPanel({
   fallbackChatMessage,
   onConfirmProceed,
   onCancelProceed,
+  showPostCreateConfirmation,
+  onPostCreateConfirm,
+  onPostCreateCancel,
 }: {
   objective: string;
   setObjective: (v: string) => void;
@@ -271,6 +274,9 @@ function AgentChatPanel({
   fallbackChatMessage?: string | null;
   onConfirmProceed: () => void;
   onCancelProceed: () => void;
+  showPostCreateConfirmation: boolean;
+  onPostCreateConfirm: () => void;
+  onPostCreateCancel: () => void;
 }) {
   return (
     <div className="flex h-full flex-col">
@@ -418,6 +424,32 @@ function AgentChatPanel({
                     >
                       <XCircle className="h-3.5 w-3.5" />
                       Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Post-createProject budget confirmation buttons */}
+            {showPostCreateConfirmation && (
+              <div className="flex justify-start gap-2">
+                <div className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50/60 px-4 py-3 shadow-sm">
+                  <span className="text-xs font-medium text-blue-800">¿Generar presupuesto para este proyecto?</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={onPostCreateConfirm}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97]"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Sí, generar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onPostCreateCancel}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 active:scale-[0.97]"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      No, solo proyecto
                     </button>
                   </div>
                 </div>
@@ -1033,6 +1065,7 @@ export function AgentWorkspace({
   } | null>(null);
   const [forcefulCommandSent, setForcefulCommandSent] = useState(false);
   const fallbackTriggeredRef = useRef(false);
+  const postCreateDismissedRef = useRef(false);
 
   const {
     status,
@@ -1055,6 +1088,23 @@ export function AgentWorkspace({
     streamExec.toolActivity.length > 0 &&
     streamExec.toolActivity.some(
       (a) => a.toolName === "previewBudgetGeneration" && a.success === true,
+    ) &&
+    !streamExec.toolActivity.some(
+      (a) => a.toolName === "generateBudget",
+    );
+
+  // ── Detectar post-createProject: proyecto creado pero sin presupuesto ──
+  const showPostCreateConfirmation =
+    !streaming &&
+    status === "done" &&
+    fallbackStatus === "idle" &&
+    !postCreateDismissedRef.current &&
+    streamExec.toolActivity.length > 0 &&
+    streamExec.toolActivity.some(
+      (a) => a.toolName === "createProject" && a.success === true,
+    ) &&
+    !streamExec.toolActivity.some(
+      (a) => a.toolName === "previewBudgetGeneration",
     ) &&
     !streamExec.toolActivity.some(
       (a) => a.toolName === "generateBudget",
@@ -1184,6 +1234,7 @@ export function AgentWorkspace({
       setFallbackStatus("idle");
       setFallbackActivity(null);
       fallbackTriggeredRef.current = false;
+      postCreateDismissedRef.current = false;
       setForcefulCommandSent(false);
     }
   }, [status]);
@@ -1234,6 +1285,51 @@ export function AgentWorkspace({
       messages: [
         ...messages.map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: "No por ahora. Cancela la generación del presupuesto." },
+      ],
+      projectId,
+      workspaceId,
+      mode: selectedBundleSlug ? "workflow" : "goal",
+      workflowId: selectedBundleSlug ?? undefined,
+      skipMessageAdd: true,
+    });
+  }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
+
+  // ── Post-createProject: confirmar si quiere generar presupuesto ────────
+  const handlePostCreateConfirm = useCallback(() => {
+    if (loading || streaming) return;
+
+    const forcefulCommand =
+      "¡SÍ! CONFIRMADO. Quiero generar el presupuesto para el proyecto recién creado. " +
+      "EJECUTA previewBudgetGeneration AHORA MISMO usando el proyecto que acabas de crear con createProject. " +
+      "NO generes texto de respuesta. NO preguntes de nuevo. " +
+      "LLAMA previewBudgetGeneration INMEDIATAMENTE.";
+
+    setObjective("");
+    connect({
+      message: forcefulCommand,
+      displayMessage: "Sí, generar presupuesto",
+      messages: [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: forcefulCommand },
+      ],
+      projectId,
+      workspaceId,
+      mode: selectedBundleSlug ? "workflow" : "goal",
+      workflowId: selectedBundleSlug ?? undefined,
+      skipMessageAdd: true,
+    });
+  }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
+
+  const handlePostCreateCancel = useCallback(() => {
+    if (loading || streaming) return;
+    postCreateDismissedRef.current = true;
+    setObjective("");
+    connect({
+      message: "No quiero generar presupuesto ahora. El proyecto vacío es suficiente. Confirma que el proyecto fue creado exitosamente y espera instrucciones.",
+      displayMessage: "No, solo el proyecto",
+      messages: [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: "No quiero generar presupuesto ahora. El proyecto vacío es suficiente. Confirma que el proyecto fue creado exitosamente y espera instrucciones." },
       ],
       projectId,
       workspaceId,
@@ -1301,6 +1397,9 @@ export function AgentWorkspace({
           fallbackChatMessage={fallbackChatMessage}
           onConfirmProceed={handleConfirmProceed}
           onCancelProceed={handleCancelProceed}
+          showPostCreateConfirmation={showPostCreateConfirmation}
+          onPostCreateConfirm={handlePostCreateConfirm}
+          onPostCreateCancel={handlePostCreateCancel}
         />
       </div>
 
