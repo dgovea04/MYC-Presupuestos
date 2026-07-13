@@ -151,11 +151,13 @@ describe("buildProjectNamedFlow", () => {
     expect(result).toContain("NO esperes. NO preguntes. EJECUTA");
   });
 
-  it("includes GENERAR PRESUPUESTO 2-step flow", () => {
+  it("includes GENERAR PRESUPUESTO 2-step flow with STOP after generate", () => {
     const result = buildProjectNamedFlow("San Felipe", "cmri-123");
     expect(result).toContain("GENERAR PRESUPUESTO");
     expect(result).toContain("VISTA PREVIA");
     expect(result).toContain("generateBudget");
+    expect(result).toContain("DESPUÉS DE GENERAR");
+    expect(result).toContain("NO llames calculateBudget");
   });
 });
 
@@ -175,11 +177,13 @@ describe("buildProjectUnnamedFlow", () => {
     expect(result).toContain("CREAR PROYECTO NUEVO");
   });
 
-  it("includes GENERAR PRESUPUESTO 2-step flow", () => {
+  it("includes GENERAR PRESUPUESTO 2-step flow with STOP after generate", () => {
     const result = buildProjectUnnamedFlow();
     expect(result).toContain("GENERAR PRESUPUESTO");
     expect(result).toContain("VISTA PREVIA");
     expect(result).toContain("generateBudget INMEDIATAMENTE");
+    expect(result).toContain("DESPUÉS DE GENERAR");
+    expect(result).toContain("NO llames calculateBudget");
   });
 
   it("includes REGLAS IMPORTANTES", () => {
