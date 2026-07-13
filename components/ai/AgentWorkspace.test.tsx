@@ -1411,4 +1411,228 @@ describe("AgentWorkspace", () => {
       expect(callArgs.message).not.toContain("Confirmado. Procede.");
     });
   });
+
+  // ─── Post-createProject confirmation buttons (Sí, generar / No, solo proyecto) ─
+
+  describe("post-createProject confirmation buttons", () => {
+    const postCreateState = {
+      ...makeDefaultHookReturn(),
+      status: "done" as const,
+      messages: [
+        { role: "user" as const, content: "Crea proyecto San Felipe" },
+        { role: "assistant" as const, content: "Proyecto 'San Felipe' creado exitosamente (ID: cmv5h1234...). ¿Quieres que genere el presupuesto ahora?" },
+      ],
+      execution: {
+        executionId: "exec-1",
+        state: "EXECUTED" as const,
+        summary: "Proyecto creado exitosamente",
+        pendingApproval: null,
+        toolActivity: [
+          { toolName: "createProject", success: true, latencyMs: 350, summary: "Proyecto \"San Felipe\" creado exitosamente (ID: cmv5h1234...)" },
+        ],
+        warnings: [],
+        latencyMs: 350,
+      },
+    };
+
+    it("does NOT show post-create buttons when idle (no tool activity)", () => {
+      mockUseAgentStream.mockReturnValue(makeDefaultHookReturn() as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+      expect(screen.queryByText("Sí, generar")).toBeNull();
+      expect(screen.queryByText("No, solo proyecto")).toBeNull();
+    });
+
+    it("shows post-create confirmation buttons when createProject succeeded", () => {
+      mockUseAgentStream.mockReturnValue(postCreateState as unknown as ReturnType<typeof useAgentStream>);
+      render(<AgentWorkspace />);
+
+      expect(screen.getByText("¿Generar presupuesto para este proyecto?")).toBeTruthy();
+      expect(screen.getByText("Sí, generar")).toBeTruthy();
+      expect(screen.getByText("No, solo proyecto")).toBeTruthy();
+    });
+
+    it("does NOT show post-create buttons when previewBudgetGeneration already ran", () => {
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        execution: {
+          ...postCreateState.execution,
+          toolActivity: [
+            { toolName: "createProject", success: true, latencyMs: 350, summary: "Proyecto creado" },
+            { toolName: "previewBudgetGeneration", success: true, latencyMs: 500, summary: "Vista previa" },
+          ],
+        },
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+    });
+
+    it("does NOT show post-create buttons when generateBudget already ran", () => {
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        execution: {
+          ...postCreateState.execution,
+          toolActivity: [
+            { toolName: "createProject", success: true, latencyMs: 350, summary: "Proyecto creado" },
+            { toolName: "generateBudget", success: true, latencyMs: 2000, summary: "Generado" },
+          ],
+        },
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+    });
+
+    it("does NOT show post-create buttons while streaming", () => {
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        status: "streaming",
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+    });
+
+    it("does NOT show post-create buttons when createProject failed", () => {
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        execution: {
+          ...postCreateState.execution,
+          toolActivity: [
+            { toolName: "createProject", success: false, latencyMs: 350, summary: "Error: nombre requerido" },
+          ],
+        },
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+    });
+
+    it("calls connect with displayMessage 'Sí, generar presupuesto' and skipMessageAdd when 'Sí, generar' is clicked", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("Sí, generar"));
+
+      expect(connect).toHaveBeenCalledTimes(1);
+      const callArgs = connect.mock.calls[0][0];
+
+      // El comando interno debe pedir previewBudgetGeneration
+      expect(callArgs.message).toContain("EJECUTA previewBudgetGeneration");
+      expect(callArgs.message).toContain("LLAMA previewBudgetGeneration INMEDIATAMENTE");
+
+      // Debe mostrar "Sí, generar presupuesto" en la UI
+      expect(callArgs.displayMessage).toBe("Sí, generar presupuesto");
+
+      // No debe agregar el mensaje automáticamente
+      expect(callArgs.skipMessageAdd).toBe(true);
+
+      // El messages array debe incluir el comando interno
+      const lastMsg = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMsg.role).toBe("user");
+      expect(lastMsg.content).toBe(callArgs.message);
+    });
+
+    it("calls connect with displayMessage 'No, solo el proyecto' and skipMessageAdd when 'No, solo proyecto' is clicked", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      render(<AgentWorkspace />);
+
+      await userEvent.click(screen.getByText("No, solo proyecto"));
+
+      expect(connect).toHaveBeenCalledTimes(1);
+      const callArgs = connect.mock.calls[0][0];
+
+      expect(callArgs.displayMessage).toBe("No, solo el proyecto");
+      expect(callArgs.message).toContain("No quiero generar presupuesto ahora");
+      expect(callArgs.message).toContain("El proyecto vacío es suficiente");
+      expect(callArgs.skipMessageAdd).toBe(true);
+
+      const lastMsg = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMsg.role).toBe("user");
+      expect(lastMsg.content).toContain("No quiero generar presupuesto ahora");
+    });
+
+    it("hides post-create buttons after 'No, solo proyecto' is clicked (dismissed ref prevents re-appearance)", async () => {
+      const connect = vi.fn();
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      const { rerender } = render(<AgentWorkspace />);
+
+      // Los botones aparecen inicialmente
+      expect(screen.getByText("Sí, generar")).toBeTruthy();
+
+      // Clic en "No, solo proyecto"
+      await userEvent.click(screen.getByText("No, solo proyecto"));
+
+      // Ahora simulamos que el estado cambia: el stream se reinicia
+      // y vuelve a "done" (porque el modelo respondió).
+      // El dismissed ref debe evitar que los botones reaparezcan.
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      rerender(<AgentWorkspace />);
+
+      // Los botones NO deben reaparecer
+      expect(screen.queryByText("Sí, generar")).toBeNull();
+      expect(screen.queryByText("No, solo proyecto")).toBeNull();
+      expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+    });
+
+    it("dismissed ref persists across stream cycles — buttons stay hidden after No", async () => {
+      const connect = vi.fn();
+
+      // Estado inicial: post-create visible
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+
+      const { rerender } = render(<AgentWorkspace />);
+
+      expect(screen.getByText("Sí, generar")).toBeTruthy();
+
+      // Clic en "No" → dismissed ref = true
+      await userEvent.click(screen.getByText("No, solo proyecto"));
+
+      // Simular nuevo stream (connecting → el useEffect ya NO resetea el ref)
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        status: "connecting",
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+      rerender(<AgentWorkspace />);
+
+      // Simular que el stream termina de nuevo en "done"
+      mockUseAgentStream.mockReturnValue({
+        ...postCreateState,
+        connect,
+      } as unknown as ReturnType<typeof useAgentStream>);
+      rerender(<AgentWorkspace />);
+
+      // Los botones NO deben reaparecer porque el dismissed ref persiste
+      expect(screen.queryByText("Sí, generar")).toBeNull();
+      expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+    });
+  });
 });

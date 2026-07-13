@@ -1066,6 +1066,7 @@ export function AgentWorkspace({
   const [forcefulCommandSent, setForcefulCommandSent] = useState(false);
   const fallbackTriggeredRef = useRef(false);
   const postCreateDismissedRef = useRef(false);
+  const prevCreateProjectCountRef = useRef(0);
 
   const {
     status,
@@ -1234,10 +1235,20 @@ export function AgentWorkspace({
       setFallbackStatus("idle");
       setFallbackActivity(null);
       fallbackTriggeredRef.current = false;
-      postCreateDismissedRef.current = false;
       setForcefulCommandSent(false);
     }
   }, [status]);
+
+  // ── Resetear dismissed ref cuando se ejecuta un nuevo createProject ──
+  useEffect(() => {
+    const createProjectCount = streamExec.toolActivity.filter(
+      (a) => a.toolName === "createProject" && a.success === true,
+    ).length;
+    if (createProjectCount > prevCreateProjectCountRef.current) {
+      postCreateDismissedRef.current = false;
+    }
+    prevCreateProjectCountRef.current = createProjectCount;
+  }, [streamExec.toolActivity]);
 
   const handleConfirmProceed = useCallback(() => {
     if (loading || streaming) return;

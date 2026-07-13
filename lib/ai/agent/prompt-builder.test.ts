@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAgentSystemPrompt,
+  buildDataAvailabilityPreamble,
   buildIdentitySection,
   buildWorkspaceSection,
   buildRecentProjectsSection,
@@ -30,12 +31,39 @@ function makeIntent(overrides: Partial<AgentIntent> = {}): AgentIntent {
 
 // ─── Section tests ──────────────────────────────────────────────────────────
 
+describe("buildDataAvailabilityPreamble", () => {
+  it("tells the model projects are already listed", () => {
+    const result = buildDataAvailabilityPreamble();
+    expect(result).toContain("INFORMACIÓN YA DISPONIBLE");
+    expect(result).toContain("NO LLAMES HERRAMIENTAS PARA OBTENERLA DE NUEVO");
+    expect(result).toContain("PROYECTOS DISPONIBLES");
+  });
+
+  it("explicitly bans searchProjects with empty query", () => {
+    const result = buildDataAvailabilityPreamble();
+    expect(result).toContain("NUNCA llames searchProjects con query vacío");
+    expect(result).toContain("NO llames searchProjects a menos que");
+  });
+
+  it("tells the model not to call searchCompanies for workspace", () => {
+    const result = buildDataAvailabilityPreamble();
+    expect(result).toContain("NO llames searchCompanies para preguntar");
+  });
+
+  it("tells model to check prompt before calling any search tool", () => {
+    const result = buildDataAvailabilityPreamble();
+    expect(result).toContain("VERIFICA si la información ya está en este mismo prompt");
+    expect(result).toContain("NO busques lo que ya tienes");
+  });
+});
+
 describe("buildIdentitySection", () => {
-  it("returns the Khipu identity", () => {
+  it("returns the Khipu identity without encouraging tool calls", () => {
     const result = buildIdentitySection();
     expect(result).toContain("Khipu");
     expect(result).toContain("asistente técnico de construcción");
     expect(result).toContain("presupuestos de obra en Perú");
+    expect(result).not.toContain("Siempre usa herramientas");
   });
 });
 
@@ -107,7 +135,7 @@ describe("buildProjectCreationFlowSection", () => {
     expect(result).toContain("LLAMA createProject");
     expect(result).toContain("INMEDIATAMENTE");
     expect(result).toContain("REGLA DE ORO");
-    expect(result).toContain("NO llames herramientas inmediatamente");
+    expect(result).toContain("NO llames NINGUNA herramienta");
   });
 
   it("includes PROYECTO EXISTENTE flow", () => {
@@ -174,7 +202,8 @@ describe("buildIntentSection", () => {
   it("includes intent-specific rules for preview", () => {
     const result = buildIntentSection(makeIntent({ type: "preview_budget_generation" }));
     expect(result).toContain("previewBudgetGeneration");
-    expect(result).toContain("NO llames generateBudget");
+    expect(result).toContain("NO llames previewBudgetGeneration");
+    expect(result).toContain("nuevo o existente");
   });
 
   it("includes intent-specific rules for apply", () => {
@@ -192,7 +221,8 @@ describe("buildToolRulesSection", () => {
   it("includes tool restrictions for preview", () => {
     const result = buildToolRulesSection(makeIntent({ type: "preview_budget_generation" }));
     expect(result).toContain("previewBudgetGeneration");
-    expect(result).toContain("NUNCA llames generateBudget");
+    expect(result).toContain("NUNCA");
+    expect(result).toContain("searchProjects ni generateBudget");
   });
 
   it("includes tool restrictions for apply", () => {

@@ -34,6 +34,7 @@ export type AgentPromptContext = {
  *
  * Cada sección es una función independiente y testeable por separado.
  * El orden de las secciones está optimizado para que el modelo priorice:
+ * 0. Datos ya disponibles (anti-redundancia)
  * 1. Identidad y rol
  * 2. Contexto del workspace
  * 3. Proyectos disponibles
@@ -47,6 +48,7 @@ export type AgentPromptContext = {
  */
 export function buildAgentSystemPrompt(context: AgentPromptContext): string {
   const sections: string[] = [
+    buildDataAvailabilityPreamble(),
     buildIdentitySection(),
     buildWorkspaceSection(context.workspace),
     buildRecentProjectsSection(context.recentProjects),
@@ -65,13 +67,34 @@ export function buildAgentSystemPrompt(context: AgentPromptContext): string {
 // ─── Section builders ───────────────────────────────────────────────────────
 
 /**
+ * Sección 0: Datos ya disponibles — anti-redundancia.
+ *
+ * Debe ser LO PRIMERO que el modelo lee. Le indica explícitamente qué
+ * información YA tiene en el prompt para que no llame herramientas
+ * de búsqueda innecesariamente.
+ */
+export function buildDataAvailabilityPreamble(): string {
+  return [
+    "⚠️ INFORMACIÓN YA DISPONIBLE — NO LLAMES HERRAMIENTAS PARA OBTENERLA DE NUEVO:",
+    "",
+    "• PROYECTOS: Si existe la sección PROYECTOS DISPONIBLES más abajo, la lista completa de proyectos del usuario con sus IDs ya está ahí.",
+    "  NO llames searchProjects a menos que el proyecto que busca el usuario NO aparezca en esa lista.",
+    "  NUNCA llames searchProjects con query vacío. Si no hay sección PROYECTOS DISPONIBLES, pregunta al usuario si quiere crear un proyecto nuevo.",
+    "",
+    "• EMPRESA/WORKSPACE: Si existe la sección WORKSPACE ACTUAL, el companyId ya está configurado.",
+    "  NO llames searchCompanies para preguntar qué empresa usar.",
+    "",
+    "• REGLA: Antes de llamar CUALQUIER herramienta de búsqueda (searchProjects, searchCompanies, searchBudgets), VERIFICA si la información ya está en este mismo prompt. Si ya la tienes, USA los datos directamente. NO busques lo que ya tienes.",
+  ].join("\n");
+}
+
+/**
  * Sección 1: Identidad Khipu.
  */
 export function buildIdentitySection(): string {
   return [
     "Eres Khipu, un asistente técnico de construcción y presupuestos de obra en Perú.",
     "Ayudas a ingenieros y contratistas con presupuestos, APU, cronogramas, metrados y reportes.",
-    "Siempre usa herramientas cuando necesites datos concretos del proyecto.",
   ].join("\n");
 }
 
@@ -151,8 +174,9 @@ export function buildProjectCreationFlowSection(): string {
     "⚠️ REGLA DE ORO: Cuando el usuario pide 'crear presupuesto' o 'generar presupuesto', NO llames herramientas inmediatamente. PRIMERO determina si es proyecto nuevo o existente. PREGUNTA antes de actuar.",
     "",
     "CREAR PROYECTO NUEVO:",
-    "1. El usuario pide crear proyecto/presupuesto → si no especifica el proyecto, pregúntale PRIMERO: '¿Quieres usar un proyecto existente o crear uno nuevo?'.",
-    "   ⛔ NO llames searchProjects, previewBudgetGeneration ni generateBudget antes de hacer esta pregunta.",
+    "1. El usuario pide 'crear presupuesto' o 'crear proyecto' → tu ÚNICA respuesta debe ser preguntar: '¿Quieres usar un proyecto existente o crear uno nuevo?'.",
+    "   ⛔ NO llames NINGUNA herramienta. NO listes proyectos. NO uses searchProjects. SOLO haz la pregunta.",
+    "   ⛔ Aunque veas PROYECTOS DISPONIBLES en este prompt, NO los muestres todavía. El usuario debe elegir primero.",
     "2. El usuario responde 'nuevo' (o similar) → pregúntale: ¿cuál es el nombre del proyecto?",
     "3. El usuario da el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
     "   • No preguntes por location, clientName, projectType ni fechas (son opcionales).",
@@ -315,11 +339,10 @@ function getIntentRules(intentType: string): string[] {
   switch (intentType) {
     case "preview_budget_generation":
       return [
-        "OBJETIVO: Generar vista previa del presupuesto.",
-        "Herramienta preferida: previewBudgetGeneration.",
-        "NO llames generateBudget en este turno.",
-        "Después del preview, resume: fuente recomendada, score, conteos y advertencias.",
-        "Pregunta al usuario si desea proceder con la generación.",
+        "OBJETIVO: El usuario quiere crear un presupuesto.",
+        "⛔ Si aún no tienes un projectId confirmado, NO llames previewBudgetGeneration, searchProjects ni generateBudget.",
+        "PRIMERO determina si es proyecto nuevo o existente. PREGUNTA '¿nuevo o existente?'.",
+        "SOLO después de tener un projectId confirmado, puedes llamar previewBudgetGeneration.",
       ];
     case "apply_budget_generation":
       return [
@@ -381,8 +404,9 @@ function getToolRulesForIntent(intentType: string): string[] {
   switch (intentType) {
     case "preview_budget_generation":
       return [
-        "- Solo puedes usar: previewBudgetGeneration, createBudgetGeneral, searchProjects.",
-        "- NUNCA llames generateBudget. Es solo lectura.",
+        "- NO llames herramientas en el primer turno. PRIMERO pregunta '¿nuevo o existente?'.",
+        "- Solo después de confirmar projectId puedes usar: previewBudgetGeneration, createBudgetGeneral.",
+        "- NUNCA llames searchProjects ni generateBudget.",
       ];
     case "apply_budget_generation":
       return [
