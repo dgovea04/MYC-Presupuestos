@@ -106,6 +106,8 @@ describe("buildProjectCreationFlowSection", () => {
     expect(result).toContain("CREAR PROYECTO NUEVO");
     expect(result).toContain("LLAMA createProject");
     expect(result).toContain("INMEDIATAMENTE");
+    expect(result).toContain("REGLA DE ORO");
+    expect(result).toContain("NO llames herramientas inmediatamente");
   });
 
   it("includes PROYECTO EXISTENTE flow", () => {
@@ -127,8 +129,9 @@ describe("buildProjectCreationFlowSection", () => {
   it("includes REGLAS IMPORTANTES", () => {
     const result = buildProjectCreationFlowSection();
     expect(result).toContain("REGLAS IMPORTANTES");
-    expect(result).toContain("NUNCA llames searchProjects() sin pasar el parámetro query");
+    expect(result).toContain("NUNCA llames searchProjects con query vacío");
     expect(result).toContain("2 veces");
+    expect(result).toContain("NO llames previewBudgetGeneration ni generateBudget sin tener un projectId");
   });
 
   it("tells the model not to ask for optional fields", () => {
@@ -238,7 +241,7 @@ describe("buildConfirmationSection", () => {
 describe("buildSecuritySection", () => {
   it("includes key rules", () => {
     const result = buildSecuritySection();
-    expect(result).toContain("NUNCA llames searchProjects() sin pasar el parámetro query");
+    expect(result).toContain("NUNCA llames searchProjects con query vacío");
     expect(result).toContain("NO uses searchCompanies si ya tienes el companyId");
     expect(result).toContain("previewBudgetGeneration antes de generateBudget");
     expect(result).toContain("No dupliques Presupuesto General");
