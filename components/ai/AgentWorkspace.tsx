@@ -1120,8 +1120,11 @@ export function AgentWorkspace({
     setObjective("");
     connect({
       message: obj.trim(),
-      // Enviar historial completo para mantener contexto entre turnos
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      // Enviar historial completo + el mensaje actual para mantener contexto
+      messages: [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: obj.trim() },
+      ],
       projectId,
       workspaceId,
       mode: selectedBundleSlug ? "workflow" : "goal",

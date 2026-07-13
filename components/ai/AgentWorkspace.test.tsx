@@ -274,7 +274,7 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto",
-        messages: [],
+        messages: [{ role: "user", content: "Crear presupuesto" }],
         projectId: undefined,
         workspaceId: undefined,
         mode: "workflow",
@@ -300,7 +300,7 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto",
-        messages: [],
+        messages: [{ role: "user", content: "Crear presupuesto" }],
         projectId: undefined,
         workspaceId: undefined,
         mode: "goal",
@@ -337,7 +337,7 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto para hospital",
-        messages: [],
+        messages: [{ role: "user", content: "Crear presupuesto para hospital" }],
         projectId: undefined,
         workspaceId: undefined,
         mode: "goal",
@@ -362,7 +362,7 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto para vivienda",
-        messages: [],
+        messages: [{ role: "user", content: "Crear presupuesto para vivienda" }],
         projectId: undefined,
         workspaceId: undefined,
         mode: "workflow",
@@ -664,7 +664,7 @@ describe("AgentWorkspace", () => {
 
       expect(connect).toHaveBeenCalledWith({
         message: "Crear presupuesto para hospital",
-        messages: [],
+        messages: [{ role: "user", content: "Crear presupuesto para hospital" }],
         projectId: "project-99",
         workspaceId: undefined,
         mode: "goal",
