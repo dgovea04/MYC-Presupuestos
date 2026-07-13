@@ -206,13 +206,58 @@ describe("SavedPresetChip", () => {
     expect(onApply).toHaveBeenCalledWith(basePreset);
   });
 
-  it("calls onDelete with the preset id when clicking delete", async () => {
-    const onDelete = vi.fn();
-    const { getDeleteButton } = await renderChip({ onDelete });
+  it("opens the delete confirmation dialog when clicking delete", async () => {
+    const { getDeleteButton } = await renderChip();
+
+    expect(document.body.textContent).not.toContain("Eliminar preset");
+
     await act(async () => {
       getDeleteButton().click();
     });
+
+    expect(document.body.textContent).toContain("Eliminar preset");
+    expect(document.body.textContent).toContain("Ene-Mar 2026");
+    expect(document.body.textContent).toContain("Cancelar");
+  });
+
+  it("closes the delete dialog when clicking Cancelar", async () => {
+    const { getDeleteButton } = await renderChip();
+
+    await act(async () => {
+      getDeleteButton().click();
+    });
+
+    expect(document.body.textContent).toContain("Eliminar preset");
+
+    await act(async () => {
+      const cancelButton = Array.from(document.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "Cancelar",
+      );
+      cancelButton?.click();
+    });
+
+    expect(document.body.textContent).not.toContain("Eliminar preset");
+  });
+
+  it("calls onDelete with the preset id when confirming in the dialog", async () => {
+    const onDelete = vi.fn();
+    const { getDeleteButton } = await renderChip({ onDelete });
+
+    await act(async () => {
+      getDeleteButton().click();
+    });
+
+    expect(document.body.textContent).toContain("Eliminar preset");
+
+    await act(async () => {
+      const confirmButton = Array.from(document.querySelectorAll("button")).find(
+        (b) => b.textContent?.includes("Eliminar preset"),
+      );
+      confirmButton?.click();
+    });
+
     expect(onDelete).toHaveBeenCalledWith("preset-1");
+    expect(document.body.textContent).not.toContain("Eliminar preset");
   });
 
   describe("drag & drop callbacks", () => {

@@ -1,8 +1,12 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import { motion } from "framer-motion";
-import { Bookmark, GripVertical, Trash2 } from "lucide-react";
+import { AlertTriangle, Bookmark, GripVertical, Trash2, X } from "lucide-react";
+import { useState } from "react";
 import type React from "react";
+
+import { Button } from "@/components/ui/button";
 
 import type { DatePreset } from "@/lib/resumen-date-presets";
 
@@ -61,9 +65,11 @@ export function SavedPresetChip({
   const shortcutIndex = showDefaults ? index + 5 : index + 1;
   const isDragging = dragIndex === index;
   const isDropTarget = dropTargetIndex === index;
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
-    <motion.div
+    <>
+      <motion.div
       layout
       transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
       draggable="true"
@@ -136,7 +142,7 @@ export function SavedPresetChip({
 
       <button
         type="button"
-        onClick={() => onDelete(preset.id)}
+        onClick={() => setDeleteOpen(true)}
         className="ml-0.5 rounded p-0.5 text-slate-300 opacity-0 transition hover:bg-slate-200 hover:text-slate-500 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
         aria-label={`Eliminar preset "${preset.name}"`}
         title="Eliminar preset"
@@ -144,5 +150,59 @@ export function SavedPresetChip({
         <Trash2 className="h-3 w-3" />
       </button>
     </motion.div>
+
+      <Dialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,380px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title className="text-base font-semibold text-[var(--app-text-strong)]">
+                  Eliminar preset
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">
+                  Se eliminara el preset <span className="font-medium text-[var(--app-text)]">{preset.name}</span>.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <p className="flex items-start gap-2 text-sm text-rose-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                El preset se eliminara de forma permanente.
+              </p>
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">
+                  Cancelar
+                </Button>
+              </Dialog.Close>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  onDelete(preset.id);
+                  setDeleteOpen(false);
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Eliminar preset
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }

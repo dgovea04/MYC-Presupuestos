@@ -1,7 +1,8 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { AlertTriangle, Loader2, Plus, Trash2, X } from "lucide-react";
 import type { ResourceCategory, ResourcePatchFields, ResourcePatchResult, ResourceRecord, ResourceStatePatch } from "@/types/resource";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
@@ -392,7 +393,6 @@ export function ResourcesTable({
     }
 
     setPendingIds((current) => [...current, id]);
-    setError("");
 
     try {
       const response = await fetch("/api/resources", {
@@ -413,8 +413,6 @@ export function ResourcesTable({
       const result = (await response.json()) as ResourcePatchResult;
       reconcilePatchResult(result);
       updateLastSavedAt(result.savedAt);
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "No se pudo eliminar el insumo");
     } finally {
       setPendingIds((current) => current.filter((resourceId) => resourceId !== id));
     }
@@ -710,6 +708,23 @@ const ResourceTableRow = memo(function ResourceTableRow({
   onDuplicateRow: (resource: EditableResource) => Promise<void>;
   onRemoveRow: (id: string) => Promise<void>;
 }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await onRemoveRow(resource.id);
+      setDeleteOpen(false);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "No se pudo eliminar el insumo");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const isOwned = !!resource.companyId || resource.isNew;
   const canEditIuCurrent = isOwned || isAutocreatedApuResource(resource);
   const canEditCatalogFields = isOwned;
@@ -731,8 +746,9 @@ const ResourceTableRow = memo(function ResourceTableRow({
   const remainingIuSuggestionsCount = Math.max(0, iuSuggestions.length - 1);
 
   return (
-    <TR
-      ref={rowRef}
+    <>
+      <TR
+        ref={rowRef}
       className={cn(
         resource.isNew && "theme-status-success-row",
         resource.isDirty && "theme-status-warning-row",
@@ -864,12 +880,75 @@ const ResourceTableRow = memo(function ResourceTableRow({
             <>
               <ActionButton action="edit" label="Editar" size="sm" variant="ghost" iconOnly disabled={(!isOwned && !canEditIuCurrent) || isPending} className={resourceActionButtonClassName} onClick={() => onStartEditing(resource.id)} />
               <ActionButton action="duplicate" label="Duplicar" size="sm" variant="ghost" iconOnly disabled={isPending} className={resourceActionButtonClassName} onClick={() => void onDuplicateRow(resource)} />
-              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" iconOnly disabled={!isOwned || isPending} className={resourceActionButtonClassName} onClick={() => void onRemoveRow(resource.id)} />
+              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" iconOnly disabled={!isOwned || isPending || isDeleting} className={resourceActionButtonClassName} data-resource-action="delete" data-resource-id={resource.id} onClick={() => setDeleteOpen(true)} />
             </>
           )}
         </div>
       </TD>
     </TR>
+
+      <Dialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title className="text-base font-semibold text-[var(--app-text-strong)]">
+                  Eliminar insumo
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">
+                  Se eliminara <span className="font-medium text-[var(--app-text)]">{resource.description || resource.code}</span> del
+                  catalogo de insumos.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <p className="flex items-start gap-2 text-sm text-rose-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                Esta accion no se puede deshacer. El insumo se eliminara de forma permanente del catalogo.
+              </p>
+            </div>
+
+            {deleteError ? (
+              <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {deleteError}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline" disabled={isDeleting}>
+                  Cancelar
+                </Button>
+              </Dialog.Close>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void handleDelete()}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                Eliminar insumo
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 });
 

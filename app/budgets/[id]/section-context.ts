@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { getAuthSession } from "@/lib/auth/session";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { getBudgetHeaderById } from "@/lib/data/budgets";
-import { getProjectHeaderById } from "@/lib/data/projects";
+import { getProjectBudgetOverviewById, getProjectHeaderById } from "@/lib/data/projects";
+import { resolveProjectGeneralBudget } from "@/lib/projects/general-budget";
 import { getUserSettings } from "@/lib/data/settings";
 
 export async function getGeneralBudgetSectionContext(id: string) {
@@ -16,11 +17,20 @@ export async function getGeneralBudgetSectionContext(id: string) {
     getUserSettings(session.user.id),
   ]);
 
-  if (!budget || budget.kind !== "GENERAL") {
+  if (!budget) {
     notFound();
   }
 
-  const project = await getProjectHeaderById(budget.projectId, session.user.id);
+  const projectBudgetOverview = await getProjectBudgetOverviewById(budget.projectId, session.user.id);
+  const resolvedGeneralBudget = projectBudgetOverview
+    ? resolveProjectGeneralBudget(projectBudgetOverview.budgets)
+    : null;
+
+  if (!resolvedGeneralBudget || resolvedGeneralBudget.id !== budget.id) {
+    notFound();
+  }
+
+  const project = await getProjectHeaderById(resolvedGeneralBudget.projectId, session.user.id);
   if (!project) {
     notFound();
   }

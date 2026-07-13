@@ -1,9 +1,10 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
-import { GitCompareArrows, Plus } from "lucide-react";
+import { AlertTriangle, GitCompareArrows, Loader2, Plus, Trash2, X } from "lucide-react";
 import { PartidaCreateSheet } from "@/components/partidas/partida-create-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
@@ -283,8 +284,6 @@ export function PartidasTable({
     }
 
     setPendingIds((current) => [...current, id]);
-    setError("");
-    setFeedback("");
 
     try {
       const response = await fetch("/api/partidas", {
@@ -305,12 +304,9 @@ export function PartidasTable({
       const result = (await response.json()) as CatalogPartidaPatchResult;
       reconcilePatchResult(result);
       setLastSavedAt(result.savedAt);
-      setFeedback("Partida eliminada del catalogo.");
       if (selectedId === id) {
         setSelectedId(null);
       }
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "No se pudo eliminar la partida");
     } finally {
       setPendingIds((current) => current.filter((currentId) => currentId !== id));
     }
@@ -486,12 +482,30 @@ const PartidaTableRow = memo(function PartidaTableRow({
   onDuplicateRow: (id: string) => void;
   onRemoveRow: (id: string) => Promise<void>;
 }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await onRemoveRow(row.id);
+      setDeleteOpen(false);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "No se pudo eliminar la partida");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const isLockedPreloaded = isPreloadedPartida(row) && !row.isNew;
   const isReadonly = !row.isEditing;
   const textSizeClass = isExcelMode ? "text-xs" : "text-sm";
 
   return (
-    <TR className={row.isNew ? "bg-emerald-50/60" : row.isDirty ? "bg-amber-50/50" : ""} style={{ height: isExcelMode ? excelRowHeight : PARTIDA_ROW_HEIGHT }}>
+    <>
+      <TR className={row.isNew ? "bg-emerald-50/60" : row.isDirty ? "bg-amber-50/50" : ""} style={{ height: isExcelMode ? excelRowHeight : PARTIDA_ROW_HEIGHT }}>
       <TD className="align-middle">
         <Input
           value={row.description}
@@ -542,12 +556,75 @@ const PartidaTableRow = memo(function PartidaTableRow({
             <>
               <ActionButton action="edit" label="Editar" size="sm" variant="ghost" disabled={isLockedPreloaded} onClick={() => onStartEditing(row.id)} />
               <ActionButton action="duplicate" label="Duplicar" size="sm" variant="ghost" disabled={isPending} onClick={() => onDuplicateRow(row.id)} />
-              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" disabled={isLockedPreloaded || isPending} onClick={() => void onRemoveRow(row.id)} />
+              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" disabled={isLockedPreloaded || isPending || isDeleting} data-partida-action="delete" data-partida-id={row.id} onClick={() => setDeleteOpen(true)} />
             </>
           )}
         </div>
       </TD>
     </TR>
+
+      <Dialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title className="text-base font-semibold text-[var(--app-text-strong)]">
+                  Eliminar partida
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">
+                  Se eliminara <span className="font-medium text-[var(--app-text)]">{row.description}</span> del catalogo de
+                  partidas, incluyendo su APU y datos asociados.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <p className="flex items-start gap-2 text-sm text-rose-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                Esta accion no se puede deshacer. La partida se eliminara de forma permanente del catalogo.
+              </p>
+            </div>
+
+            {deleteError ? (
+              <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {deleteError}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline" disabled={isDeleting}>
+                  Cancelar
+                </Button>
+              </Dialog.Close>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void handleDelete()}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                Eliminar partida
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 });
 

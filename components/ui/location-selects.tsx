@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { DEPARTMENTS } from "@/lib/location/peru-ubigeo";
 
 type LocationSelectsProps = {
@@ -64,7 +66,8 @@ export function LocationSelects({
     setDistrictCode("");
   }
 
-  const selectClass = "w-full rounded-lg border border-[var(--app-border)] bg-white px-3 py-2 text-sm disabled:opacity-50";
+  const { isExcelMode } = useAppViewMode();
+  const fieldSpacing = isExcelMode ? "space-y-1" : "space-y-2";
 
   return (
     <>
@@ -75,52 +78,49 @@ export function LocationSelects({
 
       {!compact ? (
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
+          <div className={fieldSpacing}>
             <Label htmlFor="loc-department">Departamento</Label>
-            <select
+            <Select
               id="loc-department"
               value={departmentCode}
               onChange={(e) => handleDepartmentChange(e.target.value)}
               disabled={disabled}
-              className={selectClass}
             >
               <option value="">Seleccionar departamento</option>
               {departmentOptions.map((d) => (
                 <option key={d.code} value={d.code}>{d.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className={fieldSpacing}>
             <Label htmlFor="loc-province">Provincia</Label>
-            <select
+            <Select
               id="loc-province"
               value={provinceCode}
               onChange={(e) => handleProvinceChange(e.target.value)}
               disabled={disabled || !departmentCode}
-              className={selectClass}
             >
               <option value="">Seleccionar provincia</option>
               {provinceOptions.map((p) => (
                 <option key={p.code} value={p.code}>{p.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className={fieldSpacing}>
             <Label htmlFor="loc-district">Distrito</Label>
-            <select
+            <Select
               id="loc-district"
               value={districtCode}
               onChange={(e) => setDistrictCode(e.target.value)}
               disabled={disabled || !provinceCode}
-              className={selectClass}
             >
               <option value="">Seleccionar distrito</option>
               {districtOptions.map((d) => (
                 <option key={d.code} value={d.code}>{d.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
       ) : null}

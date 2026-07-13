@@ -2,1042 +2,92 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
-  ArrowLeft,
-  Building2,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  Send,
-  Loader2,
-  ShieldCheck,
-  Wrench,
-  Activity,
-  Lightbulb,
-  Zap,
-  BrainCircuit,
-  FolderKanban,
-  Hash,
-  Clock,
-  Sparkles,
-  DollarSign,
-  BarChart4,
-  Calendar,
-  Search,
-  FileText,
+  PanelRightClose,
+  PanelRightOpen,
+  GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { KhipuSymbol } from "@/components/khipu/KhipuSymbol";
 import { useAgentStream } from "@/hooks/use-agent-stream";
-import { formatAiText } from "@/lib/ai/formatting";
-import { renderMarkdownLite } from "@/components/ai/AIMessage";
-import type {
-  AgentExecutionState,
-  AgentToolRisk,
-} from "@/lib/ai/agent/types";
 import { agentToolMetadata } from "@/lib/ai/agent/tool-metadata";
+import type { AgentToolRisk } from "@/lib/ai/agent/types";
+import { AgentChatPanel } from "./agent/AgentChatPanel";
+import { ExecutionPlanPanel } from "./agent/ExecutionPlanPanel";
+import { AgentRightPanel } from "./agent/AgentRightPanel";
+import { BUNDLE_CONFIG } from "./agent/BundleConfig";
+import type { BundleSlug } from "./agent/BundleConfig";
 
-// ─── Bundle config ────────────────────────────────────────────────────────────
-
-const BUNDLE_CONFIG = [
-  {
-    slug: "asistente-general",
-    bundleSlug: "khipu-agent",
-    name: "Asistente General",
-    description: "Acceso completo a todas las herramientas de la plataforma",
-    icon: Sparkles,
-    color: "from-blue-500 to-blue-600",
-    borderColor: "border-blue-200",
-    bgLight: "bg-blue-50",
-    textColor: "text-blue-700",
-  },
-  {
-    slug: "crear-presupuesto-base",
-    bundleSlug: "budget-agent",
-    name: "Presupuestos",
-    description: "Crear, clonar y gestionar presupuestos de obra",
-    icon: DollarSign,
-    color: "from-emerald-500 to-emerald-600",
-    borderColor: "border-emerald-200",
-    bgLight: "bg-emerald-50",
-    textColor: "text-emerald-700",
-  },
-  {
-    slug: "optimizar-apu",
-    bundleSlug: "apu-agent",
-    name: "APU",
-    description: "Análisis de precios unitarios y optimización",
-    icon: BarChart4,
-    color: "from-purple-500 to-purple-600",
-    borderColor: "border-purple-200",
-    bgLight: "bg-purple-50",
-    textColor: "text-purple-700",
-  },
-  {
-    slug: "generar-cronograma",
-    bundleSlug: "planning-agent",
-    name: "Cronograma",
-    description: "Planificación de obra, metrados y ruta crítica",
-    icon: Calendar,
-    color: "from-amber-500 to-amber-600",
-    borderColor: "border-amber-200",
-    bgLight: "bg-amber-50",
-    textColor: "text-amber-700",
-  },
-  {
-    slug: "revisar-apu-proyecto",
-    bundleSlug: "review-agent",
-    name: "Revisión",
-    description: "Calidad y consistencia de presupuestos y APU",
-    icon: Search,
-    color: "from-rose-500 to-rose-600",
-    borderColor: "border-rose-200",
-    bgLight: "bg-rose-50",
-    textColor: "text-rose-700",
-  },
-  {
-    slug: "exportar-reportes",
-    bundleSlug: "reporting-agent",
-    name: "Reportes",
-    description: "Exportaciones a PDF, Excel y dashboard",
-    icon: FileText,
-    color: "from-sky-500 to-sky-600",
-    borderColor: "border-sky-200",
-    bgLight: "bg-sky-50",
-    textColor: "text-sky-700",
-  },
-] as const;
-
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 type AgentWorkspaceProps = {
   projectId?: string;
   className?: string;
   initialObjective?: string;
-  /** Slug del workflow/bundle a usar por defecto */
   defaultBundleSlug?: string;
-  /** ID del workspace/empresa activa para pasar al agente como contexto */
   workspaceId?: string;
-  /** Nombre del workspace/empresa activa */
   workspaceName?: string;
 };
+
+// ─── localStorage helpers ────────────────────────────────────────────────────
+
+const RIGHT_PANEL_COLLAPSED_KEY = "myc-khipu-agent-right-panel-collapsed";
+const CHAT_PANEL_WIDTH_KEY = "myc-khipu-agent-chat-panel-width";
+const BUNDLE_SLUG_KEY = "myc-khipu-agent-selected-bundle";
+const CHAT_PANEL_MIN_WIDTH = 280;
+const CHAT_PANEL_MAX_WIDTH = 520;
+const CHAT_PANEL_DEFAULT_WIDTH = 380;
+
+function readStoredBoolean(key: string, fallback = false): boolean {
+  if (typeof window === "undefined") return fallback;
+  try { return window.localStorage.getItem(key) === "true"; } catch { return fallback; }
+}
+
+function persistBoolean(key: string, value: boolean) {
+  try { window.localStorage.setItem(key, String(value)); } catch { /* best effort */ }
+}
+
+function readStoredNumber(key: string, min: number, max: number, fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed) && parsed >= min && parsed <= max) return parsed;
+    }
+  } catch { /* best effort */ }
+  return fallback;
+}
+
+function persistNumber(key: string, value: number) {
+  try { window.localStorage.setItem(key, String(value)); } catch { /* best effort */ }
+}
+
+function readStoredBundleSlug(): BundleSlug | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(BUNDLE_SLUG_KEY);
+    if (raw && BUNDLE_CONFIG.some((b) => b.slug === raw)) return raw as BundleSlug;
+  } catch { /* best effort */ }
+  return null;
+}
+
+function persistBundleSlug(slug: BundleSlug | null) {
+  try {
+    if (slug) window.localStorage.setItem(BUNDLE_SLUG_KEY, slug);
+    else window.localStorage.removeItem(BUNDLE_SLUG_KEY);
+  } catch { /* best effort */ }
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function stateBadge(state: AgentExecutionState) {
-  const map: Record<string, { label: string; className: string }> = {
-    READ: { label: "Leyendo", className: "bg-slate-100 text-slate-700" },
-    PLAN: { label: "Planificando", className: "bg-blue-100 text-blue-700" },
-    PROPOSE: { label: "Propuesta", className: "bg-purple-100 text-purple-700" },
-    SIMULATE: { label: "Simulando", className: "bg-indigo-100 text-indigo-700" },
-    PENDING_APPROVAL: { label: "Esperando aprobación", className: "bg-amber-100 text-amber-700" },
-    EXECUTING: { label: "Ejecutando", className: "bg-blue-100 text-blue-700" },
-    EXECUTED: { label: "Completado", className: "bg-emerald-100 text-emerald-700" },
-    FAILED: { label: "Falló", className: "bg-rose-100 text-rose-700" },
-    ROLLED_BACK: { label: "Revertido", className: "bg-slate-100 text-slate-700" },
-  };
-  const entry = map[state] ?? { label: state, className: "bg-slate-100 text-slate-600" };
-  return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold", entry.className)}>
-      {entry.label}
-    </span>
-  );
-}
-
-function riskBadge(risk: AgentToolRisk | string) {
-  const map: Record<string, string> = {
-    read: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    write: "bg-amber-50 text-amber-700 border-amber-200",
-    financial: "bg-rose-50 text-rose-700 border-rose-200",
-    export: "bg-purple-50 text-purple-700 border-purple-200",
-  };
-  return (
-    <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase", map[risk] ?? "bg-slate-50 text-slate-600")}>
-      {risk}
-    </span>
-  );
-}
-
-// ─── Sub-components ─────────────────────────────────────────────────────────
-
-const BUNDLE_SLUG_LABELS: Record<string, string> = {
-  "khipu-agent": "General",
-  "budget-agent": "Presupuestos",
-  "apu-agent": "APU",
-  "planning-agent": "Cronograma",
-  "review-agent": "Revisión",
-  "reporting-agent": "Reportes",
-};
-
-function BundleSelector({
-  selected,
-  onSelect,
-}: {
-  selected: (typeof BUNDLE_CONFIG)[number]["slug"] | null;
-  onSelect: (slug: (typeof BUNDLE_CONFIG)[number]["slug"]) => void;
-}) {
-  return (
-    <div className="flex-1 overflow-y-auto px-6 py-8">
-      <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-lg shadow-blue-500/20">
-          <KhipuSymbol className="h-14 w-14" />
-        </div>
-        <h2 className="text-lg font-display font-bold text-[var(--app-text-strong)]">
-          Khipu Agente
-        </h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-[var(--app-text-muted)]">
-          Elige una especialidad para enfocar al asistente en tu tipo de tarea
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {BUNDLE_CONFIG.map((bundle) => {
-          const Icon = bundle.icon;
-          const isActive = selected === bundle.slug;
-
-          return (
-            <button
-              key={bundle.slug}
-              type="button"
-              onClick={() => onSelect(bundle.slug)}
-              className={cn(
-                "group relative flex items-center gap-4 rounded-2xl border p-4 text-left transition-all duration-150",
-                isActive
-                  ? cn(bundle.borderColor, bundle.bgLight, "shadow-sm ring-2 ring-offset-1 ring-blue-200/50")
-                  : "border-[var(--app-border-soft)] bg-[var(--app-surface)] hover:border-[var(--app-border)] hover:shadow-sm",
-              )}
-            >
-              <div
-                className={cn(
-                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm transition-transform duration-150 group-hover:scale-105",
-                  isActive ? bundle.color : "bg-[var(--app-bg-strong)] text-[var(--app-text-muted)] group-hover:bg-slate-200",
-                )}
-              >
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p
-                  className={cn(
-                    "text-sm font-semibold",
-                    isActive ? bundle.textColor : "text-[var(--app-text-strong)]",
-                  )}
-                >
-                  {bundle.name}
-                </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-[var(--app-text-muted)]">
-                  {bundle.description}
-                </p>
-              </div>
-              {isActive && (
-                <div className="absolute right-3 top-3">
-                  <CheckCircle2 className={cn("h-5 w-5", bundle.textColor)} />
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function AgentChatPanel({
-  objective,
-  setObjective,
-  onObjectiveSubmit,
-  messages,
-  streaming,
-  loading,
-  selectedBundle,
-  onSelectBundle,
-  onClearBundle,
-  showConfirmation,
-  fallbackChatMessage,
-  onConfirmProceed,
-  onCancelProceed,
-  showPostCreateConfirmation,
-  onPostCreateConfirm,
-  onPostCreateCancel,
-}: {
-  objective: string;
-  setObjective: (v: string) => void;
-  onObjectiveSubmit: (objective: string) => void;
-  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
-  streaming: boolean;
-  loading: boolean;
-  selectedBundle: (typeof BUNDLE_CONFIG)[number] | null;
-  onSelectBundle: (slug: (typeof BUNDLE_CONFIG)[number]["slug"]) => void;
-  onClearBundle: () => void;
-  showConfirmation: boolean;
-  fallbackChatMessage?: string | null;
-  onConfirmProceed: () => void;
-  onCancelProceed: () => void;
-  showPostCreateConfirmation: boolean;
-  onPostCreateConfirm: () => void;
-  onPostCreateCancel: () => void;
-}) {
-  return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="relative flex items-center gap-4 border-b border-[var(--app-border)] px-6 py-5">
-        <div className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center shadow-sm",
-          selectedBundle
-            ? `rounded-xl bg-gradient-to-br text-white ${selectedBundle.color}`
-            : "overflow-hidden rounded-full bg-transparent",
-        )}>
-          {selectedBundle ? <selectedBundle.icon className="h-5 w-5" /> : <KhipuSymbol className="h-10 w-10" />}
-        </div>
-        <div className="flex-1 pr-8">
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-sm font-display font-bold text-[var(--app-text-strong)]">
-              Khipu {selectedBundle ? selectedBundle.name : "Agente"}
-            </h2>
-            {selectedBundle && (
-              <span className={cn(
-                "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
-                selectedBundle.bgLight,
-                selectedBundle.textColor,
-              )}>
-                {BUNDLE_SLUG_LABELS[selectedBundle.bundleSlug] ?? selectedBundle.bundleSlug}
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 text-xs text-[var(--app-text-muted)]">
-            {selectedBundle ? selectedBundle.description : "Asistente técnico de obra"}
-          </p>
-        </div>
-        {selectedBundle && (
-          <div className="group absolute right-4 top-4">
-            <button
-              type="button"
-              onClick={onClearBundle}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--app-text-muted)] transition-colors hover:bg-[var(--app-bg-strong)] hover:text-[var(--app-text-strong)]"
-              aria-label="Cambiar especialidad"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-1.5 z-50 whitespace-nowrap rounded-md bg-[var(--app-surface-inverse)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--app-bg-elevated)] opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
-              Cambiar especialidad
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-5">
-        {messages.length === 0 && !selectedBundle ? (
-          <BundleSelector
-            selected={null}
-            onSelect={onSelectBundle}
-          />
-        ) : messages.length === 0 && selectedBundle ? (
-          <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-            <div className={cn(
-              "mb-5 flex h-14 w-14 items-center justify-center rounded-2xl",
-              selectedBundle.bgLight,
-            )}>
-              <selectedBundle.icon className={cn("h-7 w-7", selectedBundle.textColor)} />
-            </div>
-            <h3 className="text-lg font-display font-bold text-[var(--app-text-strong)]">
-              ¿Qué necesitas hacer?
-            </h3>
-            <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-[var(--app-text-muted)]">
-              Describe tu objetivo para {selectedBundle.name.toLowerCase()} o elige una sugerencia rápida
-            </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-2.5">
-              {[
-                "Crear presupuesto para vivienda",
-                "Revisar APU de concreto armado",
-                "Generar cronograma del proyecto",
-                "Comparar presupuestos activos",
-              ].map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full px-4 py-2 text-xs font-medium"
-                  onClick={() => onObjectiveSubmit(suggestion)}
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <>
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "flex gap-3",
-                  msg.role === "user" ? "justify-end" : "justify-start",
-                )}
-              >
-                {msg.role !== "user" && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full">
-                    <KhipuSymbol className="h-7 w-7" />
-                  </div>
-                )}
-                <div
-                  className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
-                    msg.role === "user"
-                      ? "bg-blue-600 text-white"
-                      : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)]",
-                    msg.role === "system" && "border-amber-200 bg-amber-50 text-amber-800 text-xs",
-                  )}
-                >
-                  {renderMarkdownLite(formatAiText(msg.content))}
-                </div>
-              </div>
-            ))}
-            {/* Fallback message when model didn't execute generateBudget */}
-            {fallbackChatMessage && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800 shadow-sm">
-                  <span className="font-semibold">⚠️</span> {fallbackChatMessage}
-                </div>
-              </div>
-            )}
-            {/* Confirmation buttons after preview */}
-            {showConfirmation && (
-              <div className="flex justify-start gap-2">
-                <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 shadow-sm">
-                  <span className="text-xs font-medium text-emerald-800">¿Generar presupuesto?</span>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={onConfirmProceed}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md active:scale-[0.97]"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Proceder
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onCancelProceed}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 active:scale-[0.97]"
-                    >
-                      <XCircle className="h-3.5 w-3.5" />
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            {/* Post-createProject budget confirmation buttons */}
-            {showPostCreateConfirmation && (
-              <div className="flex justify-start gap-2">
-                <div className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50/60 px-4 py-3 shadow-sm">
-                  <span className="text-xs font-medium text-blue-800">¿Generar presupuesto para este proyecto?</span>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={onPostCreateConfirm}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.97]"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Sí, generar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onPostCreateCancel}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 active:scale-[0.97]"
-                    >
-                      <XCircle className="h-3.5 w-3.5" />
-                      No, solo proyecto
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-        {streaming && (
-          <div className="flex items-center gap-2 text-xs text-[var(--app-text-muted)]">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Khipu está trabajando...
-          </div>
-        )}
-      </div>
-
-      {/* Input */}
-      <div className="border-t border-[var(--app-border)] p-4">
-        <div className="relative">
-          <Textarea
-            value={objective}
-            onChange={(e) => setObjective(e.target.value)}
-            placeholder={selectedBundle
-              ? `Describe tu objetivo para ${selectedBundle.name.toLowerCase()}...`
-              : "Describe tu objetivo: 'Crea un presupuesto para un hospital de 4 pisos'..."}
-            className="min-h-0 pr-12"
-            rows={3}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (objective.trim()) onObjectiveSubmit(objective.trim());
-              }
-            }}
-          />
-          <button
-            type="button"
-            aria-label="Enviar objetivo"
-            disabled={loading || !objective.trim()}
-            className={cn(
-              "absolute bottom-3 right-2.5 flex h-9 w-9 items-center justify-center rounded-full transition-all",
-              loading || !objective.trim()
-                ? "cursor-not-allowed bg-slate-200 text-slate-400"
-                : "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:shadow-md",
-            )}
-            onClick={() => {
-              if (objective.trim()) onObjectiveSubmit(objective.trim());
-            }}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-        <p className="mt-2 text-[10px] text-[var(--app-text-muted)]">
-          Enter para enviar · Shift+Enter para nueva línea
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ExecutionPlanPanel({
-  streaming,
-  streamExecution,
-  fallbackStatus,
-  fallbackActivity,
-}: {
-  streaming: boolean;
-  streamExecution: ReturnType<typeof useAgentStream>["execution"];
-  fallbackStatus?: "idle" | "executing" | "done" | "failed";
-  fallbackActivity?: {
-    toolName: string;
-    success: boolean;
-    latencyMs?: number;
-    summary: string;
-  } | null;
-}) {
-  const isIdle = !streamExecution.state && !streaming;
-
-  if (isIdle) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center px-6 py-16 text-center">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--app-bg-strong)]">
-          <Lightbulb className="h-6 w-6 text-[var(--app-text-muted)]" />
-        </div>
-        <h3 className="text-base font-display font-bold text-[var(--app-text-strong)]">Sin plan de ejecución</h3>
-        <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-[var(--app-text-muted)]">
-          Envía un objetivo en el panel de chat para que Khipu planifique los pasos necesarios.
-        </p>
-      </div>
-    );
-  }
-
-  const toolCount = streamExecution.toolActivity.length;
-
-  return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--app-border)] px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-            <Activity className="h-4 w-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-display font-bold text-[var(--app-text-strong)]">Plan de Ejecución</h2>
-            <p className="text-xs text-[var(--app-text-muted)]">
-              {streamExecution.state
-                ? stateBadge(streamExecution.state)
-                : streaming
-                  ? "Ejecutando..."
-                  : "Sin estado"}
-            </p>
-          </div>
-        </div>
-        {streaming && (
-          <div className="flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
-            </span>
-            En vivo
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        {streaming && (
-          <div className="mb-5 rounded-2xl border border-[var(--app-primary-muted)] bg-[var(--app-primary-muted)]/50 p-4">
-            <div className="flex items-center gap-2.5 text-sm font-semibold text-[var(--app-primary)]">
-              <Zap className="h-4 w-4" />
-              <span>Ejecución en tiempo real</span>
-            </div>
-            <p className="mt-1.5 text-xs leading-relaxed text-[var(--app-text-muted)]">
-              Khipu está procesando tu solicitud. Las herramientas ejecutadas aparecerán a continuación.
-            </p>
-          </div>
-        )}
-
-        {/* Fallback activity (cuando el modelo no llama generateBudget) */}
-        {fallbackActivity && (
-          <div className="mb-4 space-y-0">
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-600">
-              ⚠️ Fallback — Generación directa
-            </p>
-            <div className="group flex gap-3 pb-4 last:pb-0">
-              <div className="flex flex-col items-center">
-                <div
-                  className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full border-2 bg-[var(--app-surface)] transition-colors",
-                    fallbackStatus === "executing"
-                      ? "border-amber-400"
-                      : fallbackActivity.success
-                        ? "border-emerald-400"
-                        : "border-rose-400",
-                  )}
-                >
-                  {fallbackStatus === "executing" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
-                  ) : fallbackActivity.success ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  ) : (
-                    <XCircle className="h-3.5 w-3.5 text-rose-500" />
-                  )}
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "flex-1 rounded-xl border px-3.5 py-2.5 transition-colors",
-                  fallbackStatus === "executing"
-                    ? "border-amber-100 bg-amber-50/20"
-                    : fallbackActivity.success
-                      ? "border-emerald-100 bg-emerald-50/20"
-                      : "border-rose-100 bg-rose-50/20",
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex items-center gap-2">
-                    <span className="truncate text-xs font-semibold text-[var(--app-text-strong)]">
-                      {fallbackActivity.toolName}
-                    </span>
-                  </div>
-                  {fallbackActivity.latencyMs && (
-                    <span className="shrink-0 text-[10px] font-medium tabular-nums text-[var(--app-text-muted)]">
-                      {fallbackActivity.latencyMs}ms
-                    </span>
-                  )}
-                </div>
-                {fallbackActivity.summary && (
-                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--app-text-muted)] whitespace-pre-wrap">
-                    {fallbackActivity.summary}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {toolCount > 0 && (
-          <div className="space-y-0">
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--app-text-muted)]">
-              Herramientas ejecutadas ({toolCount})
-            </p>
-            {streamExecution.toolActivity.map((activity, i) => (
-              <div key={i} className="group flex gap-3 pb-4 last:pb-0">
-                <div className="flex flex-col items-center">
-                  <div
-                    className={cn(
-                      "flex h-7 w-7 items-center justify-center rounded-full border-2 bg-[var(--app-surface)] transition-colors",
-                      activity.success
-                        ? "border-emerald-400"
-                        : activity.latencyMs === undefined
-                          ? "border-blue-400"
-                          : "border-rose-400",
-                    )}
-                  >
-                    {activity.latencyMs === undefined ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
-                    ) : activity.success ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    ) : (
-                      <XCircle className="h-3.5 w-3.5 text-rose-500" />
-                    )}
-                  </div>
-                  {i < toolCount - 1 && (
-                    <div
-                      aria-hidden="true"
-                      className={cn(
-                        "my-1 w-0.5 flex-1 rounded-full",
-                        activity.success ? "bg-emerald-200" : "bg-[var(--app-border-soft)]",
-                      )}
-                    />
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    "flex-1 rounded-xl border px-3.5 py-2.5 transition-colors",
-                    activity.success
-                      ? "border-emerald-100 bg-emerald-50/20"
-                      : activity.latencyMs === undefined
-                        ? "border-blue-100 bg-blue-50/20"
-                        : "border-rose-100 bg-rose-50/20",
-                    !activity.success && activity.latencyMs !== undefined && "group-hover:border-rose-200",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex items-center gap-2">
-                      <span className="text-[11px] font-semibold text-[var(--app-text-muted)]">{String(i + 1).padStart(2, "0")}</span>
-                      <span className="truncate text-xs font-semibold text-[var(--app-text-strong)]">
-                        {activity.toolName}
-                      </span>
-                    </div>
-                    {activity.latencyMs !== undefined && (
-                      <span className="shrink-0 text-[10px] font-medium tabular-nums text-[var(--app-text-muted)]">
-                        {activity.latencyMs}ms
-                      </span>
-                    )}
-                  </div>
-                  {activity.summary && (
-                    <p className={cn(
-                      "mt-1 text-[11px] leading-relaxed text-[var(--app-text-muted)]",
-                      activity.summary.includes("\n") ? "whitespace-pre-wrap" : "truncate",
-                    )}>{activity.summary}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!streaming && toolCount === 0 && streamExecution.state && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--app-bg-strong)]">
-              {streamExecution.state === "FAILED" ? (
-                <XCircle className="h-6 w-6 text-[var(--app-danger)]" />
-              ) : (
-                <CheckCircle2 className="h-6 w-6 text-[var(--app-success)]" />
-              )}
-            </div>
-            <p className="text-sm font-semibold text-[var(--app-text-strong)]">
-              {streamExecution.state === "FAILED"
-                ? "La ejecución falló"
-                : streamExecution.state === "EXECUTED"
-                  ? "Ejecución completada"
-                  : `Estado: ${streamExecution.state}`}
-            </p>
-            <p className="mt-1 max-w-xs text-xs text-[var(--app-text-muted)]">
-              {streamExecution.state === "FAILED"
-                ? "Ocurrió un error durante la ejecución. Revisa las advertencias para más detalles."
-                : streamExecution.state === "EXECUTED"
-                  ? "Todas las herramientas se ejecutaron correctamente."
-                  : "La ejecución está en progreso."}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Summary footer */}
-      {streamExecution.summary && (
-        <div className="border-t border-[var(--app-border-soft)] px-6 py-4">
-          <p className="text-xs leading-relaxed text-[var(--app-text-muted)]">{streamExecution.summary}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CardSectionHeader({
-  icon: Icon,
-  label,
-  className,
-}: {
-  icon: typeof Sparkles;
-  label: string;
-  className?: string;
-}) {
-  return (
-    <div className={cn("mb-4 flex items-center gap-2.5", className)}>
-      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--app-bg-strong)]">
-        <Icon className="h-3.5 w-3.5 text-[var(--app-text-muted)]" />
-      </div>
-      <p className="text-xs font-display font-bold text-[var(--app-text-strong)]">
-        {label}
-      </p>
-    </div>
-  );
-}
-
-function AgentRightPanel({
-  streamExecution,
-  streaming,
-  projectId,
-  workspaceId,
-  workspaceName,
-  allTools,
-  onApprove,
-  onReject,
-  approving,
-  intent,
-  pendingAction,
-}: {
-  streamExecution: ReturnType<typeof useAgentStream>["execution"];
-  streaming: boolean;
-  projectId?: string;
-  workspaceId?: string;
-  workspaceName?: string;
-  allTools: Array<{ name: string; description: string; risk: AgentToolRisk }>;
-  onApprove: (toolName: string) => void;
-  onReject: (toolName: string) => void;
-  approving: boolean;
-  intent: ReturnType<typeof useAgentStream>["intent"];
-  pendingAction: ReturnType<typeof useAgentStream>["pendingAction"];
-}) {
-  const completedTools = streamExecution.toolActivity.filter((a) => a.success).length;
-  const failedTools = streamExecution.toolActivity.filter((a) => !a.success && a.latencyMs !== undefined).length;
-
-  return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
-      {/* Context / Memory Panel */}
-      <Card className="rounded-2xl border-[var(--app-border-soft)] bg-[var(--app-surface)] shadow-sm">
-        <CardContent className="p-5">
-          <CardSectionHeader icon={BrainCircuit} label="Contexto" />
-          <div className="space-y-2.5">
-            {workspaceId && workspaceName && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3.5 py-2.5">
-                <Building2 className="h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
-                <p className="min-w-0 flex-1 text-xs text-[var(--app-text)]">
-                  <span className="text-[var(--app-text-muted)]">Empresa</span>{" "}
-                  <span className="font-medium text-[var(--app-text-strong)]">{workspaceName}</span>
-                </p>
-              </div>
-            )}
-            {projectId && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3.5 py-2.5">
-                <FolderKanban className="h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
-                <p className="min-w-0 flex-1 text-xs text-[var(--app-text)]">
-                  <span className="text-[var(--app-text-muted)]">Proyecto</span>{" "}
-                  <span className="font-mono font-medium text-[var(--app-text-strong)]">{projectId}</span>
-                </p>
-              </div>
-            )}
-            <div className="flex items-center gap-2.5 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3.5 py-2.5">
-              <Hash className="h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
-              <p className="min-w-0 flex-1 text-xs text-[var(--app-text)]">
-                <span className="text-[var(--app-text-muted)]">Herramientas</span>{" "}
-                <span className="font-semibold text-[var(--app-text-strong)]">{completedTools}</span>
-                {failedTools > 0 && (
-                  <span className="text-[var(--app-danger)]"> / {failedTools} fallos</span>
-                )}
-              </p>
-            </div>
-            {streamExecution.latencyMs && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3.5 py-2.5">
-                <Clock className="h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
-                <p className="min-w-0 flex-1 text-xs text-[var(--app-text)]">
-                  <span className="text-[var(--app-text-muted)]">Latencia</span>{" "}
-                  <span className="font-semibold text-[var(--app-text-strong)]">{(streamExecution.latencyMs / 1000).toFixed(1)}s</span>
-                </p>
-              </div>
-            )}
-            {intent && intent.type !== "general_chat" && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50/50 px-3.5 py-2.5">
-                <BrainCircuit className="h-4 w-4 shrink-0 text-blue-500" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-[0.05em]">Intención</p>
-                  <p className="mt-0.5 text-xs text-blue-700">
-                    {intent.type}
-                    <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
-                      {intent.confidence}
-                    </span>
-                  </p>
-                  {intent.reason && (
-                    <p className="mt-0.5 text-[10px] text-blue-500 truncate">{intent.reason}</p>
-                  )}
-                </div>
-              </div>
-            )}
-            {pendingAction && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/50 px-3.5 py-2.5">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-[0.05em]">Acción pendiente</p>
-                  <p className="mt-0.5 text-xs text-amber-700">{pendingAction.type}</p>
-                </div>
-              </div>
-            )}
-            {streamExecution.warnings.length > 0 && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/50 px-3.5 py-2.5">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-                <p className="min-w-0 flex-1 text-xs font-medium text-amber-700">
-                  {streamExecution.warnings.length} advertencia{streamExecution.warnings.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-            )}
-            {streamExecution.summary && (
-              <p className="text-xs leading-relaxed text-[var(--app-text-muted)]">
-                {streamExecution.summary.slice(0, 120)}
-                {streamExecution.summary.length > 120 ? "…" : ""}
-              </p>
-            )}
-            {!streaming && !streamExecution.state && (
-              <p className="text-xs italic text-[var(--app-text-muted)]">Sin contexto activo. Envía un objetivo para comenzar.</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Available Tools */}
-      <Card className="rounded-2xl border-[var(--app-border-soft)] bg-[var(--app-surface)] shadow-sm">
-        <CardContent className="p-5">
-          <CardSectionHeader icon={Wrench} label={`Herramientas (${allTools.length})`} />
-          <div className="max-h-48 space-y-1.5 overflow-y-auto">
-            {allTools.map((tool) => (
-              <div
-                key={tool.name}
-                className="flex items-center justify-between rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-3 py-2 transition-colors hover:border-[var(--app-border)]"
-              >
-                <div className="min-w-0 flex-1 mr-2">
-                  <p className="text-xs font-medium text-[var(--app-text-strong)]">{tool.name}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-[var(--app-text-muted)]">{tool.description}</p>
-                </div>
-                {riskBadge(tool.risk)}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pending Approvals */}
-      {streamExecution.pendingApproval ? (
-        <Card className="rounded-2xl border-amber-200 bg-amber-50/50 shadow-sm">
-          <CardContent className="p-5">
-            <CardSectionHeader icon={ShieldCheck} label="Aprobación pendiente" className="mb-4" />
-            <div className="rounded-xl border border-amber-200 bg-white p-4">
-              <p className="text-sm font-semibold text-[var(--app-text-strong)]">
-                {streamExecution.pendingApproval.reason}
-              </p>
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-600">Herramienta</span>
-                <code className="text-xs font-medium text-amber-800">
-                  {streamExecution.pendingApproval.toolName}
-                </code>
-              </div>
-            </div>
-            <div className="mt-4 flex gap-2.5">
-              <Button
-                size="sm"
-                className="flex-1 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
-                disabled={approving}
-                onClick={() => onApprove(streamExecution.pendingApproval!.approvalId)}
-              >
-                {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                Aprobar
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex-1 gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-50"
-                disabled={approving}
-                onClick={() => onReject(streamExecution.pendingApproval!.toolName)}
-              >
-                <XCircle className="h-3.5 w-3.5" />
-                Rechazar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="rounded-2xl border-[var(--app-border-soft)] bg-[var(--app-surface)] shadow-sm">
-          <CardContent className="p-5">
-            <CardSectionHeader icon={ShieldCheck} label="Aprobaciones" />
-            <p className="text-xs text-[var(--app-text-muted)]">Sin aprobaciones pendientes.</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Activity Timeline */}
-      <Card className="rounded-2xl border-[var(--app-border-soft)] bg-[var(--app-surface)] shadow-sm">
-        <CardContent className="p-5">
-          <CardSectionHeader icon={Activity} label="Actividad" />
-          {streamExecution.toolActivity.length > 0 ? (
-            <div className="space-y-2">
-              {streamExecution.toolActivity.map((activity, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 transition-colors",
-                    activity.latencyMs === undefined
-                      ? "border-blue-200 bg-blue-50/30"
-                      : "border-[var(--app-border-soft)]",
-                  )}
-                >
-                  {activity.latencyMs === undefined ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
-                  ) : activity.success ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 shrink-0 text-rose-500" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-[var(--app-text-strong)]">{activity.toolName}</p>
-                    <p className={cn(
-                      "mt-0.5 text-[11px] leading-relaxed text-[var(--app-text-muted)]",
-                      activity.summary.includes("\n") ? "whitespace-pre-wrap" : "truncate",
-                    )}>{activity.summary}</p>
-                  </div>
-                  {activity.latencyMs && (
-                    <span className="shrink-0 text-[10px] font-medium tabular-nums text-[var(--app-text-muted)]">{activity.latencyMs}ms</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-[var(--app-text-muted)]">Sin actividad registrada.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Warnings */}
-      {streamExecution.warnings.length > 0 && (
-        <Card className="rounded-2xl border-amber-200 bg-amber-50/50 shadow-sm">
-          <CardContent className="p-5">
-            <CardSectionHeader icon={AlertTriangle} label="Advertencias" />
-            <ul className="space-y-2">
-              {streamExecution.warnings.map((w, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-amber-700">
-                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-                  {w}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Component ─────────────────────────────────────────────────────────
-
-function getAvailableTools() {
+function getAvailableTools(): Array<{ name: string; description: string; risk: AgentToolRisk }> {
   return agentToolMetadata.map((t) => ({
     name: t.name,
     description: t.description,
     risk: t.risk,
   }));
 }
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 
 export function AgentWorkspace({
   projectId,
@@ -1047,27 +97,68 @@ export function AgentWorkspace({
   workspaceId,
   workspaceName,
 }: AgentWorkspaceProps) {
+  // ── State ────────────────────────────────────────────────────────────────
   const [objective, setObjective] = useState(initialObjective);
   const [approving, setApproving] = useState(false);
-  const [selectedBundleSlug, setSelectedBundleSlug] = useState<string | null>(defaultBundleSlug ?? null);
+  const [selectedBundleSlug, setSelectedBundleSlug] = useState<BundleSlug | null>(
+    () => defaultBundleSlug ?? readStoredBundleSlug(),
+  );
 
-
-  // ── Fallback directo cuando el modelo no llama generateBudget ───────────
+  // ── Fallback ─────────────────────────────────────────────────────────────
   const [fallbackChatMessage, setFallbackChatMessage] = useState<string | null>(null);
-  const [fallbackStatus, setFallbackStatus] = useState<
-    "idle" | "executing" | "done" | "failed"
-  >("idle");
+  const [fallbackStatus, setFallbackStatus] = useState<"idle" | "executing" | "done" | "failed">("idle");
   const [fallbackActivity, setFallbackActivity] = useState<{
-    toolName: string;
-    success: boolean;
-    latencyMs?: number;
-    summary: string;
+    toolName: string; success: boolean; latencyMs?: number; summary: string;
   } | null>(null);
   const [forcefulCommandSent, setForcefulCommandSent] = useState(false);
   const fallbackTriggeredRef = useRef(false);
   const postCreateDismissedRef = useRef(false);
   const prevCreateProjectCountRef = useRef(0);
 
+  // ── Panel layout ─────────────────────────────────────────────────────────
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() => readStoredBoolean(RIGHT_PANEL_COLLAPSED_KEY));
+  const [chatPanelWidth, setChatPanelWidth] = useState(() =>
+    readStoredNumber(CHAT_PANEL_WIDTH_KEY, CHAT_PANEL_MIN_WIDTH, CHAT_PANEL_MAX_WIDTH, CHAT_PANEL_DEFAULT_WIDTH),
+  );
+  const isResizingRef = useRef(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // ── Persist layout prefs ─────────────────────────────────────────────────
+  useEffect(() => { persistBoolean(RIGHT_PANEL_COLLAPSED_KEY, rightPanelCollapsed); }, [rightPanelCollapsed]);
+  useEffect(() => { persistNumber(CHAT_PANEL_WIDTH_KEY, chatPanelWidth); }, [chatPanelWidth]);
+  useEffect(() => { persistBundleSlug(selectedBundleSlug); }, [selectedBundleSlug]);
+
+  // ── Drag-to-resize ───────────────────────────────────────────────────────
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!isResizingRef.current || !gridRef.current) return;
+      e.preventDefault();
+      const rect = gridRef.current.getBoundingClientRect();
+      const newWidth = Math.round(e.clientX - rect.left);
+      setChatPanelWidth(Math.min(CHAT_PANEL_MAX_WIDTH, Math.max(CHAT_PANEL_MIN_WIDTH, newWidth)));
+    }
+    function onMouseUp() {
+      if (isResizingRef.current) {
+        isResizingRef.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    }
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  function handleResizeStart() {
+    isResizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }
+
+  // ── Stream hook ──────────────────────────────────────────────────────────
   const {
     status,
     messages,
@@ -1081,46 +172,38 @@ export function AgentWorkspace({
   const loading = status === "connecting";
   const streaming = status === "streaming";
 
-  // ── Determinar si mostrar botón de confirmación después del preview ────
-  const showConfirmation =
-    !streaming &&
-    status === "done" &&
-    fallbackStatus === "idle" &&
-    streamExec.toolActivity.length > 0 &&
-    streamExec.toolActivity.some(
-      (a) => a.toolName === "previewBudgetGeneration" && a.success === true,
-    ) &&
-    !streamExec.toolActivity.some(
-      (a) => a.toolName === "generateBudget",
-    );
 
-  // ── Detectar post-createProject: proyecto creado pero sin presupuesto ──
+
+  // ── Derived state ────────────────────────────────────────────────────────
+  const showConfirmation =
+    !streaming && status === "done" && fallbackStatus === "idle" &&
+    streamExec.toolActivity.length > 0 &&
+    streamExec.toolActivity.some((a) => a.toolName === "previewBudgetGeneration" && a.success === true) &&
+    !streamExec.toolActivity.some((a) => a.toolName === "generateBudget");
+
   const showPostCreateConfirmation =
-    !streaming &&
-    status === "done" &&
-    fallbackStatus === "idle" &&
+    !streaming && status === "done" && fallbackStatus === "idle" &&
     !postCreateDismissedRef.current &&
     streamExec.toolActivity.length > 0 &&
-    streamExec.toolActivity.some(
-      (a) => a.toolName === "createProject" && a.success === true,
-    ) &&
-    !streamExec.toolActivity.some(
-      (a) => a.toolName === "previewBudgetGeneration",
-    ) &&
-    !streamExec.toolActivity.some(
-      (a) => a.toolName === "generateBudget",
-    );
+    streamExec.toolActivity.some((a) => a.toolName === "createProject" && a.success === true) &&
+    !streamExec.toolActivity.some((a) => a.toolName === "previewBudgetGeneration") &&
+    !streamExec.toolActivity.some((a) => a.toolName === "generateBudget");
 
-  const selectedBundle = selectedBundleSlug
-    ? BUNDLE_CONFIG.find((b) => b.slug === selectedBundleSlug) ?? null
-    : null;
+  // ── Bundle selection ─────────────────────────────────────────────────────
+  function handleSelectBundle(slug: BundleSlug) {
+    setSelectedBundleSlug(slug);
+  }
 
+  function handleClearBundle() {
+    setSelectedBundleSlug(null);
+  }
+
+  // ── Goal submission ──────────────────────────────────────────────────────
   const handleObjectiveSubmit = useCallback((obj: string) => {
     if (!obj.trim() || loading || streaming) return;
     setObjective("");
     connect({
       message: obj.trim(),
-      // Enviar historial completo + el mensaje actual para mantener contexto
       messages: [
         ...messages.map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: obj.trim() },
@@ -1132,10 +215,8 @@ export function AgentWorkspace({
     });
   }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
 
-  // Encontrar la última descripción técnica del proyecto en el historial
+  // ── Last construction description ────────────────────────────────────────
   const lastConstructionDescription = useMemo(() => {
-    // Buscar de atrás hacia adelante el último mensaje de usuario
-    // que contenga una descripción de obra (no confirmación genérica)
     const nonConfirmationMsgs = messages.filter(
       (m) =>
         m.role === "user" &&
@@ -1147,26 +228,18 @@ export function AgentWorkspace({
     return nonConfirmationMsgs[nonConfirmationMsgs.length - 1]?.content ?? "";
   }, [messages]);
 
-  // ── Fallback: ejecutar generateBudget directamente sin pasar por el modelo ─
+  // ── Fallback logic ───────────────────────────────────────────────────────
   const triggerFallback = useCallback(async () => {
     if (fallbackTriggeredRef.current) return;
     fallbackTriggeredRef.current = true;
 
     const fallbackStartTime = Date.now();
-
     setFallbackChatMessage("⚠️ El modelo no ejecutó generateBudget automáticamente. Usando fallback directo...");
     setFallbackStatus("executing");
-    setFallbackActivity({
-      toolName: "generateBudget (fallback)",
-      success: false,
-      summary: "Ejecutando generación directa...",
-    });
+    setFallbackActivity({ toolName: "generateBudget (fallback)", success: false, summary: "Ejecutando generación directa..." });
 
-    // Extraer projectId y description del historial
     const desc = lastConstructionDescription || "";
     const projId = projectId || "";
-
-    // Timeout de 30s para evitar que el fallback cuelgue indefinidamente
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 30000);
 
@@ -1174,29 +247,18 @@ export function AgentWorkspace({
       const response = await fetch("/api/ai/agent/generate-budget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: projId,
-          description: desc,
-          workspaceId,
-          templateSource: "auto",
-        }),
+        body: JSON.stringify({ projectId: projId, description: desc, workspaceId, templateSource: "auto" }),
         signal: abortController.signal,
       });
-
       const latencyMs = Date.now() - fallbackStartTime;
-
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({ error: "Error desconocido" }));
         throw new Error(errorBody.error || `Error HTTP ${response.status}`);
       }
-
       const result = await response.json();
-
       setFallbackStatus("done");
       setFallbackActivity({
-        toolName: "generateBudget (fallback)",
-        success: true,
-        latencyMs,
+        toolName: "generateBudget (fallback)", success: true, latencyMs,
         summary: `✅ Presupuesto generado: ${result.totalItemsAdded} partidas (${result.fromMcp || 0} desde .mcp, ${result.fromTemplates || 0} desde plantillas, ${result.fromCatalog || 0} desde catálogo)`,
       });
     } catch (error) {
@@ -1204,34 +266,20 @@ export function AgentWorkspace({
       const isTimeout = error instanceof DOMException && error.name === "AbortError";
       setFallbackStatus("failed");
       setFallbackActivity({
-        toolName: "generateBudget (fallback)",
-        success: false,
-        latencyMs: elapsedMs,
-        summary: isTimeout
-          ? `❌ Fallback falló: La solicitud excedió el tiempo de espera (30s)`
-          : `❌ Fallback falló: ${error instanceof Error ? error.message : "Error desconocido"}`,
+        toolName: "generateBudget (fallback)", success: false, latencyMs: elapsedMs,
+        summary: isTimeout ? `❌ Fallback falló: La solicitud excedió el tiempo de espera (30s)` : `❌ Fallback falló: ${error instanceof Error ? error.message : "Error desconocido"}`,
       });
     } finally {
       clearTimeout(timeoutId);
     }
   }, [projectId, workspaceId, lastConstructionDescription]);
 
-  // ── Detectar cuándo el modelo falló en llamar generateBudget ────────────
-  // Si el stream terminó, aún se muestra confirmación (el modelo no ejecutó
-  // generateBudget), y habíamos enviado el comando forceful → activar fallback.
   useEffect(() => {
-    if (
-      status === "done" &&
-      !streaming &&
-      showConfirmation &&
-      forcefulCommandSent &&
-      !fallbackTriggeredRef.current
-    ) {
+    if (status === "done" && !streaming && showConfirmation && forcefulCommandSent && !fallbackTriggeredRef.current) {
       triggerFallback();
     }
   }, [status, streaming, showConfirmation, forcefulCommandSent, triggerFallback]);
 
-  // ── Resetear fallback cuando comienza un nuevo stream ───────────────────
   useEffect(() => {
     if (status === "streaming" || status === "connecting") {
       setFallbackChatMessage(null);
@@ -1242,51 +290,29 @@ export function AgentWorkspace({
     }
   }, [status]);
 
-  // ── Resetear dismissed ref cuando se ejecuta un nuevo createProject ──
   useEffect(() => {
-    const createProjectCount = streamExec.toolActivity.filter(
-      (a) => a.toolName === "createProject" && a.success === true,
-    ).length;
+    const createProjectCount = streamExec.toolActivity.filter((a) => a.toolName === "createProject" && a.success).length;
     if (createProjectCount > prevCreateProjectCountRef.current) {
       postCreateDismissedRef.current = false;
     }
     prevCreateProjectCountRef.current = createProjectCount;
   }, [streamExec.toolActivity]);
 
+  // ── Confirmation handlers ────────────────────────────────────────────────
   const handleConfirmProceed = useCallback(() => {
     if (loading || streaming) return;
-
-    // Construir comando interno ultrasexplícito (lo ve el modelo)
     let descriptionHint = "";
     if (lastConstructionDescription) {
-      const clean = lastConstructionDescription.length > 120
-        ? lastConstructionDescription.substring(0, 120) + "..."
-        : lastConstructionDescription;
+      const clean = lastConstructionDescription.length > 120 ? lastConstructionDescription.substring(0, 120) + "..." : lastConstructionDescription;
       descriptionHint = ` Descripción: "${clean}".`;
     }
-    const forcefulCommand =
-      "¡SÍ! CONFIRMADO. EJECUTA generateBudget AHORA MISMO." +
-      descriptionHint +
-      " SOLO llama la herramienta generateBudget. NO generes texto de respuesta. " +
-      "NO preguntes de nuevo. USA los mismos projectId y description que en previewBudgetGeneration. " +
-      "LLAMA generateBudget INMEDIATAMENTE.";
-
+    const forcefulCommand = "¡SÍ! CONFIRMADO. EJECUTA generateBudget AHORA MISMO." + descriptionHint + " SOLO llama la herramienta generateBudget. NO generes texto de respuesta. NO preguntes de nuevo. USA los mismos projectId y description que en previewBudgetGeneration. LLAMA generateBudget INMEDIATAMENTE.";
     setForcefulCommandSent(true);
-
-    // Enviar comando internamente (modelo recibe el texto fuerte)
     setObjective("");
     connect({
-      message: forcefulCommand,
-      displayMessage: "Sí confirmado", // mensaje limpio para la UI
-      messages: [
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: forcefulCommand },
-      ],
-      projectId,
-      workspaceId,
-      mode: selectedBundleSlug ? "workflow" : "goal",
-      workflowId: selectedBundleSlug ?? undefined,
-      skipMessageAdd: true,
+      message: forcefulCommand, displayMessage: "Sí confirmado",
+      messages: [...messages.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: forcefulCommand }],
+      projectId, workspaceId, mode: selectedBundleSlug ? "workflow" : "goal", workflowId: selectedBundleSlug ?? undefined, skipMessageAdd: true,
     });
   }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages, lastConstructionDescription]);
 
@@ -1294,43 +320,20 @@ export function AgentWorkspace({
     if (loading || streaming) return;
     setObjective("");
     connect({
-      message: "No por ahora. Cancela la generación del presupuesto.",
-      displayMessage: "No, cancelar",
-      messages: [
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: "No por ahora. Cancela la generación del presupuesto." },
-      ],
-      projectId,
-      workspaceId,
-      mode: selectedBundleSlug ? "workflow" : "goal",
-      workflowId: selectedBundleSlug ?? undefined,
-      skipMessageAdd: true,
+      message: "No por ahora. Cancela la generación del presupuesto.", displayMessage: "No, cancelar",
+      messages: [...messages.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: "No por ahora. Cancela la generación del presupuesto." }],
+      projectId, workspaceId, mode: selectedBundleSlug ? "workflow" : "goal", workflowId: selectedBundleSlug ?? undefined, skipMessageAdd: true,
     });
   }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
 
-  // ── Post-createProject: confirmar si quiere generar presupuesto ────────
   const handlePostCreateConfirm = useCallback(() => {
     if (loading || streaming) return;
-
-    const forcefulCommand =
-      "¡SÍ! CONFIRMADO. Quiero generar el presupuesto para el proyecto recién creado. " +
-      "EJECUTA previewBudgetGeneration AHORA MISMO usando el proyecto que acabas de crear con createProject. " +
-      "NO generes texto de respuesta. NO preguntes de nuevo. " +
-      "LLAMA previewBudgetGeneration INMEDIATAMENTE.";
-
+    const forcefulCommand = "¡SÍ! CONFIRMADO. Quiero generar el presupuesto para el proyecto recién creado. EJECUTA previewBudgetGeneration AHORA MISMO usando el proyecto que acabas de crear con createProject. NO generes texto de respuesta. NO preguntes de nuevo. LLAMA previewBudgetGeneration INMEDIATAMENTE.";
     setObjective("");
     connect({
-      message: forcefulCommand,
-      displayMessage: "Sí, generar presupuesto",
-      messages: [
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: forcefulCommand },
-      ],
-      projectId,
-      workspaceId,
-      mode: selectedBundleSlug ? "workflow" : "goal",
-      workflowId: selectedBundleSlug ?? undefined,
-      skipMessageAdd: true,
+      message: forcefulCommand, displayMessage: "Sí, generar presupuesto",
+      messages: [...messages.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: forcefulCommand }],
+      projectId, workspaceId, mode: selectedBundleSlug ? "workflow" : "goal", workflowId: selectedBundleSlug ?? undefined, skipMessageAdd: true,
     });
   }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
 
@@ -1339,64 +342,65 @@ export function AgentWorkspace({
     postCreateDismissedRef.current = true;
     setObjective("");
     connect({
-      message: "No quiero generar presupuesto ahora. El proyecto vacío es suficiente. Confirma que el proyecto fue creado exitosamente y espera instrucciones.",
-      displayMessage: "No, solo el proyecto",
-      messages: [
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: "No quiero generar presupuesto ahora. El proyecto vacío es suficiente. Confirma que el proyecto fue creado exitosamente y espera instrucciones." },
-      ],
-      projectId,
-      workspaceId,
-      mode: selectedBundleSlug ? "workflow" : "goal",
-      workflowId: selectedBundleSlug ?? undefined,
-      skipMessageAdd: true,
+      message: "No quiero generar presupuesto ahora. El proyecto vacío es suficiente. Confirma que el proyecto fue creado exitosamente y espera instrucciones.", displayMessage: "No, solo el proyecto",
+      messages: [...messages.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: "No quiero generar presupuesto ahora. El proyecto vacío es suficiente. Confirma que el proyecto fue creado exitosamente y espera instrucciones." }],
+      projectId, workspaceId, mode: selectedBundleSlug ? "workflow" : "goal", workflowId: selectedBundleSlug ?? undefined, skipMessageAdd: true,
     });
   }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
 
+  // ── Approvals ────────────────────────────────────────────────────────────
   const handleApprove = useCallback(async (approvalId: string) => {
     setApproving(true);
     try {
-      const response = await fetch("/api/ai/approvals", {
+      await fetch("/api/ai/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approvalId, decision: "approve" }),
       });
-
-      if (!response.ok) throw new Error("Error al aprobar");
-      await response.json();
-    } catch {
-      console.error("[AgentWorkspace] Error processing approval");
-    } finally {
-      setApproving(false);
-    }
+    } catch { console.error("[AgentWorkspace] Error processing approval"); } finally { setApproving(false); }
   }, []);
 
   const handleReject = useCallback(async (approvalId: string) => {
     setApproving(true);
     try {
-      const response = await fetch("/api/ai/approvals", {
+      await fetch("/api/ai/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approvalId, decision: "reject", reason: "Rechazado por el usuario." }),
       });
-
-      if (!response.ok) throw new Error("Error al rechazar");
-      await response.json();
       disconnect();
-    } catch {
-      console.error("[AgentWorkspace] Error processing rejection");
-    } finally {
-      setApproving(false);
-    }
+    } catch { console.error("[AgentWorkspace] Error processing rejection"); } finally { setApproving(false); }
   }, [disconnect]);
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className={cn(
-      "grid gap-0 border border-[var(--app-border)] rounded-2xl bg-[var(--app-surface)] shadow-sm md:grid-cols-[320px_1fr_300px]",
-      className,
-    )}>
+    <div
+      ref={gridRef}
+      className={cn(
+        "group/agent relative grid gap-0 border border-[var(--app-border)] rounded-2xl bg-[var(--app-surface)] shadow-sm transition-all duration-300",
+        rightPanelCollapsed ? "md:grid-cols-[var(--chat-width)_1fr]" : "md:grid-cols-[var(--chat-width)_1fr_300px]",
+        className,
+      )}
+      style={{ "--chat-width": `${chatPanelWidth}px` } as React.CSSProperties}
+    >
       {/* Left: Chat + Objective */}
-      <div className="border-r border-[var(--app-border)]">
+      <div className="relative border-r border-[var(--app-border)]">
+        {/* Resize handle */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Ajustar ancho del panel de chat"
+          tabIndex={0}
+          className="group absolute -right-[5px] top-0 z-20 hidden h-full w-[10px] cursor-col-resize items-center justify-center transition-colors hover:bg-blue-500/10 active:bg-blue-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:flex"
+          onMouseDown={(e) => { e.preventDefault(); handleResizeStart(); }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft") setChatPanelWidth((w) => Math.max(CHAT_PANEL_MIN_WIDTH, w - 10));
+            if (e.key === "ArrowRight") setChatPanelWidth((w) => Math.min(CHAT_PANEL_MAX_WIDTH, w + 10));
+          }}
+        >
+          <GripVertical className="pointer-events-none h-4 w-4 text-[var(--app-text-muted)] opacity-0 transition-opacity group-hover:opacity-100" />
+        </div>
+
         <AgentChatPanel
           objective={objective}
           setObjective={setObjective}
@@ -1404,9 +408,9 @@ export function AgentWorkspace({
           messages={messages}
           streaming={streaming}
           loading={loading}
-          selectedBundle={selectedBundle}
-          onSelectBundle={(slug) => setSelectedBundleSlug(slug)}
-          onClearBundle={() => setSelectedBundleSlug(null)}
+          selectedBundleSlug={selectedBundleSlug}
+          onSelectBundle={handleSelectBundle}
+          onClearBundle={handleClearBundle}
           showConfirmation={showConfirmation}
           fallbackChatMessage={fallbackChatMessage}
           onConfirmProceed={handleConfirmProceed}
@@ -1418,7 +422,7 @@ export function AgentWorkspace({
       </div>
 
       {/* Center: Execution Plan */}
-      <div className="border-r border-[var(--app-border)]">
+      <div className={cn("border-r border-[var(--app-border)]", rightPanelCollapsed && "md:border-r-0")}>
         <ExecutionPlanPanel
           streaming={streaming}
           streamExecution={streamExec}
@@ -1428,19 +432,43 @@ export function AgentWorkspace({
       </div>
 
       {/* Right: Tools + Approvals + Activity */}
-      <AgentRightPanel
-        streamExecution={streamExec}
-        streaming={streaming}
-        projectId={projectId}
-        workspaceId={workspaceId}
-        workspaceName={workspaceName}
-        allTools={getAvailableTools()}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        approving={approving}
-        intent={intent}
-        pendingAction={pendingAction}
-      />
+      {rightPanelCollapsed && (
+        <button
+          type="button"
+          className="absolute right-0 top-4 z-10 flex h-7 w-7 translate-x-1/2 items-center justify-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] shadow-md transition-all hover:border-[var(--app-border-strong)] hover:text-[var(--app-text-strong)] hover:shadow-lg"
+          onClick={() => setRightPanelCollapsed(false)}
+          aria-label="Mostrar panel lateral"
+          title="Mostrar panel lateral"
+        >
+          <PanelRightOpen className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <div className={cn("relative transition-all duration-300", rightPanelCollapsed && "hidden md:hidden")}>
+        <button
+          type="button"
+          className="absolute left-0 top-4 z-10 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] shadow-sm transition-all hover:border-[var(--app-border-strong)] hover:text-[var(--app-text-strong)] hover:shadow-md"
+          onClick={() => setRightPanelCollapsed(true)}
+          aria-label="Ocultar panel lateral"
+          title="Ocultar panel lateral"
+        >
+          <PanelRightClose className="h-3.5 w-3.5" />
+        </button>
+        <div className="h-full overflow-y-auto">
+          <AgentRightPanel
+            streamExecution={streamExec}
+            streaming={streaming}
+            projectId={projectId}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
+            allTools={getAvailableTools()}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            approving={approving}
+            intent={intent}
+            pendingAction={pendingAction}
+          />
+        </div>
+      </div>
     </div>
   );
 }

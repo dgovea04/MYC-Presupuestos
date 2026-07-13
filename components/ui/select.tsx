@@ -300,6 +300,7 @@ export function Select({
           id={id}
           className={cn(
             "ui-select-trigger flex h-10 w-full items-center justify-between rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2 text-left text-sm text-[var(--app-text)] outline-none transition focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500/20 disabled:cursor-not-allowed disabled:bg-[var(--app-surface-muted)] disabled:text-[var(--app-text-subtle)] data-[placeholder]:text-[var(--app-text-muted)]",
+            viewMode === "excel" && "h-8 rounded-md border-[var(--app-border)] px-2 py-1.5 text-xs",
             className,
           )}
           aria-required={required}

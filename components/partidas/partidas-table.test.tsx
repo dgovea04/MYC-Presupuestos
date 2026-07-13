@@ -4,7 +4,9 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const suggestResourceIuCodesMock = vi.fn(() => []);
+vi.mock("@/components/partidas/partida-create-sheet", () => ({
+  PartidaCreateSheet: () => null,
+}));
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({
@@ -26,14 +28,12 @@ vi.mock("@/components/ui/input", () => ({
   Input: ({
     value,
     onChange,
-    placeholder,
     readOnly,
   }: {
     value?: string | number;
     onChange?: (event: { target: { value: string } }) => void;
-    placeholder?: string;
     readOnly?: boolean;
-  }) => <input value={value ?? ""} onChange={onChange} placeholder={placeholder} readOnly={readOnly} />,
+  }) => <input value={value ?? ""} onChange={onChange} readOnly={readOnly} />,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -44,33 +44,25 @@ vi.mock("@/components/ui/action-button", () => ({
   ActionButton: ({
     label,
     onClick,
-    "data-resource-action": dataAction,
-    "data-resource-id": dataId,
+    "data-partida-action": dataAction,
+    "data-partida-id": dataId,
   }: {
     label: string;
     onClick?: () => void;
-    "data-resource-action"?: string;
-    "data-resource-id"?: string;
+    "data-partida-action"?: string;
+    "data-partida-id"?: string;
   }) => (
-    <button onClick={onClick} data-resource-action={dataAction} data-resource-id={dataId}>
+    <button onClick={onClick} data-partida-action={dataAction} data-partida-id={dataId}>
       {label}
     </button>
   ),
 }));
 
 vi.mock("@/components/ui/table", () => ({
-  Table: ({
-    children,
-    style,
-  }: {
-    children: React.ReactNode;
-    style?: React.CSSProperties;
-  }) => <table style={style}>{children}</table>,
+  Table: ({ children }: { children: React.ReactNode }) => <table>{children}</table>,
   THead: ({ children }: { children: React.ReactNode }) => <thead>{children}</thead>,
   TBody: ({ children }: { children: React.ReactNode }) => <tbody>{children}</tbody>,
-  TR: React.forwardRef<HTMLTableRowElement, { children: React.ReactNode }>(function MockTR({ children }, ref) {
-    return <tr ref={ref}>{children}</tr>;
-  }),
+  TR: ({ children }: { children: React.ReactNode }) => <tr>{children}</tr>,
   TH: ({ children }: { children: React.ReactNode }) => <th>{children}</th>,
   TD: ({ children, colSpan }: { children: React.ReactNode; colSpan?: number }) => <td colSpan={colSpan}>{children}</td>,
 }));
@@ -100,6 +92,7 @@ vi.mock("@/components/view-mode/view-mode-styles", () => ({
 
 vi.mock("@/components/providers/formatting-settings-provider", () => ({
   useFormattingSettings: () => ({
+    currencyDecimals: 2,
     excelRowHeight: 74,
   }),
 }));
@@ -109,19 +102,29 @@ vi.mock("@/lib/utils", async (importOriginal) => {
   return {
     ...actual,
     cn: (...inputs: unknown[]) => inputs.filter(Boolean).join(" "),
+    formatCurrency: (amount: number) => amount.toFixed(2),
   };
 });
 
-vi.mock("@/lib/resources/iu", () => ({
-  normalizeResourceIuCode: (value: string | null | undefined) => value?.trim() || "",
+vi.mock("next/link", () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
-vi.mock("@/lib/resources/iu-suggestions", () => ({
-  suggestResourceIuCodes: (...args: unknown[]) => suggestResourceIuCodesMock(...args),
+vi.mock("next/dynamic", () => ({
+  default: () => () => null,
 }));
 
-import { ResourcesTable } from "@/components/resources/resources-table";
-import type { ResourceRecord } from "@/types/resource";
+vi.mock("lucide-react", () => ({
+  GitCompareArrows: () => null,
+  Plus: () => null,
+  AlertTriangle: () => null,
+  Loader2: () => null,
+  Trash2: () => null,
+  X: () => null,
+}));
+
+import { PartidasTable } from "@/components/partidas/partidas-table";
+import type { CatalogPartidaRecord } from "@/types/partida";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -131,21 +134,18 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 let activeContainer: HTMLDivElement | null = null;
 
-function makeResource(overrides: Partial<ResourceRecord> = {}): ResourceRecord {
+function makePartida(overrides: Partial<CatalogPartidaRecord> = {}): CatalogPartidaRecord {
   return {
-    id: overrides.id ?? `r-${Math.random().toString(36).slice(2, 7)}`,
-    code: overrides.code ?? "MAT-001",
-    description: overrides.description ?? "Cemento Portland",
-    category: overrides.category ?? "MATERIAL",
-    unit: overrides.unit ?? "BOL",
-    unitPrice: overrides.unitPrice ?? 25.5,
+    id: overrides.id ?? `p-${Math.random().toString(36).slice(2, 7)}`,
+    description: overrides.description ?? "Concreto f'c=210 kg/cm2",
+    unit: overrides.unit ?? "m3",
+    unitPrice: overrides.unitPrice ?? 350.5,
     currency: overrides.currency ?? "PEN",
-    iu: overrides.iu ?? null,
-    iuCurrent: overrides.iuCurrent ?? null,
-    iuCurrentReviewStatus: overrides.iuCurrentReviewStatus ?? null,
     source: overrides.source ?? null,
-    subcategory: overrides.subcategory ?? null,
-    companyId: overrides.companyId ?? null,
+    performance: overrides.performance ?? 25,
+    performanceUnit: overrides.performanceUnit ?? "m3",
+    performanceRate: overrides.performanceRate ?? "25.0000 m3/DIA",
+    apuRows: overrides.apuRows ?? [],
     createdAt: overrides.createdAt ?? "2026-01-01T00:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-01-01T00:00:00.000Z",
   };
@@ -153,8 +153,6 @@ function makeResource(overrides: Partial<ResourceRecord> = {}): ResourceRecord {
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  suggestResourceIuCodesMock.mockReset();
-  suggestResourceIuCodesMock.mockReturnValue([]);
 
   if (activeContainer) {
     const root = (activeContainer as HTMLDivElement & { __root?: ReturnType<typeof createRoot> }).__root;
@@ -168,7 +166,7 @@ afterEach(async () => {
   }
 });
 
-async function renderTable(resources: ResourceRecord[] = []) {
+async function renderTable(partidas: CatalogPartidaRecord[] = []) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   activeContainer = container;
@@ -177,15 +175,15 @@ async function renderTable(resources: ResourceRecord[] = []) {
   (container as HTMLDivElement & { __root?: typeof root }).__root = root;
 
   await act(async () => {
-    root.render(<ResourcesTable resources={resources} unifiedIndexDictionaryRows={[]} unifiedIndexRows={[]} />);
+    root.render(<PartidasTable partidas={partidas} resourcesCatalog={[]} />);
   });
 
   return {
     container,
-    clickDeleteAction: (resourceId: string) => {
-      const button = container.querySelector(`button[data-resource-action="delete"][data-resource-id="${resourceId}"]`);
+    clickDeleteAction: (partidaId: string) => {
+      const button = container.querySelector(`button[data-partida-action="delete"][data-partida-id="${partidaId}"]`);
       if (!(button instanceof HTMLButtonElement)) {
-        throw new Error(`Missing delete action for ${resourceId}`);
+        throw new Error(`Missing delete action for ${partidaId}`);
       }
       button.click();
     },
@@ -198,106 +196,66 @@ async function renderTable(resources: ResourceRecord[] = []) {
       }
       button.click();
     },
+    getPartidaDescriptions: () =>
+      Array.from(container.querySelectorAll("tbody tr td:first-child input")).map(
+        (input) => (input as HTMLInputElement).value,
+      ),
   };
 }
 
-describe("ResourcesTable", () => {
-  it("renders the resource table", async () => {
-    const { container } = await renderTable([makeResource({ id: "r-1" })]);
-
-    const table = container.querySelector("table");
-    expect(table).not.toBeNull();
-  });
-
-  it("renders one action set per resource row", async () => {
-    const { container } = await renderTable([
-      makeResource({ id: "r-1", description: "Cemento", source: "Indicopi" }),
-      makeResource({ id: "r-2", description: "Arena", source: "Manual" }),
-    ]);
-
-    const editButtons = [...container.querySelectorAll("button")].filter((button) => button.textContent === "Editar");
-    expect(editButtons).toHaveLength(2);
-  });
-
-  it("shows the empty state when there are no rows", async () => {
-    const { container } = await renderTable();
-    expect(container.textContent).toContain("No encontramos insumos con los filtros actuales.");
-  });
-
-  it("keeps only one compact suggestion control visible while editing a row", async () => {
-    suggestResourceIuCodesMock.mockReturnValue([
-      { code: "030101", label: "Acero estructural", score: 0.9, source: "dictionary" },
-      { code: "030102", label: "Acero laminado", score: 0.8, source: "dictionary" },
-      { code: "030103", label: "Acero corrugado", score: 0.7, source: "index" },
-    ]);
-
-    const { container } = await renderTable([
-      makeResource({
-        id: "r-1",
-        companyId: "company-1",
-        source: "Autocreado desde APU del catalogo de partidas",
-        iuCurrent: null,
-      }),
-    ]);
-
-    await act(async () => {
-      const editButton = [...container.querySelectorAll("button")].find((button) => button.textContent === "Editar");
-      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const suggestionButtons = [...container.querySelectorAll("button")].filter((button) => button.textContent?.includes("03010"));
-    expect(suggestionButtons).toHaveLength(1);
-    expect(suggestionButtons[0]?.textContent).toContain("030101");
-    expect(suggestionButtons[0]?.textContent).toContain("+2");
+describe("PartidasTable", () => {
+  it("renders the partidas table", async () => {
+    const { container } = await renderTable([makePartida({ id: "p-1" })]);
+    expect(container.querySelector("table")).not.toBeNull();
   });
 
   // ─── Delete confirmation dialog ──────────────────────────────────────────
 
   it("opens the delete confirmation dialog when clicking Eliminar", async () => {
     const { clickDeleteAction } = await renderTable([
-      makeResource({ id: "r-1", description: "Cemento Portland", companyId: "company-1" }),
+      makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" }),
     ]);
 
-    expect(document.body.textContent).not.toContain("Eliminar insumo");
+    expect(document.body.textContent).not.toContain("Eliminar partida");
 
     await act(async () => {
-      clickDeleteAction("r-1");
+      clickDeleteAction("p-1");
     });
 
-    expect(document.body.textContent).toContain("Eliminar insumo");
-    expect(document.body.textContent).toContain("Cemento Portland");
+    expect(document.body.textContent).toContain("Eliminar partida");
+    expect(document.body.textContent).toContain("Concreto f'c=210 kg/cm2");
     expect(document.body.textContent).toContain("Esta accion no se puede deshacer");
     expect(document.body.textContent).toContain("Cancelar");
   });
 
   it("closes the delete dialog when clicking Cancelar", async () => {
     const { clickDeleteAction, clickDialogButton } = await renderTable([
-      makeResource({ id: "r-1", description: "Cemento Portland", companyId: "company-1" }),
+      makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" }),
     ]);
 
     await act(async () => {
-      clickDeleteAction("r-1");
+      clickDeleteAction("p-1");
     });
 
-    expect(document.body.textContent).toContain("Eliminar insumo");
+    expect(document.body.textContent).toContain("Eliminar partida");
 
     await act(async () => {
       clickDialogButton("Cancelar");
     });
 
-    expect(document.body.textContent).not.toContain("Eliminar insumo");
+    expect(document.body.textContent).not.toContain("Eliminar partida");
   });
 
   it("closes the delete dialog when clicking the X close button", async () => {
     const { clickDeleteAction } = await renderTable([
-      makeResource({ id: "r-1", description: "Cemento Portland", companyId: "company-1" }),
+      makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" }),
     ]);
 
     await act(async () => {
-      clickDeleteAction("r-1");
+      clickDeleteAction("p-1");
     });
 
-    expect(document.body.textContent).toContain("Eliminar insumo");
+    expect(document.body.textContent).toContain("Eliminar partida");
 
     await act(async () => {
       const xButton = document.querySelector('button[aria-label="Cerrar"]') as HTMLButtonElement | null;
@@ -305,40 +263,40 @@ describe("ResourcesTable", () => {
       xButton.click();
     });
 
-    expect(document.body.textContent).not.toContain("Eliminar insumo");
+    expect(document.body.textContent).not.toContain("Eliminar partida");
   });
 
   it("sends PATCH delete request on confirm", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
-        JSON.stringify({ created: [], updated: [], deleted: ["r-1"], savedAt: "2026-06-01T00:00:00.000Z" }),
+        JSON.stringify({ created: [], updated: [], deleted: ["p-1"], savedAt: "2026-06-01T00:00:00.000Z" }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     const { clickDeleteAction, clickDialogButton, container } = await renderTable([
-      makeResource({ id: "r-1", description: "Cemento Portland", companyId: "company-1" }),
+      makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" }),
     ]);
 
     await act(async () => {
-      clickDeleteAction("r-1");
+      clickDeleteAction("p-1");
     });
 
-    expect(document.body.textContent).toContain("Eliminar insumo");
+    expect(document.body.textContent).toContain("Eliminar partida");
 
     await act(async () => {
-      clickDialogButton("Eliminar insumo");
+      clickDialogButton("Eliminar partida");
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/resources",
+      "/api/partidas",
       expect.objectContaining({
         method: "PATCH",
-        body: JSON.stringify({ create: [], update: [], delete: ["r-1"] }),
+        body: JSON.stringify({ create: [], update: [], delete: ["p-1"] }),
       }),
     );
-    expect(container.textContent).not.toContain("Cemento Portland");
+    expect(container.textContent).not.toContain("Concreto f'c=210 kg/cm2");
   });
 
   it("shows inline error in the delete dialog when the API fails and keeps the dialog open", async () => {
@@ -348,25 +306,25 @@ describe("ResourcesTable", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { clickDeleteAction, clickDialogButton } = await renderTable([
-      makeResource({ id: "r-1", description: "Cemento Portland", companyId: "company-1" }),
+      makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" }),
     ]);
 
     await act(async () => {
-      clickDeleteAction("r-1");
+      clickDeleteAction("p-1");
     });
 
     await act(async () => {
-      clickDialogButton("Eliminar insumo");
+      clickDialogButton("Eliminar partida");
     });
 
     expect(fetchMock).toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Eliminar insumo");
-    expect(document.body.textContent).toContain("No se pudo eliminar el insumo");
+    expect(document.body.textContent).toContain("Eliminar partida");
+    expect(document.body.textContent).toContain("No se pudo eliminar la partida");
   });
 
   it("shows a permission error in the delete dialog on 403 and keeps the dialog open", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(JSON.stringify({ error: "No tienes permisos para eliminar este insumo" }), {
+      new Response(JSON.stringify({ error: "No tienes permisos para eliminar esta partida" }), {
         status: 403,
         headers: { "Content-Type": "application/json" },
       }),
@@ -374,19 +332,19 @@ describe("ResourcesTable", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { clickDeleteAction, clickDialogButton } = await renderTable([
-      makeResource({ id: "r-1", description: "Cemento Portland", companyId: "company-1" }),
+      makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" }),
     ]);
 
     await act(async () => {
-      clickDeleteAction("r-1");
+      clickDeleteAction("p-1");
     });
 
     await act(async () => {
-      clickDialogButton("Eliminar insumo");
+      clickDialogButton("Eliminar partida");
     });
 
     expect(fetchMock).toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Eliminar insumo");
-    expect(document.body.textContent).toContain("No tienes permisos para eliminar este insumo");
+    expect(document.body.textContent).toContain("Eliminar partida");
+    expect(document.body.textContent).toContain("No tienes permisos para eliminar esta partida");
   });
 });

@@ -1,7 +1,9 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { AlertTriangle, Loader2, Trash2, X } from "lucide-react";
 
 import {
   broadcastAppDataChange,
@@ -11,6 +13,7 @@ import {
 } from "@/lib/client/live-updates";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { ActionButton } from "@/components/ui/action-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OperationalFilterSummary, OperationalMetricBadge, OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -107,20 +110,20 @@ export function BudgetsTable({
 
   const removeBudget = useCallback(async (id: string) => {
     setPendingId(id);
-    setError("");
 
-    const response = await fetch(`/api/budgets/${id}`, { method: "DELETE" });
+    try {
+      const response = await fetch(`/api/budgets/${id}`, { method: "DELETE" });
 
-    setPendingId(null);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "No se pudo eliminar el presupuesto");
+      }
 
-    if (!response.ok) {
-      const data = await response.json();
-      setError(data.error ?? "No se pudo eliminar el presupuesto");
-      return;
+      setBaseRows((current) => current.filter((budget) => budget.id !== id));
+      broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], undefined, { locallyHandledPaths: ["/budgets"] });
+    } finally {
+      setPendingId(null);
     }
-
-    setBaseRows((current) => current.filter((budget) => budget.id !== id));
-    broadcastAppDataChange(["/dashboard", "/projects", "/budgets"], undefined, { locallyHandledPaths: ["/budgets"] });
   }, []);
 
   return (
@@ -226,36 +229,119 @@ const BudgetTableRow = memo(function BudgetTableRow({
   templateIntent: GeneralExpenseTemplateIntent | null;
   onRemoveBudget: (id: string) => Promise<void>;
 }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await onRemoveBudget(budget.id);
+      setDeleteOpen(false);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "No se pudo eliminar el presupuesto");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const primaryHref = templateIntent
     ? `/budgets/${budget.id}/general-expenses?template=${encodeURIComponent(templateIntent.id)}`
     : `/budgets/${budget.id}`;
 
   return (
-    <TR className="hover:bg-[var(--app-surface-muted)]/80">
-      <TD className="font-medium text-[var(--app-text-strong)]">{budget.name}</TD>
-      <TD>{budget.projectName}</TD>
-      <TD>{formatCurrency(budget.totalAmount, budget.currency, currencyDecimals)}</TD>
-      <TD>{formatDate(budget.updatedAt, dateFormat)}</TD>
-      <TD>
-        <div className="flex justify-end gap-2">
-          <Link href={primaryHref}>
-            <ActionButton action="open" label={templateIntent ? "Gastos generales" : "Abrir"} size="sm" variant="outline" />
-          </Link>
-          {templateIntent ? (
-            <Link href={`/budgets/${budget.id}`}>
-              <ActionButton action="open" label="Presupuesto" size="sm" variant="ghost" />
+    <>
+      <TR className="hover:bg-[var(--app-surface-muted)]/80">
+        <TD className="font-medium text-[var(--app-text-strong)]">{budget.name}</TD>
+        <TD>{budget.projectName}</TD>
+        <TD>{formatCurrency(budget.totalAmount, budget.currency, currencyDecimals)}</TD>
+        <TD>{formatDate(budget.updatedAt, dateFormat)}</TD>
+        <TD>
+          <div className="flex justify-end gap-2">
+            <Link href={primaryHref}>
+              <ActionButton action="open" label={templateIntent ? "Gastos generales" : "Abrir"} size="sm" variant="outline" />
             </Link>
-          ) : null}
-          <ActionButton
-            action="delete"
-            label="Eliminar"
-            size="sm"
-            variant="ghost"
-            disabled={isPending}
-            onClick={() => void onRemoveBudget(budget.id)}
-          />
-        </div>
-      </TD>
-    </TR>
+            {templateIntent ? (
+              <Link href={`/budgets/${budget.id}`}>
+                <ActionButton action="open" label="Presupuesto" size="sm" variant="ghost" />
+              </Link>
+            ) : null}
+            <ActionButton
+              action="delete"
+              label="Eliminar"
+              size="sm"
+              variant="ghost"
+              disabled={isPending || isDeleting}
+              data-budget-action="delete"
+              data-budget-id={budget.id}
+              onClick={() => setDeleteOpen(true)}
+            />
+          </div>
+        </TD>
+      </TR>
+
+      <Dialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title className="text-base font-semibold text-[var(--app-text-strong)]">
+                  Eliminar presupuesto
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">
+                  Se eliminara <span className="font-medium text-[var(--app-text)]">{budget.name}</span> junto con sus partidas,
+                  APU, insumos y datos asociados.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <p className="flex items-start gap-2 text-sm text-rose-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                Esta accion no se puede deshacer. Se eliminaran todos los datos del presupuesto de forma permanente.
+              </p>
+            </div>
+
+            {deleteError ? (
+              <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {deleteError}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline" disabled={isDeleting}>
+                  Cancelar
+                </Button>
+              </Dialog.Close>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void handleDelete()}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                Eliminar presupuesto
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 });

@@ -19,6 +19,7 @@ import { getUserSettings } from "@/lib/data/settings";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectActivityHistory } from "@/components/projects/project-activity-history";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
+import { resolveProjectGeneralBudget } from "@/lib/projects/general-budget";
 import { getProjectOtherSections } from "@/lib/projects/other-sections";
 import { buildingSubtypeLabel, contractTypeLabel, projectCategoryLabel } from "@/lib/projects/labels";
 import { formatWorkDaysLabel } from "@/lib/work-schedule/calendar";
@@ -81,10 +82,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     notFound();
   }
 
-  const generalBudget =
-    project.budgets.find((budget) => budget.kind === "GENERAL") ??
-    project.budgets.find((budget) => budget.parentBudgetId == null) ??
-    null;
+  const generalBudget = resolveProjectGeneralBudget(project.budgets);
   const generalBudgetsCount = generalBudget ? 1 : 0;
   const subBudgets = project.budgets.filter((budget) => budget.kind === "SUB_BUDGET");
   const otherSections = getProjectOtherSections(generalBudget?.id ?? null);

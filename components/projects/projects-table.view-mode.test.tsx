@@ -103,6 +103,130 @@ describe("ProjectsTable excel view mode", () => {
     expect(getProjectNames()).toEqual(["Edificio Central", "Hospital Norte"]);
     expect(broadcastAppDataChange).not.toHaveBeenCalled();
   });
+
+  // ─── Delete confirmation dialog ──────────────────────────────────────────
+
+  it("opens the delete confirmation dialog when clicking Eliminar", async () => {
+    const { clickDeleteAction } = await renderProjectsTable();
+
+    expect(document.body.textContent).not.toContain("Eliminar proyecto");
+
+    await act(async () => {
+      clickDeleteAction("project-1");
+    });
+
+    expect(document.body.textContent).toContain("Eliminar proyecto");
+    expect(document.body.textContent).toContain("Edificio Central");
+    expect(document.body.textContent).toContain("Esta accion no se puede deshacer");
+    expect(document.body.textContent).toContain("Cancelar");
+  });
+
+  it("closes the delete dialog when clicking Cancelar", async () => {
+    const { clickDeleteAction, clickDialogButton } = await renderProjectsTable();
+
+    await act(async () => {
+      clickDeleteAction("project-1");
+    });
+
+    expect(document.body.textContent).toContain("Eliminar proyecto");
+
+    await act(async () => {
+      clickDialogButton("Cancelar");
+    });
+
+    expect(document.body.textContent).not.toContain("Eliminar proyecto");
+  });
+
+  it("closes the delete dialog when clicking the X close button", async () => {
+    const { clickDeleteAction } = await renderProjectsTable();
+
+    await act(async () => {
+      clickDeleteAction("project-1");
+    });
+
+    expect(document.body.textContent).toContain("Eliminar proyecto");
+
+    await act(async () => {
+      const xButton = document.querySelector('button[aria-label="Cerrar"]') as HTMLButtonElement | null;
+      if (!xButton) throw new Error("Missing X close button");
+      xButton.click();
+    });
+
+    expect(document.body.textContent).not.toContain("Eliminar proyecto");
+  });
+
+  it("sends DELETE request and removes the project row on confirm", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { clickDeleteAction, clickDialogButton, getProjectNames } = await renderProjectsTable();
+
+    await act(async () => {
+      clickDeleteAction("project-1");
+    });
+
+    expect(document.body.textContent).toContain("Eliminar proyecto");
+
+    await act(async () => {
+      clickDialogButton("Eliminar proyecto");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1", { method: "DELETE" });
+    expect(getProjectNames()).toEqual(["Hospital Norte"]);
+    expect(broadcastAppDataChange).toHaveBeenCalledWith(["/dashboard", "/projects", "/budgets"], undefined, {
+      locallyHandledPaths: ["/projects"],
+    });
+  });
+
+  it("shows inline error in the delete dialog when the API fails and keeps the dialog open", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("{}", { status: 500, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { clickDeleteAction, clickDialogButton } = await renderProjectsTable();
+
+    await act(async () => {
+      clickDeleteAction("project-1");
+    });
+
+    await act(async () => {
+      clickDialogButton("Eliminar proyecto");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1", { method: "DELETE" });
+    expect(document.body.textContent).toContain("Eliminar proyecto");
+    expect(document.body.textContent).toContain("No se pudo eliminar el proyecto");
+  });
+
+  it("shows a permission error in the delete dialog on 403 and keeps the dialog open", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ error: "No tienes permisos para eliminar este proyecto" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { clickDeleteAction, clickDialogButton } = await renderProjectsTable();
+
+    await act(async () => {
+      clickDeleteAction("project-1");
+    });
+
+    await act(async () => {
+      clickDialogButton("Eliminar proyecto");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1", { method: "DELETE" });
+    expect(document.body.textContent).toContain("Eliminar proyecto");
+    expect(document.body.textContent).toContain("No tienes permisos para eliminar este proyecto");
+  });
 });
 
 async function renderProjectsTable() {
@@ -164,11 +288,31 @@ async function renderProjectsTable() {
 
       button.click();
     },
+    clickDeleteAction: (projectId: string) => {
+      const button = nextContainer.querySelector(`button[data-project-action="delete"][data-project-id="${projectId}"]`);
+
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error(`Missing delete action for ${projectId}`);
+      }
+
+      button.click();
+    },
+    clickDialogButton: (label: string) => {
+      const button = Array.from(document.querySelectorAll("button")).find(
+        (element) => element.textContent?.trim() === label,
+      );
+
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error(`Missing dialog button: ${label}`);
+      }
+
+      button.click();
+    },
     getProjectNames: () =>
       Array.from(nextContainer.querySelectorAll("tbody tr td:first-child")).map((cell) => cell.textContent?.trim() ?? ""),
     getBudgetsCounts: () =>
       Array.from(nextContainer.querySelectorAll("tbody tr td:nth-child(5)")).map((cell) => cell.textContent?.trim() ?? ""),
-    getErrorMessage: () => nextContainer.querySelector("p.text-rose-700")?.textContent?.trim() ?? "",
+    getErrorMessage: () => nextContainer.querySelector("p.theme-status-error")?.textContent?.trim() ?? "",
   };
 }
 

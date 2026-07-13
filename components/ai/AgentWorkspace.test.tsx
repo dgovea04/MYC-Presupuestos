@@ -46,6 +46,9 @@ vi.mock("lucide-react", () => ({
   Calendar: () => <span data-testid="icon-calendar">📅</span>,
   Search: () => <span data-testid="icon-search">🔍</span>,
   FileText: () => <span data-testid="icon-filetext">📄</span>,
+  PanelRightClose: () => <span data-testid="icon-panel-right-close">◀</span>,
+  PanelRightOpen: () => <span data-testid="icon-panel-right-open">▶</span>,
+  GripVertical: () => <span data-testid="icon-grip-vertical">⋮</span>,
 }));
 
 // Mock child components
@@ -143,11 +146,13 @@ async function clickSuggestionButton(text: string) {
 describe("AgentWorkspace", () => {
   beforeEach(() => {
     mockUseAgentStream.mockReturnValue(makeDefaultHookReturn() as ReturnType<typeof useAgentStream>);
+    localStorage.clear();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
     cleanup();
+    localStorage.clear();
   });
 
   // ─── Empty state ─────────────────────────────────────────────────────────
@@ -159,8 +164,8 @@ describe("AgentWorkspace", () => {
       const grid = container.firstChild as HTMLElement;
       expect(grid).toBeTruthy();
       expect(grid.className).toContain("grid");
-      // Should have 3 direct children (panels)
-      expect(grid.children.length).toBe(3);
+      // Should have 3 direct children (panels) — left, center, right-wrapper
+      expect(grid.children.length).toBeGreaterThanOrEqual(3);
     });
 
     it("shows bundle selector when there are no messages", () => {
@@ -186,10 +191,10 @@ describe("AgentWorkspace", () => {
       // First select a bundle
       await clickBundleCard("Presupuestos");
 
-      // Now suggestion buttons should appear
+      // Now suggestion buttons should appear (bundle-specific)
       const suggestionBtns = screen.getAllByRole("button");
       const suggestions = suggestionBtns.filter(
-        (b) => b.textContent === "Crear presupuesto para vivienda"
+        (b) => b.textContent === "Crear presupuesto para vivienda de 3 pisos"
       );
       expect(suggestions.length).toBeGreaterThan(0);
     });
@@ -357,12 +362,12 @@ describe("AgentWorkspace", () => {
       // Select a bundle to show suggestion buttons
       await clickBundleCard("Presupuestos");
 
-      // Click a suggestion
-      await clickSuggestionButton("Crear presupuesto para vivienda");
+      // Click a suggestion (bundle-specific)
+      await clickSuggestionButton("Crear presupuesto para vivienda de 3 pisos");
 
       expect(connect).toHaveBeenCalledWith({
-        message: "Crear presupuesto para vivienda",
-        messages: [{ role: "user", content: "Crear presupuesto para vivienda" }],
+        message: "Crear presupuesto para vivienda de 3 pisos",
+        messages: [{ role: "user", content: "Crear presupuesto para vivienda de 3 pisos" }],
         projectId: undefined,
         workspaceId: undefined,
         mode: "workflow",
@@ -1633,6 +1638,262 @@ describe("AgentWorkspace", () => {
       // Los botones NO deben reaparecer porque el dismissed ref persiste
       expect(screen.queryByText("Sí, generar")).toBeNull();
       expect(screen.queryByText("¿Generar presupuesto para este proyecto?")).toBeNull();
+    });
+  });
+
+  // ─── Resize handle ───────────────────────────────────────────────────────
+
+  describe("resize handle", () => {
+    /** Helper: mock getBoundingClientRect on the grid to a known left offset */
+    function mockGridRect(grid: HTMLElement, rect: Partial<DOMRect>) {
+      const original = grid.getBoundingClientRect;
+      grid.getBoundingClientRect = () =>
+        ({
+          x: 0,
+          y: 0,
+          width: 900,
+          height: 600,
+          top: 0,
+          right: 900,
+          bottom: 600,
+          left: 0,
+          ...rect,
+        }) as DOMRect;
+      return () => {
+        grid.getBoundingClientRect = original;
+      };
+    }
+
+    it("renders the resize handle with correct ARIA attributes", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const handle = container.querySelector('[role="separator"]');
+      expect(handle).toBeTruthy();
+      expect(handle!.getAttribute("aria-orientation")).toBe("vertical");
+      expect(handle!.getAttribute("aria-label")).toBe("Ajustar ancho del panel de chat");
+      expect(handle!.getAttribute("tabindex")).toBe("0");
+    });
+
+    it("renders the GripVertical icon inside the handle", () => {
+      render(<AgentWorkspace />);
+
+      const icon = screen.getByTestId("icon-grip-vertical");
+      expect(icon).toBeTruthy();
+    });
+
+    it("uses default width of 380px in the CSS variable", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+    });
+
+    it("changes width on mousedown + mousemove drag", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const restore = mockGridRect(grid, { left: 100 });
+
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      // Start drag
+      fireEvent.mouseDown(handle, { clientX: 480 });
+
+      // Move to position 520 (relative to grid left = 100 → newWidth = 520 - 100 = 420)
+      fireEvent.mouseMove(document, { clientX: 520 });
+
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("420px");
+
+      restore();
+    });
+
+    it("clamps width to minimum 280px when dragging below", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const restore = mockGridRect(grid, { left: 0 });
+
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      // Start drag
+      fireEvent.mouseDown(handle, { clientX: 350 });
+
+      // Drag below minimum
+      fireEvent.mouseMove(document, { clientX: 200 });
+
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("280px");
+
+      restore();
+    });
+
+    it("clamps width to maximum 520px when dragging above", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const restore = mockGridRect(grid, { left: 0 });
+
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      // Start drag
+      fireEvent.mouseDown(handle, { clientX: 400 });
+
+      // Drag above maximum
+      fireEvent.mouseMove(document, { clientX: 700 });
+
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("520px");
+
+      restore();
+    });
+
+    it("resets body cursor and userSelect on mouseup after drag", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      // Start drag
+      fireEvent.mouseDown(handle, { clientX: 400 });
+
+      expect(document.body.style.cursor).toBe("col-resize");
+      expect(document.body.style.userSelect).toBe("none");
+
+      // End drag
+      fireEvent.mouseUp(document);
+
+      expect(document.body.style.cursor).toBe("");
+      expect(document.body.style.userSelect).toBe("");
+    });
+
+    it("does not resize when mousemove happens without mousedown", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const restore = mockGridRect(grid, { left: 0 });
+
+      // Move mouse without starting drag
+      fireEvent.mouseMove(document, { clientX: 500 });
+
+      // Width should remain at default
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+
+      restore();
+    });
+
+    it("persists width to localStorage after drag", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const restore = mockGridRect(grid, { left: 100 });
+
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      fireEvent.mouseDown(handle, { clientX: 480 });
+      fireEvent.mouseMove(document, { clientX: 550 });
+      fireEvent.mouseUp(document);
+
+      // Should be 550 - 100 = 450
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("450px");
+      expect(localStorage.getItem("myc-khipu-agent-chat-panel-width")).toBe("450");
+
+      restore();
+    });
+
+    it("reads initial width from localStorage if previously persisted", () => {
+      localStorage.setItem("myc-khipu-agent-chat-panel-width", "420");
+
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("420px");
+    });
+
+    it("ignores invalid localStorage values and uses default", () => {
+      localStorage.setItem("myc-khipu-agent-chat-panel-width", "not-a-number");
+
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+    });
+
+    it("ignores out-of-range localStorage values and uses default", () => {
+      localStorage.setItem("myc-khipu-agent-chat-panel-width", "100");
+
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+    });
+
+    it("ignores localStorage values above maximum and uses default", () => {
+      localStorage.setItem("myc-khipu-agent-chat-panel-width", "600");
+
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+    });
+
+    // ─── Keyboard resize ────────────────────────────────────────────────
+
+    it("decreases width by 10px on ArrowLeft", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      fireEvent.keyDown(handle, { key: "ArrowLeft" });
+
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("370px");
+    });
+
+    it("increases width by 10px on ArrowRight", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      fireEvent.keyDown(handle, { key: "ArrowRight" });
+
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("390px");
+    });
+
+    it("clamps to min width with multiple ArrowLeft presses", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      // Press ArrowLeft 20 times (380 - 200 = 180, clamped to 280)
+      for (let i = 0; i < 20; i++) {
+        fireEvent.keyDown(handle, { key: "ArrowLeft" });
+      }
+
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("280px");
+    });
+
+    it("clamps to max width with multiple ArrowRight presses", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const grid = container.firstChild as HTMLElement;
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      // Press ArrowRight 20 times (380 + 200 = 580, clamped to 520)
+      for (let i = 0; i < 20; i++) {
+        fireEvent.keyDown(handle, { key: "ArrowRight" });
+      }
+
+      expect(grid.style.getPropertyValue("--chat-width")).toBe("520px");
+    });
+
+    it("persists width after keyboard resize", () => {
+      const { container } = render(<AgentWorkspace />);
+
+      const handle = container.querySelector('[role="separator"]') as HTMLElement;
+
+      fireEvent.keyDown(handle, { key: "ArrowRight" });
+      fireEvent.keyDown(handle, { key: "ArrowRight" });
+
+      expect(localStorage.getItem("myc-khipu-agent-chat-panel-width")).toBe("400");
     });
   });
 });

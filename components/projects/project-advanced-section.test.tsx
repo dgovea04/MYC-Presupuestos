@@ -1,7 +1,19 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// ── Configurable mock for useAppViewMode ────────────────────────────────
+// We use a mutable ref so tests can toggle Excel mode without hoisting issues.
+const mockViewModeRef = { current: { isExcelMode: false, viewMode: "modern" as const } };
+
+vi.mock("@/components/view-mode/app-view-mode-provider", () => ({
+  useAppViewMode: () => ({
+    isExcelMode: mockViewModeRef.current.isExcelMode,
+    viewMode: mockViewModeRef.current.viewMode,
+    setViewMode: vi.fn(),
+  }),
+}));
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({
@@ -66,7 +78,10 @@ const EMPTY_PROPS = {
 describe("ProjectAdvancedSection", () => {
   afterEach(() => {
     cleanup();
+    mockViewModeRef.current = { isExcelMode: false, viewMode: "modern" };
   });
+
+  // ── Collapsed state ───────────────────────────────────────────────────────
 
   describe("collapsed state (default)", () => {
     it("renders the toggle button with correct title and description", () => {
@@ -82,11 +97,14 @@ describe("ProjectAdvancedSection", () => {
     it("does NOT render expanded fields when collapsed", () => {
       render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
 
+      // Sub-section labels
+      expect(screen.queryByText("Ubicación")).toBeNull();
+      expect(screen.queryByText("Parámetros técnicos")).toBeNull();
+      expect(screen.queryByText("Información complementaria")).toBeNull();
+
+      // Field labels
       expect(screen.queryByText("Subtipo de edificación")).toBeNull();
       expect(screen.queryByText("Tipo de contrato")).toBeNull();
-      expect(screen.queryByText("Parámetros físicos")).toBeNull();
-      expect(screen.queryByText("Información contractual")).toBeNull();
-      expect(screen.queryByText("Stakeholders")).toBeNull();
       expect(screen.queryByText("Resumen ejecutivo")).toBeNull();
     });
 
@@ -115,21 +133,20 @@ describe("ProjectAdvancedSection", () => {
     });
   });
 
+  // ── Expanded state ────────────────────────────────────────────────────────
+
   describe("expanded state (after clicking toggle)", () => {
     function expand() {
       render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
       fireEvent.click(screen.getByText("Configuración avanzada"));
     }
 
-    it("renders all field group labels", () => {
+    it("renders sub-section group labels: Ubicación, Parámetros técnicos, Información complementaria", () => {
       expand();
 
-      expect(screen.getByText("Subtipo de edificación")).toBeTruthy();
-      expect(screen.getByText("Tipo de contrato")).toBeTruthy();
-      expect(screen.getByText("Parámetros físicos")).toBeTruthy();
-      expect(screen.getByText("Información contractual")).toBeTruthy();
-      expect(screen.getByText("Stakeholders")).toBeTruthy();
-      expect(screen.getByText("Resumen ejecutivo")).toBeTruthy();
+      expect(screen.getByText("Ubicación")).toBeTruthy();
+      expect(screen.getByText("Parámetros técnicos")).toBeTruthy();
+      expect(screen.getByText("Información complementaria")).toBeTruthy();
     });
 
     it("renders buildingSubtype and contractType as Select components", () => {
@@ -139,7 +156,7 @@ describe("ProjectAdvancedSection", () => {
       expect(screen.getByTestId("select-contractType")).toBeTruthy();
     });
 
-    it("renders physical parameter inputs via Field helper", () => {
+    it("renders physical parameter inputs", () => {
       expand();
 
       expect(screen.getByLabelText("Área construida (m²)")).toBeTruthy();
@@ -149,14 +166,14 @@ describe("ProjectAdvancedSection", () => {
       expect(screen.getByLabelText("Altura total (m)")).toBeTruthy();
     });
 
-    it("renders contract info inputs", () => {
+    it("renders contract and reference budget inputs in Información complementaria", () => {
       expand();
 
       expect(screen.getByLabelText("Monto contractual")).toBeTruthy();
       expect(screen.getByLabelText("Presupuesto referencial")).toBeTruthy();
     });
 
-    it("renders stakeholder inputs", () => {
+    it("renders stakeholder inputs in Información complementaria", () => {
       expand();
 
       expect(screen.getByLabelText("Ing. Residente / PM")).toBeTruthy();
@@ -164,7 +181,7 @@ describe("ProjectAdvancedSection", () => {
       expect(screen.getByLabelText("Supervisión")).toBeTruthy();
     });
 
-    it("renders executive summary textarea", () => {
+    it("renders executive summary textarea full-width", () => {
       expand();
 
       const textarea = screen.getByLabelText("Resumen ejecutivo");
@@ -195,6 +212,8 @@ describe("ProjectAdvancedSection", () => {
       expect(screen.queryByText("Tipo de contrato")).toBeNull();
     });
   });
+
+  // ── With values ───────────────────────────────────────────────────────────
 
   describe("expanded with values", () => {
     it("renders number field defaults correctly", () => {
@@ -234,7 +253,6 @@ describe("ProjectAdvancedSection", () => {
       const subtypeSelect = screen.getByTestId("select-buildingSubtype") as HTMLSelectElement;
       const contractSelect = screen.getByTestId("select-contractType") as HTMLSelectElement;
 
-      // The mocked Select renders native <select> with defaultValue
       expect(subtypeSelect).toBeTruthy();
       expect(contractSelect).toBeTruthy();
       expect(subtypeSelect.querySelector('option[value="MULTIFAMILIAR"]')).toBeTruthy();
@@ -289,6 +307,8 @@ describe("ProjectAdvancedSection", () => {
     });
   });
 
+  // ── Structural integrity ──────────────────────────────────────────────────
+
   describe("structural integrity", () => {
     it("toggle button is type=button (not submit)", () => {
       render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
@@ -301,23 +321,121 @@ describe("ProjectAdvancedSection", () => {
     it("chevron is present both collapsed and expanded", () => {
       render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
 
-      // Collapsed
       expect(screen.getByTestId("chevron-down")).toBeTruthy();
 
       fireEvent.click(screen.getByText("Configuración avanzada"));
 
-      // Expanded
       expect(screen.getByTestId("chevron-down")).toBeTruthy();
     });
 
-    it("wrapper has rounded and border classes", () => {
+    it("uses modern styling by default (rounded-2xl, border, shadow)", () => {
       render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
 
-      // The wrapper div is the direct parent of the toggle button
       const button = screen.getByText("Configuración avanzada").closest("button");
       const wrapper = button?.parentElement;
       expect(wrapper?.className).toContain("rounded-2xl");
       expect(wrapper?.className).toContain("border");
+    });
+  });
+
+  // ── 2-Column grid layout ──────────────────────────────────────────────────
+
+  describe("2-column grid layout (when expanded)", () => {
+    it("Parámetros técnicos has all 7 fields in a 2-column grid", () => {
+      render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
+      fireEvent.click(screen.getByText("Configuración avanzada"));
+
+      const expectedLabels = [
+        "Subtipo de edificación",
+        "Tipo de contrato",
+        "Área construida (m²)",
+        "Área de terreno (m²)",
+        "N° de pisos",
+        "N° de sótanos",
+        "Altura total (m)",
+      ];
+      expectedLabels.forEach((label) => {
+        expect(screen.getByText(label)).toBeTruthy();
+      });
+    });
+
+    it("Información complementaria has all 5 fields in a 2-column grid", () => {
+      render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
+      fireEvent.click(screen.getByText("Configuración avanzada"));
+
+      const expectedLabels = [
+        "Monto contractual",
+        "Presupuesto referencial",
+        "Ing. Residente / PM",
+        "Entidad contratante",
+        "Supervisión",
+      ];
+      expectedLabels.forEach((label) => {
+        expect(screen.getByText(label)).toBeTruthy();
+      });
+    });
+
+    it("contains two 2-column grid containers (one per sub-section)", () => {
+      render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
+      fireEvent.click(screen.getByText("Configuración avanzada"));
+
+      // Each sub-section grid is a direct child of its .space-y-3 container
+      const paramGrid = screen.getByText("Parámetros técnicos").parentElement?.querySelector(".grid");
+      const infoGrid = screen.getByText("Información complementaria").parentElement?.querySelector(".grid");
+
+      expect(paramGrid).toBeTruthy();
+      expect(infoGrid).toBeTruthy();
+      expect(paramGrid).not.toBe(infoGrid); // Different elements
+    });
+
+    it("sub-section group labels are uppercase with tracking-wider", () => {
+      render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
+      fireEvent.click(screen.getByText("Configuración avanzada"));
+
+      const paramsLabel = screen.getByText("Parámetros técnicos");
+      const infoLabel = screen.getByText("Información complementaria");
+
+      expect(paramsLabel.className).toContain("uppercase");
+      expect(paramsLabel.className).toContain("tracking-wider");
+      expect(infoLabel.className).toContain("uppercase");
+      expect(infoLabel.className).toContain("tracking-wider");
+    });
+
+    it("executive summary textarea is inside its own section wrapper, not inside a 2-column grid", () => {
+      render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
+      fireEvent.click(screen.getByText("Configuración avanzada"));
+
+      const textarea = screen.getByLabelText("Resumen ejecutivo");
+      // The textarea's parent is the section wrapper (space-y-4 border...)
+      const parent = textarea.parentElement;
+      expect(parent?.className).toContain("space-y-4");
+      expect(parent?.className).toContain("border");
+      // And it should NOT be inside a grid
+      expect(parent?.className).not.toContain("grid");
+    });
+  });
+
+  // ── Excel mode ────────────────────────────────────────────────────────────
+
+  describe("Excel mode styling", () => {
+    beforeEach(() => {
+      mockViewModeRef.current = { isExcelMode: true, viewMode: "excel" };
+    });
+
+    it("uses condensed padding on toggle button (px-4 py-3 instead of px-5 py-4)", () => {
+      render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
+
+      const button = screen.getByText("Configuración avanzada").closest("button");
+      expect(button?.className).toContain("px-4");
+      expect(button?.className).toContain("py-3");
+    });
+
+    it("wrapper uses excel border style (rounded-md instead of rounded-2xl)", () => {
+      render(<ProjectAdvancedSection {...EMPTY_PROPS} />);
+
+      const wrapper = screen.getByText("Configuración avanzada").closest("button")?.parentElement;
+      expect(wrapper?.className).toContain("rounded-md");
+      expect(wrapper?.className).not.toContain("rounded-2xl");
     });
   });
 });

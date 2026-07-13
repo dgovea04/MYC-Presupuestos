@@ -11,6 +11,8 @@ import { FormActionBar, FormSectionPanel } from "@/components/ui/operational-sur
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import {
   buildingSubtypeValues,
   contractTypeValues,
@@ -105,6 +107,8 @@ export function ProjectForm({ companies, workCalendars, project, selectedTemplat
     window.location.assign(`/projects/${savedProject.id}`);
   }
 
+  const { isExcelMode } = useAppViewMode();
+
   return (
     <form action={handleSubmit} className="space-y-5">
       {project ? (
@@ -125,88 +129,104 @@ export function ProjectForm({ companies, workCalendars, project, selectedTemplat
         </div>
       ) : null}
 
-      <FormSectionPanel
-        title="Identidad del proyecto"
-        description="Define la empresa, el nombre base de la obra y su clasificacion principal."
-      >
-        <div className="space-y-2">
-          <Label htmlFor="companyId">Empresa</Label>
-          {companies.length > 1 ? (
-            <Select id="companyId" name="companyId" defaultValue={project?.companyId ?? activeWorkspaceId ?? companies[0]?.id}>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <>
-              <input type="hidden" name="companyId" value={companies[0]?.id} />
-              <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text-strong)]">
-                {companies[0]?.name}
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="space-y-5">
+          <FormSectionPanel
+            title="Identidad del proyecto"
+            description="Define la empresa, el nombre base de la obra y su clasificacion principal."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="companyId">Empresa</Label>
+                {companies.length > 1 ? (
+                  <Select id="companyId" name="companyId" defaultValue={project?.companyId ?? activeWorkspaceId ?? companies[0]?.id}>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <>
+                    <input type="hidden" name="companyId" value={companies[0]?.id} />
+                    <div className={cn(
+                      "rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text-strong)]",
+                      isExcelMode && "h-8 rounded-md border-[var(--app-border)] px-2 py-1.5 text-xs",
+                    )}>
+                      {companies[0]?.name}
+                    </div>
+                  </>
+                )}
               </div>
-            </>
-          )}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field id="name" label="Nombre de obra" defaultValue={project?.name} required />
-          <div className="space-y-2">
-            <Label htmlFor="projectCategory">Tipo de obra</Label>
-            <Select id="projectCategory" name="projectCategory" defaultValue={project?.projectCategory ?? ""}>
-              <option value="">Seleccionar tipo...</option>
-              {projectCategoryValues.map((category) => (
-                <option key={category} value={category}>
-                  {projectCategoryLabel(category)}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
-      </FormSectionPanel>
+              <Field id="name" label="Nombre de obra" defaultValue={project?.name} required />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="projectCategory">Tipo de obra</Label>
+                <Select id="projectCategory" name="projectCategory" defaultValue={project?.projectCategory ?? ""}>
+                  <option value="">Seleccionar tipo...</option>
+                  {projectCategoryValues.map((category) => (
+                    <option key={category} value={category}>
+                      {projectCategoryLabel(category)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div /> {/* spacer to balance 2-column grid */}
+            </div>
+          </FormSectionPanel>
 
-      <FormSectionPanel
-        title="Cliente y ubicación"
-        description="Ubica la obra dentro del contexto comercial y geográfico del proyecto."
-        icon={<MapPin className="h-4 w-4" />}
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field id="clientName" label="Cliente" defaultValue={project?.clientName ?? ""} />
-          <Field id="location" label="Ubicación" defaultValue={project?.location ?? ""} />
+          <FormSectionPanel
+            title="Cliente y ubicación"
+            description="Ubica la obra dentro del contexto comercial y geográfico del proyecto."
+            icon={<MapPin className="h-4 w-4" />}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field id="clientName" label="Cliente" defaultValue={project?.clientName ?? ""} />
+              <Field id="location" label="Ubicación" defaultValue={project?.location ?? ""} />
+            </div>
+          </FormSectionPanel>
         </div>
-      </FormSectionPanel>
 
-      <FormSectionPanel
-        title="Fechas y estado"
-        description="Controla la vigencia prevista y el momento operativo actual del proyecto."
-        icon={<CalendarDays className="h-4 w-4" />}
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field id="startDate" type="date" label="Fecha inicio" defaultValue={normalizeDate(project?.startDate)} />
-          <Field id="endDate" type="date" label="Fecha fin" defaultValue={normalizeDate(project?.endDate)} />
+        <div className="space-y-5">
+          <FormSectionPanel
+            title="Fechas y estado"
+            description="Controla la vigencia prevista y el momento operativo actual del proyecto."
+            icon={<CalendarDays className="h-4 w-4" />}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field id="startDate" type="date" label="Fecha inicio" defaultValue={normalizeDate(project?.startDate)} />
+              <Field id="endDate" type="date" label="Fecha fin" defaultValue={normalizeDate(project?.endDate)} />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {workCalendars && workCalendars.length > 0 ? (
+                <div className="space-y-2">
+                  <Label htmlFor="workCalendarId">Calendario laboral</Label>
+                  <Select id="workCalendarId" name="workCalendarId" defaultValue={project?.workCalendarId ?? ""}>
+                    <option value="">Calendario por defecto (Lun-Vie, 8h)</option>
+                    {workCalendars.map((calendar) => (
+                      <option key={calendar.id} value={calendar.id}>
+                        {calendar.name} ({formatWorkDaysLabel(calendar.workDays)}, {calendar.workHoursPerDay}h/dia)
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              ) : (
+                <div /> /* spacer when no calendars */
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="status">Estado</Label>
+                <Select id="status" name="status" defaultValue={project?.status ?? "PLANNING"}>
+                  <option value="PLANNING">Planificación</option>
+                  <option value="IN_PROGRESS">En ejecución</option>
+                  <option value="COMPLETED">Completado</option>
+                  <option value="ON_HOLD">En pausa</option>
+                </Select>
+              </div>
+            </div>
+          </FormSectionPanel>
         </div>
-        {workCalendars && workCalendars.length > 0 ? (
-          <div className="space-y-2">
-            <Label htmlFor="workCalendarId">Calendario laboral</Label>
-            <Select id="workCalendarId" name="workCalendarId" defaultValue={project?.workCalendarId ?? ""}>
-              <option value="">Calendario por defecto (Lun-Vie, 8h)</option>
-              {workCalendars.map((calendar) => (
-                <option key={calendar.id} value={calendar.id}>
-                  {calendar.name} ({formatWorkDaysLabel(calendar.workDays)}, {calendar.workHoursPerDay}h/dia)
-                </option>
-              ))}
-            </Select>
-          </div>
-        ) : null}
-        <div className="space-y-2">
-          <Label htmlFor="status">Estado</Label>
-          <Select id="status" name="status" defaultValue={project?.status ?? "PLANNING"}>
-            <option value="PLANNING">Planificación</option>
-            <option value="IN_PROGRESS">En ejecución</option>
-            <option value="COMPLETED">Completado</option>
-            <option value="ON_HOLD">En pausa</option>
-          </Select>
-        </div>
-      </FormSectionPanel>
+      </div>
 
       {error ? <p className="theme-status-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
 
@@ -258,10 +278,23 @@ function Field({
   required?: boolean;
   type?: string;
 }) {
+  const { isExcelMode } = useAppViewMode();
+
   return (
-    <div className="space-y-2">
+    <div className={isExcelMode ? "space-y-1" : "space-y-2"}>
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} name={id} type={type} defaultValue={defaultValue} required={required} />
+      <Input
+        id={id}
+        name={id}
+        type={type}
+        defaultValue={defaultValue}
+        required={required}
+        className={cn(
+          isExcelMode
+            ? "h-8 rounded-md border-[var(--app-border)] px-2 py-1.5 text-xs"
+            : "h-10 rounded-xl border-[var(--app-border-strong)] px-3 py-2 text-sm",
+        )}
+      />
     </div>
   );
 }
@@ -313,13 +346,33 @@ type AdvancedSectionProps = {
 
 export function ProjectAdvancedSection(props: AdvancedSectionProps) {
   const [expanded, setExpanded] = useState(false);
+  const { isExcelMode } = useAppViewMode();
+
+  const sectionWrapperClass = cn(
+    "space-y-4 border transition-colors",
+    isExcelMode
+      ? "rounded-md border-[var(--app-border)] bg-[var(--app-surface)] p-3"
+      : "rounded-xl border-[var(--app-border-soft)] bg-[var(--app-surface)] p-4",
+  );
+
+  const subSectionLabelClass = "text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]";
 
   return (
-    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]">
+    <div
+      className={cn(
+        "border transition-colors",
+        isExcelMode
+          ? "rounded-md border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]"
+          : "rounded-2xl border-[var(--app-border-soft)] bg-[var(--app-surface)] shadow-[0_10px_30px_-24px_rgba(15,23,42,0.28)]",
+      )}
+    >
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between px-5 py-4 text-left"
+        className={cn(
+          "flex w-full items-center justify-between px-5 py-4 text-left",
+          isExcelMode ? "px-4 py-3" : "",
+        )}
       >
         <div>
           <h3 className="text-sm font-semibold text-[var(--app-text-strong)]">Configuración avanzada</h3>
@@ -332,90 +385,102 @@ export function ProjectAdvancedSection(props: AdvancedSectionProps) {
         />
       </button>
 
-      {/* LocationSelects always rendered — hidden inputs persist when collapsed */}
-      <div className={expanded ? "border-t border-[var(--app-border)] px-5 pt-4" : "px-5"}>
-        <LocationSelects
-          initialDepartment={props.region}
-          initialProvince={props.province}
-          initialDistrict={props.district}
-          compact={!expanded}
-        />
-      </div>
+      {/* LocationSelects only rendered here when collapsed; full UI lives inside expanded section */}
+      {!expanded ? (
+        <div className="px-5">
+          <LocationSelects
+            initialDepartment={props.region}
+            initialProvince={props.province}
+            initialDistrict={props.district}
+            compact
+          />
+        </div>
+      ) : null}
 
       {expanded ? (
         <div className="space-y-5 border-t border-[var(--app-border)] px-5 pb-5 pt-4">
-          {/* Clasificación técnica */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="buildingSubtype">Subtipo de edificación</Label>
-              <Select id="buildingSubtype" name="buildingSubtype" defaultValue={props.buildingSubtype ?? ""}>
-                <option value="">No especificado</option>
-                {buildingSubtypeValues.map((subtype) => (
-                  <option key={subtype} value={subtype}>
-                    {buildingSubtypeLabel(subtype)}
-                  </option>
-                ))}
-              </Select>
+          <div className="grid gap-5 md:grid-cols-2">
+            {/* Left column: Ubicación + Parámetros técnicos */}
+            <div className="space-y-5">
+              {/* Sub-sección: Ubicación */}
+              <div className={sectionWrapperClass}>
+                <Label className={subSectionLabelClass}>
+                  Ubicación
+                </Label>
+                <LocationSelects
+                  initialDepartment={props.region}
+                  initialProvince={props.province}
+                  initialDistrict={props.district}
+                  compact={false}
+                />
+              </div>
+
+              {/* Sub-sección: Parámetros técnicos */}
+              <div className={sectionWrapperClass}>
+                <Label className={subSectionLabelClass}>
+                  Parámetros técnicos
+                </Label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="buildingSubtype">Subtipo de edificación</Label>
+                    <Select id="buildingSubtype" name="buildingSubtype" defaultValue={props.buildingSubtype ?? ""}>
+                      <option value="">No especificado</option>
+                      {buildingSubtypeValues.map((subtype) => (
+                        <option key={subtype} value={subtype}>
+                          {buildingSubtypeLabel(subtype)}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contractType">Tipo de contrato</Label>
+                    <Select id="contractType" name="contractType" defaultValue={props.contractType ?? ""}>
+                      <option value="">No especificado</option>
+                      {contractTypeValues.map((contractType) => (
+                        <option key={contractType} value={contractType}>
+                          {contractTypeLabel(contractType)}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <Field id="builtArea" label="Área construida (m²)" type="number" defaultValue={numberOrEmpty(props.builtArea)} />
+                  <Field id="landArea" label="Área de terreno (m²)" type="number" defaultValue={numberOrEmpty(props.landArea)} />
+                  <Field id="floors" label="N° de pisos" type="number" defaultValue={numberOrEmpty(props.floors)} />
+                  <Field id="basements" label="N° de sótanos" type="number" defaultValue={numberOrEmpty(props.basements)} />
+                  <Field id="buildingHeight" label="Altura total (m)" type="number" defaultValue={numberOrEmpty(props.buildingHeight)} />
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="contractType">Tipo de contrato</Label>
-              <Select id="contractType" name="contractType" defaultValue={props.contractType ?? ""}>
-                <option value="">No especificado</option>
-                {contractTypeValues.map((contractType) => (
-                  <option key={contractType} value={contractType}>
-                    {contractTypeLabel(contractType)}
-                  </option>
-                ))}
-              </Select>
+
+            {/* Right column: Información complementaria */}
+            <div className="space-y-5">
+              <div className={sectionWrapperClass}>
+                <Label className={subSectionLabelClass}>
+                  Información complementaria
+                </Label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field id="contractAmount" label="Monto contractual" type="number" defaultValue={numberOrEmpty(props.contractAmount)} />
+                  <Field id="referenceBudget" label="Presupuesto referencial" type="number" defaultValue={numberOrEmpty(props.referenceBudget)} />
+                  <Field id="projectManager" label="Ing. Residente / PM" defaultValue={props.projectManager ?? ""} />
+                  <Field id="ownerEntity" label="Entidad contratante" defaultValue={props.ownerEntity ?? ""} />
+                  <Field id="supervisor" label="Supervisión" defaultValue={props.supervisor ?? ""} />
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Parámetros físicos */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
-              Parámetros físicos
+          {/* Resumen ejecutivo — full width */}
+          <div className={sectionWrapperClass}>
+            <Label htmlFor="executiveSummary" className={subSectionLabelClass}>
+              Resumen ejecutivo
             </Label>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Field id="builtArea" label="Área construida (m²)" type="number" defaultValue={numberOrEmpty(props.builtArea)} />
-              <Field id="landArea" label="Área de terreno (m²)" type="number" defaultValue={numberOrEmpty(props.landArea)} />
-              <Field id="floors" label="N° de pisos" type="number" defaultValue={numberOrEmpty(props.floors)} />
-              <Field id="basements" label="N° de sótanos" type="number" defaultValue={numberOrEmpty(props.basements)} />
-              <Field id="buildingHeight" label="Altura total (m)" type="number" defaultValue={numberOrEmpty(props.buildingHeight)} />
-            </div>
-          </div>
-
-          {/* Información contractual */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
-              Información contractual
-            </Label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field id="contractAmount" label="Monto contractual" type="number" defaultValue={numberOrEmpty(props.contractAmount)} />
-              <Field id="referenceBudget" label="Presupuesto referencial" type="number" defaultValue={numberOrEmpty(props.referenceBudget)} />
-            </div>
-          </div>
-
-          {/* Contactos / Stakeholders */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
-              Stakeholders
-            </Label>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field id="projectManager" label="Ing. Residente / PM" defaultValue={props.projectManager ?? ""} />
-              <Field id="ownerEntity" label="Entidad contratante" defaultValue={props.ownerEntity ?? ""} />
-              <Field id="supervisor" label="Supervisión" defaultValue={props.supervisor ?? ""} />
-            </div>
-          </div>
-
-          {/* Resumen ejecutivo */}
-          <div className="space-y-2">
-            <Label htmlFor="executiveSummary">Resumen ejecutivo</Label>
             <Textarea
               id="executiveSummary"
               name="executiveSummary"
               defaultValue={props.executiveSummary ?? ""}
               placeholder="Describe el alcance, objetivos y características principales del proyecto..."
               rows={4}
+              className={isExcelMode ? "rounded-md border-[var(--app-border)] px-2 py-1.5 text-xs" : undefined}
             />
           </div>
         </div>
@@ -428,5 +493,3 @@ function numberOrEmpty(value: number | null | undefined) {
   if (value == null) return "";
   return String(value);
 }
-
-
