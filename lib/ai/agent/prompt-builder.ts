@@ -38,11 +38,12 @@ export type AgentPromptContext = {
  * 2. Contexto del workspace
  * 3. Proyectos disponibles
  * 4. Especialidad activa
- * 5. Intención detectada
- * 6. Reglas de herramientas
- * 7. Reglas de confirmación
- * 8. Reglas de seguridad
- * 9. Reglas de respuesta
+ * 5. Flujo de creación de proyectos
+ * 6. Intención detectada
+ * 7. Reglas de herramientas
+ * 8. Reglas de confirmación
+ * 9. Reglas de seguridad
+ * 10. Reglas de respuesta
  */
 export function buildAgentSystemPrompt(context: AgentPromptContext): string {
   const sections: string[] = [
@@ -50,6 +51,7 @@ export function buildAgentSystemPrompt(context: AgentPromptContext): string {
     buildWorkspaceSection(context.workspace),
     buildRecentProjectsSection(context.recentProjects),
     buildWorkflowSection(context.workflow),
+    buildProjectCreationFlowSection(),
     buildIntentSection(context.intent),
     buildToolRulesSection(context.intent),
     buildConfirmationSection(context.pendingAction),
@@ -135,7 +137,64 @@ export function buildWorkflowSection(
 }
 
 /**
- * Sección 5: Intención detectada.
+ * Sección 5: Flujo de creación de proyectos.
+ *
+ * Instrucciones paso a paso explícitas para que el modelo sepa exactamente
+ * qué hacer cuando el usuario quiere crear un proyecto o presupuesto.
+ * Esencial para modelos pequeños que necesitan guía muy concreta.
+ */
+export function buildProjectCreationFlowSection(): string {
+  return [
+    "",
+    "--- INSTRUCCIONES ---",
+    "",
+    "CREAR PROYECTO NUEVO:",
+    "1. El usuario pide crear proyecto/presupuesto → si no está en la lista de PROYECTOS DISPONIBLES, pregúntale: ¿nuevo o existente?",
+    "2. El usuario responde 'nuevo' (o similar) → pregúntale: ¿cuál es el nombre?",      "3. El usuario da el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
+      "   • No preguntes por location, clientName, projectType ni fechas (son opcionales).",
+      "   • No pidas confirmación extra. El sistema ya maneja la aprobación.",
+      "   • El companyId ya está configurado, no lo incluyas.",
+      "4. Después de crear el proyecto exitosamente → PREGUNTA: '¿Quieres que genere el presupuesto ahora?'.",
+      "   • Si el usuario dice que sí: sigue el flujo GENERAR PRESUPUESTO (abajo).",
+      "   • Si el usuario dice que no: confirma que el proyecto está listo y espera instrucciones.",
+    "",
+    "PROYECTO EXISTENTE (BUSCAR EN LA LISTA DE ARRIBA):",
+    "1. El usuario dice 'existente' (o similar) y da un nombre → BUSCA en la sección PROYECTOS DISPONIBLES (arriba) si el proyecto ya está listado.",
+    "   • Los proyectos ya están listados con sus IDs. USA EL ID directamente, NO llames searchProjects.",
+    "   • Ejemplo: si el usuario dice 'Santa Monica', revisa la lista de PROYECTOS DISPONIBLES. Si ves 'Santa Monica' ahí, usa su ID.",
+    "2. Si el proyecto NO está en la lista de PROYECTOS DISPONIBLES, USA searchProjects({ query: nombreDelProyecto }) PARA BUSCARLO.",
+    "   • PASA EL NOMBRE como query. NUNCA llames searchProjects sin query.",
+    "3. searchProjects retorna resultados. ENCUENTRA el que coincide por nombre y usa su ID.",
+    "4. Si el proyecto no se encuentra en los resultados, INFORMÁLE al usuario.",
+    "",
+    "GENERAR PRESUPUESTO (FLUJO EN 2 PASOS):",
+    "PASO 1 — VISTA PREVIA (SIEMPRE primero):",
+    "1. Llama previewBudgetGeneration con projectId y description para obtener el preview.",
+    "2. previewBudgetGeneration es SOLO LECTURA, no requiere aprobación, y muestra:",
+    "   • Proyectos similares encontrados",
+    "   • Plantilla .mcp seleccionada y su score",
+    "   • Matching con catálogo: partidas OK, revisión requerida y sin match",
+    "   • Costo directo estimado por sub-presupuesto",
+    "3. MUÉSTRALE al usuario un resumen claro del preview con conteos y advertencias.",
+    "4. PREGUNTA al usuario: '¿Quieres que proceda con la generación?'",
+    "",
+    "PASO 2 — GENERAR (el usuario confirma o hace clic en botón):",
+    '5. En cuanto el usuario responda ALGO afirmativo, llama generateBudget INMEDIATAMENTE. CONSIDERA CONFIRMACIÓN VÁLIDA: "si", "sí", "confirmado", "ok", "dale", "procede", "adelante", "vamos", "hazlo", "correcto".',
+    "   • SI el usuario ya respondió afirmativamente, NO le preguntes de nuevo. Llama generateBudget DIRECTAMENTE.",
+    "6. Si el usuario responde con algo negativo o pide cambios, responde apropiadamente sin llamar generateBudget.",
+    "7. generateBudget puede requerir aprobación (dependiendo del modo).",
+    "",
+    "REGLAS IMPORTANTES:",
+    "- NUNCA llames searchProjects() sin pasar el parámetro query con el nombre del proyecto.",
+    "- Si el proyecto ya está en la lista de PROYECTOS DISPONIBLES, USA SU ID DIRECTO. No necesitas searchProjects.",
+    "- NO uses searchBudgets para buscar proyectos. searchBudgets busca presupuestos dentro de un proyecto.",
+    "- Si ya tienes la información que necesitas, responde al usuario en lugar de llamar más herramientas.",
+    "- El sistema bloquea herramientas que se llaman más de 2 veces, así que úsalas con cuidado.",
+  ].join("\n");
+}
+
+/**
+ * Sección 6: Intención detectada.
  */
 export function buildIntentSection(intent: AgentIntent): string {
   const rules = getIntentRules(intent.type);
@@ -153,7 +212,7 @@ export function buildIntentSection(intent: AgentIntent): string {
 }
 
 /**
- * Sección 6: Reglas de herramientas para la intención.
+ * Sección 7: Reglas de herramientas para la intención.
  */
 export function buildToolRulesSection(intent: AgentIntent): string {
   const rules = getToolRulesForIntent(intent.type);
@@ -167,7 +226,7 @@ export function buildToolRulesSection(intent: AgentIntent): string {
 }
 
 /**
- * Sección 7: Reglas de confirmación / pending action.
+ * Sección 8: Reglas de confirmación / pending action.
  */
 export function buildConfirmationSection(
   pendingAction: AgentPendingAction | null | undefined,
@@ -197,7 +256,7 @@ export function buildConfirmationSection(
 }
 
 /**
- * Sección 8: Reglas de seguridad / aprobación.
+ * Sección 9: Reglas de seguridad / aprobación.
  */
 export function buildSecuritySection(): string {
   return [
@@ -216,7 +275,7 @@ export function buildSecuritySection(): string {
 }
 
 /**
- * Sección 9: Reglas de respuesta.
+ * Sección 10: Reglas de respuesta.
  */
 export function buildResponseSection(
   provider?: AgentPromptContext["provider"],

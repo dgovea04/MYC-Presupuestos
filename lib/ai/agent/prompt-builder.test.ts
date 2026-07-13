@@ -5,6 +5,7 @@ import {
   buildWorkspaceSection,
   buildRecentProjectsSection,
   buildWorkflowSection,
+  buildProjectCreationFlowSection,
   buildIntentSection,
   buildToolRulesSection,
   buildConfirmationSection,
@@ -96,6 +97,57 @@ describe("buildWorkflowSection", () => {
     expect(result).toContain("Presupuestos");
     expect(result).toContain("OBJETIVO DEL WORKFLOW");
     expect(result).toContain("El usuario quiere crear un presupuesto.");
+  });
+});
+
+describe("buildProjectCreationFlowSection", () => {
+  it("includes CREAR PROYECTO NUEVO flow", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain("CREAR PROYECTO NUEVO");
+    expect(result).toContain("LLAMA createProject");
+    expect(result).toContain("INMEDIATAMENTE");
+  });
+
+  it("includes PROYECTO EXISTENTE flow", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain("PROYECTO EXISTENTE");
+    expect(result).toContain("searchProjects");
+    expect(result).toContain("PROYECTOS DISPONIBLES");
+  });
+
+  it("includes GENERAR PRESUPUESTO 2-step flow", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain("GENERAR PRESUPUESTO");
+    expect(result).toContain("PASO 1");
+    expect(result).toContain("previewBudgetGeneration");
+    expect(result).toContain("PASO 2");
+    expect(result).toContain("generateBudget INMEDIATAMENTE");
+  });
+
+  it("includes REGLAS IMPORTANTES", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain("REGLAS IMPORTANTES");
+    expect(result).toContain("NUNCA llames searchProjects() sin pasar el parámetro query");
+    expect(result).toContain("2 veces");
+  });
+
+  it("tells the model not to ask for optional fields", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain("No preguntes por location, clientName, projectType ni fechas");
+  });
+
+  it("includes confirmation keywords", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain('"si"');
+    expect(result).toContain('"dale"');
+    expect(result).toContain('"procede"');
+  });
+
+  it("asks whether to generate budget after creating a project", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain("¿Quieres que genere el presupuesto ahora?");
+    expect(result).toContain("sigue el flujo GENERAR PRESUPUESTO");
+    expect(result).toContain("confirma que el proyecto está listo");
   });
 });
 
@@ -227,6 +279,8 @@ describe("buildAgentSystemPrompt", () => {
     expect(result).toContain("Khipu");
     expect(result).toContain("WORKSPACE ACTUAL");
     expect(result).toContain("PROYECTOS DISPONIBLES");
+    expect(result).toContain("INSTRUCCIONES");
+    expect(result).toContain("CREAR PROYECTO NUEVO");
     expect(result).toContain("INTENCIÓN DETECTADA");
     expect(result).toContain("REGLAS DE HERRAMIENTAS");
     expect(result).toContain("REGLAS DE CONFIRMACIÓN");
@@ -276,6 +330,7 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(result).toContain("Khipu");
+    expect(result).toContain("CREAR PROYECTO NUEVO");
     expect(result).not.toContain("REGLAS DE HERRAMIENTAS");
     expect(result).toContain("REGLAS DE CONFIRMACIÓN");
     expect(result).toContain("REGLAS DE SEGURIDAD");

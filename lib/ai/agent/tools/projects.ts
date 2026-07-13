@@ -156,7 +156,7 @@ export const createProjectTool: AgentToolDefinition<
     };
   },
   summarizeResult: (result) =>
-    `Proyecto "${result.name}" creado exitosamente con Presupuesto General y sub-presupuestos automáticos.`,
+    `Proyecto "${result.name}" creado exitosamente (ID: ${result.id}) con Presupuesto General y sub-presupuestos automáticos.`,
 };
 
 // ─── searchCompanies: list user's companies ─────────────────────────────────
