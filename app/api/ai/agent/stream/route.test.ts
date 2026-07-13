@@ -456,6 +456,77 @@ describe("POST /api/ai/agent/stream", () => {
     const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
     expect(systemPrompt).toContain("Santa Monica");
   });
+
+  // ── namedProjectMatch detection ──────────────────────────────────────────
+
+  describe("namedProjectMatch detection", () => {
+    it("injects YA DETECTADO flow when extracted projectName matches a recentProject", async () => {
+      const mockProjects = [
+        { id: "proj-san-felipe", name: "San Felipe", clientName: null, location: null, status: "IN_PROGRESS", updatedAt: new Date() },
+        { id: "proj-santa", name: "Santa Monica", clientName: null, location: null, status: "PLANNING", updatedAt: new Date() },
+      ];
+      const projectSpy = vi.spyOn(prisma.project, "findMany").mockResolvedValue(mockProjects as any);
+      mockStreamYield([makeFinal()]);
+
+      await post({
+        message: "genera un presupuesto para vivienda en el proyecto San Felipe",
+        workspaceId: "ws-1",
+      });
+
+      // The real buildAgentSystemPrompt should have received namedProjectMatch
+      // and generated the YA DETECTADO flow with the project ID
+      const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
+      expect(systemPrompt).toContain("YA DETECTADO");
+      expect(systemPrompt).toContain("San Felipe");
+      expect(systemPrompt).toContain("proj-san-felipe");
+      expect(systemPrompt).not.toContain("DETERMINAR PROYECTO");
+
+      projectSpy.mockRestore();
+    });
+
+    it("injects DETERMINAR PROYECTO flow when extracted projectName does NOT match", async () => {
+      const mockProjects = [
+        { id: "proj-santa", name: "Santa Monica", clientName: null, location: null, status: "PLANNING", updatedAt: new Date() },
+      ];
+      const projectSpy = vi.spyOn(prisma.project, "findMany").mockResolvedValue(mockProjects as any);
+      mockStreamYield([makeFinal()]);
+
+      await post({
+        message: "genera un presupuesto para vivienda en el proyecto San Felipe",
+        workspaceId: "ws-1",
+      });
+
+      // San Felipe is NOT in the project list → namedProjectMatch is null
+      // → buildProjectUnnamedFlow should be used
+      const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
+      expect(systemPrompt).toContain("DETERMINAR PROYECTO");
+      expect(systemPrompt).toContain("¿Quieres usar un proyecto existente o crear uno nuevo?");
+      expect(systemPrompt).not.toContain("YA DETECTADO");
+
+      projectSpy.mockRestore();
+    });
+
+    it("injects DETERMINAR PROYECTO flow when message does not mention a project", async () => {
+      const mockProjects = [
+        { id: "proj-santa", name: "Santa Monica", clientName: null, location: null, status: "PLANNING", updatedAt: new Date() },
+      ];
+      const projectSpy = vi.spyOn(prisma.project, "findMany").mockResolvedValue(mockProjects as any);
+      mockStreamYield([makeFinal()]);
+
+      await post({
+        message: "Crear presupuesto para vivienda",
+        workspaceId: "ws-1",
+      });
+
+      // No project name mentioned → extracted.projectName is undefined → namedProjectMatch is null
+      const systemPrompt = mocks.streamAgentChat.mock.calls[0][0].messages[0].content as string;
+      expect(systemPrompt).toContain("DETERMINAR PROYECTO");
+      expect(systemPrompt).toContain("¿Quieres usar un proyecto existente o crear uno nuevo?");
+      expect(systemPrompt).not.toContain("YA DETECTADO");
+
+      projectSpy.mockRestore();
+    });
+  });
 });
 
 // ── detectPendingActionFromHistory ─────────────────────────────────────────
