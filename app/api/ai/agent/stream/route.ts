@@ -227,7 +227,7 @@ export async function POST(request: Request) {
               ];
 
           for await (const event of streamAgentChat({
-            task: "review_budget",
+            task: "chat",
             messages: conversationMessages,
             userId: session.user.id,
             projectId: data.projectId,
@@ -304,7 +304,7 @@ export function detectPendingActionFromHistory(input: {
   currentMessage: string;
   messages?: Array<{ role: "user" | "assistant" | "system"; content: string }>;
   projectId?: string;
-}): import("@/lib/ai/agent/intent-router").AgentPendingAction | null {
+}): AgentPendingAction | null {
   if (!input.messages || input.messages.length === 0) return null;
 
   // Buscar si el último mensaje del assistant contiene resultados de preview
