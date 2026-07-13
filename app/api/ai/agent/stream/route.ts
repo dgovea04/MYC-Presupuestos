@@ -155,6 +155,18 @@ export async function POST(request: Request) {
       pendingAction,
     });
 
+    // ── Detectar si el usuario nombró un proyecto que coincide con recentProjects ─
+    const extractedProjectName = intent.extracted.projectName?.toLowerCase().trim();
+    const namedProjectMatch = extractedProjectName
+      ? recentProjectRecords.find(
+          (p) =>
+            // Exact match first (case-insensitive)
+            p.name.toLowerCase() === extractedProjectName ||
+            // Then fuzzy: project name contains the extracted name (e.g., "San Felipe" in "San Felipe 2")
+            p.name.toLowerCase().includes(extractedProjectName),
+        ) ?? null
+      : null;
+
     // ── Construir prompt modular ──────────────────────────────────────────
     const systemPrompt = buildAgentSystemPrompt({
       intent,
@@ -164,6 +176,9 @@ export async function POST(request: Request) {
       recentProjects: recentProjectRecords,
       workflow: workflowContext,
       provider: provider ?? "unknown",
+      namedProjectMatch: namedProjectMatch
+        ? { id: namedProjectMatch.id, name: namedProjectMatch.name }
+        : null,
     });
 
     // ── Resolver API key según provider ────────────────────────────────────

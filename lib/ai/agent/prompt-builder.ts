@@ -25,6 +25,11 @@ export type AgentPromptContext = {
   } | null;
   provider?: "openrouter" | "google" | "ollama" | "unknown";
   pendingAction?: AgentPendingAction | null;
+  /** Si el usuario nombró un proyecto que coincide con recentProjects, se inyecta aquí para elegir el flow adecuado */
+  namedProjectMatch?: {
+    id: string;
+    name: string;
+  } | null;
 };
 
 // ─── Main builder ───────────────────────────────────────────────────────────
@@ -39,7 +44,7 @@ export type AgentPromptContext = {
  * 2. Contexto del workspace
  * 3. Proyectos disponibles
  * 4. Especialidad activa
- * 5. Flujo de creación de proyectos
+ * 5. Flujo de creación de proyectos (context-aware: named vs unnamed)
  * 6. Intención detectada
  * 7. Reglas de herramientas
  * 8. Reglas de confirmación
@@ -47,13 +52,17 @@ export type AgentPromptContext = {
  * 10. Reglas de respuesta
  */
 export function buildAgentSystemPrompt(context: AgentPromptContext): string {
+  const flowSection = context.namedProjectMatch
+    ? buildProjectNamedFlow(context.namedProjectMatch.name, context.namedProjectMatch.id)
+    : buildProjectUnnamedFlow();
+
   const sections: string[] = [
     buildDataAvailabilityPreamble(),
     buildIdentitySection(),
     buildWorkspaceSection(context.workspace),
     buildRecentProjectsSection(context.recentProjects),
     buildWorkflowSection(context.workflow),
-    buildProjectCreationFlowSection(),
+    flowSection,
     buildIntentSection(context.intent),
     buildToolRulesSection(context.intent),
     buildConfirmationSection(context.pendingAction),
@@ -68,10 +77,6 @@ export function buildAgentSystemPrompt(context: AgentPromptContext): string {
 
 /**
  * Sección 0: Datos ya disponibles — anti-redundancia.
- *
- * Debe ser LO PRIMERO que el modelo lee. Le indica explícitamente qué
- * información YA tiene en el prompt para que no llame herramientas
- * de búsqueda innecesariamente.
  */
 export function buildDataAvailabilityPreamble(): string {
   return [
@@ -160,67 +165,104 @@ export function buildWorkflowSection(
 }
 
 /**
- * Sección 5: Flujo de creación de proyectos.
+ * Sección 5a: Flujo cuando el usuario YA nombró un proyecto existente.
  *
- * Instrucciones paso a paso explícitas para que el modelo sepa exactamente
- * qué hacer cuando el usuario quiere crear un proyecto o presupuesto.
- * Esencial para modelos pequeños que necesitan guía muy concreta.
+ * El sistema ya detectó que el usuario mencionó un proyecto que coincide
+ * con la lista de PROYECTOS DISPONIBLES. El modelo debe ir directo
+ * a previewBudgetGeneration sin preguntar "¿nuevo o existente?".
  */
-export function buildProjectCreationFlowSection(): string {
+export function buildProjectNamedFlow(projectName: string, projectId: string): string {
   return [
     "",
     "--- INSTRUCCIONES ---",
     "",
-    "⚠️ REGLA DE ORO: Cuando el usuario pide 'crear presupuesto' o 'generar presupuesto', NO llames herramientas inmediatamente. PRIMERO determina si es proyecto nuevo o existente. PREGUNTA antes de actuar.",
+    `✅ YA DETECTADO: El usuario quiere trabajar en el proyecto "${projectName}" (ID: ${projectId}). Este proyecto YA está en PROYECTOS DISPONIBLES.`,
+    "",
+    "⛔ NO preguntes '¿nuevo o existente?'. NO pidas confirmación del proyecto. El usuario ya te lo dijo.",
+    "",
+    "ACCIÓN INMEDIATA: Si el usuario pide 'crear presupuesto' o 'generar presupuesto', LLAMA previewBudgetGeneration AHORA MISMO:",
+    `  previewBudgetGeneration({ projectId: "${projectId}", description: <descripción del usuario> })`,
+    "  NO esperes. NO preguntes. EJECUTA la herramienta.",
+    "",
+    "Después del preview, MUÉSTRALE el resumen (fuente, score, conteos, costos) y PREGUNTA si procede con la generación.",
+    "",
+    "CREAR PROYECTO NUEVO (si el usuario dice que no es ese proyecto):",
+    "1. Pregunta cuál es el nombre del proyecto.",
+    "2. Cuando el usuario dé el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
+    "   • No preguntes por location, clientName, projectType ni fechas (son opcionales).",
+    "3. Después de crear el proyecto exitosamente → PREGUNTA: '¿Quieres que genere el presupuesto ahora?'.",
+    "",
+    "GENERAR PRESUPUESTO (FLUJO EN 2 PASOS):",
+    "PASO 1 — VISTA PREVIA: Llama previewBudgetGeneration con projectId y description.",
+    "PASO 2 — GENERAR: Cuando el usuario confirme, llama generateBudget INMEDIATAMENTE.",
+    "",
+    "REGLAS IMPORTANTES:",
+    "- ⛔ NUNCA llames searchProjects con query vacío.",
+    "- Si ya tienes el projectId, NO necesitas searchProjects.",
+    "- NO llames previewBudgetGeneration ni generateBudget sin tener un projectId.",
+    "- El sistema bloquea herramientas que se llaman más de 2 veces.",
+  ].join("\n");
+}
+
+/**
+ * Sección 5b: Flujo cuando el usuario NO nombró un proyecto.
+ *
+ * El modelo debe preguntar "¿nuevo o existente?" sin llamar herramientas.
+ */
+export function buildProjectUnnamedFlow(): string {
+  return [
+    "",
+    "--- INSTRUCCIONES ---",
+    "",
+    "⚠️ REGLA DE ORO: El usuario NO especificó un proyecto. NO llames herramientas. PRIMERO pregunta.",
+    "",
+    "DETERMINAR PROYECTO (PASO INICIAL):",
+    "1. El usuario pide 'crear presupuesto' y NO nombra ningún proyecto:",
+    "   • Tu ÚNICA respuesta debe ser preguntar: '¿Quieres usar un proyecto existente o crear uno nuevo?'.",
+    "   • ⛔ NO llames NINGUNA herramienta. NO listes proyectos. SOLO haz la pregunta.",
     "",
     "CREAR PROYECTO NUEVO:",
-    "1. El usuario pide 'crear presupuesto' o 'crear proyecto' → tu ÚNICA respuesta debe ser preguntar: '¿Quieres usar un proyecto existente o crear uno nuevo?'.",
-    "   ⛔ NO llames NINGUNA herramienta. NO listes proyectos. NO uses searchProjects. SOLO haz la pregunta.",
-    "   ⛔ Aunque veas PROYECTOS DISPONIBLES en este prompt, NO los muestres todavía. El usuario debe elegir primero.",
-    "2. El usuario responde 'nuevo' (o similar) → pregúntale: ¿cuál es el nombre del proyecto?",
-    "3. El usuario da el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
+    "1. El usuario dice 'nuevo' (o similar) → pregúntale: ¿cuál es el nombre del proyecto?",
+    "2. El usuario da el nombre → LLAMA createProject({ name: elNombre }) INMEDIATAMENTE.",
     "   • No preguntes por location, clientName, projectType ni fechas (son opcionales).",
     "   • No pidas confirmación extra. El sistema ya maneja la aprobación.",
     "   • El companyId ya está configurado, no lo incluyas.",
-    "4. Después de crear el proyecto exitosamente → PREGUNTA: '¿Quieres que genere el presupuesto ahora?'.",
+    "3. Después de crear el proyecto exitosamente → PREGUNTA: '¿Quieres que genere el presupuesto ahora?'.",
     "   • Si el usuario dice que sí: sigue el flujo GENERAR PRESUPUESTO (abajo).",
     "   • Si el usuario dice que no: confirma que el proyecto está listo y espera instrucciones.",
     "",
     "PROYECTO EXISTENTE (BUSCAR EN LA LISTA DE ARRIBA):",
-    "1. El usuario dice 'existente' (o similar) y da un nombre → BUSCA en la sección PROYECTOS DISPONIBLES (arriba) si el proyecto ya está listado.",
+    "1. El usuario dice 'existente' (o similar) y da un nombre → BUSCA en la sección PROYECTOS DISPONIBLES si el proyecto ya está listado.",
     "   • Los proyectos ya están listados con sus IDs. USA EL ID directamente, NO llames searchProjects.",
     "   • Ejemplo: si el usuario dice 'Santa Monica', revisa la lista de PROYECTOS DISPONIBLES. Si ves 'Santa Monica' ahí, usa su ID.",
-    "2. Si el proyecto NO está en la lista de PROYECTOS DISPONIBLES, USA searchProjects({ query: nombreDelProyecto }) PARA BUSCARLO.",
-    "   • PASA EL NOMBRE como query. NUNCA llames searchProjects con query vacío o sin query.",
-    "   • Si no sabes qué nombre buscar, PREGUNTA al usuario en vez de adivinar.",
-    "3. searchProjects retorna resultados. ENCUENTRA el que coincide por nombre y usa su ID.",
-    "4. Si el proyecto no se encuentra en los resultados, INFORMÁLE al usuario.",
+    "2. Si el proyecto NO está en la lista, USA searchProjects({ query: nombreDelProyecto }) PARA BUSCARLO.",
+    "   • PASA EL NOMBRE como query. NUNCA llames searchProjects con query vacío.",
+    "3. ENCUENTRA el que coincide por nombre y usa su ID.",
     "",
     "GENERAR PRESUPUESTO (FLUJO EN 2 PASOS):",
-    "PASO 1 — VISTA PREVIA (SIEMPRE primero):",
-    "1. Llama previewBudgetGeneration con projectId y description para obtener el preview.",
-    "2. previewBudgetGeneration es SOLO LECTURA, no requiere aprobación, y muestra:",
-    "   • Proyectos similares encontrados",
-    "   • Plantilla .mcp seleccionada y su score",
-    "   • Matching con catálogo: partidas OK, revisión requerida y sin match",
-    "   • Costo directo estimado por sub-presupuesto",
-    "3. MUÉSTRALE al usuario un resumen claro del preview con conteos y advertencias.",
-    "4. PREGUNTA al usuario: '¿Quieres que proceda con la generación?'",
+    "PASO 1 — VISTA PREVIA: Llama previewBudgetGeneration con projectId y description.",
+    "2. MUÉSTRALE al usuario un resumen claro del preview con conteos y advertencias.",
+    "3. PREGUNTA al usuario: '¿Quieres que proceda con la generación?'",
     "",
     "PASO 2 — GENERAR (el usuario confirma o hace clic en botón):",
-    '5. En cuanto el usuario responda ALGO afirmativo, llama generateBudget INMEDIATAMENTE. CONSIDERA CONFIRMACIÓN VÁLIDA: "si", "sí", "confirmado", "ok", "dale", "procede", "adelante", "vamos", "hazlo", "correcto".',
-    "   • SI el usuario ya respondió afirmativamente, NO le preguntes de nuevo. Llama generateBudget DIRECTAMENTE.",
-    "6. Si el usuario responde con algo negativo o pide cambios, responde apropiadamente sin llamar generateBudget.",
-    "7. generateBudget puede requerir aprobación (dependiendo del modo).",
+    '4. En cuanto el usuario responda ALGO afirmativo, llama generateBudget INMEDIATAMENTE. CONFIRMACIÓN VÁLIDA: "si", "sí", "confirmado", "ok", "dale", "procede", "adelante", "vamos", "hazlo", "correcto".',
+    "5. Si el usuario responde con algo negativo o pide cambios, responde apropiadamente sin llamar generateBudget.",
     "",
     "REGLAS IMPORTANTES:",
     "- ⛔ NUNCA llames searchProjects con query vacío. Si no sabes qué buscar, PREGUNTA primero.",
-    "- Si el proyecto ya está en la lista de PROYECTOS DISPONIBLES, USA SU ID DIRECTO. No necesitas searchProjects.",
-    "- NO uses searchBudgets para buscar proyectos. searchBudgets busca presupuestos dentro de un proyecto.",
+    "- Si el proyecto ya está en PROYECTOS DISPONIBLES, USA SU ID DIRECTO.",
+    "- NO uses searchBudgets para buscar proyectos.",
     "- NO llames previewBudgetGeneration ni generateBudget sin tener un projectId confirmado.",
-    "- Si ya tienes la información que necesitas, responde al usuario en lugar de llamar más herramientas.",
-    "- El sistema bloquea herramientas que se llaman más de 2 veces, así que úsalas con cuidado.",
+    "- El sistema bloquea herramientas que se llaman más de 2 veces.",
   ].join("\n");
+}
+
+/**
+ * @deprecated Usar buildProjectNamedFlow() o buildProjectUnnamedFlow() según contexto.
+ * Mantenida por compatibilidad con tests existentes — redirige a buildProjectUnnamedFlow().
+ */
+export function buildProjectCreationFlowSection(): string {
+  return buildProjectUnnamedFlow();
 }
 
 /**
@@ -339,10 +381,10 @@ function getIntentRules(intentType: string): string[] {
   switch (intentType) {
     case "preview_budget_generation":
       return [
-        "OBJETIVO: El usuario quiere crear un presupuesto.",
-        "⛔ Si aún no tienes un projectId confirmado, NO llames previewBudgetGeneration, searchProjects ni generateBudget.",
-        "PRIMERO determina si es proyecto nuevo o existente. PREGUNTA '¿nuevo o existente?'.",
-        "SOLO después de tener un projectId confirmado, puedes llamar previewBudgetGeneration.",
+        "OBJETIVO: El usuario quiere crear o generar un presupuesto.",
+        "⛔ Si el usuario NO nombró un proyecto, PREGUNTA '¿nuevo o existente?' sin llamar herramientas.",
+        "Si el usuario SÍ nombró un proyecto (ej: 'en el proyecto San Felipe'), búscalo en PROYECTOS DISPONIBLES y usa su ID.",
+        "Una vez que tengas el projectId (de PROYECTOS DISPONIBLES), llama previewBudgetGeneration directamente.",
       ];
     case "apply_budget_generation":
       return [
@@ -404,9 +446,10 @@ function getToolRulesForIntent(intentType: string): string[] {
   switch (intentType) {
     case "preview_budget_generation":
       return [
-        "- NO llames herramientas en el primer turno. PRIMERO pregunta '¿nuevo o existente?'.",
-        "- Solo después de confirmar projectId puedes usar: previewBudgetGeneration, createBudgetGeneral.",
-        "- NUNCA llames searchProjects ni generateBudget.",
+        "- Si el usuario NO nombró un proyecto, no llames herramientas. PRIMERO pregunta '¿nuevo o existente?'.",
+        "- Si el usuario SÍ nombró un proyecto que está en PROYECTOS DISPONIBLES, llama previewBudgetGeneration directamente.",
+        "- Solo después de obtener un projectId puedes usar: previewBudgetGeneration, createBudgetGeneral.",
+        "- NUNCA llames generateBudget. Usa previewBudgetGeneration primero.",
       ];
     case "apply_budget_generation":
       return [

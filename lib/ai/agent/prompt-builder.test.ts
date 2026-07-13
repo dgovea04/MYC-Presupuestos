@@ -7,6 +7,8 @@ import {
   buildRecentProjectsSection,
   buildWorkflowSection,
   buildProjectCreationFlowSection,
+  buildProjectNamedFlow,
+  buildProjectUnnamedFlow,
   buildIntentSection,
   buildToolRulesSection,
   buildConfirmationSection,
@@ -128,43 +130,79 @@ describe("buildWorkflowSection", () => {
   });
 });
 
-describe("buildProjectCreationFlowSection", () => {
-  it("includes CREAR PROYECTO NUEVO flow", () => {
-    const result = buildProjectCreationFlowSection();
-    expect(result).toContain("CREAR PROYECTO NUEVO");
-    expect(result).toContain("LLAMA createProject");
-    expect(result).toContain("INMEDIATAMENTE");
-    expect(result).toContain("REGLA DE ORO");
-    expect(result).toContain("NO llames NINGUNA herramienta");
+describe("buildProjectNamedFlow", () => {
+  it("includes the project name and ID explicitly", () => {
+    const result = buildProjectNamedFlow("San Felipe", "cmri-123");
+    expect(result).toContain("San Felipe");
+    expect(result).toContain("cmri-123");
+    expect(result).toContain("YA DETECTADO");
   });
 
-  it("includes PROYECTO EXISTENTE flow", () => {
-    const result = buildProjectCreationFlowSection();
-    expect(result).toContain("PROYECTO EXISTENTE");
-    expect(result).toContain("searchProjects");
-    expect(result).toContain("PROYECTOS DISPONIBLES");
+  it("tells model NOT to ask 'nuevo o existente'", () => {
+    const result = buildProjectNamedFlow("San Felipe", "cmri-123");
+    expect(result).toContain("NO preguntes '¿nuevo o existente?'");
+    expect(result).toContain("NO pidas confirmación del proyecto");
+  });
+
+  it("tells model to call previewBudgetGeneration immediately", () => {
+    const result = buildProjectNamedFlow("San Felipe", "cmri-123");
+    expect(result).toContain("previewBudgetGeneration");
+    expect(result).toContain("AHORA MISMO");
+    expect(result).toContain("NO esperes. NO preguntes. EJECUTA");
   });
 
   it("includes GENERAR PRESUPUESTO 2-step flow", () => {
-    const result = buildProjectCreationFlowSection();
+    const result = buildProjectNamedFlow("San Felipe", "cmri-123");
     expect(result).toContain("GENERAR PRESUPUESTO");
-    expect(result).toContain("PASO 1");
-    expect(result).toContain("previewBudgetGeneration");
-    expect(result).toContain("PASO 2");
+    expect(result).toContain("VISTA PREVIA");
+    expect(result).toContain("generateBudget");
+  });
+});
+
+describe("buildProjectUnnamedFlow", () => {
+  it("tells model to ask 'nuevo o existente' without tools", () => {
+    const result = buildProjectUnnamedFlow();
+    expect(result).toContain("REGLA DE ORO");
+    expect(result).toContain("NO especificó un proyecto");
+    expect(result).toContain("¿Quieres usar un proyecto existente o crear uno nuevo?");
+    expect(result).toContain("NO llames NINGUNA herramienta");
+  });
+
+  it("includes DETERMINAR PROYECTO flow", () => {
+    const result = buildProjectUnnamedFlow();
+    expect(result).toContain("DETERMINAR PROYECTO");
+    expect(result).toContain("PROYECTO EXISTENTE");
+    expect(result).toContain("CREAR PROYECTO NUEVO");
+  });
+
+  it("includes GENERAR PRESUPUESTO 2-step flow", () => {
+    const result = buildProjectUnnamedFlow();
+    expect(result).toContain("GENERAR PRESUPUESTO");
+    expect(result).toContain("VISTA PREVIA");
     expect(result).toContain("generateBudget INMEDIATAMENTE");
   });
 
   it("includes REGLAS IMPORTANTES", () => {
-    const result = buildProjectCreationFlowSection();
+    const result = buildProjectUnnamedFlow();
     expect(result).toContain("REGLAS IMPORTANTES");
     expect(result).toContain("NUNCA llames searchProjects con query vacío");
-    expect(result).toContain("2 veces");
     expect(result).toContain("NO llames previewBudgetGeneration ni generateBudget sin tener un projectId");
   });
+});
 
-  it("tells the model not to ask for optional fields", () => {
+// Legacy — should still pass as it redirects to buildProjectUnnamedFlow
+describe("buildProjectCreationFlowSection", () => {
+  it("redirects to buildProjectUnnamedFlow (deprecated)", () => {
     const result = buildProjectCreationFlowSection();
-    expect(result).toContain("No preguntes por location, clientName, projectType ni fechas");
+    expect(result).toContain("REGLA DE ORO");
+    expect(result).toContain("DETERMINAR PROYECTO");
+    expect(result).toContain("CREAR PROYECTO NUEVO");
+  });
+
+  it("asks whether to generate budget after creating a project", () => {
+    const result = buildProjectCreationFlowSection();
+    expect(result).toContain("¿Quieres que genere el presupuesto ahora?");
+    expect(result).toContain("confirma que el proyecto está listo");
   });
 
   it("includes confirmation keywords", () => {
@@ -172,13 +210,6 @@ describe("buildProjectCreationFlowSection", () => {
     expect(result).toContain('"si"');
     expect(result).toContain('"dale"');
     expect(result).toContain('"procede"');
-  });
-
-  it("asks whether to generate budget after creating a project", () => {
-    const result = buildProjectCreationFlowSection();
-    expect(result).toContain("¿Quieres que genere el presupuesto ahora?");
-    expect(result).toContain("sigue el flujo GENERAR PRESUPUESTO");
-    expect(result).toContain("confirma que el proyecto está listo");
   });
 });
 
@@ -202,8 +233,8 @@ describe("buildIntentSection", () => {
   it("includes intent-specific rules for preview", () => {
     const result = buildIntentSection(makeIntent({ type: "preview_budget_generation" }));
     expect(result).toContain("previewBudgetGeneration");
-    expect(result).toContain("NO llames previewBudgetGeneration");
     expect(result).toContain("nuevo o existente");
+    expect(result).toContain("PROYECTOS DISPONIBLES");
   });
 
   it("includes intent-specific rules for apply", () => {
@@ -221,8 +252,8 @@ describe("buildToolRulesSection", () => {
   it("includes tool restrictions for preview", () => {
     const result = buildToolRulesSection(makeIntent({ type: "preview_budget_generation" }));
     expect(result).toContain("previewBudgetGeneration");
-    expect(result).toContain("NUNCA");
-    expect(result).toContain("searchProjects ni generateBudget");
+    expect(result).toContain("nuevo o existente");
+    expect(result).toContain("NUNCA llames generateBudget");
   });
 
   it("includes tool restrictions for apply", () => {
@@ -300,7 +331,38 @@ describe("buildResponseSection", () => {
 // ─── Full prompt tests ──────────────────────────────────────────────────────
 
 describe("buildAgentSystemPrompt", () => {
-  it("builds a complete prompt with all sections", () => {
+  it("uses buildProjectNamedFlow when namedProjectMatch is provided", () => {
+    const result = buildAgentSystemPrompt({
+      intent: makeIntent({ type: "preview_budget_generation", confidence: "medium" }),
+      workspace: { id: "ws-1", name: "Mi Empresa" },
+      recentProjects: [{ id: "proj-1", name: "San Felipe" }],
+      workflow: null,
+      provider: "openrouter",
+      namedProjectMatch: { id: "proj-1", name: "San Felipe" },
+    });
+
+    expect(result).toContain("YA DETECTADO");
+    expect(result).toContain("San Felipe");
+    expect(result).toContain("AHORA MISMO");
+    expect(result).not.toContain("DETERMINAR PROYECTO");
+    expect(result).not.toContain("¿Quieres usar un proyecto existente o crear uno nuevo?");
+  });
+
+  it("uses buildProjectUnnamedFlow when namedProjectMatch is null", () => {
+    const result = buildAgentSystemPrompt({
+      intent: makeIntent({ type: "preview_budget_generation", confidence: "medium" }),
+      workspace: { id: "ws-1", name: "Mi Empresa" },
+      recentProjects: [{ id: "proj-1", name: "Santa Monica" }],
+      workflow: null,
+      provider: "openrouter",
+    });
+
+    expect(result).toContain("DETERMINAR PROYECTO");
+    expect(result).toContain("¿Quieres usar un proyecto existente o crear uno nuevo?");
+    expect(result).not.toContain("YA DETECTADO");
+  });
+
+  it("builds a complete prompt with all sections (unnamed)", () => {
     const result = buildAgentSystemPrompt({
       intent: makeIntent({ type: "preview_budget_generation", confidence: "medium" }),
       workspace: { id: "ws-1", name: "Mi Empresa" },
@@ -313,7 +375,7 @@ describe("buildAgentSystemPrompt", () => {
     expect(result).toContain("WORKSPACE ACTUAL");
     expect(result).toContain("PROYECTOS DISPONIBLES");
     expect(result).toContain("INSTRUCCIONES");
-    expect(result).toContain("CREAR PROYECTO NUEVO");
+    expect(result).toContain("DETERMINAR PROYECTO");
     expect(result).toContain("INTENCIÓN DETECTADA");
     expect(result).toContain("REGLAS DE HERRAMIENTAS");
     expect(result).toContain("REGLAS DE CONFIRMACIÓN");
@@ -363,7 +425,7 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(result).toContain("Khipu");
-    expect(result).toContain("CREAR PROYECTO NUEVO");
+    expect(result).toContain("INSTRUCCIONES");
     expect(result).not.toContain("REGLAS DE HERRAMIENTAS");
     expect(result).toContain("REGLAS DE CONFIRMACIÓN");
     expect(result).toContain("REGLAS DE SEGURIDAD");
