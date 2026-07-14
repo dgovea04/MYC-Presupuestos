@@ -32,7 +32,7 @@ const INTENT_TOOL_ALLOWLIST: Record<AgentIntentType, string[]> = {
 
 // ─── Universal read tools ───────────────────────────────────────────────────
 
-const UNIVERSAL_READ_TOOLS = ["searchProjects", "searchBudgets"];
+const UNIVERSAL_READ_TOOLS = ["searchProjects", "searchBudgets", "previewSchedule"];
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 

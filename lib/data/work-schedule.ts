@@ -389,11 +389,15 @@ export async function saveWorkScheduleItem(
   return getWorkScheduleOverviewSection(budgetId, userId);
 }
 
-export async function generateWorkScheduleBase(
+/**
+ * Core generation logic shared by generateWorkScheduleBase and previewWorkScheduleBase.
+ * Loads budget, lines, levels and runs the intelligent schedule builder.
+ */
+async function generateWorkScheduleGeneration(
   budgetId: string,
   userId: string,
   input: WorkScheduleGenerateBaseInput,
-): Promise<WorkScheduleViewRecord> {
+) {
   const payload = workScheduleGenerateBaseSchema.parse(input);
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
   const { lines, levelById } = await getWorkScheduleLinesWithLevels(budget);
@@ -414,6 +418,17 @@ export async function generateWorkScheduleBase(
     exceptionMap,
   });
 
+  return { payload, budget, generation, lines };
+}
+
+export async function generateWorkScheduleBase(
+  budgetId: string,
+  userId: string,
+  input: WorkScheduleGenerateBaseInput,
+): Promise<WorkScheduleViewRecord> {
+  const { payload, generation } = await generateWorkScheduleGeneration(budgetId, userId, input);
+  const mode = (payload as Record<string, unknown>).mode ?? "full";
+
   await prisma.$transaction(async (tx) => {
     const schedule = await tx.workSchedule.upsert({
       where: { budgetId },
@@ -422,35 +437,74 @@ export async function generateWorkScheduleBase(
       select: { id: true },
     });
 
-    await tx.workScheduleItem.deleteMany({
-      where: { scheduleId: schedule.id },
-    });
+    if (mode !== "incremental") {
+      await tx.workScheduleItem.deleteMany({
+        where: { scheduleId: schedule.id },
+      });
+    }
 
     if (generation.generatedItems.length === 0) {
       return;
     }
 
-    for (const line of generation.generatedItems) {
-      await tx.workScheduleItem.create({
-        data: {
-          scheduleId: schedule.id,
-          budgetItemId: line.budgetItemId,
-          startDate: new Date(`${line.startDate}T00:00:00.000Z`),
-          endDate: new Date(`${line.endDate}T00:00:00.000Z`),
-          durationDays: line.durationDays,
-          predecessor: line.predecessor,
-          crew: line.crew == null ? null : new Prisma.Decimal(line.crew),
-          distributions: {
-            createMany: {
-              data: line.monthlyDistributions.map((distribution) => ({
-                year: distribution.year,
-                month: distribution.month,
-                percentage: new Prisma.Decimal(distribution.percentage),
-              })),
+    if (mode === "incremental") {
+      const existingIds = new Set(
+        (
+          await tx.workScheduleItem.findMany({
+            where: { scheduleId: schedule.id },
+            select: { budgetItemId: true },
+          })
+        ).map((item) => item.budgetItemId),
+      );
+
+      for (const line of generation.generatedItems) {
+        if (existingIds.has(line.budgetItemId)) {
+          continue;
+        }
+        await tx.workScheduleItem.create({
+          data: {
+            scheduleId: schedule.id,
+            budgetItemId: line.budgetItemId,
+            startDate: new Date(`${line.startDate}T00:00:00.000Z`),
+            endDate: new Date(`${line.endDate}T00:00:00.000Z`),
+            durationDays: line.durationDays,
+            predecessor: line.predecessor,
+            crew: line.crew == null ? null : new Prisma.Decimal(line.crew),
+            distributions: {
+              createMany: {
+                data: line.monthlyDistributions.map((distribution) => ({
+                  year: distribution.year,
+                  month: distribution.month,
+                  percentage: new Prisma.Decimal(distribution.percentage),
+                })),
+              },
             },
           },
-        },
-      });
+        });
+      }
+    } else {
+      for (const line of generation.generatedItems) {
+        await tx.workScheduleItem.create({
+          data: {
+            scheduleId: schedule.id,
+            budgetItemId: line.budgetItemId,
+            startDate: new Date(`${line.startDate}T00:00:00.000Z`),
+            endDate: new Date(`${line.endDate}T00:00:00.000Z`),
+            durationDays: line.durationDays,
+            predecessor: line.predecessor,
+            crew: line.crew == null ? null : new Prisma.Decimal(line.crew),
+            distributions: {
+              createMany: {
+                data: line.monthlyDistributions.map((distribution) => ({
+                  year: distribution.year,
+                  month: distribution.month,
+                  percentage: new Prisma.Decimal(distribution.percentage),
+                })),
+              },
+            },
+          },
+        });
+      }
     }
   });
 
@@ -458,6 +512,43 @@ export async function generateWorkScheduleBase(
   return {
     ...section,
     generationSummary: generation.summary,
+  };
+}
+
+/**
+ * Preview-only version: generates the schedule in memory without persisting.
+ * Returns the generation summary so the agent can show the user what would be created.
+ */
+export async function previewWorkScheduleBase(
+  budgetId: string,
+  userId: string,
+  input: WorkScheduleGenerateBaseInput,
+) {
+  const { payload, generation, lines } = await generateWorkScheduleGeneration(budgetId, userId, input);
+  const summary = generation.summary;
+  const scheduledCount = summary.generatedCount;
+  const pendingCount = summary.pendingCount;
+
+  const firstDate = generation.generatedItems[0]?.startDate ?? null;
+  const lastDate = generation.generatedItems.at(-1)?.endDate ?? null;
+
+  return {
+    budgetId,
+    baseStartDate: payload.baseStartDate,
+    totalItems: lines.length,
+    scheduledItems: scheduledCount,
+    unscheduledItems: pendingCount,
+    newItems: scheduledCount,
+    issues: summary.issues.map((issue) => ({
+      budgetItemId: issue.budgetItemId,
+      itemCode: issue.itemCode,
+      reason: issue.reason,
+    })),
+    highlights: summary.highlights ?? [],
+    strategy: summary.appliedOptions?.strategy ?? "sequential",
+    timelineStartDate: firstDate,
+    timelineEndDate: lastDate,
+    canGenerate: scheduledCount > 0,
   };
 }
 

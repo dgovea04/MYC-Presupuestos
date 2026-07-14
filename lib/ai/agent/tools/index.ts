@@ -2,9 +2,10 @@ import crypto from "crypto";
 import { z } from "zod";
 import type { AgentToolDefinition } from "../types";
 import { getBudgetById, saveBudgetPatch } from "@/lib/data/budgets";
-import { generateWorkScheduleBase, saveWorkScheduleItem } from "@/lib/data/work-schedule";
+import { generateWorkScheduleBase, previewWorkScheduleBase, saveWorkScheduleItem } from "@/lib/data/work-schedule";
 import { getWorkScheduleSection } from "@/lib/data/work-schedule";
-import { createMetradoSheet, duplicateMetradoSheet } from "@/lib/data/metrados";
+import { createMetradoSheet, duplicateMetradoSheet, getMetradoSheetById, listMetradoTemplates } from "@/lib/data/metrados";
+import { validateMetradoSheet, hasBlockingMetradoIssues } from "@/lib/metrados/validation";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
 import { createApuWorkbook, createBudgetWorkbook } from "@/lib/exports/excel";
 
@@ -34,14 +35,59 @@ export const reviewTakeoffTool: AgentToolDefinition<
   risk: "read",
   requiresProjectId: false,
   inputSchema: reviewTakeoffInput,
-  execute: async (input, _context) => {
+  execute: async (input, context) => {
+    const [sheet, templates] = await Promise.all([
+      getMetradoSheetById(input.sheetId, context.userId),
+      listMetradoTemplates(),
+    ]);
+    if (!sheet) {
+      throw new Error(`Hoja de metrado "${input.sheetId}" no encontrada o no tienes acceso.`);
+    }
+
+    const matchingTemplate = templates.find((t) => t.type === sheet.templateType);
+    const templateFormulaKeys = matchingTemplate?.formulaKeys ?? ["manual"];
+    const issues = validateMetradoSheet({
+      sheetUnit: sheet.unit,
+      templateFormulaKeys: templateFormulaKeys as any,
+      linkedPartidaUnit: sheet.partidaLink?.budgetItemUnit ?? null,
+      rows: sheet.rows,
+    });
+
+    const errors = issues.filter((i) => i.severity === "error");
+    const warnings = issues.filter((i) => i.severity === "warning");
+    const hasErrors = hasBlockingMetradoIssues(issues);
+
     return {
       sheetId: input.sheetId,
-      findings: [],
-      recommendation: "Revisión de metrado delegada a fases posteriores.",
+      sheetName: sheet.name,
+      status: sheet.status,
+      totalQuantity: sheet.totalQuantity,
+      rowCount: sheet.rows.length,
+      errorCount: errors.length,
+      warningCount: warnings.length,
+      hasErrors,
+      issues: issues.map((issue) => ({
+        id: issue.id,
+        severity: issue.severity,
+        message: issue.message,
+        rowId: (issue as any).rowId ?? null,
+        field: (issue as any).field ?? null,
+      })),
+      recommendation: hasErrors
+        ? "La hoja tiene errores que deben corregirse antes de enviar el metrado a la partida."
+        : warnings.length > 0
+          ? "La hoja tiene advertencias. Revisa antes de enviar a la partida."
+          : "La hoja de metrado está lista para enviarse a la partida.",
     };
   },
-  summarizeResult: () => "Revisión de metrado completada.",
+  summarizeResult: (result) => {
+    const status = result.hasErrors
+      ? `${result.errorCount} errores, ${result.warningCount} advertencias`
+      : result.warningCount > 0
+        ? `${result.warningCount} advertencias`
+        : "Sin problemas";
+    return `Revisión de "${result.sheetName}": ${result.rowCount} filas, ${status}.`;
+  },
 };
 
 // ─── Schedule (Cronograma) ────────────────────────────────────────────────────
@@ -52,7 +98,60 @@ const createScheduleInput = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .describe("Fecha de inicio base (YYYY-MM-DD)"),
+  mode: z.enum(["full", "incremental"]).default("full").describe("Modo: 'full' regenera todo el cronograma, 'incremental' solo agrega partidas nuevas sin borrar las existentes"),
 });
+
+// ─── Preview Schedule ────────────────────────────────────────────────────────
+
+const previewScheduleInput = z.object({
+  budgetId: z.string().min(1).describe("ID del presupuesto para previsualizar cronograma"),
+  baseStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .describe("Fecha de inicio base (YYYY-MM-DD)"),
+});
+
+export const previewScheduleTool: AgentToolDefinition<
+  z.infer<typeof previewScheduleInput>,
+  Record<string, unknown>
+> = {
+  name: "previewSchedule",
+  description:
+    "Genera una vista previa del cronograma que se crearía, mostrando cuántas partidas se programarían, " +
+    "fechas estimadas, issues detectados (rendimientos sospechosos, partidas sin programar) y la estrategia a usar. " +
+    "Solo lectura — NO escribe en la base de datos. " +
+    "Usa esto ANTES de createSchedule para revisar qué se va a generar y pedir confirmación al usuario.",
+  risk: "read",
+  requiresProjectId: false,
+  inputSchema: previewScheduleInput,
+  execute: async (input, context) => {
+    const result = await previewWorkScheduleBase(input.budgetId, context.userId, {
+      baseStartDate: input.baseStartDate,
+    });
+    return result;
+  },
+  summarizeResult: (result) => {
+    const parts = [`📋 Vista previa del cronograma`];
+    parts.push(`\n📊 ${result.scheduledItems} partidas programadas de ${result.totalItems} totales.`);
+    if (result.unscheduledItems > 0) {
+      parts.push(`⚠️ ${result.unscheduledItems} partidas no se pudieron programar (revisar issues).`);
+    }
+    if (result.timelineStartDate && result.timelineEndDate) {
+      parts.push(`📅 Rango: ${result.timelineStartDate} → ${result.timelineEndDate}`);
+    }
+    parts.push(`🔧 Estrategia: ${result.strategy}`);
+    if ((result.highlights as string[]).length > 0) {
+      parts.push(`\n✨ ${(result.highlights as string[]).join("\n")}`);
+    }
+    if ((result.issues as Array<{budgetItemId: string; itemCode: string; reason: string}>).length > 0) {
+      parts.push("\n⚠️ Issues detectados:");
+      (result.issues as Array<{budgetItemId: string; itemCode: string; reason: string}>).forEach((issue) => {
+        parts.push(`  • ${issue.itemCode}: ${issue.reason}`);
+      });
+    }
+    return parts.join("\n");
+  },
+};
 
 export const createScheduleTool: AgentToolDefinition<
   z.infer<typeof createScheduleInput>,
@@ -60,18 +159,21 @@ export const createScheduleTool: AgentToolDefinition<
 > = {
   name: "createSchedule",
   description:
-    "Crea o regenera un cronograma de obra para un presupuesto basado en rendimientos, cantidades y precedencias configuradas.",
+    "Crea o regenera un cronograma de obra para un presupuesto basado en rendimientos, cantidades y precedencias configuradas. " +
+    "Usa mode='incremental' para solo agregar partidas nuevas sin borrar las existentes (preserva ajustes manuales).",
   risk: "write",
   requiresProjectId: false,
   inputSchema: createScheduleInput,
   execute: async (input, context) => {
     const result = await generateWorkScheduleBase(input.budgetId, context.userId, {
       baseStartDate: input.baseStartDate,
-    });
+      mode: input.mode,
+    } as any);
 
     return {
       budgetId: input.budgetId,
       baseStartDate: input.baseStartDate,
+      mode: input.mode,
       totalItems: result.generationSummary?.totalItems ?? 0,
       scheduledItems: result.generationSummary?.scheduledItems ?? 0,
       unscheduledItems: result.generationSummary?.unscheduledItems ?? 0,
@@ -80,7 +182,7 @@ export const createScheduleTool: AgentToolDefinition<
     };
   },
   summarizeResult: (result) =>
-    `Cronograma generado: ${result.scheduledItems} partidas programadas de ${result.totalItems} totales.`,
+    `Cronograma generado: ${result.scheduledItems} partidas programadas de ${result.totalItems} totales${(result as any).mode === "incremental" ? " (modo incremental)" : ""}.`,
 };
 
 // ─── Reports (Reportes) ──────────────────────────────────────────────────────
@@ -484,7 +586,7 @@ export const dashboardTool: AgentToolDefinition<
 // ─── Tool arrays ─────────────────────────────────────────────────────────────
 
 export const takeoffTools: AgentToolDefinition<any, any>[] = [reviewTakeoffTool, createTakeoffTool, importTakeoffTool];
-export const scheduleTools: AgentToolDefinition<any, any>[] = [createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
+export const scheduleTools: AgentToolDefinition<any, any>[] = [previewScheduleTool, createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
 export const reportTools: AgentToolDefinition<any, any>[] = [exportReportTool, exportPDFTool, exportExcelTool, exportS10Tool, dashboardTool];
 export const chapterTools: AgentToolDefinition<any, any>[] = [createChapterTool, moveChapterTool, deleteChapterTool];
 

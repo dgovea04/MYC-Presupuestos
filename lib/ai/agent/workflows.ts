@@ -58,7 +58,7 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       // Insumos
       "searchInsumos", "addInsumo", "replaceInsumo", "updatePrecio",
       // Cronograma
-      "createSchedule", "updateTask", "linkPredecessor",
+      "previewSchedule", "createSchedule", "updateTask", "linkPredecessor",
       "moveTask", "calculateCriticalPath",
       // Metrados
       "reviewTakeoff", "createTakeoff", "importTakeoff",
@@ -148,7 +148,8 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
     description: "Especialista en planificación de obra, cronogramas y metrados.",
     icon: "📅",
     toolNames: [
-      "createSchedule", "updateTask", "linkPredecessor",
+      "searchBudgets", "previewSchedule", "createSchedule",
+      "updateTask", "linkPredecessor",
       "moveTask", "calculateCriticalPath",
       "reviewTakeoff", "createTakeoff", "importTakeoff",
       "calculateBudget",
@@ -157,8 +158,17 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "Eres un especialista en planificación y cronogramas de construcción.",
       "Puedes crear cronogramas, actualizar tareas, establecer dependencias y calcular ruta crítica.",
       "También gestionas hojas de metrado.",
+      "",
+      "FLUJO PARA GENERAR CRONOGRAMA:",
+      "1. Si no conoces el budgetId, usa searchBudgets para encontrar el presupuesto general del proyecto.",
+      "2. SIEMPRE haz previewSchedule primero para mostrar al usuario qué se va a generar (partidas programadas, issues, fechas).",
+      "3. Pide al usuario la fecha de inicio base (YYYY-MM-DD) si no la ha proporcionado.",
+      "4. Después del preview, espera confirmación del usuario antes de createSchedule.",
+      "5. createSchedule acepta mode: 'incremental' para solo agregar partidas nuevas sin borrar las existentes.",
+      "6. Después de crear el cronograma, usa calculateCriticalPath para mostrar la ruta crítica.",
+      "",
       "calculateCriticalPath es de solo lectura; usa updateTask y linkPredecessor para modificar.",
-    ].join(" "),
+    ].join("\n"),
   },
   {
     slug: "review-agent",
@@ -240,7 +250,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     name: "Generar cronograma de obra",
     description: "Genera un cronograma completo con ruta crítica, dependencias y fechas estimadas basado en las partidas del presupuesto.",
     bundleSlug: "planning-agent",
-    initialGoal: "Generar un cronograma de obra para el presupuesto actual usando createSchedule con una fecha de inicio base. Si hay tareas sin programar, usa updateTask para ajustar duraciones y linkPredecessor para establecer dependencias entre partidas. Finalmente, usa calculateCriticalPath para calcular la ruta crítica.",
+    initialGoal: "Generar un cronograma de obra para el presupuesto actual. PRIMERO usa searchBudgets si no conoces el budgetId del presupuesto general. Luego usa previewSchedule con la fecha de inicio base para mostrar la vista previa. Después de que el usuario confirme, usa createSchedule. Si hay tareas sin programar, usa updateTask para ajustar duraciones y linkPredecessor para establecer dependencias entre partidas. Finalmente, usa calculateCriticalPath para calcular la ruta crítica.",
     defaultMode: "goal",
   },
   {

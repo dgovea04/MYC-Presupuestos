@@ -36,6 +36,7 @@ export const agentToolMetadata: AgentToolMetadata[] = [
   { name: "updateAPU", description: "Actualiza recursos, rendimientos o costos de un APU.", risk: "financial" },
   { name: "generateAPU", description: "Genera una propuesta de APU asistida por IA.", risk: "financial" },
   { name: "optimizeAPU", description: "Propone mejoras de rendimiento o composicion para un APU.", risk: "read" },
+  { name: "previewSchedule", description: "Previsualiza el cronograma que se generaria sin escribir en la base de datos.", risk: "read" },
   { name: "createSchedule", description: "Crea o regenera el cronograma de obra.", risk: "write" },
   { name: "updateTask", description: "Actualiza duracion o fechas de una tarea del cronograma.", risk: "write" },
   { name: "linkPredecessor", description: "Vincula dependencias entre tareas del cronograma.", risk: "write" },
