@@ -161,6 +161,7 @@ export function LocalAiSettingsCard() {
       </CardHeader>
       <CardContent className="space-y-5">
         {error ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+        {historyCleared ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">Historial local eliminado.</p> : null}
 
         <div className="grid gap-3 md:grid-cols-3">
           <AiInfoCard label="Proveedor" value="Ollama local" detail="http://localhost:11434" />
@@ -273,7 +274,6 @@ export function LocalAiSettingsCard() {
                 <Trash2 className="h-4 w-4" />
                 Limpiar historial IA
               </Button>
-              {historyCleared ? <p className="text-sm text-emerald-700 dark:text-emerald-300">Historial local eliminado.</p> : null}
             </div>
           </Panel>
         </section>

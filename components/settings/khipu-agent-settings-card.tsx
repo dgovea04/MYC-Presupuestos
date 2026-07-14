@@ -379,7 +379,7 @@ export function KhipuAgentSettingsCard() {
         throw new Error(message);
       }
 
-      setSuccessMessage("Modelo guardado correctamente.");
+      setSuccessMessage("Configuracion guardada correctamente.");
       setTimeout(() => setSuccessMessage(""), 4000);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Error al guardar la configuración.");
@@ -452,6 +452,9 @@ export function KhipuAgentSettingsCard() {
       </CardHeader>
 
       <CardContent className="space-y-5 pt-6">
+        {saveError ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{saveError}</p> : null}
+        {successMessage ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">{successMessage}</p> : null}
+
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-[var(--app-text-subtle)]" />
@@ -575,19 +578,6 @@ export function KhipuAgentSettingsCard() {
                 </p>
               </div>
             </div>
-
-            {/* Mensajes de estado */}
-            {saveError ? (
-              <div className="theme-status-error flex items-start gap-2 rounded-xl border px-3 py-2">
-                <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
-                <p className="theme-status-error-strong text-sm">{saveError}</p>
-              </div>
-            ) : null}
-            {successMessage ? (
-              <p className="theme-status-success rounded-xl border px-3 py-2 text-sm theme-status-success-strong">
-                {successMessage}
-              </p>
-            ) : null}
           </>
         )}
       </CardContent>
