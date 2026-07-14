@@ -15,7 +15,13 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
   const section = hasAccess ? await getWorkScheduleOverviewSection(id, session.user.id) : null;
 
   return (
-    <GeneralBudgetSectionShell
+    <>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){var w=localStorage.getItem('work-schedule-overview-timeline-panel-width:${id}');if(w){document.documentElement.style.setProperty('--work-schedule-timeline-panel-width',w+'px');}})()`,
+        }}
+      />
+      <GeneralBudgetSectionShell
       budgetId={budget.id}
       projectId={project.id}
       budgetName={budget.name}
@@ -40,5 +46,6 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
         />
       )}
     </GeneralBudgetSectionShell>
+    </>
   );
 }

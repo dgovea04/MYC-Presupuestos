@@ -2319,7 +2319,7 @@ function WorkScheduleOverview({
     });
   }, [flushPendingHeightUpdates]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     syncOverviewTimelinePanelWidthCssVariable(timelinePanelWidth);
     timelinePanelWidthRef.current = timelinePanelWidth;
   }, [timelinePanelWidth]);
