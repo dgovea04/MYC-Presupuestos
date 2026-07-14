@@ -214,6 +214,94 @@ describe("BudgetDetailPage", () => {
     expect(mocks.notFound).not.toHaveBeenCalled();
   });
 
+  it("strips the raw `project` field (Prisma Decimals) from the budget before forwarding to the Client Component", async () => {
+    // BUGFIX: getBudgetById() returns `{ ...BudgetRecord, project: Project }`
+    // where `project` is the raw Prisma row with Decimal columns. Next.js 16
+    // rejects Prisma Decimal objects across the Server→Client boundary
+    // ("Only plain objects can be passed to Client Components"). The page
+    // must strip `project` before forwarding `budget` to BudgetFlowWrapper
+    // so the Client Component only sees a serializable BudgetRecord.
+    //
+    // A class instance is used (not a plain object) because the RSC
+    // serialization layer detects non-plain objects by prototype, and a
+    // `{}` literal would pass the check — defeating the regression test.
+    class FakeDecimal {
+      toString() { return "1500.5"; }
+      toFixed() { return "1500.50"; }
+    }
+    const fakeBuiltArea = new FakeDecimal();
+
+    mocks.getBudgetById.mockResolvedValue({
+      id: "budget-1",
+      projectId: "project-1",
+      parentBudgetId: null,
+      kind: "SUB_BUDGET",
+      name: "Sub Presupuesto Demo",
+      currency: "PEN",
+      igvRate: 0.18,
+      generalExpensesRate: 0.1,
+      utilityRate: 0.08,
+      totalDirectCost: 0,
+      totalGeneralExpenses: 0,
+      totalUtility: 0,
+      totalTax: 0,
+      totalAmount: 0,
+      levels: [],
+      items: [],
+      // Raw Prisma project row with Decimal columns — the source of the
+      // original "Decimal objects are not supported" error.
+      project: {
+        id: "project-1",
+        companyId: "company-1",
+        name: "Proyecto Demo",
+        clientName: "Cliente Demo",
+        location: null,
+        projectType: null,
+        projectCategory: null,
+        buildingSubtype: null,
+        contractType: null,
+        builtArea: fakeBuiltArea,
+        landArea: fakeBuiltArea,
+        floors: null,
+        basements: null,
+        buildingHeight: fakeBuiltArea,
+        contractAmount: fakeBuiltArea,
+        referenceBudget: fakeBuiltArea,
+        region: null,
+        province: null,
+        district: null,
+        executiveSummary: null,
+        projectManager: null,
+        ownerEntity: null,
+        supervisor: null,
+        startDate: null,
+        endDate: null,
+        status: "PLANNING",
+        createdAt: new Date("2026-05-11T00:00:00.000Z"),
+        updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+      },
+    });
+
+    const tree = await BudgetDetailPage({
+      params: Promise.resolve({ id: "budget-1" }),
+    });
+
+    // If the page forwarded the raw `project` field, renderToStaticMarkup
+    // would throw the "Decimal objects are not supported" error.
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain('data-testid="budget-flow"');
+    expect(mocks.budgetFlowSpy).toHaveBeenCalledTimes(1);
+    const forwardedProps = mocks.budgetFlowSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    const forwardedBudget = forwardedProps.budget as Record<string, unknown>;
+    // The raw `project` field must NOT be present in the budget prop
+    // forwarded to the Client Component.
+    expect("project" in forwardedBudget).toBe(false);
+    // The serialized fields must still be present.
+    expect(forwardedBudget.id).toBe("budget-1");
+    expect(forwardedBudget.name).toBe("Sub Presupuesto Demo");
+  });
+
   it("loads the project overview without recreating missing default sub budgets or blocking on editor catalogs", async () => {
     await BudgetDetailPage({
       params: Promise.resolve({ id: "budget-1" }),
