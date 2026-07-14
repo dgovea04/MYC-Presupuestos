@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import {
   PanelRightClose,
   PanelRightOpen,
@@ -127,6 +127,11 @@ export function AgentWorkspace({
   useEffect(() => { persistBoolean(RIGHT_PANEL_COLLAPSED_KEY, rightPanelCollapsed); }, [rightPanelCollapsed]);
   useEffect(() => { persistNumber(CHAT_PANEL_WIDTH_KEY, chatPanelWidth); }, [chatPanelWidth]);
   useEffect(() => { persistBundleSlug(selectedBundleSlug); }, [selectedBundleSlug]);
+
+  // Sync CSS variable to document.documentElement before paint to prevent SSR flash
+  useLayoutEffect(() => {
+    document.documentElement.style.setProperty("--chat-width", `${chatPanelWidth}px`);
+  }, [chatPanelWidth]);
 
   // ── Drag-to-resize ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -381,7 +386,6 @@ export function AgentWorkspace({
         rightPanelCollapsed ? "md:grid-cols-[var(--chat-width)_1fr]" : "md:grid-cols-[var(--chat-width)_1fr_300px]",
         className,
       )}
-      style={{ "--chat-width": `${chatPanelWidth}px` } as React.CSSProperties}
     >
       {/* Left: Chat + Objective */}
       <div className="relative border-r border-[var(--app-border)]">

@@ -62,6 +62,11 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans" data-theme={initialTheme} suppressHydrationWarning>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var w=localStorage.getItem('myc-khipu-agent-chat-panel-width');if(w){document.documentElement.style.setProperty('--chat-width',w+'px');}})()`,
+          }}
+        />
         <GlobalAiAssistantProvider>{children}</GlobalAiAssistantProvider>
       </body>
     </html>

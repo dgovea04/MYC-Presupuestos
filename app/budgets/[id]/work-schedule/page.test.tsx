@@ -127,4 +127,76 @@ describe("WorkSchedulePage", () => {
 
     expect(markup).toContain("data-testid=\"upgrade-cta\"");
   });
+
+  // ─── blocking script for panel width ──────────────────────────────────
+
+  it("renders a blocking script tag before the shell", async () => {
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    // Script must appear before the shell
+    const scriptIndex = markup.indexOf("<script>");
+    const shellIndex = markup.indexOf('data-testid="shell"');
+    expect(scriptIndex).toBeGreaterThan(-1);
+    expect(shellIndex).toBeGreaterThan(-1);
+    expect(scriptIndex).toBeLessThan(shellIndex);
+  });
+
+  it("injects the budget-specific localStorage key in the script", async () => {
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain("work-schedule-overview-timeline-panel-width:budget-1");
+  });
+
+  it("injects a different budget id in the localStorage key", async () => {
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-abc-123" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain("work-schedule-overview-timeline-panel-width:budget-abc-123");
+  });
+
+  it("sets the CSS variable on document.documentElement in the script", async () => {
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain("document.documentElement.style.setProperty");
+    expect(markup).toContain("'--work-schedule-timeline-panel-width'");
+    expect(markup).toContain("w+'px'");
+  });
+
+  it("wraps the script logic in an IIFE", async () => {
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain("(function(){");
+    expect(markup).toContain("})()");
+  });
+
+  it("reads from localStorage in the script", async () => {
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain("localStorage.getItem");
+  });
+
+  it("renders the script with dangerouslySetInnerHTML", async () => {
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    // The script content should be rendered inline (not via src)
+    expect(markup).toContain("<script>");
+    expect(markup).not.toContain("<script src");
+  });
+
+  it("still renders the script when feature is unavailable", async () => {
+    mocks.hasFeatureAccess.mockReturnValue(false);
+
+    const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
+    const markup = renderToStaticMarkup(tree);
+
+    // Script should appear even when showing UpgradeCTA
+    expect(markup).toContain("localStorage.getItem");
+    expect(markup).toContain("work-schedule-overview-timeline-panel-width:budget-1");
+  });
 });

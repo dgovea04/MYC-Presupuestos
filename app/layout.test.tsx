@@ -71,6 +71,26 @@ describe("RootLayout", () => {
     expect(markup).toContain('--app-sidebar-initial-width:80px');
   });
 
+  it("injects the blocking script that reads chat panel width from localStorage", async () => {
+    vi.mocked(cookies).mockResolvedValue({
+      get: (name: string) => (name === "myc_sidebar_mode" ? { name, value: "mini" } : undefined),
+    } as Awaited<ReturnType<typeof cookies>>);
+
+    const markup = renderToStaticMarkup(
+      await RootLayout({
+        children: <div>Contenido</div>,
+      }),
+    );
+
+    // Verify the script tag is present with the correct localStorage key
+    expect(markup).toContain("myc-khipu-agent-chat-panel-width");
+    // Verify it sets --chat-width on document.documentElement
+    expect(markup).toContain("--chat-width");
+    // Verify it uses an IIFE pattern
+    expect(markup).toContain("(function(){");
+    expect(markup).toContain("})()");
+  });
+
   it("renders stored theme and view mode from cookies on the initial html", async () => {
     vi.mocked(cookies).mockResolvedValue({
       get: (name: string) => {

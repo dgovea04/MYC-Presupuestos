@@ -147,6 +147,7 @@ describe("AgentWorkspace", () => {
   beforeEach(() => {
     mockUseAgentStream.mockReturnValue(makeDefaultHookReturn() as ReturnType<typeof useAgentStream>);
     localStorage.clear();
+    document.documentElement.style.removeProperty("--chat-width");
   });
 
   afterEach(() => {
@@ -1685,7 +1686,7 @@ describe("AgentWorkspace", () => {
       const { container } = render(<AgentWorkspace />);
 
       const grid = container.firstChild as HTMLElement;
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("380px");
     });
 
     it("changes width on mousedown + mousemove drag", () => {
@@ -1702,7 +1703,7 @@ describe("AgentWorkspace", () => {
       // Move to position 520 (relative to grid left = 100 → newWidth = 520 - 100 = 420)
       fireEvent.mouseMove(document, { clientX: 520 });
 
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("420px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("420px");
 
       restore();
     });
@@ -1721,7 +1722,7 @@ describe("AgentWorkspace", () => {
       // Drag below minimum
       fireEvent.mouseMove(document, { clientX: 200 });
 
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("280px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("280px");
 
       restore();
     });
@@ -1740,7 +1741,7 @@ describe("AgentWorkspace", () => {
       // Drag above maximum
       fireEvent.mouseMove(document, { clientX: 700 });
 
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("520px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("520px");
 
       restore();
     });
@@ -1773,7 +1774,7 @@ describe("AgentWorkspace", () => {
       fireEvent.mouseMove(document, { clientX: 500 });
 
       // Width should remain at default
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("380px");
 
       restore();
     });
@@ -1791,7 +1792,7 @@ describe("AgentWorkspace", () => {
       fireEvent.mouseUp(document);
 
       // Should be 550 - 100 = 450
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("450px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("450px");
       expect(localStorage.getItem("myc-khipu-agent-chat-panel-width")).toBe("450");
 
       restore();
@@ -1803,7 +1804,7 @@ describe("AgentWorkspace", () => {
       const { container } = render(<AgentWorkspace />);
 
       const grid = container.firstChild as HTMLElement;
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("420px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("420px");
     });
 
     it("ignores invalid localStorage values and uses default", () => {
@@ -1812,7 +1813,7 @@ describe("AgentWorkspace", () => {
       const { container } = render(<AgentWorkspace />);
 
       const grid = container.firstChild as HTMLElement;
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("380px");
     });
 
     it("ignores out-of-range localStorage values and uses default", () => {
@@ -1821,7 +1822,7 @@ describe("AgentWorkspace", () => {
       const { container } = render(<AgentWorkspace />);
 
       const grid = container.firstChild as HTMLElement;
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("380px");
     });
 
     it("ignores localStorage values above maximum and uses default", () => {
@@ -1830,7 +1831,7 @@ describe("AgentWorkspace", () => {
       const { container } = render(<AgentWorkspace />);
 
       const grid = container.firstChild as HTMLElement;
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("380px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("380px");
     });
 
     // ─── Keyboard resize ────────────────────────────────────────────────
@@ -1843,7 +1844,7 @@ describe("AgentWorkspace", () => {
 
       fireEvent.keyDown(handle, { key: "ArrowLeft" });
 
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("370px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("370px");
     });
 
     it("increases width by 10px on ArrowRight", () => {
@@ -1854,7 +1855,7 @@ describe("AgentWorkspace", () => {
 
       fireEvent.keyDown(handle, { key: "ArrowRight" });
 
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("390px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("390px");
     });
 
     it("clamps to min width with multiple ArrowLeft presses", () => {
@@ -1868,7 +1869,7 @@ describe("AgentWorkspace", () => {
         fireEvent.keyDown(handle, { key: "ArrowLeft" });
       }
 
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("280px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("280px");
     });
 
     it("clamps to max width with multiple ArrowRight presses", () => {
@@ -1882,7 +1883,7 @@ describe("AgentWorkspace", () => {
         fireEvent.keyDown(handle, { key: "ArrowRight" });
       }
 
-      expect(grid.style.getPropertyValue("--chat-width")).toBe("520px");
+      expect(document.documentElement.style.getPropertyValue("--chat-width")).toBe("520px");
     });
 
     it("persists width after keyboard resize", () => {
