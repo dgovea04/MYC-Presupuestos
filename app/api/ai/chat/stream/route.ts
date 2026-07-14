@@ -51,9 +51,11 @@ export async function POST(request: Request) {
         getSystemSettings(),
       ]);
       streamInput.apiKey = apiKey || systemSettings.openrouterApiKey || undefined;
-      // Preferir modelo seleccionado por el usuario, luego system settings, luego default
+      // Preferir modelo seleccionado por el usuario, luego el agentModel del
+      // sistema (paridad con usuarios), luego openrouterModel del sistema.
       streamInput.modelPreference =
         data.modelPreference ||
+        systemSettings.agentModel ||
         systemSettings.openrouterModel ||
         undefined;
     }

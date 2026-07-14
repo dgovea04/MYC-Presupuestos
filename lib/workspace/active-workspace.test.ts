@@ -137,8 +137,7 @@ describe("setActiveWorkspaceId", () => {
   });
 
   it("sets secure flag in production", async () => {
-    const originalNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
 
     mockPrisma.companyMembership.findUnique.mockResolvedValue({ status: "ACTIVE" });
 
@@ -151,7 +150,7 @@ describe("setActiveWorkspaceId", () => {
       secure: true,
     });
 
-    process.env.NODE_ENV = originalNodeEnv;
+    vi.unstubAllEnvs();
   });
 });
 

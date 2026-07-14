@@ -6883,7 +6883,7 @@ async function buildWorkScheduleOverviewExecutivePackageWorkbook({
 }) {
   const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "MYC Presupuestos";
+  workbook.creator = "MC Presupuestos";
   const summaryTable = buildWorkScheduleOverviewSummaryWorkbookTableData({
     overviewLines,
     currency,
@@ -6974,7 +6974,7 @@ async function buildWorkScheduleActiveViewWorkbook({
 
   const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "MYC Presupuestos";
+  workbook.creator = "MC Presupuestos";
 
   if (activeView === "valuation") {
     const tableData = buildWorkScheduleValuationWorkbookTableData({

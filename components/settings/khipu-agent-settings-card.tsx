@@ -1,16 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Bot, Loader2, Save, AlertTriangle, CheckCircle2, Wifi, RefreshCw, Terminal, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bot, Loader2, Save, AlertTriangle, CheckCircle2, Wifi, RefreshCw, Terminal, XCircle, Cloud, Sparkles, Server, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AGENT_MODELS, DEFAULT_AGENT_MODEL, getAgentModelLabel, getAgentModelCostEmoji, getAgentModelShortLabel, PROVIDER_BADGE } from "@/lib/ai/agent/models";
+import { AGENT_MODELS, DEFAULT_AGENT_MODEL, getAgentModelShortLabel, PROVIDER_BADGE, type AgentModelProvider } from "@/lib/ai/agent/models";
 import { cn } from "@/lib/utils";
 
 const COST_BADGE_CLASS: Record<string, string> = {
-  free: "bg-emerald-100 text-emerald-700",
-  paid: "bg-amber-100 text-amber-800",
-  local: "bg-emerald-100 text-emerald-700",
+  free: "bg-[var(--app-success)]/10 text-[var(--app-success)]",
+  paid: "bg-[var(--app-warning)]/10 text-[var(--app-warning)]",
+  local: "bg-[var(--app-success)]/10 text-[var(--app-success)]",
+};
+
+const PROVIDER_ICON: Record<
+  AgentModelProvider,
+  { icon: React.ElementType; label: string }
+> = {
+  openrouter: { icon: Cloud, label: "Cloud" },
+  google: { icon: Sparkles, label: "Google" },
+  ollama: { icon: Server, label: "Local" },
 };
 
 const COST_LABEL: Record<string, string> = {
@@ -43,14 +52,14 @@ function OllamaStatusBanner({
   // Estado: verificando
   if (checking) {
     return (
-      <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-slate-500" />
+      <div className="theme-status-info flex items-start gap-3 rounded-2xl border px-4 py-3">
+        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
         <div>
-          <p className="text-sm font-semibold text-slate-700">
+          <p className="theme-status-info-strong text-sm font-semibold">
             Verificando Ollama...
           </p>
           <p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">
-            Conectando con Ollama y verificando disponibilidad del modelo <code className="rounded bg-slate-200 px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code>.
+            Conectando con Ollama y verificando disponibilidad del modelo <code className="rounded bg-[var(--app-bg-strong)] px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code>.
           </p>
         </div>
       </div>
@@ -60,14 +69,14 @@ function OllamaStatusBanner({
   // Estado: no verificado aún (idle)
   if (reachable === null) {
     return (
-      <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <Terminal className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+      <div className="theme-status-info flex items-start gap-3 rounded-2xl border px-4 py-3">
+        <Terminal className="mt-0.5 h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
         <div className="flex-1">
-          <p className="text-sm font-semibold text-slate-700">
+          <p className="theme-status-info-strong text-sm font-semibold">
             Ollama Local — verificar estado
           </p>
           <p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">
-            Presiona <strong>Verificar</strong> para comprobar que Ollama está corriendo y el modelo <code className="rounded bg-slate-200 px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code> está instalado.
+            Presiona <strong>Verificar</strong> para comprobar que Ollama está corriendo y el modelo <code className="rounded bg-[var(--app-bg-strong)] px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code> está instalado.
           </p>
           <Button
             type="button"
@@ -88,19 +97,19 @@ function OllamaStatusBanner({
   if (reachable && modelAvailable) {
     return (
       <div className="space-y-2.5">
-        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+        <div className="theme-status-success flex items-start gap-3 rounded-2xl border px-4 py-3">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-emerald-800">
+            <p className="theme-status-success-strong text-sm font-semibold">
               Ollama conectado — modelo disponible
             </p>
-            <p className="mt-1 text-xs leading-5 text-emerald-700">
-              El modelo <code className="rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code> está instalado y listo para usar con el Khipu Agente.
+            <p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">
+              El modelo <code className="rounded bg-[var(--app-bg-strong)] px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code> está instalado y listo para usar con el Khipu Agente.
             </p>
             <button
               type="button"
               onClick={onRetry}
-              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 transition-colors"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium underline-offset-2 transition-colors hover:opacity-80"
             >
               <RefreshCw className="h-3 w-3" />
               Volver a verificar
@@ -118,19 +127,19 @@ function OllamaStatusBanner({
   if (reachable && modelAvailable === false) {
     return (
       <div className="space-y-2.5">
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="theme-status-warning flex items-start gap-3 rounded-2xl border px-4 py-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800">
+            <p className="theme-status-warning-strong text-sm font-semibold">
               Ollama conectado — modelo NO instalado
             </p>
-            <p className="mt-1 text-xs leading-5 text-amber-700">
-              El modelo <code className="rounded bg-amber-100 px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code> no se encontró en tu instalación de Ollama. Ejecuta <code className="rounded bg-amber-100 px-1 py-0.5 text-[11px] font-mono">ollama pull {modelLabel}</code> en tu terminal para descargarlo.
+            <p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">
+              El modelo <code className="rounded bg-[var(--app-bg-strong)] px-1 py-0.5 text-[11px] font-mono">{modelLabel}</code> no se encontró en tu instalación de Ollama. Ejecuta <code className="rounded bg-[var(--app-bg-strong)] px-1 py-0.5 text-[11px] font-mono">ollama pull {modelLabel}</code> en tu terminal para descargarlo.
             </p>
             <button
               type="button"
               onClick={onRetry}
-              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 transition-colors"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium underline-offset-2 transition-colors hover:opacity-80"
             >
               <RefreshCw className="h-3 w-3" />
               Verificar de nuevo
@@ -146,13 +155,13 @@ function OllamaStatusBanner({
 
   // Estado: no reachable
   return (
-    <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-      <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+    <div className="theme-status-error flex items-start gap-3 rounded-2xl border px-4 py-3">
+      <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="flex-1">
-        <p className="text-sm font-semibold text-rose-800">
+        <p className="theme-status-error-strong text-sm font-semibold">
           Ollama no disponible
         </p>
-        <p className="mt-1 text-xs leading-5 text-rose-700">
+        <p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">
           {error || "No se pudo conectar con Ollama. Asegúrate de que esté corriendo en http://localhost:11434."}
         </p>
         <Button
@@ -160,7 +169,7 @@ function OllamaStatusBanner({
           variant="outline"
           size="sm"
           onClick={onRetry}
-          className="mt-2 gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-100"
+          className="mt-2 gap-1.5"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Reintentar
@@ -170,9 +179,47 @@ function OllamaStatusBanner({
   );
 }
 
+function ProviderStatusBadge({
+  provider,
+  configured,
+}: {
+  provider: "openrouter" | "google";
+  configured: boolean;
+}) {
+  const isGoogle = provider === "google";
+  const label = isGoogle ? "Google Gemini API" : "OpenRouter";
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-2xl border px-4 py-3",
+        configured ? "theme-status-success" : "theme-status-warning",
+      )}
+    >
+      {configured ? (
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+      ) : (
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      )}
+      <div>
+        <p className={cn("text-sm font-semibold", configured ? "theme-status-success-strong" : "theme-status-warning-strong")}>
+          {configured
+            ? `API key de ${label} configurada`
+            : `API key de ${label} no configurada`}
+        </p>
+        <p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">
+          {configured
+            ? `El Khipu Agente usará tu API key de ${label} para ejecutar tareas.`
+            : `Ve a Proveedores Cloud IA para agregar tu API key de ${label}. El Khipu Agente usa ${label} como backend de modelos.`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function InstalledModelsList({ models }: { models: string[] }) {
   return (
-    <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2.5">
+    <div className="theme-muted-panel rounded-xl border px-3.5 py-2.5">
       <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--app-text-muted)]">
         <Terminal className="h-3 w-3" />
         Modelos instalados en Ollama
@@ -181,7 +228,7 @@ function InstalledModelsList({ models }: { models: string[] }) {
         {models.map((m) => (
           <span
             key={m}
-            className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600"
+            className="rounded-md bg-[var(--app-bg-strong)] px-2 py-0.5 text-[11px] font-mono text-[var(--app-text-muted)]"
           >
             {m}
           </span>
@@ -198,9 +245,11 @@ export function KhipuAgentSettingsCard() {
   const [saveError, setSaveError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedModel, setSelectedModel] = useState(DEFAULT_AGENT_MODEL);
-  const [configured, setConfigured] = useState(false);
+  const [openrouterConfigured, setOpenrouterConfigured] = useState(false);
+  const [geminiConfigured, setGeminiConfigured] = useState(false);
   const [aiProviderPreference, setAiProviderPreference] = useState("auto");
   const [loading, setLoading] = useState(true);
+  const [isModelListExpanded, setIsModelListExpanded] = useState(false);
 
   // ── Ollama health check state ───────────────────────────────────────────
   const [ollamaChecking, setOllamaChecking] = useState(false);
@@ -219,11 +268,13 @@ export function KhipuAgentSettingsCard() {
       if (!payload || typeof payload !== "object") return;
 
       const data = payload as Record<string, unknown>;
-      const model = typeof data.openrouterModel === "string" && data.openrouterModel.trim().length > 0
-        ? data.openrouterModel
-        : DEFAULT_AGENT_MODEL;
+      const preferredAgentModel = typeof data.agentModel === "string" && data.agentModel.trim().length > 0
+        ? data.agentModel
+        : null;
+      const model = preferredAgentModel ?? DEFAULT_AGENT_MODEL;
       setSelectedModel(model);
-      setConfigured(data.openrouterConfigured === true);
+      setOpenrouterConfigured(data.openrouterConfigured === true);
+      setGeminiConfigured(data.geminiConfigured === true);
       if (typeof data.aiProviderPreference === "string") {
         setAiProviderPreference(data.aiProviderPreference);
       }
@@ -284,6 +335,7 @@ export function KhipuAgentSettingsCard() {
 
   useEffect(() => {
     if (isOllamaModel) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Ollama status is checked reactively when the selected model changes.
       void checkOllamaStatus(selectedModel);
     } else {
       // Reset Ollama state when switching to non-Ollama model
@@ -313,7 +365,7 @@ export function KhipuAgentSettingsCard() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          openrouterModel: selectedModel,
+          agentModel: selectedModel,
           aiProviderPreference,
         }),
       });
@@ -336,7 +388,39 @@ export function KhipuAgentSettingsCard() {
     }
   };
 
-  const costBadgeClass = selectedModelMeta ? COST_BADGE_CLASS[selectedModelMeta.cost] : COST_BADGE_CLASS.free;
+  const selectedProvider = selectedModelMeta?.provider ?? "openrouter";
+
+  const featuredModelIds = useMemo(() => {
+    const selectedMeta = AGENT_MODELS.find((model) => model.id === selectedModel);
+    const candidates = AGENT_MODELS.filter((model) => model.id !== selectedModel);
+
+    const sameProviderAndCost = candidates.filter(
+      (model) => model.provider === selectedMeta?.provider && model.cost === selectedMeta?.cost,
+    );
+    const sameProvider = candidates.filter(
+      (model) => model.provider === selectedMeta?.provider && model.cost !== selectedMeta?.cost,
+    );
+    const sameCost = candidates.filter(
+      (model) => model.cost === selectedMeta?.cost && model.provider !== selectedMeta?.provider,
+    );
+
+    const ordered = [...sameProviderAndCost, ...sameProvider, ...sameCost, ...candidates];
+    const featured = [selectedModel, ...ordered.map((model) => model.id)].slice(0, 3);
+
+    return new Set(featured);
+  }, [selectedModel]);
+
+  const visibleModels = useMemo(() => {
+    const list = isModelListExpanded
+      ? AGENT_MODELS
+      : AGENT_MODELS.filter((model) => featuredModelIds.has(model.id));
+    const selectedEntry = list.find((model) => model.id === selectedModel);
+    if (!selectedEntry) return list;
+    const others = list.filter((model) => model.id !== selectedModel);
+    return [selectedEntry, ...others];
+  }, [isModelListExpanded, featuredModelIds, selectedModel]);
+
+  const collapsedCount = AGENT_MODELS.length - featuredModelIds.size;
 
   return (
     <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
@@ -386,32 +470,7 @@ export function KhipuAgentSettingsCard() {
                 onRetry={() => void checkOllamaStatus(selectedModel)}
               />
             ) : (
-              <div className={cn(
-                "flex items-start gap-3 rounded-2xl border px-4 py-3",
-                configured
-                  ? "border-emerald-200 bg-emerald-50"
-                  : "border-amber-200 bg-amber-50",
-              )}>
-                {configured ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                ) : (
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                )}
-                <div>
-                  <p className={cn(
-                    "text-sm font-semibold",
-                    configured ? "text-emerald-800" : "text-amber-800",
-                  )}>
-                    {configured ? "API key de OpenRouter configurada" : "API key de OpenRouter no configurada"}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">
-                    {configured
-                      ? "El Khipu Agente usará tu API key de OpenRouter para ejecutar tareas."
-                      : "Ve a Proveedores Cloud IA para agregar tu API key de OpenRouter. El Khipu Agente usa OpenRouter como backend de modelos."
-                    }
-                  </p>
-                </div>
-              </div>
+              <ProviderStatusBadge provider={selectedProvider} configured={selectedProvider === "google" ? geminiConfigured : openrouterConfigured} />
             )}
 
             {/* Selector de modelo */}
@@ -420,37 +479,43 @@ export function KhipuAgentSettingsCard() {
                 Modelo por defecto
               </label>
               <p className="text-xs text-[var(--app-text-muted)]">
-                Elige qué modelo usará el Khipu Agente. Los modelos Cloud ({`☁️`}) usan OpenRouter (requiere API key). Los modelos Local ({`🏠`}) usan Ollama en tu máquina, sin costo ni límites.
+                Elige qué modelo usará el Khipu Agente. Los modelos Cloud ({`☁️`}) usan OpenRouter o Google Gemini (requieren API key). Los modelos Local ({`🏠`}) usan Ollama en tu máquina, sin costo ni límites.
               </p>
 
               <div className="mt-3 grid gap-2">
-                {AGENT_MODELS.map((model) => {
+                {visibleModels.map((model) => {
                   const isSelected = selectedModel === model.id;
-                  const costEmoji = getAgentModelCostEmoji(model.id);
+                  const ProviderIcon = PROVIDER_ICON[model.provider].icon;
 
                   return (
                     <button
                       key={model.id}
                       type="button"
+                      aria-pressed={isSelected}
                       onClick={() => setSelectedModel(model.id)}
                       className={cn(
                         "flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all",
                         isSelected
-                          ? "border-blue-300 bg-blue-50 ring-2 ring-blue-200/50 ring-offset-1"
-                          : "border-[var(--app-border)] bg-[var(--app-surface)] hover:border-slate-300 hover:shadow-sm",
+                          ? "border-[var(--app-primary)]/25 bg-[var(--app-primary-muted)] ring-2 ring-[var(--app-primary)]/10 ring-offset-1"
+                          : "border-[var(--app-border)] bg-[var(--app-surface)] hover:border-[var(--app-border-strong)] hover:shadow-sm",
                       )}
                     >
-                      <div className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm",
-                        isSelected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500",
-                      )}>
-                        {costEmoji || "🤖"}
+                      <div
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                          isSelected
+                            ? "bg-[var(--app-primary)] text-[var(--app-primary-foreground)]"
+                            : "bg-[var(--app-bg-strong)] text-[var(--app-text-muted)]",
+                        )}
+                        aria-label={PROVIDER_ICON[model.provider].label}
+                      >
+                        <ProviderIcon className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className={cn(
                             "text-sm font-semibold",
-                            isSelected ? "text-blue-800" : "text-slate-800",
+                            isSelected ? "text-[var(--app-primary)]" : "text-[var(--app-text-strong)]",
                           )}>
                             {model.label}
                           </p>
@@ -469,24 +534,35 @@ export function KhipuAgentSettingsCard() {
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                        <p className="mt-0.5 text-xs leading-5 text-[var(--app-text-muted)]">
                           {model.description}
                         </p>
-                        <p className="mt-0.5 text-[11px] font-mono text-slate-400">
+                        <p className="mt-0.5 text-[11px] font-mono text-[var(--app-text-subtle)]">
                           {getAgentModelShortLabel(model.id)}
                         </p>
                       </div>
                       {isSelected && (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-600" />
+                        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--app-primary)] text-[var(--app-primary-foreground)]">
+                          <Check className="h-3 w-3" />
+                        </div>
                       )}
                     </button>
                   );
                 })}
               </div>
+              {collapsedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsModelListExpanded((current) => !current)}
+                  className="theme-dashed-panel mt-2 w-full rounded-xl border border-dashed px-4 py-2 text-xs font-medium text-[var(--app-text-muted)] transition-colors hover:bg-[var(--app-surface-elevated)] hover:text-[var(--app-text-strong)]"
+                >
+                  {isModelListExpanded ? "Ver menos modelos" : `Ver ${collapsedCount} modelo${collapsedCount === 1 ? "" : "s"} más`}
+                </button>
+              )}
             </div>
 
             {/* Información adicional */}
-            <div className="flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3">
+            <div className="theme-muted-panel flex items-start gap-3 rounded-2xl border px-4 py-3">
               <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[var(--app-text-muted)]" />
               <div>
                 <p className="text-sm font-medium text-[var(--app-text-strong)]">
@@ -502,13 +578,13 @@ export function KhipuAgentSettingsCard() {
 
             {/* Mensajes de estado */}
             {saveError ? (
-              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-px" />
-                <p className="text-sm text-rose-800">{saveError}</p>
+              <div className="theme-status-error flex items-start gap-2 rounded-xl border px-3 py-2">
+                <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
+                <p className="theme-status-error-strong text-sm">{saveError}</p>
               </div>
             ) : null}
             {successMessage ? (
-              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <p className="theme-status-success rounded-xl border px-3 py-2 text-sm theme-status-success-strong">
                 {successMessage}
               </p>
             ) : null}

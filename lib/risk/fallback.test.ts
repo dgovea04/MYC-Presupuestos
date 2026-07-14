@@ -415,7 +415,7 @@ describe("buildRiskWorkScheduleSummary", () => {
       timeline: {
         startDate: overrides.startDate ?? "2026-01-01",
         endDate: overrides.endDate ?? "2026-06-30",
-      },
+      } as { startDate: string | null; endDate: string | null },
       criticalPath: overrides.criticalPath ?? null,
       generationSummary: overrides.generationSummary ?? null,
     };

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
 import {
@@ -250,9 +250,11 @@ export async function saveRiskSimulationRun(
       p80: parsed.p80,
       p90: parsed.p90,
       p95: parsed.p95,
-      histogramBins: parsed.histogramBins,
-      sCurvePoints: parsed.sCurvePoints,
-      scheduleSummary: parsed.scheduleDuration,
+      histogramBins: parsed.histogramBins as Prisma.InputJsonValue,
+      sCurvePoints: parsed.sCurvePoints as Prisma.InputJsonValue,
+      scheduleSummary: parsed.scheduleDuration === null
+        ? Prisma.JsonNull
+        : (parsed.scheduleDuration as Prisma.InputJsonValue),
     },
   });
 

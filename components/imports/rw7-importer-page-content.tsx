@@ -67,7 +67,7 @@ const defaultCopy: Rw7ImporterCopy = {
   noCompaniesMessage: "Crea una empresa antes de importar proyectos RW7.",
   projectLabel: "RW7",
   sourceCodeLabel: "Presupuesto RW7",
-  uploadDescription: "Lee hojas Pto, ApuB, InsB y Datos para generar el draft MYC.",
+  uploadDescription: "Lee hojas Pto, ApuB, InsB y Datos para generar el draft MC.",
 };
 
 const previewProgressSteps: ImportProgressPanelStep[] = [
@@ -310,12 +310,12 @@ export function Rw7ImporterPageContent({ companies, copy = defaultCopy }: Rw7Imp
 
           <div className="mt-5 flex flex-col gap-3 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] p-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[var(--app-text-strong)]">Crear proyecto MYC</p>
+              <p className="text-sm font-medium text-[var(--app-text-strong)]">Crear proyecto MC</p>
               <p className="text-sm text-[var(--app-text-muted)]">Importa este archivo como un proyecto nuevo con presupuesto, APUs e insumos {copy.projectLabel}.</p>
             </div>
             <Button className="gap-2" disabled={importState === "loading" || !file || !companyId} onClick={importRw7File}>
               {importState === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-              Importar a MYC
+              Importar a MC
             </Button>
           </div>
 
@@ -575,7 +575,7 @@ function createProcessingProgress(action: ImportProgressAction, file: File, sour
     detail:
       action === "preview"
         ? "Leyendo presupuestos, titulos, subtitulos, partidas e insumos para armar la previsualizacion."
-        : "Creando proyecto, presupuestos, partidas, APUs e insumos en MYC.",
+        : "Creando proyecto, presupuestos, partidas, APUs e insumos en MC.",
     progress: action === "preview" ? 58 : 55,
     activeStepIndex: 2,
     fileName: file.name,

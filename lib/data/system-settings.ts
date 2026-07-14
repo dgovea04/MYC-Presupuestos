@@ -8,6 +8,7 @@ export type SystemSettingsInput = {
   openaiModel?: string | null;
   geminiModel?: string | null;
   openrouterModel?: string | null;
+  agentModel?: string | null;
 };
 
 export type SystemSettings = {
@@ -20,6 +21,7 @@ export type SystemSettings = {
   openaiModel: string;
   geminiModel: string;
   openrouterModel: string;
+  agentModel: string;
   openaiConfigured: boolean;
   geminiConfigured: boolean;
   openrouterConfigured: boolean;
@@ -43,6 +45,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
       openaiModel: "",
       geminiModel: "",
       openrouterModel: "",
+      agentModel: "",
       openaiConfigured: false,
       geminiConfigured: false,
       openrouterConfigured: false,
@@ -66,6 +69,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
     openaiModel: settings.openaiModel ?? "",
     geminiModel: settings.geminiModel ?? "",
     openrouterModel: settings.openrouterModel ?? "",
+    agentModel: settings.agentModel ?? "",
     openaiConfigured: decryptedOpenai.length > 0,
     geminiConfigured: decryptedGemini.length > 0,
     openrouterConfigured: decryptedOpenrouter.length > 0,
@@ -102,6 +106,7 @@ export async function updateSystemSettings(input: SystemSettingsInput): Promise<
       openaiModel: input.openaiModel?.trim() || null,
       geminiModel: input.geminiModel?.trim() || null,
       openrouterModel: input.openrouterModel?.trim() || null,
+      agentModel: input.agentModel?.trim() || null,
     },
     update: {
       ...(encryptedOpenaiKey !== undefined ? { openaiApiKey: encryptedOpenaiKey || null } : {}),
@@ -111,6 +116,7 @@ export async function updateSystemSettings(input: SystemSettingsInput): Promise<
       ...(input.openaiModel != null ? { openaiModel: input.openaiModel.trim() || null } : {}),
       ...(input.geminiModel != null ? { geminiModel: input.geminiModel.trim() || null } : {}),
       ...(input.openrouterModel != null ? { openrouterModel: input.openrouterModel.trim() || null } : {}),
+      ...(input.agentModel != null ? { agentModel: input.agentModel.trim() || null } : {}),
     },
   });
 
@@ -131,6 +137,7 @@ export async function updateSystemSettings(input: SystemSettingsInput): Promise<
     openaiModel: settings.openaiModel ?? "",
     geminiModel: settings.geminiModel ?? "",
     openrouterModel: settings.openrouterModel ?? "",
+    agentModel: settings.agentModel ?? "",
     openaiConfigured: storedDecryptedOpenai.length > 0,
     geminiConfigured: storedDecryptedGemini.length > 0,
     openrouterConfigured: storedDecryptedOpenrouter.length > 0,

@@ -11,17 +11,22 @@ import {
   FLOATING_KHIPU_DEFAULTS,
 } from "@/types/settings";
 
-const { queryRawMock } = vi.hoisted(() => ({
+const { queryRawMock, upsertMock } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
+  upsertMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     $queryRaw: queryRawMock,
+    userSettings: {
+      upsert: upsertMock,
+      findUnique: vi.fn(),
+    },
   },
 }));
 
-import { defaultUserSettings, getUserSettings, updateUserSettings } from "@/lib/data/settings";
+import { AiProviderSettings, defaultUserSettings, getUserSettings, updateUserSettings, updateAiProviderSettings } from "@/lib/data/settings";
 
 type ColumnSupportFlags = {
   defaultSubBudgetNames?: boolean;
@@ -122,6 +127,7 @@ const DEFAULT_FLOATING_KHIPU_FIELDS = {
 describe("user settings data", () => {
   beforeEach(() => {
     queryRawMock.mockReset();
+    upsertMock.mockReset();
   });
 
   // ─── getUserSettings tests ──────────────────────────────────
@@ -1157,6 +1163,87 @@ describe("user settings data", () => {
       }),
     ).resolves.toMatchObject({
       floatingKhipuTheme: "dark",
+    });
+  });
+
+  // ─── agentModel column guard (regression: Khipu Agente "no guarda la selección") ──────
+  //
+  // BUGFIX: cuando la migración `20260714000000_add_agent_model_to_user_settings`
+  // NO se ha aplicado, hasUserSettingsColumn('agentModel') devuelve false y el
+  // upsert omitía silenciosamente el campo → PUT retornaba 200 sin persistir.
+  // Estos tests pinnean el guard que lanza un error explícito con el nombre
+  // exacto de la migración que el dev/admin debe correr.
+  describe("updateAiProviderSettings agentModel column guard", () => {
+    it("lanza error claro cuando la columna agentModel no existe (migración no aplicada)", async () => {
+      // Todas las columnas AI devuelven exists:false (incluyendo agentModel).
+      queryRawMock.mockResolvedValue([{ exists: false }]);
+
+      await expect(
+        updateAiProviderSettings("user-bug", {
+          aiProviderPreference: "auto",
+          agentModel: "google/gemini-2.5-flash",
+        }),
+      ).rejects.toThrow(
+        /agentModel aún no puede guardarse.*20260714000000_add_agent_model_to_user_settings.*npx prisma migrate deploy/s,
+      );
+    });
+
+    it("lanza error cuando agentModel es null pero la columna no existe (intento explícito de limpieza)", async () => {
+      queryRawMock.mockResolvedValue([{ exists: false }]);
+
+      await expect(
+        updateAiProviderSettings("user-bug", {
+          aiProviderPreference: "auto",
+          agentModel: null,
+        }),
+      ).rejects.toThrow(/agentModel aún no puede guardarse/);
+    });
+
+    it("lanza error cuando agentModel es string vacío y la columna no existe", async () => {
+      queryRawMock.mockResolvedValue([{ exists: false }]);
+
+      await expect(
+        updateAiProviderSettings("user-bug", {
+          aiProviderPreference: "auto",
+          agentModel: "",
+        }),
+      ).rejects.toThrow(/agentModel aún no puede guardarse/);
+    });
+
+    it("NO lanza error cuando agentModel está ausente en el input (caller no quiso cambiarlo)", async () => {
+      // Caso cloud-ai-settings-card que NO envía agentModel. Aunque la columna
+      // agentModel no exista, este guardado puntual debe proceder (los demás
+      // campos sí se persisten) — el guard solo debe dispararse cuando el
+      // caller tiene intención explícita de modificar agentModel.
+      //
+      // El throw solo se dispara si `input.agentModel !== undefined`. Si un
+      // refactor futuro cambia a `input.agentModel != null` (que matchea
+      // undefined), TODOS los PUTs tirarían — incluyendo cloud-ai-settings-card.
+      // Este test pinnean esa regresión.
+
+      // Todas las columnas AI devuelven exists:false (incluyendo agentModel).
+      queryRawMock.mockResolvedValue([{ exists: false }]);
+
+      // Mock del upsert para que devuelva la fila que el caller quería
+      // persistir (openaiModel diferente al default).
+      upsertMock.mockResolvedValueOnce({
+        id: "row-1",
+        userId: "user-bug",
+        aiProviderPreference: "auto",
+        openaiModel: "custom-openai-model",
+      });
+
+      // Pasamos un objeto SIN la propiedad agentModel en absoluto
+      const result = await updateAiProviderSettings("user-bug", {
+        aiProviderPreference: "auto",
+        openaiModel: "custom-openai-model",
+      });
+
+      // Si llegamos aquí sin throw, el guard respetó la semántica "solo si
+      // el caller incluyó agentModel". El upsert se llamó con openaiModel
+      // en el payload (aunque !supportsOpenaiModel hará que se filtre).
+      expect(result.aiProviderPreference).toBe("auto");
+      expect(result.openaiModel).toBe("custom-openai-model");
     });
   });
 });

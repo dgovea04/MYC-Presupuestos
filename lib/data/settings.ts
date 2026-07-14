@@ -77,6 +77,7 @@ export type AiProviderSettingsInput = {
   openaiModel?: string | null;
   geminiModel?: string | null;
   openrouterModel?: string | null;
+  agentModel?: string | null;
 };
 
 export type AiProviderSettings = {
@@ -87,6 +88,7 @@ export type AiProviderSettings = {
   openaiModel: string;
   geminiModel: string;
   openrouterModel: string;
+  agentModel: string;
   openaiConfigured: boolean;
   geminiConfigured: boolean;
   openrouterConfigured: boolean;
@@ -334,6 +336,7 @@ const aiProviderColumns = [
   "geminiModel",
   "openrouterApiKey",
   "openrouterModel",
+  "agentModel",
   "aiProviderPreference",
 ] as const;
 
@@ -348,6 +351,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
     supportsGeminiModel,
     supportsOpenrouterApiKey,
     supportsOpenrouterModel,
+    supportsAgentModel,
     supportsAiProviderPreference,
   ] = columnFlags;
 
@@ -362,6 +366,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
       openaiModel: "",
       geminiModel: "",
       openrouterModel: "",
+      agentModel: "",
       openaiConfigured: false,
       geminiConfigured: false,
       openrouterConfigured: false,
@@ -378,6 +383,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
       ...(supportsOpenaiModel ? { openaiModel: true } : {}),
       ...(supportsGeminiModel ? { geminiModel: true } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: true } : {}),
+      ...(supportsAgentModel ? { agentModel: true } : {}),
     },
   });
 
@@ -390,6 +396,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
       openaiModel: "",
       geminiModel: "",
       openrouterModel: "",
+      agentModel: "",
       openaiConfigured: false,
       geminiConfigured: false,
       openrouterConfigured: false,
@@ -406,6 +413,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
   const openaiModel = supportsOpenaiModel && typeof row.openaiModel === "string" ? row.openaiModel : "";
   const geminiModel = supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : "";
   const openrouterModel = supportsOpenrouterModel && typeof row.openrouterModel === "string" ? row.openrouterModel : "";
+  const agentModel = supportsAgentModel && typeof row.agentModel === "string" ? row.agentModel : "";
 
   return {
     aiProviderPreference: readAiProviderPreference(supportsAiProviderPreference ? row.aiProviderPreference : undefined),
@@ -415,6 +423,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
     openaiModel,
     geminiModel,
     openrouterModel,
+    agentModel,
     openaiConfigured: decryptedOpenaiKey.length > 0,
     geminiConfigured: decryptedGeminiKey.length > 0,
     openrouterConfigured: decryptedOpenrouterKey.length > 0,
@@ -480,6 +489,7 @@ export async function updateAiProviderSettings(
     supportsGeminiModel,
     supportsOpenrouterApiKey,
     supportsOpenrouterModel,
+    supportsAgentModel,
     supportsAiProviderPreference,
   ] = columnFlags;
 
@@ -504,6 +514,21 @@ export async function updateAiProviderSettings(
     );
   }
 
+  // BUGFIX: el campo agentModel se agregó a UserSettings en una migración
+  // reciente (`20260714000000_add_agent_model_to_user_settings`). Si esa
+  // migración NO se ha aplicado, hasUserSettingsColumn('agentModel') devuelve
+  // false y el upsert silenciosamente omite el campo -> PUT retorna 200 pero
+  // el modelo seleccionado nunca persiste. Reproducía el bug del usuario
+  // "el khipu agente no esta guardando la seleccion de modelo que hago".
+  // Lanzamos un error explícito con el nombre exacto de la migración + el
+  // comando `npx prisma migrate deploy` para que el dev/admin sepa
+  // exactamente qué ejecutar.
+  if (input.agentModel !== undefined && !supportsAgentModel) {
+    throw new Error(
+      "agentModel aún no puede guardarse en esta base de datos. Ejecuta la migración pendiente `20260714000000_add_agent_model_to_user_settings` usando `npx prisma migrate deploy` para agregar la columna agentModel a UserSettings.",
+    );
+  }
+
   const settings = await prisma.userSettings.upsert({
     where: { userId },
     create: {
@@ -520,6 +545,7 @@ export async function updateAiProviderSettings(
       ...(supportsOpenaiModel ? { openaiModel: input.openaiModel ?? null } : {}),
       ...(supportsGeminiModel ? { geminiModel: input.geminiModel ?? null } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: input.openrouterModel ?? null } : {}),
+      ...(supportsAgentModel && input.agentModel !== undefined ? { agentModel: input.agentModel ?? null } : {}),
     },
     update: {
       ...(supportsAiProviderPreference ? { aiProviderPreference: input.aiProviderPreference } : {}),
@@ -529,6 +555,7 @@ export async function updateAiProviderSettings(
       ...(supportsOpenaiModel ? { openaiModel: input.openaiModel ?? null } : {}),
       ...(supportsGeminiModel ? { geminiModel: input.geminiModel ?? null } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: input.openrouterModel ?? null } : {}),
+      ...(supportsAgentModel && input.agentModel !== undefined ? { agentModel: input.agentModel ?? null } : {}),
     },
     select: {
       ...(supportsAiProviderPreference ? { aiProviderPreference: true } : {}),
@@ -538,6 +565,7 @@ export async function updateAiProviderSettings(
       ...(supportsOpenaiModel ? { openaiModel: true } : {}),
       ...(supportsGeminiModel ? { geminiModel: true } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: true } : {}),
+      ...(supportsAgentModel ? { agentModel: true } : {}),
     },
   });
 
@@ -557,6 +585,7 @@ export async function updateAiProviderSettings(
     openaiModel: supportsOpenaiModel && typeof row.openaiModel === "string" ? row.openaiModel : input.openaiModel ?? "",
     geminiModel: supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : input.geminiModel ?? "",
     openrouterModel: supportsOpenrouterModel && typeof row.openrouterModel === "string" ? row.openrouterModel : input.openrouterModel ?? "",
+    agentModel: supportsAgentModel && typeof row.agentModel === "string" ? row.agentModel : input.agentModel ?? "",
     openaiConfigured: storedDecryptedOpenai.length > 0,
     geminiConfigured: storedDecryptedGemini.length > 0,
     openrouterConfigured: storedDecryptedOpenrouter.length > 0,

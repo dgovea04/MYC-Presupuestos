@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   withAiRoute: vi.fn(),
   streamAgentChat: vi.fn(),
+  getSystemSettings: vi.fn(),
 }));
 
 vi.mock("@/lib/ai/route-handler", () => ({
@@ -13,6 +14,28 @@ vi.mock("@/lib/ai/route-handler", () => ({
 vi.mock("@/lib/ai/gateway/providers/agent-provider", () => ({
   streamAgentChat: mocks.streamAgentChat,
 }));
+
+vi.mock("@/lib/data/system-settings", () => ({
+  getSystemSettings: mocks.getSystemSettings,
+}));
+
+// Default empty system-settings response, mirrors getSystemSettings() return shape
+// when no row exists in the DB. Used by beforeEach to keep tests deterministic.
+const EMPTY_SYSTEM_SETTINGS = {
+  openaiApiKey: "",
+  geminiApiKey: "",
+  openrouterApiKey: "",
+  openaiApiKeyMasked: "",
+  geminiApiKeyMasked: "",
+  openrouterApiKeyMasked: "",
+  openaiModel: "",
+  geminiModel: "",
+  openrouterModel: "",
+  agentModel: "",
+  openaiConfigured: false,
+  geminiConfigured: false,
+  openrouterConfigured: false,
+};
 
 import { prisma } from "@/lib/db/prisma";
 import { POST, detectPendingActionFromHistory } from "@/app/api/ai/agent/stream/route";
@@ -72,6 +95,7 @@ describe("POST /api/ai/agent/stream", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authAs();
+    mocks.getSystemSettings.mockResolvedValue(EMPTY_SYSTEM_SETTINGS);
   });
 
   // ── Auth ─────────────────────────────────────────────────────────────────

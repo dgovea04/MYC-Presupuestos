@@ -501,6 +501,10 @@ body,
   color: #b91c1c;
 }
 
+.theme-status-error-strong {
+  color: #7f1d1d;
+}
+
 .theme-status-success {
   border-color: #a7f3d0;
   background: #ecfdf5;
@@ -779,6 +783,10 @@ body,
 
 [data-theme="dark"] .theme-status-warning-strong {
   color: #fde68a;
+}
+
+[data-theme="dark"] .theme-status-error-strong {
+  color: #fecaca;
 }
 
 .theme-status-warning-row {

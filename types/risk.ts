@@ -1,4 +1,4 @@
-export const MONTE_CARLO_ITERATIONS = 10000;
+export const MONTE_CARLO_ITERATIONS = 10000 as const;
 
 export type RiskVariableType = "QUANTITY" | "UNIT_PRICE" | "DURATION";
 export type RiskDistributionType = "TRIANGULAR" | "PERT" | "NORMAL" | "UNIFORM";

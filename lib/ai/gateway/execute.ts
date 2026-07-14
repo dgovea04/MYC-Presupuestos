@@ -187,14 +187,17 @@ async function enrichProviderRequest(
   }
 
   if (resolvedProvider === "agent") {
-    // Agent usa OpenRouter como backend — enriquecer con su API key y modelo
+    // Agent usa OpenRouter como backend, pero prefiere el agentModel guardado
+    // por el Khipu Agente tanto a nivel usuario como de sistema; si no existe,
+    // cae al openrouterModel de Proveedores Cloud IA (legacy safety).
     if (userId) {
       const [apiKey, settings] = await Promise.all([
         getDecryptedOpenrouterApiKey(userId),
         getAiProviderSettings(userId),
       ]);
       if (apiKey) {
-        return { ...request, apiKey, modelPreference: settings.openrouterModel || undefined };
+        const agentModelPreference = settings.agentModel || settings.openrouterModel || undefined;
+        return { ...request, apiKey, modelPreference: agentModelPreference };
       }
     }
 
@@ -203,7 +206,8 @@ async function enrichProviderRequest(
       return {
         ...request,
         apiKey: systemSettings.openrouterApiKey,
-        modelPreference: systemSettings.openrouterModel || request.modelPreference,
+        modelPreference:
+          systemSettings.agentModel || systemSettings.openrouterModel || request.modelPreference,
       };
     }
   }

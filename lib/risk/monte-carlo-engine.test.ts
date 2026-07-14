@@ -66,6 +66,7 @@ describe("risk statistics", () => {
           baseQuantity: 10,
           unitPrice: 100,
           baseTotal: 1000,
+          updatedAt: "2026-07-01T00:00:00.000Z",
         },
         {
           itemId: "item-2",
@@ -77,6 +78,7 @@ describe("risk statistics", () => {
           baseQuantity: 5,
           unitPrice: 80,
           baseTotal: 400,
+          updatedAt: "2026-07-01T00:00:00.000Z",
         },
       ],
       [
@@ -178,6 +180,7 @@ describe("monte carlo engine", () => {
         baseQuantity: 10,
         unitPrice: 100,
         baseTotal: 1000,
+        updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
     variables: [
@@ -278,6 +281,7 @@ describe("monte carlo engine", () => {
             baseQuantity: 10,
             unitPrice: 50,
             baseTotal: 500,
+            updatedAt: "2026-07-01T00:00:00.000Z",
           },
         ],
         variables: [
@@ -317,6 +321,7 @@ describe("monte carlo engine", () => {
             baseQuantity: 10,
             unitPrice: 55,
             baseTotal: 550,
+            updatedAt: "2026-07-01T00:00:00.000Z",
           },
         ],
         variables: [
@@ -357,6 +362,7 @@ describe("monte carlo engine", () => {
             baseQuantity: 10,
             unitPrice: 50,
             baseTotal: 500,
+            updatedAt: "2026-07-01T00:00:00.000Z",
           },
         ],
         variables: [
@@ -397,6 +403,7 @@ describe("monte carlo engine", () => {
             baseQuantity: 10,
             unitPrice: 50,
             baseTotal: 500,
+            updatedAt: "2026-07-01T00:00:00.000Z",
           },
         ],
         variables: [

@@ -1280,7 +1280,6 @@ describe("createMycImportDraftFromS10", () => {
           CodPresupuesto: "0201001",
           CodSubpresupuesto: "001",
           CodPartida: "907701050602",
-          CodPresupuestoPartida: "9999999",
           Descripcion: "LOSA ALIGERADA - LADRILLO HUECO 20x30x30",
           CodUnidad: "040",
           Precio1: 1.67,

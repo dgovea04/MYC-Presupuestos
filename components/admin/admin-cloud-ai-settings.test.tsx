@@ -19,6 +19,7 @@ function createSettingsPayload(overrides?: {
   openaiModel?: string;
   geminiModel?: string;
   openrouterModel?: string;
+  agentModel?: string;
 }) {
   return {
     openaiApiKeyMasked: overrides?.openaiApiKeyMasked ?? "sk-d...-key",
@@ -27,6 +28,7 @@ function createSettingsPayload(overrides?: {
     openaiModel: overrides?.openaiModel ?? "gpt-5-mini",
     geminiModel: overrides?.geminiModel ?? "gemini-2.5-flash",
     openrouterModel: overrides?.openrouterModel ?? "deepseek/deepseek-chat-v3-0324:free",
+    agentModel: overrides?.agentModel ?? "google/gemini-2.5-flash",
     openaiConfigured: overrides?.openaiConfigured ?? true,
     geminiConfigured: overrides?.geminiConfigured ?? true,
     openrouterConfigured: overrides?.openrouterConfigured ?? true,
@@ -102,11 +104,11 @@ describe("AdminCloudAiSettings", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => createSettingsPayload({ openaiConfigured: true, openaiModel: "custom-openai", geminiModel: "custom-gemini" }),
+        json: async () => createSettingsPayload({ openaiConfigured: true, openaiModel: "custom-openai", geminiModel: "custom-gemini", agentModel: "google/gemini-2.5-flash" }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => createSettingsPayload({ openaiConfigured: false, openaiModel: "custom-openai", geminiModel: "custom-gemini" }),
+        json: async () => createSettingsPayload({ openaiConfigured: false, openaiModel: "custom-openai", geminiModel: "custom-gemini", agentModel: "google/gemini-2.5-flash" }),
       });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -141,6 +143,7 @@ describe("AdminCloudAiSettings", () => {
     expect(body.openaiApiKey).toBe("");
     expect(body.openaiModel).toBe("custom-openai");
     expect(body.geminiModel).toBe("custom-gemini");
+    expect(body.agentModel).toBe("google/gemini-2.5-flash");
   });
 
   it("shows success message after clearing a key", async () => {

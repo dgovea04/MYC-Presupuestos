@@ -56,6 +56,7 @@ function defaultSettingsRow(overrides?: Partial<{
   openaiModel: string | null;
   geminiModel: string | null;
   openrouterModel: string | null;
+  agentModel: string | null;
 }>) {
   return {
     singletonKey: "system",
@@ -65,6 +66,7 @@ function defaultSettingsRow(overrides?: Partial<{
     openaiModel: null,
     geminiModel: null,
     openrouterModel: null,
+    agentModel: null,
     ...overrides,
   };
 }
@@ -91,6 +93,7 @@ describe("system settings data", () => {
         openaiModel: "",
         geminiModel: "",
         openrouterModel: "",
+        agentModel: "",
         openaiConfigured: false,
         geminiConfigured: false,
         openrouterConfigured: false,
@@ -109,6 +112,7 @@ describe("system settings data", () => {
           openaiModel: "gpt-5-mini",
           geminiModel: "gemini-2.5-flash",
           openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
+          agentModel: "google/gemini-2.5-flash",
         }),
       );
 
@@ -124,6 +128,7 @@ describe("system settings data", () => {
         openaiModel: "gpt-5-mini",
         geminiModel: "gemini-2.5-flash",
         openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
+        agentModel: "google/gemini-2.5-flash",
         openaiConfigured: true,
         geminiConfigured: true,
         openrouterConfigured: true,
@@ -158,6 +163,7 @@ describe("system settings data", () => {
           openaiModel: "custom-model",
           geminiModel: null,
           openrouterModel: "custom-openrouter",
+          agentModel: "openrouter/free",
         }),
       );
 
@@ -169,6 +175,7 @@ describe("system settings data", () => {
       expect(result.openaiModel).toBe("custom-model");
       expect(result.geminiModel).toBe("");
       expect(result.openrouterModel).toBe("custom-openrouter");
+      expect(result.agentModel).toBe("openrouter/free");
       expect(result.openaiConfigured).toBe(false);
     });
   });
@@ -183,6 +190,7 @@ describe("system settings data", () => {
           openaiModel: "gpt-5-mini",
           geminiModel: "gemini-2.5-flash",
           openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
+          agentModel: "google/gemini-2.5-flash",
         }),
       );
 
@@ -193,6 +201,7 @@ describe("system settings data", () => {
         openaiModel: "gpt-5-mini",
         geminiModel: "gemini-2.5-flash",
         openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
+        agentModel: "google/gemini-2.5-flash",
       });
 
       expect(encryptApiKeyMock).toHaveBeenCalledWith("sk-new-key");
@@ -205,12 +214,38 @@ describe("system settings data", () => {
             openaiApiKey: "encrypted:sk-new-key",
             geminiApiKey: "encrypted:ai-new-key",
             openrouterApiKey: "encrypted:sk-or-new-key",
+            agentModel: "google/gemini-2.5-flash",
           }),
         }),
       );
+      expect(result.agentModel).toBe("google/gemini-2.5-flash");
       expect(result.openaiConfigured).toBe(true);
       expect(result.geminiConfigured).toBe(true);
       expect(result.openrouterConfigured).toBe(true);
+    });
+
+    it("persists agentModel with same 3-state semantics as openrouterModel", async () => {
+      upsertMock.mockResolvedValue(
+        defaultSettingsRow({ agentModel: "anthropic/claude-sonnet-4-20250514" }),
+      );
+
+      type UpsertArgs = { update: Record<string, unknown>; create: Record<string, unknown> };
+
+      // explicit non-empty -> writes
+      await updateSystemSettings({ agentModel: "anthropic/claude-sonnet-4-20250514" });
+      let upsertCall = upsertMock.mock.calls.at(-1)?.[0] as UpsertArgs;
+      expect(upsertCall.update.agentModel).toBe("anthropic/claude-sonnet-4-20250514");
+      expect(upsertCall.create.agentModel).toBe("anthropic/claude-sonnet-4-20250514");
+
+      // explicit empty string -> clears to null
+      await updateSystemSettings({ agentModel: "" });
+      upsertCall = upsertMock.mock.calls.at(-1)?.[0] as UpsertArgs;
+      expect(upsertCall.update.agentModel).toBe(null);
+
+      // absent (null/undefined) -> key is not present in update at all
+      await updateSystemSettings({});
+      upsertCall = upsertMock.mock.calls.at(-1)?.[0] as UpsertArgs;
+      expect(upsertCall.update).not.toHaveProperty("agentModel");
     });
 
     it("updates only provided fields — leaves non-provided keys unchanged", async () => {
@@ -234,6 +269,17 @@ describe("system settings data", () => {
       expect(upsertCall.update).not.toHaveProperty("openrouterApiKey");
       expect(upsertCall.update).toHaveProperty("openaiModel", "updated-model");
       expect(result.openaiModel).toBe("updated-model");
+    });
+
+    it("trims whitespace from agentModel before persisting", async () => {
+      upsertMock.mockResolvedValue(
+        defaultSettingsRow({ agentModel: "openrouter/free" }),
+      );
+
+      await updateSystemSettings({ agentModel: "  openrouter/free  " });
+
+      const upsertCall = upsertMock.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+      expect(upsertCall.update.agentModel).toBe("openrouter/free");
     });
 
     it("explicitly clears an API key when empty string is sent", async () => {

@@ -153,17 +153,19 @@ function getVariableTypeLabel(variableType: RiskAnalysisPayload["variables"][num
   return "Cantidad";
 }
 
-function buildScheduleDurationRows(scheduleDuration: NonNullable<RiskAnalysisPayload["latestRun"]>["scheduleDuration"]) {
+function buildScheduleDurationRows(scheduleDuration: NonNullable<RiskAnalysisPayload["latestRun"]>["scheduleDuration"]): string[][] {
   if (!scheduleDuration) {
     return [];
   }
 
-  return [
+  const scenarios: Array<[string, number]> = [
     ["Media", scheduleDuration.meanDurationDays],
     ["P80", scheduleDuration.p80DurationDays],
     ["P90", scheduleDuration.p90DurationDays],
     ["P95", scheduleDuration.p95DurationDays],
-  ].map(([label, duration]) => {
+  ];
+
+  return scenarios.map(([label, duration]) => {
     const durationValue = Number(duration);
     const delta = durationValue - scheduleDuration.baseProjectDurationDays;
     const contingency =
@@ -178,15 +180,17 @@ function buildScheduleDurationRows(scheduleDuration: NonNullable<RiskAnalysisPay
   });
 }
 
-function buildScheduleBufferRows(scheduleDuration: NonNullable<RiskAnalysisPayload["latestRun"]>["scheduleDuration"]) {
+function buildScheduleBufferRows(scheduleDuration: NonNullable<RiskAnalysisPayload["latestRun"]>["scheduleDuration"]): string[][] {
   if (!scheduleDuration) {
     return [];
   }
 
-  return [
+  const scenarios: Array<[string, number]> = [
     ["P80", scheduleDuration.p80DurationDays],
     ["P95", scheduleDuration.p95DurationDays],
-  ].map(([label, duration]) => {
+  ];
+
+  return scenarios.map(([label, duration]) => {
     const durationValue = Number(duration);
     const bufferDays = Math.max(0, durationValue - scheduleDuration.baseProjectDurationDays);
     const bufferRatio =

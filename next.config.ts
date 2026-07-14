@@ -61,7 +61,7 @@ const nextConfig: NextConfig = {
       // Convert "node:xxx" imports to plain "xxx" so resolve.fallback can handle them
       config.plugins = config.plugins ?? [];
       config.plugins.push(
-        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource: { request: string }) => {
           resource.request = resource.request.replace(/^node:/, "");
         }),
       );

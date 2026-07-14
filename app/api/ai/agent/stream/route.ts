@@ -3,6 +3,7 @@ import type { AiMessage } from "@/lib/ai/types";
 import { aiAgentRequestSchema } from "@/lib/ai/agent/validation";
 import { streamAgentChat } from "@/lib/ai/gateway/providers/agent-provider";
 import { getDecryptedOpenrouterApiKey, getDecryptedGeminiApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import { getSystemSettings } from "@/lib/data/system-settings";
 import {
   getWorkflowTemplate,
   getBundleBySlug,
@@ -127,9 +128,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── Resolver modelo y provider desde la configuración del usuario ─────
+    // ── Resolver modelo y provider desde la configuración del usuario, con
+    // fallback al agentModel a nivel de sistema si el usuario no eligió uno.
+    // Solo cargamos settings del sistema si los del usuario están vacíos, para
+    // evitar una consulta DB extra en el caso común (usuario ya eligió modelo).
     const settings = await getAiProviderSettings(session.user.id);
-    const modelPreference = settings.openrouterModel || undefined;
+    let systemSettings: Awaited<ReturnType<typeof getSystemSettings>> | null = null;
+    if (!settings.agentModel && !settings.openrouterModel) {
+      systemSettings = await getSystemSettings();
+    }
+    const modelPreference =
+      settings.agentModel ||
+      settings.openrouterModel ||
+      systemSettings?.agentModel ||
+      systemSettings?.openrouterModel ||
+      undefined;
     const provider = modelPreference ? getAgentModelProvider(modelPreference) : undefined;
 
     // ── Detectar intención del usuario ─────────────────────────────────────

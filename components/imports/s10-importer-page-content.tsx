@@ -547,7 +547,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
             setProgressState({
               ...createProcessingProgress("preview", progressSource),
               title: "Exportando snapshot S10 local",
-              detail: "Leyendo SQL Server local y convirtiendo el presupuesto seleccionado a snapshot MYC.",
+              detail: "Leyendo SQL Server local y convirtiendo el presupuesto seleccionado a snapshot MC.",
               progress: 35,
               activeStepIndex: 2,
             });
@@ -748,7 +748,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
               <Server className="h-4 w-4 text-sky-600" />
               SQL Server S10 local
             </div>
-            <p className="text-sm text-[var(--app-text-muted)]">Lee bases S10 existentes en SQL Server Express y genera el draft MYC.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">Lee bases S10 existentes en SQL Server Express y genera el draft MC.</p>
           </div>
           <StatusBadge state={localSqlState} />
         </div>
@@ -820,7 +820,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
               <FileJson className="h-4 w-4 text-sky-600" />
-              Draft MYC
+              Draft MC
             </div>
             <p className="text-sm text-[var(--app-text-muted)]">Previsualizacion de presupuestos, partidas, APUs e insumos.</p>
           </div>
@@ -902,12 +902,12 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
 
           <div className="mt-5 flex flex-col gap-3 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] p-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[var(--app-text-strong)]">Crear proyecto MYC</p>
+              <p className="text-sm font-medium text-[var(--app-text-strong)]">Crear proyecto MC</p>
               <p className="text-sm text-[var(--app-text-muted)]">Importa este snapshot como un proyecto nuevo con presupuestos, APUs e insumos S10.</p>
             </div>
             <Button className="gap-2" disabled={importState === "loading" || (!snapshotFile && !localSnapshot) || !companyId} onClick={importSnapshotToMyc}>
               {importState === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-              Importar a MYC
+              Importar a MC
             </Button>
           </div>
 
@@ -1225,7 +1225,7 @@ function createProcessingProgress(action: S10ProgressAction, source: S10Progress
         ? "Leyendo presupuestos, subpresupuestos, partidas, APUs e insumos para armar la previsualizacion."
         : action === "restore"
           ? "SQL Server esta restaurando el respaldo y moviendo archivos de datos y log."
-        : "Creando proyecto, presupuestos, partidas, APUs e insumos en MYC.",
+        : "Creando proyecto, presupuestos, partidas, APUs e insumos en MC.",
     progress: action === "preview" ? 58 : 55,
     activeStepIndex: 2,
     fileName: source.fileName,

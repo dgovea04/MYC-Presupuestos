@@ -17,14 +17,14 @@ const currencySymbols: Record<string, string> = {
   EUR: "EUR",
 };
 
-export function formatNumber(value: number, decimalPlaces = 2) {
+export function formatNumber(value: number, decimalPlaces = 2): string {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: decimalPlaces,
     maximumFractionDigits: decimalPlaces,
   }).format(value);
 }
 
-export function formatCurrency(value: number, currency = "PEN", decimalPlaces = 2) {
+export function formatCurrency(value: number, currency = "PEN", decimalPlaces = 2): string {
   const symbol = currencySymbols[currency] ?? currency;
   const sign = value < 0 ? "-" : "";
   return `${sign}${symbol} ${formatNumber(Math.abs(value), decimalPlaces)}`;

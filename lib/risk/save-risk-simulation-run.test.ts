@@ -18,6 +18,7 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 import { saveRiskSimulationRun } from "@/lib/risk/data";
+import type { RiskSimulationRunInput } from "@/lib/validations/risk";
 import { MONTE_CARLO_ITERATIONS, type RiskSimulationSummary } from "@/types/risk";
 
 describe("saveRiskSimulationRun", () => {
@@ -78,7 +79,7 @@ describe("saveRiskSimulationRun", () => {
       },
     };
 
-    const result = await saveRiskSimulationRun("budget-1", "user-1", summary);
+    const result = await saveRiskSimulationRun("budget-1", "user-1", summary as unknown as RiskSimulationRunInput);
 
     expect(createMock).toHaveBeenCalledWith({
       data: {

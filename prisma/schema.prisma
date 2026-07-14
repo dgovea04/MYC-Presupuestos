@@ -491,6 +491,7 @@ model SystemSettings {
   openaiModel      String?
   geminiModel      String?
   openrouterModel  String?
+  agentModel       String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -518,6 +519,7 @@ model UserSettings {
   openaiModel                String?
   geminiModel                String?
   openrouterModel            String?
+  agentModel                 String?
   floatingKhipuProvider      String   @default("ollama")
   floatingKhipuWidth         Int      @default(600)
   floatingKhipuHeight        Int      @default(500)

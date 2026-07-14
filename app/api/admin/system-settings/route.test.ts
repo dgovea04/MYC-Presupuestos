@@ -32,6 +32,7 @@ function mockSystemSettings(overrides?: {
   openaiModel?: string;
   geminiModel?: string;
   openrouterModel?: string;
+  agentModel?: string;
 }) {
   getSystemSettingsMock.mockResolvedValue({
     openaiApiKey: "sk-decrypted-openai",
@@ -43,6 +44,7 @@ function mockSystemSettings(overrides?: {
     openaiModel: overrides?.openaiModel ?? "gpt-5-mini",
     geminiModel: overrides?.geminiModel ?? "gemini-2.5-flash",
     openrouterModel: overrides?.openrouterModel ?? "deepseek/deepseek-chat-v3-0324:free",
+    agentModel: overrides?.agentModel ?? "google/gemini-2.5-flash",
     openaiConfigured: overrides?.openaiConfigured ?? true,
     geminiConfigured: overrides?.geminiConfigured ?? true,
     openrouterConfigured: overrides?.openrouterConfigured ?? true,
@@ -80,6 +82,7 @@ describe("admin system settings route", () => {
       expect(body.openaiModel).toBe("gpt-5-mini");
       expect(body.geminiModel).toBe("gemini-2.5-flash");
       expect(body.openrouterModel).toBe("deepseek/deepseek-chat-v3-0324:free");
+      expect(body.agentModel).toBe("google/gemini-2.5-flash");
       expect(body.openaiConfigured).toBe(true);
       expect(body.geminiConfigured).toBe(true);
       expect(body.openrouterConfigured).toBe(true);
@@ -130,6 +133,7 @@ describe("admin system settings route", () => {
         openaiModel: "custom-model",
         geminiModel: "",
         openrouterModel: "openrouter/model",
+        agentModel: "google/gemini-2.5-flash",
         openaiConfigured: true,
         geminiConfigured: false,
         openrouterConfigured: true,
@@ -142,6 +146,7 @@ describe("admin system settings route", () => {
           body: JSON.stringify({
             openaiApiKey: "sk-my-key",
             openaiModel: "custom-model",
+            agentModel: "google/gemini-2.5-flash",
           }),
         }),
       );
@@ -156,6 +161,7 @@ describe("admin system settings route", () => {
         openaiModel: "custom-model",
         geminiModel: null,
         openrouterModel: null,
+        agentModel: "google/gemini-2.5-flash",
       });
 
       // Safe fields present
@@ -163,6 +169,7 @@ describe("admin system settings route", () => {
       expect(body.openaiConfigured).toBe(true);
       expect(body.geminiConfigured).toBe(false);
       expect(body.openrouterConfigured).toBe(true);
+      expect(body.agentModel).toBe("google/gemini-2.5-flash");
 
       // CRITICAL: decrypted keys must NOT be exposed
       expect(body).not.toHaveProperty("openaiApiKey");

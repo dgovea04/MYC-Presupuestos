@@ -43,6 +43,7 @@ export async function PUT(request: Request) {
       openaiModel: readOptionalModel(body.openaiModel),
       geminiModel: readOptionalModel(body.geminiModel),
       openrouterModel: readOptionalModel(body.openrouterModel),
+      agentModel: readOptionalModel(body.agentModel),
     };
 
     const settings = await updateSystemSettings(input);
@@ -79,6 +80,7 @@ function toSafeSystemSettings(settings: Awaited<ReturnType<typeof getSystemSetti
     openaiModel: settings.openaiModel,
     geminiModel: settings.geminiModel,
     openrouterModel: settings.openrouterModel,
+    agentModel: settings.agentModel,
     openaiConfigured: settings.openaiConfigured,
     geminiConfigured: settings.geminiConfigured,
     openrouterConfigured: settings.openrouterConfigured,

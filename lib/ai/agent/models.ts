@@ -57,30 +57,7 @@ export const AGENT_MODELS: readonly AgentModelEntry[] = [
     provider: "openrouter",
     description: "Razonamiento técnico sólido y confiable.",
   },
-  {
-    id: "google/gemini-2.0-flash-001",
-    label: "Gemini 2.0 Flash",
-    category: "Rápido",
-    cost: "paid",
-    provider: "openrouter",
-    description: "Muy rápido, buena relación costo/calidad.",
-  },
-  {
-    id: "google/gemini-2.5-pro-exp-03-25:free",
-    label: "Gemini 2.5 Pro (gratis)",
-    category: "Económico",
-    cost: "free",
-    provider: "openrouter",
-    description: "Experimental gratuito con buena capacidad de razonamiento.",
-  },
-  {
-    id: "meta-llama/llama-4-maverick:free",
-    label: "Llama 4 Maverick (gratis)",
-    category: "Económico",
-    cost: "free",
-    provider: "openrouter",
-    description: "Open-source competitivo, gratuito.",
-  },  // ── Google AI (directo) ────────────────────────────────────────────────
+  // ── Google AI (directo) ────────────────────────────────────────────────
   {
     id: "google/gemini-3.1-flash-lite",
     label: "Gemini 3.1 Flash Lite",
@@ -88,14 +65,6 @@ export const AGENT_MODELS: readonly AgentModelEntry[] = [
     cost: "paid",
     provider: "google",
     description: "Modelo directo de Google AI. Más rápido y moderno que 2.5 Flash Lite. Usa tu API key de Google Gemini.",
-  },
-  {
-    id: "google/gemini-2.5-flash-lite",
-    label: "Gemini 2.5 Flash Lite",
-    category: "Rápido",
-    cost: "paid",
-    provider: "google",
-    description: "Modelo directo de Google AI. Rápido y económico. Usa tu API key de Google Gemini.",
   },
   {
     id: "google/gemini-2.5-flash",
@@ -130,14 +99,6 @@ export const AGENT_MODELS: readonly AgentModelEntry[] = [
     provider: "ollama",
     description: "Modelo local Llama 3.1 vía Ollama. Buen rendimiento general, ~5 GB en Q4.",
   },
-  {
-    id: "ollama/mistral",
-    label: "Mistral 7B (Local)",
-    category: "Local",
-    cost: "local",
-    provider: "ollama",
-    description: "Modelo local Mistral 7B vía Ollama. Ligero y rápido, ~4 GB en Q4.",
-  },
 ] as const;
 
 export type AgentModelId = (typeof AGENT_MODELS)[number]["id"];
@@ -153,9 +114,9 @@ export const COST_EMOJI: Record<AgentModelCost, string> = {
 };
 
 export const PROVIDER_BADGE: Record<AgentModelProvider, { label: string; className: string }> = {
-  openrouter: { label: "Cloud", className: "bg-purple-100 text-purple-700" },
-  google: { label: "Google", className: "bg-blue-100 text-blue-700" },
-  ollama: { label: "Local", className: "bg-emerald-100 text-emerald-700" },
+  openrouter: { label: "Cloud", className: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
+  google: { label: "Google", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  ollama: { label: "Local", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
 };
 
 export function getAgentModelProvider(id: string): AgentModelProvider | undefined {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Eye, EyeOff, Key, Loader2, RefreshCw, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { Bot, Eye, EyeOff, Key, Loader2, RefreshCw, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { DEFAULT_GEMINI_MODEL, GEMINI_MODEL_OPTIONS } from "@/lib/ai/gateway/providers/gemini-provider";
+import { AGENT_MODELS } from "@/lib/ai/agent/models";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,12 +18,17 @@ type SystemAiSettingsState = {
   openaiModel: string;
   geminiModel: string;
   openrouterModel: string;
+  agentModel: string;
   openaiConfigured: boolean;
   geminiConfigured: boolean;
   openrouterConfigured: boolean;
 };
 
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
+
+// Modelos cloud disponibles para el agente a nivel sistema (excluye Ollama,
+// que no se puede configurar como default a nivel organizacional).
+const SYSTEM_AGENT_MODEL_OPTIONS = AGENT_MODELS.filter((model) => model.provider !== "ollama");
 
 export function AdminCloudAiSettings() {
   const [settings, setSettings] = useState<SystemAiSettingsState | null>(null);
@@ -38,6 +44,7 @@ export function AdminCloudAiSettings() {
   const [openaiModel, setOpenaiModel] = useState("");
   const [geminiModel, setGeminiModel] = useState("");
   const [openrouterModel, setOpenrouterModel] = useState("");
+  const [agentModel, setAgentModel] = useState("");
 
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [showGeminiKey, setShowGeminiKey] = useState(false);
@@ -74,6 +81,7 @@ export function AdminCloudAiSettings() {
       setOpenaiModel(data.openaiModel);
       setGeminiModel(data.geminiModel);
       setOpenrouterModel(data.openrouterModel);
+      setAgentModel(data.agentModel);
       resetKeyEditors();
       resetTests();
     } catch (caughtError) {
@@ -113,6 +121,7 @@ export function AdminCloudAiSettings() {
       openaiModel: openaiModel.trim() || null,
       geminiModel: geminiModel.trim() || null,
       openrouterModel: openrouterModel.trim() || null,
+      agentModel: agentModel.trim() || null,
     };
 
     if (openaiKey.trim()) body.openaiApiKey = openaiKey.trim();
@@ -212,6 +221,7 @@ export function AdminCloudAiSettings() {
           openaiModel: openaiModel.trim() || null,
           geminiModel: geminiModel.trim() || null,
           openrouterModel: openrouterModel.trim() || null,
+          agentModel: agentModel.trim() || null,
         }),
       });
       const payload: unknown = await response.json();
@@ -270,6 +280,62 @@ export function AdminCloudAiSettings() {
           </div>
         ) : (
           <>
+            <div className="theme-surface-card rounded-2xl border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="theme-strong-text flex items-center gap-2 text-sm font-semibold">
+                    <Bot className="h-4 w-4" />
+                    Khipu Agente — modelo por defecto del sistema
+                  </p>
+                  <p className="theme-muted-text mt-1 text-xs">
+                    Se usa como fallback para todos los usuarios que no hayan elegido un modelo propio en su Khipu Agente.
+                    Tiene prioridad sobre openrouterModel del sistema.
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+                    agentModel
+                      ? "theme-status-success theme-status-success-strong"
+                      : "theme-muted-panel theme-muted-text",
+                  )}
+                >
+                  {agentModel ? "Definido" : "Sin definir"}
+                </span>
+              </div>
+
+              <label className="theme-muted-text mt-3 block text-xs font-medium">Modelo default</label>
+              <div className="mt-1 flex gap-2">
+                <select
+                  className="theme-muted-panel theme-strong-text flex-1 rounded-xl border px-3 py-2.5 text-sm focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                  value={agentModel}
+                  onChange={(event) => setAgentModel(event.target.value)}
+                >
+                  <option value="">— Sin definir (cae al openrouterModel del sistema) —</option>
+                  {SYSTEM_AGENT_MODEL_OPTIONS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+                {agentModel ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAgentModel("")}
+                    className="shrink-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-200"
+                    title="Quitar el modelo default del sistema"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+              <p className="theme-subtle-text mt-2 font-mono text-[11px]">
+                {agentModel || "—"}
+              </p>
+            </div>
+
             <div className="grid gap-4 xl:grid-cols-2">
               <AdminProviderCard
                 title="OpenAI (ChatGPT API)"
@@ -544,6 +610,7 @@ function readSystemSettings(payload: unknown): SystemAiSettingsState {
     openaiModel: typeof payload.openaiModel === "string" ? payload.openaiModel : "",
     geminiModel: typeof payload.geminiModel === "string" ? payload.geminiModel : "",
     openrouterModel: typeof payload.openrouterModel === "string" ? payload.openrouterModel : "",
+    agentModel: typeof payload.agentModel === "string" ? payload.agentModel : "",
     openaiConfigured: payload.openaiConfigured === true,
     geminiConfigured: payload.geminiConfigured === true,
     openrouterConfigured: payload.openrouterConfigured === true,

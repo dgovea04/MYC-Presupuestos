@@ -272,7 +272,7 @@ export function buildCorrelationMatrix(
   variables: RiskVariableRecord[],
   correlations: RiskCorrelationRecord[],
 ): number[][] {
-  const matrix = variables.map((_, rowIndex) =>
+  const matrix: number[][] = variables.map((_, rowIndex) =>
     variables.map((__, columnIndex) => (rowIndex === columnIndex ? 1 : 0)),
   );
   const indexById = new Map(variables.map((variable, index) => [variable.id, index]));

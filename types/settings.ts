@@ -64,6 +64,7 @@ export type UserSettingsRecord = {
   openaiModel?: string;
   geminiModel?: string;
   openrouterModel?: string;
+  agentModel?: string;
   floatingKhipuProvider: AiProviderPreference;
   floatingKhipuWidth: number;
   floatingKhipuHeight: number;
