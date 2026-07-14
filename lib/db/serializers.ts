@@ -54,6 +54,27 @@ export function decimalToNumber(value: Prisma.Decimal | number | null | undefine
   return typeof value === "number" ? value : Number(value.toString());
 }
 
+/**
+ * Strip the raw `project` field from a budget record returned by
+ * `getBudgetById()` so it can be safely forwarded across the
+ * Server→Client Component boundary.
+ *
+ * `getBudgetById()` returns `{ ...BudgetRecord, project: Project }` where
+ * `project` is the raw Prisma row. Project carries Decimal columns
+ * (`builtArea`, `landArea`, `buildingHeight`, `contractAmount`,
+ * `referenceBudget`) that Next.js 16's RSC serialization layer rejects
+ * with "Only plain objects can be passed to Client Components. Decimal
+ * objects are not supported." Server-side callers keep the raw `project`
+ * for Decimal arithmetic; Client Components must opt in via this helper.
+ * No-op when `project` is absent.
+ */
+export function stripBudgetProjectForClient<T extends { project?: unknown }>(
+  budget: T,
+): Omit<T, "project"> {
+  const { project: _stripped, ...serializable } = budget;
+  return serializable;
+}
+
 export function decimalToString(value: Prisma.Decimal | string | number | null | undefined) {
   if (value == null) return "0";
   if (typeof value === "string") return value;

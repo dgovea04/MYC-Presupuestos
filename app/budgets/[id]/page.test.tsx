@@ -122,6 +122,10 @@ vi.mock("@/lib/data/settings", () => ({
 
 vi.mock("@/lib/db/serializers", () => ({
   decimalToNumber: mocks.decimalToNumber,
+  stripBudgetProjectForClient: <T extends { project?: unknown }>(budget: T) => {
+    const { project: _stripped, ...rest } = budget;
+    return rest;
+  },
 }));
 
 vi.mock("@/lib/utils", () => ({

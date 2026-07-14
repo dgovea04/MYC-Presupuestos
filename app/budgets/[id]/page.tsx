@@ -21,7 +21,7 @@ import { BudgetCollaborationWrapper } from "@/components/budget/budget-collabora
 import { getProjectBudgetOverviewById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
-import { decimalToNumber } from "@/lib/db/serializers";
+import { decimalToNumber, stripBudgetProjectForClient } from "@/lib/db/serializers";
 import { measureAsync } from "@/lib/platform/performance";
 import { cn, ensureDate, formatCurrency, formatDate } from "@/lib/utils";
 
@@ -264,11 +264,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
   // BUGFIX: `getBudgetById()` returns `{ ...BudgetRecord, project: Project }`
   // where `project` is the raw Prisma row with Decimal columns. Next.js 16
   // rejects Prisma Decimals across the Server→Client boundary ("Only plain
-  // objects can be passed to Client Components"). Strip `project` here so
-  // only the serializable `BudgetRecord` reaches <BudgetFlowWrapper />; the
-  // page already receives the project separately and passes `projectName`
-  // as a string.
-  const { project: _strippedProject, ...budgetForClient } = budget;
+  // objects can be passed to Client Components"). `stripBudgetProjectForClient`
+  // drops the raw `project` so only the serializable `BudgetRecord` reaches
+  // <BudgetFlowWrapper />; the page already receives the project separately
+  // and passes `projectName` as a string.
+  const budgetForClient = stripBudgetProjectForClient(budget);
 
   return (
     <AppShell
