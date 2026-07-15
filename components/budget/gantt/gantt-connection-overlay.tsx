@@ -113,6 +113,14 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const captureIdRef = useRef<number | null>(null);
+  const hasPointerMovedRef = useRef(false);
+
+  // Reset the moved flag whenever a new connection session starts (connectionState
+  // transitions from null to non-null). This ensures the initial frame detects
+  // that pointer coords are still viewport-relative and need adjustment.
+  if (!connectionState) {
+    hasPointerMovedRef.current = false;
+  }
 
   // Adjust source coordinates from viewport-relative to SVG-local.
   // gantt-bar.tsx passes getBoundingClientRect() coordinates which are viewport-relative,
@@ -134,10 +142,22 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
 
   const adjustedConnectionState = useMemo(() => {
     if (!connectionState) return null;
+    // On the initial render (before any pointer move), pointerX/pointerY are
+    // viewport-relative (set to sourceBarRightX/sourceBarCenterY in startConnection).
+    // After the first handlePointerMove, they become SVG-local. We track whether
+    // a move happened via hasPointerMovedRef instead of comparing coordinates
+    // (coordinate comparison would break if svgOffset happened to be {0,0}).
+    const adjustPointer = !hasPointerMovedRef.current;
     return {
       ...connectionState,
       sourceBarRightX: connectionState.sourceBarRightX - svgOffset.left,
       sourceBarCenterY: connectionState.sourceBarCenterY - svgOffset.top,
+      pointerX: adjustPointer
+        ? connectionState.pointerX - svgOffset.left
+        : connectionState.pointerX,
+      pointerY: adjustPointer
+        ? connectionState.pointerY - svgOffset.top
+        : connectionState.pointerY,
     };
   }, [connectionState, svgOffset]);
 
@@ -166,6 +186,10 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
     (event: React.PointerEvent<SVGElement>) => {
       const svg = svgRef.current;
       if (!svg) return;
+      // Mark that the pointer has moved at least once. After this point,
+      // pointerX/pointerY from updateConnectionPointer are SVG-local and
+      // should NOT be adjusted by svgOffset.
+      hasPointerMovedRef.current = true;
       const rect = svg.getBoundingClientRect();
       const pointerX = event.clientX - rect.left;
       const pointerY = event.clientY - rect.top;
