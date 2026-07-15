@@ -1209,6 +1209,9 @@ model WorkScheduleItem {
   isMilestone         Boolean                    @default(false)
   baselineStartDate   DateTime?
   baselineEndDate     DateTime?
+  actualStartDate     DateTime?
+  actualEndDate       DateTime?
+  percentComplete     Decimal?                   @db.Decimal(5, 2)
   createdAt           DateTime                   @default(now())
   updatedAt           DateTime                   @updatedAt
   schedule            WorkSchedule               @relation(fields: [scheduleId], references: [id], onDelete: Cascade)

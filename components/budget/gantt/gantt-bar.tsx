@@ -224,6 +224,7 @@ export const GanttBar = memo(function GanttBar({
   const isNearCritical = showCriticalPath && line.criticalPath && nearCriticalSlackDays != null && nearCriticalSlackDays > 0
     && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays;
   const isMilestone = line.isMilestone === true;
+  const progressPercent = line.percentComplete != null ? Math.min(100, Math.max(0, line.percentComplete)) : null;
 
   const distributions = line.monthlyDistributions;
 
@@ -358,10 +359,23 @@ export const GanttBar = memo(function GanttBar({
           )}
         </div>
 
+        {/* Progress bar overlay */}
+        {progressPercent != null && progressPercent > 0 && (
+          <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
+            <div
+              className={cn(
+                "h-full rounded-full opacity-25",
+                progressPercent >= 100 ? "bg-emerald-400" : "bg-white",
+              )}
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
+
         {/* Label */}
         <div className="absolute inset-0 flex items-center px-1.5">
           <span className="block truncate text-[9px] font-semibold text-white">
-            {line.itemCode}
+            {line.itemCode}{progressPercent != null && progressPercent > 0 ? ` ${Math.round(progressPercent)}%` : ""}
           </span>
         </div>
       </div>

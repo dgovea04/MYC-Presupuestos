@@ -42,6 +42,9 @@ export type WorkScheduleLineRecord = {
   baselineStartDate?: string | null;
   baselineEndDate?: string | null;
   baselineDurationDays?: number | null;
+  actualStartDate?: string | null;
+  actualEndDate?: string | null;
+  percentComplete?: number | null;
 };
 
 export type WorkScheduleCriticalPathLineRecord = {

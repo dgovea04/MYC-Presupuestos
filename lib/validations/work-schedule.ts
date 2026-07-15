@@ -39,6 +39,9 @@ export const workScheduleItemSaveSchema = z.object({
   isMilestone: z.boolean().optional().default(false),
   baselineStartDate: isoDateSchema.optional().nullable(),
   baselineEndDate: isoDateSchema.optional().nullable(),
+  actualStartDate: isoDateSchema.optional().nullable(),
+  actualEndDate: isoDateSchema.optional().nullable(),
+  percentComplete: z.coerce.number().min(0, "El porcentaje no puede ser negativo").max(100, "El porcentaje no puede superar 100").optional().nullable(),
   predecessor: z.string().trim().max(240).optional().nullable().superRefine((value, context) => {
     try {
       parseWorkSchedulePredecessors(value);

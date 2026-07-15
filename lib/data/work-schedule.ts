@@ -352,6 +352,9 @@ export async function saveWorkScheduleItem(
           isMilestone: normalizedPayload.isMilestone ?? false,
           baselineStartDate: normalizedPayload.baselineStartDate ? new Date(`${normalizedPayload.baselineStartDate}T00:00:00.000Z`) : null,
           baselineEndDate: normalizedPayload.baselineEndDate ? new Date(`${normalizedPayload.baselineEndDate}T00:00:00.000Z`) : null,
+          actualStartDate: normalizedPayload.actualStartDate ? new Date(`${normalizedPayload.actualStartDate}T00:00:00.000Z`) : null,
+          actualEndDate: normalizedPayload.actualEndDate ? new Date(`${normalizedPayload.actualEndDate}T00:00:00.000Z`) : null,
+          percentComplete: normalizedPayload.percentComplete == null ? null : new Prisma.Decimal(normalizedPayload.percentComplete),
           distributions: {
             createMany: {
               data: normalizedPayload.monthlyDistributions.map((distribution) => ({
@@ -376,6 +379,9 @@ export async function saveWorkScheduleItem(
           isMilestone: normalizedPayload.isMilestone ?? false,
           baselineStartDate: normalizedPayload.baselineStartDate ? new Date(`${normalizedPayload.baselineStartDate}T00:00:00.000Z`) : null,
           baselineEndDate: normalizedPayload.baselineEndDate ? new Date(`${normalizedPayload.baselineEndDate}T00:00:00.000Z`) : null,
+          actualStartDate: normalizedPayload.actualStartDate ? new Date(`${normalizedPayload.actualStartDate}T00:00:00.000Z`) : null,
+          actualEndDate: normalizedPayload.actualEndDate ? new Date(`${normalizedPayload.actualEndDate}T00:00:00.000Z`) : null,
+          percentComplete: normalizedPayload.percentComplete == null ? null : new Prisma.Decimal(normalizedPayload.percentComplete),
           distributions: {
             createMany: {
               data: normalizedPayload.monthlyDistributions.map((distribution) => ({
@@ -556,6 +562,47 @@ export async function previewWorkScheduleBase(
     timelineEndDate: lastDate,
     canGenerate: scheduledCount > 0,
   };
+}
+
+export async function setWorkScheduleBaseline(budgetId: string, userId: string): Promise<{ updatedCount: number }> {
+  const budget = await getAccessibleGeneralBudget(budgetId, userId);
+
+  const schedule = await prisma.workSchedule.findUnique({
+    where: { budgetId: budget.id },
+    select: {
+      id: true,
+      items: {
+        where: {
+          startDate: { not: null },
+          endDate: { not: null },
+        },
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          durationDays: true,
+        },
+      },
+    },
+  });
+
+  if (!schedule || schedule.items.length === 0) {
+    throw new Error("No hay partidas programadas. Programa al menos una partida antes de establecer la linea base.");
+  }
+
+  await prisma.$transaction(
+    schedule.items.map((item) =>
+      prisma.workScheduleItem.update({
+        where: { id: item.id },
+        data: {
+          baselineStartDate: item.startDate,
+          baselineEndDate: item.endDate,
+        },
+      }),
+    ),
+  );
+
+  return { updatedCount: schedule.items.length };
 }
 
 async function getAccessibleGeneralBudget(budgetId: string, userId: string) {
@@ -878,6 +925,9 @@ async function loadWorkScheduleDataset(
           baselineDurationDays: persisted?.baselineStartDate && persisted?.baselineEndDate
             ? Math.round((ensureDate(persisted.baselineEndDate).getTime() - ensureDate(persisted.baselineStartDate).getTime()) / 86400000) + 1
             : null,
+          actualStartDate: persisted?.actualStartDate ? ensureDate(persisted.actualStartDate).toISOString().slice(0, 10) : null,
+          actualEndDate: persisted?.actualEndDate ? ensureDate(persisted.actualEndDate).toISOString().slice(0, 10) : null,
+          percentComplete: persisted?.percentComplete != null ? decimalToNumber(persisted.percentComplete) : null,
           resourceIds:
             item.apu?.resources.flatMap((resource) =>
               resource.resourceId && resource.resource ? [resource.resourceId] : [],

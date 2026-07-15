@@ -93,6 +93,8 @@ export const TimelineRow = memo(function TimelineRow({
   const isLine = row.kind === "line";
   const canInteract = isLine && line && onGanttBarChange;
   const hoverableItemCode = isLine && line ? line.itemCode : null;
+  const progressPercent = line?.percentComplete != null ? Math.min(100, Math.max(0, line.percentComplete)) : null;
+  const progressLabel = progressPercent != null && progressPercent > 0 ? ` ${Math.round(progressPercent)}%` : "";
 
   return (
     <div
@@ -158,7 +160,7 @@ export const TimelineRow = memo(function TimelineRow({
             )}
           </div>
           <div className="absolute inset-0 px-1 text-[9px] font-semibold text-white">
-            <span className="line-clamp-1 block truncate py-1">{itemCode}</span>
+            <span className="line-clamp-1 block truncate py-1">{itemCode}{progressLabel}</span>
           </div>
           {highlighted ? (
             <div className="absolute -top-5 left-0">
