@@ -38,7 +38,7 @@ import { getExportDefinition } from "@/lib/exports/definitions";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import { countWorkDays } from "@/lib/work-schedule/calendar";
 import type { WorkSchedulePredecessorRelation } from "@/components/budget/gantt/use-gantt-connection-mode";
-import type { GanttBarChangeResult } from "@/components/budget/gantt/gantt-utils";
+import { diffInDays, type GanttBarChangeResult } from "@/components/budget/gantt/gantt-utils";
 import type {
   InterSubBudgetParallelism,
   LevelLinkageMode,
@@ -199,6 +199,20 @@ type GenerationLevelPreviewGroup = {
 
 export function WorkSchedulePageContent({ initialData }: WorkSchedulePageContentProps) {
   return <WorkSchedulePageContentInner key={initialData.budgetId} initialData={initialData} />;
+}
+
+/** Recalculate durationDays from startDate/endDate to match server-side
+ *  validation (diffInDays + 1). Falls back to the provided default when
+ *  either date is missing. */
+function computeDurationFromRange(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+  fallback?: number,
+): number {
+  if (startDate && endDate) {
+    return diffInDays(startDate, endDate) + 1;
+  }
+  return fallback ?? 1;
 }
 
 function normalizeWorkScheduleView(data: WorkScheduleViewRecord): WorkScheduleViewRecord {
@@ -710,14 +724,20 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         ? [...existingPredecessors.map((ref) => formatPredecessorToken(ref.code, ref.relation, ref.lagDays)), newPredecessor].join(",")
         : newPredecessor;
 
+      // Recalculate durationDays from startDate/endDate to pass server-side
+      // validation (diffInDays + 1).
+      const startDate = targetLine.startDate ?? "";
+      const endDate = targetLine.endDate ?? "";
+      const durationDays = computeDurationFromRange(startDate, endDate, targetLine.durationDays ?? 1);
+
       const editableLine: EditableLine = {
         budgetItemId: targetLine.budgetItemId,
         description: targetLine.description,
         quantity: targetLine.quantity,
         performance: targetLine.performance ?? null,
-        startDate: targetLine.startDate ?? "",
-        endDate: targetLine.endDate ?? "",
-        durationDays: targetLine.durationDays ?? 1,
+        startDate,
+        endDate,
+        durationDays,
         predecessor: mergedPredecessors,
         crew: targetLine.crew?.toString() ?? "",
         monthlyDistributions: targetLine.monthlyDistributions,
@@ -762,14 +782,20 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         )
         .join(",");
 
+      // Recalculate durationDays from startDate/endDate to pass server-side
+      // validation (diffInDays + 1).
+      const startDate = targetLine.startDate ?? "";
+      const endDate = targetLine.endDate ?? "";
+      const durationDays = computeDurationFromRange(startDate, endDate, targetLine.durationDays ?? 1);
+
       const editableLine: EditableLine = {
         budgetItemId: targetLine.budgetItemId,
         description: targetLine.description,
         quantity: targetLine.quantity,
         performance: targetLine.performance ?? null,
-        startDate: targetLine.startDate ?? "",
-        endDate: targetLine.endDate ?? "",
-        durationDays: targetLine.durationDays ?? 1,
+        startDate,
+        endDate,
+        durationDays,
         predecessor: updatedPredecessors,
         crew: targetLine.crew?.toString() ?? "",
         monthlyDistributions: targetLine.monthlyDistributions,
@@ -811,14 +837,23 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         .map((ref) => formatPredecessorToken(ref.code, ref.relation, ref.lagDays))
         .join(",");
 
+      // Recalculate durationDays from startDate/endDate to pass server-side
+      // validation (diffInDays + 1). Using the stored value directly can fail
+      // when dates drift from their original duration, e.g. via CPM recalc.
+      const startDate = targetLine.startDate ?? "";
+      const endDate = targetLine.endDate ?? "";
+      const durationDays = startDate && endDate
+        ? Math.round((new Date(`${endDate}T00:00:00.000Z`).getTime() - new Date(`${startDate}T00:00:00.000Z`).getTime()) / 86400000) + 1
+        : (targetLine.durationDays ?? 1);
+
       const editableLine: EditableLine = {
         budgetItemId: targetLine.budgetItemId,
         description: targetLine.description,
         quantity: targetLine.quantity,
         performance: targetLine.performance ?? null,
-        startDate: targetLine.startDate ?? "",
-        endDate: targetLine.endDate ?? "",
-        durationDays: targetLine.durationDays ?? 1,
+        startDate,
+        endDate,
+        durationDays,
         predecessor: updatedPredecessors,
         crew: targetLine.crew?.toString() ?? "",
         monthlyDistributions: targetLine.monthlyDistributions,
