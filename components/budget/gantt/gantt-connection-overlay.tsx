@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getProvisionalConnectionPath, type ConnectionConfirmState, type ConnectionModeState, type LinePosition, type WorkSchedulePredecessorRelation } from "./use-gantt-connection-mode";
 
 export type GanttConnectionOverlayProps = {
@@ -113,8 +113,43 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
   const svgRef = useRef<SVGSVGElement>(null);
   const captureIdRef = useRef<number | null>(null);
 
-  const hasValidTarget =
-    connectionState?.targetItemCode !== null && connectionState?.targetItemCode !== undefined;
+  // Adjust source coordinates from viewport-relative to SVG-local.
+  // gantt-bar.tsx passes getBoundingClientRect() coordinates which are viewport-relative,
+  // but the SVG overlay uses its own coordinate system. The pointer coordinates are
+  // already converted in handlePointerMove, but the source bar positions need adjustment.
+  // We use useLayoutEffect + useState (not useMemo) because svgRef.current is only
+  // populated after DOM commit, which happens after render.
+  const [svgOffset, setSvgOffset] = useState({ left: 0, top: 0 });
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (svg) {
+      const rect = svg.getBoundingClientRect();
+      setSvgOffset({ left: rect.left, top: rect.top });
+    }
+  }, [connectionState]);
+
+  const adjustedConnectionState = useMemo(() => {
+    if (!connectionState) return null;
+    return {
+      ...connectionState,
+      sourceBarRightX: connectionState.sourceBarRightX - svgOffset.left,
+      sourceBarCenterY: connectionState.sourceBarCenterY - svgOffset.top,
+    };
+  }, [connectionState, svgOffset]);
+
+  const adjustedConfirmingState = useMemo(() => {
+    if (!confirmingState) return null;
+    return {
+      ...confirmingState,
+      sourceBarRightX: confirmingState.sourceBarRightX - svgOffset.left,
+      sourceBarCenterY: confirmingState.sourceBarCenterY - svgOffset.top,
+    };
+  }, [confirmingState, svgOffset]);
+
+  // Aliases for adjusted state used throughout the component.
+  // Declared before hasValidTarget / targetHighlight which reference them.
+  const state = adjustedConnectionState;
+  const confirmState = adjustedConfirmingState;
 
   const handlePointerDown = useCallback((event: React.PointerEvent<SVGElement>) => {
     const svg = svgRef.current;
@@ -163,10 +198,13 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
     return () => document.removeEventListener("pointerup", handleGlobalPointerUp);
   }, [onEndConnection]);
 
+  const hasValidTarget =
+    state?.targetItemCode !== null && state?.targetItemCode !== undefined;
+
   // Target bar highlight
   const targetHighlight = useMemo(() => {
-    if (!connectionState?.targetItemCode || !hasValidTarget) return null;
-    const target = linePositions.find((pos) => pos.itemCode === connectionState.targetItemCode);
+    if (!state?.targetItemCode || !hasValidTarget) return null;
+    const target = linePositions.find((pos) => pos.itemCode === state.targetItemCode);
     if (!target) return null;
     return (
       <rect
@@ -178,7 +216,7 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
         rx={4}
       />
     );
-  }, [connectionState?.targetItemCode, hasValidTarget, linePositions, timelineContentWidth]);
+  }, [state?.targetItemCode, hasValidTarget, linePositions, timelineContentWidth]);
 
   if (!connectionState && !confirmingState) return null;
 
@@ -193,7 +231,7 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
         />
       )}
 
-      {connectionState && (
+      {state && (
         <svg
           ref={svgRef}
           className="pointer-events-auto absolute inset-0 z-30 cursor-crosshair"
@@ -208,7 +246,7 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
 
           {/* Provisional connector line */}
           <path
-            d={getProvisionalConnectionPath(connectionState)}
+            d={getProvisionalConnectionPath(state)}
             fill="none"
             stroke="#2563EB"
             strokeWidth={1.5}
@@ -218,59 +256,59 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
 
           {/* Source dot */}
           <circle
-            cx={connectionState.sourceBarRightX}
-            cy={connectionState.sourceBarCenterY}
+            cx={state.sourceBarRightX}
+            cy={state.sourceBarCenterY}
             r={4}
             className="fill-blue-600"
           />
 
           {/* Pointer dot */}
           <circle
-            cx={connectionState.pointerX}
-            cy={connectionState.pointerY}
+            cx={state.pointerX}
+            cy={state.pointerY}
             r={hasValidTarget ? 4 : 3}
             className={hasValidTarget ? "fill-emerald-500" : "fill-slate-400"}
           />
 
           {/* Target indicator */}
-          {connectionState.targetItemCode && (
+          {state.targetItemCode && (
             <text
-              x={connectionState.pointerX + 10}
-              y={connectionState.pointerY - 8}
+              x={state.pointerX + 10}
+              y={state.pointerY - 8}
               className="fill-slate-800 text-[11px] font-semibold"
               style={{ dominantBaseline: "middle" }}
             >
-              {connectionState.targetItemCode}
+              {state.targetItemCode}
             </text>
           )}
         </svg>
       )}
 
       {/* When confirming, also show a static version of the connector line */}
-      {confirmingState && (
+      {confirmState && (
         <svg
           className="pointer-events-none absolute inset-0 z-20 overflow-visible"
           style={{ width: timelineContentWidth, height: totalHeight }}
         >
           <line
-            x1={confirmingState.sourceBarRightX}
-            y1={confirmingState.sourceBarCenterY}
-            x2={confirmingState.popoverX}
-            y2={confirmingState.popoverY}
+            x1={confirmState.sourceBarRightX}
+            y1={confirmState.sourceBarCenterY}
+            x2={confirmState.popoverX}
+            y2={confirmState.popoverY}
             stroke="#2563EB"
             strokeWidth={1.5}
             strokeDasharray="5,3"
             className="opacity-80"
           />
           <circle
-            cx={confirmingState.sourceBarRightX}
-            cy={confirmingState.sourceBarCenterY}
+            cx={confirmState.sourceBarRightX}
+            cy={confirmState.sourceBarCenterY}
             r={4}
             className="fill-blue-600"
           />
           <circle
-            cx={confirmingState.popoverX}
-            cy={confirmingState.popoverY}
+            cx={confirmState.popoverX}
+            cy={confirmState.popoverY}
             r={4}
             className="fill-emerald-500"
           />
