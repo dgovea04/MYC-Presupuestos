@@ -32,6 +32,8 @@ export type GanttBarProps = {
   timelineEndIso: string | null;
   onChange: (result: GanttBarChangeResult) => void;
   onStartConnection?: (itemCode: string, budgetItemId: string, barRightEdgeX: number, barCenterY: number) => void;
+  timelineDayIndexByIso?: Map<string, number>;
+  nearCriticalSlackDays?: number;
 };
 
 export const GanttBar = memo(function GanttBar({
@@ -48,6 +50,8 @@ export const GanttBar = memo(function GanttBar({
   timelineEndIso,
   onChange,
   onStartConnection,
+  timelineDayIndexByIso,
+  nearCriticalSlackDays,
 }: GanttBarProps) {
   const originalStartDate = line.startDate ?? "";
   const originalEndDate = line.endDate ?? "";
@@ -217,12 +221,88 @@ export const GanttBar = memo(function GanttBar({
   };
 
   const isCritical = showCriticalPath && line.criticalPath?.isCritical;
+  const isNearCritical = showCriticalPath && line.criticalPath && nearCriticalSlackDays != null && nearCriticalSlackDays > 0
+    && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays;
+  const isMilestone = line.isMilestone === true;
 
   const distributions = line.monthlyDistributions;
+
+  // Baseline bar calculations
+  const hasBaseline = line.baselineStartDate != null && line.baselineEndDate != null;
+  const baselineStartIndex = hasBaseline && line.baselineStartDate ? (timelineDayIndexByIso?.get(line.baselineStartDate) ?? -1) : -1;
+  const baselineEndIndex = hasBaseline && line.baselineEndDate ? (timelineDayIndexByIso?.get(line.baselineEndDate) ?? -1) : -1;
+  const baselineSpan = baselineStartIndex >= 0 && baselineEndIndex >= baselineStartIndex ? baselineEndIndex - baselineStartIndex + 1 : 0;
+  const baselineBarStyle = hasBaseline && baselineSpan > 0
+    ? {
+        left: `${baselineStartIndex * timelineColumnWidth}px`,
+        width: `${baselineSpan * timelineDayWidth + Math.max(0, baselineSpan - 1) * timelineDayGap}px`,
+      }
+    : null;
 
   const tooltipContent = isInteracting
     ? state.tooltipLabel || getTooltipLabel(state.deltaPx, state.mode)
     : undefined;
+
+  // Milestone: render diamond shape
+  if (isMilestone) {
+    const diamondSize = 16;
+    const diamondStyle = {
+      left: `${baseLeft + timelineDayWidth / 2 - diamondSize / 2}px`,
+      top: `calc(50% - ${diamondSize / 2}px)`,
+      width: `${diamondSize}px`,
+      height: `${diamondSize}px`,
+    };
+
+    return (
+      <div
+        className={cn(
+          "group absolute z-10",
+          highlighted && "ring-2 ring-sky-400 ring-offset-1",
+        )}
+        style={diamondStyle}
+        data-testid="gantt-bar"
+        data-milestone="true"
+        data-budget-item-id={line.budgetItemId}
+        title={line.description}
+      >
+        <div
+          className={cn(
+            "h-full w-full rotate-45 rounded-sm",
+            isCritical ? "bg-rose-500" : isNearCritical ? "bg-amber-500" : "bg-violet-500",
+            "shadow-sm",
+          )}
+        />
+        {/* Connector dot for dependency creation */}
+        {onStartConnection && startIndex >= 0 && endIndex >= 0 && (
+          <div
+            className={cn(
+              "absolute right-0 top-1/2 z-10 h-3 w-3 -translate-y-1/2 translate-x-1/2 cursor-crosshair rounded-full bg-violet-100 shadow-md ring-1 ring-violet-400 transition-all",
+              "opacity-0 group-hover:opacity-100 hover:scale-125 hover:bg-violet-300",
+            )}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const barElement = event.currentTarget.closest<HTMLElement>("[data-testid='gantt-bar']");
+              if (!barElement) return;
+              const barRect = barElement.getBoundingClientRect();
+              const barCenterY = barRect.top + barRect.height / 2;
+              const barRightEdgeX = barRect.right;
+              onStartConnection(line.itemCode, line.budgetItemId, barRightEdgeX, barCenterY);
+            }}
+            data-testid="gantt-bar-connector-dot"
+            title="Arrastrar para crear predecesora"
+          />
+        )}
+        {highlighted && !isInteracting && (
+          <div className="absolute -top-5 left-1/2 -translate-x-1/2">
+            <span className="rounded-md bg-slate-900 px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-md whitespace-nowrap">
+              Partida activa
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -237,12 +317,24 @@ export const GanttBar = memo(function GanttBar({
       data-mode={state.mode}
       data-budget-item-id={line.budgetItemId}
     >
+      {/* Baseline bar */}
+      {hasBaseline && baselineBarStyle && (
+        <div
+          className={cn(
+            "absolute top-[calc(50%+10px)] h-2 -translate-y-1/2 rounded-full opacity-40",
+            isCritical ? "bg-rose-300" : isNearCritical ? "bg-amber-300" : "bg-slate-400",
+          )}
+          style={baselineBarStyle}
+          data-testid="gantt-bar-baseline"
+        />
+      )}
+
       {/* Main bar body */}
       <div
         className={cn(
           "absolute inset-0 cursor-grab overflow-hidden rounded-full active:cursor-grabbing",
           isInteracting && "cursor-grabbing",
-          isCritical ? "bg-rose-500" : "bg-sky-600",
+          isCritical ? "bg-rose-500" : isNearCritical ? "bg-amber-500" : "bg-sky-600",
         )}
         onPointerDown={interactions.handleBarPointerDown}
         onPointerMove={interactions.handlePointerMove}
@@ -256,13 +348,13 @@ export const GanttBar = memo(function GanttBar({
                 key={`${distribution.year}-${distribution.month}`}
                 className={cn(
                   "h-full",
-                  isCritical ? "bg-rose-500" : segmentColors[index % segmentColors.length],
+                  isCritical ? "bg-rose-500" : isNearCritical ? "bg-amber-500" : segmentColors[index % segmentColors.length],
                 )}
                 style={{ width: `${distribution.percentage}%` }}
               />
             ))
           ) : (
-            <div className={cn("h-full w-full", isCritical ? "bg-rose-500" : "bg-sky-600")} />
+            <div className={cn("h-full w-full", isCritical ? "bg-rose-500" : isNearCritical ? "bg-amber-500" : "bg-sky-600")} />
           )}
         </div>
 

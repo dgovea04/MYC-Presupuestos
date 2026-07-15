@@ -6,6 +6,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function isIsoDateOnlyString(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 export function ensureDate(value: Date | string | undefined | null): Date {
   if (!value) return new Date();
   return value instanceof Date ? value : new Date(value);
@@ -32,13 +36,15 @@ export function formatCurrency(value: number, currency = "PEN", decimalPlaces = 
 
 export function formatDate(value?: string | Date | null, dateFormat: DateFormatOption = DEFAULT_DATE_FORMAT) {
   if (!value) return "Sin fecha";
-  const date = typeof value === "string" ? new Date(value) : value;
+  const useUtc = typeof value === "string" && isIsoDateOnlyString(value);
+  const date = typeof value === "string" ? new Date(useUtc ? `${value}T00:00:00.000Z` : value) : value;
 
   if (dateFormat === "DD_MM_YYYY") {
     return new Intl.DateTimeFormat("es-PE", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      ...(useUtc ? { timeZone: "UTC" } : {}),
     }).format(date);
   }
 
@@ -46,6 +52,7 @@ export function formatDate(value?: string | Date | null, dateFormat: DateFormatO
     return new Intl.DateTimeFormat("es-PE", {
       day: "2-digit",
       month: "2-digit",
+      ...(useUtc ? { timeZone: "UTC" } : {}),
     }).format(date);
   }
 
@@ -53,6 +60,7 @@ export function formatDate(value?: string | Date | null, dateFormat: DateFormatO
     day: "2-digit",
     month: "short",
     year: "numeric",
+    ...(useUtc ? { timeZone: "UTC" } : {}),
   }).format(date);
 }
 

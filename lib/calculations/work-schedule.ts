@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { addWorkDays } from "@/lib/work-schedule/calendar";
+import { addWorkDays, type CalendarExceptionMap } from "@/lib/work-schedule/calendar";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors, type WorkSchedulePredecessorReference } from "@/lib/work-schedule/predecessors";
 import type {
@@ -140,6 +140,8 @@ export function hasSuspiciousDefaultWorkSchedulePerformance(input: {
 export function recalculateDependentWorkScheduleLines(
   lines: WorkScheduleLineRecord[],
   changedBudgetItemId: string,
+  workDaysBitmask?: number,
+  exceptionMap?: CalendarExceptionMap,
 ) {
   const nextLines = lines.map((line) => ({
     ...line,
@@ -188,7 +190,7 @@ export function recalculateDependentWorkScheduleLines(
         continue;
       }
 
-      const recalculated = recalculateWorkScheduleLineFromPredecessors(successorLine, lineByCode);
+      const recalculated = recalculateWorkScheduleLineFromPredecessors(successorLine, lineByCode, workDaysBitmask);
       if (!recalculated) {
         continue;
       }

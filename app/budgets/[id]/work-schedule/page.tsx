@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
@@ -16,7 +17,9 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
 
   return (
     <>
-      <script
+      <Script
+        id="work-schedule-overview-width-bootstrap"
+        strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
           __html: `(function(){var w=localStorage.getItem('work-schedule-overview-timeline-panel-width:${id}');if(w){document.documentElement.style.setProperty('--work-schedule-timeline-panel-width',w+'px');}})()`,
         }}

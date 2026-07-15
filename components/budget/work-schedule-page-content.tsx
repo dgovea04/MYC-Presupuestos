@@ -27,6 +27,7 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
+import type { DateFormatOption } from "@/types/settings";
 import {
   buildWorkScheduleView,
   calculateWorkScheduleDurationDays,
@@ -36,12 +37,14 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { useEditSession } from "@/hooks/use-edit-session";
 import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
+import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import { countWorkDays } from "@/lib/work-schedule/calendar";
 import { TimelineRow as GanttTimelineRow } from "@/components/budget/gantt/timeline-row";
 import { GanttConnectionOverlay } from "@/components/budget/gantt/gantt-connection-overlay";
 import { DependencyEditPopover } from "@/components/budget/gantt/dependency-edit-popover";
+import { GanttMiniMap } from "@/components/budget/gantt/gantt-minimap";
 import { useGanttConnectionMode, type LinePosition, type WorkSchedulePredecessorRelation } from "@/components/budget/gantt/use-gantt-connection-mode";
 import type { GanttBarChangeResult } from "@/components/budget/gantt/gantt-utils";
 import type {
@@ -90,6 +93,9 @@ export type EditableLine = {
   predecessor: string;
   crew: string;
   monthlyDistributions: WorkScheduleMonthlyDistributionRecord[];
+  isMilestone: boolean;
+  baselineStartDate: string | null;
+  baselineEndDate: string | null;
 };
 
 type OverviewFilter = "all" | "pending" | "incomplete_distribution" | "scheduled";
@@ -214,7 +220,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const normalizedInitialData = normalizeWorkScheduleView(initialData);
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
-  const [data, setData] = useState(normalizedInitialData);
+  const { state: data, setState: setData, undo, redo, canUndo, canRedo } = useUndoRedo<WorkScheduleViewRecord>(normalizedInitialData);
   const [activeView, setActiveView] = useState<ActiveView>(() => readActiveView(normalizedInitialData.budgetId));
   const [editingLine, setEditingLine] = useState<EditableLine | null>(() =>
     readEditingLine(normalizedInitialData, buildPredecessorRowNumberMaps(normalizedInitialData.groups).itemCodeToRowNumber),
@@ -223,6 +229,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [collapsedLevelIds, setCollapsedLevelIds] = useState<Record<string, boolean>>(() => readCollapsedLevelIds(normalizedInitialData.budgetId));
   const [overviewFilter, setOverviewFilter] = useState<OverviewFilter>(() => readOverviewFilter(normalizedInitialData.budgetId));
   const [showCriticalPath, setShowCriticalPath] = useState(() => readCriticalPathVisibility(normalizedInitialData.budgetId));
+  const [nearCriticalSlackDays, setNearCriticalSlackDays] = useState(() => readNearCriticalSlackDays(normalizedInitialData.budgetId));
   const [resourceCalendarMode, setResourceCalendarMode] = useState<ResourceCalendarMode>(() => readResourceCalendarMode(normalizedInitialData.budgetId));
   const [executiveWorkbookScope, setExecutiveWorkbookScope] = useState<WorkbookExportScope>(() =>
     readExecutiveWorkbookScope(normalizedInitialData.budgetId),
@@ -238,6 +245,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   );
   const [overviewScrollRequest, setOverviewScrollRequest] = useState<number | null>(null);
   const [highlightedBudgetItemId, setHighlightedBudgetItemId] = useState<string | null>(null);
+  const [hoveredItemCode, setHoveredItemCode] = useState<string | null>(null);
+  const handleUnhoverBar = useCallback(() => setHoveredItemCode(null), []);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [error, setError] = useState("");
   const [activeInlineRowId, setActiveInlineRowId] = useState<string | null>(null);
@@ -653,6 +662,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         predecessor: line.predecessor ?? "",
         crew: line.crew?.toString() ?? "",
         monthlyDistributions: result.monthlyDistributions,
+        isMilestone: line.isMilestone ?? false,
+        baselineStartDate: line.baselineStartDate ?? null,
+        baselineEndDate: line.baselineEndDate ?? null,
       };
 
       // Optimistic update: set inline draft immediately so the bar stays at the dragged position
@@ -708,6 +720,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         predecessor: mergedPredecessors,
         crew: targetLine.crew?.toString() ?? "",
         monthlyDistributions: targetLine.monthlyDistributions,
+        isMilestone: targetLine.isMilestone ?? false,
+        baselineStartDate: targetLine.baselineStartDate ?? null,
+        baselineEndDate: targetLine.baselineEndDate ?? null,
       };
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
@@ -757,6 +772,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         predecessor: updatedPredecessors,
         crew: targetLine.crew?.toString() ?? "",
         monthlyDistributions: targetLine.monthlyDistributions,
+        isMilestone: targetLine.isMilestone ?? false,
+        baselineStartDate: targetLine.baselineStartDate ?? null,
+        baselineEndDate: targetLine.baselineEndDate ?? null,
       };
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
@@ -803,6 +821,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         predecessor: updatedPredecessors,
         crew: targetLine.crew?.toString() ?? "",
         monthlyDistributions: targetLine.monthlyDistributions,
+        isMilestone: targetLine.isMilestone ?? false,
+        baselineStartDate: targetLine.baselineStartDate ?? null,
+        baselineEndDate: targetLine.baselineEndDate ?? null,
       };
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
@@ -860,6 +881,10 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   }, [data.budgetId, showCriticalPath]);
 
   useEffect(() => {
+    writeNearCriticalSlackDays(data.budgetId, nearCriticalSlackDays);
+  }, [data.budgetId, nearCriticalSlackDays]);
+
+  useEffect(() => {
     writeResourceCalendarMode(data.budgetId, resourceCalendarMode);
   }, [data.budgetId, resourceCalendarMode]);
 
@@ -912,6 +937,35 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
     return () => window.clearTimeout(timeoutId);
   }, [highlightedBudgetItemId]);
+
+  // Undo/redo keyboard shortcuts
+  useEffect(() => {
+    function handleUndoRedoKeyboard(event: KeyboardEvent) {
+      const isMod = event.ctrlKey || event.metaKey;
+      if (!isMod) return;
+
+      // Don't capture undo/redo when user is focused on a text input
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if ((event.key === "z" && event.shiftKey) || event.key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    }
+
+    window.addEventListener("keydown", handleUndoRedoKeyboard);
+    return () => window.removeEventListener("keydown", handleUndoRedoKeyboard);
+  }, [undo, redo]);
 
   const handleNavigateEditingLine = useCallback((direction: "previous" | "next") => {
     if (!editingLine) {
@@ -1440,6 +1494,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           onOverviewFilterChange={setOverviewFilter}
           showCriticalPath={showCriticalPath}
           onShowCriticalPathChange={setShowCriticalPath}
+          nearCriticalSlackDays={nearCriticalSlackDays}
+          onNearCriticalSlackDaysChange={setNearCriticalSlackDays}
           highlightedBudgetItemId={highlightedBudgetItemId}
           scrollRequest={overviewScrollRequest}
           onScrollRequestHandled={handleScrollRequestHandled}
@@ -1457,6 +1513,8 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           onCreateDependency={handleCreateDependency}
           onEditDependency={handleEditDependencySave}
           onDeleteDependency={handleEditDependencyDelete}
+          hoveredItemCode={hoveredItemCode}
+          onHoverItemCode={setHoveredItemCode}
         />
       ) : null}
 
@@ -1542,6 +1600,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           open
           saveState={saveState}
           error={error}
+          dateFormat={dateFormat}
           onClose={handleCloseEditor}
           onJumpToSchedule={handleJumpToSchedule}
           canNavigateToPreviousLine={canNavigateToPreviousLine}
@@ -1620,6 +1679,8 @@ function WorkScheduleOverview({
   onOverviewFilterChange,
   showCriticalPath,
   onShowCriticalPathChange,
+  nearCriticalSlackDays,
+  onNearCriticalSlackDaysChange,
   highlightedBudgetItemId,
   scrollRequest,
   onScrollRequestHandled,
@@ -1637,12 +1698,14 @@ function WorkScheduleOverview({
   onCreateDependency,
   onEditDependency,
   onDeleteDependency,
+  hoveredItemCode,
+  onHoverItemCode,
 }: {
   data: WorkScheduleViewRecord;
   isExcelMode: boolean;
   timelineDays: TimelineDay[];
   hasDailyTimeline: boolean;
-  dateFormat: string;
+  dateFormat: DateFormatOption;
   currencyDecimals: number;
   predecessorItemCodeToRowNumber: Map<string, number>;
   collapsedGroups: Record<string, boolean>;
@@ -1655,6 +1718,8 @@ function WorkScheduleOverview({
   onOverviewFilterChange: (filter: OverviewFilter) => void;
   showCriticalPath: boolean;
   onShowCriticalPathChange: (visible: boolean) => void;
+  nearCriticalSlackDays: number;
+  onNearCriticalSlackDaysChange: (days: number) => void;
   highlightedBudgetItemId: string | null;
   scrollRequest: number | null;
   onScrollRequestHandled: () => void;
@@ -1672,6 +1737,8 @@ function WorkScheduleOverview({
   onCreateDependency?: (sourceItemCode: string, targetItemCode: string, relation: WorkSchedulePredecessorRelation, lagDays: number) => void;
   onEditDependency?: (sourceCode: string, targetCode: string, relation: WorkSchedulePredecessorRelation, lagDays: number) => void;
   onDeleteDependency?: (sourceCode: string, targetCode: string) => void;
+  hoveredItemCode?: string | null;
+  onHoverItemCode?: (itemCode: string | null) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineBottomScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1707,6 +1774,7 @@ function WorkScheduleOverview({
   const [leftTableViewportWidth, setLeftTableViewportWidth] = useState<number | null>(null);
   const [verticalScrollTop, setVerticalScrollTop] = useState(0);
   const [verticalViewportHeight, setVerticalViewportHeight] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const latestVerticalScrollTopRef = useRef(0);
   const leftTableViewportWidthRef = useRef<number | null>(null);
   const OVERVIEW_TIMELINE_RIGHT_OFFSET = 16;
@@ -1746,6 +1814,9 @@ function WorkScheduleOverview({
   const pendingCount = lineOverviewStats.pendingCount;
   const incompleteDistributionCount = lineOverviewStats.incompleteDistributionCount;
   const scheduledCount = lineOverviewStats.scheduledCount;
+  const handleUnhoverBar = useCallback(() => {
+    onHoverItemCode?.(null);
+  }, [onHoverItemCode]);
   const visibleGroups = useMemo(
     () => {
       const groups: typeof data.groups = [];
@@ -1946,6 +2017,23 @@ function WorkScheduleOverview({
       }),
     [timelineDayIndexByIso, timelineZoomPercent, visibleTimelineLinePositions],
   );
+
+  // Pre-compute path key → predecessor/successor code mapping for hover highlighting
+  const dependencyPathCodeMap = useMemo(() => {
+    const budgetIdToCode = new Map(allLines.map((l) => [l.budgetItemId, l.itemCode]));
+    const result = new Map<string, { predecessorCode: string; successorCode: string }>();
+    for (const path of timelineDependencyPaths) {
+      const key = path.key;
+      const parts = key.split("-");
+      if (parts.length >= 4) {
+        const predCode = parts[parts.length - 3];
+        const budgetId = parts.slice(0, parts.length - 3).join("-");
+        const succCode = budgetIdToCode.get(budgetId) ?? "";
+        result.set(key, { predecessorCode: predCode, successorCode: succCode });
+      }
+    }
+    return result;
+  }, [allLines, timelineDependencyPaths]);
 
   // Gantt connection mode for visual dependency creation
   const timelineLinePositions = useMemo<LinePosition[]>(
@@ -2196,13 +2284,15 @@ function WorkScheduleOverview({
       horizontalScrollSyncSourceRef.current = null;
     }
 
+    const currentScrollLeft = scrollContainerRef.current.scrollLeft;
+
     if (pendingScrollWriteFrameRef.current !== null) {
       window.cancelAnimationFrame(pendingScrollWriteFrameRef.current);
     }
 
-    const nextScrollLeft = scrollContainerRef.current.scrollLeft;
     pendingScrollWriteFrameRef.current = window.requestAnimationFrame(() => {
-      writeOverviewScrollPosition(data.budgetId, nextScrollLeft);
+      setScrollLeft(currentScrollLeft);
+      writeOverviewScrollPosition(data.budgetId, currentScrollLeft);
       pendingScrollWriteFrameRef.current = null;
     });
   }
@@ -2599,6 +2689,21 @@ function WorkScheduleOverview({
               >
                 {showCriticalPath ? "Ocultar ruta critica" : "Mostrar ruta critica"}
               </Button>
+              {showCriticalPath ? (
+                <label className="flex h-9 items-center gap-1.5 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-text)]">
+                  <span>Holgura ≤</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={999}
+                    value={nearCriticalSlackDays || ""}
+                    placeholder="0"
+                    onChange={(e) => onNearCriticalSlackDaysChange?.(Number(e.target.value) || 0)}
+                    className="w-12 rounded border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-1.5 py-0.5 text-center text-xs font-medium text-[var(--app-text)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span>días</span>
+                </label>
+              ) : null}
               <Button variant="outline" size="sm" onClick={() => setShowCostColumns((current) => !current)}>
                 {showCostColumns ? "Ocultar PU y Parcial" : "Mostrar PU y Parcial"}
               </Button>
@@ -2728,6 +2833,7 @@ function WorkScheduleOverview({
                             currencyDecimals={currencyDecimals}
                             showCostColumns={showCostColumns}
                             showCriticalPath={showCriticalPath}
+                            nearCriticalSlackDays={nearCriticalSlackDays}
                             highlighted={highlightedBudgetItemId === item.row.line.budgetItemId}
                             displayPredecessor={formatPredecessorForDisplay(item.row.line.predecessor ?? "", predecessorItemCodeToRowNumber)}
                             onEditLine={onEditLine}
@@ -2740,6 +2846,7 @@ function WorkScheduleOverview({
                             onActivateInlineRow={onActivateInlineRow}
                             onInlineDraftChange={onInlineDraftChange}
                             onInlinePredecessorChange={onInlinePredecessorChange}
+                            itemCodeToRowNumber={predecessorItemCodeToRowNumber}
                             onInlineRowSave={onInlineRowSave}
                             onInlineRowCancel={onInlineRowCancel}
                           />
@@ -2823,16 +2930,26 @@ function WorkScheduleOverview({
                               <path d="M0,0 L6,3 L0,6 Z" fill="#64748b" />
                             </marker>
                           </defs>
-                          {timelineDependencyPaths.map((path) => (
+                          {timelineDependencyPaths.map((path) => {
+                            const pathKey = path.key;
+                            const codes = dependencyPathCodeMap.get(pathKey);
+                            const isRelated = codes != null && hoveredItemCode != null && (
+                              hoveredItemCode === codes.predecessorCode || hoveredItemCode === codes.successorCode
+                            );
+                            const isDimmed = hoveredItemCode != null && !isRelated;
+                            return (
                             <path
-                              key={path.key}
+                              key={pathKey}
                               d={path.d}
                               fill="none"
-                              stroke="#64748b"
-                              strokeWidth="1.5"
+                              stroke={isRelated ? "#2563EB" : "#64748b"}
+                              strokeWidth={isRelated ? 2.5 : 1.5}
                               strokeLinejoin="round"
                               markerEnd="url(#work-schedule-dependency-arrowhead)"
-                              className="pointer-events-auto cursor-pointer hover:stroke-sky-500 hover:stroke-[2.5]"
+                              className={cn(
+                                "pointer-events-auto cursor-pointer transition-all duration-150",
+                                isRelated ? "opacity-100" : isDimmed ? "opacity-20" : "hover:stroke-sky-500 hover:stroke-[2.5] opacity-60",
+                              )}
                               onClick={(event) => {
                                 const sourceCode = path.key.split("→")[0];
                                 const targetCode = path.key.split("→")[1];
@@ -2858,7 +2975,9 @@ function WorkScheduleOverview({
                                 });
                               }}
                             />
-                          ))}
+                          );
+                        }
+                      )}
                         </svg>
                       ) : null}
 
@@ -2937,6 +3056,7 @@ function WorkScheduleOverview({
                             currency={data.currency}
                             currencyDecimals={currencyDecimals}
                             showCriticalPath={showCriticalPath}
+                            nearCriticalSlackDays={nearCriticalSlackDays}
                             timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
                             timelineDayGap={getZoomedTimelineDayGap(timelineZoomPercent)}
                             highlighted={item.row.kind === "line" && highlightedBudgetItemId === item.row.line.budgetItemId}
@@ -2948,6 +3068,8 @@ function WorkScheduleOverview({
                             timelineEndIso={data.timeline.endDate}
                             onGanttBarChange={onGanttBarChange}
                             onStartConnection={startConnection}
+                            onHoverBar={onHoverItemCode}
+                            onUnhoverBar={handleUnhoverBar}
                           />
                         ),
                       )}
@@ -2966,6 +3088,25 @@ function WorkScheduleOverview({
                         ))}
                       </div>
                     </div>
+                    {hasDailyTimeline ? (
+                      <div className="border-t border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-2.5 py-1.5">
+                        <GanttMiniMap
+                          allLines={allLines}
+                          timelineDayIndexByIso={timelineDayIndexByIso}
+                          timelineContentWidth={timelineContentWidth}
+                          timelineDayCount={timelineDays.length}
+                          scrollLeft={scrollLeft}
+                          viewportWidth={leftTableViewportWidth ?? 600}
+                          showCriticalPath={showCriticalPath}
+                          nearCriticalSlackDays={nearCriticalSlackDays}
+                          onScrollTo={(targetScrollLeft) => {
+                            if (scrollContainerRef.current) {
+                              scrollContainerRef.current.scrollLeft = targetScrollLeft;
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : (
@@ -3067,6 +3208,7 @@ type WorkScheduleLineTableRowProps = {
   currencyDecimals: number;
   showCostColumns: boolean;
   showCriticalPath: boolean;
+  nearCriticalSlackDays: number;
   highlighted: boolean;
   onEditLine: (line: WorkScheduleLineRecord) => void;
   onRegisterRow: (rowId: string, element: HTMLElement | null) => void;
@@ -3089,6 +3231,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
   currencyDecimals,
   showCostColumns,
   showCriticalPath,
+  nearCriticalSlackDays,
   highlighted,
   onEditLine,
   onRegisterRow,
@@ -3099,6 +3242,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
   onActivateInlineRow,
   onInlineDraftChange,
   onInlinePredecessorChange,
+  itemCodeToRowNumber,
   onInlineRowSave,
   onInlineRowCancel,
 }: WorkScheduleLineTableRowProps) {
@@ -3135,9 +3279,9 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       data-table-row-id={line.budgetItemId}
       data-inline-row-id={inlineRowId}
       data-highlighted={highlighted ? "true" : "false"}
-      data-critical={showCriticalPath && line.criticalPath?.isCritical ? "true" : "false"}
+      data-critical={showCriticalPath && line.criticalPath?.isCritical ? "true" : (showCriticalPath && line.criticalPath && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays ? "near" : "false")}
       className={cn(
-        showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-50/80 dark:bg-rose-500/10" : "",
+        showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-50/80 dark:bg-rose-500/10" : (showCriticalPath && line.criticalPath && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays ? "bg-amber-50/80 dark:bg-amber-500/10" : ""),
         highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/12 dark:ring-amber-500/30" : "",
       )}
       onBlur={handleInlineBlur}
@@ -3159,15 +3303,33 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
                   Partida activa
                 </span>
               ) : null}
-              {showCriticalPath && line.criticalPath?.isCritical ? (
-                <span
-                  data-testid={`work-schedule-critical-badge-${line.budgetItemId}`}
-                  className="theme-status-error shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold dark:text-rose-200"
-                  title={`Holgura total: ${line.criticalPath.totalSlackDays} dias`}
-                >
-                  Critica
-                </span>
-              ) : null}
+              {showCriticalPath && line.criticalPath ? (() => {
+                const ncDays = line.criticalPath.totalSlackDays;
+                const isNearCritical = ncDays > 0 && ncDays <= nearCriticalSlackDays;
+                if (line.criticalPath.isCritical) {
+                  return (
+                    <span
+                      data-testid={`work-schedule-critical-badge-${line.budgetItemId}`}
+                      className="theme-status-error shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold dark:text-rose-200"
+                      title={`Holgura total: ${ncDays} dias`}
+                    >
+                      Critica
+                    </span>
+                  );
+                }
+                if (isNearCritical) {
+                  return (
+                    <span
+                      data-testid={`work-schedule-near-critical-badge-${line.budgetItemId}`}
+                      className="theme-status-warning shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold dark:text-amber-200"
+                      title={`Casi critica · Holgura: ${ncDays} dias`}
+                    >
+                      ±{ncDays}d
+                    </span>
+                  );
+                }
+                return null;
+              })() : null}
             </div>
             <Button
               variant="ghost"
@@ -3210,11 +3372,13 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
         onClick={() => onActivateInlineRow(line)}
       >
         {isInlineActive && inlineDraft ? (
-          <Input
-            type="date"
+          <WorkScheduleDateInput
+            label="Inicio"
             value={inlineDraft.startDate}
+            dateFormat={dateFormat as DateFormatOption}
+            compact
             onKeyDown={handleInlineKeyDown}
-            onChange={(event) => onInlineDraftChange(inlineRowId, updateEditableLineDates(inlineDraft, { startDate: event.target.value }))}
+            onChange={(value) => onInlineDraftChange(inlineRowId, updateEditableLineDates(inlineDraft, { startDate: value }))}
           />
         ) : (
           line.startDate ? formatDate(line.startDate, dateFormat as never) : "Pendiente"
@@ -3226,11 +3390,13 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
         onClick={() => onActivateInlineRow(line)}
       >
         {isInlineActive && inlineDraft ? (
-          <Input
-            type="date"
+          <WorkScheduleDateInput
+            label="Fin"
             value={inlineDraft.endDate}
+            dateFormat={dateFormat as DateFormatOption}
+            compact
             onKeyDown={handleInlineKeyDown}
-            onChange={(event) => onInlineDraftChange(inlineRowId, updateEditableLineDates(inlineDraft, { endDate: event.target.value }))}
+            onChange={(value) => onInlineDraftChange(inlineRowId, updateEditableLineDates(inlineDraft, { endDate: value }))}
           />
         ) : (
           line.endDate ? formatDate(line.endDate, dateFormat as never) : "Pendiente"
@@ -3276,6 +3442,27 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       {showCostColumns ? <TD className="align-middle">{formatCurrency(line.partial, currency, currencyDecimals)}</TD> : null}
       <TD className="align-middle bg-[var(--app-surface)]">
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors",
+              (isInlineActive && inlineDraft ? inlineDraft.isMilestone : line.isMilestone)
+                ? "border-violet-300 bg-violet-100 text-violet-700 hover:bg-violet-200 dark:border-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+                : "border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] hover:border-slate-300 hover:text-[var(--app-text)]",
+            )}
+            onClick={() => {
+              if (isInlineActive && inlineDraft) {
+                onInlineDraftChange(inlineRowId, { ...inlineDraft, isMilestone: !inlineDraft.isMilestone });
+              } else {
+                const draft = createQuickToggleDraft(line, itemCodeToRowNumber);
+                draft.isMilestone = !(line.isMilestone ?? false);
+                onInlineDraftChange(inlineRowId, draft);
+              }
+            }}
+            title={line.isMilestone ? "Desmarcar como hito" : "Marcar como hito"}
+          >
+            {(isInlineActive && inlineDraft ? inlineDraft.isMilestone : line.isMilestone) ? "◆ Hito" : "◇ Hito"}
+          </button>
           <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => onEditLine(line)}>
             Editar
           </Button>
@@ -3435,6 +3622,7 @@ function areWorkScheduleLineTableRowPropsEqual(
     previousProps.currencyDecimals === nextProps.currencyDecimals &&
     previousProps.showCostColumns === nextProps.showCostColumns &&
     previousProps.showCriticalPath === nextProps.showCriticalPath &&
+    previousProps.nearCriticalSlackDays === nextProps.nearCriticalSlackDays &&
     previousProps.highlighted === nextProps.highlighted &&
     previousProps.onEditLine === nextProps.onEditLine &&
     previousProps.onRegisterRow === nextProps.onRegisterRow &&
@@ -3445,6 +3633,7 @@ function areWorkScheduleLineTableRowPropsEqual(
     previousProps.onInlineDraftChange === nextProps.onInlineDraftChange &&
     previousProps.onInlineRowSave === nextProps.onInlineRowSave &&
     previousProps.onInlineRowCancel === nextProps.onInlineRowCancel &&
+    previousProps.itemCodeToRowNumber === nextProps.itemCodeToRowNumber &&
     areEditableLinesEqual(previousProps.inlineDraft, nextProps.inlineDraft)
   );
 }
@@ -3919,11 +4108,73 @@ function CurveSView({
   );
 }
 
+function WorkScheduleDateInput({
+  label,
+  value,
+  dateFormat,
+  onChange,
+  onKeyDown,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  dateFormat: DateFormatOption;
+  onChange: (value: string) => void;
+  onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
+  compact?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const openPicker = useCallback(() => {
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+
+    if ("showPicker" in input && typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.focus();
+    input.click();
+  }, []);
+
+  return (
+    <div className="relative">
+      <Input
+        ref={inputRef}
+        type="date"
+        value={value}
+        aria-label={label}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        onChange={(event) => onChange(event.target.value)}
+        className="sr-only"
+      />
+      <Button
+        type="button"
+        variant="outline"
+        onClick={openPicker}
+        className={cn(
+          "w-full justify-start gap-2 text-left font-normal",
+          compact ? "h-9 rounded-lg px-2.5 text-xs" : "h-10 rounded-xl px-3 text-sm",
+          !value && "text-[var(--app-text-muted)]",
+        )}
+      >
+        <CalendarDays className={cn("shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+        <span className="truncate">{value ? formatDate(value, dateFormat) : "Seleccionar fecha"}</span>
+      </Button>
+    </div>
+  );
+}
+
 function WorkScheduleEditorSheet({
   line,
   open,
   saveState,
   error,
+  dateFormat,
   onClose,
   onJumpToSchedule,
   canNavigateToPreviousLine,
@@ -3938,6 +4189,7 @@ function WorkScheduleEditorSheet({
   open: boolean;
   saveState: "idle" | "saving" | "error";
   error: string;
+  dateFormat: string;
   onClose: () => void;
   onJumpToSchedule: () => void;
   canNavigateToPreviousLine: boolean;
@@ -3998,17 +4250,19 @@ function WorkScheduleEditorSheet({
                 <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
                   <CardContent className="grid gap-4 p-5 md:grid-cols-2">
                     <Field label="Inicio">
-                      <Input
-                        type="date"
+                      <WorkScheduleDateInput
+                        label="Inicio"
                         value={line.startDate}
-                        onChange={(event) => onChange(updateEditableLineDates(line, { startDate: event.target.value }))}
+                        dateFormat={dateFormat}
+                        onChange={(value) => onChange(updateEditableLineDates(line, { startDate: value }))}
                       />
                     </Field>
                     <Field label="Fin">
-                      <Input
-                        type="date"
+                      <WorkScheduleDateInput
+                        label="Fin"
                         value={line.endDate}
-                        onChange={(event) => onChange(updateEditableLineDates(line, { endDate: event.target.value }))}
+                        dateFormat={dateFormat}
+                        onChange={(value) => onChange(updateEditableLineDates(line, { endDate: value }))}
                       />
                     </Field>
                     <Field label="Duracion">
@@ -5493,6 +5747,10 @@ export function buildPreviewWorkScheduleView({
     );
   }
 
+  for (const draft of draftEntries.values()) {
+    nextLines = recalculateDependentWorkScheduleLines(nextLines, draft.budgetItemId);
+  }
+
   const previewView = buildWorkScheduleView(
     {
       budgetId: data.budgetId,
@@ -5739,6 +5997,30 @@ function writeCriticalPathVisibility(budgetId: string, visible: boolean) {
   }
 
   window.localStorage.setItem(getCriticalPathVisibilityStorageKey(budgetId), "true");
+}
+
+function readNearCriticalSlackDays(budgetId: string) {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+  const stored = window.localStorage.getItem(getNearCriticalSlackDaysStorageKey(budgetId));
+  const parsed = stored ? Number(stored) : 0;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function writeNearCriticalSlackDays(budgetId: string, days: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (days <= 0) {
+    window.localStorage.removeItem(getNearCriticalSlackDaysStorageKey(budgetId));
+    return;
+  }
+  window.localStorage.setItem(getNearCriticalSlackDaysStorageKey(budgetId), String(days));
+}
+
+function getNearCriticalSlackDaysStorageKey(budgetId: string) {
+  return `work-schedule:near-critical-slack-days:${budgetId}`;
 }
 
 function isResourceCalendarMode(value: string): value is ResourceCalendarMode {
@@ -7260,6 +7542,9 @@ function createEditableLine(
       predecessor: formatPredecessorForDisplay(line.predecessor ?? "", itemCodeToRowNumber),
       crew: line.crew != null ? String(line.crew) : "1",
       monthlyDistributions: fallbackDistributions,
+      isMilestone: line.isMilestone ?? false,
+      baselineStartDate: line.baselineStartDate ?? null,
+      baselineEndDate: line.baselineEndDate ?? null,
     },
     {},
   );
@@ -7273,6 +7558,9 @@ function serializeEditableLine(line: EditableLine, rowNumberToItemCode: Map<numb
     durationDays: Number(line.durationDays),
     predecessor: formatPredecessorForStorage(line.predecessor, rowNumberToItemCode),
     crew: parseEditableCrew(line.crew) ?? 1,
+    isMilestone: line.isMilestone ?? false,
+    baselineStartDate: line.baselineStartDate || null,
+    baselineEndDate: line.baselineEndDate || null,
     monthlyDistributions: line.monthlyDistributions.map((distribution) => ({
       year: distribution.year,
       month: distribution.month,
@@ -7480,6 +7768,24 @@ function updateEditableLineDuration(line: EditableLine, durationDays: number) {
     monthlyDistributions: shouldHydrateInitialDistribution(line)
       ? buildInitialDistributionsFromRange(line.startDate, endDate)
       : line.monthlyDistributions,
+  };
+}
+
+function createQuickToggleDraft(line: WorkScheduleLineRecord, itemCodeToRowNumber: Map<string, number>): EditableLine {
+  return {
+    budgetItemId: line.budgetItemId,
+    description: line.description,
+    quantity: line.quantity,
+    performance: line.performance ?? null,
+    startDate: line.startDate ?? "",
+    endDate: line.endDate ?? "",
+    durationDays: line.durationDays ?? 1,
+    predecessor: formatPredecessorForDisplay(line.predecessor ?? "", itemCodeToRowNumber),
+    crew: line.crew != null ? String(line.crew) : "1",
+    monthlyDistributions: line.monthlyDistributions.length > 0 ? line.monthlyDistributions.map(d => ({ ...d })) : [],
+    isMilestone: line.isMilestone ?? false,
+    baselineStartDate: line.baselineStartDate ?? null,
+    baselineEndDate: line.baselineEndDate ?? null,
   };
 }
 

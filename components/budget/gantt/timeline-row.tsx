@@ -28,6 +28,9 @@ export type TimelineRowProps = {
   timelineEndIso: string | null;
   onGanttBarChange?: (line: WorkScheduleLineRecord, result: GanttBarChangeResult) => void;
   onStartConnection?: (itemCode: string, budgetItemId: string, barRightEdgeX: number, barCenterY: number) => void;
+  onHoverBar?: (itemCode: string | null) => void;
+  onUnhoverBar?: () => void;
+  nearCriticalSlackDays?: number;
 };
 
 const segmentColors = [
@@ -54,6 +57,9 @@ export const TimelineRow = memo(function TimelineRow({
   timelineEndIso,
   onGanttBarChange,
   onStartConnection,
+  onHoverBar,
+  onUnhoverBar,
+  nearCriticalSlackDays,
 }: TimelineRowProps) {
   const line = row.kind === "line" ? row.line : null;
   const startDate = row.kind === "line" ? row.line.startDate : row.startDate;
@@ -86,13 +92,16 @@ export const TimelineRow = memo(function TimelineRow({
 
   const isLine = row.kind === "line";
   const canInteract = isLine && line && onGanttBarChange;
+  const hoverableItemCode = isLine && line ? line.itemCode : null;
 
   return (
     <div
       data-testid="work-schedule-timeline-row"
+      onPointerEnter={() => onHoverBar?.(hoverableItemCode)}
+      onPointerLeave={() => onUnhoverBar?.()}
       data-line-id={row.rowId}
       data-highlighted={highlighted ? "true" : "false"}
-      data-critical={showCriticalPath && line?.criticalPath?.isCritical ? "true" : "false"}
+      data-critical={showCriticalPath && line?.criticalPath?.isCritical ? "true" : (showCriticalPath && line?.criticalPath && nearCriticalSlackDays != null && nearCriticalSlackDays > 0 && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays ? "near" : "false")}
       className="relative overflow-visible border-b border-[var(--app-border-soft)] px-0.5 py-1"
       style={{
         height: rowHeight ? `${rowHeight}px` : undefined,
@@ -114,6 +123,8 @@ export const TimelineRow = memo(function TimelineRow({
           timelineEndIso={timelineEndIso}
           onChange={(result) => onGanttBarChange!(line, result)}
           onStartConnection={onStartConnection}
+          timelineDayIndexByIso={timelineDayIndexByIso}
+          nearCriticalSlackDays={nearCriticalSlackDays}
         />
       ) : timelineBarStyle ? (
         <div
@@ -134,14 +145,14 @@ export const TimelineRow = memo(function TimelineRow({
                   data-testid={`work-schedule-bar-segment-${row.rowId}`}
                   className={cn(
                     "h-full border-r border-white/35 dark:border-black/20 last:border-r-0",
-                    showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : segmentColors[distributionIndex % segmentColors.length],
+                    showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : (showCriticalPath && line.criticalPath && nearCriticalSlackDays != null && nearCriticalSlackDays > 0 && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays ? "bg-amber-500 dark:bg-amber-400" : segmentColors[distributionIndex % segmentColors.length]),
                   )}
                   style={{ width: `${distribution.percentage}%` }}
                   title={formatDistributionTooltip(distribution, partial, currency, currencyDecimals)}
                 />
               ))
             ) : line ? (
-              <div className={cn("h-full w-full", showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : "bg-sky-600 dark:bg-sky-500")} />
+              <div className={cn("h-full w-full", showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-600 dark:bg-rose-500" : (showCriticalPath && line.criticalPath && nearCriticalSlackDays != null && nearCriticalSlackDays > 0 && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays ? "bg-amber-500 dark:bg-amber-400" : "bg-sky-600 dark:bg-sky-500"))} />
             ) : (
               <div className="h-full w-full bg-[var(--app-text-subtle)]" />
             )}
@@ -194,6 +205,9 @@ function areTimelineRowPropsEqual(previousProps: TimelineRowProps, nextProps: Ti
     previousProps.timelineStartIso === nextProps.timelineStartIso &&
     previousProps.timelineEndIso === nextProps.timelineEndIso &&
     previousProps.onGanttBarChange === nextProps.onGanttBarChange &&
-    previousProps.onStartConnection === nextProps.onStartConnection
+    previousProps.onStartConnection === nextProps.onStartConnection &&
+    previousProps.onHoverBar === nextProps.onHoverBar &&
+    previousProps.onUnhoverBar === nextProps.onUnhoverBar &&
+    previousProps.nearCriticalSlackDays === nextProps.nearCriticalSlackDays
   );
 }

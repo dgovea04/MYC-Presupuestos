@@ -349,6 +349,9 @@ export async function saveWorkScheduleItem(
           durationDays: normalizedPayload.durationDays,
           predecessor: normalizeOptionalString(normalizedPayload.predecessor),
           crew: normalizedPayload.crew == null ? null : new Prisma.Decimal(normalizedPayload.crew),
+          isMilestone: normalizedPayload.isMilestone ?? false,
+          baselineStartDate: normalizedPayload.baselineStartDate ? new Date(`${normalizedPayload.baselineStartDate}T00:00:00.000Z`) : null,
+          baselineEndDate: normalizedPayload.baselineEndDate ? new Date(`${normalizedPayload.baselineEndDate}T00:00:00.000Z`) : null,
           distributions: {
             createMany: {
               data: normalizedPayload.monthlyDistributions.map((distribution) => ({
@@ -370,6 +373,9 @@ export async function saveWorkScheduleItem(
           durationDays: normalizedPayload.durationDays,
           predecessor: normalizeOptionalString(normalizedPayload.predecessor),
           crew: normalizedPayload.crew == null ? null : new Prisma.Decimal(normalizedPayload.crew),
+          isMilestone: normalizedPayload.isMilestone ?? false,
+          baselineStartDate: normalizedPayload.baselineStartDate ? new Date(`${normalizedPayload.baselineStartDate}T00:00:00.000Z`) : null,
+          baselineEndDate: normalizedPayload.baselineEndDate ? new Date(`${normalizedPayload.baselineEndDate}T00:00:00.000Z`) : null,
           distributions: {
             createMany: {
               data: normalizedPayload.monthlyDistributions.map((distribution) => ({
@@ -866,6 +872,12 @@ async function loadWorkScheduleDataset(
           performance: item.apu ? decimalToNumber(item.apu.performance) : null,
           performanceLabel: item.apu ? `${decimalToNumber(item.apu.performance)} ${item.unit}/DIA` : null,
           monthlyDistributions: sanitizedPersistedSchedule.monthlyDistributions,
+          isMilestone: persisted?.isMilestone ?? false,
+          baselineStartDate: persisted?.baselineStartDate ? ensureDate(persisted.baselineStartDate).toISOString().slice(0, 10) : null,
+          baselineEndDate: persisted?.baselineEndDate ? ensureDate(persisted.baselineEndDate).toISOString().slice(0, 10) : null,
+          baselineDurationDays: persisted?.baselineStartDate && persisted?.baselineEndDate
+            ? Math.round((ensureDate(persisted.baselineEndDate).getTime() - ensureDate(persisted.baselineStartDate).getTime()) / 86400000) + 1
+            : null,
           resourceIds:
             item.apu?.resources.flatMap((resource) =>
               resource.resourceId && resource.resource ? [resource.resourceId] : [],

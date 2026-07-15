@@ -38,6 +38,10 @@ export type WorkScheduleLineRecord = {
   resourceIds?: string[];
   resources?: WorkScheduleResourceRecord[];
   criticalPath?: WorkScheduleCriticalPathLineRecord | null;
+  isMilestone?: boolean;
+  baselineStartDate?: string | null;
+  baselineEndDate?: string | null;
+  baselineDurationDays?: number | null;
 };
 
 export type WorkScheduleCriticalPathLineRecord = {

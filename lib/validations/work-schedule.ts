@@ -35,7 +35,10 @@ export const workScheduleItemSaveSchema = z.object({
   budgetItemId: z.string().trim().min(1, "Selecciona una partida"),
   startDate: isoDateSchema,
   endDate: isoDateSchema,
-  durationDays: z.coerce.number().int().min(1, "La duracion debe ser mayor que cero"),
+  durationDays: z.coerce.number().int().min(0, "La duracion debe ser mayor o igual a cero"),
+  isMilestone: z.boolean().optional().default(false),
+  baselineStartDate: isoDateSchema.optional().nullable(),
+  baselineEndDate: isoDateSchema.optional().nullable(),
   predecessor: z.string().trim().max(240).optional().nullable().superRefine((value, context) => {
     try {
       parseWorkSchedulePredecessors(value);

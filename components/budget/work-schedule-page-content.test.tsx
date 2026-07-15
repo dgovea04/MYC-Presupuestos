@@ -221,6 +221,26 @@ describe("WorkSchedulePageContent", () => {
     expect(getInputByLabel("Duracion").value).toBe("11");
   });
 
+  it("shows schedule editor dates in Peruvian format with a calendar trigger", async () => {
+    const { clickByText, getInputByLabel } = await renderContent();
+
+    await act(async () => {
+      clickByText("Editar");
+    });
+
+    const startInput = getInputByLabel("Inicio");
+    const endInput = getInputByLabel("Fin");
+    const startButton = startInput.parentElement?.querySelector("button");
+    const endButton = endInput.parentElement?.querySelector("button");
+
+    expect(startInput.getAttribute("type")).toBe("date");
+    expect(endInput.getAttribute("type")).toBe("date");
+    expect(startButton?.textContent).toMatch(/^\s*\d{2}\s+\D+2026/u);
+    expect(endButton?.textContent).toMatch(/^\s*\d{2}\s+\D+2026/u);
+    expect(startButton?.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    expect(endButton?.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+  });
+
   it("defaults the cronograma crew to 1 and recalculates duration when the user edits it", async () => {
     const { clickByText, getInputByLabel } = await renderContent();
 

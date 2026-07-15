@@ -2,6 +2,24 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next/script", () => ({
+  default: ({
+    children,
+    dangerouslySetInnerHTML,
+    ...props
+  }: {
+    children?: ReactNode;
+    dangerouslySetInnerHTML?: { __html: string };
+    id?: string;
+  }) => {
+    if (dangerouslySetInnerHTML) {
+      return <script {...props} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;
+    }
+
+    return <script {...props}>{children}</script>;
+  },
+}));
+
 const mocks = vi.hoisted(() => ({
   getGeneralBudgetSectionContext: vi.fn(),
   getActiveWorkspaceId: vi.fn(),
@@ -130,14 +148,15 @@ describe("WorkSchedulePage", () => {
 
   // ─── blocking script for panel width ──────────────────────────────────
 
-  it("renders a blocking script tag before the shell", async () => {
+  it("renders an inline next/script tag before the shell", async () => {
     const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
     const markup = renderToStaticMarkup(tree);
 
-    // Script must appear before the shell
-    const scriptIndex = markup.indexOf("<script>");
+    const scriptIndex = markup.indexOf("<script");
+    const scriptIdIndex = markup.indexOf("work-schedule-overview-width-bootstrap");
     const shellIndex = markup.indexOf('data-testid="shell"');
     expect(scriptIndex).toBeGreaterThan(-1);
+    expect(scriptIdIndex).toBeGreaterThan(-1);
     expect(shellIndex).toBeGreaterThan(-1);
     expect(scriptIndex).toBeLessThan(shellIndex);
   });
@@ -180,12 +199,11 @@ describe("WorkSchedulePage", () => {
     expect(markup).toContain("localStorage.getItem");
   });
 
-  it("renders the script with dangerouslySetInnerHTML", async () => {
+  it("renders the inline script with the next/script id", async () => {
     const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
     const markup = renderToStaticMarkup(tree);
 
-    // The script content should be rendered inline (not via src)
-    expect(markup).toContain("<script>");
+    expect(markup).toContain("id=\"work-schedule-overview-width-bootstrap\"");
     expect(markup).not.toContain("<script src");
   });
 

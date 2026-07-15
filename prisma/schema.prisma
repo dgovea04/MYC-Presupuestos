@@ -1198,19 +1198,22 @@ model WorkSchedule {
 }
 
 model WorkScheduleItem {
-  id            String                     @id @default(cuid())
-  scheduleId    String
-  budgetItemId  String
-  startDate     DateTime
-  endDate       DateTime
-  durationDays  Int
-  predecessor   String?
-  crew          Decimal?                   @db.Decimal(18, 4)
-  createdAt     DateTime                   @default(now())
-  updatedAt     DateTime                   @updatedAt
-  schedule      WorkSchedule               @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  budgetItem    BudgetItem                 @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
-  distributions WorkScheduleDistribution[]
+  id                  String                     @id @default(cuid())
+  scheduleId          String
+  budgetItemId        String
+  startDate           DateTime
+  endDate             DateTime
+  durationDays        Int
+  predecessor         String?
+  crew                Decimal?                   @db.Decimal(18, 4)
+  isMilestone         Boolean                    @default(false)
+  baselineStartDate   DateTime?
+  baselineEndDate     DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  schedule            WorkSchedule               @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  budgetItem          BudgetItem                 @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  distributions       WorkScheduleDistribution[]
 
   @@unique([scheduleId, budgetItemId])
   @@index([scheduleId])
