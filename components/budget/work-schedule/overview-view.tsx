@@ -19,6 +19,11 @@ import type { GanttBarChangeResult } from "@/components/budget/gantt/gantt-utils
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import type { DateFormatOption } from "@/types/settings";
+import {
+  clampWorkScheduleTimelinePanelWidth,
+  DEFAULT_WORK_SCHEDULE_TIMELINE_PANEL_WIDTH,
+  WORK_SCHEDULE_TIMELINE_PANEL_WIDTH_COOKIE_NAME,
+} from "@/lib/work-schedule/overview-panel-width";
 import { VisibleTimelineLinePosition } from "./types";
 import { getOverviewMeasuredHeightsStorageKey, sanitizeMeasuredHeightsMap, compareIsoDates, shouldHydrateInitialDistribution, buildInitialDistributionsFromRange, addIsoDays } from "./utils/overview-helpers";
 import type {
@@ -40,7 +45,7 @@ export const timelineWeekFormatter = new Intl.DateTimeFormat("es-PE", {
   timeZone: "UTC",
 });
 
-export const DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH = 972;
+export const DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH = DEFAULT_WORK_SCHEDULE_TIMELINE_PANEL_WIDTH;
 export const MIN_OVERVIEW_TIMELINE_PANEL_WIDTH = 360;
 export const OVERVIEW_HEADER_HEIGHT_CLASS = "h-[72px]";
 export const OVERVIEW_GROUP_ROW_HEIGHT_CLASS = "h-10";
@@ -241,6 +246,16 @@ export function WorkScheduleOverview({
   const latestVerticalScrollTopRef = useRef(0);
   const leftTableViewportWidthRef = useRef<number | null>(null);
   const OVERVIEW_TIMELINE_RIGHT_OFFSET = 16;
+  const leftTableViewportStyle = useMemo(
+    () =>
+      leftTableViewportWidth
+        ? { width: `${leftTableViewportWidth}px`, maxWidth: "100%" }
+        : {
+            width: `max(calc(100% - var(${OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR}, ${timelinePanelWidth}px) - ${OVERVIEW_TIMELINE_RIGHT_OFFSET}px), 240px)`,
+            maxWidth: "100%",
+          },
+    [leftTableViewportWidth, timelinePanelWidth],
+  );
   const hasCollapsedGroups = data.groups.some((group) => collapsedGroups[group.subBudgetId] === true);
   const hasExpandedGroups = data.groups.some((group) => collapsedGroups[group.subBudgetId] !== true);
   const allLines = useMemo(() => data.groups.flatMap((group) => group.lines), [data.groups]);
@@ -640,6 +655,8 @@ export function WorkScheduleOverview({
   }, [data.budgetId]);
 
   useLayoutEffect(() => {
+    measureLeftTableViewportWidth();
+
     const scheduleViewportMeasurement = () => {
       if (pendingViewportMeasureFrameRef.current !== null) {
         return;
@@ -1222,7 +1239,7 @@ export function WorkScheduleOverview({
                 data-testid="work-schedule-left-scroll"
                 className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 onScroll={handleLeftTableScroll}
-                style={leftTableViewportWidth ? { width: `${leftTableViewportWidth}px`, maxWidth: "100%" } : undefined}
+                style={leftTableViewportStyle}
               >
                 <div style={{ width: `${leftTableWidth}px`, minWidth: `${leftTableWidth}px` }}>
                   <Table className="table-fixed [&_td]:p-2 [&_td]:text-xs [&_th]:px-2 [&_th]:text-[11px]">
@@ -1399,8 +1416,38 @@ export function WorkScheduleOverview({
                             const isRelated = codes != null && hoveredItemCode != null && (
                               hoveredItemCode === codes.predecessorCode || hoveredItemCode === codes.successorCode
                             );
-                            const isDimmed = hoveredItemCode != null && !isRelated;
-                            return (
+                            const isDimmed = hoveredItemCode != null && !isRelated;                              return (
+                                <>
+                                  <path
+                                    key={`${pathKey}-hit`}
+                                    d={path.d}
+                                    fill="none"
+                                    stroke="transparent"
+                                    strokeWidth={12}
+                                    strokeLinejoin="round"
+                                    className="pointer-events-auto cursor-pointer"
+                                    onClick={(event) => {
+                                const codes = dependencyPathCodeMap.get(path.key);
+                                if (!codes) return;
+                                const sourceCode = codes.predecessorCode;
+                                const targetCode = codes.successorCode;
+                                const parts = path.key.split("-");
+                                if (parts.length < 4) return;
+                                const relation = parts[parts.length - 2] as WorkSchedulePredecessorRelation;
+                                const lagDays = Number(parts[parts.length - 1]) || 0;
+                                const svgRect = event.currentTarget.closest("svg")?.getBoundingClientRect();
+                                setEditingDependency({
+                                  sourceCode,
+                                  targetCode,
+                                  sourceItemCode: sourceCode,
+                                  targetItemCode: targetCode,
+                                  currentRelation: relation,
+                                  currentLagDays: lagDays,
+                                  x: svgRect ? event.clientX - svgRect.left : event.clientX,
+                                  y: svgRect ? event.clientY - svgRect.top : event.clientY,
+                                });
+                              }}
+                            />
                             <path
                               key={pathKey}
                               d={path.d}
@@ -1410,34 +1457,11 @@ export function WorkScheduleOverview({
                               strokeLinejoin="round"
                               markerEnd="url(#work-schedule-dependency-arrowhead)"
                               className={cn(
-                                "pointer-events-auto cursor-pointer transition-all duration-150",
+                                "pointer-events-auto transition-all duration-150",
                                 isRelated ? "opacity-100" : isDimmed ? "opacity-20" : "hover:stroke-sky-500 hover:stroke-[2.5] opacity-60",
                               )}
-                              onClick={(event) => {
-                                const sourceCode = path.key.split("→")[0];
-                                const targetCode = path.key.split("→")[1];
-                                if (!sourceCode || !targetCode) return;
-                                const targetLine = data.groups
-                                  .flatMap((g) => g.lines)
-                                  .find((l) => l.itemCode === targetCode);
-                                if (!targetLine?.predecessor) return;
-                                const parsed = tryParseWorkSchedulePredecessors(targetLine.predecessor);
-                                if (!parsed) return;
-                                const ref = parsed.find((r) => r.code === sourceCode);
-                                if (!ref) return;
-                                const svgRect = event.currentTarget.closest("svg")?.getBoundingClientRect();
-                                setEditingDependency({
-                                  sourceCode,
-                                  targetCode,
-                                  sourceItemCode: sourceCode,
-                                  targetItemCode: targetCode,
-                                  currentRelation: ref.relation,
-                                  currentLagDays: ref.lagDays,
-                                  x: svgRect ? event.clientX - svgRect.left : event.clientX,
-                                  y: svgRect ? event.clientY - svgRect.top : event.clientY,
-                                });
-                              }}
                             />
+                                </>
                           );
                         }
                       )}
@@ -1593,7 +1617,7 @@ export function WorkScheduleOverview({
                 "overflow-hidden border bg-[var(--app-surface)]",
                 isExcelMode ? "rounded-none border-[var(--app-border-strong)] shadow-none" : "rounded-bl-2xl border-[var(--app-border)] shadow-[0_-8px_24px_-20px_rgba(15,23,42,0.35)]",
               )}
-              style={leftTableViewportWidth ? { width: `${leftTableViewportWidth}px`, maxWidth: "100%" } : undefined}
+              style={leftTableViewportStyle}
             >
               <div
                 ref={leftBottomScrollRef}
@@ -2550,7 +2574,7 @@ function clampOverviewTimelinePanelWidth(width: number, availableWidth: number |
     (availableWidth && availableWidth > 0 ? availableWidth : fallbackViewportWidth) - 48,
   );
 
-  return Math.min(Math.max(Math.round(width), MIN_OVERVIEW_TIMELINE_PANEL_WIDTH), maxWidth);
+  return Math.min(clampWorkScheduleTimelinePanelWidth(width), maxWidth);
 }
 
 
@@ -2576,6 +2600,11 @@ function readOverviewTimelinePanelWidth(budgetId: string) {
     return DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH;
   }
 
+  const bootstrappedCssWidth = readOverviewTimelinePanelWidthCssVariable();
+  if (bootstrappedCssWidth !== null) {
+    return bootstrappedCssWidth;
+  }
+
   const parsedValue = Number(storedValue);
   if (!Number.isFinite(parsedValue)) {
     return DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH;
@@ -2591,6 +2620,13 @@ function writeOverviewTimelinePanelWidth(budgetId: string, width: number) {
   }
 
   const normalizedWidth = clampOverviewTimelinePanelWidth(width, null);
+  if (typeof document !== "undefined") {
+    try {
+      document.cookie = `${WORK_SCHEDULE_TIMELINE_PANEL_WIDTH_COOKIE_NAME}=${normalizedWidth}; path=/; max-age=31536000; samesite=lax`;
+    } catch {
+      // Ignore cookie persistence failures and keep localStorage as the source of truth fallback.
+    }
+  }
   if (normalizedWidth === DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH) {
     window.localStorage.removeItem(getOverviewTimelinePanelWidthStorageKey(budgetId));
     return;
@@ -2609,6 +2645,25 @@ function syncOverviewTimelinePanelWidthCssVariable(width: number) {
     OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR,
     `${clampOverviewTimelinePanelWidth(width, null)}px`,
   );
+}
+
+
+function readOverviewTimelinePanelWidthCssVariable() {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const rawValue = document.documentElement.style.getPropertyValue(OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR).trim();
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsedValue = Number.parseFloat(rawValue.replace("px", ""));
+  if (!Number.isFinite(parsedValue)) {
+    return null;
+  }
+
+  return clampOverviewTimelinePanelWidth(parsedValue, null);
 }
 
 

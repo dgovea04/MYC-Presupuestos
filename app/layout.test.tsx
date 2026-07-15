@@ -38,6 +38,7 @@ describe("RootLayout", () => {
     );
 
     expect(markup).toContain('--app-sidebar-initial-width:280px');
+    expect(markup).toContain('--work-schedule-timeline-panel-width:972px');
   });
 
   it("mounts the global AI assistant provider around layout children", async () => {
@@ -69,6 +70,20 @@ describe("RootLayout", () => {
     );
 
     expect(markup).toContain('--app-sidebar-initial-width:80px');
+  });
+
+  it("renders the stored gantt panel width on the initial html", async () => {
+    vi.mocked(cookies).mockResolvedValue({
+      get: (name: string) => (name === "myc_work_schedule_timeline_panel_width" ? { name, value: "706" } : undefined),
+    } as Awaited<ReturnType<typeof cookies>>);
+
+    const markup = renderToStaticMarkup(
+      await RootLayout({
+        children: <div>Contenido</div>,
+      }),
+    );
+
+    expect(markup).toContain('--work-schedule-timeline-panel-width:706px');
   });
 
   it("injects the blocking script that reads chat panel width from localStorage", async () => {

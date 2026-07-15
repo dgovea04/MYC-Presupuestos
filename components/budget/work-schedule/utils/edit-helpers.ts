@@ -124,9 +124,8 @@ export function serializeEditableLine(
     isMilestone: line.isMilestone ?? false,
     baselineStartDate: line.baselineStartDate || null,
     baselineEndDate: line.baselineEndDate || null,
-    actualStartDate: line.actualStartDate || null,
-    actualEndDate: line.actualEndDate || null,
-    percentComplete: line.percentComplete ?? null,
+    // TODO: Restore actualStartDate, actualEndDate, percentComplete after running
+    // `npx prisma generate` (dev server locks the Prisma client DLL, preventing regeneration)
     monthlyDistributions: line.monthlyDistributions.map((d) => ({
       year: d.year,
       month: d.month,

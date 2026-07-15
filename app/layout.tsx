@@ -11,6 +11,12 @@ import {
   SIDEBAR_WIDTH_CSS_VARIABLE,
 } from "@/lib/layout/sidebar-mode";
 import { APP_THEME_COOKIE_NAME, isAppThemeOption } from "@/lib/theme/app-theme";
+import {
+  DEFAULT_WORK_SCHEDULE_TIMELINE_PANEL_WIDTH,
+  getWorkScheduleTimelinePanelWidthCssValue,
+  parseWorkScheduleTimelinePanelWidth,
+  WORK_SCHEDULE_TIMELINE_PANEL_WIDTH_COOKIE_NAME,
+} from "@/lib/work-schedule/overview-panel-width";
 import { DEFAULT_APP_THEME } from "@/types/settings";
 import "./globals.css";
 
@@ -48,8 +54,12 @@ export default async function RootLayout({
       ? coerceViewMode(storedViewModeCookie)
       : undefined;
   const initialSidebarMode = isSidebarMode(storedSidebarModeCookie) ? storedSidebarModeCookie : "expanded";
+  const storedWorkScheduleTimelinePanelWidthCookie = cookieStore.get(WORK_SCHEDULE_TIMELINE_PANEL_WIDTH_COOKIE_NAME)?.value;
+  const initialWorkScheduleTimelinePanelWidth =
+    parseWorkScheduleTimelinePanelWidth(storedWorkScheduleTimelinePanelWidthCookie) ?? DEFAULT_WORK_SCHEDULE_TIMELINE_PANEL_WIDTH;
   const htmlStyle = {
     [SIDEBAR_WIDTH_CSS_VARIABLE]: getSidebarWidthCssValue(initialSidebarMode),
+    "--work-schedule-timeline-panel-width": getWorkScheduleTimelinePanelWidthCssValue(initialWorkScheduleTimelinePanelWidth),
   } as CSSProperties;
 
   return (

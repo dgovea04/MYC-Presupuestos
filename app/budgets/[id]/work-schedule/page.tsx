@@ -1,4 +1,3 @@
-import Script from "next/script";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
@@ -16,15 +15,7 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
   const section = hasAccess ? await getWorkScheduleOverviewSection(id, session.user.id) : null;
 
   return (
-    <>
-      <Script
-        id="work-schedule-overview-width-bootstrap"
-        strategy="beforeInteractive"
-        dangerouslySetInnerHTML={{
-          __html: `(function(){var w=localStorage.getItem('work-schedule-overview-timeline-panel-width:${id}');if(w){document.documentElement.style.setProperty('--work-schedule-timeline-panel-width',w+'px');}})()`,
-        }}
-      />
-      <GeneralBudgetSectionShell
+    <GeneralBudgetSectionShell
       budgetId={budget.id}
       projectId={project.id}
       budgetName={budget.name}
@@ -49,6 +40,5 @@ export default async function WorkSchedulePage({ params }: { params: Promise<{ i
         />
       )}
     </GeneralBudgetSectionShell>
-    </>
   );
 }
