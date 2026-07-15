@@ -111,19 +111,23 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
   onCancelConnection,
 }: GanttConnectionOverlayProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const captureIdRef = useRef<number | null>(null);
 
   // Adjust source coordinates from viewport-relative to SVG-local.
   // gantt-bar.tsx passes getBoundingClientRect() coordinates which are viewport-relative,
   // but the SVG overlay uses its own coordinate system. The pointer coordinates are
   // already converted in handlePointerMove, but the source bar positions need adjustment.
-  // We use useLayoutEffect + useState (not useMemo) because svgRef.current is only
-  // populated after DOM commit, which happens after render.
+  //
+  // We use containerRef (a wrapper div) instead of svgRef because:
+  // - containerRef is populated on the FIRST render (the div always exists)
+  // - svgRef.current is null until the SVG commits, causing one frame of bad coordinates
+  // - Both use absolute inset-0 so their bounding rects are identical
   const [svgOffset, setSvgOffset] = useState({ left: 0, top: 0 });
   useLayoutEffect(() => {
-    const svg = svgRef.current;
-    if (svg) {
-      const rect = svg.getBoundingClientRect();
+    const container = containerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
       setSvgOffset({ left: rect.left, top: rect.top });
     }
   }, [connectionState]);
@@ -221,7 +225,7 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
   if (!connectionState && !confirmingState) return null;
 
   return (
-    <>
+    <div ref={containerRef} className="absolute inset-0">
       {/* Confirming popover (rendered as HTML overlay, not SVG) */}
       {confirmingState && (
         <ConnectionConfirmPopover
@@ -314,6 +318,6 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
           />
         </svg>
       )}
-    </>
+    </div>
   );
 });
