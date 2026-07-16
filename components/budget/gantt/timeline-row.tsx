@@ -95,6 +95,14 @@ export const TimelineRow = memo(function TimelineRow({
   const hoverableItemCode = isLine && line ? line.itemCode : null;
   const progressPercent = line?.percentComplete != null ? Math.min(100, Math.max(0, line.percentComplete)) : null;
   const progressLabel = progressPercent != null && progressPercent > 0 ? ` ${Math.round(progressPercent)}%` : "";
+  const summaryBarStyle =
+    row.kind === "line"
+      ? "inset-y-2"
+      : "top-1/2 h-[15px] -translate-y-1/2";
+  const summaryLabelClassName =
+    row.kind === "line"
+      ? "line-clamp-1 block truncate py-1"
+      : "line-clamp-1 block h-[15px] truncate p-[2px]";
 
   return (
     <div
@@ -131,7 +139,8 @@ export const TimelineRow = memo(function TimelineRow({
       ) : timelineBarStyle ? (
         <div
           className={cn(
-            "absolute inset-y-2 z-20 overflow-visible rounded-full",
+            "absolute z-20 overflow-visible rounded-full",
+            summaryBarStyle,
             row.kind === "line"
               ? "shadow-[0_10px_20px_-16px_rgba(37,99,235,0.9)] ring-1 ring-black/5 dark:ring-white/6"
               : "bg-[var(--app-text-subtle)]/90",
@@ -160,7 +169,7 @@ export const TimelineRow = memo(function TimelineRow({
             )}
           </div>
           <div className="absolute inset-0 px-1 text-[9px] font-semibold text-white">
-            <span className="line-clamp-1 block truncate py-1">{itemCode}{progressLabel}</span>
+            <span className={summaryLabelClassName}>{itemCode}{progressLabel}</span>
           </div>
           {highlighted ? (
             <div className="absolute -top-5 left-0">
