@@ -322,6 +322,63 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     [presentationLines],
   );
 
+  // `cascadedInlineDrafts` proactively syncs each active draft's dates to
+  // the current `presentationLinesByBudgetItemId`. Without this, the date
+  // picker inside an active row only re-binds to a predecessor-driven
+  // cascade once the user clicks in / out of the row (the static formatted
+  // text shows the cascaded date, but `<WorkScheduleDateInput value=...>`
+  // reads from `inlineDrafts` which `buildPreviewWorkScheduleView`
+  // intentionally leaves alone). With this memo the picker follows the
+  // cascade automatically — no re-click required.
+  //
+  // Trade-off: a draft the user is actively editing can be overwritten if
+  // a parallel predecessor change cascades through while they type. The
+  // exact overwrite trigger is: the next render where
+  // `presentationLinesByBudgetItemId.get(budgetItemId).startDate !==
+  // draft.startDate` AND the row hasn't been re-activated. In practice
+  // users edit one row at a time so this is rare; a per-draft "touched"
+  // flag set on the date-input setter specifically and cleared on
+  // save/cancel would close the gap and is documented as a followup.
+  //
+  // This memo and the activate-side merge in `handleActivateInlineRow`
+  // both reconcile dates onto `inlineDrafts`. The activate-side branch is
+  // NOT dead — it is the safety net for the case where the row's `line`
+  // prop was captured before the latest `previewData` recomputation (e.g.
+  // `React.memo` on `WorkScheduleLineTableRow` skipped the rerender that
+  // would have refreshed `line`). Keep both.
+  //
+  // Pure derivation (no setState) — cannot create a React render loop.
+  // The `if (!changed) return inlineDrafts` short-circuit preserves
+  // caller-side object identity when nothing diverges, keeping
+  // `React.memo` on `WorkScheduleLineTableRow` effective.
+  const cascadedInlineDrafts = useMemo(() => {
+    let changed = false;
+    const next: Record<string, EditableLine> = {};
+    for (const [budgetItemId, draft] of Object.entries(inlineDrafts)) {
+      const presentationLine = presentationLinesByBudgetItemId.get(budgetItemId);
+      if (
+        !presentationLine ||
+        !presentationLine.startDate ||
+        !presentationLine.endDate ||
+        (presentationLine.startDate === draft.startDate &&
+          presentationLine.endDate === draft.endDate)
+      ) {
+        // Either the cascade doesn't cover this row, or the draft is
+        // already in sync — keep the existing reference so React.memo can
+        // skip the row.
+        next[budgetItemId] = draft;
+        continue;
+      }
+      next[budgetItemId] = updateEditableLineDates(draft, {
+        startDate: presentationLine.startDate,
+        endDate: presentationLine.endDate,
+      });
+      changed = true;
+    }
+    if (!changed) return inlineDrafts;
+    return next;
+  }, [inlineDrafts, presentationLinesByBudgetItemId]);
+
   const timelineDays = useMemo(
     () =>
       presentationData.scale.canLoadDailyTimeline
@@ -614,11 +671,40 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
   function handleActivateInlineRow(line: WorkScheduleLineRecord) {
     setActiveInlineRowId(line.budgetItemId);
-    setInlineDrafts((current) =>
-      current[line.budgetItemId]
-        ? current
-        : { ...current, [line.budgetItemId]: createEditableLine(line, predecessorItemCodeToRowNumber) },
-    );
+    setInlineDrafts((current) => {
+      const existingDraft = current[line.budgetItemId];
+      if (existingDraft) {
+        // `buildPreviewWorkScheduleView` cascades successor dates into
+        // `presentationLines` whenever a draft changes, but it intentionally
+        // does NOT mutate `inlineDrafts`. If the row was previously activated,
+        // the cached draft was holding the OLD dates. Sync the dates back
+        // from the current (cascaded) presentation line before the user sees
+        // the date picker — otherwise the picker would open at the stale
+        // value even though the formatted cell text already shows the new
+        // one. Non-date fields (description, crew, predecessor, etc.) are
+        // preserved so any unsaved manual edits survive the cascade.
+        //
+        // Only merge when both dates are present on the cascaded line: a
+        // partial range (one side empty) would otherwise trigger
+        // `updateEditableLineDates`'s "either date missing → durationDays = 0"
+        // branch and silently zero the user's existing duration. If the
+        // cascade produced nothing usable, leave the draft untouched.
+        if (line.startDate && line.endDate) {
+          return {
+            ...current,
+            [line.budgetItemId]: updateEditableLineDates(existingDraft, {
+              startDate: line.startDate,
+              endDate: line.endDate,
+            }),
+          };
+        }
+        return current;
+      }
+      return {
+        ...current,
+        [line.budgetItemId]: createEditableLine(line, predecessorItemCodeToRowNumber),
+      };
+    });
   }
 
   const handleInlineDraftChange = useCallback((rowId: string, draft: EditableLine) => {
@@ -1537,7 +1623,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           onScrollRequestHandled={handleScrollRequestHandled}
           onEditLine={handleEditLine}
           activeInlineRowId={activeInlineRowId}
-          inlineDrafts={inlineDrafts}
+          inlineDrafts={cascadedInlineDrafts}
           inlineSaveStateById={inlineSaveStateById}
           inlineErrorsById={inlineErrorsById}
           onActivateInlineRow={handleActivateInlineRow}

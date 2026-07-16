@@ -71,6 +71,8 @@ describe("WorkSchedulePageContent", () => {
     document.body.innerHTML = "";
   });
 
+  // Partial-date guard in `handleActivateInlineRow`: trap pinned in `utils/edit-helpers.test.ts`.
+
   it("renders grouped sub budgets and opens the side editor for a partida", async () => {
     const { clickByText, getByText, getByTestId, getAllByTestId } = await renderContent();
 
@@ -90,6 +92,121 @@ describe("WorkSchedulePageContent", () => {
 
     expect(getByTestId("work-schedule-editor-panel")).toBeTruthy();
     expect(getByText("Distribucion mensual")).toBeTruthy();
+  });
+
+  it("renders the Hito toggle button with the icon, label 'Hito', and title 'Marcar como hito' in the inactive state", async () => {
+    await renderContent();
+
+    const hitoButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        'button[title="Marcar como hito"], button[title="Desmarcar como hito"]',
+      ),
+    );
+    expect(hitoButtons.length).toBeGreaterThan(0);
+
+    for (const button of hitoButtons) {
+      // 1. Diamond icon is present as first child
+      expect(button.querySelector("svg")).toBeTruthy();
+      // 2. Visible label is the trimmed text "Hito"
+      expect(button.textContent?.trim()).toBe("Hito");
+    }
+
+    // Default mocked view has no isMilestone=true lines, so every Hito button suggests marking
+    expect(hitoButtons.every((button) => button.getAttribute("title") === "Marcar como hito")).toBe(true);
+  });
+
+  it("toggles the row's isMilestone through the Hito button and persists it via Enter", async () => {
+    // Simulate server-side persistence: the mock echoes the PATCH body back as the
+    // response payload so the rendered view reflects the toggled milestone after save.
+    fetchMock.mockImplementation(async (_url, options) => {
+      let responseData: WorkScheduleViewRecord = createView();
+      if (options?.method === "PATCH" && typeof options.body === "string") {
+        try {
+          const parsed = JSON.parse(options.body) as
+            | { budgetItemId?: string; isMilestone?: boolean }
+            | undefined;
+          if (parsed?.budgetItemId) {
+            responseData = {
+              ...responseData,
+              // Rebuild rows from the updated lines so the rendered row points at the
+              // freshly-toggled line (otherwise row.line still references the old one).
+              groups: rebuildTestWorkScheduleRows(
+                responseData.groups.map((group) => ({
+                  ...group,
+                  lines: group.lines.map((line) =>
+                    line.budgetItemId === parsed.budgetItemId
+                      ? { ...line, isMilestone: parsed.isMilestone ?? line.isMilestone }
+                      : line,
+                  ),
+                })),
+              ),
+            };
+          }
+        } catch {
+          // fall back to the default view below
+        }
+      }
+      return { ok: true, json: async () => responseData };
+    });
+
+    await renderContent();
+
+    // 1. Activate inline editing on item-1 by clicking the durationDays cell
+    await act(async () => {
+      const durationCell = document.querySelector(
+        '[data-testid="work-schedule-inline-cell-durationDays-item-1"]',
+      );
+      if (!(durationCell instanceof HTMLElement)) {
+        throw new Error("Missing durationDays cell for item-1");
+      }
+      durationCell.click();
+    });
+
+    // 2. The cell now renders an <input> that owns handleInlineKeyDown (Enter saves)
+    const durationInput = document.querySelector<HTMLInputElement>(
+      '[data-testid="work-schedule-inline-cell-durationDays-item-1"] input',
+    );
+    expect(durationInput).toBeTruthy();
+
+    // 3. Click the Hito button on the same row to flip isMilestone in the active inline draft
+    const hitoButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="work-schedule-table-row-item-1"] button[title="Marcar como hito"]',
+    );
+    expect(hitoButton).toBeTruthy();
+
+    await act(async () => {
+      hitoButton!.click();
+    });
+
+    // Pre-save sanity: PATCH has not fired yet, so title is still bound to the line state.
+    expect(
+      document.querySelector(
+        '[data-testid="work-schedule-table-row-item-1"] button[title="Marcar como hito"]',
+      ),
+    ).toBeTruthy();
+
+    // 4. Dispatch Enter on the input → onInlineRowSave → PATCH with the toggled isMilestone
+    await act(async () => {
+      durationInput!.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+    });
+
+    // 5. Verify the outgoing PATCH body carries the toggle
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/budget-1/work-schedule",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining("\"isMilestone\":true"),
+      }),
+    );
+
+    // 6. End-to-end flip verification: after the roundtrip, the rendered title is now
+    //    "Desmarcar como hito" on the same row, with the same Diamond+Hito visual language.
+    const flippedButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="work-schedule-table-row-item-1"] button[title="Desmarcar como hito"]',
+    );
+    expect(flippedButton).toBeTruthy();
+    expect(flippedButton?.querySelector("svg")).toBeTruthy();
+    expect(flippedButton?.textContent?.trim()).toBe("Hito");
   });
 
   it("keeps empty sub budget groups visible in the cronograma overview", async () => {
@@ -365,6 +482,117 @@ describe("WorkSchedulePageContent", () => {
         body: expect.stringContaining("\"durationDays\":1"),
       }),
     );
+  });
+
+  it("syncs the inline date input on re-activate after a predecessor cascade", async () => {
+    const helpers = await renderWithView(
+      createViewWithDependencyPreview(),
+      createSettings(),
+    );
+    const { getByTestId } = helpers;
+    const startCellB = getByTestId("work-schedule-inline-cell-startDate-item-2");
+
+    // Step 1: Activate B by clicking its Inicio cell. A fresh draft is created
+    // carrying B's initial startDate (2026-03-06) before any cascade.
+    await act(async () => {
+      startCellB.click();
+    });
+
+    const initialInputValue = (startCellB.querySelector('input[type="date"]') as HTMLInputElement | null)?.value;
+    expect(initialInputValue).toBe("2026-03-06");
+
+    // Step 2: Activate row A (predecessor) and extend its duration to 10 days.
+    // `buildPreviewWorkScheduleView` cascades B's startDate forward to A.end + 1
+    // (= 2026-03-11) inside presentationLines, but it must NOT mutate inlineDrafts.
+    // Without the fix, B's draft still holds the original 2026-03-06.
+    const durationCellA = getByTestId("work-schedule-inline-cell-durationDays-item-1");
+    await act(async () => {
+      durationCellA.click();
+    });
+    const durationInputA = durationCellA.querySelector('input') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(durationInputA, "10");
+    });
+
+    // Step 3: Re-activate B by clicking its Inicio cell. This is the path the user
+    // reported as broken. With the fix, handleActivateInlineRow merges the cascaded
+    // startDate / endDate into the existing draft via updateEditableLineDates, so the
+    // date picker rebinds to the cascaded value. Without the fix, the OLD draft wins
+    // and the picker reopens at the stale 2026-03-06 even though the formatted cell
+    // text already shows 2026-03-11.
+    await act(async () => {
+      startCellB.click();
+    });
+    const reboundInput = startCellB.querySelector('input[type="date"]') as HTMLInputElement | null;
+    expect(reboundInput?.value).toBe("2026-03-11");
+  });
+
+  it("cascades successor dates into the editor sheet when its predecessor is edited", async () => {
+    const helpers = await renderWithView(
+      createViewWithDependencyPreview(),
+      createSettings(),
+    );
+    const { getInputByLabel } = helpers;
+
+    // Open the editor sheet for item-2 (successor of "01.01") via the same
+    // aria-label-driven button click the original predecessor-cascade test
+    // uses — `clickByText("Editar Tarrajeo")` does not match because the
+    // button label and the partida name are rendered in different DOM nodes.
+    await act(async () => {
+      const editButton = document.querySelector("[aria-label='Editar Tarrajeo']");
+      if (!(editButton instanceof HTMLButtonElement)) {
+        throw new Error("Missing edit button for Tarrajeo");
+      }
+      editButton.click();
+    });
+
+    // Baseline: the editor sheet shows item-2's initial dates.
+    expect(getInputByLabel("Inicio").value).toBe("2026-03-06");
+    expect(getInputByLabel("Fin").value).toBe("2026-03-08");
+
+    // Change the predecessor through the editor sheet's Predecesora input.
+    // FS relation + 5d lag → B.start = A.end + 1 + 5 = 2026-03-11;
+    // B.durationDays is preserved (3) so B.end = 2026-03-11 + 3 - 1 = 2026-03-13.
+    //
+    // Without the fix on `updateEditableLinePredecessor`, the date inputs
+    // would stay at the baseline values because the helper never cascaded.
+    setInputValue(getInputByLabel("Predecesora"), "01.01FS+5d");
+
+    expect(getInputByLabel("Inicio").value).toBe("2026-03-11");
+    expect(getInputByLabel("Fin").value).toBe("2026-03-13");
+  });
+
+  it("cascades successor dates into the inline row when its predecessor is edited", async () => {
+    const helpers = await renderWithView(
+      createViewWithDependencyPreview(),
+      createSettings(),
+    );
+    const { getByTestId } = helpers;
+
+    // Activate row item-2 inline by clicking its Inicio cell.
+    const startCellB = getByTestId("work-schedule-inline-cell-startDate-item-2");
+    await act(async () => {
+      startCellB.click();
+    });
+
+    // Baseline assertion: the initial draft carries B.startDate = 2026-03-06.
+    expect(
+      (startCellB.querySelector('input[type="date"]') as HTMLInputElement | null)?.value,
+    ).toBe("2026-03-06");
+
+    // Edit the predecessor through the inline cell input. With the fix, this
+    // both updates the predecessor field and recomputes the row's dates via
+    // `updateEditableLinePredecessor → recalculateWorkScheduleLineFromReferences`.
+    // Without the fix the date input would stay at 2026-03-06.
+    const predecessorCellB = getByTestId("work-schedule-inline-cell-predecessor-item-2");
+    await act(async () => {
+      const predecessorInput = predecessorCellB.querySelector('input') as HTMLInputElement;
+      setInputValue(predecessorInput, "01.01FS+5d");
+    });
+
+    expect(
+      (startCellB.querySelector('input[type="date"]') as HTMLInputElement | null)?.value,
+    ).toBe("2026-03-11");
   });
 
   it("opens the intelligent schedule dialog and sends the base generation request with advanced options", async () => {

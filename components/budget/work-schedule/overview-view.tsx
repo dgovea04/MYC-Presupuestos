@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type UIEvent as ReactUIEvent } from "react";
-import { CalendarDays, ChartSpline, ChevronDown, Info, MoreHorizontal, Package2, PenLine, PenSquare, Save, WandSparkles, X } from "lucide-react";
+import { CalendarDays, ChartSpline, ChevronDown, Diamond, Info, MoreHorizontal, Package2, PenLine, PenSquare, Save, WandSparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -77,7 +77,7 @@ export const OVERVIEW_TABLE_COLUMN_WIDTHS = {
   quantity: 88,
   unitPrice: 98,
   partial: 110,
-  action: 88,
+  action: 168,
 } as const;
 
 export type TimelineDay = {
@@ -1263,7 +1263,7 @@ export function WorkScheduleOverview({
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Metrado</TH>
                         {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>PU</TH> : null}
                         {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Parcial</TH> : null}
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "w-[88px] py-0 align-middle")}>Accion</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "w-[168px] py-0 text-right align-middle")}>Accion</TH>
                       </TR>
                     </THead>
                     <TBody>
@@ -1905,14 +1905,14 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       {showCostColumns ? <TD className="align-middle">{formatCurrency(line.unitPrice, currency, currencyDecimals)}</TD> : null}
       {showCostColumns ? <TD className="align-middle">{formatCurrency(line.partial, currency, currencyDecimals)}</TD> : null}
       <TD className="align-middle bg-[var(--app-surface)]">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
+        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+          <Button
+            variant="outline"
+            size="sm"
             className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors",
-              (isInlineActive && inlineDraft ? inlineDraft.isMilestone : line.isMilestone)
-                ? "border-violet-300 bg-violet-100 text-violet-700 hover:bg-violet-200 dark:border-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
-                : "border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] hover:border-slate-300 hover:text-[var(--app-text)]",
+              "h-7 px-2 text-[11px]",
+              (isInlineActive && inlineDraft ? inlineDraft.isMilestone : line.isMilestone) &&
+                "border-violet-300 bg-violet-100 text-violet-700 hover:bg-violet-200 dark:border-violet-700 dark:bg-violet-500/10 dark:text-violet-300",
             )}
             onClick={() => {
               if (isInlineActive && inlineDraft) {
@@ -1925,8 +1925,9 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
             }}
             title={line.isMilestone ? "Desmarcar como hito" : "Marcar como hito"}
           >
-            {(isInlineActive && inlineDraft ? inlineDraft.isMilestone : line.isMilestone) ? "◆ Hito" : "◇ Hito"}
-          </button>
+            <Diamond className="mr-1 h-3 w-3" aria-hidden="true" />
+            Hito
+          </Button>
           <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => onEditLine(line)}>
             Editar
           </Button>

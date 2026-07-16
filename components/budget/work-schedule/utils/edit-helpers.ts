@@ -3,12 +3,14 @@
 import {
   buildWorkScheduleView,
   recalculateDependentWorkScheduleLines,
-} from "@/lib/calculations/work-schedule";
-import {
+  recalculateWorkScheduleLineFromReferences,
   buildWorkScheduleMonthlyDistributionsFromRange,
   calculateWorkScheduleDurationDays,
 } from "@/lib/calculations/work-schedule";
-import { parseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
+import {
+  parseWorkSchedulePredecessors,
+  tryParseWorkSchedulePredecessors,
+} from "@/lib/work-schedule/predecessors";
 import type {
   WorkScheduleLineRecord,
   WorkScheduleMonthlyDistributionRecord,
@@ -204,7 +206,7 @@ export function updateEditableLinePredecessor(
   line: EditableLine,
   predecessor: string,
   {
-    lineByBudgetItemId,
+    lineByBudgetItemId: _lineByBudgetItemId,
     lineByCode,
     rowNumberToItemCode,
   }: {
@@ -213,8 +215,64 @@ export function updateEditableLinePredecessor(
     rowNumberToItemCode: Map<number, string>;
   },
 ): EditableLine {
+  // Format the display-form predecessor (row numbers) into the item-code
+  // storage form so the cascade helper can parse the references. If the
+  // user is mid-typing a partial token (e.g. "1F"), `references` will be
+  // empty and we fall back to just updating the string — the next keystroke
+  // or commit completes the cascade.
   const stored = formatPredecessorForStorage(predecessor, rowNumberToItemCode);
-  return { ...line, predecessor };
+  const references = tryParseWorkSchedulePredecessors(stored);
+
+  if (references.length === 0) {
+    return { ...line, predecessor };
+  }
+
+  // Bridge EditableLine → WorkScheduleLineRecord so we can call into the
+  // canonical cascade helper. Non-date fields mirror `createEditableLine`
+  // so the round-trip preserves every piece of state. crew is converted
+  // from string (UI) to number | null (record).
+  const asWorkScheduleRecord: WorkScheduleLineRecord = {
+    budgetItemId: line.budgetItemId,
+    description: line.description,
+    quantity: line.quantity,
+    performance: line.performance,
+    startDate: line.startDate,
+    endDate: line.endDate,
+    durationDays: line.durationDays,
+    predecessor: stored,
+    // Preserve crew faithfully: `"0"` is a valid value (zero workers)
+    // and must not collapse to `null`. `Number("")` returns `0` and is
+    // falsy in JS, so we treat empty string AS the absent case.
+    crew: line.crew === "" || line.crew == null ? null : Number(line.crew),
+    monthlyDistributions: line.monthlyDistributions,
+    isMilestone: line.isMilestone,
+    baselineStartDate: line.baselineStartDate,
+    baselineEndDate: line.baselineEndDate,
+  };
+
+  const cascaded = recalculateWorkScheduleLineFromReferences(
+    asWorkScheduleRecord,
+    references,
+    lineByCode,
+  );
+
+  // Recalculate returns null when a referenced predecessor is missing
+  // dates, when durationDays <= 0, or when there are zero references.
+  // Preserve the prior state for date / distribution fields in that case
+  // — the predecessor string still updates for display, and a later commit
+  // (after the upstream data is repaired) will reconcile.
+  if (!cascaded) {
+    return { ...line, predecessor };
+  }
+
+  return {
+    ...line,
+    predecessor,
+    startDate: cascaded.startDate,
+    endDate: cascaded.endDate,
+    durationDays: cascaded.durationDays,
+    monthlyDistributions: cascaded.monthlyDistributions,
+  };
 }
 
 export function updateDistribution(
