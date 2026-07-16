@@ -1,5 +1,12 @@
 import type { WorkScheduleLineRecord } from "@/types/work-schedule";
 
+/**
+ * Construction phases used by the `by_front` work schedule generation strategy.
+ *
+ * Phases are ordered by their typical occurrence in a construction project:
+ * preliminaries → earthwork → structure → masonry → installations → finishes → testing.
+ * The `other` phase is used when no specific phase keyword is matched.
+ */
 export type WorkFrontPhase =
   | "preliminaries"
   | "earthwork"
@@ -10,6 +17,18 @@ export type WorkFrontPhase =
   | "testing"
   | "other";
 
+/**
+ * Numeric order for each construction phase.
+ *
+ * Lower values represent earlier phases in the construction sequence.
+ * Used by {@link sortWorkFrontLines} to order lines by phase.
+ *
+ * @example
+ * ```ts
+ * WORK_FRONT_PHASE_ORDER["earthwork"]; // 20
+ * WORK_FRONT_PHASE_ORDER["structure"]; // 30
+ * ```
+ */
 export const WORK_FRONT_PHASE_ORDER: Record<WorkFrontPhase, number> = {
   preliminaries: 10,
   earthwork: 20,
@@ -21,6 +40,18 @@ export const WORK_FRONT_PHASE_ORDER: Record<WorkFrontPhase, number> = {
   other: 80,
 };
 
+/**
+ * Keywords used to classify a budget line into a construction phase.
+ *
+ * Each phase has a list of normalized keywords (lowercase, no accents).
+ * A line is classified into the first phase whose keyword list matches any
+ * word in the line's searchable text (`itemCode + description + unit`).
+ *
+ * @example
+ * ```ts
+ * WORK_FRONT_PHASE_KEYWORDS["structure"]; // ["concreto", "hormigon", ...]
+ * ```
+ */
 export const WORK_FRONT_PHASE_KEYWORDS: Record<WorkFrontPhase, readonly string[]> = {
   preliminaries: [
     "preliminar",
