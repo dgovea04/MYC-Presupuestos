@@ -139,6 +139,7 @@ export type WorkScheduleGenerationOptions = {
   interSubBudgetParallelism?: InterSubBudgetParallelism | null;
   interSubBudgetStaggerDays?: number | null;
   levelLinkage?: Record<string, LevelLinkageMode> | null;
+  customPhaseKeywords?: Record<string, string[]> | null;
 };
 
 export type WorkScheduleGenerationIssueRecord = {

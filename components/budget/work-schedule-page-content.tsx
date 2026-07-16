@@ -54,6 +54,7 @@ import type {
   WorkScheduleViewRecord,
 } from "@/types/work-schedule";
 import { WorkScheduleOverview, buildTimelineDays, formatPredecessorForDisplay, formatPredecessorToken, formatPredecessorForStorage, WorkScheduleDateInput, updateEditableLineDates, updateEditableLineCrew, updateEditableLineDuration, parseEditableCrew, isPendingWorkScheduleLine, hasIncompleteDistribution } from "./work-schedule/overview-view";
+import { parseCustomPhaseKeywords } from "./work-schedule/utils/edit-helpers";
 import {
   buildWorkScheduleCsvExport,
   formatPeriodLabel,
@@ -182,6 +183,7 @@ type WorkScheduleGenerationFormState = {
   maxDurationDays: string;
   similarityLagDays: string;
   levelLinkage: Record<string, LevelLinkageMode>;
+  customPhaseKeywords: Record<string, string>;
 };
 
 type GenerationLevelPreviewRow = {
@@ -2982,6 +2984,10 @@ function getGenerationSimilarityLagStorageKey(budgetId: string) {
   return `work-schedule-generation-similarity-lag:${budgetId}`;
 }
 
+function getGenerationCustomPhaseKeywordsStorageKey(budgetId: string) {
+  return `work-schedule-generation-custom-phase-keywords:${budgetId}`;
+}
+
 function getGenerationPreviewCollapsedGroupsStorageKey(budgetId: string) {
   return `work-schedule-generation-preview-collapsed:${budgetId}`;
 }
@@ -3054,6 +3060,7 @@ function readGenerationFormState(
       levelLinkage: Object.fromEntries(
         previewGroups.flatMap((group) => group.levels.map((level) => [level.levelId, "parallel" as const])),
       ),
+      customPhaseKeywords: {},
     };
   }
 
@@ -3079,6 +3086,19 @@ function readGenerationFormState(
     parsedLevelLinkage = baseLevelLinkage;
   }
 
+  let parsedCustomPhaseKeywords: Record<string, string> = {};
+  try {
+    const storedCustomPhaseKeywords = window.localStorage.getItem(getGenerationCustomPhaseKeywordsStorageKey(budgetId));
+    if (storedCustomPhaseKeywords) {
+      const raw = JSON.parse(storedCustomPhaseKeywords) as Record<string, unknown>;
+      parsedCustomPhaseKeywords = Object.fromEntries(
+        Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+      );
+    }
+  } catch {
+    parsedCustomPhaseKeywords = {};
+  }
+
   return {
     strategy: storedStrategy && isWorkScheduleGenerationStrategy(storedStrategy) ? storedStrategy : defaultStrategy,
     interSubBudgetParallelism:
@@ -3087,6 +3107,7 @@ function readGenerationFormState(
     maxDurationDays: window.localStorage.getItem(getGenerationMaxDurationStorageKey(budgetId)) ?? "",
     similarityLagDays: window.localStorage.getItem(getGenerationSimilarityLagStorageKey(budgetId)) ?? "0",
     levelLinkage: parsedLevelLinkage,
+    customPhaseKeywords: parsedCustomPhaseKeywords,
   };
 }
 
@@ -3098,6 +3119,7 @@ function writeGenerationFormState(budgetId: string, formState: WorkScheduleGener
   window.localStorage.setItem(getGenerationStrategyStorageKey(budgetId), formState.strategy);
   window.localStorage.setItem(getGenerationParallelismStorageKey(budgetId), formState.interSubBudgetParallelism);
   window.localStorage.setItem(getGenerationLevelLinkageStorageKey(budgetId), JSON.stringify(formState.levelLinkage));
+  window.localStorage.setItem(getGenerationCustomPhaseKeywordsStorageKey(budgetId), JSON.stringify(formState.customPhaseKeywords));
 
   writeStringPreference(getGenerationStaggerDaysStorageKey(budgetId), formState.interSubBudgetStaggerDays, "7");
   writeStringPreference(getGenerationMaxDurationStorageKey(budgetId), formState.maxDurationDays, "");
@@ -3209,6 +3231,7 @@ function buildGenerationOptionsPayload(formState: WorkScheduleGenerationFormStat
     maxDurationDays: parseOptionalPositiveInteger(formState.maxDurationDays),
     similarityLagDays: parseOptionalNonNegativeInteger(formState.similarityLagDays) ?? 0,
     levelLinkage: Object.keys(formState.levelLinkage).length > 0 ? formState.levelLinkage : null,
+    customPhaseKeywords: parseCustomPhaseKeywords(formState.customPhaseKeywords),
   };
 }
 

@@ -130,6 +130,7 @@ export type WorkScheduleGenerationFormState = {
   maxDurationDays: string;
   similarityLagDays: string;
   levelLinkage: Record<string, LevelLinkageMode>;
+  customPhaseKeywords: Record<string, string>;
 };
 
 export type GenerationLevelPreviewRow = {

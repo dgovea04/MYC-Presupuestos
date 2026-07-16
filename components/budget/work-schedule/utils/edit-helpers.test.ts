@@ -8,6 +8,7 @@ import {
   createEditableLine,
   serializeEditableLine,
   updateEditableLineDates,
+  parseCustomPhaseKeywords,
 } from "@/components/budget/work-schedule/utils/edit-helpers";
 
 // ─── helpers ──────────────────────────────────────────────────────────────
@@ -328,5 +329,48 @@ describe("createEditableLine round-trip for partial-date source records", () => 
     expect(serialized.endDate).toBe("");
     expect(serialized.durationDays).toBe(0);
     expect(serialized.monthlyDistributions).toEqual([]);
+  });
+});
+
+describe("parseCustomPhaseKeywords", () => {
+  it("returns null when input is undefined", () => {
+    expect(parseCustomPhaseKeywords(undefined)).toBeNull();
+  });
+
+  it("returns null when input is empty", () => {
+    expect(parseCustomPhaseKeywords({})).toBeNull();
+  });
+
+  it("splits comma-separated keywords and normalizes them", () => {
+    const input = {
+      structure: "Concreto, Acero, HORMIGON",
+      finishes: "Pintura Látex, Cerámico",
+    };
+
+    expect(parseCustomPhaseKeywords(input)).toEqual({
+      structure: ["concreto", "acero", "hormigon"],
+      finishes: ["pintura latex", "ceramico"],
+    });
+  });
+
+  it("removes empty tokens and deduplicates keywords", () => {
+    const input = {
+      earthwork: "excavacion, , corte, excavacion",
+    };
+
+    expect(parseCustomPhaseKeywords(input)).toEqual({
+      earthwork: ["excavacion", "corte"],
+    });
+  });
+
+  it("ignores phases with only empty or whitespace values", () => {
+    const input = {
+      structure: "  ",
+      finishes: "pintura",
+    };
+
+    expect(parseCustomPhaseKeywords(input)).toEqual({
+      finishes: ["pintura"],
+    });
   });
 });

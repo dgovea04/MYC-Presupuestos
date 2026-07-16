@@ -62,6 +62,17 @@ export const interSubBudgetParallelismSchema = z.enum(["independent", "staggered
 
 export const levelLinkageModeSchema = z.enum(["chain", "parallel"]);
 
+export const workScheduleFrontPhaseSchema = z.enum([
+  "preliminaries",
+  "earthwork",
+  "structure",
+  "masonry",
+  "installations",
+  "finishes",
+  "testing",
+  "other",
+]);
+
 export const workScheduleGenerationOptionsSchema = z.object({
   strategy: workScheduleGenerationStrategySchema.default("sequential"),
   maxDurationDays: z.coerce.number().int().min(1).max(36525).optional().nullable(),
@@ -69,6 +80,10 @@ export const workScheduleGenerationOptionsSchema = z.object({
   interSubBudgetParallelism: interSubBudgetParallelismSchema.optional().nullable(),
   interSubBudgetStaggerDays: z.coerce.number().int().min(1).max(365).optional().nullable(),
   levelLinkage: z.record(z.string(), levelLinkageModeSchema).optional().nullable(),
+  customPhaseKeywords: z
+    .record(workScheduleFrontPhaseSchema, z.array(z.string().trim().min(1)))
+    .optional()
+    .nullable(),
 });
 
 export const workScheduleGenerateBaseSchema = z.object({

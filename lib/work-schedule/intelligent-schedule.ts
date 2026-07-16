@@ -375,7 +375,7 @@ function buildByFrontBase({
       scheduleLevel: ({ levelLines, levelCursor, shouldChain }) => {
         const frontLines: WorkFrontLine[] = levelLines.map((line, originalIndex) => ({
           line,
-          phase: classifyWorkFrontPhase(line),
+          phase: classifyWorkFrontPhase(line, options.customPhaseKeywords ?? null),
           originalIndex,
         }));
 

@@ -381,17 +381,32 @@ function buildInitialDistributionsFromRange(
 
 // ─── Generation helpers ──────────────────────────────────────────────────────
 
-export function buildGenerationOptionsPayload(
-  formState: WorkScheduleGenerationFormState,
-): WorkScheduleGenerationOptions {
-  return {
-    strategy: formState.strategy,
-    interSubBudgetParallelism: formState.interSubBudgetParallelism,
-    interSubBudgetStaggerDays: parseOptionalPositiveInteger(formState.interSubBudgetStaggerDays),
-    maxDurationDays: parseOptionalPositiveInteger(formState.maxDurationDays),
-    similarityLagDays: parseOptionalNonNegativeInteger(formState.similarityLagDays),
-    levelLinkage: Object.keys(formState.levelLinkage).length > 0 ? formState.levelLinkage : null,
-  };
+export function parseCustomPhaseKeywords(
+  input: Record<string, string> | undefined,
+): Record<string, string[]> | null {
+  if (!input) {
+    return null;
+  }
+
+  const parsed: Record<string, string[]> = {};
+  for (const [phase, value] of Object.entries(input)) {
+    const keywords = value
+      .split(",")
+      .map((keyword) =>
+        keyword
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim(),
+      )
+      .filter(Boolean);
+
+    if (keywords.length > 0) {
+      parsed[phase] = Array.from(new Set(keywords));
+    }
+  }
+
+  return Object.keys(parsed).length > 0 ? parsed : null;
 }
 
 export function parseOptionalPositiveInteger(value: string): number | null | undefined {

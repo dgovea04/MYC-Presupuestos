@@ -7,8 +7,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import type { InterSubBudgetParallelism, LevelLinkageMode, WorkScheduleGenerationStrategy, WorkScheduleViewRecord } from "@/types/work-schedule";
+import { WORK_FRONT_PHASE_KEYWORDS, type WorkFrontPhase } from "@/lib/work-schedule/work-front-phase";
 import { Field } from "./ui-elements";
 import type { GenerationLevelPreviewGroup, WorkScheduleGenerationFormState } from "./types";
+
+const PHASE_KEYWORD_FIELDS: Array<{ phase: WorkFrontPhase; label: string }> = [
+  { phase: "preliminaries", label: "Preliminares" },
+  { phase: "earthwork", label: "Movimiento de tierras" },
+  { phase: "structure", label: "Estructura" },
+  { phase: "masonry", label: "Albanileria" },
+  { phase: "installations", label: "Instalaciones" },
+  { phase: "finishes", label: "Acabados" },
+  { phase: "testing", label: "Pruebas y entrega" },
+];
 
 export function WorkScheduleGenerationDialog({
   open,
@@ -109,6 +120,36 @@ export function WorkScheduleGenerationDialog({
                     <Field label="Escalonado" tooltip="Dias de retraso entre especialidades. La primera inicia en la fecha base.">
                       <Input inputMode="numeric" placeholder="0" value={formState.interSubBudgetStaggerDays} onChange={(event) => onFormStateChange((current) => ({ ...current, interSubBudgetStaggerDays: event.target.value }))} />
                     </Field>
+                  ) : null}
+
+                  {formState.strategy === "by_front" ? (
+                    <div className="col-span-full space-y-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--app-text-strong)]">Palabras clave por fase</p>
+                        <p className="mt-1 text-xs text-[var(--app-text-muted)]">
+                          Personaliza las palabras clave (separadas por coma) usadas para clasificar las partidas en la estrategia por frentes.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {PHASE_KEYWORD_FIELDS.map((field) => (
+                          <Field key={field.phase} label={field.label}>
+                            <Input
+                              placeholder={WORK_FRONT_PHASE_KEYWORDS[field.phase].join(", ")}
+                              value={formState.customPhaseKeywords[field.phase] ?? ""}
+                              onChange={(event) =>
+                                onFormStateChange((current) => ({
+                                  ...current,
+                                  customPhaseKeywords: {
+                                    ...current.customPhaseKeywords,
+                                    [field.phase]: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </Field>
+                        ))}
+                      </div>
+                    </div>
                   ) : null}
 
                   {hasExistingSchedule ? (

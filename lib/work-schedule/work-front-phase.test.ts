@@ -110,6 +110,41 @@ describe("classifyWorkFrontPhase", () => {
     // unit containing a keyword can shift classification
     expect(classifyWorkFrontPhase(createLine({ itemCode: "01.01", description: "Partida generica", unit: "concreto" }))).toBe("structure");
   });
+
+  it("uses default keywords when no custom keywords are provided", () => {
+    expect(classifyWorkFrontPhase(createLine({ description: "Concreto f'c=210" }))).toBe("structure");
+    expect(classifyWorkFrontPhase(createLine({ description: "Concreto f'c=210" }), undefined)).toBe("structure");
+    expect(classifyWorkFrontPhase(createLine({ description: "Concreto f'c=210" }), null)).toBe("structure");
+    expect(classifyWorkFrontPhase(createLine({ description: "Concreto f'c=210" }), {})).toBe("structure");
+  });
+
+  it("replaces default keywords with custom keywords for a phase", () => {
+    const customKeywords = {
+      structure: ["hormigon"],
+    };
+
+    expect(classifyWorkFrontPhase(createLine({ description: "Hormigon armado" }), customKeywords)).toBe("structure");
+    expect(classifyWorkFrontPhase(createLine({ description: "Concreto f'c=210" }), customKeywords)).toBe("other");
+  });
+
+  it("normalizes custom keywords before matching", () => {
+    const customKeywords = {
+      finishes: ["pintura latex", "ceramico"],
+    };
+
+    expect(classifyWorkFrontPhase(createLine({ description: "Pintura Latex" }), customKeywords)).toBe("finishes");
+    expect(classifyWorkFrontPhase(createLine({ description: "Cerámico" }), customKeywords)).toBe("finishes");
+  });
+
+  it("preserves precedence order when using custom keywords", () => {
+    const customKeywords = {
+      testing: ["entrega final"],
+      finishes: ["pintura"],
+    };
+
+    expect(classifyWorkFrontPhase(createLine({ description: "Entrega final" }), customKeywords)).toBe("testing");
+    expect(classifyWorkFrontPhase(createLine({ description: "Pintura latex" }), customKeywords)).toBe("finishes");
+  });
 });
 
 describe("WORK_FRONT_PHASE_ORDER", () => {

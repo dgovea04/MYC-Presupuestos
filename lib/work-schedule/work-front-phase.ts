@@ -178,6 +178,32 @@ export const WORK_FRONT_PHASE_KEYWORDS: Record<WorkFrontPhase, readonly string[]
   other: [],
 };
 
+/**
+ * Resolves the effective keywords for a phase.
+ *
+ * If `customKeywords` contains a non-empty list for the phase, it is used as a
+ * complete replacement for the default keywords. Otherwise the built-in defaults
+ * are used. This keeps backward compatibility: callers that do not pass a
+ * custom mapping continue to use the hard-coded keywords.
+ *
+ * @example
+ * ```ts
+ * const keywords = resolvePhaseKeywords("structure", { structure: ["hormigon"] });
+ * // keywords === ["hormigon"]
+ * ```
+ */
+export function resolvePhaseKeywords(
+  phase: WorkFrontPhase,
+  customKeywords?: Record<string, string[]> | null,
+): readonly string[] {
+  const override = customKeywords?.[phase];
+  if (override && override.length > 0) {
+    return override;
+  }
+
+  return WORK_FRONT_PHASE_KEYWORDS[phase];
+}
+
 // Classifies a line into a construction phase used by the `by_front` strategy.
 // The order of checks matters: `testing` is evaluated first because words like
 // "limpieza final", "entrega" or "recepcion" should be treated as final
@@ -185,35 +211,38 @@ export const WORK_FRONT_PHASE_KEYWORDS: Record<WorkFrontPhase, readonly string[]
 // "limpieza" also appears in `preliminaries`). After that, phases are checked
 // in their natural construction sequence so that a line is assigned to the
 // earliest matching phase.
-export function classifyWorkFrontPhase(line: WorkScheduleLineRecord): WorkFrontPhase {
+export function classifyWorkFrontPhase(
+  line: WorkScheduleLineRecord,
+  customKeywords?: Record<string, string[]> | null,
+): WorkFrontPhase {
   const text = normalizeScheduleText(`${line.itemCode} ${line.description} ${line.unit}`);
 
   // Testing must win over preliminaries/finishes when explicit final words are present.
-  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.testing)) {
+  if (includesAnyKeyword(text, resolvePhaseKeywords("testing", customKeywords))) {
     return "testing";
   }
 
-  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.preliminaries)) {
+  if (includesAnyKeyword(text, resolvePhaseKeywords("preliminaries", customKeywords))) {
     return "preliminaries";
   }
 
-  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.earthwork)) {
+  if (includesAnyKeyword(text, resolvePhaseKeywords("earthwork", customKeywords))) {
     return "earthwork";
   }
 
-  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.structure)) {
+  if (includesAnyKeyword(text, resolvePhaseKeywords("structure", customKeywords))) {
     return "structure";
   }
 
-  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.masonry)) {
+  if (includesAnyKeyword(text, resolvePhaseKeywords("masonry", customKeywords))) {
     return "masonry";
   }
 
-  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.installations)) {
+  if (includesAnyKeyword(text, resolvePhaseKeywords("installations", customKeywords))) {
     return "installations";
   }
 
-  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.finishes)) {
+  if (includesAnyKeyword(text, resolvePhaseKeywords("finishes", customKeywords))) {
     return "finishes";
   }
 
