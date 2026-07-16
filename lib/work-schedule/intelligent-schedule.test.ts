@@ -1782,6 +1782,41 @@ describe("buildIntelligentWorkScheduleBase (by_front strategy)", () => {
     expect(result.generatedItems[1]?.predecessor).toBe("2FS");
   });
 
+  it("classifies expanded technical keywords into the correct construction phases", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "finish-drywall", itemCode: "70", description: "Tablayeso drywall", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "finish-glass", itemCode: "71", description: "Colocacion de vidrio", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "finish-ceiling", itemCode: "72", description: "Cielo falso y techos", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "install-hvac", itemCode: "50", description: "Sistema de climatizacion", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "earth-clear", itemCode: "20", description: "Desbroce y desmonte", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "structure-plate", itemCode: "30", description: "Placa de concreto", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "masonry-block", itemCode: "40", description: "Muro de bloque", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "prelim-demo", itemCode: "10", description: "Demolicion preliminar", levelId: "front-a", quantity: 5, performance: 5 }),
+      ],
+      options: createOptions({ strategy: "by_front" }),
+      levelById,
+    });
+
+    // Expected order by phase: preliminaries (10), earthwork (20), structure (30), masonry (40),
+    // installations (50), finishes (60-72).
+    expect(result.generatedItems.map((item) => item.itemCode)).toEqual([
+      "10",
+      "20",
+      "30",
+      "40",
+      "50",
+      "70",
+      "71",
+      "72",
+    ]);
+  });
+
   it("orders all technical phases inside a front by construction sequence", () => {
     const levelById = buildLevelMap([
       { id: "front-a", parentId: null, type: "TITLE" },
