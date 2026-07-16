@@ -90,6 +90,18 @@ describe("classifyWorkFrontPhase", () => {
     expect(classifyWorkFrontPhase(createLine({ description: "PINTURA LATEX" }))).toBe("finishes");
   });
 
+  it.each([
+    { description: "Excavacion y concreto", expected: "earthwork", reason: "earthwork is checked before structure" },
+    { description: "Concreto y pintura", expected: "structure", reason: "structure is checked before finishes" },
+    { description: "Limpieza y entrega", expected: "testing", reason: "testing is checked before preliminaries" },
+    { description: "Muro de concreto", expected: "structure", reason: "structure is checked before masonry" },
+    { description: "Excavacion y limpieza", expected: "preliminaries", reason: "preliminaries is checked before earthwork" },
+    { description: "Pintura y cable", expected: "installations", reason: "installations is checked before finishes" },
+    { description: "Concreto y excavacion", expected: "earthwork", reason: "word order does not affect precedence" },
+  ])("classifies '$description' as $expected because $reason", ({ description, expected }) => {
+    expect(classifyWorkFrontPhase(createLine({ description }))).toBe(expected);
+  });
+
   it("includes item code and unit in the searchable text", () => {
     expect(classifyWorkFrontPhase(createLine({ itemCode: "01.01", description: "Partida generica", unit: "m3" }))).toBe("other");
     expect(classifyWorkFrontPhase(createLine({ itemCode: "01.01", description: "Partida generica", unit: "m2" }))).toBe("other");
