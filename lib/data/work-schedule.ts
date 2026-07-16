@@ -9,6 +9,7 @@ import {
   buildWorkScheduleValuationCalendarSlice,
   buildWorkScheduleValuationCalendar,
   buildWorkScheduleView,
+  recalculateDependentWorkScheduleLines,
   validateWorkScheduleInput,
 } from "@/lib/calculations/work-schedule";
 import { prisma } from "@/lib/db/prisma";
@@ -39,6 +40,14 @@ type WorkScheduleProfileSnapshot = {
 
 const MAX_PERSISTED_WORK_SCHEDULE_DURATION_DAYS = 36525;
 const MAX_PERSISTED_WORK_SCHEDULE_YEAR = 2200;
+
+type CascadedWorkScheduleSuccessorUpdate = {
+  budgetItemId: string;
+  startDate: string;
+  endDate: string;
+  durationDays: number;
+  monthlyDistributions: WorkScheduleLineRecord["monthlyDistributions"];
+};
 
 export async function getWorkScheduleSection(budgetId: string, userId: string): Promise<WorkScheduleViewRecord> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
@@ -398,6 +407,70 @@ export async function saveWorkScheduleItem(
 
   });
 
+  const linesAfterSave = await getWorkScheduleLinesForBudget(budget, { includeResources: false });
+  const cascadedSuccessorUpdates = buildCascadedWorkScheduleSuccessorUpdates(
+    linesAfterSave,
+    normalizedPayload.budgetItemId,
+    budget.workCalendar?.workDays,
+  );
+
+  if (cascadedSuccessorUpdates.length > 0) {
+    await prisma.$transaction(async (tx) => {
+      const schedule = await tx.workSchedule.findUnique({
+        where: { budgetId },
+        select: { id: true },
+      });
+
+      if (!schedule) {
+        return;
+      }
+
+      const existingItems = await tx.workScheduleItem.findMany({
+        where: {
+          scheduleId: schedule.id,
+          budgetItemId: {
+            in: cascadedSuccessorUpdates.map((line) => line.budgetItemId),
+          },
+        },
+        select: {
+          id: true,
+          budgetItemId: true,
+        },
+      });
+
+      const existingItemByBudgetItemId = new Map(existingItems.map((item) => [item.budgetItemId, item]));
+
+      for (const successor of cascadedSuccessorUpdates) {
+        const persistedItem = existingItemByBudgetItemId.get(successor.budgetItemId);
+        if (!persistedItem) {
+          continue;
+        }
+
+        await tx.workScheduleDistribution.deleteMany({
+          where: { scheduleItemId: persistedItem.id },
+        });
+
+        await tx.workScheduleItem.update({
+          where: { id: persistedItem.id },
+          data: {
+            startDate: new Date(`${successor.startDate}T00:00:00.000Z`),
+            endDate: new Date(`${successor.endDate}T00:00:00.000Z`),
+            durationDays: successor.durationDays,
+            distributions: {
+              createMany: {
+                data: successor.monthlyDistributions.map((distribution) => ({
+                  year: distribution.year,
+                  month: distribution.month,
+                  percentage: new Prisma.Decimal(distribution.percentage),
+                })),
+              },
+            },
+          },
+        });
+      }
+    });
+  }
+
   return getWorkScheduleOverviewSection(budgetId, userId);
 }
 
@@ -708,8 +781,59 @@ function normalizeOptionalString(value: string | null | undefined) {
   return normalized.length > 0 ? normalized : null;
 }
 
+export function buildCascadedWorkScheduleSuccessorUpdates(
+  lines: WorkScheduleLineRecord[],
+  changedBudgetItemId: string,
+  workDaysBitmask?: number,
+): CascadedWorkScheduleSuccessorUpdate[] {
+  const originalByBudgetItemId = new Map(lines.map((line) => [line.budgetItemId, line]));
+  const recalculatedLines = recalculateDependentWorkScheduleLines(lines, changedBudgetItemId, workDaysBitmask);
+
+  return recalculatedLines
+    .filter((line) => line.budgetItemId !== changedBudgetItemId)
+    .filter((line) => {
+      const original = originalByBudgetItemId.get(line.budgetItemId);
+      if (!original) {
+        return false;
+      }
+
+      return (
+        line.startDate !== original.startDate ||
+        line.endDate !== original.endDate ||
+        line.durationDays !== original.durationDays ||
+        !areMonthlyDistributionsEquivalent(line.monthlyDistributions, original.monthlyDistributions)
+      );
+    })
+    .map((line) => ({
+      budgetItemId: line.budgetItemId,
+      startDate: line.startDate ?? "",
+      endDate: line.endDate ?? "",
+      durationDays: line.durationDays ?? 0,
+      monthlyDistributions: line.monthlyDistributions.map((distribution) => ({ ...distribution })),
+    }))
+    .filter((line) => line.startDate.length > 0 && line.endDate.length > 0 && line.durationDays > 0);
+}
+
 function normalizeWorkScheduleItemSaveInput(payload: WorkScheduleItemSaveInput) {
   return payload;
+}
+
+function areMonthlyDistributionsEquivalent(
+  left: WorkScheduleLineRecord["monthlyDistributions"],
+  right: WorkScheduleLineRecord["monthlyDistributions"],
+) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((distribution, index) => {
+    const candidate = right[index];
+    return (
+      candidate?.year === distribution.year &&
+      candidate?.month === distribution.month &&
+      candidate?.percentage === distribution.percentage
+    );
+  });
 }
 
 function buildWorkScheduleGroupRows(

@@ -243,6 +243,8 @@ export const GanttBar = memo(function GanttBar({
   const tooltipContent = isInteracting
     ? state.tooltipLabel || getTooltipLabel(state.deltaPx, state.mode)
     : undefined;
+  const connectorDotClassName =
+    "absolute right-[-10px] top-1/2 z-10 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full shadow-md transition-all";
 
   // Milestone: render diamond shape
   if (isMilestone) {
@@ -277,8 +279,9 @@ export const GanttBar = memo(function GanttBar({
         {onStartConnection && startIndex >= 0 && endIndex >= 0 && (
           <div
             className={cn(
-              "absolute right-0 top-1/2 z-10 h-3 w-3 -translate-y-1/2 translate-x-1/2 cursor-crosshair rounded-full bg-violet-100 shadow-md ring-1 ring-violet-400 transition-all",
-              "opacity-0 group-hover:opacity-100 hover:scale-125 hover:bg-violet-300",
+              connectorDotClassName,
+              "bg-violet-100 ring-1 ring-violet-400",
+              "opacity-0 group-hover:opacity-100 hover:scale-110 hover:bg-violet-300",
             )}
             onPointerDown={(event) => {
               event.preventDefault();
@@ -386,7 +389,7 @@ export const GanttBar = memo(function GanttBar({
           {/* Left handle */}
           <div
             className={cn(
-              "absolute -left-1 top-1/2 z-10 h-6 w-3 -translate-y-1/2 cursor-w-resize rounded-sm bg-white/90 shadow-md ring-1 ring-slate-300 transition-opacity",
+              "absolute -left-1.5 top-1/2 z-20 flex h-7 w-4 -translate-y-1/2 cursor-w-resize items-center justify-center rounded-full transition-opacity",
               "opacity-0 group-hover:opacity-100",
               isInteracting && state.mode === "resizing-left" && "opacity-100",
             )}
@@ -394,11 +397,13 @@ export const GanttBar = memo(function GanttBar({
             onPointerMove={interactions.handlePointerMove}
             onPointerUp={interactions.handlePointerUp}
             data-testid="gantt-bar-handle-left"
-          />
+          >
+            <span className="pointer-events-none h-5 w-1 rounded-full bg-white/95 shadow-sm ring-1 ring-slate-300" />
+          </div>
           {/* Right handle */}
           <div
             className={cn(
-              "absolute -right-1 top-1/2 z-10 h-6 w-3 -translate-y-1/2 cursor-e-resize rounded-sm bg-white/90 shadow-md ring-1 ring-slate-300 transition-opacity",
+              "peer/resize-right absolute -right-1.5 top-1/2 z-20 flex h-7 w-4 -translate-y-1/2 cursor-e-resize items-center justify-center rounded-full transition-opacity",
               "opacity-0 group-hover:opacity-100",
               isInteracting && state.mode === "resizing-right" && "opacity-100",
             )}
@@ -406,7 +411,9 @@ export const GanttBar = memo(function GanttBar({
             onPointerMove={interactions.handlePointerMove}
             onPointerUp={interactions.handlePointerUp}
             data-testid="gantt-bar-handle-right"
-          />
+          >
+            <span className="pointer-events-none h-5 w-1 rounded-full bg-white/95 shadow-sm ring-1 ring-slate-300" />
+          </div>
         </>
       )}
 
@@ -414,8 +421,9 @@ export const GanttBar = memo(function GanttBar({
       {onStartConnection && startIndex >= 0 && endIndex >= 0 && (
         <div
           className={cn(
-            "absolute right-0 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 translate-x-1/2 cursor-crosshair rounded-full bg-sky-100 shadow-md ring-1 ring-sky-400 transition-all",
-            "opacity-0 group-hover:opacity-100 hover:scale-125 hover:bg-sky-300",
+            connectorDotClassName,
+            "bg-sky-100 ring-1 ring-sky-400",
+            "opacity-0 group-hover:opacity-100 peer-hover/resize-right:opacity-30 hover:scale-110 hover:bg-sky-300",
           )}
           onPointerDown={(event) => {
             event.preventDefault();
