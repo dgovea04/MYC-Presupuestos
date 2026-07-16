@@ -3,7 +3,10 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WorkSchedulePageContent } from "@/components/budget/work-schedule-page-content";
+import {
+  WorkSchedulePageContent,
+  recalculateDraggedPredecessorString,
+} from "@/components/budget/work-schedule-page-content";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import { AppViewModeProvider } from "@/components/view-mode/app-view-mode-provider";
 import type { UserSettingsRecord } from "@/types/settings";
@@ -49,6 +52,74 @@ describe("WorkSchedulePageContent", () => {
 
       return element;
     }) as typeof document.createElement);
+  });
+
+  it("updates the predecessor lag when a successor gantt bar is moved after its FS predecessor", () => {
+    const moved = recalculateDraggedPredecessorString(
+      "01.01FS",
+      {
+        itemCode: "01.02",
+        startDate: "2026-03-08",
+        endDate: "2026-03-10",
+        durationDays: 3,
+      },
+      new Map([
+        [
+          "01.01",
+          {
+            budgetItemId: "item-1",
+            itemCode: "01.01",
+            description: "Predecesora",
+            unit: "M2",
+            quantity: 1,
+            unitPrice: 1,
+            partial: 1,
+            subBudgetId: "sub-1",
+            subBudgetName: "Estructuras",
+            startDate: "2026-03-01",
+            endDate: "2026-03-05",
+            durationDays: 5,
+            monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
+          },
+        ],
+      ]),
+    );
+
+    expect(moved).toBe("01.01FS+2d");
+  });
+
+  it("updates the predecessor lag when a successor gantt bar is moved before its FS predecessor constraint", () => {
+    const moved = recalculateDraggedPredecessorString(
+      "01.01FS",
+      {
+        itemCode: "01.02",
+        startDate: "2026-03-04",
+        endDate: "2026-03-06",
+        durationDays: 3,
+      },
+      new Map([
+        [
+          "01.01",
+          {
+            budgetItemId: "item-1",
+            itemCode: "01.01",
+            description: "Predecesora",
+            unit: "M2",
+            quantity: 1,
+            unitPrice: 1,
+            partial: 1,
+            subBudgetId: "sub-1",
+            subBudgetName: "Estructuras",
+            startDate: "2026-03-01",
+            endDate: "2026-03-05",
+            durationDays: 5,
+            monthlyDistributions: [{ year: 2026, month: 3, percentage: 100 }],
+          },
+        ],
+      ]),
+    );
+
+    expect(moved).toBe("01.01FS-2d");
   });
 
   afterEach(async () => {

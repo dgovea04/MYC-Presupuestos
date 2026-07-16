@@ -753,6 +753,16 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
   const handleGanttBarChange = useCallback(
     (line: WorkScheduleLineRecord, result: GanttBarChangeResult) => {
+      const recalculatedPredecessor = recalculateDraggedPredecessorString(
+        line.predecessor ?? "",
+        {
+          itemCode: line.itemCode,
+          startDate: result.startDate,
+          endDate: result.endDate,
+          durationDays: result.durationDays,
+        },
+        presentationLinesByCode,
+      );
       const editableLine: EditableLine = {
         budgetItemId: line.budgetItemId,
         description: line.description,
@@ -761,7 +771,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         startDate: result.startDate,
         endDate: result.endDate,
         durationDays: result.durationDays,
-        predecessor: line.predecessor ?? "",
+        predecessor: recalculatedPredecessor,
         crew: line.crew?.toString() ?? "",
         monthlyDistributions: result.monthlyDistributions,
         isMilestone: line.isMilestone ?? false,
@@ -792,7 +802,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           });
         });
     },
-    [persistWorkScheduleLine],
+    [persistWorkScheduleLine, presentationLinesByCode],
   );
 
 
@@ -4018,6 +4028,51 @@ function updateEditableLinePredecessor(
     },
     recalculatedLine.durationDays,
   );
+}
+
+export function recalculateDraggedPredecessorString(
+  predecessor: string,
+  movedLine: Pick<WorkScheduleLineRecord, "itemCode" | "startDate" | "endDate" | "durationDays">,
+  lineByCode: Map<string, WorkScheduleLineRecord>,
+) {
+  const parsedPredecessors = tryParseWorkSchedulePredecessors(predecessor);
+  if (!parsedPredecessors || parsedPredecessors.length === 0 || !movedLine.startDate || !movedLine.endDate) {
+    return predecessor;
+  }
+
+  return parsedPredecessors
+    .map((reference) => {
+      const predecessorLine = lineByCode.get(reference.code);
+      if (!predecessorLine?.startDate || !predecessorLine.endDate) {
+        return formatPredecessorToken(reference.code, reference.relation, reference.lagDays);
+      }
+
+      return formatPredecessorToken(
+        reference.code,
+        reference.relation,
+        calculateLagDaysFromMovedSuccessor(reference.relation, predecessorLine, movedLine),
+      );
+    })
+    .join(",");
+}
+
+function calculateLagDaysFromMovedSuccessor(
+  relation: "FS" | "SS" | "FF" | "SF",
+  predecessorLine: Pick<WorkScheduleLineRecord, "startDate" | "endDate">,
+  movedLine: Pick<WorkScheduleLineRecord, "startDate" | "endDate">,
+) {
+  switch (relation) {
+    case "FS":
+      return diffInDays(predecessorLine.endDate!, movedLine.startDate!) - 1;
+    case "SS":
+      return diffInDays(predecessorLine.startDate!, movedLine.startDate!);
+    case "FF":
+      return diffInDays(predecessorLine.endDate!, movedLine.endDate!);
+    case "SF":
+      return diffInDays(predecessorLine.startDate!, movedLine.endDate!);
+    default:
+      return 0;
+  }
 }
 
 
