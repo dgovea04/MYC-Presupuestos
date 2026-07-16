@@ -1697,4 +1697,66 @@ describe("buildIntelligentWorkScheduleBase (by_front strategy)", () => {
     expect(result.summary.highlights).toContain("Estrategia por frentes de obra");
     expect(result.summary.highlights).toContain("Secuencia constructiva aplicada por fase tecnica");
   });
+
+  it("chains fronts sequentially when levelLinkage specifies chain", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+      { id: "front-b", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "a1", itemCode: "1", description: "Limpieza de terreno frente A", levelId: "front-a", quantity: 10, performance: 10 }),
+        createLine({ budgetItemId: "b1", itemCode: "3", description: "Limpieza de terreno frente B", levelId: "front-b", quantity: 10, performance: 10 }),
+      ],
+      options: createOptions({ strategy: "by_front", levelLinkage: { "front-b": "chain" } }),
+      levelById,
+    });
+
+    expect(result.generatedItems).toHaveLength(2);
+    expect(result.generatedItems[0]).toEqual(expect.objectContaining({
+      budgetItemId: "a1",
+      startDate: "2026-08-03",
+      predecessor: null,
+    }));
+    expect(result.generatedItems[1]).toEqual(expect.objectContaining({
+      budgetItemId: "b1",
+      startDate: "2026-08-04",
+      predecessor: "1FS",
+    }));
+  });
+
+  it("respects interSubBudgetParallelism staggered across multiple sub budgets", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+      { id: "front-b", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "a1", itemCode: "1", description: "Limpieza de terreno frente A", levelId: "front-a", subBudgetId: "sub-1", subBudgetName: "Estructuras", quantity: 10, performance: 10 }),
+        createLine({ budgetItemId: "b1", itemCode: "3", description: "Limpieza de terreno frente B", levelId: "front-b", subBudgetId: "sub-2", subBudgetName: "Arquitectura", quantity: 10, performance: 10 }),
+      ],
+      options: createOptions({
+        strategy: "by_front",
+        interSubBudgetParallelism: "staggered",
+        interSubBudgetStaggerDays: 10,
+      }),
+      levelById,
+    });
+
+    expect(result.generatedItems).toHaveLength(2);
+    expect(result.generatedItems[0]).toEqual(expect.objectContaining({
+      budgetItemId: "a1",
+      startDate: "2026-08-03",
+      predecessor: null,
+    }));
+    expect(result.generatedItems[1]).toEqual(expect.objectContaining({
+      budgetItemId: "b1",
+      startDate: "2026-08-13",
+      predecessor: null,
+    }));
+  });
 });
