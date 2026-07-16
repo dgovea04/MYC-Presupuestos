@@ -2,7 +2,8 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   WorkSchedulePageContent,
   recalculateDraggedPredecessorString,
@@ -16,9 +17,24 @@ let activeContainer: HTMLDivElement | null = null;
 let lastCreatedBlob: Blob | null = null;
 let lastDownloadName = "";
 let clickCount = 0;
+let originalScrollIntoView: typeof HTMLElement.prototype.scrollIntoView | undefined;
 const fetchMock = vi.fn();
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeAll(() => {
+  originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = () => undefined;
+});
+
+afterAll(() => {
+  if (originalScrollIntoView) {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    return;
+  }
+
+  Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+});
 
 describe("WorkSchedulePageContent", () => {
   beforeEach(() => {
@@ -714,6 +730,36 @@ describe("WorkSchedulePageContent", () => {
     }));
     expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
       body: expect.stringContaining("\"strategy\":\"by_level\""),
+    }));
+  });
+
+  it("sends by_front strategy when selected", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => createInitialData(),
+    });
+
+    const { clickByText, getByText, getInputByLabel } = await renderWithView(createViewWithLevels(), createSettings());
+
+    await act(async () => {
+      clickByText("Generar cronograma inteligente");
+    });
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Fecha base"), "2026-06-01");
+      clickByText("Por niveles");
+    });
+
+    await act(async () => {
+      clickByText("Por frentes de obra");
+    });
+
+    await act(async () => {
+      clickByText("Generar base");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/work-schedule", expect.objectContaining({
+      body: expect.stringContaining("\"strategy\":\"by_front\""),
     }));
   });
 

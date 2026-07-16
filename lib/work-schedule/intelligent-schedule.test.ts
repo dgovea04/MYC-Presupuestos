@@ -1615,3 +1615,86 @@ describe("buildIntelligentWorkScheduleBase (sequential strategy with levelLinkag
     }));
   });
 });
+
+// ─── by_front strategy ───────────────────────────────────────────────────────
+
+describe("buildIntelligentWorkScheduleBase (by_front strategy)", () => {
+  it("starts independent top-level fronts in parallel", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+      { id: "front-b", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "a1", itemCode: "1", description: "Limpieza de terreno frente A", levelId: "front-a", quantity: 10, performance: 10 }),
+        createLine({ budgetItemId: "a2", itemCode: "2", description: "Excavacion de zapatas frente A", levelId: "front-a", quantity: 10, performance: 10 }),
+        createLine({ budgetItemId: "b1", itemCode: "3", description: "Limpieza de terreno frente B", levelId: "front-b", quantity: 10, performance: 10 }),
+        createLine({ budgetItemId: "b2", itemCode: "4", description: "Excavacion de zapatas frente B", levelId: "front-b", quantity: 10, performance: 10 }),
+      ],
+      options: createOptions({ strategy: "by_front" }),
+      levelById,
+    });
+
+    expect(result.generatedItems).toHaveLength(4);
+    expect(result.generatedItems.find((item) => item.itemCode === "1")?.startDate).toBe("2026-08-03");
+    expect(result.generatedItems.find((item) => item.itemCode === "3")?.startDate).toBe("2026-08-03");
+    expect(result.generatedItems.find((item) => item.itemCode === "2")?.predecessor).toBe("1FS");
+    expect(result.generatedItems.find((item) => item.itemCode === "4")?.predecessor).toBe("3FS");
+  });
+
+  it("orders technical phases inside the same front before generating FS links", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "finish", itemCode: "30", description: "Pintura latex en muros", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "earth", itemCode: "10", description: "Excavacion masiva", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "structure", itemCode: "20", description: "Concreto f'c=210 kg/cm2 en zapatas", levelId: "front-a", quantity: 5, performance: 5 }),
+      ],
+      options: createOptions({ strategy: "by_front" }),
+      levelById,
+    });
+
+    expect(result.generatedItems.map((item) => item.itemCode)).toEqual(["10", "20", "30"]);
+    expect(result.generatedItems[0]?.predecessor).toBeNull();
+    expect(result.generatedItems[1]?.predecessor).toBe("10FS");
+    expect(result.generatedItems[2]?.predecessor).toBe("20FS");
+  });
+
+  it("keeps original relative order for unclassified work inside a front", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "x1", itemCode: "1", description: "Servicio especial alfa", levelId: "front-a", quantity: 10, performance: 10 }),
+        createLine({ budgetItemId: "x2", itemCode: "2", description: "Servicio especial beta", levelId: "front-a", quantity: 10, performance: 10 }),
+      ],
+      options: createOptions({ strategy: "by_front" }),
+      levelById,
+    });
+
+    expect(result.generatedItems.map((item) => item.itemCode)).toEqual(["1", "2"]);
+    expect(result.generatedItems[1]?.predecessor).toBe("1FS");
+  });
+
+  it("describes front strategy in generation highlights", () => {
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "a1", itemCode: "1", description: "Limpieza de terreno", quantity: 1, performance: 1 }),
+      ],
+      options: createOptions({ strategy: "by_front" }),
+    });
+
+    expect(result.summary.highlights).toContain("Estrategia por frentes de obra");
+    expect(result.summary.highlights).toContain("Secuencia constructiva aplicada por fase tecnica");
+  });
+});

@@ -83,6 +83,7 @@ export function WorkScheduleGenerationDialog({
                       <Select value={formState.strategy} onChange={(event) => onFormStateChange((current) => ({ ...current, strategy: event.target.value as WorkScheduleGenerationStrategy }))}>
                         <option value="sequential">Secuencial</option>
                         <option value="by_level">Por niveles</option>
+                        <option value="by_front">Por frentes de obra</option>
                         <option value="by_similarity">Por similitud</option>
                       </Select>
                     </Field>

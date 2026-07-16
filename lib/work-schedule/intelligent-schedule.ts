@@ -28,10 +28,48 @@ type LevelInfo = {
   type: string;
 };
 
+type WorkFrontPhase =
+  | "preliminaries"
+  | "earthwork"
+  | "structure"
+  | "masonry"
+  | "installations"
+  | "finishes"
+  | "testing"
+  | "other";
+
+type WorkFrontLine = {
+  line: WorkScheduleLineRecord;
+  phase: WorkFrontPhase;
+  originalIndex: number;
+};
+
 const DEFAULT_GENERATED_WORK_SCHEDULE_CREW = 1;
 const MAX_GENERATED_WORK_SCHEDULE_DURATION_DAYS = 36525;
 const SIMILARITY_PERFORMANCE_TOLERANCE = 0.2;
 const DEFAULT_STAGGER_DAYS = 15;
+
+const WORK_FRONT_PHASE_ORDER: Record<WorkFrontPhase, number> = {
+  preliminaries: 10,
+  earthwork: 20,
+  structure: 30,
+  masonry: 40,
+  installations: 50,
+  finishes: 60,
+  testing: 70,
+  other: 80,
+};
+
+const WORK_FRONT_PHASE_KEYWORDS: Record<WorkFrontPhase, readonly string[]> = {
+  preliminaries: ["preliminar", "limpieza", "trazo", "replanteo", "cartel", "movilizacion", "campamento", "seguridad"],
+  earthwork: ["excavacion", "corte", "relleno", "eliminacion", "movimiento de tierras", "nivelacion", "compactacion"],
+  structure: ["concreto", "hormigon", "acero", "fierro", "encofrado", "desencofrado", "columna", "viga", "losa", "zapata", "cimentacion"],
+  masonry: ["muro", "ladrillo", "albanileria", "tabique", "asentado"],
+  installations: ["electrica", "sanitario", "sanitaria", "tuberia", "desague", "agua", "cable", "conduit", "tablero", "instalacion"],
+  finishes: ["pintura", "ceramico", "porcelanato", "enchape", "piso", "acabado", "cielo raso", "carpinteria", "puerta", "ventana"],
+  testing: ["prueba", "ensayo", "puesta en marcha", "limpieza final", "entrega", "recepcion"],
+  other: [],
+};
 
 export function buildIntelligentWorkScheduleBase({
   baseStartDate,
@@ -60,6 +98,9 @@ export function buildIntelligentWorkScheduleBase({
       break;
     case "by_similarity":
       generatedItems = buildBySimilarityBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById, workDaysBitmask, exceptionMap });
+      break;
+    case "by_front":
+      generatedItems = buildByFrontBase({ baseStartDate, lines, reviewedBudgetItemIds, issues, options: appliedOptions, levelById, workDaysBitmask, exceptionMap });
       break;
     case "sequential":
     default:
@@ -323,6 +364,91 @@ function buildGroupedLevelSchedule({
   });
 }
 
+// ─── By-front strategy ───────────────────────────────────────────────────────
+
+function buildByFrontBase({
+  baseStartDate,
+  lines,
+  reviewedBudgetItemIds,
+  issues,
+  options,
+  levelById,
+  workDaysBitmask,
+  exceptionMap,
+}: {
+  baseStartDate: string;
+  lines: WorkScheduleLineRecord[];
+  reviewedBudgetItemIds?: Set<string>;
+  issues: WorkScheduleGenerationIssueRecord[];
+  options: WorkScheduleGenerationOptions;
+  levelById?: Map<string, LevelInfo>;
+  workDaysBitmask?: number;
+  exceptionMap?: CalendarExceptionMap;
+}) {
+  const generatedItems: GeneratedScheduleLine[] = [];
+  const linesBySubBudget = groupLinesBySubBudget(lines);
+  const levelLinkage = options.levelLinkage ?? null;
+
+  const orderedSubBudgetIds = [...linesBySubBudget.keys()];
+  let subBudgetStaggerOffset = 0;
+
+  for (const subBudgetId of orderedSubBudgetIds) {
+    const groupLines = linesBySubBudget.get(subBudgetId) ?? [];
+    const subBudgetStartDate = addDaysInclusive(baseStartDate, subBudgetStaggerOffset, workDaysBitmask, exceptionMap);
+
+    let lastPreviousGroupItem: GeneratedScheduleLine | null = null;
+
+    forEachLevelGroup({
+      groupLines,
+      subBudgetStartDate,
+      levelLinkage,
+      levelById,
+      workDaysBitmask,
+      exceptionMap,
+      scheduleLevel: ({ levelLines, levelCursor, shouldChain }) => {
+        const frontLines: WorkFrontLine[] = levelLines.map((line, originalIndex) => ({
+          line,
+          phase: classifyWorkFrontPhase(line),
+          originalIndex,
+        }));
+
+        const orderedFrontLines = sortWorkFrontLines(frontLines);
+        let cursor = levelCursor;
+        let previousInLevel: GeneratedScheduleLine | null = null;
+
+        for (const frontLine of orderedFrontLines) {
+          const previousLine = previousInLevel?.itemCode ?? (shouldChain ? lastPreviousGroupItem?.itemCode ?? null : null);
+          const result = tryGenerateLine({
+            line: frontLine.line,
+            cursor,
+            previousLine,
+            reviewedBudgetItemIds,
+            issues,
+            options,
+            workDaysBitmask,
+            exceptionMap,
+          });
+
+          if (!result) {
+            continue;
+          }
+
+          generatedItems.push(result.generatedLine);
+          previousInLevel = result.generatedLine;
+          cursor = addDaysInclusive(result.generatedLine.endDate, 1, workDaysBitmask, exceptionMap);
+        }
+
+        lastPreviousGroupItem = previousInLevel;
+        return previousInLevel?.endDate ?? null;
+      },
+    });
+
+    subBudgetStaggerOffset = getNextSubBudgetStaggerOffset(subBudgetStaggerOffset, options);
+  }
+
+  return generatedItems;
+}
+
 // ─── By-similarity strategy ──────────────────────────────────────────────────
 
 function buildBySimilarityBase({
@@ -391,7 +517,7 @@ function buildBySimilarityBase({
             // Similar items: schedule in parallel with SS + lag
             const sortedCluster = sortLines(cluster);
             const lagDays = options.similarityLagDays ?? 0;
-            let clusterCursor = cursor;
+            const clusterCursor = cursor;
             let clusterMaxEndDate = cursor;
 
             for (let i = 0; i < sortedCluster.length; i++) {
@@ -741,6 +867,66 @@ function sortLines(lines: WorkScheduleLineRecord[]): WorkScheduleLineRecord[] {
   });
 }
 
+function normalizeScheduleText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function includesAnyKeyword(value: string, keywords: readonly string[]) {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function classifyWorkFrontPhase(line: WorkScheduleLineRecord): WorkFrontPhase {
+  const text = normalizeScheduleText(`${line.itemCode} ${line.description} ${line.unit}`);
+
+  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.testing)) {
+    return "testing";
+  }
+
+  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.preliminaries)) {
+    return "preliminaries";
+  }
+
+  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.earthwork)) {
+    return "earthwork";
+  }
+
+  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.structure)) {
+    return "structure";
+  }
+
+  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.masonry)) {
+    return "masonry";
+  }
+
+  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.installations)) {
+    return "installations";
+  }
+
+  if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.finishes)) {
+    return "finishes";
+  }
+
+  return "other";
+}
+
+function getWorkFrontPhaseOrder(phase: WorkFrontPhase) {
+  return WORK_FRONT_PHASE_ORDER[phase];
+}
+
+function sortWorkFrontLines(lines: WorkFrontLine[]) {
+  return [...lines].sort((left, right) => {
+    const phaseDifference = getWorkFrontPhaseOrder(left.phase) - getWorkFrontPhaseOrder(right.phase);
+    if (phaseDifference !== 0) {
+      return phaseDifference;
+    }
+
+    return left.originalIndex - right.originalIndex;
+  });
+}
+
 function normalizeUnit(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
@@ -760,8 +946,13 @@ function buildGenerationHighlights(
     const strategyLabels: Record<Exclude<WorkScheduleGenerationStrategy, "sequential">, string> = {
       by_level: "Estrategia por niveles (titulos en paralelo)",
       by_similarity: "Estrategia por similitud",
+      by_front: "Estrategia por frentes de obra",
     };
     highlights.push(strategyLabels[options.strategy]);
+  }
+
+  if (options.strategy === "by_front") {
+    highlights.push("Secuencia constructiva aplicada por fase tecnica");
   }
 
   // Crew optimization

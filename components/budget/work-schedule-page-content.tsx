@@ -2474,6 +2474,7 @@ function WorkScheduleGenerationDialog({
                       >
                         <option value="sequential">Secuencial</option>
                         <option value="by_level">Por niveles</option>
+                        <option value="by_front">Por frentes de obra</option>
                         <option value="by_similarity">Por similitud</option>
                       </Select>
                     </Field>
@@ -3029,7 +3030,7 @@ function buildGenerationLevelPreviewGroups(groups: WorkScheduleViewRecord["group
 }
 
 function isWorkScheduleGenerationStrategy(value: string): value is WorkScheduleGenerationStrategy {
-  return value === "sequential" || value === "by_level" || value === "by_similarity";
+  return value === "sequential" || value === "by_level" || value === "by_similarity" || value === "by_front";
 }
 
 function isInterSubBudgetParallelism(value: string): value is InterSubBudgetParallelism {

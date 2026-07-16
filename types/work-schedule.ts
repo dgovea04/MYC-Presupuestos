@@ -126,7 +126,7 @@ export type WorkScheduleCurvePointRecord = {
   accumulatedPercentage: number;
 };
 
-export type WorkScheduleGenerationStrategy = "sequential" | "by_level" | "by_similarity";
+export type WorkScheduleGenerationStrategy = "sequential" | "by_level" | "by_similarity" | "by_front";
 
 export type InterSubBudgetParallelism = "independent" | "staggered" | "parallel";
 

@@ -190,4 +190,46 @@ describe("budget work schedule route", () => {
     expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "work_schedule.intelligent" });
     expect(generateWorkScheduleBase).toHaveBeenCalledWith("budget-1", "user-1", payload);
   });
+
+  it("accepts by_front strategy in the generation payload", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    vi.mocked(generateWorkScheduleBase).mockResolvedValue({
+      generationSummary: {
+        generatedCount: 4,
+        pendingCount: 0,
+        issues: [],
+        appliedOptions: {
+          strategy: "by_front",
+          interSubBudgetParallelism: "parallel",
+          levelLinkage: null,
+          maxDurationDays: null,
+          similarityLagDays: 0,
+        },
+        highlights: ["Estrategia por frentes de obra", "Secuencia constructiva aplicada por fase tecnica"],
+      },
+    });
+
+    const payload = {
+      baseStartDate: "2026-06-01",
+      options: {
+        strategy: "by_front",
+        interSubBudgetParallelism: "parallel",
+        levelLinkage: null,
+        maxDurationDays: null,
+        similarityLagDays: 0,
+      },
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/budgets/budget-1/work-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+      { params: Promise.resolve({ id: "budget-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(generateWorkScheduleBase).toHaveBeenCalledWith("budget-1", "user-1", payload);
+  });
 });

@@ -56,7 +56,7 @@ export const workScheduleItemSaveSchema = z.object({
   monthlyDistributions: z.array(workScheduleDistributionInputSchema).min(1, "Registra al menos un periodo"),
 });
 
-export const workScheduleGenerationStrategySchema = z.enum(["sequential", "by_level", "by_similarity"]);
+export const workScheduleGenerationStrategySchema = z.enum(["sequential", "by_level", "by_similarity", "by_front"]);
 
 export const interSubBudgetParallelismSchema = z.enum(["independent", "staggered", "parallel"]);
 
