@@ -733,6 +733,25 @@ describe("WorkSchedulePageContent", () => {
     }));
   });
 
+  it("shows the by_front strategy option in the generation dialog", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => createInitialData(),
+    });
+
+    const { clickByText, getByText } = await renderWithView(createViewWithLevels(), createSettings());
+
+    await act(async () => {
+      clickByText("Generar cronograma inteligente");
+    });
+
+    expect(getByText("Cronograma inteligente")).toBeTruthy();
+
+    const byFrontOption = document.querySelector('option[value="by_front"]');
+    expect(byFrontOption).toBeTruthy();
+    expect(byFrontOption?.textContent).toBe("Por frentes de obra");
+  });
+
   it("sends by_front strategy when selected", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
