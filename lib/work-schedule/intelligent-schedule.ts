@@ -878,9 +878,17 @@ function includesAnyKeyword(value: string, keywords: readonly string[]) {
   return keywords.some((keyword) => value.includes(keyword));
 }
 
+// Classifies a line into a construction phase used by the `by_front` strategy.
+// The order of checks matters: `testing` is evaluated first because words like
+// "limpieza final", "entrega" or "recepcion" should be treated as final
+// acceptance/testing even if they share words with earlier phases (e.g.
+// "limpieza" also appears in `preliminaries`). After that, phases are checked
+// in their natural construction sequence so that a line is assigned to the
+// earliest matching phase.
 function classifyWorkFrontPhase(line: WorkScheduleLineRecord): WorkFrontPhase {
   const text = normalizeScheduleText(`${line.itemCode} ${line.description} ${line.unit}`);
 
+  // Testing must win over preliminaries/finishes when explicit final words are present.
   if (includesAnyKeyword(text, WORK_FRONT_PHASE_KEYWORDS.testing)) {
     return "testing";
   }

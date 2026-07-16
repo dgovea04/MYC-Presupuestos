@@ -1759,4 +1759,51 @@ describe("buildIntelligentWorkScheduleBase (by_front strategy)", () => {
       predecessor: null,
     }));
   });
+
+  it("classifies final acceptance keywords as testing before preliminaries", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "final-clean", itemCode: "1", description: "Limpieza final del terreno", levelId: "front-a", quantity: 10, performance: 10 }),
+        createLine({ budgetItemId: "prelim-clean", itemCode: "2", description: "Limpieza inicial del terreno", levelId: "front-a", quantity: 10, performance: 10 }),
+      ],
+      options: createOptions({ strategy: "by_front" }),
+      levelById,
+    });
+
+    // "Limpieza final" must be classified as testing (order 70), not preliminaries (order 10).
+    // Therefore it should appear AFTER the preliminaries item in the generated sequence.
+    expect(result.generatedItems.map((item) => item.itemCode)).toEqual(["2", "1"]);
+    expect(result.generatedItems[0]?.predecessor).toBeNull();
+    expect(result.generatedItems[1]?.predecessor).toBe("2FS");
+  });
+
+  it("orders all technical phases inside a front by construction sequence", () => {
+    const levelById = buildLevelMap([
+      { id: "front-a", parentId: null, type: "TITLE" },
+    ]);
+
+    const result = buildIntelligentWorkScheduleBase({
+      baseStartDate: "2026-08-03",
+      lines: [
+        createLine({ budgetItemId: "finish", itemCode: "60", description: "Pintura latex en interiores", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "install", itemCode: "50", description: "Instalacion sanitaria", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "masonry", itemCode: "40", description: "Muro de ladrillo", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "structure", itemCode: "30", description: "Concreto en zapatas", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "earth", itemCode: "20", description: "Excavacion de zapatas", levelId: "front-a", quantity: 5, performance: 5 }),
+        createLine({ budgetItemId: "prelim", itemCode: "10", description: "Trazo y replanteo", levelId: "front-a", quantity: 5, performance: 5 }),
+      ],
+      options: createOptions({ strategy: "by_front" }),
+      levelById,
+    });
+
+    expect(result.generatedItems.map((item) => item.itemCode)).toEqual(["10", "20", "30", "40", "50", "60"]);
+    expect(result.generatedItems[0]?.predecessor).toBeNull();
+    expect(result.generatedItems[1]?.predecessor).toBe("10FS");
+    expect(result.generatedItems[5]?.predecessor).toBe("50FS");
+  });
 });
