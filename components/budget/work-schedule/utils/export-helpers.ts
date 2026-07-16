@@ -3,6 +3,7 @@
 import type ExcelJS from "exceljs";
 import { isPendingWorkScheduleLine, hasIncompleteDistribution } from "../overview-view";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { diffInDays } from "@/components/budget/gantt/gantt-utils";
 import type { DateFormatOption } from "@/types/settings";
 import type {
   WorkScheduleLineRecord,
@@ -28,6 +29,82 @@ type WorkbookTableData = {
 };
 
 // ─── Export functions ──────────────────────────────────────────────────────
+
+/**
+ * Canonical header tuple for the per-line overview CSV export.
+ *
+ * The position of each entry is the source of truth: row index `i` of
+ * `mapLineToCsvRow` corresponds to header `OVERVIEW_CSV_HEADERS[i]`. The helper's
+ * return type is a 12-tuple so TypeScript flags any drift between the two.
+ */
+export const OVERVIEW_CSV_HEADERS = [
+  "Item",
+  "Partida",
+  "Duracion",
+  "Dias calendario",
+  "Inicio",
+  "Fin",
+  "Predecesora",
+  "Cuadrilla",
+  "Unidad",
+  "Metrado",
+  "PU",
+  "Parcial",
+] as const;
+
+export type OverviewCsvHeader = (typeof OVERVIEW_CSV_HEADERS)[number];
+
+/**
+ * Quantity ("Metrado") is rendered with this many decimals on the export.
+ *
+ * Project convention: quantities (m2, m3, und, etc.) always render at 2
+ * decimals regardless of the `currencyDecimals` parameter. The PU and Parcial
+ * cells respect `currencyDecimals` because the convention there is to mirror
+ * the user-configured precision. Kept private until a second caller
+ * (e.g. the workbook builder) materializes — exporting a `2` for now would be
+ * premature API surface.
+ */
+const QUANTITY_DECIMALS = 2;
+
+/**
+ * Maps a {@link WorkScheduleLineRecord} to the 12-cell CSV row that pairs with
+ * {@link OVERVIEW_CSV_HEADERS}. Return type is a 12-tuple so any deviation from
+ * the canonical layout fails the build.
+ */
+export function mapLineToCsvRow(
+  line: WorkScheduleLineRecord,
+  currency: string,
+  currencyDecimals: number,
+  dateFormat: string,
+): readonly [
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+  OverviewCsvHeader,
+] {
+  return [
+    line.itemCode,
+    line.description,
+    line.durationDays != null ? String(line.durationDays) : "-",
+    line.startDate && line.endDate ? String(Math.round(diffInDays(line.startDate, line.endDate)) + 1) : "-",
+    line.startDate ? formatDate(line.startDate, dateFormat as never) : "Pendiente",
+    line.endDate ? formatDate(line.endDate, dateFormat as never) : "Pendiente",
+    line.predecessor || "-",
+    line.crew != null ? formatNumber(line.crew, 2) : "-",
+    line.unit,
+    formatNumber(line.quantity, QUANTITY_DECIMALS),
+    formatCurrency(line.unitPrice, currency, currencyDecimals),
+    formatCurrency(line.partial, currency, currencyDecimals),
+  ];
+}
 
 export function formatPeriodLabel(period: { year: number; month: number }) {
   return `${period.month.toString().padStart(2, "0")}/${period.year}`;
@@ -227,24 +304,11 @@ export function buildWorkScheduleCsvExport({
   dateFormat: string;
 }) {
   if (activeView === "overview") {
-    const headers = ["Item", "Partida", "Duracion", "Inicio", "Fin", "Predecesora", "Cuadrilla", "Unidad", "Metrado", "PU", "Parcial"];
-    const rows = overviewLines.map((line) => [
-      line.itemCode,
-      line.description,
-      line.durationDays != null ? String(line.durationDays) : "-",
-      line.startDate ? formatDate(line.startDate, dateFormat as never) : "Pendiente",
-      line.endDate ? formatDate(line.endDate, dateFormat as never) : "Pendiente",
-      line.predecessor || "-",
-      line.crew != null ? formatNumber(line.crew, 2) : "-",
-      line.unit,
-      formatNumber(line.quantity, 2),
-      formatCurrency(line.unitPrice, currency, currencyDecimals),
-      formatCurrency(line.partial, currency, currencyDecimals),
-    ]);
+    const rows = overviewLines.map((line) => mapLineToCsvRow(line, currency, currencyDecimals, dateFormat));
 
     return {
       fileName: "work-schedule-cronograma.csv",
-      content: buildCsvContent(headers, rows),
+      content: buildCsvContent(OVERVIEW_CSV_HEADERS, rows as string[][]),
     };
   }
 
