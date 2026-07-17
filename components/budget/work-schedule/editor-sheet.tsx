@@ -6,6 +6,7 @@ import { CalendarDays, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useSaveShortcut } from "@/hooks/use-save-shortcut";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 import type { DateFormatOption } from "@/types/settings";
 import { Field } from "./ui-elements";
@@ -43,17 +44,16 @@ export function WorkScheduleDateInput({
   }, []);
 
   return (
-    <div className="relative">
-      <Input
-        ref={inputRef}
-        type="date"
-        value={value}
-        aria-label={label}
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        onChange={(event) => onChange(event.target.value)}
-        className="sr-only"
-      />
+    <div className="relative">        <Input
+          ref={inputRef}
+          type="date"
+          value={value}
+          aria-label={label}
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+          onChange={(event) => onChange(event.target.value)}
+          className="sr-only"
+        />
       <Button
         type="button"
         variant="outline"
@@ -102,6 +102,8 @@ export function WorkScheduleEditorSheet({
   onChange: (line: EditableLine | null) => void;
   onPredecessorChange: (line: EditableLine, predecessor: string) => void;
 }) {
+  useSaveShortcut({ enabled: open, onSave });
+
   const totalPercentage = line?.monthlyDistributions.reduce((sum, d) => sum + Number(d.percentage), 0) ?? 0;
   const percentageDifference = 100 - totalPercentage;
 
@@ -156,6 +158,43 @@ export function WorkScheduleEditorSheet({
 
                 <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
                   <CardContent className="space-y-4 p-5">
+                    <p className="text-sm font-semibold text-[var(--app-text-strong)]">Control de avance</p>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <Field label="Inicio real">
+                        <WorkScheduleDateInput
+                          label="Inicio real"
+                          value={line.actualStartDate ?? ""}
+                          dateFormat={dateFormat}
+                          onChange={(v) => onChange({ ...line, actualStartDate: v || null })}
+                        />
+                      </Field>
+                      <Field label="Fin real">
+                        <WorkScheduleDateInput
+                          label="Fin real"
+                          value={line.actualEndDate ?? ""}
+                          dateFormat={dateFormat}
+                          onChange={(v) => onChange({ ...line, actualEndDate: v || null })}
+                        />
+                      </Field>
+                      <Field label="% Avance">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={line.percentComplete ?? ""}
+                          onChange={(ev) => {
+                            const value = ev.target.value === "" ? null : Math.min(100, Math.max(0, Number(ev.target.value)));
+                            onChange({ ...line, percentComplete: value });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
+                  <CardContent className="space-y-4 p-5">
+
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-[var(--app-text-strong)]">Distribucion mensual</p>

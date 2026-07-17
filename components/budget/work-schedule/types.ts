@@ -31,9 +31,15 @@ export type WorkbookTableData = {
 
 export type EditableLine = {
   budgetItemId: string;
+  itemCode: string;
   description: string;
   quantity: number;
+  unit: string;
+  unitPrice: number;
+  partial: number;
   performance: number | null;
+  subBudgetId: string;
+  subBudgetName: string;
   startDate: string;
   endDate: string;
   durationDays: number;
@@ -43,9 +49,9 @@ export type EditableLine = {
   isMilestone: boolean;
   baselineStartDate: string | null;
   baselineEndDate: string | null;
-  actualStartDate?: string | null;
-  actualEndDate?: string | null;
-  percentComplete?: number | null;
+  actualStartDate: string | null;
+  actualEndDate: string | null;
+  percentComplete: number | null;
 };
 
 export type OverviewFilter = "all" | "pending" | "incomplete_distribution" | "scheduled";

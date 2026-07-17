@@ -44,6 +44,9 @@ export const OVERVIEW_CSV_HEADERS = [
   "Dias calendario",
   "Inicio",
   "Fin",
+  "Inicio real",
+  "Fin real",
+  "% Avance",
   "Predecesora",
   "Cuadrilla",
   "Unidad",
@@ -67,8 +70,8 @@ export type OverviewCsvHeader = (typeof OVERVIEW_CSV_HEADERS)[number];
 const QUANTITY_DECIMALS = 2;
 
 /**
- * Maps a {@link WorkScheduleLineRecord} to the 12-cell CSV row that pairs with
- * {@link OVERVIEW_CSV_HEADERS}. Return type is a 12-tuple so any deviation from
+ * Maps a {@link WorkScheduleLineRecord} to the 15-cell CSV row that pairs with
+ * {@link OVERVIEW_CSV_HEADERS}. Return type is a 15-tuple so any deviation from
  * the canonical layout fails the build.
  */
 export function mapLineToCsvRow(
@@ -76,20 +79,7 @@ export function mapLineToCsvRow(
   currency: string,
   currencyDecimals: number,
   dateFormat: string,
-): readonly [
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-  OverviewCsvHeader,
-] {
+): readonly [string, string, string, string, string, string, string, string, string, string, string, string, string, string, string] {
   return [
     line.itemCode,
     line.description,
@@ -97,6 +87,9 @@ export function mapLineToCsvRow(
     line.startDate && line.endDate ? String(Math.round(diffInDays(line.startDate, line.endDate)) + 1) : "-",
     line.startDate ? formatDate(line.startDate, dateFormat as never) : "Pendiente",
     line.endDate ? formatDate(line.endDate, dateFormat as never) : "Pendiente",
+    line.actualStartDate ? formatDate(line.actualStartDate, dateFormat as never) : "-",
+    line.actualEndDate ? formatDate(line.actualEndDate, dateFormat as never) : "-",
+    line.percentComplete != null ? `${formatNumber(line.percentComplete, 0)}%` : "-",
     line.predecessor || "-",
     line.crew != null ? formatNumber(line.crew, 2) : "-",
     line.unit,
@@ -308,7 +301,7 @@ export function buildWorkScheduleCsvExport({
 
     return {
       fileName: "work-schedule-cronograma.csv",
-      content: buildCsvContent(OVERVIEW_CSV_HEADERS, rows as string[][]),
+      content: buildCsvContent(OVERVIEW_CSV_HEADERS, rows),
     };
   }
 
@@ -1284,7 +1277,7 @@ function resolveWorkbookCurrencySymbol(currency: string) {
   return currency;
 }
 
-function buildCsvContent(headers: string[], rows: string[][]) {
+function buildCsvContent(headers: readonly string[], rows: readonly (readonly string[])[]) {
   return [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
 }
 

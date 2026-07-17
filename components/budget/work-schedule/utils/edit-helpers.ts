@@ -18,6 +18,8 @@ import type {
 } from "@/types/work-schedule";
 import type { EditableLine, WorkScheduleGenerationFormState } from "../types";
 import type { WorkScheduleGenerationOptions } from "@/types/work-schedule";
+import { updateEditableLineDuration } from "../overview-view";
+import { compareIsoDates } from "./overview-helpers";
 
 // ─── Preview ─────────────────────────────────────────────────────────────────
 
@@ -46,11 +48,11 @@ export function buildPreviewWorkScheduleView({
     return null;
   }
 
-  let nextLines = data.groups.flatMap((group) => group.lines).map((line) => ({
+  let nextLines: WorkScheduleLineRecord[] = data.groups.flatMap((group) => group.lines).map((line) => ({
     ...line,
     monthlyDistributions: line.monthlyDistributions.map((d) => ({ ...d })),
-    resourceIds: line.resourceIds ? [...line.resourceIds] : undefined,
-    resources: line.resources?.map((r) => ({ ...r })),
+    ...(line.resourceIds ? { resourceIds: [...line.resourceIds] } : {}),
+    ...(line.resources ? { resources: line.resources.map((r) => ({ ...r })) } : {}),
     criticalPath: line.criticalPath ? { ...line.criticalPath } : null,
   }));
 
@@ -92,9 +94,15 @@ export function createEditableLine(
   return updateEditableLineDates(
     {
       budgetItemId: line.budgetItemId,
+      itemCode: line.itemCode,
       description: line.description,
       quantity: line.quantity,
+      unit: line.unit,
+      unitPrice: line.unitPrice,
+      partial: line.partial,
       performance: line.performance ?? null,
+      subBudgetId: line.subBudgetId,
+      subBudgetName: line.subBudgetName,
       startDate: line.startDate ?? "",
       endDate: line.endDate ?? "",
       durationDays: line.durationDays ?? 0,
@@ -126,8 +134,9 @@ export function serializeEditableLine(
     isMilestone: line.isMilestone ?? false,
     baselineStartDate: line.baselineStartDate || null,
     baselineEndDate: line.baselineEndDate || null,
-    // TODO: Restore actualStartDate, actualEndDate, percentComplete after running
-    // `npx prisma generate` (dev server locks the Prisma client DLL, preventing regeneration)
+    actualStartDate: line.actualStartDate || null,
+    actualEndDate: line.actualEndDate || null,
+    percentComplete: line.percentComplete,
     monthlyDistributions: line.monthlyDistributions.map((d) => ({
       year: d.year,
       month: d.month,
@@ -167,8 +176,27 @@ export function updateEditableLineDates(
   line: EditableLine,
   patch: { startDate?: string; endDate?: string },
 ): EditableLine {
-  const startDate = patch.startDate ?? line.startDate;
-  const endDate = patch.endDate ?? line.endDate;
+  let startDate = patch.startDate ?? line.startDate;
+  let endDate = patch.endDate ?? line.endDate;
+
+  const patchProvidesStartDate = patch.startDate !== undefined;
+  const patchProvidesEndDate = patch.endDate !== undefined;
+
+  // Propose a default date when the line has no existing dates so the user sees
+  // a distribution immediately after picking the first date in the editor.
+  // Also keep the dates in sync when the user changes only one side and the
+  // existing other side would otherwise fall out of range. When both sides are
+  // explicitly provided and they conflict, preserve the trap contract used by
+  // inline editing and serialization.
+  if (patchProvidesStartDate && !patchProvidesEndDate) {
+    if (startDate && (!endDate || compareIsoDates(endDate, startDate) < 0)) {
+      endDate = startDate;
+    }
+  } else if (!patchProvidesStartDate && patchProvidesEndDate) {
+    if (endDate && (!startDate || compareIsoDates(endDate, startDate) < 0)) {
+      startDate = endDate;
+    }
+  }
 
   if (!startDate || !endDate) {
     return { ...line, startDate, endDate, durationDays: 0 };
@@ -199,7 +227,13 @@ export function updateEditableLineCrew(line: EditableLine, crew: string) {
         }) ?? line.durationDays
       : line.durationDays;
 
-  return { ...line, crew };
+  const nextLine = { ...line, crew };
+
+  if (durationDays == null) {
+    return nextLine;
+  }
+
+  return updateEditableLineDuration(nextLine, durationDays);
 }
 
 export function updateEditableLinePredecessor(
@@ -223,7 +257,7 @@ export function updateEditableLinePredecessor(
   const stored = formatPredecessorForStorage(predecessor, rowNumberToItemCode);
   const references = tryParseWorkSchedulePredecessors(stored);
 
-  if (references.length === 0) {
+  if (!references || references.length === 0) {
     return { ...line, predecessor };
   }
 
@@ -233,9 +267,15 @@ export function updateEditableLinePredecessor(
   // from string (UI) to number | null (record).
   const asWorkScheduleRecord: WorkScheduleLineRecord = {
     budgetItemId: line.budgetItemId,
+    itemCode: line.itemCode,
     description: line.description,
     quantity: line.quantity,
+    unit: line.unit,
+    unitPrice: line.unitPrice,
+    partial: line.partial,
     performance: line.performance,
+    subBudgetId: line.subBudgetId,
+    subBudgetName: line.subBudgetName,
     startDate: line.startDate,
     endDate: line.endDate,
     durationDays: line.durationDays,
@@ -248,6 +288,9 @@ export function updateEditableLinePredecessor(
     isMilestone: line.isMilestone,
     baselineStartDate: line.baselineStartDate,
     baselineEndDate: line.baselineEndDate,
+    actualStartDate: line.actualStartDate,
+    actualEndDate: line.actualEndDate,
+    percentComplete: line.percentComplete,
   };
 
   const cascaded = recalculateWorkScheduleLineFromReferences(

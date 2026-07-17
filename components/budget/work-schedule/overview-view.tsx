@@ -24,7 +24,7 @@ import {
   DEFAULT_WORK_SCHEDULE_TIMELINE_PANEL_WIDTH,
   WORK_SCHEDULE_TIMELINE_PANEL_WIDTH_COOKIE_NAME,
 } from "@/lib/work-schedule/overview-panel-width";
-import { VisibleTimelineLinePosition } from "./types";
+import type { EditableLine, VisibleTimelineLinePosition } from "./types";
 import { getOverviewMeasuredHeightsStorageKey, sanitizeMeasuredHeightsMap, compareIsoDates, shouldHydrateInitialDistribution, buildInitialDistributionsFromRange, addIsoDays } from "./utils/overview-helpers";
 import type {
   WorkScheduleLineRecord,
@@ -70,6 +70,9 @@ export const OVERVIEW_TABLE_COLUMN_WIDTHS = {
   duration: 88,
   start: 118,
   end: 118,
+  actualStart: 118,
+  actualEnd: 118,
+  progress: 80,
   predecessor: 100,
   crew: 92,
   performance: 118,
@@ -85,24 +88,7 @@ export type TimelineDay = {
   date: Date;
 };
 
-type EditableLine = {
-  budgetItemId: string;
-  description: string;
-  quantity: number;
-  performance: number | null;
-  startDate: string;
-  endDate: string;
-  durationDays: number;
-  predecessor: string;
-  crew: string;
-  monthlyDistributions: WorkScheduleMonthlyDistributionRecord[];
-  isMilestone: boolean;
-  baselineStartDate: string | null;
-  baselineEndDate: string | null;
-  actualStartDate?: string | null;
-  actualEndDate?: string | null;
-  percentComplete?: number | null;
-};
+
 
 type OverviewVirtualItem =
   | {
@@ -413,6 +399,9 @@ export function WorkScheduleOverview({
       OVERVIEW_TABLE_COLUMN_WIDTHS.duration,
       OVERVIEW_TABLE_COLUMN_WIDTHS.start,
       OVERVIEW_TABLE_COLUMN_WIDTHS.end,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.actualStart,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.actualEnd,
+      OVERVIEW_TABLE_COLUMN_WIDTHS.progress,
       OVERVIEW_TABLE_COLUMN_WIDTHS.predecessor,
       OVERVIEW_TABLE_COLUMN_WIDTHS.crew,
       OVERVIEW_TABLE_COLUMN_WIDTHS.performance,
@@ -655,8 +644,6 @@ export function WorkScheduleOverview({
   }, [data.budgetId]);
 
   useLayoutEffect(() => {
-    measureLeftTableViewportWidth();
-
     const scheduleViewportMeasurement = () => {
       if (pendingViewportMeasureFrameRef.current !== null) {
         return;
@@ -1256,6 +1243,9 @@ export function WorkScheduleOverview({
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Duracion</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Inicio</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Fin</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Inicio real</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Fin real</TH>
+                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>% Avance</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Predecesora</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Cuadrilla</TH>
                         <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Rendimiento</TH>
@@ -1269,7 +1259,7 @@ export function WorkScheduleOverview({
                     <TBody>
                       {overviewVirtualWindow.topSpacerHeight > 0 ? (
                         <TR aria-hidden="true">
-                          <TD colSpan={showCostColumns ? 14 : 12} className="p-0" style={{ height: overviewVirtualWindow.topSpacerHeight }} />
+                          <TD colSpan={showCostColumns ? 17 : 15} className="p-0" style={{ height: overviewVirtualWindow.topSpacerHeight }} />
                         </TR>
                       ) : null}
                       {overviewVirtualWindow.visibleItems.map((item) =>
@@ -1347,7 +1337,7 @@ export function WorkScheduleOverview({
                       )}
                       {overviewVirtualWindow.bottomSpacerHeight > 0 ? (
                         <TR aria-hidden="true">
-                          <TD colSpan={showCostColumns ? 14 : 12} className="p-0" style={{ height: overviewVirtualWindow.bottomSpacerHeight }} />
+                          <TD colSpan={showCostColumns ? 17 : 15} className="p-0" style={{ height: overviewVirtualWindow.bottomSpacerHeight }} />
                         </TR>
                       ) : null}
                     </TBody>
@@ -1868,6 +1858,63 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       </TD>
       <TD
         className="align-middle"
+        data-testid={`work-schedule-inline-cell-actualStartDate-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <WorkScheduleDateInput
+            label="Inicio real"
+            value={inlineDraft.actualStartDate ?? ""}
+            dateFormat={dateFormat as DateFormatOption}
+            compact
+            onKeyDown={handleInlineKeyDown}
+            onChange={(value) => onInlineDraftChange(inlineRowId, { ...inlineDraft, actualStartDate: value || null })}
+          />
+        ) : (
+          line.actualStartDate ? formatDate(line.actualStartDate, dateFormat as never) : "-"
+        )}
+      </TD>
+      <TD
+        className="align-middle"
+        data-testid={`work-schedule-inline-cell-actualEndDate-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <WorkScheduleDateInput
+            label="Fin real"
+            value={inlineDraft.actualEndDate ?? ""}
+            dateFormat={dateFormat as DateFormatOption}
+            compact
+            onKeyDown={handleInlineKeyDown}
+            onChange={(value) => onInlineDraftChange(inlineRowId, { ...inlineDraft, actualEndDate: value || null })}
+          />
+        ) : (
+          line.actualEndDate ? formatDate(line.actualEndDate, dateFormat as never) : "-"
+        )}
+      </TD>
+      <TD
+        className="align-middle"
+        data-testid={`work-schedule-inline-cell-percentComplete-${line.budgetItemId}`}
+        onClick={() => onActivateInlineRow(line)}
+      >
+        {isInlineActive && inlineDraft ? (
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            value={inlineDraft.percentComplete ?? ""}
+            onKeyDown={handleInlineKeyDown}
+            onChange={(event) => {
+              const value = event.target.value === "" ? null : Math.min(100, Math.max(0, Number(event.target.value)));
+              onInlineDraftChange(inlineRowId, { ...inlineDraft, percentComplete: value });
+            }}
+          />
+        ) : (
+          line.percentComplete != null ? `${formatNumber(line.percentComplete, 0)}%` : "-"
+        )}
+      </TD>
+      <TD
+        className="align-middle"
         data-testid={`work-schedule-inline-cell-predecessor-${line.budgetItemId}`}
         onClick={() => onActivateInlineRow(line)}
       >
@@ -1996,6 +2043,10 @@ const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
       <TD className="align-middle">{row.durationDays ?? "-"}</TD>
       <TD className="align-middle">{row.startDate ? formatDate(row.startDate, dateFormat as never) : "Pendiente"}</TD>
       <TD className="align-middle">{row.endDate ? formatDate(row.endDate, dateFormat as never) : "Pendiente"}</TD>
+      <TD className="align-middle">-</TD>
+      <TD className="align-middle">-</TD>
+      <TD className="align-middle">-</TD>
+      <TD className="align-middle">-</TD>
       <TD className="align-middle">-</TD>
       <TD className="align-middle">-</TD>
       <TD className="align-middle">-</TD>
@@ -2970,9 +3021,15 @@ export function updateEditableLineDuration(line: EditableLine, durationDays: num
 function createQuickToggleDraft(line: WorkScheduleLineRecord, itemCodeToRowNumber: Map<string, number>): EditableLine {
   return {
     budgetItemId: line.budgetItemId,
+    itemCode: line.itemCode,
     description: line.description,
     quantity: line.quantity,
+    unit: line.unit,
+    unitPrice: line.unitPrice,
+    partial: line.partial,
     performance: line.performance ?? null,
+    subBudgetId: line.subBudgetId,
+    subBudgetName: line.subBudgetName,
     startDate: line.startDate ?? "",
     endDate: line.endDate ?? "",
     durationDays: line.durationDays ?? 1,
@@ -2982,6 +3039,9 @@ function createQuickToggleDraft(line: WorkScheduleLineRecord, itemCodeToRowNumbe
     isMilestone: line.isMilestone ?? false,
     baselineStartDate: line.baselineStartDate ?? null,
     baselineEndDate: line.baselineEndDate ?? null,
+    actualStartDate: line.actualStartDate ?? null,
+    actualEndDate: line.actualEndDate ?? null,
+    percentComplete: line.percentComplete ?? null,
   };
 }
 

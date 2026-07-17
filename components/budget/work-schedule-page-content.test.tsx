@@ -2,7 +2,6 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import userEvent from "@testing-library/user-event";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   WorkSchedulePageContent,
@@ -752,13 +751,182 @@ describe("WorkSchedulePageContent", () => {
     expect(byFrontOption?.textContent).toBe("Por frentes de obra");
   });
 
+  it("renders the by_front keyword inputs after selecting the strategy", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ customPhaseKeywords: null }),
+    });
+
+    const { clickByText, getInputByLabel } = await renderWithView(createViewWithLevels(), createSettings());
+
+    await act(async () => {
+      clickByText("Generar cronograma inteligente");
+    });
+
+    await act(async () => {
+      setInputValue(getInputByLabel("Fecha base"), "2026-06-01");
+      clickByText("Por niveles");
+    });
+
+    await act(async () => {
+      clickByText("Por frentes de obra");
+    });
+
+    expect(getInputByLabel("Preliminares")).toBeTruthy();
+  });
+
+  it("saves custom phase keywords when clicking Guardar configuracion", async () => {
+    const { clickByText } = await openFrontsGenerationDialog();
+
+    await act(async () => {
+      clickByText("Guardar configuracion");
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(document.querySelector("p.text-emerald-600")?.textContent).toBe("Configuracion guardada correctamente.");
+
+    const saveCall = fetchMock.mock.calls.find(
+      ([url, options]) => url === "/api/budgets/budget-1/work-schedule/generation-settings" && options?.method === "PUT",
+    );
+
+    expect(saveCall).toBeDefined();
+    const requestBody = JSON.parse(saveCall![1].body as string);
+    expect(requestBody).toMatchObject({
+      settings: {
+        customPhaseKeywords: {
+          preliminaries: ["limpieza", "replanteo"],
+        },
+      },
+    });
+  });
+
+  it.each([
+    { modifier: "Ctrl", modifierKey: "ctrlKey" as const },
+    { modifier: "Cmd", modifierKey: "metaKey" as const },
+  ])("saves custom phase keywords when pressing $modifier+S", async ({ modifierKey }) => {
+    await openFrontsGenerationDialog();
+
+    await act(async () => {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "s", [modifierKey]: true, bubbles: true }));
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(document.querySelector("p.text-emerald-600")?.textContent).toBe("Configuracion guardada correctamente.");
+
+    const saveCall = fetchMock.mock.calls.find(
+      ([url, options]) => url === "/api/budgets/budget-1/work-schedule/generation-settings" && options?.method === "PUT",
+    );
+
+    expect(saveCall).toBeDefined();
+    const requestBody = JSON.parse(saveCall![1].body as string);
+    expect(requestBody).toMatchObject({
+      settings: {
+        customPhaseKeywords: {
+          preliminaries: ["limpieza", "replanteo"],
+        },
+      },
+    });
+  });
+
+  it("does not save custom phase keywords when pressing Ctrl+S while typing in an input", async () => {
+    const { getInputByLabel } = await openFrontsGenerationDialog();
+
+    const input = getInputByLabel("Preliminares");
+    await act(async () => {
+      setInputValue(input, "limpieza, replanteo");
+      input.focus();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const saveCall = fetchMock.mock.calls.find(
+      ([url, options]) => url === "/api/budgets/budget-1/work-schedule/generation-settings" && options?.method === "PUT",
+    );
+
+    expect(saveCall).toBeUndefined();
+  });
+
+  it.each([
+    { label: "Ctrl+A", event: { key: "a", ctrlKey: true } },
+    { label: "Ctrl+Shift+S", event: { key: "s", ctrlKey: true, shiftKey: true } },
+    { label: "Ctrl+Alt+S", event: { key: "s", ctrlKey: true, altKey: true } },
+    { label: "Cmd+Shift+S", event: { key: "s", metaKey: true, shiftKey: true } },
+    { label: "S without modifier", event: { key: "s" } },
+  ])("does not save custom phase keywords when pressing $label", async ({ event }) => {
+    await openFrontsGenerationDialog();
+
+    await act(async () => {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      document.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...event }));
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const saveCall = fetchMock.mock.calls.find(
+      ([url, options]) => url === "/api/budgets/budget-1/work-schedule/generation-settings" && options?.method === "PUT",
+    );
+
+    expect(saveCall).toBeUndefined();
+  });
+
+  it("saves custom phase keywords when pressing Ctrl+S while a button is focused", async () => {
+    const { getByText } = await openFrontsGenerationDialog();
+
+    await act(async () => {
+      const button = getByText("Guardar configuracion");
+      button.focus();
+      expect(document.activeElement).toBe(button);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(document.querySelector("p.text-emerald-600")?.textContent).toBe("Configuracion guardada correctamente.");
+
+    const saveCall = fetchMock.mock.calls.find(
+      ([url, options]) => url === "/api/budgets/budget-1/work-schedule/generation-settings" && options?.method === "PUT",
+    );
+
+    expect(saveCall).toBeDefined();
+    const requestBody = JSON.parse(saveCall![1].body as string);
+    expect(requestBody).toMatchObject({
+      settings: {
+        customPhaseKeywords: {
+          preliminaries: ["limpieza", "replanteo"],
+        },
+      },
+    });
+  });
+
+  it("shows an error message when saving custom phase keywords fails", async () => {
+    const { clickByText, getByText } = await openFrontsGenerationDialog(async (url, options) => {
+      if (url === "/api/budgets/budget-1/work-schedule/generation-settings") {
+        if (options?.method === "PUT") {
+          return { ok: false, json: async () => ({ error: "Error de prueba" }) };
+        }
+
+        return { ok: true, json: async () => ({ customPhaseKeywords: null }) };
+      }
+
+      return { ok: true, json: async () => createInitialData() };
+    });
+
+    await act(async () => {
+      clickByText("Guardar configuracion");
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(getByText("Error de prueba")).toBeTruthy();
+  });
+
   it("sends by_front strategy when selected", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => createInitialData(),
     });
 
-    const { clickByText, getByText, getInputByLabel } = await renderWithView(createViewWithLevels(), createSettings());
+    const { clickByText, getInputByLabel } = await renderWithView(createViewWithLevels(), createSettings());
 
     await act(async () => {
       clickByText("Generar cronograma inteligente");
@@ -1868,7 +2036,7 @@ describe("WorkSchedulePageContent", () => {
     expect(lastCreatedBlob).toBeTruthy();
 
     const csvContent = await lastCreatedBlob?.text();
-    expect(csvContent).toContain("Item,Partida,Duracion,Dias calendario,Inicio,Fin,Predecesora,Cuadrilla,Unidad,Metrado,PU,Parcial");
+    expect(csvContent).toContain("Item,Partida,Duracion,Dias calendario,Inicio,Fin,Inicio real,Fin real,% Avance,Predecesora,Cuadrilla,Unidad,Metrado,PU,Parcial");
     expect(csvContent).toContain("02.01,Tarrajeo,14,");
     expect(csvContent).toContain(",-,-,M2,10.00,S/ 20.00,S/ 200.00");
     expect(csvContent).not.toContain("Trazo y replanteo");
@@ -2135,6 +2303,10 @@ async function waitFor(predicate: () => boolean, timeoutMs = 4000) {
   }
 }
 
+function createInitialData(): WorkScheduleViewRecord {
+  return createView();
+}
+
 async function renderContent() {
   return renderWithView(createView(), createSettings());
 }
@@ -2232,8 +2404,10 @@ async function renderWithView(view: WorkScheduleViewRecord, settings: UserSettin
       return element;
     },
     getInputByLabel: (label: string) => {
-      const labelElement = [...document.querySelectorAll("label")].find((candidate) =>
-        candidate.textContent?.includes(label),
+      const editorPanel = document.querySelector("[data-testid='work-schedule-editor-panel']");
+      const labels = editorPanel ? [...editorPanel.querySelectorAll("label")] : [...document.querySelectorAll("label")];
+      const labelElement = labels.find((candidate) =>
+        candidate.textContent?.trim().includes(label),
       );
 
       if (!(labelElement instanceof HTMLLabelElement)) {
@@ -2247,6 +2421,7 @@ async function renderWithView(view: WorkScheduleViewRecord, settings: UserSettin
 
       return input;
     },
+
     getDistributionInput: (index: number, label: string) => {
       const groups = [...document.querySelectorAll("[data-testid='work-schedule-distribution-row']")];
       const row = groups[index];
@@ -2310,6 +2485,13 @@ function createSettings(overrides: Partial<UserSettingsRecord> = {}): UserSettin
     defaultGeneralExpensesRate: 0.1,
     defaultUtilityRate: 0.08,
     defaultSubBudgetNames: ["Estructuras", "Arquitectura"],
+    aiProviderPreference: "auto",
+    floatingKhipuProvider: "ollama",
+    floatingKhipuWidth: 600,
+    floatingKhipuHeight: 500,
+    floatingKhipuFontSize: "normal",
+    floatingKhipuPosition: "bottom-right",
+    floatingKhipuTheme: "light",
     ...overrides,
   };
 }
@@ -2319,6 +2501,47 @@ function setInputValue(input: HTMLInputElement, value: string) {
   descriptor?.set?.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function openFrontsGenerationDialog(
+  fetchImplementation: (url: string, options?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }> = defaultGenerationSettingsFetch,
+) {
+  fetchMock.mockImplementation(fetchImplementation);
+
+  const helpers = await renderWithView(createViewWithLevels(), createSettings());
+
+  await act(async () => {
+    helpers.clickByText("Generar cronograma inteligente");
+  });
+
+  await act(async () => {
+    setInputValue(helpers.getInputByLabel("Fecha base"), "2026-06-01");
+    helpers.clickByText("Por niveles");
+  });
+
+  await act(async () => {
+    helpers.clickByText("Por frentes de obra");
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  await act(async () => {
+    setInputValue(helpers.getInputByLabel("Preliminares"), "limpieza, replanteo");
+  });
+
+  return helpers;
+}
+
+function defaultGenerationSettingsFetch(url: string, options?: RequestInit) {
+  if (url === "/api/budgets/budget-1/work-schedule/generation-settings") {
+    if (options?.method === "PUT") {
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    }
+
+    return Promise.resolve({ ok: true, json: async () => ({ customPhaseKeywords: null }) });
+  }
+
+  return Promise.resolve({ ok: true, json: async () => createInitialData() });
 }
 
 function createView(): WorkScheduleViewRecord {

@@ -1,11 +1,12 @@
 "use client";
 
-import { type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { useSaveShortcut } from "@/hooks/use-save-shortcut";
 import type { InterSubBudgetParallelism, LevelLinkageMode, WorkScheduleGenerationStrategy, WorkScheduleViewRecord } from "@/types/work-schedule";
 import { WORK_FRONT_PHASE_KEYWORDS, type WorkFrontPhase } from "@/lib/work-schedule/work-front-phase";
 import { Field } from "./ui-elements";
@@ -30,8 +31,11 @@ export function WorkScheduleGenerationDialog({
   reviewedBudgetItemIds,
   saveState,
   error,
+  settingsSaveState,
+  settingsSaveError,
   hasExistingSchedule,
   reviewSummary,
+  isLoadingCustomPhaseKeywords,
   onBaseStartDateChange,
   onFormStateChange,
   onTogglePreviewGroup,
@@ -40,6 +44,7 @@ export function WorkScheduleGenerationDialog({
   onMarkAllReviewed,
   onClose,
   onSubmit,
+  onSaveSettings,
 }: {
   open: boolean;
   baseStartDate: string;
@@ -49,8 +54,11 @@ export function WorkScheduleGenerationDialog({
   reviewedBudgetItemIds: string[];
   saveState: "idle" | "saving" | "error";
   error: string;
+  settingsSaveState: "idle" | "saving" | "success" | "error";
+  settingsSaveError: string;
   hasExistingSchedule: boolean;
   reviewSummary: WorkScheduleViewRecord["reviewSummary"];
+  isLoadingCustomPhaseKeywords: boolean;
   onBaseStartDateChange: (value: string) => void;
   onFormStateChange: (value: WorkScheduleGenerationFormState | ((current: WorkScheduleGenerationFormState) => WorkScheduleGenerationFormState)) => void;
   onTogglePreviewGroup: (subBudgetId: string) => void;
@@ -59,7 +67,10 @@ export function WorkScheduleGenerationDialog({
   onMarkAllReviewed: () => void;
   onClose: () => void;
   onSubmit: () => void;
+  onSaveSettings: () => void;
 }) {
+  useSaveShortcut({ enabled: open, onSave: onSaveSettings });
+
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
@@ -124,11 +135,35 @@ export function WorkScheduleGenerationDialog({
 
                   {formState.strategy === "by_front" ? (
                     <div className="col-span-full space-y-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--app-text-strong)]">Palabras clave por fase</p>
-                        <p className="mt-1 text-xs text-[var(--app-text-muted)]">
-                          Personaliza las palabras clave (separadas por coma) usadas para clasificar las partidas en la estrategia por frentes.
-                        </p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-[var(--app-text-strong)]">Palabras clave por fase</p>
+                            {isLoadingCustomPhaseKeywords ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin text-[var(--app-text-muted)]" />
+                                <span className="text-xs text-[var(--app-text-muted)]">Cargando...</span>
+                              </>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-xs text-[var(--app-text-muted)]">
+                            Personaliza las palabras clave (separadas por coma) usadas para clasificar las partidas en la estrategia por frentes.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                          onClick={() =>
+                            onFormStateChange((current) => ({
+                              ...current,
+                              customPhaseKeywords: Object.fromEntries(
+                                PHASE_KEYWORD_FIELDS.map((field) => [field.phase, WORK_FRONT_PHASE_KEYWORDS[field.phase].join(", ")]),
+                              ),
+                            }))
+                          }
+                        >
+                          Restablecer por defecto
+                        </button>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
                         {PHASE_KEYWORD_FIELDS.map((field) => (
@@ -136,6 +171,7 @@ export function WorkScheduleGenerationDialog({
                             <Input
                               placeholder={WORK_FRONT_PHASE_KEYWORDS[field.phase].join(", ")}
                               value={formState.customPhaseKeywords[field.phase] ?? ""}
+                              disabled={isLoadingCustomPhaseKeywords}
                               onChange={(event) =>
                                 onFormStateChange((current) => ({
                                   ...current,
@@ -241,8 +277,23 @@ export function WorkScheduleGenerationDialog({
 
               {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
 
+              {settingsSaveState === "success" ? (
+                <p className="text-sm font-medium text-emerald-600">Configuracion guardada correctamente.</p>
+              ) : null}
+              {settingsSaveState === "error" ? (
+                <p className="text-sm font-medium text-rose-600">{settingsSaveError || "No se pudo guardar la configuracion"}</p>
+              ) : null}
+
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button
+                  variant="outline"
+                  onClick={onSaveSettings}
+                  disabled={settingsSaveState === "saving" || isLoadingCustomPhaseKeywords}
+                  title="Guardar configuracion (Ctrl+S / Cmd+S)"
+                >
+                  {settingsSaveState === "saving" ? "Guardando..." : "Guardar configuracion"}
+                </Button>
                 <Button onClick={onSubmit} disabled={saveState === "saving" || !baseStartDate}>{saveState === "saving" ? "Generando..." : "Generar base"}</Button>
               </div>
             </div>

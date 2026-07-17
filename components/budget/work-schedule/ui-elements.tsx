@@ -97,7 +97,7 @@ export function Field({
   tooltip?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <label className="flex flex-col gap-1">
       <span
         className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-muted)]"
         title={tooltip}
@@ -105,7 +105,7 @@ export function Field({
         {label}
       </span>
       {children}
-    </div>
+    </label>
   );
 }
 

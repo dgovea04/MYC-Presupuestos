@@ -53,8 +53,18 @@ import type {
   WorkScheduleValuationCalendarRow,
   WorkScheduleViewRecord,
 } from "@/types/work-schedule";
-import { WorkScheduleOverview, buildTimelineDays, formatPredecessorForDisplay, formatPredecessorToken, formatPredecessorForStorage, WorkScheduleDateInput, updateEditableLineDates, updateEditableLineCrew, updateEditableLineDuration, parseEditableCrew, isPendingWorkScheduleLine, hasIncompleteDistribution } from "./work-schedule/overview-view";
-import { parseCustomPhaseKeywords } from "./work-schedule/utils/edit-helpers";
+import { WorkScheduleOverview, buildTimelineDays, formatPredecessorForDisplay, formatPredecessorToken, formatPredecessorForStorage, updateEditableLineDates, updateEditableLineCrew, updateEditableLineDuration, parseEditableCrew, isPendingWorkScheduleLine, hasIncompleteDistribution } from "./work-schedule/overview-view";
+import type { EditableLine } from "./work-schedule/types";
+import { WorkScheduleEditorSheet } from "./work-schedule/editor-sheet";
+import { WorkScheduleGenerationDialog } from "./work-schedule/generation-dialog";
+import { ScheduleDeviationPanel } from "./work-schedule/schedule-deviation-panel";
+import { LookaheadView } from "./work-schedule/lookahead-view";
+import { ResourceCapacityPanel } from "./work-schedule/resource-capacity-panel";
+import { ReschedulePreviewDialog } from "./work-schedule/reschedule-preview-dialog";
+import { createEditableLine, serializeEditableLine, createNextDistribution, parseCustomPhaseKeywords } from "./work-schedule/utils/edit-helpers";
+import { detectWorkScheduleDeviations } from "@/lib/work-schedule/progress";
+import { detectResourceOverallocations } from "@/lib/work-schedule/resource-capacity";
+import { buildWorkScheduleReschedulePreview, type WorkScheduleRescheduleImpact } from "@/lib/work-schedule/rescheduling";
 import {
   buildWorkScheduleCsvExport,
   formatPeriodLabel,
@@ -85,21 +95,7 @@ type DerivedCalendarView = Exclude<ActiveView, "overview">;
 type WorkbookExportScope = "detail_only" | "detail_and_total" | "detail_subtotals_and_total";
 type WorkbookExportProfile = "minimal" | "executive" | "analytical";
 
-export type EditableLine = {
-  budgetItemId: string;
-  description: string;
-  quantity: number;
-  performance: number | null;
-  startDate: string;
-  endDate: string;
-  durationDays: number;
-  predecessor: string;
-  crew: string;
-  monthlyDistributions: WorkScheduleMonthlyDistributionRecord[];
-  isMilestone: boolean;
-  baselineStartDate: string | null;
-  baselineEndDate: string | null;
-};
+
 
 type OverviewFilter = "all" | "pending" | "incomplete_distribution" | "scheduled";
 type ResourceCalendarMode = "amounts" | "quantities";
@@ -276,6 +272,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [generationFormState, setGenerationFormState] = useState<WorkScheduleGenerationFormState>(() =>
     readGenerationFormState(normalizedInitialData.budgetId, normalizedInitialData.groups),
   );
+  const hasCustomPhaseKeywordsChangedRef = useRef(false);
   const [generationPreviewCollapsedGroups, setGenerationPreviewCollapsedGroups] = useState<Record<string, boolean>>(() =>
     readGenerationPreviewCollapsedGroups(normalizedInitialData.budgetId),
   );
@@ -284,7 +281,15 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   );
   const [generationState, setGenerationState] = useState<"idle" | "saving" | "error">("idle");
   const [generationError, setGenerationError] = useState("");
+  const [generationSettingsSaveState, setGenerationSettingsSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [generationSettingsSaveError, setGenerationSettingsSaveError] = useState("");
+  const [isLoadingGenerationSettings, setIsLoadingGenerationSettings] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [reschedulePreview, setReschedulePreview] = useState<{
+    open: boolean;
+    impacts: WorkScheduleRescheduleImpact[];
+    pendingLine: EditableLine | null;
+  } | null>(null);
   const [derivedDataLoadState, setDerivedDataLoadState] = useState<DerivedDataLoadState>(() => ({
     valuation: normalizedInitialData.valuationCalendar ? "idle" : "idle",
     resources: normalizedInitialData.resourceCalendar ? "idle" : "idle",
@@ -462,6 +467,25 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     rowNumberToItemCode: predecessorRowNumberToItemCode,
   } = useMemo(() => buildPredecessorRowNumberMaps(presentationData.groups), [presentationData.groups]);
 
+  const asOfDate = data.timeline.startDate ?? new Date().toISOString().slice(0, 10);
+  const scheduleDeviations = useMemo(
+    () => detectWorkScheduleDeviations({ lines: presentationLines, asOfDate }),
+    [presentationLines, asOfDate],
+  );
+  const resourceOverallocations = useMemo(() => {
+    const demands =
+      data.resourceCalendar?.rows.flatMap((row) =>
+        Object.entries(row.periodQuantities).map(([periodKey, quantity]) => ({
+          resourceId: row.resourceId,
+          resourceName: row.description,
+          periodKey,
+          demandQuantity: quantity,
+        })),
+      ) ?? [];
+    const limits: { resourceId: string; periodKey: string; quantityCapacity: number }[] = [];
+    return detectResourceOverallocations({ demands, limits });
+  }, [data.resourceCalendar?.rows]);
+
   async function persistWorkScheduleLine(line: EditableLine) {
     const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule`, {
       method: "PATCH",
@@ -563,6 +587,16 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   async function handleSave() {
     if (!editingLine) return;
 
+    const impacts = buildWorkScheduleReschedulePreview({
+      lines: presentationLines,
+      changedBudgetItemId: editingLine.budgetItemId,
+    });
+
+    if (impacts.length > 0 && reschedulePreview == null) {
+      setReschedulePreview({ open: true, impacts, pendingLine: editingLine });
+      return;
+    }
+
     setSaveState("saving");
     setError("");
 
@@ -581,6 +615,26 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   async function handleInlineRowSave(rowId: string) {
     const draft = inlineDrafts[rowId];
     if (!draft) {
+      return;
+    }
+
+    if (draft.percentComplete != null && (draft.percentComplete < 0 || draft.percentComplete > 100)) {
+      setInlineErrorsById((current) => ({ ...current, [rowId]: "El avance debe estar entre 0 y 100." }));
+      return;
+    }
+
+    if (draft.actualStartDate && draft.actualEndDate && draft.actualStartDate > draft.actualEndDate) {
+      setInlineErrorsById((current) => ({ ...current, [rowId]: "El inicio real no puede ser posterior al fin real." }));
+      return;
+    }
+
+    const inlineImpacts = buildWorkScheduleReschedulePreview({
+      lines: presentationLines,
+      changedBudgetItemId: draft.budgetItemId,
+    });
+
+    if (inlineImpacts.length > 0 && reschedulePreview == null) {
+      setReschedulePreview({ open: true, impacts: inlineImpacts, pendingLine: draft });
       return;
     }
 
@@ -607,11 +661,39 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     }
   }
 
+  const handleGenerationFormStateChange = useCallback(
+    (next: React.SetStateAction<WorkScheduleGenerationFormState>) => {
+      setGenerationFormState((current) => {
+        const nextState = typeof next === "function" ? next(current) : next;
+        if (nextState.customPhaseKeywords !== current.customPhaseKeywords) {
+          hasCustomPhaseKeywordsChangedRef.current = true;
+        }
+        return nextState;
+      });
+    },
+    [],
+  );
+
+  const handleSaveGenerationSettings = useCallback(async () => {
+    setGenerationSettingsSaveState("saving");
+    setGenerationSettingsSaveError("");
+
+    try {
+      await saveGenerationSettings(data.budgetId, generationFormState);
+      setGenerationSettingsSaveState("success");
+    } catch (saveSettingsError) {
+      setGenerationSettingsSaveState("error");
+      setGenerationSettingsSaveError(saveSettingsError instanceof Error ? saveSettingsError.message : "No se pudo guardar la configuracion");
+    }
+  }, [data.budgetId, generationFormState]);
+
   async function handleGenerateIntelligentSchedule() {
     setGenerationState("saving");
     setGenerationError("");
 
     try {
+      await saveGenerationSettings(data.budgetId, generationFormState);
+
       const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -767,9 +849,15 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
       );
       const editableLine: EditableLine = {
         budgetItemId: line.budgetItemId,
+        itemCode: line.itemCode,
         description: line.description,
         quantity: line.quantity,
+        unit: line.unit,
+        unitPrice: line.unitPrice,
+        partial: line.partial,
         performance: line.performance ?? null,
+        subBudgetId: line.subBudgetId,
+        subBudgetName: line.subBudgetName,
         startDate: result.startDate,
         endDate: result.endDate,
         durationDays: result.durationDays,
@@ -779,6 +867,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         isMilestone: line.isMilestone ?? false,
         baselineStartDate: line.baselineStartDate ?? null,
         baselineEndDate: line.baselineEndDate ?? null,
+        actualStartDate: line.actualStartDate ?? null,
+        actualEndDate: line.actualEndDate ?? null,
+        percentComplete: line.percentComplete ?? null,
       };
 
       // Optimistic update: set inline draft immediately so the bar stays at the dragged position
@@ -830,9 +921,15 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
       const editableLine: EditableLine = {
         budgetItemId: targetLine.budgetItemId,
+        itemCode: targetLine.itemCode,
         description: targetLine.description,
         quantity: targetLine.quantity,
+        unit: targetLine.unit,
+        unitPrice: targetLine.unitPrice,
+        partial: targetLine.partial,
         performance: targetLine.performance ?? null,
+        subBudgetId: targetLine.subBudgetId,
+        subBudgetName: targetLine.subBudgetName,
         startDate,
         endDate,
         durationDays,
@@ -842,6 +939,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         isMilestone: targetLine.isMilestone ?? false,
         baselineStartDate: targetLine.baselineStartDate ?? null,
         baselineEndDate: targetLine.baselineEndDate ?? null,
+        actualStartDate: targetLine.actualStartDate ?? null,
+        actualEndDate: targetLine.actualEndDate ?? null,
+        percentComplete: targetLine.percentComplete ?? null,
       };
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
@@ -888,9 +988,15 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
       const editableLine: EditableLine = {
         budgetItemId: targetLine.budgetItemId,
+        itemCode: targetLine.itemCode,
         description: targetLine.description,
         quantity: targetLine.quantity,
+        unit: targetLine.unit,
+        unitPrice: targetLine.unitPrice,
+        partial: targetLine.partial,
         performance: targetLine.performance ?? null,
+        subBudgetId: targetLine.subBudgetId,
+        subBudgetName: targetLine.subBudgetName,
         startDate,
         endDate,
         durationDays,
@@ -900,6 +1006,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         isMilestone: targetLine.isMilestone ?? false,
         baselineStartDate: targetLine.baselineStartDate ?? null,
         baselineEndDate: targetLine.baselineEndDate ?? null,
+        actualStartDate: targetLine.actualStartDate ?? null,
+        actualEndDate: targetLine.actualEndDate ?? null,
+        percentComplete: targetLine.percentComplete ?? null,
       };
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
@@ -946,9 +1055,15 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
       const editableLine: EditableLine = {
         budgetItemId: targetLine.budgetItemId,
+        itemCode: targetLine.itemCode,
         description: targetLine.description,
         quantity: targetLine.quantity,
+        unit: targetLine.unit,
+        unitPrice: targetLine.unitPrice,
+        partial: targetLine.partial,
         performance: targetLine.performance ?? null,
+        subBudgetId: targetLine.subBudgetId,
+        subBudgetName: targetLine.subBudgetName,
         startDate,
         endDate,
         durationDays,
@@ -958,6 +1073,9 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         isMilestone: targetLine.isMilestone ?? false,
         baselineStartDate: targetLine.baselineStartDate ?? null,
         baselineEndDate: targetLine.baselineEndDate ?? null,
+        actualStartDate: targetLine.actualStartDate ?? null,
+        actualEndDate: targetLine.actualEndDate ?? null,
+        percentComplete: targetLine.percentComplete ?? null,
       };
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
@@ -1001,6 +1119,62 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   useEffect(() => {
     writeGenerationFormState(data.budgetId, generationFormState);
   }, [data.budgetId, generationFormState]);
+
+
+
+  useEffect(() => {
+    if (!isGenerationDialogOpen) {
+      setIsLoadingGenerationSettings(false);
+      setGenerationSettingsSaveState("idle");
+      setGenerationSettingsSaveError("");
+      return;
+    }
+
+    let cancelled = false;
+    hasCustomPhaseKeywordsChangedRef.current = false;
+
+    async function loadSettings() {
+      setIsLoadingGenerationSettings(true);
+      try {
+        const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule/generation-settings`);
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { customPhaseKeywords: Record<string, string[]> | null };
+        if (cancelled) {
+          return;
+        }
+
+        const dbKeywords = formatCustomPhaseKeywordsForForm(payload.customPhaseKeywords);
+        const localKeywords = readLocalCustomPhaseKeywords(data.budgetId);
+        const mergedKeywords = Object.keys(dbKeywords).length > 0 ? dbKeywords : localKeywords;
+
+        if (!hasCustomPhaseKeywordsChangedRef.current) {
+          setGenerationFormState((current) => ({
+            ...current,
+            customPhaseKeywords: mergedKeywords,
+          }));
+        }
+
+        if (Object.keys(mergedKeywords).length > 0 && Object.keys(localKeywords).length > 0) {
+          clearLocalCustomPhaseKeywords(data.budgetId);
+        }
+      } catch {
+        // Ignore network errors and keep the current form state.
+      } finally {
+        if (!cancelled) {
+          setIsLoadingGenerationSettings(false);
+        }
+      }
+    }
+
+    void loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isGenerationDialogOpen, data.budgetId]);
 
   useEffect(() => {
     writeGenerationPreviewCollapsedGroups(data.budgetId, generationPreviewCollapsedGroups);
@@ -1652,6 +1826,13 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         />
       ) : null}
 
+      {activeView === "overview" ? (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <ScheduleDeviationPanel deviations={scheduleDeviations} />
+          <LookaheadView lines={presentationLines} asOfDate={asOfDate} />
+        </div>
+      ) : null}
+
       {activeView === "valuation" ? (
         derivedDataLoadState.valuation === "loading" && data.valuationCalendar == null ? (
           <DerivedViewLoadingCard label="Cargando calendario valorizado" />
@@ -1693,15 +1874,18 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
             description={derivedDataErrors.resources || "Vuelve a intentarlo en unos segundos."}
           />
         ) : (
-          <ResourceCalendarView
-            rows={filteredResourceRows}
-            periods={data.resourceCalendar?.periods ?? []}
-            currency={data.currency}
-            currencyDecimals={currencyDecimals}
-            mode={resourceCalendarMode}
-            onModeChange={setResourceCalendarMode}
-            activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
-          />
+          <div className="space-y-5">
+            <ResourceCapacityPanel overallocations={resourceOverallocations} />
+            <ResourceCalendarView
+              rows={filteredResourceRows}
+              periods={data.resourceCalendar?.periods ?? []}
+              currency={data.currency}
+              currencyDecimals={currencyDecimals}
+              mode={resourceCalendarMode}
+              onModeChange={setResourceCalendarMode}
+              activeFilterLabel={overviewFilter !== "all" ? formatOverviewFilterLabel(overviewFilter) : null}
+            />
+          </div>
         )
       ) : null}
 
@@ -1747,6 +1931,62 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         />
       ) : null}
 
+      {reschedulePreview ? (
+        <ReschedulePreviewDialog
+          open={reschedulePreview.open}
+          impacts={reschedulePreview.impacts}
+          onApply={async () => {
+            const line = reschedulePreview.pendingLine;
+            setReschedulePreview(null);
+            if (!line) return;
+            try {
+              const nextData = await persistWorkScheduleLine(line);
+              setData(normalizeWorkScheduleView(nextData));
+              if (editingLine?.budgetItemId === line.budgetItemId) {
+                setEditingLine(null);
+                setSaveState("idle");
+              }
+              if (inlineDrafts[line.budgetItemId]) {
+                setInlineDrafts((current) => {
+                  const next = { ...current };
+                  delete next[line.budgetItemId];
+                  return next;
+                });
+                setActiveInlineRowId((current) => (current === line.budgetItemId ? null : current));
+              }
+            } catch (saveError) {
+              setSaveState("error");
+              setError(saveError instanceof Error ? saveError.message : "No se pudo guardar la programacion");
+            }
+          }}
+          onSaveOnlyThis={async () => {
+            const line = reschedulePreview.pendingLine;
+            setReschedulePreview(null);
+            if (!line) return;
+            try {
+              const nextData = await persistWorkScheduleLine(line);
+              setData(normalizeWorkScheduleView(nextData));
+              if (editingLine?.budgetItemId === line.budgetItemId) {
+                setEditingLine(null);
+                setSaveState("idle");
+              }
+              if (inlineDrafts[line.budgetItemId]) {
+                setInlineDrafts((current) => {
+                  const next = { ...current };
+                  delete next[line.budgetItemId];
+                  return next;
+                });
+                setActiveInlineRowId((current) => (current === line.budgetItemId ? null : current));
+              }
+            } catch (saveError) {
+              setSaveState("error");
+              setError(saveError instanceof Error ? saveError.message : "No se pudo guardar la programacion");
+            }
+          }}
+          onCancel={() => setReschedulePreview(null)}
+        />
+      ) : null}
+
       <WorkScheduleGenerationDialog
         open={isGenerationDialogOpen}
         baseStartDate={generationBaseDate}
@@ -1756,10 +1996,14 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         reviewedBudgetItemIds={generationReviewedBudgetItemIds}
         saveState={generationState}
         error={generationError}
+        settingsSaveState={generationSettingsSaveState}
+        settingsSaveError={generationSettingsSaveError}
         hasExistingSchedule={orderedLines.some((line) => line.startDate && line.endDate && line.durationDays != null)}
         reviewSummary={effectiveReviewSummary}
+        isLoadingCustomPhaseKeywords={isLoadingGenerationSettings}
         onBaseStartDateChange={setGenerationBaseDate}
-        onFormStateChange={setGenerationFormState}
+        onSaveSettings={handleSaveGenerationSettings}
+        onFormStateChange={handleGenerationFormStateChange}
         onTogglePreviewGroup={(subBudgetId) =>
           setGenerationPreviewCollapsedGroups((current) => ({
             ...current,
@@ -2189,499 +2433,6 @@ function CurveSView({
 }
 
 
-function WorkScheduleEditorSheet({
-  line,
-  open,
-  saveState,
-  error,
-  dateFormat,
-  onClose,
-  onJumpToSchedule,
-  canNavigateToPreviousLine,
-  canNavigateToNextLine,
-  onNavigateToPreviousLine,
-  onNavigateToNextLine,
-  onSave,
-  onChange,
-  onPredecessorChange,
-}: {
-  line: EditableLine | null;
-  open: boolean;
-  saveState: "idle" | "saving" | "error";
-  error: string;
-  dateFormat: string;
-  onClose: () => void;
-  onJumpToSchedule: () => void;
-  canNavigateToPreviousLine: boolean;
-  canNavigateToNextLine: boolean;
-  onNavigateToPreviousLine: () => void;
-  onNavigateToNextLine: () => void;
-  onSave: () => void;
-  onChange: (line: EditableLine | null) => void;
-  onPredecessorChange: (line: EditableLine, predecessor: string) => void;
-}) {
-  const totalPercentage = line?.monthlyDistributions.reduce((sum, distribution) => sum + Number(distribution.percentage), 0) ?? 0;
-  const percentageDifference = 100 - totalPercentage;
-
-  return (
-    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
-        <Dialog.Content asChild>
-          <div
-            className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-[var(--app-border)] bg-[var(--app-surface-muted)] p-5 shadow-2xl outline-none"
-            data-testid="work-schedule-editor-panel"
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <Dialog.Title asChild>
-                  <h3 className="text-2xl font-semibold text-[var(--app-text-strong)]">Programar partida</h3>
-                </Dialog.Title>
-                <Dialog.Description asChild>
-                  <div className="mt-1 space-y-2 text-sm text-[var(--app-text-muted)]">
-                    <p>{line?.description ?? "Selecciona una partida para programarla."}</p>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-muted)]">
-                      <span className="font-semibold text-[var(--app-text)]">Atajos</span>
-                      <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5">Alt + Left: anterior</span>
-                      <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5">Alt + Right: siguiente</span>
-                    </div>
-                  </div>
-                </Dialog.Description>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={onNavigateToPreviousLine} disabled={!canNavigateToPreviousLine}>
-                  Anterior
-                </Button>
-                <Button variant="outline" onClick={onNavigateToNextLine} disabled={!canNavigateToNextLine}>
-                  Siguiente
-                </Button>
-                <Button variant="outline" onClick={onJumpToSchedule}>
-                  Ir al cronograma
-                </Button>
-                <Button variant="outline" onClick={onClose}>
-                  <X className="mr-2 h-4 w-4" />
-                  Cerrar
-                </Button>
-              </div>
-            </div>
-
-            {line ? (
-              <div className="space-y-5">
-                <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
-                  <CardContent className="grid gap-4 p-5 md:grid-cols-2">
-                    <Field label="Inicio">
-                      <WorkScheduleDateInput
-                        label="Inicio"
-                        value={line.startDate}
-                        dateFormat={dateFormat as DateFormatOption}
-                        onChange={(value) => onChange(updateEditableLineDates(line, { startDate: value }))}
-                      />
-                    </Field>
-                    <Field label="Fin">
-                      <WorkScheduleDateInput
-                        label="Fin"
-                        value={line.endDate}
-                        dateFormat={dateFormat as DateFormatOption}
-                        onChange={(value) => onChange(updateEditableLineDates(line, { endDate: value }))}
-                      />
-                    </Field>
-                    <Field label="Duracion">
-                      <Input
-                        value={String(line.durationDays)}
-                        readOnly
-                      />
-                    </Field>
-                    <Field label="Predecesora">
-                      <Input value={line.predecessor} onChange={(event) => onPredecessorChange(line, event.target.value)} />
-                    </Field>
-                    <Field label="Cuadrilla">
-                      <Input value={line.crew} onChange={(event) => onChange(updateEditableLineCrew(line, event.target.value))} />
-                    </Field>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
-                  <CardContent className="space-y-4 p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--app-text-strong)]">Distribucion mensual</p>
-                        <p className="mt-1 text-sm text-[var(--app-text-muted)]">La suma debe cerrar exactamente al 100%.</p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          onChange({
-                            ...line,
-                            monthlyDistributions: [
-                              ...line.monthlyDistributions,
-                              createNextDistribution(line.monthlyDistributions),
-                            ],
-                          })
-                        }
-                      >
-                        Agregar periodo
-                      </Button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {line.monthlyDistributions.map((distribution, index) => (
-                        <div
-                          key={`${distribution.year}-${distribution.month}-${index}`}
-                          className="grid gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
-                          data-testid="work-schedule-distribution-row"
-                        >
-                          <Field label="Ano">
-                            <Input
-                              value={String(distribution.year)}
-                              onChange={(event) => updateDistribution(line, index, "year", Number(event.target.value) || distribution.year, onChange)}
-                            />
-                          </Field>
-                          <Field label="Mes">
-                            <Input
-                              value={String(distribution.month)}
-                              onChange={(event) => updateDistribution(line, index, "month", Number(event.target.value) || distribution.month, onChange)}
-                            />
-                          </Field>
-                          <Field label="%">
-                            <Input
-                              value={String(distribution.percentage)}
-                              onChange={(event) =>
-                                updateDistribution(line, index, "percentage", Number(event.target.value) || 0, onChange)
-                              }
-                            />
-                          </Field>
-                          <div className="flex items-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                onChange({
-                                  ...line,
-                                  monthlyDistributions: line.monthlyDistributions.filter((_, rowIndex) => rowIndex !== index),
-                                })
-                              }
-                            >
-                              Quitar
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="rounded-2xl border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface-muted)] px-4 py-3 text-sm text-[var(--app-text-muted)]">
-                      <span className="font-medium text-[var(--app-text-strong)]">Total:</span> {formatNumber(totalPercentage, 4)}%{" "}
-                      <span className={cn("ml-2 font-medium", percentageDifference === 0 ? "text-emerald-600" : "text-amber-600")}>
-                        Diferencia: {formatNumber(percentageDifference, 4)}%
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
-
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" onClick={onClose}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={onSave} disabled={saveState === "saving"}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {saveState === "saving" ? "Guardando..." : "Guardar programacion"}
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-function WorkScheduleGenerationDialog({
-  open,
-  baseStartDate,
-  formState,
-  previewGroups,
-  collapsedGroups,
-  reviewedBudgetItemIds,
-  saveState,
-  error,
-  hasExistingSchedule,
-  reviewSummary,
-  onBaseStartDateChange,
-  onFormStateChange,
-  onTogglePreviewGroup,
-  onSetAllLevelLinkage,
-  onToggleReviewedBudgetItem,
-  onMarkAllReviewed,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean;
-  baseStartDate: string;
-  formState: WorkScheduleGenerationFormState;
-  previewGroups: GenerationLevelPreviewGroup[];
-  collapsedGroups: Record<string, boolean>;
-  reviewedBudgetItemIds: string[];
-  saveState: "idle" | "saving" | "error";
-  error: string;
-  hasExistingSchedule: boolean;
-  reviewSummary: WorkScheduleViewRecord["reviewSummary"];
-  onBaseStartDateChange: (value: string) => void;
-  onFormStateChange: (value: WorkScheduleGenerationFormState | ((current: WorkScheduleGenerationFormState) => WorkScheduleGenerationFormState)) => void;
-  onTogglePreviewGroup: (subBudgetId: string) => void;
-  onSetAllLevelLinkage: (mode: LevelLinkageMode) => void;
-  onToggleReviewedBudgetItem: (budgetItemId: string) => void;
-  onMarkAllReviewed: () => void;
-  onClose: () => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
-        <Dialog.Content asChild>
-          <div className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-[var(--app-border)] bg-[var(--app-surface-muted)] p-5 shadow-2xl outline-none">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <Dialog.Title asChild>
-                  <h3 className="text-2xl font-semibold text-[var(--app-text-strong)]">Cronograma inteligente</h3>
-                </Dialog.Title>
-                <Dialog.Description asChild>
-                  <p className="mt-1 text-sm text-[var(--app-text-muted)]">
-                    Genera el gantt base usando metrado, rendimiento y cuadrilla, con secuencia por sub presupuesto.
-                  </p>
-                </Dialog.Description>
-              </div>
-              <Button variant="outline" onClick={onClose}>
-                Cerrar
-              </Button>
-            </div>
-
-            <div className="space-y-6">
-              <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
-                <CardContent className="space-y-7 p-6">
-                  <div className="mb-4">
-                    <Field label="Fecha base">
-                      <Input type="date" value={baseStartDate} onChange={(event) => onBaseStartDateChange(event.target.value)} />
-                    </Field>
-                  </div>
-
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <Field label="Estrategia base" tooltip="Secuencial: una tras otra. Por niveles: agrupa por nivel. Por similitud: agrupa por metrados.">
-                      <Select
-                        value={formState.strategy}
-                        onChange={(event) => onFormStateChange((current) => ({ ...current, strategy: event.target.value as WorkScheduleGenerationStrategy }))}
-                      >
-                        <option value="sequential">Secuencial</option>
-                        <option value="by_level">Por niveles</option>
-                        <option value="by_front">Por frentes de obra</option>
-                        <option value="by_similarity">Por similitud</option>
-                      </Select>
-                    </Field>
-
-                    <Field label="Especialidades" tooltip="Independientes: cada especialidad inicia sola. En paralelo: arrancan juntas. Escalonado: inician con N dias de retraso.">
-                      <Select
-                        value={formState.interSubBudgetParallelism}
-                        onChange={(event) => onFormStateChange((current) => ({ ...current, interSubBudgetParallelism: event.target.value as InterSubBudgetParallelism }))}
-                      >
-                        <option value="independent">Independientes</option>
-                        <option value="parallel">En paralelo</option>
-                        <option value="staggered">Escalonado</option>
-                      </Select>
-                    </Field>
-
-                    <Field label="Duracion maxima" tooltip="Limite de dias por partida. Si excede, se divide. Vacio = sin limite.">
-                      <Input
-                        inputMode="numeric"
-                        placeholder="Sin limite"
-                        value={formState.maxDurationDays}
-                        onChange={(event) => onFormStateChange((current) => ({ ...current, maxDurationDays: event.target.value }))}
-                      />
-                    </Field>
-
-                    <Field label="Separacion por similitud" tooltip="Dias entre grupos de partidas similares. Escalona bloques de trabajo parecidos.">
-                      <Input
-                        inputMode="numeric"
-                        placeholder="0"
-                        value={formState.similarityLagDays}
-                        onChange={(event) => onFormStateChange((current) => ({ ...current, similarityLagDays: event.target.value }))}
-                      />
-                    </Field>
-                  </div>
-
-                  {formState.interSubBudgetParallelism === "staggered" ? (
-                    <Field label="Escalonado" tooltip="Dias de retraso entre especialidades. La primera inicia en la fecha base.">
-                      <Input
-                        inputMode="numeric"
-                        placeholder="0"
-                        value={formState.interSubBudgetStaggerDays}
-                        onChange={(event) => onFormStateChange((current) => ({ ...current, interSubBudgetStaggerDays: event.target.value }))}
-                      />
-                    </Field>
-                  ) : null}
-
-                  {hasExistingSchedule ? (
-                    <div className="theme-status-warning theme-status-warning-strong rounded-2xl border px-4 py-3 text-sm">
-                      Se reemplazara la programacion actual de las partidas ya programadas.
-                    </div>
-                  ) : null}
-
-                  {previewGroups.length > 0 ? (
-                    <div className="space-y-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--app-text-strong)]">Previsualizacion de niveles</p>
-                          <p className="mt-1 text-xs text-[var(--app-text-muted)]">
-                            Define si cada titulo o subtitulo debe ejecutarse en paralelo o encadenado.
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-                            onClick={() => onSetAllLevelLinkage("parallel")}
-                          >
-                            Todo paralelo
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-                            onClick={() => onSetAllLevelLinkage("chain")}
-                          >
-                            Todo encadenar
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {previewGroups.map((group) => {
-                          const collapsed = collapsedGroups[group.subBudgetId] === true;
-
-                          return (
-                            <div key={group.subBudgetId} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]">
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-                                onClick={() => onTogglePreviewGroup(group.subBudgetId)}
-                              >
-                                <span className="text-sm font-semibold text-[var(--app-text-strong)]">
-                                  {group.subBudgetName} ({group.levels.length})
-                                </span>
-                                <span className="text-xs text-[var(--app-text-muted)]">{collapsed ? "Expandir" : "Ocultar"}</span>
-                              </button>
-
-                              {!collapsed ? (
-                                <div className="space-y-2 border-t border-[var(--app-border)] px-4 py-3">
-                                  {group.levels.map((level) => {
-                                    const linkageMode = formState.levelLinkage[level.levelId] ?? "parallel";
-
-                                    return (
-                                      <div key={level.levelId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--app-border)] px-3 py-2">
-                                        <div className="min-w-0">
-                                          <p className="truncate text-sm font-medium text-[var(--app-text-strong)]">{`${level.itemCode}: ${level.description}`}</p>
-                                          <p className="text-xs text-[var(--app-text-muted)]">
-                                            {level.levelType === "TITLE" ? "Titulo" : "Subtitulo"}
-                                          </p>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-                                          onClick={() =>
-                                            onFormStateChange((current) => ({
-                                              ...current,
-                                              levelLinkage: {
-                                                ...current.levelLinkage,
-                                                [level.levelId]: linkageMode === "parallel" ? "chain" : "parallel",
-                                              },
-                                            }))
-                                          }
-                                        >
-                                          {linkageMode === "parallel" ? "Paralelo" : "Encadenar"}
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {reviewSummary && reviewSummary.warnings.length > 0 ? (
-                    <div className="theme-status-warning theme-status-warning-strong space-y-2 rounded-2xl border px-4 py-3 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <p className="font-semibold">Revision previa recomendada</p>
-                        {reviewSummary.warnings.flatMap((w) => w.examples).some((e) => !reviewedBudgetItemIds.includes(e.budgetItemId)) ? (
-                          <button
-                            type="button"
-                            className="inline-flex shrink-0 items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-[10px] font-medium text-[var(--app-text-muted)] transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-                            onClick={onMarkAllReviewed}
-                          >
-                            Marcar todos como revisados
-                          </button>
-                        ) : null}
-                      </div>
-                      {reviewSummary.warnings.map((warning) => (
-                        <div key={warning.code} className="space-y-1">
-                          <p className="text-xs">{warning.label}</p>
-                          <p className="theme-muted-text text-[10px]">{warning.count} partidas afectadas.</p>
-                          {warning.examples.length > 0 ? (
-                            <div className="space-y-1.5 pt-1">
-                              {warning.examples.map((example) => {
-                                const reviewed = reviewedBudgetItemIds.includes(example.budgetItemId);
-
-                                return (
-                                  <div
-                                    key={example.budgetItemId}
-                                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1"
-                                  >
-                                    <span className="min-w-0 truncate text-[11px] text-[var(--app-text-strong)]">{`${example.itemCode}: ${example.description}`}</span>
-                                    <button
-                                      type="button"
-                                      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition ${
-                                        reviewed
-                                          ? "border-sky-300 bg-sky-100 text-sky-700 hover:border-sky-400 hover:bg-sky-200"
-                                          : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-                                      }`}
-                                      onClick={() => onToggleReviewedBudgetItem(example.budgetItemId)}
-                                    >
-                                      {reviewed ? "Revisada" : "Marcar como revisada"}
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-
-              {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
-
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={onClose}>
-                  Cancelar
-                </Button>
-                <Button onClick={onSubmit} disabled={saveState === "saving" || !baseStartDate}>
-                  {saveState === "saving" ? "Generando..." : "Generar base"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
 function DerivedTableCard({
   title,
   description,
@@ -2988,6 +2739,34 @@ function getGenerationCustomPhaseKeywordsStorageKey(budgetId: string) {
   return `work-schedule-generation-custom-phase-keywords:${budgetId}`;
 }
 
+function readLocalCustomPhaseKeywords(budgetId: string): Record<string, string> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(getGenerationCustomPhaseKeywordsStorageKey(budgetId));
+    if (!storedValue) {
+      return {};
+    }
+
+    const raw = JSON.parse(storedValue) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function clearLocalCustomPhaseKeywords(budgetId: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(getGenerationCustomPhaseKeywordsStorageKey(budgetId));
+}
+
 function getGenerationPreviewCollapsedGroupsStorageKey(budgetId: string) {
   return `work-schedule-generation-preview-collapsed:${budgetId}`;
 }
@@ -3086,19 +2865,6 @@ function readGenerationFormState(
     parsedLevelLinkage = baseLevelLinkage;
   }
 
-  let parsedCustomPhaseKeywords: Record<string, string> = {};
-  try {
-    const storedCustomPhaseKeywords = window.localStorage.getItem(getGenerationCustomPhaseKeywordsStorageKey(budgetId));
-    if (storedCustomPhaseKeywords) {
-      const raw = JSON.parse(storedCustomPhaseKeywords) as Record<string, unknown>;
-      parsedCustomPhaseKeywords = Object.fromEntries(
-        Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
-      );
-    }
-  } catch {
-    parsedCustomPhaseKeywords = {};
-  }
-
   return {
     strategy: storedStrategy && isWorkScheduleGenerationStrategy(storedStrategy) ? storedStrategy : defaultStrategy,
     interSubBudgetParallelism:
@@ -3107,7 +2873,7 @@ function readGenerationFormState(
     maxDurationDays: window.localStorage.getItem(getGenerationMaxDurationStorageKey(budgetId)) ?? "",
     similarityLagDays: window.localStorage.getItem(getGenerationSimilarityLagStorageKey(budgetId)) ?? "0",
     levelLinkage: parsedLevelLinkage,
-    customPhaseKeywords: parsedCustomPhaseKeywords,
+    customPhaseKeywords: {},
   };
 }
 
@@ -3119,7 +2885,6 @@ function writeGenerationFormState(budgetId: string, formState: WorkScheduleGener
   window.localStorage.setItem(getGenerationStrategyStorageKey(budgetId), formState.strategy);
   window.localStorage.setItem(getGenerationParallelismStorageKey(budgetId), formState.interSubBudgetParallelism);
   window.localStorage.setItem(getGenerationLevelLinkageStorageKey(budgetId), JSON.stringify(formState.levelLinkage));
-  window.localStorage.setItem(getGenerationCustomPhaseKeywordsStorageKey(budgetId), JSON.stringify(formState.customPhaseKeywords));
 
   writeStringPreference(getGenerationStaggerDaysStorageKey(budgetId), formState.interSubBudgetStaggerDays, "7");
   writeStringPreference(getGenerationMaxDurationStorageKey(budgetId), formState.maxDurationDays, "");
@@ -3233,6 +2998,41 @@ function buildGenerationOptionsPayload(formState: WorkScheduleGenerationFormStat
     levelLinkage: Object.keys(formState.levelLinkage).length > 0 ? formState.levelLinkage : null,
     customPhaseKeywords: parseCustomPhaseKeywords(formState.customPhaseKeywords),
   };
+}
+
+function formatCustomPhaseKeywordsForForm(input: Record<string, string[]> | null): Record<string, string> {
+  if (!input) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(input).map(([phase, keywords]) => [phase, keywords.join(", ")]),
+  );
+}
+
+async function saveGenerationSettings(budgetId: string, formState: WorkScheduleGenerationFormState): Promise<void> {
+  const customPhaseKeywords = parseCustomPhaseKeywords(formState.customPhaseKeywords);
+
+  const response = await fetch(`/api/budgets/${budgetId}/work-schedule/generation-settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      settings: {
+        strategy: formState.strategy,
+        interSubBudgetParallelism: formState.interSubBudgetParallelism,
+        interSubBudgetStaggerDays: parseOptionalPositiveInteger(formState.interSubBudgetStaggerDays),
+        maxDurationDays: parseOptionalPositiveInteger(formState.maxDurationDays),
+        similarityLagDays: parseOptionalNonNegativeInteger(formState.similarityLagDays),
+        levelLinkage: Object.keys(formState.levelLinkage).length > 0 ? formState.levelLinkage : null,
+        customPhaseKeywords,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? "No se pudo guardar la configuracion de fases");
+  }
 }
 
 function parseOptionalPositiveInteger(value: string) {
@@ -3858,75 +3658,7 @@ function escapeCsvValue(value: string) {
 }
 
 
-function createEditableLine(
-  line: WorkScheduleLineRecord,
-  itemCodeToRowNumber: Map<string, number> = new Map<string, number>(),
-): EditableLine {
-  const fallbackDistributions =
-    line.monthlyDistributions.length > 0
-      ? line.monthlyDistributions.map((distribution) => ({ ...distribution }))
-      : buildInitialDistributionsFromRange(line.startDate ?? "", line.endDate ?? "");
 
-  return updateEditableLineDates(
-    {
-      budgetItemId: line.budgetItemId,
-      description: line.description,
-      quantity: line.quantity,
-      performance: line.performance ?? null,
-      startDate: line.startDate ?? "",
-      endDate: line.endDate ?? "",
-      durationDays: line.durationDays ?? 0,
-      predecessor: formatPredecessorForDisplay(line.predecessor ?? "", itemCodeToRowNumber),
-      crew: line.crew != null ? String(line.crew) : "1",
-      monthlyDistributions: fallbackDistributions,
-      isMilestone: line.isMilestone ?? false,
-      baselineStartDate: line.baselineStartDate ?? null,
-      baselineEndDate: line.baselineEndDate ?? null,
-    },
-    {},
-  );
-}
-
-function serializeEditableLine(line: EditableLine, rowNumberToItemCode: Map<number, string> = new Map<number, string>()) {
-  return {
-    budgetItemId: line.budgetItemId,
-    startDate: line.startDate,
-    endDate: line.endDate,
-    durationDays: Number(line.durationDays),
-    predecessor: formatPredecessorForStorage(line.predecessor, rowNumberToItemCode),
-    crew: parseEditableCrew(line.crew) ?? 1,
-    isMilestone: line.isMilestone ?? false,
-    baselineStartDate: line.baselineStartDate || null,
-    baselineEndDate: line.baselineEndDate || null,
-    monthlyDistributions: line.monthlyDistributions.map((distribution) => ({
-      year: distribution.year,
-      month: distribution.month,
-      percentage: Number(distribution.percentage),
-    })),
-  };
-}
-
-
-function createNextDistribution(distributions: WorkScheduleMonthlyDistributionRecord[]) {
-  const lastDistribution = distributions[distributions.length - 1];
-  if (!lastDistribution) {
-    const currentDate = new Date();
-    return {
-      year: currentDate.getUTCFullYear(),
-      month: currentDate.getUTCMonth() + 1,
-      percentage: 100,
-    };
-  }
-
-  const nextMonth = lastDistribution.month === 12 ? 1 : lastDistribution.month + 1;
-  const nextYear = lastDistribution.month === 12 ? lastDistribution.year + 1 : lastDistribution.year;
-
-  return {
-    year: nextYear,
-    month: nextMonth,
-    percentage: 0,
-  };
-}
 
 function createDistributionFromStartDate(startDate: string) {
   if (startDate) {

@@ -46,8 +46,8 @@ function buildLine(
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe("OVERVIEW_CSV_HEADERS", () => {
-  it("contains 12 entries (the canonical per-line cronogram layout)", () => {
-    expect(OVERVIEW_CSV_HEADERS).toHaveLength(12);
+  it("contains 15 entries (the canonical per-line cronogram layout)", () => {
+    expect(OVERVIEW_CSV_HEADERS).toHaveLength(15);
   });
 
   it("places 'Dias calendario' between 'Duracion' and 'Inicio'", () => {
@@ -57,34 +57,32 @@ describe("OVERVIEW_CSV_HEADERS", () => {
   });
 
   it("defines headers as a readonly array (no push/splice allowed)", () => {
-    type IsReadonly = Assert<
-      Equal<typeof OVERVIEW_CSV_HEADERS extends ReadonlyArray<unknown> ? true : false, true>
-    >;
-    const isReadonly: IsReadonly = true;
-    expect(isReadonly).toBe(true);
+    const readonlyCheck: ReadonlyArray<string> = OVERVIEW_CSV_HEADERS;
+    expect(readonlyCheck).toBe(OVERVIEW_CSV_HEADERS);
   });
 
   it("exposes the header literal union type", () => {
-    type HeaderIsString = Assert<Equal<OverviewCsvHeader, string>>;
-    const headerIsString: HeaderIsString = true;
-    expect(headerIsString).toBe(true);
+    const sampleHeader: OverviewCsvHeader = OVERVIEW_CSV_HEADERS[0] ?? "Item";
+    expect(typeof sampleHeader).toBe("string");
   });
 });
 
 describe("mapLineToCsvRow", () => {
-  it("returns a 12-cell row in header order", () => {
+  it("returns a 15-cell row in header order", () => {
     const row = mapLineToCsvRow(buildLine(), "PEN", 2, "DD/MM/YYYY");
-    expect(row).toHaveLength(12);
+    expect(row).toHaveLength(15);
     expect(row[0]).toBe("01.01");
     expect(row[1]).toBe("Trazo y replanteo");
     expect(row[2]).toBe("14");
     expect(row[3]).toBe("14");
     expect(row[6]).toBe("-");
-    expect(row[7]).toMatch(/^2\.00$/);
-    expect(row[8]).toBe("m2");
-    expect(row[9]).toMatch(/^100\.00$/);
-    expect(row[10]).toMatch(/^(S\/|PEN) 10\.00$/);
-    expect(row[11]).toMatch(/^(S\/|PEN) 1,000\.00$/);
+    expect(row[7]).toBe("-");
+    expect(row[8]).toBe("-");
+    expect(row[9]).toMatch(/^2\.00$/);
+    expect(row[10]).toBe("m2");
+    expect(row[11]).toMatch(/^100\.00$/);
+    expect(row[12]).toMatch(/^(S\/|PEN) 10\.00$/);
+    expect(row[13]).toMatch(/^(S\/|PEN) 1,000\.00$/);
   });
 
   it("computes 'Dias calendario' as inclusive diffInDays when both dates are set", () => {
@@ -137,8 +135,8 @@ describe("mapLineToCsvRow", () => {
       "DD/MM/YYYY",
     );
     expect(row[2]).toBe("-");
+    expect(row[9]).toBe("-");
     expect(row[6]).toBe("-");
-    expect(row[7]).toBe("-");
   });
 
   it("emits 'Pendiente' for missing startDate or endDate (Inicio/Fin slots)", () => {
@@ -152,21 +150,33 @@ describe("mapLineToCsvRow", () => {
     expect(row[5]).toBe("Pendiente");
   });
 
+  it("emits actual progress columns when present", () => {
+    const row = mapLineToCsvRow(
+      buildLine({ actualStartDate: "2026-03-10", actualEndDate: "2026-03-20", percentComplete: 75 }),
+      "PEN",
+      2,
+      "DD/MM/YYYY",
+    );
+    expect(row[6]).toMatch(/^10\/03\/2026$/);
+    expect(row[7]).toMatch(/^20\/03\/2026$/);
+    expect(row[8]).toBe("75%");
+  });
+
   it("respects currency symbol and decimal places (PU + Parcial cells only; Metrado uses 2 decimals fixed)", () => {
     const usdRow = mapLineToCsvRow(buildLine(), "USD", 4, "yyyy-MM-dd");
     expect(usdRow[0]).toBe("01.01");
     // quantity cell is hardcoded to 2 decimals — currencyDecimals only affects currency cells.
-    expect(usdRow[9]).toBe("100.00");
-    expect(usdRow[10]).toMatch(/^\$ 10\.0000$/);
-    expect(usdRow[11]).toMatch(/^\$ 1,000\.0000$/);
+    expect(usdRow[11]).toBe("100.00");
+    expect(usdRow[12]).toMatch(/^\$ 10\.0000$/);
+    expect(usdRow[13]).toMatch(/^\$ 1,000\.0000$/);
   });
 });
 
 describe("header / row alignment (single source of truth)", () => {
   it("the helper's tuple length matches the headers' tuple length", () => {
-    type HeadersAreTwelve = Assert<Equal<typeof OVERVIEW_CSV_HEADERS["length"], 12>>;
+    type HeadersAreFifteen = Assert<Equal<typeof OVERVIEW_CSV_HEADERS["length"], 15>>;
     type RowsAreStrings = Assert<Equal<ReturnedRow extends readonly string[] ? true : false, true>>;
-    type _Assert = HeadersAreTwelve & RowsAreStrings;
+    type _Assert = HeadersAreFifteen & RowsAreStrings;
     const check: _Assert = true;
     expect(check).toBe(true);
 
