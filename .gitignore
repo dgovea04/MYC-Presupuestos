@@ -56,4 +56,6 @@ presupuesto-ejemplo/s10/*.S2K
 /tsc-errors.txt
 /vitest-log.txt
 /C*tmpvitest-log*.txt
-/tmpvitest-log*.txt
+
+# eslint cache
+/.eslintcache
