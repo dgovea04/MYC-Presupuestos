@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTimelineDependencyConnector } from "@/components/budget/work-schedule-page-content";
+import { buildTimelineDependencyConnector } from "@/components/budget/work-schedule/overview-view";
 
 /** Helper: count V commands in an SVG path to distinguish break path (2 V's) from simple elbow (1 V) */
 function countVerticalSegments(path: string): number {

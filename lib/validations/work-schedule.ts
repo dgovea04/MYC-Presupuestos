@@ -62,6 +62,10 @@ export const interSubBudgetParallelismSchema = z.enum(["independent", "staggered
 
 export const levelLinkageModeSchema = z.enum(["chain", "parallel"]);
 
+import { WORK_FRONT_PHASE_KEYWORDS } from "@/lib/work-schedule/work-front-phase";
+
+const WORK_SCHEDULE_FRONT_PHASES = Object.keys(WORK_FRONT_PHASE_KEYWORDS).filter((phase) => phase !== "other");
+
 export const workScheduleFrontPhaseSchema = z.enum([
   "preliminaries",
   "earthwork",
@@ -73,18 +77,23 @@ export const workScheduleFrontPhaseSchema = z.enum([
   "other",
 ]);
 
-export const workScheduleGenerationOptionsSchema = z.object({
+export const workScheduleGenerationCustomPhaseKeywordsSchema = z
+  .record(z.string(), z.array(z.string().trim().min(1)).min(1))
+  .refine((value) => Object.keys(value).every((key) => WORK_SCHEDULE_FRONT_PHASES.includes(key)), {
+    message: "Invalid phase key in customPhaseKeywords",
+  });
+
+export const workScheduleGenerationSettingsSchema = z.object({
   strategy: workScheduleGenerationStrategySchema.default("sequential"),
+  interSubBudgetParallelism: interSubBudgetParallelismSchema.default("independent"),
+  interSubBudgetStaggerDays: z.coerce.number().int().min(1).max(365).optional().nullable().default(7),
   maxDurationDays: z.coerce.number().int().min(1).max(36525).optional().nullable(),
-  similarityLagDays: z.coerce.number().int().min(0).max(365).optional().nullable(),
-  interSubBudgetParallelism: interSubBudgetParallelismSchema.optional().nullable(),
-  interSubBudgetStaggerDays: z.coerce.number().int().min(1).max(365).optional().nullable(),
+  similarityLagDays: z.coerce.number().int().min(0).max(365).optional().nullable().default(0),
   levelLinkage: z.record(z.string(), levelLinkageModeSchema).optional().nullable(),
-  customPhaseKeywords: z
-    .record(workScheduleFrontPhaseSchema, z.array(z.string().trim().min(1)))
-    .optional()
-    .nullable(),
+  customPhaseKeywords: workScheduleGenerationCustomPhaseKeywordsSchema.optional().nullable(),
 });
+
+export const workScheduleGenerationOptionsSchema = workScheduleGenerationSettingsSchema;
 
 export const workScheduleGenerateBaseSchema = z.object({
   baseStartDate: isoDateSchema,
@@ -95,3 +104,4 @@ export const workScheduleGenerateBaseSchema = z.object({
 export type WorkScheduleDistributionInput = z.infer<typeof workScheduleDistributionInputSchema>;
 export type WorkScheduleItemSaveInput = z.infer<typeof workScheduleItemSaveSchema>;
 export type WorkScheduleGenerateBaseInput = z.infer<typeof workScheduleGenerateBaseSchema>;
+export type WorkScheduleGenerationSettings = z.infer<typeof workScheduleGenerationSettingsSchema>;

@@ -18,11 +18,15 @@ import { ensureDate } from "@/lib/utils";
 import { validateWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import { buildIntelligentWorkScheduleBase } from "@/lib/work-schedule/intelligent-schedule";
 import { buildExceptionMap } from "@/lib/data/work-calendars";
+import { buildPlannedVsActualCurveSeries } from "@/lib/work-schedule/curve-s";
 import {
   workScheduleGenerateBaseSchema,
   workScheduleItemSaveSchema,
+  workScheduleGenerationCustomPhaseKeywordsSchema,
+  workScheduleGenerationSettingsSchema,
   type WorkScheduleGenerateBaseInput,
   type WorkScheduleItemSaveInput,
+  type WorkScheduleGenerationSettings,
 } from "@/lib/validations/work-schedule";
 import type { BudgetLevelRecord, BudgetRecord } from "@/types/budget";
 import type {
@@ -248,6 +252,8 @@ export async function getWorkScheduleResourceCalendarSection(budgetId: string, u
 }
 
 export async function getWorkScheduleCurveSeriesSection(budgetId: string, userId: string) {
+  const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  const lines = await getWorkScheduleLinesForBudget(budget, { includeResources: false });
   const valuationCalendar = await getWorkScheduleValuationCalendarSection(budgetId, userId);
   const monthlyTotals = valuationCalendar.rows.reduce<Record<string, number>>((totals, row) => {
     for (const [key, value] of Object.entries(row.periodAmounts)) {
@@ -257,10 +263,22 @@ export async function getWorkScheduleCurveSeriesSection(budgetId: string, userId
     return totals;
   }, {});
 
-  return buildWorkScheduleCurveSeries({
+  const plannedSeries = buildWorkScheduleCurveSeries({
     periods: valuationCalendar.periods,
     monthlyTotals,
   });
+
+  const actualSeries = buildPlannedVsActualCurveSeries({
+    lines,
+    periods: valuationCalendar.periods,
+  });
+
+  const actualByPeriod = new Map(actualSeries.map((point) => [point.period, point.actualPercent]));
+
+  return plannedSeries.map((point) => ({
+    ...point,
+    actualAccumulatedPercentage: actualByPeriod.get(point.key),
+  }));
 }
 
 function withWorkScheduleGroupRows(
@@ -635,6 +653,46 @@ export async function previewWorkScheduleBase(
     timelineEndDate: lastDate,
     canGenerate: scheduledCount > 0,
   };
+}
+
+export type CustomPhaseKeywords = Record<string, string[]>;
+
+export async function getWorkScheduleGenerationSettings(
+  budgetId: string,
+  userId: string,
+): Promise<CustomPhaseKeywords | null> {
+  const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  const settings = await prisma.workScheduleGenerationSettings.findUnique({
+    where: { budgetId: budget.id },
+    select: { customPhaseKeywords: true },
+  });
+
+  if (!settings) {
+    return null;
+  }
+
+  const keywords = (settings.customPhaseKeywords ?? null) as CustomPhaseKeywords | null;
+  return keywords && typeof keywords === "object" && !Array.isArray(keywords) ? keywords : null;
+}
+
+export async function saveWorkScheduleGenerationSettings(
+  budgetId: string,
+  userId: string,
+  customPhaseKeywords: CustomPhaseKeywords,
+): Promise<void> {
+  const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  const parsed = workScheduleGenerationCustomPhaseKeywordsSchema.parse(customPhaseKeywords ?? {});
+
+  await prisma.workScheduleGenerationSettings.upsert({
+    where: { budgetId: budget.id },
+    update: {
+      customPhaseKeywords: parsed as Prisma.InputJsonValue,
+    },
+    create: {
+      budgetId: budget.id,
+      customPhaseKeywords: parsed as Prisma.InputJsonValue,
+    },
+  });
 }
 
 export async function setWorkScheduleBaseline(budgetId: string, userId: string): Promise<{ updatedCount: number }> {

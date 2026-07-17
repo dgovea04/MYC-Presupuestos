@@ -124,6 +124,7 @@ export type WorkScheduleCurvePointRecord = {
   monthlyAmount: number;
   accumulatedAmount: number;
   accumulatedPercentage: number;
+  actualAccumulatedPercentage?: number;
 };
 
 export type WorkScheduleGenerationStrategy = "sequential" | "by_level" | "by_similarity" | "by_front";

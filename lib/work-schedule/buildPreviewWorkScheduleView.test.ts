@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { WorkScheduleViewRecord, WorkScheduleLineRecord } from "@/types/work-schedule";
 import { buildWorkScheduleView } from "@/lib/calculations/work-schedule";
-import { buildPreviewWorkScheduleView, type EditableLine } from "@/components/budget/work-schedule-page-content";
+import { buildPreviewWorkScheduleView } from "@/components/budget/work-schedule-page-content";
+import type { EditableLine } from "@/components/budget/work-schedule/types";
 
 function buildLine(overrides: Partial<WorkScheduleLineRecord> & { budgetItemId: string; itemCode: string }): WorkScheduleLineRecord {
   return {
@@ -61,8 +62,14 @@ describe("buildPreviewWorkScheduleView", () => {
     const draft: Record<string, EditableLine> = {
       ["item-A"]: {
         budgetItemId: "item-A",
+        itemCode: "A",
         description: "Partida A",
         quantity: 1,
+        unit: "UND",
+        unitPrice: 100,
+        partial: 100,
+        subBudgetId: "sub-1",
+        subBudgetName: "Test",
         performance: null,
         startDate: "2026-03-05",
         endDate: "2026-03-14",
@@ -72,6 +79,12 @@ describe("buildPreviewWorkScheduleView", () => {
         monthlyDistributions: [
           { year: 2026, month: 3, percentage: 100 },
         ],
+        isMilestone: false,
+        baselineStartDate: null,
+        baselineEndDate: null,
+        actualStartDate: null,
+        actualEndDate: null,
+        percentComplete: null,
       },
     };
 
@@ -82,13 +95,14 @@ describe("buildPreviewWorkScheduleView", () => {
       rowNumberToItemCode: new Map(),
     });
 
-    const resultLineA = result.groups
+    expect(result).not.toBeNull();
+    const resultLineA = result!.groups
       .flatMap((g) => g.lines)
       .find((l) => l.budgetItemId === "item-A");
 
     expect(resultLineA).toBeDefined();
-    expect(resultLineA!.startDate).toBe("2026-03-05");
-    expect(resultLineA!.endDate).toBe("2026-03-14");
+    expect(resultLineA?.startDate).toBe("2026-03-05");
+    expect(resultLineA?.endDate).toBe("2026-03-14");
   });
 
   it("does NOT recalculate successor dates when predecessor is dragged", () => {
@@ -116,8 +130,14 @@ describe("buildPreviewWorkScheduleView", () => {
     const draft: Record<string, EditableLine> = {
       ["item-A"]: {
         budgetItemId: "item-A",
+        itemCode: "A",
         description: "Partida A",
         quantity: 1,
+        unit: "UND",
+        unitPrice: 100,
+        partial: 100,
+        subBudgetId: "sub-1",
+        subBudgetName: "Test",
         performance: null,
         startDate: "2026-03-05",
         endDate: "2026-03-14",
@@ -127,6 +147,12 @@ describe("buildPreviewWorkScheduleView", () => {
         monthlyDistributions: [
           { year: 2026, month: 3, percentage: 100 },
         ],
+        isMilestone: false,
+        baselineStartDate: null,
+        baselineEndDate: null,
+        actualStartDate: null,
+        actualEndDate: null,
+        percentComplete: null,
       },
     };
 
@@ -137,23 +163,24 @@ describe("buildPreviewWorkScheduleView", () => {
       rowNumberToItemCode: new Map(),
     });
 
-    const resultLineA = result.groups
+    expect(result).not.toBeNull();
+    const resultLineA = result!.groups
       .flatMap((g) => g.lines)
       .find((l) => l.budgetItemId === "item-A");
-    const resultLineB = result.groups
+    const resultLineB = result!.groups
       .flatMap((g) => g.lines)
       .find((l) => l.budgetItemId === "item-B");
 
     // Line A should have new dates (from drag)
     expect(resultLineA).toBeDefined();
-    expect(resultLineA!.startDate).toBe("2026-03-05");
-    expect(resultLineA!.endDate).toBe("2026-03-14");
+    expect(resultLineA?.startDate).toBe("2026-03-05");
+    expect(resultLineA?.endDate).toBe("2026-03-14");
 
     // Line B should KEEP its original dates (not recalculated from predecessor)
     expect(resultLineB).toBeDefined();
-    expect(resultLineB!.startDate).toBe("2026-03-08");
-    expect(resultLineB!.endDate).toBe("2026-03-15");
-    expect(resultLineB!.durationDays).toBe(8);
+    expect(resultLineB?.startDate).toBe("2026-03-08");
+    expect(resultLineB?.endDate).toBe("2026-03-15");
+    expect(resultLineB?.durationDays).toBe(8);
   });
 
   it("does NOT recalculate successor dates in a chain (A->B->C)", () => {
@@ -190,8 +217,14 @@ describe("buildPreviewWorkScheduleView", () => {
     const draft: Record<string, EditableLine> = {
       ["item-A"]: {
         budgetItemId: "item-A",
+        itemCode: "A",
         description: "Partida A",
         quantity: 1,
+        unit: "UND",
+        unitPrice: 100,
+        partial: 100,
+        subBudgetId: "sub-1",
+        subBudgetName: "Test",
         performance: null,
         startDate: "2026-03-10",
         endDate: "2026-03-17",
@@ -201,6 +234,12 @@ describe("buildPreviewWorkScheduleView", () => {
         monthlyDistributions: [
           { year: 2026, month: 3, percentage: 100 },
         ],
+        isMilestone: false,
+        baselineStartDate: null,
+        baselineEndDate: null,
+        actualStartDate: null,
+        actualEndDate: null,
+        percentComplete: null,
       },
     };
 
@@ -211,26 +250,27 @@ describe("buildPreviewWorkScheduleView", () => {
       rowNumberToItemCode: new Map(),
     });
 
-    const resultLineA = result.groups
+    expect(result).not.toBeNull();
+    const resultLineA = result!.groups
       .flatMap((g) => g.lines)
       .find((l) => l.budgetItemId === "item-A");
-    const resultLineB = result.groups
+    const resultLineB = result!.groups
       .flatMap((g) => g.lines)
       .find((l) => l.budgetItemId === "item-B");
-    const resultLineC = result.groups
+    const resultLineC = result!.groups
       .flatMap((g) => g.lines)
       .find((l) => l.budgetItemId === "item-C");
 
-    expect(resultLineA!.startDate).toBe("2026-03-10");
-    expect(resultLineA!.endDate).toBe("2026-03-17");
+    expect(resultLineA?.startDate).toBe("2026-03-10");
+    expect(resultLineA?.endDate).toBe("2026-03-17");
 
     // B should keep its original dates (not recalculated from A's new position)
-    expect(resultLineB!.startDate).toBe("2026-03-04");
-    expect(resultLineB!.endDate).toBe("2026-03-06");
+    expect(resultLineB?.startDate).toBe("2026-03-04");
+    expect(resultLineB?.endDate).toBe("2026-03-06");
 
     // C should keep its original dates (not recalculated from B's position)
-    expect(resultLineC!.startDate).toBe("2026-03-05");
-    expect(resultLineC!.endDate).toBe("2026-03-06");
+    expect(resultLineC?.startDate).toBe("2026-03-05");
+    expect(resultLineC?.endDate).toBe("2026-03-06");
   });
 
   it("returns null when there are no drafts or editing lines", () => {
