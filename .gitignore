@@ -51,3 +51,9 @@ presupuesto-ejemplo/s10/*.S2K
 
 # legacy file-based mcp repo (migrated to DB)
 .mcp-repo/
+
+# transient debug logs (manual tsc/vitest captures)
+/tsc-errors.txt
+/vitest-log.txt
+/C*tmpvitest-log*.txt
+/tmpvitest-log*.txt
