@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "../lib/db/prisma-client";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(["warn", "error"]);
 
 async function main() {
   const companies = await prisma.company.findMany({

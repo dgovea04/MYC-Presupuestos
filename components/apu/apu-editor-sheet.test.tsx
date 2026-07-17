@@ -293,6 +293,12 @@ function createSettings(): UserSettingsRecord {
     defaultGeneralExpensesRate: 0.1,
     defaultUtilityRate: 0.08,
     defaultSubBudgetNames: ["Estructuras"],
+    floatingKhipuProvider: "ollama",
+    floatingKhipuWidth: 600,
+    floatingKhipuHeight: 500,
+    floatingKhipuFontSize: "normal",
+    floatingKhipuPosition: "bottom-right",
+    floatingKhipuTheme: "light",
   };
 }
 

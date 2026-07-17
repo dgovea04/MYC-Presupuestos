@@ -4,7 +4,6 @@ import { withAiRoute } from "@/lib/ai/route-handler";
 import { aiApuCatalogGenerateRequestSchema } from "@/lib/ai/validation";
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getResourcesByUser } from "@/lib/data/resources";
-import { serializeResource } from "@/lib/db/serializers";
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
@@ -13,14 +12,13 @@ export async function POST(request: Request) {
       getCatalogPartidas(),
       getResourcesByUser(session.user.id),
     ]);
-    const serializedResources = resources.map((resource) => serializeResource(resource));
     const result = await generateCatalogBackedApuProposal({
       query: data.query,
       unit: data.unit,
       category: data.category,
       projectType: data.project_type,
       partidas,
-      resources: serializedResources,
+      resources,
       includeDebug: process.env.NODE_ENV !== "production",
       userId: session.user.id,
     });

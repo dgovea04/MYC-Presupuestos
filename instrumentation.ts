@@ -6,7 +6,7 @@
  *
  * Referencia: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
-import { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "@/lib/db/prisma-client";
 import { seedAgentWorkflows } from "@/lib/data/seed-agent-workflows";
 
 export async function register() {
@@ -18,9 +18,9 @@ export async function register() {
     return;
   }
 
-  const prisma = new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-  });
+  const prisma = createPrismaClient(
+    process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+  );
 
   try {
     const result = await seedAgentWorkflows(prisma);

@@ -63,7 +63,9 @@ export const getResourcesByUser = cache(
           () => Promise.all([getCachedGlobalResources(), getUserOwnedResources(uid, activeCompanyId)]),
           { activeCompanyId },
         );
-        return mergeVisibleResourcesForCatalog(globalResources, userResources).sort(compareResourcesForCatalog);
+        return mergeVisibleResourcesForCatalog(globalResources, userResources)
+          .sort(compareResourcesForCatalog)
+          .map((resource) => serializeResource(resource));
       },
       activeCompanyId
         ? [RESOURCES_BY_USER_CACHE_TAG, activeCompanyId]

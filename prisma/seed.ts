@@ -1,7 +1,8 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import ExcelJS from "exceljs";
-import { PrismaClient, ProjectStatus, ResourceCategory } from "@prisma/client";
+import { ProjectStatus, ResourceCategory } from "@prisma/client";
+import { createPrismaClient } from "@/lib/db/prisma-client";
 import { hashPassword } from "@/lib/auth/password";
 import { calculateBudgetRecord } from "@/lib/calculations/budget";
 import { loadUnifiedIndexWorkbook } from "@/lib/polynomial-formula/index-source";
@@ -14,7 +15,7 @@ import { normalizeExcelCellText } from "@/lib/seed/excel-cell-text";
 import { isSubpartidaResourceType, SUBPARTIDA_RESOURCE_TYPE } from "@/lib/apu/subpartidas";
 import { seedAgentWorkflows } from "@/lib/data/seed-agent-workflows";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(["warn", "error"]);
 const DATA_FOR_SEED_DIR = path.resolve(process.cwd(), "data-for-seed");
 const SEED_PARTIDAS_WORKBOOK_PATHS = [
   path.join(DATA_FOR_SEED_DIR, "catalogo-de-partidas.xlsx"),

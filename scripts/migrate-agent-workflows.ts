@@ -12,10 +12,10 @@
  * - En CI/CD como paso posterior a la migración
  * - Manualmente cuando se añadan nuevos templates
  */
-import { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "@/lib/db/prisma-client";
 import { seedAgentWorkflows } from "@/lib/data/seed-agent-workflows";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(["warn", "error"]);
 
 async function main() {
   console.info("[migrate-agent-workflows] Iniciando sincronización...");

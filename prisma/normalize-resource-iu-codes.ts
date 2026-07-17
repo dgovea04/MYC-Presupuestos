@@ -1,8 +1,7 @@
-import { PrismaClient } from "@prisma/client";
-
+import { createPrismaClient } from "../lib/db/prisma-client";
 import { normalizeResourceIuCode } from "../lib/resources/iu";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(["warn", "error"]);
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
