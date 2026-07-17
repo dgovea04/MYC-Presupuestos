@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum ProjectStatus {
@@ -644,9 +643,9 @@ model Project {
   collaborationComments      CollaborationComment[]
   budgetChangeEvents         BudgetChangeEvent[]
   budgetVersionSnapshots     BudgetVersionSnapshot[]
-  agentExecutions               AgentExecution[]
-  storedProjectPackages         StoredProjectPackage[]
-  attachments                   ProjectAttachment[]
+  agentExecutions            AgentExecution[]
+  storedProjectPackages      StoredProjectPackage[]
+  attachments                ProjectAttachment[]
 
   @@index([companyId])
 }
@@ -690,46 +689,47 @@ model AiProjectMemory {
 }
 
 model Budget {
-  id                        String                     @id @default(cuid())
-  projectId                 String
-  parentBudgetId            String?
-  kind                      BudgetKind                 @default(GENERAL)
-  name                      String
-  currency                  String                     @default("PEN")
-  igvRate                   Decimal                    @default(0.18) @db.Decimal(10, 4)
-  generalExpensesRate       Decimal                    @default(0.10) @db.Decimal(10, 4)
-  utilityRate               Decimal                    @default(0.08) @db.Decimal(10, 4)
-  totalDirectCost           Decimal                    @default(0) @db.Decimal(18, 4)
-  totalGeneralExpenses      Decimal                    @default(0) @db.Decimal(18, 4)
-  totalUtility              Decimal                    @default(0) @db.Decimal(18, 4)
-  totalTax                  Decimal                    @default(0) @db.Decimal(18, 4)
-  totalAmount               Decimal                    @default(0) @db.Decimal(18, 4)
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  project                   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentBudget              Budget?                    @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id], onDelete: SetNull)
-  childBudgets              Budget[]                   @relation("BudgetHierarchy")
-  levels                    BudgetLevel[]
-  items                     BudgetItem[]
-  itemGenerationSources     BudgetItemGenerationSource[]
-  generalExpenses           GeneralExpense[]
-  generalExpenseGroups      GeneralExpenseGroup[]
-  footerRows                BudgetFooterRow[]
-  polynomialFormulas        PolynomialFormula[]
-  workSchedule              WorkSchedule?
-  valuations                Valuation[]
-  reports                   Report[]
-  riskVariables             RiskVariable[]
-  riskCorrelations          RiskCorrelation[]
-  riskSimulationRuns        RiskSimulationRun[]
-  noteTasks                 NoteTask[]
-  metradoSheets             MetradoSheet[]
-  budgetTemplates           BudgetTemplate[]
-  collaborationPresence     CollaborationPresence[]
-  collaborationEditSessions CollaborationEditSession[]
-  collaborationComments     CollaborationComment[]
-  budgetChangeEvents        BudgetChangeEvent[]
-  budgetVersionSnapshots    BudgetVersionSnapshot[]
+  id                             String                          @id @default(cuid())
+  projectId                      String
+  parentBudgetId                 String?
+  kind                           BudgetKind                      @default(GENERAL)
+  name                           String
+  currency                       String                          @default("PEN")
+  igvRate                        Decimal                         @default(0.18) @db.Decimal(10, 4)
+  generalExpensesRate            Decimal                         @default(0.10) @db.Decimal(10, 4)
+  utilityRate                    Decimal                         @default(0.08) @db.Decimal(10, 4)
+  totalDirectCost                Decimal                         @default(0) @db.Decimal(18, 4)
+  totalGeneralExpenses           Decimal                         @default(0) @db.Decimal(18, 4)
+  totalUtility                   Decimal                         @default(0) @db.Decimal(18, 4)
+  totalTax                       Decimal                         @default(0) @db.Decimal(18, 4)
+  totalAmount                    Decimal                         @default(0) @db.Decimal(18, 4)
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  project                        Project                         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentBudget                   Budget?                         @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id], onDelete: SetNull)
+  childBudgets                   Budget[]                        @relation("BudgetHierarchy")
+  levels                         BudgetLevel[]
+  items                          BudgetItem[]
+  itemGenerationSources          BudgetItemGenerationSource[]
+  generalExpenses                GeneralExpense[]
+  generalExpenseGroups           GeneralExpenseGroup[]
+  footerRows                     BudgetFooterRow[]
+  polynomialFormulas             PolynomialFormula[]
+  workSchedule                   WorkSchedule?
+  workScheduleGenerationSettings WorkScheduleGenerationSettings?
+  valuations                     Valuation[]
+  reports                        Report[]
+  riskVariables                  RiskVariable[]
+  riskCorrelations               RiskCorrelation[]
+  riskSimulationRuns             RiskSimulationRun[]
+  noteTasks                      NoteTask[]
+  metradoSheets                  MetradoSheet[]
+  budgetTemplates                BudgetTemplate[]
+  collaborationPresence          CollaborationPresence[]
+  collaborationEditSessions      CollaborationEditSession[]
+  collaborationComments          CollaborationComment[]
+  budgetChangeEvents             BudgetChangeEvent[]
+  budgetVersionSnapshots         BudgetVersionSnapshot[]
 
   @@unique([id, projectId])
   @@index([projectId])
@@ -1197,26 +1197,44 @@ model WorkSchedule {
   @@index([budgetId])
 }
 
+model WorkScheduleGenerationSettings {
+  id                        String   @id @default(cuid())
+  budgetId                  String   @unique
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  budget                    Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  strategy                  String?  @default("sequential")
+  interSubBudgetParallelism String?  @default("independent")
+  interSubBudgetStaggerDays Int?     @default(7)
+  maxDurationDays           Int?
+  similarityLagDays         Int?     @default(0)
+  levelLinkage              Json?    @default("{}")
+  customPhaseKeywords       Json?    @default("{}")
+
+  @@index([budgetId])
+  @@map("work_schedule_generation_settings")
+}
+
 model WorkScheduleItem {
-  id                  String                     @id @default(cuid())
-  scheduleId          String
-  budgetItemId        String
-  startDate           DateTime
-  endDate             DateTime
-  durationDays        Int
-  predecessor         String?
-  crew                Decimal?                   @db.Decimal(18, 4)
-  isMilestone         Boolean                    @default(false)
-  baselineStartDate   DateTime?
-  baselineEndDate     DateTime?
-  actualStartDate     DateTime?
-  actualEndDate       DateTime?
-  percentComplete     Decimal?                   @db.Decimal(5, 2)
-  createdAt           DateTime                   @default(now())
-  updatedAt           DateTime                   @updatedAt
-  schedule            WorkSchedule               @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  budgetItem          BudgetItem                 @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
-  distributions       WorkScheduleDistribution[]
+  id                String                     @id @default(cuid())
+  scheduleId        String
+  budgetItemId      String
+  startDate         DateTime
+  endDate           DateTime
+  durationDays      Int
+  predecessor       String?
+  crew              Decimal?                   @db.Decimal(18, 4)
+  isMilestone       Boolean                    @default(false)
+  baselineStartDate DateTime?
+  baselineEndDate   DateTime?
+  actualStartDate   DateTime?
+  actualEndDate     DateTime?
+  percentComplete   Decimal?                   @db.Decimal(5, 2)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  schedule          WorkSchedule               @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  budgetItem        BudgetItem                 @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  distributions     WorkScheduleDistribution[]
 
   @@unique([scheduleId, budgetItemId])
   @@index([scheduleId])
@@ -1263,23 +1281,23 @@ model Resource {
 }
 
 model BudgetItemGenerationSource {
-  id                     String                          @id @default(cuid())
-  budgetItemId           String                          @unique
+  id                     String                         @id @default(cuid())
+  budgetItemId           String                         @unique
   budgetId               String
   sourceType             BudgetItemGenerationSourceType
   sourcePackageId        String?
   sourceCatalogPartidaId String?
   sourceItemId           String?
-  catalogMatchScore      Decimal?                        @db.Decimal(10, 4)
+  catalogMatchScore      Decimal?                       @db.Decimal(10, 4)
   quantityConfidence     String?
-  metadata               Json                            @default("{}")
-  createdAt              DateTime                        @default(now())
+  metadata               Json                           @default("{}")
+  createdAt              DateTime                       @default(now())
   // budgetId is denormalized from budgetItem for query convenience
   // (find all generated items for a budget without joining through BudgetItem)
-  budgetItem             BudgetItem                      @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
-  budget                 Budget                          @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  sourcePackage          StoredProjectPackage?           @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
-  sourceCatalogPartida   CatalogPartida?                 @relation(fields: [sourceCatalogPartidaId], references: [id], onDelete: SetNull)
+  budgetItem             BudgetItem                     @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  budget                 Budget                         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  sourcePackage          StoredProjectPackage?          @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
+  sourceCatalogPartida   CatalogPartida?                @relation(fields: [sourceCatalogPartidaId], references: [id], onDelete: SetNull)
 
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([sourceType])
@@ -1288,22 +1306,22 @@ model BudgetItemGenerationSource {
 }
 
 model CatalogPartida {
-  id                      String                   @id @default(cuid())
+  id                      String                       @id @default(cuid())
   description             String
   unit                    String
-  unitPrice               Decimal                  @default(0) @db.Decimal(18, 4)
-  currency                String                   @default("PEN")
+  unitPrice               Decimal                      @default(0) @db.Decimal(18, 4)
+  currency                String                       @default("PEN")
   source                  String?
-  performance             Decimal                  @default(1) @db.Decimal(18, 4)
+  performance             Decimal                      @default(1) @db.Decimal(18, 4)
   performanceUnit         String?
   performanceRate         String?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
   apuRows                 PartidaApuRow[]
-  usedAsSubpartidaRows    PartidaApuRow[]          @relation("CatalogSubpartidaRows")
-  budgetApuSubpartidaRows ApuResource[]            @relation("BudgetApuCatalogSubpartida")
-  generatedAsResult       GeneratedPartida[]       @relation("GeneratedCatalogPartida")
-  generatedSources        GeneratedPartidaSource[] @relation("GeneratedPartidaSourceCatalog")
+  usedAsSubpartidaRows    PartidaApuRow[]              @relation("CatalogSubpartidaRows")
+  budgetApuSubpartidaRows ApuResource[]                @relation("BudgetApuCatalogSubpartida")
+  generatedAsResult       GeneratedPartida[]           @relation("GeneratedCatalogPartida")
+  generatedSources        GeneratedPartidaSource[]     @relation("GeneratedPartidaSourceCatalog")
   budgetItemGenSources    BudgetItemGenerationSource[]
 
   @@index([description])
@@ -1669,19 +1687,19 @@ model AdjustmentCalculationTerm {
 // ─── Stored Project Packages (.mcp repo) ──────────────────────────────────
 
 model StoredProjectPackage {
-  id              String   @id @default(cuid())
-  companyId       String
-  userId          String
-  sourceProjectId String?
-  projectName     String
-  projectType     String   @default("")
-  description     String   @default("")
-  mcpContent      String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sourceProject   Project? @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
+  id                   String                       @id @default(cuid())
+  companyId            String
+  userId               String
+  sourceProjectId      String?
+  projectName          String
+  projectType          String                       @default("")
+  description          String                       @default("")
+  mcpContent           String
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  company              Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user                 User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceProject        Project?                     @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
   budgetItemGenSources BudgetItemGenerationSource[]
 
   @@unique([companyId, projectName])
@@ -1825,18 +1843,18 @@ model AgentWorkflow {
 }
 
 model ProjectAttachment {
-  id        String                     @id @default(cuid())
+  id        String                    @id @default(cuid())
   projectId String
   fileName  String
   fileType  String
   fileSize  Int
   filePath  String
-  category  ProjectAttachmentCategory  @default(OTRO)
+  category  ProjectAttachmentCategory @default(OTRO)
   userId    String
-  createdAt DateTime                   @default(now())
-  updatedAt DateTime                   @updatedAt
-  project   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+  project   Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt(sort: Desc)])
   @@index([userId])

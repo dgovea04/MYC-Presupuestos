@@ -1,13 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "@/lib/db/prisma-client";
 
 declare global {
   var prisma: PrismaClient | undefined;
-}
-
-function createPrismaClient() {
-  return new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-  });
 }
 
 function hasPolynomialFormulaDelegate(client: PrismaClient | undefined) {
@@ -28,7 +23,11 @@ const existingClient =
     ? global.prisma
     : undefined;
 
-export const prisma = existingClient ?? createPrismaClient();
+export const prisma =
+  existingClient ??
+  createPrismaClient(
+    process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+  );
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;
