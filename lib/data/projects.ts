@@ -714,6 +714,7 @@ export async function getProjectHeaderById(id: string, userId: string) {
     },
     select: {
       id: true,
+      companyId: true,
       name: true,
       clientName: true,
       location: true,

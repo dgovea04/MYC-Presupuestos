@@ -81,12 +81,17 @@ export const reviewTakeoffTool: AgentToolDefinition<
     };
   },
   summarizeResult: (result) => {
-    const status = result.hasErrors
-      ? `${result.errorCount} errores, ${result.warningCount} advertencias`
-      : result.warningCount > 0
-        ? `${result.warningCount} advertencias`
+    const hasErrors = Boolean(result.hasErrors);
+    const errorCount = typeof result.errorCount === "number" ? result.errorCount : 0;
+    const warningCount = typeof result.warningCount === "number" ? result.warningCount : 0;
+    const sheetName = typeof result.sheetName === "string" ? result.sheetName : "hoja";
+    const rowCount = typeof result.rowCount === "number" ? result.rowCount : 0;
+    const status = hasErrors
+      ? `${errorCount} errores, ${warningCount} advertencias`
+      : warningCount > 0
+        ? `${warningCount} advertencias`
         : "Sin problemas";
-    return `Revisión de "${result.sheetName}": ${result.rowCount} filas, ${status}.`;
+    return `Revisión de "${sheetName}": ${rowCount} filas, ${status}.`;
   },
 };
 
