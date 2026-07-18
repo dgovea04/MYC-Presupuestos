@@ -136,21 +136,46 @@ export const previewScheduleTool: AgentToolDefinition<
     return result;
   },
   summarizeResult: (result) => {
+    const scheduledItems = typeof result.scheduledItems === "number" ? result.scheduledItems : 0;
+    const totalItems = typeof result.totalItems === "number" ? result.totalItems : 0;
+    const unscheduledItems = typeof result.unscheduledItems === "number" ? result.unscheduledItems : 0;
+    const timelineStartDate =
+      typeof result.timelineStartDate === "string" ? result.timelineStartDate : null;
+    const timelineEndDate =
+      typeof result.timelineEndDate === "string" ? result.timelineEndDate : null;
+    const strategy = typeof result.strategy === "string" ? result.strategy : "sequential";
+    const highlights = Array.isArray(result.highlights)
+      ? (result.highlights as unknown[]).filter(
+          (entry): entry is string => typeof entry === "string",
+        )
+      : [];
+    const issues: Array<{ budgetItemId: string; itemCode: string; reason: string }> =
+      Array.isArray(result.issues)
+        ? (result.issues as unknown[]).filter(
+            (entry): entry is { budgetItemId: string; itemCode: string; reason: string } =>
+              typeof entry === "object" &&
+              entry !== null &&
+              typeof (entry as { budgetItemId?: unknown }).budgetItemId === "string" &&
+              typeof (entry as { itemCode?: unknown }).itemCode === "string" &&
+              typeof (entry as { reason?: unknown }).reason === "string",
+          )
+        : [];
+
     const parts = [`📋 Vista previa del cronograma`];
-    parts.push(`\n📊 ${result.scheduledItems} partidas programadas de ${result.totalItems} totales.`);
-    if (result.unscheduledItems > 0) {
-      parts.push(`⚠️ ${result.unscheduledItems} partidas no se pudieron programar (revisar issues).`);
+    parts.push(`\n📊 ${scheduledItems} partidas programadas de ${totalItems} totales.`);
+    if (unscheduledItems > 0) {
+      parts.push(`⚠️ ${unscheduledItems} partidas no se pudieron programar (revisar issues).`);
     }
-    if (result.timelineStartDate && result.timelineEndDate) {
-      parts.push(`📅 Rango: ${result.timelineStartDate} → ${result.timelineEndDate}`);
+    if (timelineStartDate && timelineEndDate) {
+      parts.push(`📅 Rango: ${timelineStartDate} → ${timelineEndDate}`);
     }
-    parts.push(`🔧 Estrategia: ${result.strategy}`);
-    if ((result.highlights as string[]).length > 0) {
-      parts.push(`\n✨ ${(result.highlights as string[]).join("\n")}`);
+    parts.push(`🔧 Estrategia: ${strategy}`);
+    if (highlights.length > 0) {
+      parts.push(`\n✨ ${highlights.join("\n")}`);
     }
-    if ((result.issues as Array<{budgetItemId: string; itemCode: string; reason: string}>).length > 0) {
+    if (issues.length > 0) {
       parts.push("\n⚠️ Issues detectados:");
-      (result.issues as Array<{budgetItemId: string; itemCode: string; reason: string}>).forEach((issue) => {
+      issues.forEach((issue) => {
         parts.push(`  • ${issue.itemCode}: ${issue.reason}`);
       });
     }
@@ -186,8 +211,12 @@ export const createScheduleTool: AgentToolDefinition<
       timelineEndDate: result.timeline?.endDate ?? null,
     };
   },
-  summarizeResult: (result) =>
-    `Cronograma generado: ${result.scheduledItems} partidas programadas de ${result.totalItems} totales${(result as any).mode === "incremental" ? " (modo incremental)" : ""}.`,
+  summarizeResult: (result) => {
+    const scheduledItems = typeof result.scheduledItems === "number" ? result.scheduledItems : 0;
+    const totalItems = typeof result.totalItems === "number" ? result.totalItems : 0;
+    const modeSuffix = result.mode === "incremental" ? " (modo incremental)" : "";
+    return `Cronograma generado: ${scheduledItems} partidas programadas de ${totalItems} totales${modeSuffix}.`;
+  },
 };
 
 // ─── Reports (Reportes) ──────────────────────────────────────────────────────
@@ -215,8 +244,11 @@ export const exportReportTool: AgentToolDefinition<
       pending: true,
     };
   },
-  summarizeResult: (result) =>
-    `Exportación a ${result.format} solicitada para presupuesto ${result.budgetId}.`,
+  summarizeResult: (result) => {
+    const format = typeof result.format === "string" ? result.format : "?";
+    const budgetId = typeof result.budgetId === "string" ? result.budgetId : "?";
+    return `Exportación a ${format} solicitada para presupuesto ${budgetId}.`;
+  },
 };
 
 // ─── Chapters (Capítulos) ────────────────────────────────────────────────────
@@ -280,8 +312,12 @@ export const createChapterTool: AgentToolDefinition<
       sortOrder: maxSortOrder + 1,
     };
   },
-  summarizeResult: (result) =>
-    `Capítulo "${result.name}" (${result.code}) creado en presupuesto ${result.budgetId}.`,
+  summarizeResult: (result) => {
+    const name = typeof result.name === "string" ? result.name : "capítulo";
+    const code = typeof result.code === "string" ? result.code : "?";
+    const budgetId = typeof result.budgetId === "string" ? result.budgetId : "?";
+    return `Capítulo "${name}" (${code}) creado en presupuesto ${budgetId}.`;
+  },
 };
 
 // ─── Chapter management tools ─────────────────────────────────────────────────
@@ -312,7 +348,11 @@ export const moveChapterTool: AgentToolDefinition<
     });
     return { chapterId: input.chapterId, newSortOrder: input.newSortOrder };
   },
-  summarizeResult: (result) => `Capítulo ${result.chapterId} movido a posición ${result.newSortOrder}.`,
+  summarizeResult: (result) => {
+    const chapterId = typeof result.chapterId === "string" ? result.chapterId : "?";
+    const newSortOrder = typeof result.newSortOrder === "number" ? result.newSortOrder : 0;
+    return `Capítulo ${chapterId} movido a posición ${newSortOrder}.`;
+  },
 };
 
 const deleteChapterInput = z.object({
@@ -393,7 +433,13 @@ export const linkPredecessorTool: AgentToolDefinition<
     } as Parameters<typeof saveWorkScheduleItem>[2]);
     return { itemId: input.itemId, predecessorId: input.predecessorItemId, type: input.type };
   },
-  summarizeResult: (result) => `Dependencia ${result.type} creada: ${result.predecessorItemId} → ${result.itemId}.`,
+  summarizeResult: (result) => {
+    const type = typeof result.type === "string" ? result.type : "FS";
+    const predecessorItemId =
+      typeof result.predecessorItemId === "string" ? result.predecessorItemId : "?";
+    const itemId = typeof result.itemId === "string" ? result.itemId : "?";
+    return `Dependencia ${type} creada: ${predecessorItemId} → ${itemId}.`;
+  },
 };
 
 const moveTaskInput = z.object({
@@ -418,7 +464,11 @@ export const moveTaskTool: AgentToolDefinition<
     } as Parameters<typeof saveWorkScheduleItem>[2]);
     return { itemId: input.itemId, newStartDate: input.startDate };
   },
-  summarizeResult: (result) => `Tarea ${result.itemId} movida a ${result.newStartDate}.`,
+  summarizeResult: (result) => {
+    const itemId = typeof result.itemId === "string" ? result.itemId : "?";
+    const newStartDate = typeof result.newStartDate === "string" ? result.newStartDate : "?";
+    return `Tarea ${itemId} movida a ${newStartDate}.`;
+  },
 };
 
 const calculateCriticalPathInput = z.object({
@@ -453,8 +503,13 @@ export const calculateCriticalPathTool: AgentToolDefinition<
       status: result.status,
     };
   },
-  summarizeResult: (result) =>
-    `Ruta crítica: ${result.criticalItemCount} tareas críticas, duración ${result.projectDurationDays} días.`,
+  summarizeResult: (result) => {
+    const criticalItemCount =
+      typeof result.criticalItemCount === "number" ? result.criticalItemCount : 0;
+    const projectDurationDays =
+      typeof result.projectDurationDays === "number" ? result.projectDurationDays : 0;
+    return `Ruta crítica: ${criticalItemCount} tareas críticas, duración ${projectDurationDays} días.`;
+  },
 };
 
 // ─── Takeoff (Metrados) management tools ──────────────────────────────────────
@@ -483,7 +538,10 @@ export const createTakeoffTool: AgentToolDefinition<
     });
     return { id: sheet.id, name: sheet.name, unit: sheet.unit, projectId: sheet.projectId };
   },
-  summarizeResult: (result) => `Hoja de metrado "${result.name}" creada.`,
+  summarizeResult: (result) => {
+    const name = typeof result.name === "string" ? result.name : "hoja";
+    return `Hoja de metrado "${name}" creada.`;
+  },
 };
 
 const importTakeoffInput = z.object({
@@ -508,7 +566,10 @@ export const importTakeoffTool: AgentToolDefinition<
     });
     return { id: duplicated.id, name: duplicated.name, sourceSheetId: input.sourceSheetId };
   },
-  summarizeResult: (result) => `Metrado importado: "${result.name}".`,
+  summarizeResult: (result) => {
+    const name = typeof result.name === "string" ? result.name : "metrado";
+    return `Metrado importado: "${name}".`;
+  },
 };
 
 // ─── Export tools ─────────────────────────────────────────────────────────────
@@ -531,7 +592,10 @@ export const exportPDFTool: AgentToolDefinition<
     const pdfBuffer = await createBudgetPdfFn({ budget } as Parameters<typeof createBudgetPdfFn>[0]);
     return { budgetId: input.budgetId, size: pdfBuffer.byteLength, format: "pdf" };
   },
-  summarizeResult: (result) => `PDF exportado (${Math.round(result.size / 1024)} KB).`,
+  summarizeResult: (result) => {
+    const sizeKb = typeof result.size === "number" ? Math.round(result.size / 1024) : 0;
+    return `PDF exportado (${sizeKb} KB).`;
+  },
 };
 
 const exportExcelInput = z.object({ budgetId: z.string().min(1) });
@@ -551,7 +615,10 @@ export const exportExcelTool: AgentToolDefinition<
     const buffer = await createBudgetWorkbook({ budget } as Parameters<typeof createBudgetWorkbook>[0]);
     return { budgetId: input.budgetId, size: buffer.byteLength, format: "xlsx" };
   },
-  summarizeResult: (result) => `Excel exportado (${Math.round(result.size / 1024)} KB).`,
+  summarizeResult: (result) => {
+    const sizeKb = typeof result.size === "number" ? Math.round(result.size / 1024) : 0;
+    return `Excel exportado (${sizeKb} KB).`;
+  },
 };
 
 const exportS10Input = z.object({ budgetId: z.string().min(1) });
