@@ -30,6 +30,26 @@
  * vi.hoisted NO necesario en el consumer — el dynamic import dentro del factory
  * de vi.mock resuelve la captura del singleton en runtime via el module cache.
  *
+ * Diseño de tipos (Round 6 — typed handler returns): los handlers
+ * prisma.resource.findMany/findFirst y mockTx.workScheduleItem.* devuelven
+ * tipos estructurales (MockResource[], MockResource | null, MockWorkScheduleItem[],
+ * MockWorkScheduleItem | null) en vez de unknown[]/unknown. Se elimina la
+ * necesidad de `as MockResource[]` y similares en los consumers.
+ *
+ * Decisión de diseño: NO usamos overload interfaces con multiples call
+ * signatures para cubrir `select: { code: true }` o `include: { apuResources: true }`
+ * porque vitest's `MockedFunction<X>` colapsa las overloads a la última signature
+ * en la resolución de callsites (TS18046 / TS2353 al consumer). En lugar de eso,
+ * los handlers siempre devuelven la forma completa (full MockResource[] o
+ * MockResource | null) y la fidelidad al projection de Prisma se modela con
+ * campos opcionales en el tipo (e.g. `apuResources?: Array<{id:string}>`).
+ *
+ * Trade-off de fidelidad (intencional): `select: { companyId: true }` y
+ * `select: { code: true }` son IGNORED por el mock — siempre devuelve full
+ * MockResource sin fencing de keys. Consumers NO deben depender de shape-narrow
+ * detection tipo `if ('unitPrice' in result) ...` para distinguir projections;
+ * el codigo de produccion real (Prisma tipado) si devuelve solo los keys pedidos.
+ *
  * Mantenido por: tests de lib/data/work-schedule.ts + lib/data/resources.ts.
  */
 
@@ -73,6 +93,13 @@ export type MockSubBudget = {
 
 export type ResourceCategory = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT";
 
+/**
+ * Round 6: added `apuResources?: Array<{ id: string }>` to model the optional
+ * include path. The mock's `findFirst` handler populates this field from
+ * `mockDb.apuResources` whenever callers ask for the include; other handlers
+ * (create/update/delete/findMany) leave it undefined so its presence in the
+ * return value is a clear signal of "this came from include".
+ */
 export type MockResource = {
   id: string;
   companyId: string | null;
@@ -88,6 +115,7 @@ export type MockResource = {
   source: string | null;
   createdAt: Date;
   updatedAt: Date;
+  apuResources?: Array<{ id: string }>;
 };
 
 export type MockBudgetGeneral = {
@@ -137,9 +165,11 @@ export type MockTx = {
     >;
   };
   workScheduleItem: {
+    // Round 6 typed returns: full MockWorkScheduleItem (no more lightweight
+    // {id} only) so consumers can read all fields without casting.
     findUnique: MockedFunction<
       (args: { where: { scheduleId_budgetItemId: { budgetItemId: string } } }) => Promise<
-        { id: string } | null
+        MockWorkScheduleItem | null
       >
     >;
     findMany: MockedFunction<
@@ -148,7 +178,7 @@ export type MockTx = {
           budgetItemId: { in?: string[] } | string[];
           scheduleId: string;
         };
-      }) => Promise<Array<{ id: string; budgetItemId: string }>>
+      }) => Promise<MockWorkScheduleItem[]>
     >;
     create: MockedFunction<
       (args: {
@@ -172,12 +202,14 @@ export type MockTx = {
     >;
   };
   resource: {
+    // Round 6 typed returns (simple signature; pseudo-overloads via optional
+    // union members on MockResource, see top of file).
     findMany: MockedFunction<
       (args?: {
         where?: { companyId?: string | null; category?: string; id?: { not?: string } };
         select?: { code?: boolean };
         orderBy?: unknown;
-      }) => Promise<unknown[]>
+      }) => Promise<MockResource[]>
     >;
     count: MockedFunction<(args?: { where?: { id?: { in?: string[] }; companyId?: string | null } }) => Promise<number>>;
     findFirst: MockedFunction<
@@ -185,7 +217,7 @@ export type MockTx = {
         where?: { id?: string; OR?: unknown };
         include?: { apuResources?: boolean };
         select?: { companyId?: boolean };
-      }) => Promise<unknown>
+      }) => Promise<MockResource | null>
     >;
     create: MockedFunction<
       (args: {
@@ -252,7 +284,7 @@ export type PrismaMock = {
         where?: { companyId?: string | null; category?: string; id?: { not?: string } };
         select?: { code?: boolean };
         orderBy?: unknown;
-      }) => Promise<unknown[]>
+      }) => Promise<MockResource[]>
     >;
     count: MockedFunction<(args?: { where?: { id?: { in?: string[] }; companyId?: string | null } }) => Promise<number>>;
     findFirst: MockedFunction<
@@ -260,7 +292,7 @@ export type PrismaMock = {
         where?: { id?: string; OR?: unknown };
         include?: { apuResources?: boolean };
         select?: { companyId?: boolean };
-      }) => Promise<unknown>
+      }) => Promise<MockResource | null>
     >;
     create: MockedFunction<
       (args: {
@@ -374,16 +406,21 @@ function createEmptyMockDb(): MockDb {
  * sin Postgres real:
  * - findMany: filtra por companyId, category, id.not (auto-generate code lookup)
  * - count: cuenta resources matching where
- * - findFirst (con include apuResources): usado por deleteResource para validar
- *   que el resource no este usado en un APU antes de borrar
+ * - findFirst: usado por deleteResource/deletePatch/savePatch; añade `apuResources`
+ *   cuando se solicita el include para modelar la safety-check de deleteResource.
  * - create/update: persist + return con timestamps
  * - delete: remove + return
+ *
+ * Round 6 typed returns: findMany y findFirst ahora devuelven tipos
+ * estructurales plenos (MockResource[] / MockResource | null). El campo
+ * opcional `apuResources` se popula solo si el caller solicito el include.
  */
 function buildResourceHandlers(mockDb: MockDb): MockTx["resource"] {
   const findMany = vi.fn(
     async (args?: {
       where?: { companyId?: string | null; category?: string; id?: { not?: string } };
       select?: { code?: boolean };
+      orderBy?: unknown;
     }) => {
       let list = Array.from(mockDb.resources.values());
       if (args?.where?.companyId !== undefined) {
@@ -396,9 +433,12 @@ function buildResourceHandlers(mockDb: MockDb): MockTx["resource"] {
         const exclude = args.where.id.not;
         list = list.filter((r) => r.id !== exclude);
       }
-      if (args?.select?.code) {
-        return list.map((r) => ({ code: r.code }));
-      }
+      // Round 6 simplification: findMany always returns full MockResource[];
+      // the optional `select: { code }` projection is intentionally not modeled
+      // in the mock because consumers can access any subset of fields on
+      // MockResource without runtime fencing. Tests that previously asserted
+      // on `projections.every(row => typeof row.code === "string")` still
+      // pass because MockResource.code is a string.
       return list;
     },
   );
@@ -426,19 +466,25 @@ function buildResourceHandlers(mockDb: MockDb): MockTx["resource"] {
       if (args?.where?.id) {
         const res = mockDb.resources.get(args.where.id);
         if (!res) return null;
-        if (args.include?.apuResources) {
-          return { ...res, apuResources: mockDb.apuResources.get(args.where.id) ?? [] };
+        if (args.include?.apuResources === true) {
+          // Model the include path: attach apuResources from the aux Map.
+          return {
+            ...res,
+            apuResources: mockDb.apuResources.get(args.where.id) ?? [],
+          };
         }
-        if (args.select?.companyId) {
-          return { companyId: res.companyId };
+        if (args.select?.companyId === true) {
+          // Round 6 simplification: select.companyId returns full MockResource;
+          // consumers that only read .companyId still get the right value
+          // because MockResource.companyId is the requested field.
+          return res;
         }
         return res;
       }
       // OR clause (used by updateResource inside tx): findFirst with OR[company-membership-or-global]
-      // Simplified: return first resource matching where.id OR any
+      // Simplified: return null to indicate "not found via OR path".
+      // Update flow expects this; if not found, update just won't execute.
       if (args?.where?.OR) {
-        // Skip detailed OR evaluation; return null to indicate "not found via OR path".
-        // Update flow expects this; if not found, update just won't execute.
         return null;
       }
       return null;
@@ -554,21 +600,24 @@ function createMockTx(mockDb: MockDb): MockTx {
     return null;
   });
 
+  // Round 6 typed return: full MockWorkScheduleItem (no more lightweight {id} only)
+  // so consumers can read all fields without casting.
   tx.workScheduleItem.findUnique.mockImplementation(async ({ where }) => {
     const k = where.scheduleId_budgetItemId?.budgetItemId;
     const item = mockDb.workScheduleItems.get(k);
-    return item ? { id: item.id } : null;
+    return item ? { ...item } : null;
   });
 
+  // Round 6 typed return: full MockWorkScheduleItem[] (no more lightweight {id,budgetItemId})
   tx.workScheduleItem.findMany.mockImplementation(async ({ where }) => {
     const ids: string[] =
       (where.budgetItemId && "in" in where.budgetItemId && where.budgetItemId.in) ||
       (Array.isArray(where.budgetItemId) ? where.budgetItemId : []);
-    const out: { id: string; budgetItemId: string }[] = [];
+    const out: MockWorkScheduleItem[] = [];
     for (const id of ids) {
       const item = mockDb.workScheduleItems.get(id);
       if (item && item.scheduleId === where.scheduleId) {
-        out.push({ id: item.id, budgetItemId: item.budgetItemId });
+        out.push({ ...item });
       }
     }
     return out;
@@ -830,6 +879,7 @@ function addMockResourceImpl(
     source: overrides.source ?? null,
     createdAt: overrides.createdAt ?? new Date(),
     updatedAt: overrides.updatedAt ?? new Date(),
+    // apuResources stays undefined unless caller invokes findFirst with include.
   };
   mockDb.resources.set(resource.id, resource);
   return resource;
