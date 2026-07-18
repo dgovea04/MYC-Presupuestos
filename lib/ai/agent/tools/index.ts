@@ -2,12 +2,14 @@ import crypto from "crypto";
 import { z } from "zod";
 import type { AgentToolDefinition } from "../types";
 import { getBudgetById, saveBudgetPatch } from "@/lib/data/budgets";
-import { generateWorkScheduleBase, previewWorkScheduleBase, saveWorkScheduleItem } from "@/lib/data/work-schedule";
+import { generateWorkScheduleBase, previewWorkScheduleBase, saveWorkScheduleItemPatch } from "@/lib/data/work-schedule";
 import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import { createMetradoSheet, duplicateMetradoSheet, getMetradoSheetById, listMetradoTemplates } from "@/lib/data/metrados";
 import { validateMetradoSheet, hasBlockingMetradoIssues } from "@/lib/metrados/validation";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
 import { createApuWorkbook, createBudgetWorkbook } from "@/lib/exports/excel";
+import { prisma } from "@/lib/db/prisma";
+import type { WorkScheduleItemPatchInput } from "@/lib/validations/work-schedule";
 
 import { budgetTools } from "./budgets";
 import { partidaTools } from "./partidas";
@@ -400,17 +402,10 @@ export const updateTaskTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: updateTaskInput,
   execute: async (input, context) => {
-    const patch: Record<string, unknown> = { id: input.itemId };
-    if (input.duration) patch.realDuration = input.duration;
-    if (input.startDate) patch.startDate = input.startDate;
-    // TODO(saveWorkScheduleItemPatch): patch no satisface `workScheduleItemSaveSchema`
-    // (faltan endDate, durationDays, monthlyDistributions, etc.). Hará ZodError en runtime
-    // hasta que se introduzca un endpoint/función de patch parcial en lib/data/work-schedule.ts.
-    await saveWorkScheduleItem(
-      input.budgetId,
-      context.userId,
-      patch as unknown as Parameters<typeof saveWorkScheduleItem>[2],
-    );
+    const patch: WorkScheduleItemPatchInput = { budgetItemId: input.itemId };
+    if (input.duration != null) patch.durationDays = input.duration;
+    if (input.startDate != null) patch.startDate = input.startDate;
+    await saveWorkScheduleItemPatch(input.budgetId, context.userId, patch);
     return { itemId: input.itemId, updated: true };
   },
   summarizeResult: () => "Tarea de cronograma actualizada.",
@@ -433,26 +428,49 @@ export const linkPredecessorTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: linkPredecessorInput,
   execute: async (input, context) => {
-    // TODO(saveWorkScheduleItemPatch): ver nota en updateTaskTool.execute. Patch no
-    // satisface `workScheduleItemSaveSchema`; ZodError en runtime hasta introducir
-    // función de patch parcial.
-    await saveWorkScheduleItem(
-      input.budgetId,
-      context.userId,
-      {
-        id: input.itemId,
-        predecessorId: input.predecessorItemId,
-        predecessorType: input.type,
-      } as unknown as Parameters<typeof saveWorkScheduleItem>[2],
-    );
+    // Autorizacion upfront (defensa-en-profundidad): valida que el usuario tiene
+    // acceso al budget destino antes de tocar la BD. Patron consistente con
+    // updateTask/deleteTask/otras tools de este archivo.
+    const budget = await getBudgetById(input.budgetId, context.userId);
+    if (!budget) {
+      throw new Error(`Presupuesto "${input.budgetId}" no encontrado o no tienes acceso.`);
+    }
+    // Cross-budget predecessor lookup: budget.items solo contiene items del mismo SUB_BUDGET,
+    // pero las dependencias pueden cruzar sub-budgets del mismo proyecto (tipico
+    // Estructuras -> Arquitectura). Scoped a proyecto via budget.project.budgets.some
+    // para garantizar que la predecesora pertenece al MISMO proyecto (no cruza
+    // company/project boundaries) y respeta la membresia tenant del usuario.
+    const predecessor = await prisma.budgetItem.findFirst({
+      where: {
+        id: input.predecessorItemId,
+        budget: {
+          project: {
+            budgets: { some: { id: input.budgetId } },
+            company: {
+              memberships: { some: { userId: context.userId, status: "ACTIVE" } },
+            },
+          },
+        },
+      },
+      select: { code: true, id: true },
+    });
+    if (!predecessor) {
+      throw new Error(
+        `La predecesora "${input.predecessorItemId}" no existe, no pertenece a este proyecto o no tienes acceso.`,
+      );
+    }
+    await saveWorkScheduleItemPatch(input.budgetId, context.userId, {
+      budgetItemId: input.itemId,
+      predecessor: `${predecessor.code}${input.type}`,
+    });
     return { itemId: input.itemId, predecessorId: input.predecessorItemId, type: input.type };
   },
   summarizeResult: (result) => {
     const type = typeof result.type === "string" ? result.type : "FS";
-    const predecessorItemId =
-      typeof result.predecessorItemId === "string" ? result.predecessorItemId : "?";
+    const predecessorId =
+      typeof result.predecessorId === "string" ? result.predecessorId : "?";
     const itemId = typeof result.itemId === "string" ? result.itemId : "?";
-    return `Dependencia ${type} creada: ${predecessorItemId} → ${itemId}.`;
+    return `Dependencia ${type} creada: ${predecessorId} → ${itemId}.`;
   },
 };
 
@@ -472,17 +490,10 @@ export const moveTaskTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: moveTaskInput,
   execute: async (input, context) => {
-    // TODO(saveWorkScheduleItemPatch): ver nota en updateTaskTool.execute. Patch no
-    // satisface `workScheduleItemSaveSchema`; ZodError en runtime hasta introducir
-    // función de patch parcial.
-    await saveWorkScheduleItem(
-      input.budgetId,
-      context.userId,
-      {
-        id: input.itemId,
-        startDate: input.startDate,
-      } as unknown as Parameters<typeof saveWorkScheduleItem>[2],
-    );
+    await saveWorkScheduleItemPatch(input.budgetId, context.userId, {
+      budgetItemId: input.itemId,
+      startDate: input.startDate,
+    });
     return { itemId: input.itemId, newStartDate: input.startDate };
   },
   summarizeResult: (result) => {

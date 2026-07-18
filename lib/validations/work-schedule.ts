@@ -102,7 +102,38 @@ export const workScheduleGenerateBaseSchema = z.object({
   mode: z.enum(["full", "incremental"]).optional(),
 });
 
+/**
+ * Patch schema: subset opcional de WorkScheduleItemSaveInput; el data layer combina
+ * los campos provistos con los existentes para construir el SaveInput completo.
+ * No acepta `monthlyDistributions` (se reusan las existentes o se crea una sola
+ * partiendo de startDate) ni `endDate` (se deriva de startDate + durationDays).
+ */
+export const workScheduleItemPatchSchema = z.object({
+  budgetItemId: z.string().trim().min(1, "Selecciona una partida"),
+  startDate: isoDateSchema.optional().nullable(),
+  endDate: isoDateSchema.optional().nullable(),
+  durationDays: z.coerce.number().int().min(0, "La duracion debe ser mayor o igual a cero").optional().nullable(),
+  isMilestone: z.boolean().optional().nullable(),
+  predecessor: z.string().trim().max(240).optional().nullable().superRefine((value, context) => {
+    try {
+      parseWorkSchedulePredecessors(value);
+    } catch (error) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error instanceof Error ? error.message : "Ingresa una predecesora valida",
+      });
+    }
+  }),
+  crew: positiveDecimalSchema("La cuadrilla").optional().nullable(),
+  baselineStartDate: isoDateSchema.optional().nullable(),
+  baselineEndDate: isoDateSchema.optional().nullable(),
+  actualStartDate: isoDateSchema.optional().nullable(),
+  actualEndDate: isoDateSchema.optional().nullable(),
+  percentComplete: z.coerce.number().min(0, "El porcentaje no puede ser negativo").max(100, "El porcentaje no puede superar 100").optional().nullable(),
+});
+
 export type WorkScheduleDistributionInput = z.infer<typeof workScheduleDistributionInputSchema>;
 export type WorkScheduleItemSaveInput = z.infer<typeof workScheduleItemSaveSchema>;
+export type WorkScheduleItemPatchInput = z.infer<typeof workScheduleItemPatchSchema>;
 export type WorkScheduleGenerateBaseInput = z.infer<typeof workScheduleGenerateBaseSchema>;
 export type WorkScheduleGenerationSettings = z.infer<typeof workScheduleGenerationSettingsSchema>;

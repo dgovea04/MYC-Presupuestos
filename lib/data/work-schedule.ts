@@ -21,10 +21,12 @@ import { buildExceptionMap } from "@/lib/data/work-calendars";
 import { buildPlannedVsActualCurveSeries } from "@/lib/work-schedule/curve-s";
 import {
   workScheduleGenerateBaseSchema,
+  workScheduleItemPatchSchema,
   workScheduleItemSaveSchema,
   workScheduleGenerationCustomPhaseKeywordsSchema,
   workScheduleGenerationSettingsSchema,
   type WorkScheduleGenerateBaseInput,
+  type WorkScheduleItemPatchInput,
   type WorkScheduleItemSaveInput,
   type WorkScheduleGenerationSettings,
 } from "@/lib/validations/work-schedule";
@@ -490,6 +492,123 @@ export async function saveWorkScheduleItem(
   }
 
   return getWorkScheduleOverviewSection(budgetId, userId);
+}
+
+/**
+ * Aplica un patch parcial a una partida del cronograma ya programada.
+ *
+ * El patch se combina con el estado actual de la partida para construir el
+ * `WorkScheduleItemSaveInput` completo que `saveWorkScheduleItem` espera,
+ * manteniendo campos como `monthlyDistributions` y aprovechando la logica
+ * de cascaded successor updates + persistedWorkScheduleItem ya implementada.
+ *
+ * Casos soportados:
+ * - actualizar `startDate` (deriva `endDate` desde `startDate + durationDays`)
+ * - actualizar `durationDays` (deriva `endDate` desde `startDate + durationDays`)
+ * - actualizar `endDate` explicito
+ * - actualizar `predecessor`, `crew`, `isMilestone`, baseline/actual dates, etc.
+ *
+ * Lanzara error si la partida no existe en este cronograma o si no tiene
+ * programacion inicial (en cuyo caso debe usarse `saveWorkScheduleItem` con
+ * un input completo).
+ */
+export async function saveWorkScheduleItemPatch(
+  budgetId: string,
+  userId: string,
+  input: WorkScheduleItemPatchInput,
+): Promise<WorkScheduleViewRecord> {
+  const payload = workScheduleItemPatchSchema.parse(input);
+
+  const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  const lines = await getWorkScheduleLinesForBudget(budget, { includeResources: false });
+
+  const targetLine = lines.find((line) => line.budgetItemId === payload.budgetItemId);
+  if (!targetLine) {
+    throw new Error("La partida seleccionada no pertenece a este proyecto");
+  }
+  if (!targetLine.startDate || !targetLine.endDate || targetLine.durationDays == null) {
+    throw new Error(
+      "La partida no tiene programacion inicial; usa saveWorkScheduleItem con un input completo.",
+    );
+  }
+
+  const startDate = payload.startDate ?? targetLine.startDate;
+  const durationDays = payload.durationDays ?? targetLine.durationDays;
+
+  let endDate: string;
+  if (payload.endDate) {
+    endDate = payload.endDate;
+  } else if (startDate === targetLine.startDate && durationDays === targetLine.durationDays) {
+    endDate = targetLine.endDate;
+  } else {
+    endDate = computePatchEndDate(startDate, durationDays);
+  }
+
+  const monthlyDistributions =
+    targetLine.monthlyDistributions.length > 0
+      ? targetLine.monthlyDistributions
+      : [
+          {
+            year: Number(startDate.slice(0, 4)),
+            month: Number(startDate.slice(5, 7)),
+            percentage: 100,
+          },
+        ];
+
+  // Merge rule: cada campo usa el valor del patch si fue provisto (incluyendo
+  // `null` explicito para limpiar), o el valor existente si el patch NO lo
+  // incluyó. Distinguimos `undefined` (no presente en patch) de `null` (presente
+  // con reset explicito) usando `!== undefined` para todos los escalares.
+  const fullInput: WorkScheduleItemSaveInput = {
+    budgetItemId: payload.budgetItemId,
+    startDate,
+    endDate,
+    durationDays,
+    isMilestone:
+      payload.isMilestone !== undefined ? payload.isMilestone : (targetLine.isMilestone ?? false),
+    predecessor:
+      payload.predecessor !== undefined ? payload.predecessor : targetLine.predecessor,
+    crew: payload.crew !== undefined ? payload.crew : (targetLine.crew ?? null),
+    baselineStartDate:
+      payload.baselineStartDate !== undefined
+        ? payload.baselineStartDate
+        : targetLine.baselineStartDate,
+    baselineEndDate:
+      payload.baselineEndDate !== undefined ? payload.baselineEndDate : targetLine.baselineEndDate,
+    actualStartDate:
+      payload.actualStartDate !== undefined ? payload.actualStartDate : targetLine.actualStartDate,
+    actualEndDate:
+      payload.actualEndDate !== undefined ? payload.actualEndDate : targetLine.actualEndDate,
+    percentComplete:
+      payload.percentComplete !== undefined
+        ? payload.percentComplete
+        : (targetLine.percentComplete ?? null),
+    monthlyDistributions,
+  };
+
+  return saveWorkScheduleItem(budgetId, userId, fullInput);
+}
+
+/**
+ * Calcula el endDate a partir de un startDate + durationDays con aritmetica
+ * de DIAS CALENDARIO (suma directa sin saltar feriados/fin de semana).
+ *
+ * Limitacion documentada: difiere del calculo work-day-aware que usa
+ * `saveWorkScheduleItem` original (que aplica la bitmask del calendario
+ * laboral). Si el patch solo cambia `startDate` sin tocar `durationDays`,
+ * el endDate resultante será calendar-derived aunque el original era
+ * work-day-derived. Esto puede generar inconsistencias menores con
+ * recalculos downstream de curva/valorización si se comparan contra
+ * durationDays reportados previamente.
+ *
+ * Si el usuario requiere precisión work-day-aware, debe patchear con
+ * `startDate` Y `endDate` explícitos (en cuyo caso se respeta el endDate
+ * provisto y se omite este calculo).
+ */
+function computePatchEndDate(startDate: string, durationDays: number): string {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() + Math.max(durationDays - 1, 0));
+  return start.toISOString().slice(0, 10);
 }
 
 /**

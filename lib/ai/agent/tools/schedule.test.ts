@@ -14,6 +14,7 @@ const scheduleMocks = vi.hoisted(() => ({
   getBudgetById: vi.fn(),
   saveBudgetPatch: vi.fn(),
   saveWorkScheduleItem: vi.fn(),
+  saveWorkScheduleItemPatch: vi.fn(),
   createMetradoSheet: vi.fn(),
   duplicateMetradoSheet: vi.fn(),
   createApuWorkbook: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/lib/data/work-schedule", () => ({
   generateWorkScheduleBase: scheduleMocks.generateWorkScheduleBase,
   getWorkScheduleSection: scheduleMocks.getWorkScheduleSection,
   saveWorkScheduleItem: scheduleMocks.saveWorkScheduleItem,
+  saveWorkScheduleItemPatch: scheduleMocks.saveWorkScheduleItemPatch,
 }));
 
 vi.mock("@/lib/data/metrados", () => ({
