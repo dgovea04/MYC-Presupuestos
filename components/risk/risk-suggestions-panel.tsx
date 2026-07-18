@@ -61,19 +61,27 @@ export function RiskSuggestionsPanel({
                   className="grid gap-3 rounded-xl border border-[var(--app-border)] bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded bg-[var(--app-surface-muted)] px-1.5 py-0.5 text-[11px] font-mono font-semibold text-[var(--app-text-strong)]">
+                        {suggestion.itemCode}
+                      </span>
+                      <span className="theme-strong-text truncate text-xs" title={suggestion.itemDescription}>
+                        {suggestion.itemDescription}
+                      </span>
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="theme-strong-text text-sm font-medium">
+                      <p className="theme-muted-text text-[11px]">
                         {suggestion.variableType} | {suggestion.distributionType}
                       </p>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                      <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
                         {suggestion.source}
                       </span>
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                      <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
                         Conf. {Math.round(suggestion.confidence * 100)}%
                       </span>
                     </div>
-                    <p className="theme-muted-text text-xs">{suggestion.reason}</p>
-                    <p className="theme-muted-text text-xs">
+                    <p className="theme-muted-text text-[11px]">{suggestion.reason}</p>
+                    <p className="theme-muted-text text-[11px]">
                       Min {suggestion.minimum} | Probable {suggestion.mostLikely} | Max {suggestion.maximum}
                     </p>
                   </div>

@@ -81,6 +81,9 @@ export type RiskVariableSuggestion = {
   id: string;
   budgetId: string;
   budgetItemId: string;
+  itemCode: string;
+  itemDescription: string;
+  sourceBudgetName: string;
   variableType: RiskVariableType;
   distributionType: RiskDistributionType;
   minimum: number;

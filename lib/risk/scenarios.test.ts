@@ -199,7 +199,12 @@ describe("saveRiskScenario", () => {
 
     expect(budgetItemFindManyMock).toHaveBeenCalledWith({
       where: {
-        budgetId: "budget-1",
+        budget: {
+          OR: [
+            { id: "budget-1" },
+            { parentBudgetId: "budget-1" },
+          ],
+        },
         id: { in: ["item-1", "other-budget-item"] },
       },
       select: { id: true },

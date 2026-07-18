@@ -76,7 +76,12 @@ export async function saveRiskScenario(
   if (submittedBudgetItemIds.length > 0) {
     const scopedBudgetItems = await prisma.budgetItem.findMany({
       where: {
-        budgetId,
+        budget: {
+          OR: [
+            { id: budgetId },
+            { parentBudgetId: budgetId },
+          ],
+        },
         id: { in: submittedBudgetItemIds },
       },
       select: { id: true },
