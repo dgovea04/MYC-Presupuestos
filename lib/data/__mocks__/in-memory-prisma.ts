@@ -1,5 +1,6 @@
 /**
- * In-memory Prisma mock server para tests del módulo work-schedule.
+ * In-memory Prisma mock server para tests del módulo work-schedule +
+ * extension opt-in para modulos resource catalog (lib/data/resources.ts).
  *
  * Patron de uso en el consumer:
  *
@@ -22,30 +23,14 @@
  * ```
  *
  * Para tests que requieren state verdaderamente aislado (no compartido cross-tests
- * del archivo), usar `makeMockDb()` y trabajar con el bundle retornado:
+ * del archivo), usar `makeMockDb()` y trabajar con el bundle retornado.
+ * Para tests que solo necesitan catalog de resources (sin work-schedule),
+ * `populateDefaultResourcesFixture()` puede invocarse aisladamente.
  *
- * ```typescript
- * import { makeMockDb } from "@/lib/data/__mocks__/in-memory-prisma";
+ * vi.hoisted NO necesario en el consumer — el dynamic import dentro del factory
+ * de vi.mock resuelve la captura del singleton en runtime via el module cache.
  *
- * const { mockDb, mockTx, prismaMock, reset, populateDefault } = makeMockDb();
- *
- * beforeEach(() => {
- *   reset();
- *   populateDefault();
- * });
- * ```
- *
- * Trade-offs documentados:
- * - El default singleton (mockDb, mockTx, prismaMock) es un `makeMockDb()`
- *   evaluado una vez al cargar el modulo. Vitest aísla por archivo, asi que
- *   tests en otros archivos NO contaminan el singleton.
- * - Tests concurrentes dentro del mismo archivo (test.concurrent) SI comparten
- *   state del singleton — usar `makeMockDb()` por test si esto es un problema.
- * - vi.hoisted NO necesario en el consumer — el dynamic import dentro del factory
- *   de vi.mock resuelve la captura del singleton en runtime via el module cache.
- *
- * Mantenido por: tests de lib/data/work-schedule.ts y entradas relacionadas
- * (generateWorkScheduleBase, previewWorkScheduleBase, getWorkScheduleSection).
+ * Mantenido por: tests de lib/data/work-schedule.ts + lib/data/resources.ts.
  */
 
 import { vi, type MockedFunction } from "vitest";
@@ -86,6 +71,25 @@ export type MockSubBudget = {
   items: MockBudgetItem[];
 };
 
+export type ResourceCategory = "MATERIAL" | "LABOR" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT";
+
+export type MockResource = {
+  id: string;
+  companyId: string | null;
+  code: string;
+  description: string;
+  category: ResourceCategory;
+  iu: string | null;
+  iuCurrent: string | null;
+  subcategory: string | null;
+  unit: string;
+  unitPrice: number;
+  currency: string;
+  source: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type MockBudgetGeneral = {
   id: string;
   projectId: string;
@@ -121,6 +125,8 @@ export type MockDb = {
   workSchedule: { id: string; budgetId: string } | null;
   workScheduleItems: Map<string, MockWorkScheduleItem>;
   workScheduleDistributions: Map<string, unknown[]>;
+  resources: Map<string, MockResource>;
+  apuResources: Map<string, Array<{ id: string }>>;
 };
 
 export type MockTx = {
@@ -165,6 +171,47 @@ export type MockTx = {
       (args: { where: { scheduleItemId: string } }) => Promise<{ count: number }>
     >;
   };
+  resource: {
+    findMany: MockedFunction<
+      (args?: {
+        where?: { companyId?: string | null; category?: string; id?: { not?: string } };
+        select?: { code?: boolean };
+        orderBy?: unknown;
+      }) => Promise<unknown[]>
+    >;
+    count: MockedFunction<(args?: { where?: { id?: { in?: string[] }; companyId?: string | null } }) => Promise<number>>;
+    findFirst: MockedFunction<
+      (args: {
+        where?: { id?: string; OR?: unknown };
+        include?: { apuResources?: boolean };
+        select?: { companyId?: boolean };
+      }) => Promise<unknown>
+    >;
+    create: MockedFunction<
+      (args: {
+        data: {
+          code: string;
+          description: string;
+          category: ResourceCategory;
+          unit: string;
+          unitPrice: number;
+          currency?: string;
+          iu?: string | null;
+          iuCurrent?: string | null;
+          subcategory?: string | null;
+          source?: string | null;
+          company?: { connect?: { id: string } };
+        };
+      }) => Promise<MockResource>
+    >;
+    update: MockedFunction<
+      (args: {
+        where: { id: string };
+        data: Partial<MockResource>;
+      }) => Promise<MockResource>
+    >;
+    delete: MockedFunction<(args: { where: { id: string } }) => Promise<MockResource>>;
+  };
 };
 
 export type PrismaMock = {
@@ -199,6 +246,47 @@ export type PrismaMock = {
       >
     >;
   };
+  resource: {
+    findMany: MockedFunction<
+      (args?: {
+        where?: { companyId?: string | null; category?: string; id?: { not?: string } };
+        select?: { code?: boolean };
+        orderBy?: unknown;
+      }) => Promise<unknown[]>
+    >;
+    count: MockedFunction<(args?: { where?: { id?: { in?: string[] }; companyId?: string | null } }) => Promise<number>>;
+    findFirst: MockedFunction<
+      (args: {
+        where?: { id?: string; OR?: unknown };
+        include?: { apuResources?: boolean };
+        select?: { companyId?: boolean };
+      }) => Promise<unknown>
+    >;
+    create: MockedFunction<
+      (args: {
+        data: {
+          code: string;
+          description: string;
+          category: ResourceCategory;
+          unit: string;
+          unitPrice: number;
+          currency?: string;
+          iu?: string | null;
+          iuCurrent?: string | null;
+          subcategory?: string | null;
+          source?: string | null;
+          company?: { connect?: { id: string } };
+        };
+      }) => Promise<MockResource>
+    >;
+    update: MockedFunction<
+      (args: {
+        where: { id: string };
+        data: Partial<MockResource>;
+      }) => Promise<MockResource>
+    >;
+    delete: MockedFunction<(args: { where: { id: string } }) => Promise<MockResource>>;
+  };
 };
 
 export type InMemoryPrisma = {
@@ -207,10 +295,12 @@ export type InMemoryPrisma = {
   prismaMock: PrismaMock;
   reset: () => void;
   populateDefault: () => void;
+  populateDefaultResourcesFixture: () => void;
   addMockBudgetItem: (overrides: Partial<MockBudgetItem> & { id: string }) => MockBudgetItem;
   addMockSubBudget: (
     overrides: Partial<MockSubBudget> & { id: string; name: string },
   ) => MockSubBudget;
+  addMockResource: (overrides: Partial<MockResource> & { id: string }) => MockResource;
 };
 
 // =============================================================================
@@ -228,16 +318,17 @@ const EXCAV_ID = "cline_excav_001";
 const CIM_ID = "cline_cim_002";
 const EST_ID = "cline_est_003";
 
+export const DEFAULT_RESOURCE_MAT_001 = "res-mat-cement";
+export const DEFAULT_RESOURCE_MAT_002 = "res-mat-sand";
+export const DEFAULT_RESOURCE_EQ_001 = "res-eq-mixer";
+
 // =============================================================================
 // HELPERS DE COLECCION
 // =============================================================================
 
-/**
- * Recorre recursivamente los objetos mockTx/prismaMock y devuelve todos los
- * vi.fn/mock functions anidados. Usado por `reset` para mockClear() sin tener
- * que mantener una lista hardcoded que se desincronice con la estructura.
- */
-function collectAllMockFns(...sources: Array<Record<string, unknown>>): Array<MockedFunction<(...args: unknown[]) => unknown>> {
+function collectAllMockFns(
+  ...sources: Array<Record<string, unknown>>
+): Array<MockedFunction<(...args: unknown[]) => unknown>> {
   const seen = new WeakSet<object>();
   const out: Array<MockedFunction<(...args: unknown[]) => unknown>> = [];
 
@@ -265,12 +356,163 @@ function createEmptyMockDb(): MockDb {
     workSchedule: null,
     workScheduleItems: new Map(),
     workScheduleDistributions: new Map(),
+    resources: new Map(),
+    apuResources: new Map(),
   };
 }
 
 // =============================================================================
 // FACTORIES (closures lockean state via referencia capturada)
 // =============================================================================
+
+/**
+ * Construye los handlers prisma.resource.* compartidos entre prismaMock (top-level)
+ * y mockTx.resource (dentro de transactions). Ambos casos lockean la misma
+ * instancia de mockDb.resources via closure.
+ *
+ * Implementa la logica filtrante minima para que `resources.ts` pueda correr
+ * sin Postgres real:
+ * - findMany: filtra por companyId, category, id.not (auto-generate code lookup)
+ * - count: cuenta resources matching where
+ * - findFirst (con include apuResources): usado por deleteResource para validar
+ *   que el resource no este usado en un APU antes de borrar
+ * - create/update: persist + return con timestamps
+ * - delete: remove + return
+ */
+function buildResourceHandlers(mockDb: MockDb): MockTx["resource"] {
+  const findMany = vi.fn(
+    async (args?: {
+      where?: { companyId?: string | null; category?: string; id?: { not?: string } };
+      select?: { code?: boolean };
+    }) => {
+      let list = Array.from(mockDb.resources.values());
+      if (args?.where?.companyId !== undefined) {
+        list = list.filter((r) => r.companyId === args.where!.companyId);
+      }
+      if (args?.where?.category) {
+        list = list.filter((r) => r.category === args.where!.category);
+      }
+      if (args?.where?.id?.not) {
+        const exclude = args.where.id.not;
+        list = list.filter((r) => r.id !== exclude);
+      }
+      if (args?.select?.code) {
+        return list.map((r) => ({ code: r.code }));
+      }
+      return list;
+    },
+  );
+
+  const count = vi.fn(
+    async (args?: { where?: { id?: { in?: string[] }; companyId?: string | null } }) => {
+      let list = Array.from(mockDb.resources.values());
+      if (args?.where?.id?.in) {
+        const ids = args.where.id.in;
+        list = list.filter((r) => ids.includes(r.id));
+      }
+      if (args?.where?.companyId !== undefined) {
+        list = list.filter((r) => r.companyId === args.where!.companyId);
+      }
+      return list.length;
+    },
+  );
+
+  const findFirst = vi.fn(
+    async (args: {
+      where?: { id?: string; OR?: unknown };
+      include?: { apuResources?: boolean };
+      select?: { companyId?: boolean };
+    }) => {
+      if (args?.where?.id) {
+        const res = mockDb.resources.get(args.where.id);
+        if (!res) return null;
+        if (args.include?.apuResources) {
+          return { ...res, apuResources: mockDb.apuResources.get(args.where.id) ?? [] };
+        }
+        if (args.select?.companyId) {
+          return { companyId: res.companyId };
+        }
+        return res;
+      }
+      // OR clause (used by updateResource inside tx): findFirst with OR[company-membership-or-global]
+      // Simplified: return first resource matching where.id OR any
+      if (args?.where?.OR) {
+        // Skip detailed OR evaluation; return null to indicate "not found via OR path".
+        // Update flow expects this; if not found, update just won't execute.
+        return null;
+      }
+      return null;
+    },
+  );
+
+  const create = vi.fn(
+    async ({
+      data,
+    }: {
+      data: {
+        code: string;
+        description: string;
+        category: ResourceCategory;
+        unit: string;
+        unitPrice: number;
+        currency?: string;
+        iu?: string | null;
+        iuCurrent?: string | null;
+        subcategory?: string | null;
+        source?: string | null;
+        company?: { connect?: { id: string } };
+      };
+    }) => {
+      const id = `res-${Math.random().toString(36).slice(2, 8)}`;
+      const resource: MockResource = {
+        id,
+        companyId: data.company?.connect?.id ?? null,
+        code: data.code,
+        description: data.description,
+        category: data.category,
+        iu: data.iu ?? null,
+        iuCurrent: data.iuCurrent ?? null,
+        subcategory: data.subcategory ?? null,
+        unit: data.unit,
+        unitPrice: data.unitPrice,
+        currency: data.currency ?? "PEN",
+        source: data.source ?? null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockDb.resources.set(id, resource);
+      return resource;
+    },
+  );
+
+  const update = vi.fn(
+    async ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Partial<MockResource>;
+    }) => {
+      const target = mockDb.resources.get(where.id);
+      if (!target) {
+        throw new Error(`Mock resource ${where.id} not found`);
+      }
+      Object.assign(target, data, { updatedAt: new Date() });
+      return target;
+    },
+  );
+
+  const del = vi.fn(async ({ where }: { where: { id: string } }) => {
+    const target = mockDb.resources.get(where.id);
+    if (!target) {
+      throw new Error(`Mock resource ${where.id} not found`);
+    }
+    mockDb.resources.delete(where.id);
+    return target;
+  });
+
+  return { findMany, count, findFirst, create, update, delete: del };
+}
 
 function createMockTx(mockDb: MockDb): MockTx {
   const tx: MockTx = {
@@ -287,6 +529,7 @@ function createMockTx(mockDb: MockDb): MockTx {
     workScheduleDistribution: {
       deleteMany: vi.fn(),
     },
+    resource: buildResourceHandlers(mockDb),
   };
 
   tx.workSchedule.upsert.mockImplementation(async ({ where }) => {
@@ -433,6 +676,7 @@ function createPrismaMock(mockDb: MockDb, mockTx: MockTx): PrismaMock {
         return null;
       }),
     },
+    resource: buildResourceHandlers(mockDb),
   };
 }
 
@@ -514,7 +758,10 @@ function populateDefaultWorkScheduleFixtureImpl(mockDb: MockDb): void {
   ];
 }
 
-function addMockBudgetItemImpl(mockDb: MockDb, overrides: Partial<MockBudgetItem> & { id: string }): MockBudgetItem {
+function addMockBudgetItemImpl(
+  mockDb: MockDb,
+  overrides: Partial<MockBudgetItem> & { id: string },
+): MockBudgetItem {
   if (mockDb.subBudgets.length === 0) {
     throw new Error("addMockBudgetItem requiere populateDefaultWorkScheduleFixture primero.");
   }
@@ -564,6 +811,60 @@ function addMockSubBudgetImpl(
   return sub;
 }
 
+function addMockResourceImpl(
+  mockDb: MockDb,
+  overrides: Partial<MockResource> & { id: string },
+): MockResource {
+  const resource: MockResource = {
+    id: overrides.id,
+    companyId: overrides.companyId ?? null,
+    code: overrides.code ?? "MAT-000",
+    description: overrides.description ?? "(sin descripcion)",
+    category: overrides.category ?? "MATERIAL",
+    iu: overrides.iu ?? null,
+    iuCurrent: overrides.iuCurrent ?? null,
+    subcategory: overrides.subcategory ?? null,
+    unit: overrides.unit ?? "UND",
+    unitPrice: overrides.unitPrice ?? 0,
+    currency: overrides.currency ?? "PEN",
+    source: overrides.source ?? null,
+    createdAt: overrides.createdAt ?? new Date(),
+    updatedAt: overrides.updatedAt ?? new Date(),
+  };
+  mockDb.resources.set(resource.id, resource);
+  return resource;
+}
+
+function populateDefaultResourcesFixtureImpl(mockDb: MockDb): void {
+  addMockResourceImpl(mockDb, {
+    id: DEFAULT_RESOURCE_MAT_001,
+    companyId: null,
+    code: "MAT-001",
+    description: "Cemento Portland tipo I",
+    category: "MATERIAL",
+    unit: "bls",
+    unitPrice: 28,
+  });
+  addMockResourceImpl(mockDb, {
+    id: DEFAULT_RESOURCE_MAT_002,
+    companyId: null,
+    code: "MAT-002",
+    description: "Arena gruesa",
+    category: "MATERIAL",
+    unit: "m3",
+    unitPrice: 45,
+  });
+  addMockResourceImpl(mockDb, {
+    id: DEFAULT_RESOURCE_EQ_001,
+    companyId: null,
+    code: "EQ-001",
+    description: "Mezcladora de concreto",
+    category: "EQUIPMENT",
+    unit: "hm",
+    unitPrice: 18,
+  });
+}
+
 function createReset(mockDb: MockDb, mockTx: MockTx, prismaMock: PrismaMock): () => void {
   return () => {
     mockDb.budgetGeneral = null;
@@ -571,8 +872,8 @@ function createReset(mockDb: MockDb, mockTx: MockTx, prismaMock: PrismaMock): ()
     mockDb.workSchedule = null;
     mockDb.workScheduleItems.clear();
     mockDb.workScheduleDistributions.clear();
-    // Programmatic mockClear via recursion — survives estructura changes
-    // sin tener que mantener una lista hardcoded.
+    mockDb.resources.clear();
+    mockDb.apuResources.clear();
     const allMockFns = collectAllMockFns(
       mockTx as unknown as Record<string, unknown>,
       prismaMock as unknown as Record<string, unknown>,
@@ -587,49 +888,29 @@ function createReset(mockDb: MockDb, mockTx: MockTx, prismaMock: PrismaMock): ()
 // FACTORY PUBLICA
 // =============================================================================
 
-/**
- * Crea un bundle nuevo e independiente de mock state + handlers.
- *
- * Cada llamada produce estado y vi.fn frescos — no comparten referencias con
- * el singleton default. Ideal para tests que necesitan aislamiento total, p.ej.
- * tests concurrentes (`test.concurrent`) o tests que invocan setup secuencial.
- *
- * El bundle retornado tiene la misma shape que los exports default del modulo,
- * asi que un test puede intercambiarlos sin cambiar su logica:
- *
- * ```typescript
- * const { mockDb, mockTx, prismaMock, reset, populateDefault } = makeMockDb();
- *
- * vi.mock("@/lib/db/prisma", async () => {
- *   const { prismaMock } = await import("@/lib/data/__mocks__/in-memory-prisma");
- *   // IMPORTANTE: usar el prismaMock del makeMockDb() binding local, NO el default
- * });
- * ```
- *
- * Nota: cuando se usa `makeMockDb()` dentro de un test file, el `vi.mock` factory
- * debe referenciar el prismaMock retornado por el factory en lugar del export
- * default del modulo. Esto requiere setear el mock factory antes del primer
- * `import` del codigo bajo test (Vitest hoist), lo cual se logra usando
- * `vi.hoisted` o definiendo el factory al top-level con un await import.
- */
 export function makeMockDb(): InMemoryPrisma {
   const mockDb = createEmptyMockDb();
   const mockTx = createMockTx(mockDb);
   const prismaMock = createPrismaMock(mockDb, mockTx);
   const reset = createReset(mockDb, mockTx, prismaMock);
   const populateDefault = () => populateDefaultWorkScheduleFixtureImpl(mockDb);
+  const populateDefaultResourcesFixture = () => populateDefaultResourcesFixtureImpl(mockDb);
   const addMockBudgetItem = (overrides: Partial<MockBudgetItem> & { id: string }) =>
     addMockBudgetItemImpl(mockDb, overrides);
   const addMockSubBudget = (overrides: Partial<MockSubBudget> & { id: string; name: string }) =>
     addMockSubBudgetImpl(mockDb, overrides);
+  const addMockResource = (overrides: Partial<MockResource> & { id: string }) =>
+    addMockResourceImpl(mockDb, overrides);
   return {
     mockDb,
     mockTx,
     prismaMock,
     reset,
     populateDefault,
+    populateDefaultResourcesFixture,
     addMockBudgetItem,
     addMockSubBudget,
+    addMockResource,
   };
 }
 
@@ -642,27 +923,25 @@ export const mockDb: MockDb = _default.mockDb;
 export const mockTx: MockTx = _default.mockTx;
 export const prismaMock: PrismaMock = _default.prismaMock;
 
-/**
- * Limpia state + vi.fn mocks. Llamar en `beforeEach` con el default singleton.
- * Para bundles factory, usar `bundle.reset()` directamente.
- */
 export function resetInMemoryState(): void {
   _default.reset();
 }
 
-/**
- * Popula el state con fixture baseline (1 budget GENERAL + 1 sub-budget
- * Estructuras + 3 partidas excav/cim/est). Para bundles factory, usar
- * `bundle.populateDefault()` directamente.
- */
 export function populateDefaultWorkScheduleFixture(): void {
   _default.populateDefault();
 }
 
 /**
+ * Popula el mockDb con 3 recursos globales baseline (Cemento MAT-001, Arena
+ * MAT-002, Mezcladora EQ-001). Llamar antes de tests que esperan catalog
+ * no vacio. NO requiere populateDefaultWorkScheduleFixture.
+ */
+export function populateDefaultResourcesFixture(): void {
+  _default.populateDefaultResourcesFixture();
+}
+
+/**
  * @deprecated usar `bundle.addMockBudgetItem()` o el singleton via import directo.
- * Mantenido como thin wrapper por backward compat con tests que ya consumian
- * el helper top-level.
  */
 export function addMockBudgetItem(overrides: Partial<MockBudgetItem> & { id: string }): MockBudgetItem {
   return _default.addMockBudgetItem(overrides);
@@ -675,4 +954,12 @@ export function addMockSubBudget(
   overrides: Partial<MockSubBudget> & { id: string; name: string },
 ): MockSubBudget {
   return _default.addMockSubBudget(overrides);
+}
+
+/**
+ * Agrega un resource al catalog. Llamar despues de `populateDefaultResourcesFixture()`
+ * o en lugar de este si solo se necesitan resources custom.
+ */
+export function addMockResource(overrides: Partial<MockResource> & { id: string }): MockResource {
+  return _default.addMockResource(overrides);
 }
