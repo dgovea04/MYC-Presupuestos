@@ -4,7 +4,12 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RiskAnalysisDashboard } from "@/components/risk/risk-analysis-dashboard";
-import { MONTE_CARLO_ITERATIONS, type RiskAnalysisPayload, type RiskSimulationSummary } from "@/types/risk";
+import {
+  MONTE_CARLO_ITERATIONS,
+  type RiskAnalysisPayload,
+  type RiskSimulationSummary,
+  type RiskVariableSuggestion,
+} from "@/types/risk";
 
 const { runRiskSimulationWorkerMock } = vi.hoisted(() => ({
   runRiskSimulationWorkerMock: vi.fn(),
@@ -187,6 +192,87 @@ describe("RiskAnalysisDashboard", () => {
 
     expect(container.textContent).toContain("La simulacion no corresponde al presupuesto seleccionado.");
   });
+
+  it("requests Khipu risk suggestions for review", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ suggestions: [createSuggestion()] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, getByText } = await renderRiskAnalysisDashboard();
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/risk-analysis/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strategy: "balanced", maxSuggestions: 12 }),
+    });
+    expect(container.textContent).toContain("Partida de alto impacto.");
+  });
+
+  it("saves accepted Khipu suggestions as an approved agent scenario without running simulation", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ suggestions: [createSuggestion()] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "scenario-1", budgetId: "budget-1", name: "Escenario Khipu aprobado" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getByText } = await renderRiskAnalysisDashboard();
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      getByText("Guardar escenario aprobado").click();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/budgets/budget-1/risk-analysis/scenarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Escenario Khipu aprobado",
+        description: "Variables de riesgo revisadas y aprobadas desde Khipu.",
+        source: "AGENT",
+        status: "APPROVED",
+        variables: [
+          {
+            id: "suggestion-1",
+            budgetItemId: "item-1",
+            variableType: "QUANTITY",
+            distributionType: "PERT",
+            minimum: 9.5,
+            mostLikely: 10,
+            maximum: 11,
+            enabled: true,
+            source: "HEURISTIC",
+            confidence: 0.8,
+            rationale: "Partida de alto impacto.",
+          },
+        ],
+        correlations: [],
+      }),
+    });
+    expect(runRiskSimulationWorkerMock).not.toHaveBeenCalled();
+  });
 });
 
 async function renderRiskAnalysisDashboard(payload: RiskAnalysisPayload = createPayload()) {
@@ -311,5 +397,22 @@ function createSimulationSummary(): RiskSimulationSummary {
       { cost: 1120, cumulativeProbability: 0.95 },
     ],
     scheduleDuration: null,
+  };
+}
+
+function createSuggestion(): RiskVariableSuggestion {
+  return {
+    id: "suggestion-1",
+    budgetId: "budget-1",
+    budgetItemId: "item-1",
+    variableType: "QUANTITY",
+    distributionType: "PERT",
+    minimum: 9.5,
+    mostLikely: 10,
+    maximum: 11,
+    confidence: 0.8,
+    reason: "Partida de alto impacto.",
+    source: "HEURISTIC",
+    impactScore: 1000,
   };
 }

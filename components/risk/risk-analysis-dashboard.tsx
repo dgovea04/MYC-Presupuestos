@@ -6,6 +6,7 @@ import { PercentilesTable } from "@/components/risk/percentiles-table";
 import { RiskCorrelationsPanel } from "@/components/risk/risk-correlations-panel";
 import { RiskKPICards } from "@/components/risk/risk-kpi-cards";
 import { RiskScheduleAnalysisPanel } from "@/components/risk/risk-schedule-analysis-panel";
+import { RiskSuggestionsPanel } from "@/components/risk/risk-suggestions-panel";
 import { RiskValidationPanel } from "@/components/risk/risk-validation-panel";
 import { RiskVariableModal } from "@/components/risk/risk-variable-modal";
 import { RiskVariablesTable } from "@/components/risk/risk-variables-table";
@@ -23,6 +24,7 @@ import {
   type RiskBudgetItem,
   type RiskSimulationInput,
   type RiskSimulationSummary,
+  type RiskVariableSuggestion,
   type RiskVariableDraftKey,
   type RiskVariableRecord,
   type RiskVariableType,
@@ -47,6 +49,11 @@ export function RiskAnalysisDashboard({
   const activeBudgetIdRef = useRef(payload.budget.id);
   const modelVersionRef = useRef(0);
   const [qualityPanelCollapsed, setQualityPanelCollapsed] = useState(true);
+  const [suggestionsBudgetId, setSuggestionsBudgetId] = useState(payload.budget.id);
+  const [suggestions, setSuggestions] = useState<RiskVariableSuggestion[]>([]);
+  const [suggestionsError, setSuggestionsError] = useState("");
+  const [suggestionsStatus, setSuggestionsStatus] = useState<"idle" | "loading" | "saving">("idle");
+  const [savedScenarioName, setSavedScenarioName] = useState("");
   const {
     completeSimulation,
     correlations,
@@ -106,6 +113,11 @@ export function RiskAnalysisDashboard({
       (variable) =>
         variable.budgetItemId === editingContext?.itemId && variable.variableType === editingContext?.variableType,
     ) ?? null;
+  const activeSuggestions = suggestionsBudgetId === payload.budget.id ? suggestions : [];
+  const activeSuggestionsError = suggestionsBudgetId === payload.budget.id ? suggestionsError : "";
+  const activeSuggestionsStatus = suggestionsBudgetId === payload.budget.id ? suggestionsStatus : "idle";
+  const activeSavedScenarioName = suggestionsBudgetId === payload.budget.id ? savedScenarioName : "";
+  const suggestionsPanelKey = `${payload.budget.id}:${activeSuggestions.map((suggestion) => suggestion.id).join("|")}`;
   const editingDurationBaseValue =
     editingVariableType === "DURATION"
       ? criticalItemById.get(editingContext?.itemId ?? "")?.durationDays ?? null
@@ -273,6 +285,79 @@ export function RiskAnalysisDashboard({
     setLatestRun(result.latestRun);
   };
 
+  const requestSuggestions = async () => {
+    if (status === "running" || activeSuggestionsStatus !== "idle") {
+      return;
+    }
+
+    setSuggestionsStatus("loading");
+    setSuggestionsBudgetId(payload.budget.id);
+    setSuggestionsError("");
+    setSavedScenarioName("");
+
+    try {
+      const response = await fetch(`/api/budgets/${payload.budget.id}/risk-analysis/suggestions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ strategy: "balanced", maxSuggestions: 12 }),
+      });
+      const result = await readOptionalJson(response);
+
+      if (!response.ok) {
+        throw new Error(readApiError(result, "No se pudieron generar sugerencias de riesgo."));
+      }
+
+      if (!isRiskSuggestionsResponse(result)) {
+        throw new Error("No se pudo leer la respuesta de sugerencias de riesgo.");
+      }
+
+      setSuggestions(result.suggestions);
+    } catch (requestError) {
+      setSuggestionsError(
+        requestError instanceof Error ? requestError.message : "No se pudieron generar sugerencias de riesgo.",
+      );
+    } finally {
+      setSuggestionsStatus("idle");
+    }
+  };
+
+  const saveApprovedScenario = async (approvedVariables: RiskVariableRecord[]) => {
+    if (status === "running" || activeSuggestionsStatus !== "idle") {
+      return;
+    }
+
+    setSuggestionsStatus("saving");
+    setSuggestionsBudgetId(payload.budget.id);
+    setSuggestionsError("");
+    setSavedScenarioName("");
+
+    try {
+      const response = await fetch(`/api/budgets/${payload.budget.id}/risk-analysis/scenarios`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Escenario Khipu aprobado",
+          description: "Variables de riesgo revisadas y aprobadas desde Khipu.",
+          source: "AGENT",
+          status: "APPROVED",
+          variables: approvedVariables.map(toScenarioVariable),
+          correlations: [],
+        }),
+      });
+      const result = await readOptionalJson(response);
+
+      if (!response.ok) {
+        throw new Error(readApiError(result, "No se pudo guardar el escenario de riesgo."));
+      }
+
+      setSavedScenarioName("Escenario Khipu aprobado guardado.");
+    } catch (saveError) {
+      setSuggestionsError(saveError instanceof Error ? saveError.message : "No se pudo guardar el escenario de riesgo.");
+    } finally {
+      setSuggestionsStatus("idle");
+    }
+  };
+
   return (
     <div className="space-y-5">
       <SimulationToolbar
@@ -318,6 +403,18 @@ export function RiskAnalysisDashboard({
           variables={variables}
         />
       </div>
+
+      <RiskSuggestionsPanel
+        key={suggestionsPanelKey}
+        disabled={status === "running"}
+        error={activeSuggestionsError}
+        isLoading={activeSuggestionsStatus === "loading"}
+        isSaving={activeSuggestionsStatus === "saving"}
+        onRequestSuggestions={requestSuggestions}
+        onSaveApprovedScenario={saveApprovedScenario}
+        savedScenarioName={activeSavedScenarioName}
+        suggestions={activeSuggestions}
+      />
 
       <RiskCorrelationsPanel
         correlations={correlations}
@@ -391,8 +488,28 @@ function isRiskSimulationSummary(value: unknown): value is RiskSimulationSummary
   return isRecord(value) && typeof value.budgetId === "string" && typeof value.p50 === "number";
 }
 
+function isRiskSuggestionsResponse(value: unknown): value is { suggestions: RiskVariableSuggestion[] } {
+  return isRecord(value) && Array.isArray(value.suggestions);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function toScenarioVariable(variable: RiskVariableRecord) {
+  return {
+    id: variable.id,
+    budgetItemId: variable.budgetItemId,
+    variableType: variable.variableType,
+    distributionType: variable.distributionType,
+    minimum: variable.minimum,
+    mostLikely: variable.mostLikely,
+    maximum: variable.maximum,
+    enabled: variable.enabled,
+    source: variable.source,
+    confidence: variable.confidence,
+    rationale: variable.rationale,
+  };
 }
 
 function parseDraftKey(value: RiskVariableDraftKey | null): { itemId: string; variableType: RiskVariableType } | null {
