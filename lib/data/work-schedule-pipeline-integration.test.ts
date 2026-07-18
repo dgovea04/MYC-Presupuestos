@@ -431,31 +431,50 @@ describe("data/work-schedule.saveWorkScheduleItem + critical-path pipeline", () 
     const excavItem = mockDb.workScheduleItems.get("cline_excav_001");
     expect(excavItem?.durationDays).toBe(14);
 
+    // Patch respeta campos no-provistos: startDate permanece intacto en el store.
+    // Esto fija el contrato "patch aplica solo delta; campos ausentes se preservan".
+    expect(excavItem?.startDate instanceof Date).toBe(true);
+    if (excavItem?.startDate instanceof Date) {
+      expect(excavItem.startDate.toISOString().slice(0, 10)).toBe("2024-03-01");
+    }
+
     // Recalcular critical path desde el store actualizado
     const updatedCriticalPath = calculateWorkScheduleCriticalPath(loadLinesFromMockDb() as any);
 
-    // El critical path recalculado:
-    //  - sigue siendo "calculated" (no ciclo introducido por el patch)
-    //  - incluye las 3 partidas (no se eliminaron items)
-    //  - projectDurationDays >= 30 (porque Excav duro +6 dias)
+    // Envelope stability tras patch
     expect(updatedCriticalPath.status).toBe("calculated");
     expect(updatedCriticalPath.itemsByBudgetItemId.size).toBe(3);
-    expect(updatedCriticalPath.projectDurationDays).toBeGreaterThan(30);
 
-    // Excav refleja el patch
+    // Excav refleja el patch en el critical path recalculado
     const excavItemAfter = updatedCriticalPath.itemsByBudgetItemId.get("cline_excav_001");
     expect(excavItemAfter?.durationDays).toBe(14);
 
-    // Ninguna partida tiene slack negativo (no se introdujeron ciclos en la cadena)
+    // Computed exact: la cascade aplica lazy-shift (cada dependiente arranca
+    // el dia siguiente al fin de su predecessor, sin lag explicito). Resultado:
+    //   Excav 2024-03-14 -> Cim start 2024-03-15 -> Cim end 2024-03-26
+    //   -> Est start 2024-03-27 -> Est end 2024-04-05
+    // Span = 2024-03-01 .. 2024-04-05 = 36 calendar days inclusive.
+    // Si el algoritmo agrega lag explicito entre cada par, el valor seria 37+.
+    // Si difiere en una iteracion futura, ajustar con:
+    //   expect(updatedCriticalPath.projectDurationDays).toMatchInlineSnapshot(`36`);
+    expect(updatedCriticalPath.projectDurationDays).toBe(36);
+
+    // Cascada propaga: Cim (predecessor FS puro de Excav) arranca 1 dia despues
+    // del nuevo fin de Excav (2024-03-14 + 1 = 2024-03-15). Est a su vez se
+    // desplaza en cascada desde Cim.
+    const cimItem = mockDb.workScheduleItems.get("cline_cim_002");
+    const estItem = mockDb.workScheduleItems.get("cline_est_003");
+    expect(cimItem?.startDate instanceof Date).toBe(true);
+    expect(estItem?.startDate instanceof Date).toBe(true);
+    if (cimItem?.startDate instanceof Date && estItem?.startDate instanceof Date) {
+      expect(cimItem.startDate.toISOString().slice(0, 10)).toBe("2024-03-15");
+      expect(estItem.startDate.toISOString().slice(0, 10)).toBe("2024-03-27");
+    }
+
+    // Ninguna partida tiene slack negativo tras el patch
     for (const item of updatedCriticalPath.itemsByBudgetItemId.values()) {
       expect(item.totalSlackDays).toBeGreaterThanOrEqual(0);
     }
-
-    // Cross-invariant: la nueva duracion critica es al menos la suma de
-    // durations actualizados del chain (Excav 14, Cim/Estr permanecen pero sus
-    // startDates pueden haberse desplazado via cascada si el recalculo asi lo decide).
-    // En FS puro sin cascada agresiva, la nueva duracion critica >= 14 + 12 + 10 = 36
-    expect(updatedCriticalPath.projectDurationDays).toBeGreaterThanOrEqual(36);
   });
 
   it("idempotencia: una segunda llamada con el mismo input produce WorkScheduleViewRecord equivalente", async () => {
