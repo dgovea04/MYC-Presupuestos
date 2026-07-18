@@ -4,7 +4,12 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RiskAnalysisDashboard } from "@/components/risk/risk-analysis-dashboard";
-import { MONTE_CARLO_ITERATIONS, type RiskAnalysisPayload, type RiskSimulationSummary } from "@/types/risk";
+import {
+  MONTE_CARLO_ITERATIONS,
+  type RiskAnalysisPayload,
+  type RiskSimulationSummary,
+  type RiskVariableSuggestion,
+} from "@/types/risk";
 
 const { runRiskSimulationWorkerMock } = vi.hoisted(() => ({
   runRiskSimulationWorkerMock: vi.fn(),
@@ -187,6 +192,134 @@ describe("RiskAnalysisDashboard", () => {
 
     expect(container.textContent).toContain("La simulacion no corresponde al presupuesto seleccionado.");
   });
+
+  it("requests Khipu risk suggestions for review", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ suggestions: [createSuggestion()] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, getByText } = await renderRiskAnalysisDashboard();
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/budgets/budget-1/risk-analysis/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strategy: "balanced", maxSuggestions: 12 }),
+    });
+    expect(container.textContent).toContain("Partida de alto impacto.");
+  });
+
+  it("does not render stale Khipu suggestions after switching to a newer budget request", async () => {
+    const staleSuggestionsResponse = createDeferred<Response>();
+    const currentSuggestionsResponse = createDeferred<Response>();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockReturnValueOnce(staleSuggestionsResponse.promise)
+      .mockReturnValueOnce(currentSuggestionsResponse.promise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, getByText, rerender } = await renderRiskAnalysisDashboard();
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+    });
+
+    await rerender(createPayload("budget-2"));
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+    });
+
+    await act(async () => {
+      currentSuggestionsResponse.resolve(
+        new Response(JSON.stringify({ suggestions: [createSuggestion("current-suggestion", "budget-2", "Sugerencia vigente.")] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await currentSuggestionsResponse.promise;
+    });
+
+    expect(container.textContent).toContain("Sugerencia vigente.");
+
+    await act(async () => {
+      staleSuggestionsResponse.resolve(
+        new Response(JSON.stringify({ suggestions: [createSuggestion("stale-suggestion", "budget-1", "Sugerencia obsoleta.")] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await staleSuggestionsResponse.promise;
+    });
+
+    expect(container.textContent).toContain("Sugerencia vigente.");
+    expect(container.textContent).not.toContain("Sugerencia obsoleta.");
+  });
+
+  it("saves accepted Khipu suggestions as an approved agent scenario without running simulation", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ suggestions: [createSuggestion()] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "scenario-1", budgetId: "budget-1", name: "Escenario Khipu aprobado" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getByText } = await renderRiskAnalysisDashboard();
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      getByText("Guardar escenario aprobado").click();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/budgets/budget-1/risk-analysis/scenarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Escenario Khipu aprobado",
+        description: "Variables de riesgo revisadas y aprobadas desde Khipu.",
+        source: "AGENT",
+        status: "APPROVED",
+        variables: [
+          {
+            id: "suggestion-1",
+            budgetItemId: "item-1",
+            variableType: "QUANTITY",
+            distributionType: "PERT",
+            minimum: 9.5,
+            mostLikely: 10,
+            maximum: 11,
+            enabled: true,
+            source: "HEURISTIC",
+            confidence: 0.8,
+            rationale: "Partida de alto impacto.",
+          },
+        ],
+        correlations: [],
+      }),
+    });
+    expect(runRiskSimulationWorkerMock).not.toHaveBeenCalled();
+  });
 });
 
 async function renderRiskAnalysisDashboard(payload: RiskAnalysisPayload = createPayload()) {
@@ -208,6 +341,15 @@ async function renderRiskAnalysisDashboard(payload: RiskAnalysisPayload = create
 
   return {
     container,
+    rerender: async (nextPayload: RiskAnalysisPayload) => {
+      await act(async () => {
+        root.render(<RiskAnalysisDashboard currencyDecimals={2} payload={nextPayload} />);
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+    },
     getByText: (text: string) => {
       const element = [...container.querySelectorAll("*")].find((candidate) => candidate.textContent === text);
 
@@ -240,10 +382,10 @@ async function renderRiskAnalysisDashboard(payload: RiskAnalysisPayload = create
   };
 }
 
-function createPayload(): RiskAnalysisPayload {
+function createPayload(budgetId = "budget-1"): RiskAnalysisPayload {
   return {
     budget: {
-      id: "budget-1",
+      id: budgetId,
       projectId: "project-1",
       name: "Presupuesto General",
       kind: "GENERAL",
@@ -311,5 +453,37 @@ function createSimulationSummary(): RiskSimulationSummary {
       { cost: 1120, cumulativeProbability: 0.95 },
     ],
     scheduleDuration: null,
+  };
+}
+
+function createSuggestion(id = "suggestion-1", budgetId = "budget-1", reason = "Partida de alto impacto."): RiskVariableSuggestion {
+  return {
+    id,
+    budgetId,
+    budgetItemId: "item-1",
+    variableType: "QUANTITY",
+    distributionType: "PERT",
+    minimum: 9.5,
+    mostLikely: 10,
+    maximum: 11,
+    confidence: 0.8,
+    reason,
+    source: "HEURISTIC",
+    impactScore: 1000,
+  };
+}
+
+function createDeferred<T>() {
+  let resolvePromise: (value: T) => void = () => undefined;
+  let rejectPromise: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+
+  return {
+    promise,
+    reject: rejectPromise,
+    resolve: resolvePromise,
   };
 }

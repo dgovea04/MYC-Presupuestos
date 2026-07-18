@@ -460,6 +460,7 @@ describe("getRiskAnalysisFallbackData", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           budgetId: "budget-xyz",
+          scenarioId: null,
           budgetItemId: { in: ["item-a", "item-b"] },
         }),
         orderBy: { createdAt: "asc" },
@@ -467,13 +468,13 @@ describe("getRiskAnalysisFallbackData", () => {
     );
     expect(prisma.riskCorrelation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { budgetId: "budget-xyz" },
+        where: { budgetId: "budget-xyz", scenarioId: null },
         orderBy: { createdAt: "asc" },
       }),
     );
     expect(prisma.riskSimulationRun.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { budgetId: "budget-xyz" },
+        where: { budgetId: "budget-xyz", scenarioId: null },
         orderBy: { createdAt: "desc" },
       }),
     );

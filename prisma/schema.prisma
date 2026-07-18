@@ -187,6 +187,23 @@ enum RiskDistributionType {
   UNIFORM
 }
 
+enum RiskScenarioSource {
+  MANUAL
+  AGENT
+}
+
+enum RiskScenarioStatus {
+  DRAFT
+  APPROVED
+  ARCHIVED
+}
+
+enum RiskInputSource {
+  MANUAL
+  AGENT
+  HEURISTIC
+}
+
 enum NoteTaskPriority {
   HIGH
   MEDIUM
@@ -303,6 +320,8 @@ model User {
   agentRollbacks                AgentRollback[]             @relation("AgentRollbackCreatedBy")
   storedProjectPackages         StoredProjectPackage[]
   projectAttachments            ProjectAttachment[]
+  riskScenarios                 RiskScenario[]
+  riskSimulationRuns            RiskSimulationRun[]
 
   @@index([role])
   @@index([status])
@@ -722,6 +741,7 @@ model Budget {
   riskVariables                  RiskVariable[]
   riskCorrelations               RiskCorrelation[]
   riskSimulationRuns             RiskSimulationRun[]
+  riskScenarios                  RiskScenario[]
   noteTasks                      NoteTask[]
   metradoSheets                  MetradoSheet[]
   budgetTemplates                BudgetTemplate[]
@@ -1124,6 +1144,7 @@ model NoteTask {
 model RiskVariable {
   id                 String               @id @default(cuid())
   budgetId           String
+  scenarioId         String?
   budgetItemId       String
   variableType       RiskVariableType     @default(QUANTITY)
   distributionType   RiskDistributionType @default(TRIANGULAR)
@@ -1131,32 +1152,45 @@ model RiskVariable {
   mostLikely         Decimal              @default(0) @db.Decimal(18, 4)
   maximum            Decimal              @default(0) @db.Decimal(18, 4)
   enabled            Boolean              @default(true)
+  source             RiskInputSource      @default(MANUAL)
+  confidence         Decimal?             @db.Decimal(5, 4)
+  rationale          String?              @db.Text
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   budget             Budget               @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  scenario           RiskScenario?        @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
   budgetItem         BudgetItem           @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
   sourceCorrelations RiskCorrelation[]    @relation("RiskCorrelationSource")
   targetCorrelations RiskCorrelation[]    @relation("RiskCorrelationTarget")
 
-  @@unique([budgetId, budgetItemId, variableType])
   @@index([budgetId])
+  @@index([budgetId, budgetItemId, variableType])
+  @@index([budgetId, scenarioId, budgetItemId, variableType])
+  @@index([scenarioId])
   @@index([budgetItemId])
 }
 
 model RiskCorrelation {
   id               String       @id @default(cuid())
   budgetId         String
+  scenarioId       String?
   sourceVariableId String
   targetVariableId String
   coefficient      Decimal      @default(0) @db.Decimal(8, 4)
+  source           RiskInputSource @default(MANUAL)
+  confidence       Decimal?     @db.Decimal(5, 4)
+  rationale        String?      @db.Text
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   budget           Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  scenario         RiskScenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
   sourceVariable   RiskVariable @relation("RiskCorrelationSource", fields: [sourceVariableId], references: [id], onDelete: Cascade)
   targetVariable   RiskVariable @relation("RiskCorrelationTarget", fields: [targetVariableId], references: [id], onDelete: Cascade)
 
   @@unique([budgetId, sourceVariableId, targetVariableId])
   @@index([budgetId])
+  @@index([scenarioId])
+  @@index([budgetId, scenarioId])
   @@index([sourceVariableId])
   @@index([targetVariableId])
 }
@@ -1164,7 +1198,11 @@ model RiskCorrelation {
 model RiskSimulationRun {
   id                String   @id @default(cuid())
   budgetId          String
+  scenarioId        String?
+  createdByUserId   String?
   iterations        Int
+  seed              String?
+  engineVersion     String?
   baseTotal         Decimal  @default(0) @db.Decimal(18, 4)
   mean              Decimal  @default(0) @db.Decimal(18, 4)
   median            Decimal  @default(0) @db.Decimal(18, 4)
@@ -1180,10 +1218,34 @@ model RiskSimulationRun {
   histogramBins     Json
   sCurvePoints      Json
   scheduleSummary   Json?
+  modelSnapshot     Json?
   createdAt         DateTime @default(now())
   budget            Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  scenario          RiskScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  createdBy         User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([budgetId, createdAt(sort: Desc)])
+  @@index([scenarioId, createdAt(sort: Desc)])
+  @@index([createdByUserId])
+}
+
+model RiskScenario {
+  id              String             @id @default(cuid())
+  budgetId        String
+  name            String
+  description     String?
+  source          RiskScenarioSource @default(MANUAL)
+  status          RiskScenarioStatus @default(DRAFT)
+  createdByUserId String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  budget          Budget             @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  createdBy       User               @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  variables       RiskVariable[]
+  correlations    RiskCorrelation[]
+  simulationRuns  RiskSimulationRun[]
+
+  @@index([budgetId, updatedAt(sort: Desc)])
 }
 
 model WorkSchedule {

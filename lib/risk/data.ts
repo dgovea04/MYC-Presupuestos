@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { runMonteCarloSimulation } from "@/lib/risk/monte-carlo-engine";
 import {
   riskCorrelationsSaveSchema,
   riskHistogramBinSchema,
@@ -115,6 +116,7 @@ export async function saveRiskVariables(
         await tx.riskVariable.deleteMany({
           where: {
             budgetId,
+            scenarioId: null,
             budgetItemId: variable.budgetItemId,
             variableType: variable.variableType,
           },
@@ -122,25 +124,14 @@ export async function saveRiskVariables(
         continue;
       }
 
-      await tx.riskVariable.upsert({
+      const updated = await tx.riskVariable.updateMany({
         where: {
-          budgetId_budgetItemId_variableType: {
-            budgetId,
-            budgetItemId: variable.budgetItemId,
-            variableType: variable.variableType,
-          },
-        },
-        update: {
-          distributionType: variable.distributionType,
-          minimum: variable.minimum,
-          mostLikely: variable.mostLikely,
-          maximum: variable.maximum,
-          enabled: variable.enabled,
-        },
-        create: {
           budgetId,
+          scenarioId: null,
           budgetItemId: variable.budgetItemId,
           variableType: variable.variableType,
+        },
+        data: {
           distributionType: variable.distributionType,
           minimum: variable.minimum,
           mostLikely: variable.mostLikely,
@@ -148,6 +139,22 @@ export async function saveRiskVariables(
           enabled: variable.enabled,
         },
       });
+
+      if (updated.count === 0) {
+        await tx.riskVariable.create({
+          data: {
+            budgetId,
+            scenarioId: null,
+            budgetItemId: variable.budgetItemId,
+            variableType: variable.variableType,
+            distributionType: variable.distributionType,
+            minimum: variable.minimum,
+            mostLikely: variable.mostLikely,
+            maximum: variable.maximum,
+            enabled: variable.enabled,
+          },
+        });
+      }
     }
   });
 
@@ -170,6 +177,7 @@ export async function saveRiskCorrelations(
   const variables = await prisma.riskVariable.findMany({
     where: {
       budgetId,
+      scenarioId: null,
       budgetItemId: { in: [...scopedItemIds] },
     },
   });
@@ -187,6 +195,7 @@ export async function saveRiskCorrelations(
         await tx.riskCorrelation.deleteMany({
           where: {
             budgetId,
+            scenarioId: null,
             sourceVariableId: normalized.sourceVariableId,
             targetVariableId: normalized.targetVariableId,
           },
@@ -234,24 +243,54 @@ export async function saveRiskSimulationRun(
     throw new Error("La simulacion no corresponde al presupuesto seleccionado.");
   }
 
+  const items = normalizeRiskBudgetItems(budget);
+  const scopedItemIds = items.map((item) => item.itemId);
+  const [rawVariables, rawCorrelations] = await Promise.all([
+    prisma.riskVariable.findMany({
+      where: {
+        budgetId,
+        scenarioId: null,
+        budgetItemId: { in: scopedItemIds },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.riskCorrelation.findMany({
+      where: { budgetId, scenarioId: null },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  const variableIds = new Set(rawVariables.map((variable) => variable.id));
+  const summary = runMonteCarloSimulation({
+    budgetId,
+    baseTotal: roundBaseTotal(items.reduce((total, item) => total + item.baseTotal, 0)),
+    iterations: parsed.iterations,
+    items,
+    variables: rawVariables.map(serializeRiskVariable),
+    correlations: rawCorrelations
+      .filter((correlation) => variableIds.has(correlation.sourceVariableId))
+      .filter((correlation) => variableIds.has(correlation.targetVariableId))
+      .map(serializeRiskCorrelation),
+    workSchedule: null,
+  });
+
   const created = await prisma.riskSimulationRun.create({
     data: {
       budgetId,
-      iterations: parsed.iterations,
-      baseTotal: parsed.baseTotal,
-      mean: parsed.mean,
-      median: parsed.median,
-      variance: parsed.variance,
-      standardDeviation: parsed.standardDeviation,
-      skewness: parsed.skewness,
-      kurtosis: parsed.kurtosis,
-      p10: parsed.p10,
-      p50: parsed.p50,
-      p80: parsed.p80,
-      p90: parsed.p90,
-      p95: parsed.p95,
-      histogramBins: parsed.histogramBins as Prisma.InputJsonValue,
-      sCurvePoints: parsed.sCurvePoints as Prisma.InputJsonValue,
+      iterations: summary.iterations,
+      baseTotal: summary.baseTotal,
+      mean: summary.mean,
+      median: summary.median,
+      variance: summary.variance,
+      standardDeviation: summary.standardDeviation,
+      skewness: summary.skewness,
+      kurtosis: summary.kurtosis,
+      p10: summary.p10,
+      p50: summary.p50,
+      p80: summary.p80,
+      p90: summary.p90,
+      p95: summary.p95,
+      histogramBins: summary.histogramBins as Prisma.InputJsonValue,
+      sCurvePoints: summary.sCurvePoints as Prisma.InputJsonValue,
       scheduleSummary: parsed.scheduleDuration === null
         ? Prisma.JsonNull
         : (parsed.scheduleDuration as Prisma.InputJsonValue),
@@ -478,16 +517,17 @@ async function queryAndSerializeRiskData(
     prisma.riskVariable.findMany({
       where: {
         budgetId,
+        scenarioId: null,
         budgetItemId: { in: scopedItemIds },
       },
       orderBy: { createdAt: "asc" },
     }),
     prisma.riskCorrelation.findMany({
-      where: { budgetId },
+      where: { budgetId, scenarioId: null },
       orderBy: { createdAt: "asc" },
     }),
     prisma.riskSimulationRun.findFirst({
-      where: { budgetId },
+      where: { budgetId, scenarioId: null },
       orderBy: { createdAt: "desc" },
     }),
   ]);

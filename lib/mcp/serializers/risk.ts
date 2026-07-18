@@ -35,6 +35,10 @@ export type McpSerializedRisk = {
     p95: string;
     histogramBins: unknown;
     sCurvePoints: unknown;
+    scenarioId?: string | null;
+    seed?: string | null;
+    engineVersion?: string | null;
+    modelSnapshot?: unknown;
   }>;
 };
 
@@ -69,6 +73,10 @@ export function serializeRiskAnalysis(data: {
     p95: string | number;
     histogramBins: unknown;
     sCurvePoints: unknown;
+    scenarioId?: string | null;
+    seed?: string | null;
+    engineVersion?: string | null;
+    modelSnapshot?: unknown;
   }>;
 }): McpSerializedRisk {
   return {
@@ -102,6 +110,10 @@ export function serializeRiskAnalysis(data: {
       p95: decimalToString(run.p95),
       histogramBins: run.histogramBins,
       sCurvePoints: run.sCurvePoints,
+      scenarioId: run.scenarioId,
+      seed: run.seed,
+      engineVersion: run.engineVersion,
+      modelSnapshot: run.modelSnapshot,
     })),
   };
 }

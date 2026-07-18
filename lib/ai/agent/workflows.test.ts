@@ -30,8 +30,8 @@ function collectAllToolNames(): Set<string> {
 // ─── Specialist Bundles ─────────────────────────────────────────────────────
 
 describe("SpecialistBundles", () => {
-  it("tiene 6 bundles definidos (khipu-agent + 5 especialistas)", () => {
-    expect(SPECIALIST_BUNDLES).toHaveLength(6);
+  it("tiene 7 bundles definidos (khipu-agent + 6 especialistas)", () => {
+    expect(SPECIALIST_BUNDLES).toHaveLength(7);
   });
 
   it("cada bundle tiene slug, name, description, icon, toolNames y systemPrompt", () => {
@@ -141,6 +141,15 @@ describe("SpecialistBundles", () => {
     expect(bundle!.toolNames).toContain("calculateBudget");
   });
 
+  it("registers risk specialist workflow", () => {
+    const bundle = getBundleBySlug("risk-agent");
+    const workflow = getWorkflowTemplate("analizar-riesgo-monte-carlo");
+
+    expect(bundle?.toolNames).toContain("suggestRiskVariables");
+    expect(bundle?.toolNames).toContain("runRiskSimulation");
+    expect(workflow?.bundleSlug).toBe("risk-agent");
+  });
+
   describe("consistencia systemPrompt con toolNames", () => {
     it("cada bundle que menciona toolNames explícitos en su systemPrompt los tiene registrados en toolNames", () => {
       const allKnownTools = collectAllToolNames();
@@ -215,8 +224,8 @@ describe("SpecialistBundles", () => {
 // ─── Workflow Templates ──────────────────────────────────────────────────────
 
 describe("WorkflowTemplates", () => {
-  it("tiene 8 templates definidos", () => {
-    expect(WORKFLOW_TEMPLATES).toHaveLength(8);
+  it("tiene 9 templates definidos", () => {
+    expect(WORKFLOW_TEMPLATES).toHaveLength(9);
   });
 
   it("cada template tiene slug, name, description, bundleSlug, initialGoal y defaultMode", () => {

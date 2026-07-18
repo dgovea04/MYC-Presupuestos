@@ -2,6 +2,10 @@ export const MONTE_CARLO_ITERATIONS = 10000 as const;
 
 export type RiskVariableType = "QUANTITY" | "UNIT_PRICE" | "DURATION";
 export type RiskDistributionType = "TRIANGULAR" | "PERT" | "NORMAL" | "UNIFORM";
+export type RiskScenarioSource = "MANUAL" | "AGENT";
+export type RiskScenarioStatus = "DRAFT" | "APPROVED" | "ARCHIVED";
+export type RiskInputSource = "MANUAL" | "AGENT" | "HEURISTIC";
+export type RiskSuggestionStrategy = "balanced" | "conservative" | "aggressive";
 
 export type RiskBudgetKind = "GENERAL" | "SUB_BUDGET";
 
@@ -30,6 +34,7 @@ export type RiskBudgetItem = {
 export type RiskVariableRecord = {
   id: string;
   budgetId: string;
+  scenarioId?: string | null;
   budgetItemId: string;
   variableType: RiskVariableType;
   distributionType: RiskDistributionType;
@@ -37,6 +42,9 @@ export type RiskVariableRecord = {
   mostLikely: number;
   maximum: number;
   enabled: boolean;
+  source?: RiskInputSource;
+  confidence?: number | null;
+  rationale?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -46,11 +54,61 @@ export type RiskVariableDraftKey = `${string}:${RiskVariableType}`;
 export type RiskCorrelationRecord = {
   id: string;
   budgetId: string;
+  scenarioId?: string | null;
   sourceVariableId: string;
   targetVariableId: string;
   coefficient: number;
+  source?: RiskInputSource;
+  confidence?: number | null;
+  rationale?: string | null;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type RiskScenarioRecord = {
+  id: string;
+  budgetId: string;
+  name: string;
+  description: string | null;
+  source: RiskScenarioSource;
+  status: RiskScenarioStatus;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RiskVariableSuggestion = {
+  id: string;
+  budgetId: string;
+  budgetItemId: string;
+  variableType: RiskVariableType;
+  distributionType: RiskDistributionType;
+  minimum: number;
+  mostLikely: number;
+  maximum: number;
+  confidence: number;
+  reason: string;
+  source: "HEURISTIC" | "AGENT";
+  impactScore: number;
+};
+
+export type RiskSimulationModelSnapshot = {
+  budgetId: string;
+  scenarioId: string | null;
+  baseTotal: number;
+  iterations: number;
+  seed: string;
+  engineVersion: string;
+  itemIds: string[];
+  variableIds: string[];
+  correlationIds: string[];
+  createdAt: string;
+};
+
+export type RiskSimulationRunRequest = {
+  budgetId: string;
+  scenarioId?: string;
+  seed?: string;
 };
 
 export type RiskWorkScheduleCriticalItem = {
@@ -130,6 +188,7 @@ export type RiskPercentileKey = "p10" | "p50" | "p80" | "p90" | "p95";
 export type RiskSimulationSummary = {
   id?: string;
   budgetId: string;
+  scenarioId?: string | null;
   iterations: number;
   baseTotal: number;
   mean: number;
@@ -146,6 +205,9 @@ export type RiskSimulationSummary = {
   histogramBins: RiskHistogramBin[];
   sCurvePoints: RiskSCurvePoint[];
   scheduleDuration: RiskScheduleDurationSummary | null;
+  seed?: string | null;
+  engineVersion?: string | null;
+  modelSnapshot?: RiskSimulationModelSnapshot | null;
   createdAt?: string;
 };
 

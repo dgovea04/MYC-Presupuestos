@@ -32,6 +32,7 @@ export type TriangularParameters = {
 const PERT_WEIGHT = 4;
 
 export type MonteCarloSimulationOptions = {
+  seed?: string;
   random?: () => number;
   onProgress?: (completedIterations: number, totalIterations: number) => void;
   progressInterval?: number;
@@ -113,7 +114,7 @@ export function runMonteCarloSimulation(
 ): RiskSimulationSummary {
   validateSimulationInput(input);
 
-  const random = options.random ?? Math.random;
+  const random = options.random ?? (options.seed ? createSeededRandom(options.seed) : Math.random);
   const progressInterval = Math.max(1, Math.floor(options.progressInterval ?? Math.ceil(input.iterations / 100)));
   const preparedVariables = prepareSimulationVariables(input.items, input.variables);
   const preparedSchedule = prepareScheduleSimulation(input.workSchedule?.lines ?? null, preparedVariables, input.iterations);
@@ -169,6 +170,22 @@ export function runMonteCarloSimulation(
   }
 
   return buildSimulationSummary(input, totals, options, projectDurationDays, preparedSchedule);
+}
+
+export function createSeededRandom(seed: string): () => number {
+  let state = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    state ^= seed.charCodeAt(index);
+    state = Math.imul(state, 16777619);
+  }
+
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function validateSimulationInput(input: RiskSimulationInput): void {

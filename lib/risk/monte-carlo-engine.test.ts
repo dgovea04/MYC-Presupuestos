@@ -14,6 +14,7 @@ import {
 import {
   buildCorrelationMatrix,
   buildCorrelatedUniformSampler,
+  createSeededRandom,
   runMonteCarloSimulation,
   sampleNormal,
   samplePert,
@@ -263,6 +264,21 @@ describe("monte carlo engine", () => {
       [2, 4],
       [4, 4],
     ]);
+  });
+
+  it("produces deterministic summaries when a seed is provided", () => {
+    const first = runMonteCarloSimulation(baseSimulationInput, { seed: "risk-seed-1" });
+    const second = runMonteCarloSimulation(baseSimulationInput, { seed: "risk-seed-1" });
+
+    expect(first.p80).toBe(second.p80);
+    expect(first.histogramBins).toEqual(second.histogramBins);
+  });
+
+  it("creates repeatable seeded random sequences", () => {
+    const first = createSeededRandom("risk-seed-1");
+    const second = createSeededRandom("risk-seed-1");
+
+    expect([first(), first(), first()]).toEqual([second(), second(), second()]);
   });
 
   it("simulates unit price variables using the same triangular distribution", () => {

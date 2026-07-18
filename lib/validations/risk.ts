@@ -3,17 +3,14 @@ import { MONTE_CARLO_ITERATIONS } from "@/types/risk";
 
 const finiteNonnegativeNumber = z.number().finite().nonnegative();
 
-export const riskVariableInputSchema = z
+const riskVariableRangeSchema = z
   .object({
-    id: z.string().optional(),
     budgetItemId: z.string().min(1),
     variableType: z.enum(["QUANTITY", "UNIT_PRICE", "DURATION"]),
     distributionType: z.enum(["TRIANGULAR", "PERT", "NORMAL", "UNIFORM"]),
     minimum: finiteNonnegativeNumber,
     mostLikely: finiteNonnegativeNumber,
     maximum: finiteNonnegativeNumber,
-    enabled: z.boolean(),
-    delete: z.boolean().optional(),
   })
   .refine((input) => input.minimum <= input.mostLikely, {
     message: "El minimo no puede ser mayor que el valor probable.",
@@ -24,8 +21,26 @@ export const riskVariableInputSchema = z
     path: ["mostLikely"],
   });
 
+export const riskVariableInputSchema = riskVariableRangeSchema.extend({
+  id: z.string().optional(),
+  enabled: z.boolean(),
+  delete: z.boolean().optional(),
+});
+
 export const riskVariablesSaveSchema = z.object({
   variables: z.array(riskVariableInputSchema),
+});
+
+export const riskInputSourceSchema = z.enum(["MANUAL", "AGENT", "HEURISTIC"]);
+export const riskSuggestionStrategySchema = z.enum(["balanced", "conservative", "aggressive"]);
+
+export const riskVariableSuggestionSchema = riskVariableRangeSchema.extend({
+  id: z.string().min(1),
+  budgetId: z.string().min(1),
+  confidence: z.number().finite().min(0).max(1),
+  reason: z.string().min(1),
+  source: z.enum(["HEURISTIC", "AGENT"]),
+  impactScore: z.number().finite().nonnegative(),
 });
 
 export const riskCorrelationInputSchema = z
@@ -93,6 +108,13 @@ export const riskSimulationRunInputSchema = z.object({
   scheduleDuration: riskScheduleDurationSummarySchema.nullable(),
 });
 
+export const riskSimulationRunRequestSchema = z.object({
+  budgetId: z.string().min(1),
+  scenarioId: z.string().min(1).optional(),
+  seed: z.string().min(1).optional(),
+});
+
 export type RiskVariablesSaveInput = z.infer<typeof riskVariablesSaveSchema>;
 export type RiskCorrelationsSaveInput = z.infer<typeof riskCorrelationsSaveSchema>;
 export type RiskSimulationRunInput = z.infer<typeof riskSimulationRunInputSchema>;
+export type RiskSimulationRunRequestInput = z.infer<typeof riskSimulationRunRequestSchema>;

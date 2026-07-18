@@ -19,6 +19,8 @@ describe("risk pdf report", () => {
     expect(tables[3]?.rows[0]?.[3]).toBe("PERT");
     expect(tables[5]?.rows[0]).toEqual(["Media", "49.2 dias", "+3.2 dias", "6.96%"]);
     expect(tables[6]?.rows[0]).toEqual(["Buffer recomendado", "6.0 dias (13.04%)", "52.0 dias"]);
+    expect(JSON.stringify(tables)).toContain("risk-engine-v2");
+    expect(JSON.stringify(tables)).toContain("seed-1");
   });
 
   it("creates a non-empty pdf buffer", async () => {
@@ -110,6 +112,18 @@ function createPayload(): RiskAnalysisPayload {
           { cost: 49, cumulativeProbability: 0.5 },
           { cost: 55, cumulativeProbability: 0.95 },
         ],
+      },
+      scenarioId: "scenario-1",
+      seed: "seed-1",
+      engineVersion: "risk-engine-v2",
+      modelSnapshot: {
+        budgetId: "budget-1",
+        scenarioId: "scenario-1",
+        itemIds: ["item-1"],
+        variableIds: ["risk-1"],
+        correlationIds: [],
+        seed: "seed-1",
+        engineVersion: "risk-engine-v2",
       },
       createdAt: "2026-07-01T00:00:00.000Z",
     },

@@ -8,6 +8,7 @@ import { MONTE_CARLO_ITERATIONS } from "@/types/risk";
 import {
   riskCorrelationInputSchema,
   riskSimulationRunInputSchema,
+  riskVariableSuggestionSchema,
   riskVariableInputSchema,
 } from "@/lib/validations/risk";
 
@@ -191,6 +192,44 @@ describe("risk analysis validation", () => {
     ).toThrow(ZodError);
 
     expect(riskSimulationRunInputSchema.parse(validRunInput).iterations).toBe(MONTE_CARLO_ITERATIONS);
+  });
+
+  it("validates a risk variable suggestion", () => {
+    const parsed = riskVariableSuggestionSchema.parse({
+      id: "suggestion-1",
+      budgetId: "budget-1",
+      budgetItemId: "item-1",
+      variableType: "QUANTITY",
+      distributionType: "PERT",
+      minimum: 9.5,
+      mostLikely: 10,
+      maximum: 11,
+      confidence: 0.82,
+      reason: "Partida de alto impacto con metrado sensible.",
+      source: "HEURISTIC",
+      impactScore: 1200,
+    });
+
+    expect(parsed.confidence).toBe(0.82);
+  });
+
+  it("rejects a risk variable suggestion with inverted range", () => {
+    expect(() =>
+      riskVariableSuggestionSchema.parse({
+        id: "suggestion-1",
+        budgetId: "budget-1",
+        budgetItemId: "item-1",
+        variableType: "QUANTITY",
+        distributionType: "PERT",
+        minimum: 12,
+        mostLikely: 10,
+        maximum: 11,
+        confidence: 0.82,
+        reason: "Rango invalido.",
+        source: "HEURISTIC",
+        impactScore: 1200,
+      }),
+    ).toThrow();
   });
 
   it("does not accept client-computed simulation totals when saving a run", async () => {
@@ -404,6 +443,7 @@ describe("risk analysis validation", () => {
 });
 
 const validRunInput = {
+  budgetId: "budget-1",
   iterations: MONTE_CARLO_ITERATIONS,
   baseTotal: 1000,
   mean: 1100,
