@@ -2516,8 +2516,6 @@ export function buildTimelineDependencyConnector({
   const isSameDayHandoff =
     (predecessorReference.relation === "FS" &&
       sameDayOrNextDayDelta(predecessorEndIndex, successorStartIndex) <= 1) ||
-    (predecessorReference.relation === "SS" &&
-      sameDayOrNextDayDelta(predecessorStartIndex, successorStartIndex) <= 1) ||
     (predecessorReference.relation === "FF" &&
       sameDayOrNextDayDelta(predecessorEndIndex, successorEndIndex) <= 1) ||
     (predecessorReference.relation === "SF" &&

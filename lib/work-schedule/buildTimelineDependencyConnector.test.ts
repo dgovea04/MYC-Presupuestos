@@ -126,7 +126,7 @@ describe("buildTimelineDependencyConnector", () => {
   });
 
   describe("SS (Start-to-Start) relationship", () => {
-    it("uses break path when successor starts before predecessor (overlap)", () => {
+    it("uses simple left-down-right path when successor starts before predecessor", () => {
       // SS overlap: B (starts at index 3) starts before A (starts at index 5): delta = 3 - 5 = -2
       const path = buildTimelineDependencyConnector({
         predecessor: { ...defaultLine, top: 0, height: 40 },
@@ -140,10 +140,16 @@ describe("buildTimelineDependencyConnector", () => {
         timelineDayGap: DEFAULT_TIMELINE_DAY_GAP,
       });
 
-      expect(countVerticalSegments(path)).toBe(2);
+      expect(countVerticalSegments(path)).toBe(1);
+
+      const firstH = path.match(/H (-?\d+)/);
+      expect(firstH).not.toBeNull();
+      const firstHX = parseInt(firstH![1], 10);
+      const sourceX = startX(5);
+      expect(firstHX).toBeLessThan(sourceX);
     });
 
-    it("uses break path for same-day SS handoff (delta = 0)", () => {
+    it("uses simple left-down-right path for same-day SS handoff", () => {
       const path = buildTimelineDependencyConnector({
         predecessor: { ...defaultLine, top: 0, height: 40 },
         predecessorReference: { relation: "SS" },
@@ -156,7 +162,7 @@ describe("buildTimelineDependencyConnector", () => {
         timelineDayGap: DEFAULT_TIMELINE_DAY_GAP,
       });
 
-      expect(countVerticalSegments(path)).toBe(2);
+      expect(countVerticalSegments(path)).toBe(1);
 
       const firstH = path.match(/H (-?\d+)/);
       expect(firstH).not.toBeNull();
