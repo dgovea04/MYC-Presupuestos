@@ -499,6 +499,125 @@ describe("risk analysis end-to-end flow", () => {
     expect(tableTitles).not.toContain("Buffer recomendado de plazo");
   });
 
+  it("retorna 0 sugerencias cuando todas las partidas ya tienen variables para cada tipo", () => {
+    // Payload donde cada item ya tiene QUANTITY + UNIT_PRICE + DURATION
+    const payload = createPayload({
+      variables: [
+        {
+          id: "risk-item1-qty",
+          budgetId: "budget-1",
+          budgetItemId: "item-1",
+          variableType: "QUANTITY",
+          distributionType: "TRIANGULAR",
+          minimum: 45,
+          mostLikely: 50,
+          maximum: 55,
+          enabled: true,
+        },
+        {
+          id: "risk-item1-price",
+          budgetId: "budget-1",
+          budgetItemId: "item-1",
+          variableType: "UNIT_PRICE",
+          distributionType: "PERT",
+          minimum: 36,
+          mostLikely: 40,
+          maximum: 44,
+          enabled: true,
+        },
+        {
+          id: "risk-item1-dur",
+          budgetId: "budget-1",
+          budgetItemId: "item-1",
+          variableType: "DURATION",
+          distributionType: "PERT",
+          minimum: 13,
+          mostLikely: 15,
+          maximum: 19,
+          enabled: true,
+        },
+        {
+          id: "risk-item2-qty",
+          budgetId: "budget-1",
+          budgetItemId: "item-2",
+          variableType: "QUANTITY",
+          distributionType: "NORMAL",
+          minimum: 8,
+          mostLikely: 10,
+          maximum: 12,
+          enabled: true,
+        },
+        {
+          id: "risk-item2-price",
+          budgetId: "budget-1",
+          budgetItemId: "item-2",
+          variableType: "UNIT_PRICE",
+          distributionType: "UNIFORM",
+          minimum: 280,
+          mostLikely: 300,
+          maximum: 320,
+          enabled: true,
+        },
+        {
+          id: "risk-item2-dur",
+          budgetId: "budget-1",
+          budgetItemId: "item-2",
+          variableType: "DURATION",
+          distributionType: "PERT",
+          minimum: 27,
+          mostLikely: 30,
+          maximum: 38,
+          enabled: true,
+        },
+      ],
+    });
+    const workScheduleSummary = createWorkScheduleSummary();
+
+    // Todas las partidas ya tienen los 3 tipos de variables → 0 sugerencias
+    const suggestions = suggestRiskVariables({
+      payload,
+      workScheduleSummary,
+      strategy: "balanced",
+      maxSuggestions: 12,
+    });
+
+    expect(suggestions).toHaveLength(0);
+
+    // La simulación sigue funcionando con las variables existentes
+    const summary = runMonteCarloSimulation(
+      {
+        budgetId: payload.budget.id,
+        baseTotal: payload.budget.baseTotal,
+        iterations: 300,
+        items: payload.items,
+        variables: payload.variables,
+        correlations: [],
+        workSchedule: {
+          lines: workScheduleSummary.simulationLines,
+        },
+      },
+      { random: seededRandom() },
+    );
+
+    expect(Number.isFinite(summary.mean)).toBe(true);
+    expect(summary.scheduleDuration).not.toBeNull();
+    expect(summary.histogramBins.reduce((sum, bin) => sum + bin.frequency, 0)).toBe(300);
+
+    // El PDF se genera correctamente con las variables pre-existentes
+    const payloadWithRun = createPayload({
+      ...payload,
+      latestRun: summary,
+    });
+
+    const tables = buildRiskPdfTables(payloadWithRun, 2);
+    const variablesTable = tables.find(
+      (table) => table.title === "Variables activas",
+    );
+    expect(variablesTable).toBeDefined();
+    // Deben aparecer las variables no-DURATION (4: 2 QUANTITY + 2 UNIT_PRICE)
+    expect(variablesTable!.rows.length).toBeGreaterThanOrEqual(4);
+  });
+
   it("genera PDF con datos de auditoria completos cuando hay scenarioId, seed y modelSnapshot", () => {
     const payload = createPayload({
       variables: [
