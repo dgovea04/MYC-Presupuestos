@@ -39,6 +39,7 @@ ADD COLUMN "rationale" TEXT;
 -- AlterTable
 ALTER TABLE "RiskSimulationRun"
 ADD COLUMN "scenarioId" TEXT,
+ADD COLUMN "createdByUserId" TEXT,
 ADD COLUMN "seed" TEXT,
 ADD COLUMN "engineVersion" TEXT,
 ADD COLUMN "modelSnapshot" JSONB;
@@ -77,6 +78,9 @@ CREATE INDEX "RiskCorrelation_budgetId_scenarioId_idx" ON "RiskCorrelation"("bud
 -- CreateIndex
 CREATE INDEX "RiskSimulationRun_scenarioId_createdAt_idx" ON "RiskSimulationRun"("scenarioId", "createdAt" DESC);
 
+-- CreateIndex
+CREATE INDEX "RiskSimulationRun_createdByUserId_idx" ON "RiskSimulationRun"("createdByUserId");
+
 -- AddForeignKey
 ALTER TABLE "RiskScenario" ADD CONSTRAINT "RiskScenario_budgetId_fkey" FOREIGN KEY ("budgetId") REFERENCES "Budget"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -90,4 +94,7 @@ ALTER TABLE "RiskVariable" ADD CONSTRAINT "RiskVariable_scenarioId_fkey" FOREIGN
 ALTER TABLE "RiskCorrelation" ADD CONSTRAINT "RiskCorrelation_scenarioId_fkey" FOREIGN KEY ("scenarioId") REFERENCES "RiskScenario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RiskSimulationRun" ADD CONSTRAINT "RiskSimulationRun_scenarioId_fkey" FOREIGN KEY ("scenarioId") REFERENCES "RiskScenario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "RiskSimulationRun" ADD CONSTRAINT "RiskSimulationRun_scenarioId_fkey" FOREIGN KEY ("scenarioId") REFERENCES "RiskScenario"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RiskSimulationRun" ADD CONSTRAINT "RiskSimulationRun_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

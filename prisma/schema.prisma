@@ -321,6 +321,7 @@ model User {
   storedProjectPackages         StoredProjectPackage[]
   projectAttachments            ProjectAttachment[]
   riskScenarios                 RiskScenario[]
+  riskSimulationRuns            RiskSimulationRun[]
 
   @@index([role])
   @@index([status])
@@ -1198,6 +1199,7 @@ model RiskSimulationRun {
   id                String   @id @default(cuid())
   budgetId          String
   scenarioId        String?
+  createdByUserId   String?
   iterations        Int
   seed              String?
   engineVersion     String?
@@ -1219,10 +1221,12 @@ model RiskSimulationRun {
   modelSnapshot     Json?
   createdAt         DateTime @default(now())
   budget            Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  scenario          RiskScenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  scenario          RiskScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  createdBy         User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([scenarioId, createdAt(sort: Desc)])
+  @@index([createdByUserId])
 }
 
 model RiskScenario {

@@ -71,6 +71,24 @@ export async function saveRiskScenario(
     throw new Error("No tienes permisos para guardar este escenario de riesgo.");
   }
 
+  const submittedBudgetItemIds = Array.from(new Set(input.variables.map((variable) => variable.budgetItemId)));
+
+  if (submittedBudgetItemIds.length > 0) {
+    const scopedBudgetItems = await prisma.budgetItem.findMany({
+      where: {
+        budgetId,
+        id: { in: submittedBudgetItemIds },
+      },
+      select: { id: true },
+    });
+    const scopedBudgetItemIds = new Set(scopedBudgetItems.map((item) => item.id));
+    const hasOutOfScopeBudgetItem = submittedBudgetItemIds.some((budgetItemId) => !scopedBudgetItemIds.has(budgetItemId));
+
+    if (hasOutOfScopeBudgetItem) {
+      throw new Error("El escenario contiene partidas que no pertenecen al presupuesto seleccionado.");
+    }
+  }
+
   const scenario = await prisma.$transaction(async (tx) => {
     const createdScenario = await tx.riskScenario.create({
       data: {

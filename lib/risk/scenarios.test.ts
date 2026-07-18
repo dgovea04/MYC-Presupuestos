@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { saveRiskScenario } from "@/lib/risk/scenarios";
 
-const { budgetFindFirstMock, transactionMock } = vi.hoisted(() => ({
+const { budgetFindFirstMock, budgetItemFindManyMock, transactionMock } = vi.hoisted(() => ({
   budgetFindFirstMock: vi.fn(),
+  budgetItemFindManyMock: vi.fn(),
   transactionMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     budget: { findFirst: budgetFindFirstMock },
+    budgetItem: { findMany: budgetItemFindManyMock },
     $transaction: transactionMock,
   },
 }));
@@ -16,6 +18,7 @@ vi.mock("@/lib/db/prisma", () => ({
 describe("saveRiskScenario", () => {
   beforeEach(() => {
     budgetFindFirstMock.mockReset();
+    budgetItemFindManyMock.mockReset();
     transactionMock.mockReset();
   });
 
@@ -34,6 +37,7 @@ describe("saveRiskScenario", () => {
 
   it("creates a scenario with submitted variables and correlations inside a transaction", async () => {
     budgetFindFirstMock.mockResolvedValueOnce({ id: "budget-1" });
+    budgetItemFindManyMock.mockResolvedValueOnce([{ id: "item-1" }, { id: "item-2" }]);
 
     const tx = {
       riskScenario: {
@@ -158,5 +162,48 @@ describe("saveRiskScenario", () => {
       createdAt: "2026-07-18T12:00:00.000Z",
       updatedAt: "2026-07-18T12:00:00.000Z",
     });
+  });
+
+  it("rejects submitted variables that reference budget items outside the accessible budget", async () => {
+    budgetFindFirstMock.mockResolvedValueOnce({ id: "budget-1" });
+    budgetItemFindManyMock.mockResolvedValueOnce([{ id: "item-1" }]);
+
+    await expect(
+      saveRiskScenario("budget-1", "user-1", {
+        name: "Escenario Khipu",
+        variables: [
+          {
+            id: "draft-var-1",
+            budgetItemId: "item-1",
+            variableType: "QUANTITY",
+            distributionType: "TRIANGULAR",
+            minimum: 8,
+            mostLikely: 10,
+            maximum: 13,
+            enabled: true,
+          },
+          {
+            id: "draft-var-2",
+            budgetItemId: "other-budget-item",
+            variableType: "UNIT_PRICE",
+            distributionType: "PERT",
+            minimum: 90,
+            mostLikely: 100,
+            maximum: 120,
+            enabled: true,
+          },
+        ],
+        correlations: [],
+      }),
+    ).rejects.toThrow("partidas que no pertenecen");
+
+    expect(budgetItemFindManyMock).toHaveBeenCalledWith({
+      where: {
+        budgetId: "budget-1",
+        id: { in: ["item-1", "other-budget-item"] },
+      },
+      select: { id: true },
+    });
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 });
