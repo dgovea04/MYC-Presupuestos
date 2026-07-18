@@ -404,6 +404,7 @@ describe("risk analysis validation", () => {
 });
 
 const validRunInput = {
+  budgetId: "budget-1",
   iterations: MONTE_CARLO_ITERATIONS,
   baseTotal: 1000,
   mean: 1100,
