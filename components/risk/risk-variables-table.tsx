@@ -124,14 +124,14 @@ function RiskVariablesTableGrid({
       columnHelper.accessor("description", {
         header: "Partida",
         cell: (info) => (
-          <span className="theme-strong-text block w-65 max-w-65 truncate font-medium" title={info.getValue()}>
+          <span className="theme-strong-text block w-52 max-w-52 truncate font-medium" title={info.getValue()}>
             {info.getValue()}
           </span>
         ),
       }),
       columnHelper.accessor("sourceBudgetName", {
-        header: "Presupuesto origen",
-        cell: (info) => <span className="block min-w-36">{info.getValue()}</span>,
+        header: "Origen",
+        cell: (info) => <span className="block min-w-28">{info.getValue()}</span>,
       }),
       columnHelper.display({
         id: "variableType",
@@ -230,8 +230,8 @@ function RiskVariablesTableGrid({
   });
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--app-border)] px-3 py-3">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-[var(--app-border)] px-2 py-2">
         <FilterField label="Estado">
           <Select
             aria-label="Filtrar por estado"
@@ -269,13 +269,13 @@ function RiskVariablesTableGrid({
             <option value="MISSING">Sin variable</option>
           </Select>
         </FilterField>
-        <p className="theme-muted-text ml-auto text-xs">
+        <p className="theme-muted-text ml-auto text-[10px]">
           {filteredRows.length} de {rows.length} filas
         </p>
       </div>
 
-      <div className="max-h-[560px] overflow-auto">
-      <Table className="risk-variables-table min-w-[1420px] text-[10px] relative">
+      <div className="max-h-[520px] overflow-auto">
+      <Table className="risk-variables-table min-w-[1200px] text-[10px] relative">
         <THead className="theme-muted-panel sticky top-0 z-10">
           {table.getHeaderGroups().map((headerGroup) => (
             <TR key={headerGroup.id} className="theme-muted-panel hover:theme-muted-panel">
@@ -308,7 +308,7 @@ function FilterField({ children, label }: { children: ReactNode; label: string }
   return (
     <label className="space-y-1">
       <span className="theme-muted-text block text-[10px] font-semibold uppercase tracking-wide">{label}</span>
-      <div className="min-w-40">{children}</div>
+      <div className="min-w-32">{children}</div>
     </label>
   );
 }
