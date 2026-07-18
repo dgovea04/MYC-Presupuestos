@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth/session", () => ({
   getAuthSession: vi.fn(),
@@ -28,6 +28,10 @@ import { runAndSaveRiskSimulation } from "@/lib/risk/simulation-service";
 import { MONTE_CARLO_ITERATIONS } from "@/types/risk";
 
 describe("risk analysis runs route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("runs and saves simulation server-side for short scenario request", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(runAndSaveRiskSimulation).mockResolvedValue({
@@ -68,6 +72,22 @@ describe("risk analysis runs route", () => {
     expect(result.id).toBe("run-1");
     expect(result.p80).toBe(1080);
     expect(runAndSaveRiskSimulation).toHaveBeenCalledWith("budget-1", "user-1", body);
+    expect(saveRiskSimulationRun).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid short server-side request before running or saving", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+
+    const response = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({ budgetId: "budget-1", scenarioId: "" }),
+      }),
+      { params: Promise.resolve({ id: "budget-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(runAndSaveRiskSimulation).not.toHaveBeenCalled();
     expect(saveRiskSimulationRun).not.toHaveBeenCalled();
   });
 

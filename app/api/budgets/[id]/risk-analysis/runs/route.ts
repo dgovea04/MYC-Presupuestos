@@ -6,7 +6,7 @@ import { createBillingErrorResponse } from "@/lib/billing/api";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { saveRiskSimulationRun } from "@/lib/risk/data";
 import { runAndSaveRiskSimulation } from "@/lib/risk/simulation-service";
-import type { RiskSimulationRunRequest } from "@/types/risk";
+import { riskSimulationRunRequestSchema } from "@/lib/validations/risk";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -19,7 +19,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const payload = await request.json();
     const result = isServerRunRequest(payload)
-      ? await runAndSaveRiskSimulation(id, session.user.id, payload)
+      ? await runAndSaveRiskSimulation(id, session.user.id, riskSimulationRunRequestSchema.parse(payload))
       : await saveRiskSimulationRun(id, session.user.id, payload);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-function isServerRunRequest(payload: unknown): payload is RiskSimulationRunRequest {
+function isServerRunRequest(payload: unknown): boolean {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return false;
   }
@@ -39,13 +39,7 @@ function isServerRunRequest(payload: unknown): payload is RiskSimulationRunReque
   const allowedKeys = new Set(["budgetId", "scenarioId", "seed"]);
   const keys = Object.keys(candidate);
 
-  return (
-    keys.length > 0 &&
-    keys.every((key) => allowedKeys.has(key)) &&
-    typeof candidate.budgetId === "string" &&
-    (candidate.scenarioId === undefined || typeof candidate.scenarioId === "string") &&
-    (candidate.seed === undefined || typeof candidate.seed === "string")
-  );
+  return keys.length > 0 && keys.every((key) => allowedKeys.has(key));
 }
 
 function getRiskRunRouteErrorMessage(error: unknown) {
