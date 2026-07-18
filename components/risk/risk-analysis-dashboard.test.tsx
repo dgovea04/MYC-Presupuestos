@@ -264,7 +264,7 @@ describe("RiskAnalysisDashboard", () => {
     expect(container.textContent).not.toContain("Sugerencia obsoleta.");
   });
 
-  it("saves accepted Khipu suggestions as an approved agent scenario without running simulation", async () => {
+  it("applies accepted Khipu suggestions as risk variables without running simulation", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -274,8 +274,8 @@ describe("RiskAnalysisDashboard", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: "scenario-1", budgetId: "budget-1", name: "Escenario Khipu aprobado" }), {
-          status: 201,
+        new Response(JSON.stringify(createPayloadWithVariable()), {
+          status: 200,
           headers: { "Content-Type": "application/json" },
         }),
       );
@@ -288,35 +288,22 @@ describe("RiskAnalysisDashboard", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      getByText("Guardar escenario aprobado").click();
+      getByText("Aplicar variables").click();
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenLastCalledWith("/api/budgets/budget-1/risk-analysis/scenarios", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Escenario Khipu aprobado",
-        description: "Variables de riesgo revisadas y aprobadas desde Khipu.",
-        source: "AGENT",
-        status: "APPROVED",
-        variables: [
-          {
-            id: "suggestion-1",
-            budgetItemId: "item-1",
-            variableType: "QUANTITY",
-            distributionType: "PERT",
-            minimum: 9.5,
-            mostLikely: 10,
-            maximum: 11,
-            enabled: true,
-            source: "HEURISTIC",
-            confidence: 0.8,
-            rationale: "Partida de alto impacto.",
-          },
-        ],
-        correlations: [],
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/budgets/budget-1/risk-analysis/variables",
+      expect.objectContaining({
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
       }),
+    );
+    const lastCallBody = JSON.parse(fetchMock.mock.calls.at(-1)?.[1]?.body as string);
+    expect(lastCallBody.variables[0]).toMatchObject({
+      budgetItemId: "item-1",
+      variableType: "QUANTITY",
+      enabled: true,
     });
     expect(runRiskSimulationWorkerMock).not.toHaveBeenCalled();
   });

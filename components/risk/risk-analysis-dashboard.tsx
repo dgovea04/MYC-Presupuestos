@@ -331,6 +331,53 @@ export function RiskAnalysisDashboard({
     }
   };
 
+  const applyApprovedSuggestions = async (approvedVariables: RiskVariableRecord[]) => {
+    if (status === "running" || activeSuggestionsStatus !== "idle") {
+      return;
+    }
+
+    const requestBudgetId = payload.budget.id;
+    const requestToken = suggestionRequestTokenRef.current + 1;
+    suggestionRequestTokenRef.current = requestToken;
+    setSuggestionsStatus("saving");
+    setSuggestionsBudgetId(requestBudgetId);
+    setSuggestionsError("");
+    setSavedScenarioName("");
+
+    try {
+      const response = await fetch(`/api/budgets/${requestBudgetId}/risk-analysis/variables`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variables: approvedVariables }),
+      });
+      const result = await readOptionalJson(response);
+
+      if (!response.ok) {
+        throw new Error(readApiError(result, "No se pudieron aplicar las variables de riesgo."));
+      }
+
+      if (!isRiskAnalysisPayload(result)) {
+        throw new Error("No se pudo leer la respuesta de variables de riesgo.");
+      }
+
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        modelVersionRef.current += 1;
+        setCorrelations(result.correlations);
+        setVariables(result.variables);
+        setLatestRun(result.latestRun);
+        setSavedScenarioName("Variables aplicadas al presupuesto.");
+      }
+    } catch (applyError) {
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSuggestionsError(applyError instanceof Error ? applyError.message : "No se pudieron aplicar las variables de riesgo.");
+      }
+    } finally {
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSuggestionsStatus("idle");
+      }
+    }
+  };
+
   const saveApprovedScenario = async (approvedVariables: RiskVariableRecord[]) => {
     if (status === "running" || activeSuggestionsStatus !== "idle") {
       return;
@@ -432,6 +479,7 @@ export function RiskAnalysisDashboard({
         error={activeSuggestionsError}
         isLoading={activeSuggestionsStatus === "loading"}
         isSaving={activeSuggestionsStatus === "saving"}
+        onApplyVariables={applyApprovedSuggestions}
         onRequestSuggestions={requestSuggestions}
         onSaveApprovedScenario={saveApprovedScenario}
         savedScenarioName={activeSavedScenarioName}

@@ -14,6 +14,7 @@ describe("RiskSuggestionsPanel", () => {
     render(
       <RiskSuggestionsPanel
         disabled={false}
+        onApplyVariables={async () => undefined}
         onRequestSuggestions={async () => undefined}
         onSaveApprovedScenario={async () => undefined}
         suggestions={[createSuggestion()]}
@@ -26,14 +27,15 @@ describe("RiskSuggestionsPanel", () => {
     expect(screen.getByText("Min 9.5 | Probable 10 | Max 11")).toBeTruthy();
   });
 
-  it("saves only accepted suggestions with source confidence and rationale metadata", async () => {
-    const onSaveApprovedScenario = vi.fn<(variables: RiskVariableRecord[]) => Promise<void>>().mockResolvedValue(undefined);
+  it("applies only accepted suggestions with source confidence and rationale metadata", async () => {
+    const onApplyVariables = vi.fn<(variables: RiskVariableRecord[]) => Promise<void>>().mockResolvedValue(undefined);
 
     render(
       <RiskSuggestionsPanel
         disabled={false}
+        onApplyVariables={onApplyVariables}
         onRequestSuggestions={async () => undefined}
-        onSaveApprovedScenario={onSaveApprovedScenario}
+        onSaveApprovedScenario={async () => undefined}
         suggestions={[
           createSuggestion({ id: "suggestion-1", reason: "Partida de alto impacto." }),
           createSuggestion({
@@ -49,10 +51,10 @@ describe("RiskSuggestionsPanel", () => {
     );
 
     fireEvent.click(screen.getByLabelText("Rechazar sugerencia suggestion-2"));
-    fireEvent.click(screen.getByRole("button", { name: "Guardar escenario aprobado" }));
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar variables" }));
 
-    await waitFor(() => expect(onSaveApprovedScenario).toHaveBeenCalledTimes(1));
-    expect(onSaveApprovedScenario).toHaveBeenCalledWith([
+    await waitFor(() => expect(onApplyVariables).toHaveBeenCalledTimes(1));
+    expect(onApplyVariables).toHaveBeenCalledWith([
       expect.objectContaining({
         budgetItemId: "item-1",
         confidence: 0.8,

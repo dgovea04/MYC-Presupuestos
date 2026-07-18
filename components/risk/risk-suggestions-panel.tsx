@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Check, Lightbulb, Save, X } from "lucide-react";
+import { Bot, Check, Lightbulb, Play, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ type RiskSuggestionsPanelProps = {
   error?: string;
   isLoading?: boolean;
   isSaving?: boolean;
+  onApplyVariables: (variables: RiskVariableRecord[]) => Promise<void>;
   onRequestSuggestions: () => Promise<void>;
   onSaveApprovedScenario: (variables: RiskVariableRecord[]) => Promise<void>;
   savedScenarioName?: string;
@@ -22,6 +23,7 @@ export function RiskSuggestionsPanel({
   error = "",
   isLoading = false,
   isSaving = false,
+  onApplyVariables,
   onRequestSuggestions,
   onSaveApprovedScenario,
   savedScenarioName = "",
@@ -108,11 +110,11 @@ export function RiskSuggestionsPanel({
           </p>
           <Button
             disabled={disabled || isLoading || isSaving || acceptedSuggestions.length === 0}
-            onClick={() => void onSaveApprovedScenario(acceptedSuggestions.map(toVariableRecord))}
+            onClick={() => void onApplyVariables(acceptedSuggestions.map(toVariableRecord))}
             size="sm"
           >
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Guardando" : "Guardar escenario aprobado"}
+            <Play className="mr-2 h-4 w-4" />
+            {isSaving ? "Aplicando" : "Aplicar variables"}
           </Button>
         </div>
 
