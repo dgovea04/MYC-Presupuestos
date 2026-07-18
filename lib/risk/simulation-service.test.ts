@@ -1,10 +1,17 @@
 import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createRunMock, getPayloadMock, riskCorrelationFindManyMock, riskVariableFindManyMock } = vi.hoisted(() => ({
+const {
+  createRunMock,
+  getPayloadMock,
+  riskCorrelationFindManyMock,
+  riskScenarioFindFirstMock,
+  riskVariableFindManyMock,
+} = vi.hoisted(() => ({
   createRunMock: vi.fn(),
   getPayloadMock: vi.fn(),
   riskCorrelationFindManyMock: vi.fn(),
+  riskScenarioFindFirstMock: vi.fn(),
   riskVariableFindManyMock: vi.fn(),
 }));
 
@@ -14,6 +21,9 @@ vi.mock("@/lib/risk/data", () => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
+    riskScenario: {
+      findFirst: riskScenarioFindFirstMock,
+    },
     riskVariable: {
       findMany: riskVariableFindManyMock,
     },
@@ -61,6 +71,7 @@ describe("runAndSaveRiskSimulation", () => {
     createRunMock.mockReset();
     getPayloadMock.mockReset();
     riskCorrelationFindManyMock.mockReset();
+    riskScenarioFindFirstMock.mockReset();
     riskVariableFindManyMock.mockReset();
   });
 
@@ -70,7 +81,27 @@ describe("runAndSaveRiskSimulation", () => {
     ).rejects.toThrow("no corresponde");
   });
 
+  it("rejects scenario ids outside the selected budget before creating a run", async () => {
+    riskScenarioFindFirstMock.mockResolvedValue(null);
+
+    await expect(
+      runAndSaveRiskSimulation("budget-1", "user-1", {
+        budgetId: "budget-1",
+        scenarioId: "scenario-other-budget",
+      }),
+    ).rejects.toThrow("El escenario de riesgo no corresponde al presupuesto seleccionado.");
+
+    expect(riskScenarioFindFirstMock).toHaveBeenCalledWith({
+      where: { id: "scenario-other-budget", budgetId: "budget-1" },
+    });
+    expect(getPayloadMock).not.toHaveBeenCalled();
+    expect(riskVariableFindManyMock).not.toHaveBeenCalled();
+    expect(riskCorrelationFindManyMock).not.toHaveBeenCalled();
+    expect(createRunMock).not.toHaveBeenCalled();
+  });
+
   it("loads risk data server-side, runs with seed, and persists audit metadata", async () => {
+    riskScenarioFindFirstMock.mockResolvedValue(createRiskScenario());
     getPayloadMock.mockResolvedValue(createPayload());
     riskVariableFindManyMock.mockResolvedValue([createRiskVariable()]);
     riskCorrelationFindManyMock.mockResolvedValue([]);
@@ -162,6 +193,18 @@ function createRiskVariable() {
     source: "AGENT",
     confidence: new Prisma.Decimal("0.8"),
     rationale: "Partida sensible.",
+    createdAt: new Date("2026-07-17T00:00:00.000Z"),
+    updatedAt: new Date("2026-07-17T00:00:00.000Z"),
+  };
+}
+
+function createRiskScenario() {
+  return {
+    id: "scenario-1",
+    budgetId: "budget-1",
+    name: "Escenario base",
+    description: null,
+    createdByUserId: "user-1",
     createdAt: new Date("2026-07-17T00:00:00.000Z"),
     updatedAt: new Date("2026-07-17T00:00:00.000Z"),
   };

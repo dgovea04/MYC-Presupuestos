@@ -47,8 +47,18 @@ export async function runAndSaveRiskSimulation(
     throw new Error("La simulacion no corresponde al presupuesto seleccionado.");
   }
 
-  const payload = await getRiskAnalysisPayload(budgetId, userId);
   const scenarioId = request.scenarioId ?? null;
+  if (scenarioId) {
+    const scenario = await prisma.riskScenario.findFirst({
+      where: { id: scenarioId, budgetId },
+    });
+
+    if (!scenario) {
+      throw new Error("El escenario de riesgo no corresponde al presupuesto seleccionado.");
+    }
+  }
+
+  const payload = await getRiskAnalysisPayload(budgetId, userId);
   const seed = request.seed ?? `${budgetId}:${Date.now()}`;
   const itemIds = payload.items.map((item) => item.itemId);
   const { correlations, variables } = await loadRiskModel(budgetId, scenarioId, itemIds);
