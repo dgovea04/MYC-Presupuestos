@@ -827,10 +827,10 @@ function buildWorkScheduleTables(section: WorkScheduleViewRecord, decimals: numb
       rows: overviewRows,
     },
     summary: buildWorkScheduleSummaryTable(lines, decimals),
-    monthly: buildWorkScheduleMonthlyTable(section.valuationCalendar.rows, section.valuationCalendar.periods, decimals),
-    valuation: buildWorkScheduleValuationTable(section.valuationCalendar.rows, section.valuationCalendar.periods, decimals),
-    resources: buildWorkScheduleResourcesTable(section.resourceCalendar.rows, section.resourceCalendar.periods, decimals),
-    curve: buildWorkScheduleCurveTable(section.curveSeries, decimals),
+    monthly: buildWorkScheduleMonthlyTable(section.valuationCalendar?.rows ?? [], section.valuationCalendar?.periods ?? [], decimals),
+    valuation: buildWorkScheduleValuationTable(section.valuationCalendar?.rows ?? [], section.valuationCalendar?.periods ?? [], decimals),
+    resources: buildWorkScheduleResourcesTable(section.resourceCalendar?.rows ?? [], section.resourceCalendar?.periods ?? [], decimals),
+    curve: buildWorkScheduleCurveTable(section.curveSeries ?? [], decimals),
   };
 }
 

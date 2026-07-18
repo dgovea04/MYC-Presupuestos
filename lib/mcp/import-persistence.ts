@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, PolynomialCostGroup } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
@@ -185,7 +185,7 @@ export async function importProjectPackageToMyc(
     const apuById = new Map<string, { id: string; name: string; unit: string; performance: string | number; totalUnitCost: string | number; resources: Array<{ id: string; resourceId: string | null; resourceType: string; crew: string | number | null; quantity: string | number; unitPrice: string | number; subtotal: string | number; resourceDescription: string | null }> }>(apusData?.apus.map((apu) => [apu.budgetItemId, apu] as [string, typeof apu]) ?? []);
 
     // Build items-by-budget lookup
-    const itemsByBudgetId = new Map<string, (typeof budgetItemsData) extends { budgets: Array<infer T> } ? T : never>();
+    const itemsByBudgetId = new Map<string, NonNullable<typeof budgetItemsData>["budgets"][number]>();
     if (budgetItemsData) {
       for (const budgetItems of budgetItemsData.budgets) {
         itemsByBudgetId.set(budgetItems.budgetId, budgetItems);
@@ -259,7 +259,7 @@ export async function importProjectPackageToMyc(
               formulaId: createdFormula.id,
               code: monomial.code,
               name: monomial.name,
-              costGroupKey: monomial.costGroupKey as unknown as Prisma.PolynomialCostGroup,
+              costGroupKey: monomial.costGroupKey as unknown as PolynomialCostGroup,
               amount: monomial.amount,
               coefficient: monomial.coefficient,
               baseIndexCode: monomial.baseIndexCode,
