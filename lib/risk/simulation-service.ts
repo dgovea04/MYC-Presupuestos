@@ -1,7 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import { getRiskAnalysisPayload } from "@/lib/risk/data";
+import { buildRiskWorkScheduleSummary } from "@/lib/risk/fallback";
 import { runMonteCarloSimulation } from "@/lib/risk/monte-carlo-engine";
 import {
   riskHistogramBinSchema,
@@ -10,7 +12,9 @@ import {
 } from "@/lib/validations/risk";
 import {
   MONTE_CARLO_ITERATIONS,
+  type RiskBudgetKind,
   type RiskCorrelationRecord,
+  type RiskSimulationInput,
   type RiskSimulationModelSnapshot,
   type RiskSimulationRunRequest,
   type RiskSimulationSummary,
@@ -62,6 +66,7 @@ export async function runAndSaveRiskSimulation(
   const seed = request.seed ?? `${budgetId}:${Date.now()}`;
   const itemIds = payload.items.map((item) => item.itemId);
   const { correlations, variables } = await loadRiskModel(budgetId, scenarioId, itemIds);
+  const workSchedule = await loadWorkScheduleIfAvailable(budgetId, userId, payload.budget.kind);
 
   const summary = runMonteCarloSimulation(
     {
@@ -71,7 +76,7 @@ export async function runAndSaveRiskSimulation(
       items: payload.items,
       variables,
       correlations,
-      workSchedule: null,
+      workSchedule,
     },
     { seed },
   );
@@ -143,6 +148,29 @@ async function loadRiskModel(budgetId: string, scenarioId: string | null, itemId
       .filter((correlation) => variableIds.has(correlation.targetVariableId))
       .map(serializeRiskCorrelation),
   };
+}
+
+async function loadWorkScheduleIfAvailable(
+  budgetId: string,
+  userId: string,
+  budgetKind: RiskBudgetKind,
+): Promise<RiskSimulationInput["workSchedule"]> {
+  if (budgetKind !== "GENERAL") {
+    return null;
+  }
+
+  try {
+    const section = await getWorkScheduleSection(budgetId, userId);
+    const summary = buildRiskWorkScheduleSummary(section);
+
+    if (summary.simulationLines.length === 0) {
+      return null;
+    }
+
+    return { lines: summary.simulationLines };
+  } catch {
+    return null;
+  }
 }
 
 function serializeRiskVariable(variable: RiskVariableModel): RiskVariableRecord {

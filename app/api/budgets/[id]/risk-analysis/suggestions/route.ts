@@ -4,7 +4,9 @@ import { ZodError, z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
+import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import { getRiskAnalysisPayload } from "@/lib/risk/data";
+import { buildRiskWorkScheduleSummary } from "@/lib/risk/fallback";
 import { suggestRiskVariables } from "@/lib/risk/suggestions";
 import { riskSuggestionStrategySchema } from "@/lib/validations/risk";
 
@@ -24,11 +26,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const body = riskSuggestionsRequestSchema.parse(await request.json());
     const payload = await getRiskAnalysisPayload(id, session.user.id);
+    const workScheduleSummary = await loadWorkScheduleForSuggestions(id, session.user.id, payload.budget.kind);
 
     return NextResponse.json({
       suggestions: suggestRiskVariables({
         payload,
-        workScheduleSummary: null,
+        workScheduleSummary,
         strategy: body.strategy,
         maxSuggestions: body.maxSuggestions,
       }),
@@ -38,6 +41,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (billingResponse) return billingResponse;
 
     return NextResponse.json({ error: getRiskSuggestionsRouteErrorMessage(error) }, { status: 400 });
+  }
+}
+
+async function loadWorkScheduleForSuggestions(
+  budgetId: string,
+  userId: string,
+  budgetKind: string,
+) {
+  if (budgetKind !== "GENERAL") {
+    return null;
+  }
+
+  try {
+    const section = await getWorkScheduleSection(budgetId, userId);
+    return buildRiskWorkScheduleSummary(section);
+  } catch {
+    return null;
   }
 }
 
