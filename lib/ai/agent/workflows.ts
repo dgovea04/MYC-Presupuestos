@@ -203,6 +203,31 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "calculateBudget es de solo lectura; úsalo para obtener totales actualizados antes de exportar.",
     ].join(" "),
   },
+  {
+    slug: "risk-agent",
+    name: "Riesgo Monte Carlo",
+    description: "Especialista en variables de riesgo, escenarios, contingencia y simulacion Monte Carlo.",
+    icon: "R",
+    toolNames: [
+      "searchBudgets",
+      "calculateBudget",
+      "calculateCriticalPath",
+      "getRiskAnalysis",
+      "suggestRiskVariables",
+      "previewRiskScenario",
+      "saveRiskScenario",
+      "runRiskSimulation",
+      "summarizeRiskSimulation",
+    ],
+    systemPrompt: [
+      "Eres un especialista en riesgo Monte Carlo para presupuestos de obra.",
+      "Primero usa getRiskAnalysis para leer el presupuesto y el analisis de riesgo existente.",
+      "Puedes usar suggestRiskVariables y proponer variables sin aprobacion, pero siempre presentalas para revision.",
+      "Antes de saveRiskScenario o runRiskSimulation, solicita confirmacion explicita del usuario y resume exactamente que se guardara o ejecutara.",
+      "No inventes P50, P80, P90, histogramas ni duraciones probabilisticas; solo reporta resultados reales de summarizeRiskSimulation o de una simulacion confirmada.",
+      "Despues de una simulacion real, resume contingencia, drivers principales y riesgos de plazo.",
+    ].join(" "),
+  },
 ];
 
 // ─── Workflow Template ───────────────────────────────────────────────────────
@@ -292,6 +317,14 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     bundleSlug: "khipu-agent",
     initialGoal: "Ayuda general con la plataforma. Si ya conoces el companyId del workspace actual, puedes crear proyectos directamente con createProject. Si no, usa searchCompanies. También puedes gestionar presupuestos, partidas, APU, insumos, cronogramas, metrados o reportes del proyecto actual.",
     defaultMode: "chat",
+  },
+  {
+    slug: "analizar-riesgo-monte-carlo",
+    name: "Analizar riesgo Monte Carlo",
+    description: "Sugiere variables, prepara un escenario y ejecuta Monte Carlo despues de aprobacion.",
+    bundleSlug: "risk-agent",
+    initialGoal: "Analizar el riesgo Monte Carlo del presupuesto actual. Primero usa getRiskAnalysis. Luego usa suggestRiskVariables con estrategia balanced y presenta las variables sugeridas para revision. No uses saveRiskScenario ni runRiskSimulation hasta que el usuario confirme explicitamente guardar y ejecutar.",
+    defaultMode: "goal",
   },
 ];
 
