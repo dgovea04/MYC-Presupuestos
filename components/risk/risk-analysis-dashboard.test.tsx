@@ -217,6 +217,53 @@ describe("RiskAnalysisDashboard", () => {
     expect(container.textContent).toContain("Partida de alto impacto.");
   });
 
+  it("does not render stale Khipu suggestions after switching to a newer budget request", async () => {
+    const staleSuggestionsResponse = createDeferred<Response>();
+    const currentSuggestionsResponse = createDeferred<Response>();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockReturnValueOnce(staleSuggestionsResponse.promise)
+      .mockReturnValueOnce(currentSuggestionsResponse.promise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, getByText, rerender } = await renderRiskAnalysisDashboard();
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+    });
+
+    await rerender(createPayload("budget-2"));
+
+    await act(async () => {
+      getByText("Sugerir variables").click();
+    });
+
+    await act(async () => {
+      currentSuggestionsResponse.resolve(
+        new Response(JSON.stringify({ suggestions: [createSuggestion("current-suggestion", "budget-2", "Sugerencia vigente.")] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await currentSuggestionsResponse.promise;
+    });
+
+    expect(container.textContent).toContain("Sugerencia vigente.");
+
+    await act(async () => {
+      staleSuggestionsResponse.resolve(
+        new Response(JSON.stringify({ suggestions: [createSuggestion("stale-suggestion", "budget-1", "Sugerencia obsoleta.")] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await staleSuggestionsResponse.promise;
+    });
+
+    expect(container.textContent).toContain("Sugerencia vigente.");
+    expect(container.textContent).not.toContain("Sugerencia obsoleta.");
+  });
+
   it("saves accepted Khipu suggestions as an approved agent scenario without running simulation", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -294,6 +341,15 @@ async function renderRiskAnalysisDashboard(payload: RiskAnalysisPayload = create
 
   return {
     container,
+    rerender: async (nextPayload: RiskAnalysisPayload) => {
+      await act(async () => {
+        root.render(<RiskAnalysisDashboard currencyDecimals={2} payload={nextPayload} />);
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+    },
     getByText: (text: string) => {
       const element = [...container.querySelectorAll("*")].find((candidate) => candidate.textContent === text);
 
@@ -326,10 +382,10 @@ async function renderRiskAnalysisDashboard(payload: RiskAnalysisPayload = create
   };
 }
 
-function createPayload(): RiskAnalysisPayload {
+function createPayload(budgetId = "budget-1"): RiskAnalysisPayload {
   return {
     budget: {
-      id: "budget-1",
+      id: budgetId,
       projectId: "project-1",
       name: "Presupuesto General",
       kind: "GENERAL",
@@ -400,10 +456,10 @@ function createSimulationSummary(): RiskSimulationSummary {
   };
 }
 
-function createSuggestion(): RiskVariableSuggestion {
+function createSuggestion(id = "suggestion-1", budgetId = "budget-1", reason = "Partida de alto impacto."): RiskVariableSuggestion {
   return {
-    id: "suggestion-1",
-    budgetId: "budget-1",
+    id,
+    budgetId,
     budgetItemId: "item-1",
     variableType: "QUANTITY",
     distributionType: "PERT",
@@ -411,8 +467,23 @@ function createSuggestion(): RiskVariableSuggestion {
     mostLikely: 10,
     maximum: 11,
     confidence: 0.8,
-    reason: "Partida de alto impacto.",
+    reason,
     source: "HEURISTIC",
     impactScore: 1000,
+  };
+}
+
+function createDeferred<T>() {
+  let resolvePromise: (value: T) => void = () => undefined;
+  let rejectPromise: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+
+  return {
+    promise,
+    reject: rejectPromise,
+    resolve: resolvePromise,
   };
 }

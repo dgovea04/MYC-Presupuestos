@@ -48,6 +48,7 @@ export function RiskAnalysisDashboard({
   const workerRef = useRef<RiskWorkerController | null>(null);
   const activeBudgetIdRef = useRef(payload.budget.id);
   const modelVersionRef = useRef(0);
+  const suggestionRequestTokenRef = useRef(0);
   const [qualityPanelCollapsed, setQualityPanelCollapsed] = useState(true);
   const [suggestionsBudgetId, setSuggestionsBudgetId] = useState(payload.budget.id);
   const [suggestions, setSuggestions] = useState<RiskVariableSuggestion[]>([]);
@@ -290,13 +291,16 @@ export function RiskAnalysisDashboard({
       return;
     }
 
+    const requestBudgetId = payload.budget.id;
+    const requestToken = suggestionRequestTokenRef.current + 1;
+    suggestionRequestTokenRef.current = requestToken;
     setSuggestionsStatus("loading");
-    setSuggestionsBudgetId(payload.budget.id);
+    setSuggestionsBudgetId(requestBudgetId);
     setSuggestionsError("");
     setSavedScenarioName("");
 
     try {
-      const response = await fetch(`/api/budgets/${payload.budget.id}/risk-analysis/suggestions`, {
+      const response = await fetch(`/api/budgets/${requestBudgetId}/risk-analysis/suggestions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ strategy: "balanced", maxSuggestions: 12 }),
@@ -311,13 +315,19 @@ export function RiskAnalysisDashboard({
         throw new Error("No se pudo leer la respuesta de sugerencias de riesgo.");
       }
 
-      setSuggestions(result.suggestions);
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSuggestions(result.suggestions);
+      }
     } catch (requestError) {
-      setSuggestionsError(
-        requestError instanceof Error ? requestError.message : "No se pudieron generar sugerencias de riesgo.",
-      );
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSuggestionsError(
+          requestError instanceof Error ? requestError.message : "No se pudieron generar sugerencias de riesgo.",
+        );
+      }
     } finally {
-      setSuggestionsStatus("idle");
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSuggestionsStatus("idle");
+      }
     }
   };
 
@@ -326,13 +336,16 @@ export function RiskAnalysisDashboard({
       return;
     }
 
+    const requestBudgetId = payload.budget.id;
+    const requestToken = suggestionRequestTokenRef.current + 1;
+    suggestionRequestTokenRef.current = requestToken;
     setSuggestionsStatus("saving");
-    setSuggestionsBudgetId(payload.budget.id);
+    setSuggestionsBudgetId(requestBudgetId);
     setSuggestionsError("");
     setSavedScenarioName("");
 
     try {
-      const response = await fetch(`/api/budgets/${payload.budget.id}/risk-analysis/scenarios`, {
+      const response = await fetch(`/api/budgets/${requestBudgetId}/risk-analysis/scenarios`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -350,13 +363,22 @@ export function RiskAnalysisDashboard({
         throw new Error(readApiError(result, "No se pudo guardar el escenario de riesgo."));
       }
 
-      setSavedScenarioName("Escenario Khipu aprobado guardado.");
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSavedScenarioName("Escenario Khipu aprobado guardado.");
+      }
     } catch (saveError) {
-      setSuggestionsError(saveError instanceof Error ? saveError.message : "No se pudo guardar el escenario de riesgo.");
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSuggestionsError(saveError instanceof Error ? saveError.message : "No se pudo guardar el escenario de riesgo.");
+      }
     } finally {
-      setSuggestionsStatus("idle");
+      if (isCurrentSuggestionRequest(requestToken, requestBudgetId)) {
+        setSuggestionsStatus("idle");
+      }
     }
   };
+
+  const isCurrentSuggestionRequest = (requestToken: number, requestBudgetId: string) =>
+    suggestionRequestTokenRef.current === requestToken && activeBudgetIdRef.current === requestBudgetId;
 
   return (
     <div className="space-y-5">
