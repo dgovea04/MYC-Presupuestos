@@ -22,15 +22,15 @@ import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { saveRiskScenario } from "@/lib/risk/scenarios";
 
 describe("risk scenarios route", () => {
-  it("saves an approved scenario for authenticated users", async () => {
+  it("saves a draft manual scenario by default for authenticated users", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(saveRiskScenario).mockResolvedValue({
       id: "scenario-1",
       budgetId: "budget-1",
       name: "Escenario Khipu",
       description: "Riesgos sugeridos",
-      source: "AGENT",
-      status: "APPROVED",
+      source: "MANUAL",
+      status: "DRAFT",
       createdByUserId: "user-1",
       createdAt: "2026-07-17T00:00:00.000Z",
       updatedAt: "2026-07-17T00:00:00.000Z",
@@ -68,8 +68,42 @@ describe("risk scenarios route", () => {
     expect(saveRiskScenario).toHaveBeenCalledWith("budget-1", "user-1", {
       ...body,
       description: "Riesgos sugeridos",
+      source: "MANUAL",
+      status: "DRAFT",
+    });
+  });
+
+  it("saves explicit agent approved scenario metadata", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    vi.mocked(saveRiskScenario).mockResolvedValue({
+      id: "scenario-1",
+      budgetId: "budget-1",
+      name: "Escenario Khipu",
+      description: null,
       source: "AGENT",
       status: "APPROVED",
+      createdByUserId: "user-1",
+      createdAt: "2026-07-17T00:00:00.000Z",
+      updatedAt: "2026-07-17T00:00:00.000Z",
+    });
+
+    const body = {
+      name: "Escenario Khipu",
+      source: "AGENT",
+      status: "APPROVED",
+      variables: [],
+      correlations: [],
+    };
+
+    const response = await POST(
+      new Request("http://localhost", { method: "POST", body: JSON.stringify(body) }),
+      { params: Promise.resolve({ id: "budget-1" }) },
+    );
+
+    expect(response.status).toBe(201);
+    expect(saveRiskScenario).toHaveBeenCalledWith("budget-1", "user-1", {
+      ...body,
+      description: null,
     });
   });
 

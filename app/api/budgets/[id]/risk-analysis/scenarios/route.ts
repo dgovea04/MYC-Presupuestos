@@ -51,6 +51,8 @@ const riskScenarioCorrelationSchema = z
 const riskScenarioRequestSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1).nullable().optional(),
+  source: z.enum(["MANUAL", "AGENT"]).default("MANUAL"),
+  status: z.enum(["DRAFT", "APPROVED", "ARCHIVED"]).default("DRAFT"),
   variables: z.array(riskScenarioVariableSchema),
   correlations: z.array(riskScenarioCorrelationSchema).default([]),
 });
@@ -68,8 +70,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const scenario = await saveRiskScenario(id, session.user.id, {
       ...body,
       description: body.description ?? null,
-      source: "AGENT",
-      status: "APPROVED",
     });
 
     return NextResponse.json(scenario, { status: 201 });
