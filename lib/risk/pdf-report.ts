@@ -34,6 +34,7 @@ export function buildRiskPdfTables(payload: RiskAnalysisPayload, currencyDecimal
     ["Asimetria", formatNumber(latestRun.skewness, 4)],
     ["Curtosis", formatNumber(latestRun.kurtosis, 4)],
     ["Iteraciones", formatNumber(latestRun.iterations, 0)],
+    ...buildAuditMetadataRows(latestRun),
   ];
 
   const percentilesRows = [
@@ -128,6 +129,36 @@ export function buildRiskPdfTables(payload: RiskAnalysisPayload, currencyDecimal
   }
 
   return tables;
+}
+
+function buildAuditMetadataRows(latestRun: NonNullable<RiskAnalysisPayload["latestRun"]>): string[][] {
+  const rows: string[][] = [];
+
+  if (latestRun.scenarioId) {
+    rows.push(["Escenario", latestRun.scenarioId]);
+  }
+
+  if (latestRun.seed) {
+    rows.push(["Semilla", latestRun.seed]);
+  }
+
+  if (latestRun.engineVersion) {
+    rows.push(["Motor", latestRun.engineVersion]);
+  }
+
+  if (latestRun.modelSnapshot) {
+    rows.push(["Snapshot modelo", buildModelSnapshotSummary(latestRun.modelSnapshot)]);
+  }
+
+  return rows;
+}
+
+function buildModelSnapshotSummary(modelSnapshot: NonNullable<NonNullable<RiskAnalysisPayload["latestRun"]>["modelSnapshot"]>) {
+  return [
+    `${modelSnapshot.itemIds.length} partidas`,
+    `${modelSnapshot.variableIds.length} variables`,
+    `${modelSnapshot.correlationIds.length} correlaciones`,
+  ].join(", ");
 }
 
 function buildCurveChartPoints(payload: RiskAnalysisPayload): PdfCurveChartPoint[] {

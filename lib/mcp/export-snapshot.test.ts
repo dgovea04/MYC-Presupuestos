@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Prisma } from "@prisma/client";
+
+vi.hoisted(() => {
+  process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
+});
+
 import { getProjectForPackageExport } from "@/lib/data/projects";
 import { serializePolynomialFormula } from "./serializers/polynomial-formula";
 import { serializeBudgetItems } from "./serializers/apus";
@@ -200,7 +205,7 @@ describe("MCP serializers", () => {
   });
 
   describe("serializeRiskAnalysis", () => {
-    it("serializes risk variables, correlations, and simulation runs", () => {
+    it("serializes risk variables, correlations, simulation runs, and audit metadata", () => {
       const result = serializeRiskAnalysis({
         variables: [
           {
@@ -215,12 +220,38 @@ describe("MCP serializers", () => {
           },
         ],
         correlations: [],
-        simulationRuns: [],
+        simulationRuns: [
+          {
+            id: "run-1",
+            iterations: 10000,
+            baseTotal: "1000",
+            mean: "1045",
+            median: "1032",
+            standardDeviation: "14",
+            p10: "990",
+            p50: "1032",
+            p80: "1085",
+            p90: "1102",
+            p95: "1120",
+            histogramBins: [],
+            sCurvePoints: [],
+            scenarioId: "scenario-1",
+            seed: "seed-1",
+            engineVersion: "risk-engine-v2",
+            modelSnapshot: { variableIds: ["rv-1"] },
+          },
+        ],
       });
 
       expect(result.variables).toHaveLength(1);
       expect(result.variables[0]?.minimum).toBe("100");
       expect(result.variables[0]?.enabled).toBe(true);
+      expect(result.simulationRuns[0]).toMatchObject({
+        scenarioId: "scenario-1",
+        seed: "seed-1",
+        engineVersion: "risk-engine-v2",
+        modelSnapshot: { variableIds: ["rv-1"] },
+      });
     });
   });
 });
