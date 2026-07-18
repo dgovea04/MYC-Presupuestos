@@ -307,6 +307,108 @@ modulos (recursos, presupuesto, APU), agregar handlers segun necesidad.
   — el handler actual soporta `include: { items }` y agrega distributions
   inline. NO soporta niveles de include mas profundos.
 
+## When NOT to use this pattern
+
+El patron in-memory es optimo para el caso comun (CRUD work-schedule con
+selectivas queries de una sola tabla). Pero hay escenarios donde el mock
+**silenciosamente perderia fidelidad** sin detectar el bug. Estos requieren
+**Prisma test client real** (Postgres SQLite binary via `@prisma/client/test`)
+o **integration tests contra una DB real** (Docker-compose Postgres).
+
+### 1. Raw SQL via `$queryRaw` / `$executeRaw`
+
+`lib/data/account.ts` usa `prisma.$queryRaw` 6 veces (lineas 85, 174, 202,
+224, 242, 258) para queries optimizadas con JOINs y agregaciones que Prisma
+typed query builder no soporta bien. `lib/auth/email-verification.ts` y
+`lib/auth/options.ts` usan `$queryRaw` + `$executeRaw` para operaciones
+transaccionales de verificacion de email (lineas ~42, 47, 84, 93, 102, 108).
+
+**Por que el in-memory mock falla**: el modulo shared NO incluye handlers
+para `$queryRaw`/`$executeRaw`. Si un test usa el patron in-memory para codigo
+que hace raw SQL, el handler es `undefined` y el test fallara con
+`TypeError: prisma.$queryRaw is not a function` — eso es detectable, pero
+significa que el patron esta siendo mal aplicado.
+
+**Que usar en su lugar**: mock local con `vi.fn()` que retorne un valor
+hard-coded para el SQL especifico bajo test, o `prisma-extension-bundle`
+(NO recomendado: requiere setup adicional). No usar el modulo shared.
+
+### 2. Schema migration tests (DDL via raw SQL)
+
+Ejemplo real: `prisma/migrations/20260717005227_prisma7_work_schedule_generation_settings/migration.sql`
+incluye CREATE TABLE / CREATE INDEX / ADD FOREIGN KEY CONSTRAINT — esto es
+DDL real de Postgres con extension JSONB. NO es mockeable: el motor ejecuta
+los statements literal para que tome efecto el schema.
+
+**Por que el in-memory mock falla**: el modulo shared solo modela DML
+(SELECT/UPDATE/INSERT/DELETE). Las migraciones ejercitan el motor completo
+— si pasan en Postgres real, el validator del query esta implicitamente
+tested. Si pasan contra un mock in-memory, no prueban nada.
+
+**Que usar en su lugar**: integration tests con `@prisma/client` contra una
+DB de test real (CI runs `docker-compose up postgres` o testcontainers).
+Alternativa: `prisma migrate diff` para validar que las migraciones sean
+consistentes sin necesidad de DB completa (no ejecuta DDL, solo compara
+schema actual vs desired).
+
+### 3. Cross-table joins con `groupBy` / `aggregate`
+
+Cuando el codigo usa `prisma.X.groupBy({by:[...], _count, _sum})` o
+`prisma.X.aggregate({_count, _avg})`, el handler in-memory tendria que
+implementar todo el SQL GROUP BY algebra. En la practica el codigo del
+proyecto prefiere `findMany` + reduce in-process en vez de `groupBy`
+(ver `lib/work-schedule/` donde se hace aggregation en TypeScript).
+
+**Por que el in-memory mock falla**: si en el futuro alguien escribe
+`prisma.budget.groupBy({by:["kind"], _count:true})`, el mock no devolveria
+el shape correcto y el test pasaria con falso positivo.
+
+**Que usar en su lugar**: Prisma test client real o `prisma-mock` library.
+Como higiene, agregar una busqueda pre-test: `grep -rn '\.groupBy\|\.aggregate' lib/`
+para confirmar que el codigo bajo test no depende de aggregations.
+
+### 4. Prisma middleware / extensions (`prisma.$use`)
+
+Si algun modulo set up un middleware como `auditLogger` via
+`prisma.$use(async (params, next) => {...})`, el in-memory mock no respeta
+el middleware flow — los tests pasan pero la auditoria real estaria deshabilitada
+en produccion o viceversa.
+
+**Verificar pre-test**: `grep -rn 'prisma.\$use\|Prisma.plugins' lib/`. Si
+existe middleware, no usar este patron o agregar handler explicito para
+`$use` en el modulo shared (raro, pero existe).
+
+### 5. Tipos derivados de introspeccion (Prisma.JsonValue, Prisma.Decimal)
+
+El modulo shared usa `MockedFunction<...>` y tipos a mano para los handlers
+porque Prisma genera tipos via introspection al `prisma generate` runtime.
+Hay clases de types como `Prisma.Decimal` (usado en `account.ts` para
+montos) que NO estan representadas trivialmente en mocks — el handler tendria
+que importar `Prisma.Decimal` y reconstruir el wrapper. Si un test espera
+que `partial instanceof Prisma.Decimal` retorne true, el in-memory mock
+fallara silenciosamente devolviendo un `number` nativo.
+
+**Verificar pre-test**: revisar `lib/calculations/` y `lib/db/serializers.ts`
+para ver si dependen de `Prisma.Decimal` instances. Si los tests son
+unit-test pure functions, no usan Prisma directamente y este patron es seguro.
+Si los tests son integration con el modulo `lib/data/`, hay que extender el
+mock con `Prisma.Decimal` reconstruction.
+
+### Decision checklist antes de aplicar este patron
+
+Antes de escribir un test nuevo con este modulo shared, verificar:
+
+- [ ] El codigo bajo test NO usa `$queryRaw` o `$executeRaw`
+- [ ] El codigo bajo test NO trigger schema migrations
+- [ ] El codigo bajo test NO usa `groupBy`/`aggregate` (o si los usa,
+      considerar Prisma test client real)
+- [ ] El proyecto NO set up `prisma.$use` middleware (o ya esta manejado)
+- [ ] Los campos Decimal/Json son serializados antes de llegar al codigo
+      bajo test (o el mock los reconstruye explicitamente)
+
+Si todos los checks pasan, el patron aplica. Si cualquiera falla, evaluar
+las alternativas en cada subseccion arriba.
+
 ## Trade-offs
 
 ### Pros
