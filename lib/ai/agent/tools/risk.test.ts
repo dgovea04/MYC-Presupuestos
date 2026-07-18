@@ -207,26 +207,29 @@ describe("risk agent tools", () => {
       updatedAt: "2026-07-18T00:00:00.000Z",
     };
     mocks.saveRiskScenario.mockResolvedValueOnce(scenario);
-
-    const result = await saveRiskScenarioTool.execute(
+    const variables = [
       {
-        budgetId: "budget-1",
-        name: "Escenario Khipu",
-        variables: [
-          {
-            budgetItemId: "item-1",
-            variableType: "QUANTITY",
-            distributionType: "PERT",
-            minimum: 9,
-            mostLikely: 10,
-            maximum: 11,
-            enabled: true,
-          },
-        ],
-        correlations: [],
+        budgetItemId: "item-1",
+        variableType: "QUANTITY",
+        distributionType: "PERT",
+        minimum: 9,
+        mostLikely: 10,
+        maximum: 11,
+        enabled: true,
+        source: "HEURISTIC" as const,
+        confidence: 0.82,
+        rationale: "Partida sensible por metrados.",
       },
-      makeContext(),
-    );
+    ];
+
+    const parsedInput = saveRiskScenarioTool.inputSchema.parse({
+      budgetId: "budget-1",
+      name: "Escenario Khipu",
+      variables,
+      correlations: [],
+    });
+
+    const result = await saveRiskScenarioTool.execute(parsedInput, makeContext());
 
     expect(result).toBe(scenario);
     expect(mocks.saveRiskScenario).toHaveBeenCalledWith(
@@ -235,6 +238,7 @@ describe("risk agent tools", () => {
       expect.objectContaining({
         source: "AGENT",
         status: "APPROVED",
+        variables,
       }),
     );
   });

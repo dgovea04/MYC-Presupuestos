@@ -6,6 +6,7 @@ import { runAndSaveRiskSimulation } from "@/lib/risk/simulation-service";
 import { suggestRiskVariables } from "@/lib/risk/suggestions";
 import {
   riskCorrelationInputSchema,
+  riskInputSourceSchema,
   riskSuggestionStrategySchema,
   riskVariableInputSchema,
 } from "@/lib/validations/risk";
@@ -25,11 +26,17 @@ const suggestRiskVariablesInputSchema = budgetInputSchema.extend({
   maxSuggestions: z.number().int().min(1).max(50).default(12),
 });
 
+const riskScenarioVariableInputSchema = riskVariableInputSchema.extend({
+  source: riskInputSourceSchema.optional(),
+  confidence: z.number().finite().min(0).max(1).nullable().optional(),
+  rationale: z.string().trim().min(1).nullable().optional(),
+});
+
 const previewRiskScenarioInputSchema = z.object({
   budgetId: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
-  variables: z.array(riskVariableInputSchema),
+  variables: z.array(riskScenarioVariableInputSchema),
   correlations: z.array(riskCorrelationInputSchema).default([]),
 });
 
