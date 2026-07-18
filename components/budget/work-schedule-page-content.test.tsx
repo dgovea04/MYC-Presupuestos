@@ -681,6 +681,60 @@ describe("WorkSchedulePageContent", () => {
     ).toBe("2026-03-11");
   });
 
+  it.each([
+    ["SS", "2026-03-01", "2026-03-03"],
+    ["FF", "2026-03-03", "2026-03-05"],
+    ["SF", "2026-02-27", "2026-03-01"],
+  ] as const)(
+    "recalculates successor dates when an existing gantt dependency changes from FS to %s",
+    async (relation, expectedStartDate, expectedEndDate) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => createViewWithDependencyPreview(),
+      });
+      await renderWithView(createViewWithDependencyPreview(), createSettings());
+
+      const dependencyHitPath = document.querySelector<SVGPathElement>(
+        "svg path[stroke='transparent']",
+      );
+      if (!dependencyHitPath) {
+        throw new Error("Missing editable dependency hit path");
+      }
+
+      await act(async () => {
+        dependencyHitPath.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 120, clientY: 80 }));
+      });
+
+      const relationButton = document.querySelector<HTMLButtonElement>(`[data-testid='edit-relation-${relation}']`);
+      const saveButton = document.querySelector<HTMLButtonElement>("[data-testid='save-dependency-btn']");
+      if (!relationButton || !saveButton) {
+        throw new Error("Missing dependency edit controls");
+      }
+
+      await act(async () => {
+        relationButton.click();
+      });
+
+      await act(async () => {
+        saveButton.click();
+        await Promise.resolve();
+      });
+
+      const patchCall = fetchMock.mock.calls.find(([, options]) => options?.method === "PATCH");
+      const body = JSON.parse(String(patchCall?.[1]?.body)) as {
+        predecessor?: string;
+        startDate?: string;
+        endDate?: string;
+        durationDays?: number;
+      };
+
+      expect(body.predecessor).toBe(`01.01${relation}`);
+      expect(body.startDate).toBe(expectedStartDate);
+      expect(body.endDate).toBe(expectedEndDate);
+      expect(body.durationDays).toBe(3);
+    },
+  );
+
   it("opens the intelligent schedule dialog and sends the base generation request with advanced options", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
@@ -1716,460 +1770,7 @@ describe("WorkSchedulePageContent", () => {
     expect(getByText("Filtro aplicado: Distribucion incompleta")).toBeTruthy();
   });
 
-  it("shows a unified xlsx export preferences bar only for derived calendar views", async () => {
-    const { clickByText, getByText, queryByText } = await renderContent();
-
-    await act(async () => {
-      clickByText("Calendario valorizado");
-    });
-
-    expect(getByText("Preferencias de exportacion XLSX:")).toBeTruthy();
-    expect(getByText("Calendario valorizado")).toBeTruthy();
-    expect(getByText("Perfiles:")).toBeTruthy();
-    expect(getByText("Minimo")).toBeTruthy();
-    expect(getByText("Ejecutivo")).toBeTruthy();
-    expect(getByText("Analitico")).toBeTruthy();
-    expect(getByText("Alcance:")).toBeTruthy();
-    expect(getByText("Solo detalle")).toBeTruthy();
-    expect(getByText("Detalle + total")).toBeTruthy();
-    expect(getByText("Detalle + subtotales + total")).toBeTruthy();
-    expect(getByText("Se exportara calendario valorizado con detalle por partida, subtotales y total general.")).toBeTruthy();
-    expect(getByText("Detalle")).toBeTruthy();
-    expect(getByText("Incluye total")).toBeTruthy();
-    expect(getByText("Incluye subtotales")).toBeTruthy();
-
-    await act(async () => {
-      clickByText("Minimo");
-    });
-
-    expect(getByText("Se exportara calendario valorizado con solo detalle por partida.")).toBeTruthy();
-    expect(getByText("Solo detalle")).toBeTruthy();
-
-    await act(async () => {
-      clickByText("Calendario de insumos");
-    });
-
-    expect(getByText("Preferencias de exportacion XLSX:")).toBeTruthy();
-    expect(getByText("Calendario de insumos")).toBeTruthy();
-    expect(getByText("Analitico")).toBeTruthy();
-    expect(getByText("Solo detalle")).toBeTruthy();
-    expect(getByText("Detalle + total")).toBeTruthy();
-    expect(getByText("Detalle + subtotales + total")).toBeTruthy();
-
-    await act(async () => {
-      clickByText("Curva S");
-    });
-
-    expect(getByText("Preferencias de exportacion XLSX:")).toBeTruthy();
-    expect(getByText("Curva S")).toBeTruthy();
-    expect(getByText("Minimo")).toBeTruthy();
-    expect(getByText("Ejecutivo")).toBeTruthy();
-    expect(getByText("Solo detalle")).toBeTruthy();
-    expect(getByText("Detalle + total")).toBeTruthy();
-    expect(queryByText("Analitico")).toBeNull();
-
-    await act(async () => {
-      clickByText("Cronograma");
-    });
-
-    expect(getByText("Preferencias de exportacion XLSX:")).toBeTruthy();
-    expect(getByText("Paquete ejecutivo")).toBeTruthy();
-    expect(getByText("Analitico")).toBeTruthy();
-    expect(getByText("Detalle + subtotales + total")).toBeTruthy();
-  });
-
-  it("exports the active filtered curva s view as xlsx in detail-only mode when configured", async () => {
-    const { clickByText, clickExportAction, queryByText } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      clickByText("Curva S");
-    });
-
-    expect(queryByText("Solo detalle")).toBeTruthy();
-
-    await act(async () => {
-      clickByText("Solo detalle");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar XLSX");
-    });
-
-    await waitFor(() => clickCount > 0);
-
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await lastCreatedBlob!.arrayBuffer());
-
-    const curveSheet = workbook.getWorksheet("Curva S");
-    expect(curveSheet?.getCell("A4").value).toBe("03/2026");
-    expect(curveSheet?.getCell("A6").value).toBeNull();
-  });
-
-  it("exports the active filtered calendario valorizado view as csv", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      clickByText("Calendario valorizado");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar CSV");
-    });
-
-    expect(lastDownloadName).toContain("calendario-valorizado");
-    expect(clickCount).toBe(1);
-    expect(lastCreatedBlob).toBeTruthy();
-
-    const csvContent = await lastCreatedBlob?.text();
-    expect(csvContent).toContain("Item,Partida,Unidad,Metrado,PU,Parcial,03/2026,04/2026");
-    expect(csvContent).toContain("02.01,Tarrajeo,M2,10.00,S/ 20.00,S/ 200.00,S/ 200.00,S/ 0.00");
-    expect(csvContent).not.toContain("Trazo y replanteo");
-  });
-
-  it("exports the active filtered calendario valorizado view as xlsx", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      clickByText("Calendario valorizado");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar XLSX");
-    });
-
-    await waitFor(() => clickCount > 0);
-
-    expect(lastDownloadName).toContain("calendario-valorizado.xlsx");
-    expect(lastCreatedBlob?.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await lastCreatedBlob!.arrayBuffer());
-
-    expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual(["Calendario valorizado"]);
-
-    const valuationSheet = workbook.getWorksheet("Calendario valorizado");
-    expect(valuationSheet?.getCell("A1").value).toBe("PROGRAMACION DE OBRA - CALENDARIO VALORIZADO");
-    expect(valuationSheet?.autoFilter).toBe("A3:H3");
-    expect(valuationSheet?.getCell("A4").value).toBe("02.01");
-    expect(valuationSheet?.getCell("D4").value).toBe(10);
-    expect(valuationSheet?.getCell("D4").numFmt).toBe("#,##0.00");
-    expect(valuationSheet?.getCell("G4").value).toBe(200);
-    expect(valuationSheet?.getCell("G4").numFmt).toBe("S/ #,##0.00");
-    expect(valuationSheet?.getCell("H4").value).toBe(0);
-    expect(valuationSheet?.getCell("H4").numFmt).toBe("S/ #,##0.00");
-    expect(valuationSheet?.getCell("B5").value).toBe("Subtotal Arquitectura");
-    expect(valuationSheet?.getCell("G5").value).toBe(200);
-    expect(valuationSheet?.getCell("H5").value).toBe(0);
-    expect(valuationSheet?.getCell("B6").value).toBe("Total");
-    expect(valuationSheet?.getCell("B6").border?.top?.style).toBe("medium");
-  });
-
-  it("exports the active filtered calendario valorizado view as xlsx in detail-only mode when configured", async () => {
-    const { clickByText, clickExportAction, queryByText } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      clickByText("Calendario valorizado");
-    });
-
-    expect(queryByText("Solo detalle")).toBeTruthy();
-
-    await act(async () => {
-      clickByText("Solo detalle");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar XLSX");
-    });
-
-    await waitFor(() => clickCount > 0);
-
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await lastCreatedBlob!.arrayBuffer());
-
-    const valuationSheet = workbook.getWorksheet("Calendario valorizado");
-    expect(valuationSheet?.getCell("B5").value).toBeNull();
-  });
-
-  it("exports the active filtered calendario de insumos view as xlsx", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      clickByText("Calendario de insumos");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar XLSX");
-    });
-
-    await waitFor(() => clickCount > 0);
-
-    expect(lastDownloadName).toContain("calendario-insumos.xlsx");
-    expect(lastCreatedBlob?.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await lastCreatedBlob!.arrayBuffer());
-
-    expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual(["Calendario de insumos"]);
-
-    const resourcesSheet = workbook.getWorksheet("Calendario de insumos");
-    expect(resourcesSheet?.getCell("A1").value).toBe("PROGRAMACION DE OBRA - CALENDARIO DE INSUMOS");
-    expect(resourcesSheet?.getCell("A4").value).toBe(1);
-    expect(resourcesSheet?.getCell("B4").value).toBe("PEON");
-    expect(resourcesSheet?.getCell("D4").value).toBe(8);
-    expect(resourcesSheet?.getCell("D4").numFmt).toBe("#,##0.00");
-    expect(resourcesSheet?.getCell("H4").value).toBe(120);
-    expect(resourcesSheet?.getCell("H4").numFmt).toBe("S/ #,##0.00");
-    expect(resourcesSheet?.getCell("B5").value).toBe("Subtotal LAB");
-    expect(resourcesSheet?.getCell("D5").value).toBe(8);
-    expect(resourcesSheet?.getCell("H5").value).toBe(120);
-    expect(resourcesSheet?.getCell("B6").value).toBe("Total");
-    expect(resourcesSheet?.getCell("D6").value).toBe(8);
-    expect(resourcesSheet?.getCell("H6").value).toBe(120);
-  });
-
-  it("exports the active filtered calendario de insumos view as xlsx in detail-only mode when configured", async () => {
-    const { clickByText, clickExportAction, queryByText } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      clickByText("Calendario de insumos");
-    });
-
-    expect(queryByText("Solo detalle")).toBeTruthy();
-
-    await act(async () => {
-      clickByText("Solo detalle");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar XLSX");
-    });
-
-    await waitFor(() => clickCount > 0);
-
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await lastCreatedBlob!.arrayBuffer());
-
-    const resourcesSheet = workbook.getWorksheet("Calendario de insumos");
-    expect(resourcesSheet?.getCell("B5").value).toBeNull();
-  });
-
-  it("exports the active filtered curva s view as xlsx", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      clickByText("Curva S");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar XLSX");
-    });
-
-    await waitFor(() => clickCount > 0);
-
-    expect(lastDownloadName).toContain("curva-s.xlsx");
-    expect(lastCreatedBlob?.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await lastCreatedBlob!.arrayBuffer());
-
-    expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual(["Curva S"]);
-
-    const curveSheet = workbook.getWorksheet("Curva S");
-    expect(curveSheet?.getCell("A1").value).toBe("PROGRAMACION DE OBRA - CURVA S");
-    expect(curveSheet?.getCell("A4").value).toBe("03/2026");
-    expect(curveSheet?.getCell("B4").value).toBe(200);
-    expect(curveSheet?.getCell("B4").numFmt).toBe("S/ #,##0.00");
-    expect(curveSheet?.getCell("D4").value).toBe(1);
-    expect(curveSheet?.getCell("D4").numFmt).toBe("0.00%");
-    expect(curveSheet?.getCell("A6").value).toBe("Total");
-    expect(curveSheet?.getCell("B6").value).toBe(200);
-    expect(curveSheet?.getCell("D6").value).toBe(1);
-  });
-
-  it("exports the filtered cronograma overview as csv", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar CSV");
-    });
-
-    expect(lastDownloadName).toContain("cronograma");
-    expect(clickCount).toBe(1);
-    expect(lastCreatedBlob).toBeTruthy();
-
-    const csvContent = await lastCreatedBlob?.text();
-    expect(csvContent).toContain("Item,Partida,Duracion,Dias calendario,Inicio,Fin,Inicio real,Fin real,% Avance,Predecesora,Cuadrilla,Unidad,Metrado,PU,Parcial");
-    expect(csvContent).toContain("02.01,Tarrajeo,14,");
-    expect(csvContent).toContain(",-,-,M2,10.00,S/ 20.00,S/ 200.00");
-    expect(csvContent).not.toContain("Trazo y replanteo");
-  });
-
-  it("exports the filtered cronograma summary as csv by subbudget", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar resumen CSV");
-    });
-
-    expect(lastDownloadName).toContain("resumen");
-    expect(clickCount).toBe(1);
-    expect(lastCreatedBlob).toBeTruthy();
-
-    const csvContent = await lastCreatedBlob?.text();
-    expect(csvContent).toContain("Subpresupuesto,Partidas,Programadas,Pendientes,Distribucion incompleta,Inicio,Fin,Total parcial");
-    expect(csvContent).toContain("Arquitectura,1,0,1,1,");
-    expect(csvContent).toContain(",S/ 200.00");
-    expect(csvContent).not.toContain("Estructuras");
-  });
-
-  it("exports the filtered cronograma monthly summary as csv", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar resumen mensual CSV");
-    });
-
-    expect(lastDownloadName).toContain("resumen-mensual");
-    expect(clickCount).toBe(1);
-    expect(lastCreatedBlob).toBeTruthy();
-
-    const csvContent = await lastCreatedBlob?.text();
-    expect(csvContent).toContain("Periodo,Partidas con monto,Programado mensual,Acumulado,% acumulado");
-    expect(csvContent).toContain("03/2026,1,S/ 200.00,S/ 200.00,100.00%");
-    expect(csvContent).toContain("04/2026,0,S/ 0.00,S/ 200.00,100.00%");
-  });
-
-  it("exports the filtered cronograma executive package as a combined csv", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar paquete ejecutivo CSV");
-    });
-
-    expect(lastDownloadName).toContain("paquete-ejecutivo");
-    expect(clickCount).toBe(1);
-    expect(lastCreatedBlob).toBeTruthy();
-
-    const csvContent = await lastCreatedBlob?.text();
-    expect(csvContent).toContain("Paquete ejecutivo - Resumen por subpresupuesto");
-    expect(csvContent).toContain("Subpresupuesto,Partidas,Programadas,Pendientes,Distribucion incompleta,Inicio,Fin,Total parcial");
-    expect(csvContent).toContain("Arquitectura,1,0,1,1,");
-    expect(csvContent).toContain("Paquete ejecutivo - Resumen mensual");
-    expect(csvContent).toContain("Periodo,Partidas con monto,Programado mensual,Acumulado,% acumulado");
-    expect(csvContent).toContain("03/2026,1,S/ 200.00,S/ 200.00,100.00%");
-    expect(csvContent).not.toContain("Estructuras,1");
-  });
-
-  it("exports the filtered cronograma executive package as xlsx", async () => {
-    const { clickByText, clickExportAction } = await renderContentWithIncompleteDistribution();
-
-    await act(async () => {
-      clickByText("Distribucion incompleta (1)");
-    });
-
-    await act(async () => {
-      await clickExportAction("Exportar paquete ejecutivo XLSX");
-    });
-
-    await waitFor(() => clickCount > 0);
-
-    expect(lastDownloadName).toContain("paquete-ejecutivo.xlsx");
-    expect(clickCount).toBe(1);
-    expect(lastCreatedBlob).toBeTruthy();
-    expect(lastCreatedBlob?.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await lastCreatedBlob!.arrayBuffer());
-
-    expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual([
-      "Resumen subpresupuesto",
-      "Resumen mensual",
-      "Cronograma partidas",
-    ]);
-
-    const summarySheet = workbook.getWorksheet("Resumen subpresupuesto");
-    const monthlySheet = workbook.getWorksheet("Resumen mensual");
-    const overviewSheet = workbook.getWorksheet("Cronograma partidas");
-
-    expect(summarySheet?.getCell("A1").value).toBe("PROGRAMACION DE OBRA - RESUMEN POR SUBPRESUPUESTO");
-    expect(summarySheet?.autoFilter).toBe("A3:H3");
-    expect(summarySheet?.getCell("A4").value).toBe("Arquitectura");
-    expect(summarySheet?.getCell("B4").value).toBe(1);
-    expect(summarySheet?.getCell("H4").value).toBe(200);
-    expect(summarySheet?.getCell("H4").numFmt).toBe("S/ #,##0.00");
-    expect(summarySheet?.getCell("A5").value).toBe("Total");
-    expect(summarySheet?.getCell("H5").value).toBe(200);
-    expect(summarySheet?.getCell("A5").border?.top?.style).toBe("medium");
-    expect(monthlySheet?.getCell("A1").value).toBe("PROGRAMACION DE OBRA - RESUMEN MENSUAL");
-    expect(monthlySheet?.getCell("A4").value).toBe("03/2026");
-    expect(monthlySheet?.getCell("C4").value).toBe(200);
-    expect(monthlySheet?.getCell("C4").numFmt).toBe("S/ #,##0.00");
-    expect(monthlySheet?.getCell("E4").value).toBe(1);
-    expect(monthlySheet?.getCell("E4").numFmt).toBe("0.00%");
-    expect(monthlySheet?.getCell("A6").value).toBe("Total");
-    expect(monthlySheet?.getCell("C6").value).toBe(200);
-    expect(monthlySheet?.getCell("E6").value).toBe(1);
-    expect(overviewSheet?.getCell("A1").value).toBe("PROGRAMACION DE OBRA - CRONOGRAMA DE PARTIDAS");
-    expect(overviewSheet?.getCell("A4").value).toBe("02.01");
-    expect(overviewSheet?.getCell("I4").value).toBe(10);
-    expect(overviewSheet?.getCell("I4").numFmt).toBe("#,##0.00");
-    expect(overviewSheet?.getCell("B5").value).toBe("Subtotal Arquitectura");
-    expect(overviewSheet?.getCell("K5").value).toBe(200);
-    expect(overviewSheet?.getCell("B6").value).toBe("Total");
-    expect(overviewSheet?.getCell("K6").value).toBe(200);
-  });
-});    it("'Todo paralelo' sets all level toggles to parallel in the generation dialog tree preview", async () => {
+  it("'Todo paralelo' sets all level toggles to parallel in the generation dialog tree preview", async () => {
     window.localStorage.setItem("work-schedule-generation-strategy:budget-1", "sequential");
     window.localStorage.removeItem("work-schedule-generation-level-linkage:budget-1");
 
@@ -2212,7 +1813,9 @@ describe("WorkSchedulePageContent", () => {
       (btn) => btn.textContent?.trim() === "Paralelo",
     );
     expect(paralelosAfter.length).toBe(3);
-  });    it("'Todo encadenar' sets all level toggles to chain in the generation dialog tree preview", async () => {
+  });
+
+  it("'Todo encadenar' sets all level toggles to chain in the generation dialog tree preview", async () => {
     window.localStorage.setItem("work-schedule-generation-strategy:budget-1", "sequential");
     window.localStorage.removeItem("work-schedule-generation-level-linkage:budget-1");
 
@@ -2244,7 +1847,9 @@ describe("WorkSchedulePageContent", () => {
     );
     // Level toggle buttons (3 levels) plus "Todo encadenar" itself = 4+
     expect(encadenarAfter.length).toBe(3);
-  });    it("collapses and expands sub-budget levels in the generation dialog tree preview", async () => {
+  });
+
+  it("collapses and expands sub-budget levels in the generation dialog tree preview", async () => {
     window.localStorage.setItem("work-schedule-generation-strategy:budget-1", "sequential");
     window.localStorage.removeItem("work-schedule-generation-level-linkage:budget-1");
 
@@ -2350,22 +1955,6 @@ async function renderWithView(view: WorkScheduleViewRecord, settings: UserSettin
       const element = findElementByText(text);
       if (!(element instanceof HTMLElement)) {
         throw new Error(`Missing clickable text: ${text}`);
-      }
-
-      element.click();
-    },
-    clickExportAction: async (text: string) => {
-      const trigger = document.querySelector<HTMLButtonElement>("[aria-label='Abrir acciones de exportacion']");
-      if (!trigger) {
-        throw new Error("Missing export action trigger");
-      }
-
-      trigger.click();
-      await Promise.resolve();
-
-      const element = findElementByText(text);
-      if (!(element instanceof HTMLElement)) {
-        throw new Error(`Missing export action: ${text}`);
       }
 
       element.click();
@@ -2969,3 +2558,4 @@ function rebuildTestWorkScheduleRows(groups: WorkScheduleViewRecord["groups"]) {
     rows: group.lines.map((line) => ({ kind: "line" as const, rowId: line.budgetItemId, line })),
   }));
 }
+});

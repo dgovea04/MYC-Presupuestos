@@ -157,6 +157,12 @@ describe("buildTimelineDependencyConnector", () => {
       });
 
       expect(countVerticalSegments(path)).toBe(2);
+
+      const firstH = path.match(/H (-?\d+)/);
+      expect(firstH).not.toBeNull();
+      const firstHX = parseInt(firstH![1], 10);
+      const sourceX = startX(5);
+      expect(firstHX).toBeLessThan(sourceX);
     });
 
     it("uses simple elbow path for SS with positive gap (delta >= 2)", () => {
@@ -243,6 +249,26 @@ describe("buildTimelineDependencyConnector", () => {
       });
 
       expect(countVerticalSegments(path)).toBe(1);
+    });
+
+    it("exits left from the predecessor start for same-day SF handoff", () => {
+      const path = buildTimelineDependencyConnector({
+        predecessor: { ...defaultLine, top: 0, height: 40 },
+        predecessorReference: { relation: "SF" },
+        predecessorStartIndex: 5,
+        predecessorEndIndex: 14,
+        successor: { ...defaultLine, top: 60, height: 40 },
+        successorStartIndex: 0,
+        successorEndIndex: 5,
+        timelineDayWidth: DEFAULT_TIMELINE_DAY_WIDTH,
+        timelineDayGap: DEFAULT_TIMELINE_DAY_GAP,
+      });
+
+      const firstH = path.match(/H (-?\d+)/);
+      expect(firstH).not.toBeNull();
+      const firstHX = parseInt(firstH![1], 10);
+      const sourceX = startX(5);
+      expect(firstHX).toBeLessThan(sourceX);
     });
   });
 });

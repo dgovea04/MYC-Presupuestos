@@ -78,11 +78,11 @@ describe("mapLineToCsvRow", () => {
     expect(row[6]).toBe("-");
     expect(row[7]).toBe("-");
     expect(row[8]).toBe("-");
-    expect(row[9]).toMatch(/^2\.00$/);
-    expect(row[10]).toBe("m2");
-    expect(row[11]).toMatch(/^100\.00$/);
-    expect(row[12]).toMatch(/^(S\/|PEN) 10\.00$/);
-    expect(row[13]).toMatch(/^(S\/|PEN) 1,000\.00$/);
+    expect(row[10]).toMatch(/^2\.00$/);
+    expect(row[11]).toBe("m2");
+    expect(row[12]).toMatch(/^100\.00$/);
+    expect(row[13]).toMatch(/^(S\/|PEN) 10\.00$/);
+    expect(row[14]).toMatch(/^(S\/|PEN) 1,000\.00$/);
   });
 
   it("computes 'Dias calendario' as inclusive diffInDays when both dates are set", () => {
@@ -157,8 +157,8 @@ describe("mapLineToCsvRow", () => {
       2,
       "DD/MM/YYYY",
     );
-    expect(row[6]).toMatch(/^10\/03\/2026$/);
-    expect(row[7]).toMatch(/^20\/03\/2026$/);
+    expect(row[6]).toMatch(/10 mar\. 2026/);
+    expect(row[7]).toMatch(/20 mar\. 2026/);
     expect(row[8]).toBe("75%");
   });
 
@@ -166,9 +166,9 @@ describe("mapLineToCsvRow", () => {
     const usdRow = mapLineToCsvRow(buildLine(), "USD", 4, "yyyy-MM-dd");
     expect(usdRow[0]).toBe("01.01");
     // quantity cell is hardcoded to 2 decimals — currencyDecimals only affects currency cells.
-    expect(usdRow[11]).toBe("100.00");
-    expect(usdRow[12]).toMatch(/^\$ 10\.0000$/);
-    expect(usdRow[13]).toMatch(/^\$ 1,000\.0000$/);
+    expect(usdRow[12]).toBe("100.00");
+    expect(usdRow[13]).toMatch(/^\$ 10\.0000$/);
+    expect(usdRow[14]).toMatch(/^\$ 1,000\.0000$/);
   });
 });
 

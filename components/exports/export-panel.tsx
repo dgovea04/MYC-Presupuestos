@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { downloadBlob, requestExportBlob } from "@/lib/exports/download";
-import type { ExportDefinition, ExportFormat, ExportOptions, ExportPreset, ExportRequest, ExportTarget } from "@/lib/exports/definitions";
+import type { ExportDefinition, ExportFormat, ExportOptions, ExportPreset, ExportRequest, ExportTarget, WorkbookExportScope } from "@/lib/exports/definitions";
 
 type ExportPanelProps = {
   definition: ExportDefinition;
@@ -52,6 +52,7 @@ export function ExportPanel({
   const [includeCurveChart, setIncludeCurveChart] = useState(contextOptions?.includeCurveChart ?? true);
   const [includeCriticalPath, setIncludeCriticalPath] = useState(contextOptions?.includeCriticalPath ?? false);
   const [currencyDecimals, setCurrencyDecimals] = useState(contextOptions?.currencyDecimals ?? 2);
+  const [workbookScope, setWorkbookScope] = useState<WorkbookExportScope>(contextOptions?.workbookScope ?? "detail_subtotals_and_total");
   const [status, setStatus] = useState<"idle" | "downloading" | "previewing" | "error">("idle");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<{ blob: Blob; fileName: string; key: string; url: string } | null>(null);
@@ -72,9 +73,10 @@ export function ExportPanel({
         includeCurveChart,
         includeCriticalPath,
         currencyDecimals,
+        workbookScope,
       },
     }),
-    [contextOptions, currencyDecimals, definition.target, includeCriticalPath, includeCurveChart, includeGanttChart, includeSignature, includeSubtotals, includeTotals, preset.id, resolvedFormat, targetId],
+    [contextOptions, currencyDecimals, definition.target, includeCriticalPath, includeCurveChart, includeGanttChart, includeSignature, includeSubtotals, includeTotals, preset.id, resolvedFormat, targetId, workbookScope],
   );
   const payloadKey = useMemo(() => JSON.stringify(payload), [payload]);
   const optionSummary = useMemo(
@@ -243,6 +245,28 @@ export function ExportPanel({
                   value={currencyDecimals}
                 />
               </label>
+              {definition.target === "work_schedule" && resolvedFormat === "xlsx" ? (
+                <>
+                  <p className="theme-muted-text text-[11px] font-semibold uppercase tracking-wide">Alcance del Excel</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <WorkbookScopeButton
+                      active={workbookScope === "detail_only"}
+                      label="Solo detalle"
+                      onClick={() => setWorkbookScope("detail_only")}
+                    />
+                    <WorkbookScopeButton
+                      active={workbookScope === "detail_and_total"}
+                      label="Detalle + total"
+                      onClick={() => setWorkbookScope("detail_and_total")}
+                    />
+                    <WorkbookScopeButton
+                      active={workbookScope === "detail_subtotals_and_total"}
+                      label="Subtotales + total"
+                      onClick={() => setWorkbookScope("detail_subtotals_and_total")}
+                    />
+                  </div>
+                </>
+              ) : null}
               </section>
 
               <section className="theme-surface-card rounded-2xl border p-4">
@@ -296,6 +320,23 @@ export function ExportPanel({
   );
 }
 
+function WorkbookScopeButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-2.5 py-1 text-xs font-medium transition",
+        active
+          ? "bg-sky-600 text-white"
+          : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover)]",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
 function ExportCheckbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
   return (
     <label className="theme-strong-text flex items-center justify-between gap-3 text-sm">
@@ -335,6 +376,15 @@ function buildExportOptionSummary(options: Partial<ExportOptions>, target: Expor
 
   if (canIncludeGantt && options.includeGanttChart && options.includeCriticalPath) {
     summary.push("Ruta critica incluida");
+  }
+
+  if (target === "work_schedule" && format === "xlsx" && options.workbookScope) {
+    const scopeLabel = options.workbookScope === "detail_only"
+      ? "Solo detalle"
+      : options.workbookScope === "detail_and_total"
+        ? "Detalle + total"
+        : "Subtotales + total";
+    summary.push(`Alcance: ${scopeLabel}`);
   }
 
   return summary;

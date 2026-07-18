@@ -25,6 +25,7 @@ import {
   type ExportPreset,
   type ExportRequest,
   type NormalizedExportRequest,
+  type WorkbookExportScope,
 } from "@/lib/exports/definitions";
 import { buildProjectPackageArchive, buildProjectPackageSnapshot } from "@/lib/mcp/export-snapshot";
 import { storeProjectPackage } from "@/lib/data/stored-project-packages";
@@ -560,8 +561,9 @@ async function createWorkScheduleExport(request: NormalizedExportRequest, userId
   }
 
   if (request.format === "xlsx") {
+    const scope = request.options.workbookScope ?? "detail_subtotals_and_total";
     return {
-      content: await buildWorkScheduleWorkbook(selectedTables),
+      content: await buildWorkScheduleWorkbook(selectedTables, scope),
       contentType: CONTENT_TYPES.xlsx,
       fileName: request.options.fileName ?? `cronograma-${section.budgetId}-${selectedTables[0]?.slug ?? "export"}.xlsx`,
     };
@@ -981,29 +983,166 @@ function buildWorkScheduleCurveTable(curveRows: WorkScheduleCurvePointRecord[], 
   };
 }
 
-async function buildWorkScheduleWorkbook(tables: WorkScheduleExportTable[]) {
+async function buildWorkScheduleWorkbook(tables: WorkScheduleExportTable[], scope: WorkbookExportScope) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "MC Presupuestos";
+  const includeTotals = scope !== "detail_only";
+  const includeSubtotals = scope === "detail_subtotals_and_total";
 
   for (const table of tables) {
     const sheet = workbook.addWorksheet(table.title.slice(0, 31));
-    sheet.addRow([table.title]);
-    sheet.mergeCells(1, 1, 1, Math.max(table.headers.length, 1));
-    sheet.getRow(1).font = { bold: true, size: 14, color: { argb: "FF0F172A" } };
+    const lastCol = getExcelColumnLetter(table.headers.length);
+
+    // Title row
+    sheet.mergeCells(`A1:${lastCol}1`);
+    sheet.getCell("A1").value = table.title.toUpperCase();
+    sheet.getCell("A1").font = { bold: true, size: 15, color: { argb: "FF0F172A" } };
+    sheet.getCell("A1").alignment = { horizontal: "center", vertical: "middle" };
+
+    // Subtitle describing scope
+    sheet.mergeCells(`A2:${lastCol}2`);
+    sheet.getCell("A2").value = scope === "detail_only"
+      ? "Solo detalle."
+      : scope === "detail_and_total"
+        ? "Detalle y total general."
+        : "Detalle, subtotales y total general.";
+    sheet.getCell("A2").font = { size: 11, color: { argb: "FF475569" } };
+    sheet.getCell("A2").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+    // Headers row
     sheet.addRow(table.headers);
-    sheet.getRow(2).font = { bold: true, color: { argb: "FFFFFFFF" } };
-    sheet.getRow(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+    const headerRow = sheet.getRow(3);
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+    headerRow.alignment = { horizontal: "center", vertical: "middle" };
+
+    // Data rows
+    const dataStartRow = 4;
     for (const row of table.rows) {
       sheet.addRow(row);
     }
-    sheet.views = [{ state: "frozen", ySplit: 2 }];
-    sheet.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: table.headers.length } };
+
+    const dataEndRow = dataStartRow + table.rows.length - 1;
+
+    // Alternating row colors
+    for (let rowNum = dataStartRow; rowNum <= dataEndRow; rowNum += 1) {
+      const currentRow = sheet.getRow(rowNum);
+      if ((rowNum - dataStartRow) % 2 === 0) {
+        currentRow.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+        });
+      }
+    }
+
+    // Section rows styling
+    if (includeSubtotals && table.sectionRows?.length) {
+      for (const sectionIndex of table.sectionRows) {
+        const sectionRowNum = dataStartRow + sectionIndex;
+        const sectionRow = sheet.getRow(sectionRowNum);
+        sectionRow.font = { bold: true, color: { argb: "FF0F172A" } };
+        sectionRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0F2FE" } };
+        sectionRow.eachCell((cell) => {
+          cell.border = {
+            top: { style: "thin", color: { argb: "FF0EA5E9" } },
+            left: { style: "thin", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+            right: { style: "thin", color: { argb: "FFE2E8F0" } },
+          };
+        });
+      }
+    }
+
+    // Total row
+    if (includeTotals) {
+      const totalRowCells = buildWorkScheduleTotalRow(table);
+      if (totalRowCells.length) {
+        const totalRow = sheet.addRow(totalRowCells);
+        totalRow.font = { bold: true, color: { argb: "FF0F172A" } };
+        totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
+        totalRow.alignment = { vertical: "middle" };
+        totalRow.eachCell((cell) => {
+          cell.border = {
+            top: { style: "medium", color: { argb: "FF10B981" } },
+            left: { style: "thin", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+            right: { style: "thin", color: { argb: "FFE2E8F0" } },
+          };
+        });
+      }
+    }
+
+    // Borders for all cells
+    sheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE2E8F0" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } },
+        };
+      });
+    });
+
+    sheet.views = [{ state: "frozen", ySplit: 3 }];
+    sheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: table.headers.length } };
     sheet.columns = table.headers.map((header, index) => ({
-      width: Math.max(header.length + 3, ...table.rows.map((row) => row[index]?.length ?? 0), 12),
+      width: Math.min(52, Math.max(header.length + 4, ...table.rows.map((row) => String(row[index] ?? "").length + 2), 14)),
     }));
   }
 
   return workbook.xlsx.writeBuffer();
+}
+
+function getExcelColumnLetter(columnNumber: number) {
+  let current = columnNumber;
+  let result = "";
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    current = Math.floor((current - 1) / 26);
+  }
+  return result;
+}
+
+const NON_NUMERIC_HEADER_PATTERNS = [
+  /^codigo$/i,
+  /^item$/i,
+  /^descripcion/i,
+  /^insumo$/i,
+  /^unidad$/i,
+  /^predecesora$/i,
+  /^inicio$/i,
+  /^fin$/i,
+  /^periodo$/i,
+  /^subpresupuesto$/i,
+  /^partidas(\scon\smonto)?$/i,
+  /^programadas$/i,
+  /^duracion/i,
+  /^cuadrilla$/i,
+  /^%\s*acumulado$/i,
+];
+
+function isNumericHeader(header: string) {
+  return !NON_NUMERIC_HEADER_PATTERNS.some((pattern) => pattern.test(header));
+}
+
+function buildWorkScheduleTotalRow(table: WorkScheduleExportTable) {
+  if (!table.rows.length) return [];
+  const totalCells: string[] = [];
+  for (let colIdx = 0; colIdx < table.headers.length; colIdx += 1) {
+    if (colIdx === 0) {
+      totalCells.push("TOTAL");
+    } else if (!isNumericHeader(table.headers[colIdx] ?? "")) {
+      totalCells.push("");
+    } else {
+      const sum = table.rows.reduce((accum, row) => {
+        const val = parseFloat(row[colIdx] ?? "");
+        return isNaN(val) ? accum : accum + val;
+      }, 0);
+      totalCells.push(sum > 0 ? String(sum) : "");
+    }
+  }
+  return totalCells;
 }
 
 function buildCsvContent(headers: string[], rows: string[][]) {

@@ -12,7 +12,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type UIEvent as ReactUIEvent,
 } from "react";
-import { CalendarDays, ChartSpline, ChevronDown, Info, MoreHorizontal, Package2, PenLine, PenSquare, Save, WandSparkles, X } from "lucide-react";
+import { CalendarDays, ChartSpline, ChevronDown, ChevronRight, Info, Package2, PenLine, PenSquare, Save, WandSparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,24 +66,8 @@ import { detectWorkScheduleDeviations } from "@/lib/work-schedule/progress";
 import { detectResourceOverallocations } from "@/lib/work-schedule/resource-capacity";
 import { buildWorkScheduleReschedulePreview, type WorkScheduleRescheduleImpact } from "@/lib/work-schedule/rescheduling";
 import {
-  buildWorkScheduleCsvExport,
   formatPeriodLabel,
-  buildWorkScheduleOverviewSummaryCsvExport,
-  buildWorkScheduleOverviewMonthlySummaryCsvExport,
-  buildWorkScheduleOverviewExecutivePackageCsvExport,
-  buildWorkScheduleOverviewExecutivePackageWorkbook,
-  buildWorkScheduleActiveViewWorkbook,
-  downloadTextFile,
-  downloadBinaryFile,
   formatTimelineRange,
-  getWorkbookExportTargetLabel,
-  getSupportedWorkbookProfiles,
-  getWorkbookExportProfileLabel,
-  getWorkbookExportScopeForView,
-  getWorkbookExportProfileFromScope,
-  getWorkbookExportScopeFromProfile,
-  buildWorkbookExportPreviewBadges,
-  describeWorkbookExportPreview,
 } from "./work-schedule/utils/export-helpers";
 
 type WorkSchedulePageContentProps = {
@@ -92,8 +76,6 @@ type WorkSchedulePageContentProps = {
 
 type ActiveView = "overview" | "valuation" | "resources" | "curve";
 type DerivedCalendarView = Exclude<ActiveView, "overview">;
-type WorkbookExportScope = "detail_only" | "detail_and_total" | "detail_subtotals_and_total";
-type WorkbookExportProfile = "minimal" | "executive" | "analytical";
 
 
 
@@ -213,6 +195,49 @@ function computeDurationFromRange(
   return fallback ?? 1;
 }
 
+function buildDependencyEditableLine(
+  targetLine: WorkScheduleLineRecord,
+  predecessor: string,
+  lineByCode: Map<string, WorkScheduleLineRecord>,
+): EditableLine {
+  const startDate = targetLine.startDate ?? "";
+  const endDate = targetLine.endDate ?? "";
+  const durationDays = computeDurationFromRange(startDate, endDate, targetLine.durationDays ?? 1);
+  const draftLine: WorkScheduleLineRecord = {
+    ...targetLine,
+    startDate,
+    endDate,
+    durationDays,
+    predecessor,
+  };
+  const recalculatedLine = recalculateWorkScheduleLineFromPredecessors(draftLine, lineByCode);
+
+  return {
+    budgetItemId: targetLine.budgetItemId,
+    itemCode: targetLine.itemCode,
+    description: targetLine.description,
+    quantity: targetLine.quantity,
+    unit: targetLine.unit,
+    unitPrice: targetLine.unitPrice,
+    partial: targetLine.partial,
+    performance: targetLine.performance ?? null,
+    subBudgetId: targetLine.subBudgetId,
+    subBudgetName: targetLine.subBudgetName,
+    startDate: recalculatedLine?.startDate ?? startDate,
+    endDate: recalculatedLine?.endDate ?? endDate,
+    durationDays: recalculatedLine?.durationDays ?? durationDays,
+    predecessor,
+    crew: targetLine.crew?.toString() ?? "",
+    monthlyDistributions: recalculatedLine?.monthlyDistributions ?? targetLine.monthlyDistributions,
+    isMilestone: targetLine.isMilestone ?? false,
+    baselineStartDate: targetLine.baselineStartDate ?? null,
+    baselineEndDate: targetLine.baselineEndDate ?? null,
+    actualStartDate: targetLine.actualStartDate ?? null,
+    actualEndDate: targetLine.actualEndDate ?? null,
+    percentComplete: targetLine.percentComplete ?? null,
+  };
+}
+
 function normalizeWorkScheduleView(data: WorkScheduleViewRecord): WorkScheduleViewRecord {
   return {
     ...data,
@@ -245,18 +270,6 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [showCriticalPath, setShowCriticalPath] = useState(() => readCriticalPathVisibility(normalizedInitialData.budgetId));
   const [nearCriticalSlackDays, setNearCriticalSlackDays] = useState(() => readNearCriticalSlackDays(normalizedInitialData.budgetId));
   const [resourceCalendarMode, setResourceCalendarMode] = useState<ResourceCalendarMode>(() => readResourceCalendarMode(normalizedInitialData.budgetId));
-  const [executiveWorkbookScope, setExecutiveWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readExecutiveWorkbookScope(normalizedInitialData.budgetId),
-  );
-  const [valuationWorkbookScope, setValuationWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readValuationWorkbookScope(normalizedInitialData.budgetId),
-  );
-  const [resourceWorkbookScope, setResourceWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readResourceWorkbookScope(normalizedInitialData.budgetId),
-  );
-  const [curveWorkbookScope, setCurveWorkbookScope] = useState<WorkbookExportScope>(() =>
-    readCurveWorkbookScope(normalizedInitialData.budgetId),
-  );
   const [overviewScrollRequest, setOverviewScrollRequest] = useState<number | null>(null);
   const [highlightedBudgetItemId, setHighlightedBudgetItemId] = useState<string | null>(null);
   const [hoveredItemCode, setHoveredItemCode] = useState<string | null>(null);
@@ -284,7 +297,6 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   const [generationSettingsSaveState, setGenerationSettingsSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [generationSettingsSaveError, setGenerationSettingsSaveError] = useState("");
   const [isLoadingGenerationSettings, setIsLoadingGenerationSettings] = useState(false);
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [reschedulePreview, setReschedulePreview] = useState<{
     open: boolean;
     impacts: WorkScheduleRescheduleImpact[];
@@ -301,7 +313,6 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     curve: "",
   });
   const [valuationRange, setValuationRange] = useState<PeriodRangeSelection>(() => createDefaultValuationRange(normalizedInitialData));
-  const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const basePredecessorMaps = useMemo(() => buildPredecessorRowNumberMaps(data.groups), [data.groups]);
   const generationLevelPreviewGroups = useMemo(() => buildGenerationLevelPreviewGroups(data.groups), [data.groups]);
   const effectiveReviewSummary = useMemo(
@@ -913,36 +924,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         ? [...existingPredecessors.map((ref) => formatPredecessorToken(ref.code, ref.relation, ref.lagDays)), newPredecessor].join(",")
         : newPredecessor;
 
-      // Recalculate durationDays from startDate/endDate to pass server-side
-      // validation (diffInDays + 1).
-      const startDate = targetLine.startDate ?? "";
-      const endDate = targetLine.endDate ?? "";
-      const durationDays = computeDurationFromRange(startDate, endDate, targetLine.durationDays ?? 1);
-
-      const editableLine: EditableLine = {
-        budgetItemId: targetLine.budgetItemId,
-        itemCode: targetLine.itemCode,
-        description: targetLine.description,
-        quantity: targetLine.quantity,
-        unit: targetLine.unit,
-        unitPrice: targetLine.unitPrice,
-        partial: targetLine.partial,
-        performance: targetLine.performance ?? null,
-        subBudgetId: targetLine.subBudgetId,
-        subBudgetName: targetLine.subBudgetName,
-        startDate,
-        endDate,
-        durationDays,
-        predecessor: mergedPredecessors,
-        crew: targetLine.crew?.toString() ?? "",
-        monthlyDistributions: targetLine.monthlyDistributions,
-        isMilestone: targetLine.isMilestone ?? false,
-        baselineStartDate: targetLine.baselineStartDate ?? null,
-        baselineEndDate: targetLine.baselineEndDate ?? null,
-        actualStartDate: targetLine.actualStartDate ?? null,
-        actualEndDate: targetLine.actualEndDate ?? null,
-        percentComplete: targetLine.percentComplete ?? null,
-      };
+      const editableLine = buildDependencyEditableLine(targetLine, mergedPredecessors, presentationLinesByCode);
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
       persistWorkScheduleLine(editableLine)
@@ -963,7 +945,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           });
         });
     },
-    [presentationLinesByCode],
+    [persistWorkScheduleLine, presentationLinesByCode],
   );
 
   const handleEditDependencySave = useCallback(
@@ -980,36 +962,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
         )
         .join(",");
 
-      // Recalculate durationDays from startDate/endDate to pass server-side
-      // validation (diffInDays + 1).
-      const startDate = targetLine.startDate ?? "";
-      const endDate = targetLine.endDate ?? "";
-      const durationDays = computeDurationFromRange(startDate, endDate, targetLine.durationDays ?? 1);
-
-      const editableLine: EditableLine = {
-        budgetItemId: targetLine.budgetItemId,
-        itemCode: targetLine.itemCode,
-        description: targetLine.description,
-        quantity: targetLine.quantity,
-        unit: targetLine.unit,
-        unitPrice: targetLine.unitPrice,
-        partial: targetLine.partial,
-        performance: targetLine.performance ?? null,
-        subBudgetId: targetLine.subBudgetId,
-        subBudgetName: targetLine.subBudgetName,
-        startDate,
-        endDate,
-        durationDays,
-        predecessor: updatedPredecessors,
-        crew: targetLine.crew?.toString() ?? "",
-        monthlyDistributions: targetLine.monthlyDistributions,
-        isMilestone: targetLine.isMilestone ?? false,
-        baselineStartDate: targetLine.baselineStartDate ?? null,
-        baselineEndDate: targetLine.baselineEndDate ?? null,
-        actualStartDate: targetLine.actualStartDate ?? null,
-        actualEndDate: targetLine.actualEndDate ?? null,
-        percentComplete: targetLine.percentComplete ?? null,
-      };
+      const editableLine = buildDependencyEditableLine(targetLine, updatedPredecessors, presentationLinesByCode);
 
       setInlineDrafts((current) => ({ ...current, [targetLine.budgetItemId]: editableLine }));
       persistWorkScheduleLine(editableLine)
@@ -1030,7 +983,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           });
         });
     },
-    [presentationLinesByCode],
+    [persistWorkScheduleLine, presentationLinesByCode],
   );
 
   const handleEditDependencyDelete = useCallback(
@@ -1197,40 +1150,6 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
   }, [data.budgetId, resourceCalendarMode]);
 
   useEffect(() => {
-    writeExecutiveWorkbookScope(data.budgetId, executiveWorkbookScope);
-  }, [data.budgetId, executiveWorkbookScope]);
-
-  useEffect(() => {
-    writeValuationWorkbookScope(data.budgetId, valuationWorkbookScope);
-  }, [data.budgetId, valuationWorkbookScope]);
-
-  useEffect(() => {
-    writeResourceWorkbookScope(data.budgetId, resourceWorkbookScope);
-  }, [data.budgetId, resourceWorkbookScope]);
-
-  useEffect(() => {
-    writeCurveWorkbookScope(data.budgetId, curveWorkbookScope);
-  }, [data.budgetId, curveWorkbookScope]);
-
-  useEffect(() => {
-    if (!isExportMenuOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-      if (!(target instanceof Node) || exportMenuRef.current?.contains(target)) {
-        return;
-      }
-
-      setIsExportMenuOpen(false);
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [isExportMenuOpen]);
-
-  useEffect(() => {
     writeEditingLineBudgetItemId(data.budgetId, editingLine?.budgetItemId ?? null);
   }, [data.budgetId, editingLine]);
 
@@ -1339,109 +1258,6 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
     setHighlightedBudgetItemId(editingLine.budgetItemId);
   }
 
-  function handleExportCsv() {
-    const periods = data.valuationCalendar?.periods ?? [];
-    const exportPayload = buildWorkScheduleCsvExport({
-      activeView,
-      overviewLines: filteredVisibleLines,
-      valuationRows: filteredValuationRows,
-      resourceRows: filteredResourceRows,
-      curvePoints: filteredCurveSeries,
-      periods,
-      currency: data.currency,
-      currencyDecimals,
-      dateFormat,
-    });
-
-    if (!exportPayload) {
-      return;
-    }
-
-    downloadTextFile(exportPayload.fileName, exportPayload.content, "text/csv;charset=utf-8;");
-  }
-
-  function handleExportOverviewSummaryCsv() {
-    const exportPayload = buildWorkScheduleOverviewSummaryCsvExport({
-      overviewLines: filteredVisibleLines,
-      currency: data.currency,
-      currencyDecimals,
-      dateFormat,
-    });
-
-    downloadTextFile(exportPayload.fileName, exportPayload.content, "text/csv;charset=utf-8;");
-  }
-
-  function handleExportOverviewMonthlySummaryCsv() {
-    const periods = data.valuationCalendar?.periods ?? [];
-    const exportPayload = buildWorkScheduleOverviewMonthlySummaryCsvExport({
-      valuationRows: filteredValuationRows,
-      periods,
-      currency: data.currency,
-      currencyDecimals,
-    });
-
-    downloadTextFile(exportPayload.fileName, exportPayload.content, "text/csv;charset=utf-8;");
-  }
-
-  function handleExportOverviewExecutivePackageCsv() {
-    const periods = data.valuationCalendar?.periods ?? [];
-    const exportPayload = buildWorkScheduleOverviewExecutivePackageCsvExport({
-      overviewLines: filteredVisibleLines,
-      valuationRows: filteredValuationRows,
-      periods,
-      currency: data.currency,
-      currencyDecimals,
-      dateFormat,
-    });
-
-    downloadTextFile(exportPayload.fileName, exportPayload.content, "text/csv;charset=utf-8;");
-  }
-
-  async function handleExportOverviewExecutivePackageXlsx() {
-    const periods = data.valuationCalendar?.periods ?? [];
-    const workbookBuffer = await buildWorkScheduleOverviewExecutivePackageWorkbook({
-      overviewLines: filteredVisibleLines,
-      valuationRows: filteredValuationRows,
-      periods,
-      currency: data.currency,
-      currencyDecimals,
-      dateFormat,
-      scope: executiveWorkbookScope,
-    });
-
-    downloadBinaryFile(
-      "work-schedule-cronograma-paquete-ejecutivo.xlsx",
-      workbookBuffer,
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    );
-  }
-
-  async function handleExportActiveViewXlsx() {
-    const periods = data.valuationCalendar?.periods ?? [];
-    const exportPayload = await buildWorkScheduleActiveViewWorkbook({
-      activeView,
-      valuationRows: filteredValuationRows,
-      resourceRows: filteredResourceRows,
-      curvePoints: filteredCurveSeries,
-      periods,
-      currency: data.currency,
-      currencyDecimals,
-      curveWorkbookScope,
-      valuationWorkbookScope,
-      resourceWorkbookScope,
-    });
-
-    if (!exportPayload) {
-      return;
-    }
-
-    downloadBinaryFile(
-      exportPayload.fileName,
-      exportPayload.content,
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    );
-  }
-
   return (
     <div className="space-y-5">
       <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
@@ -1511,220 +1327,34 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
                 </Button>
               ) : null}
               <ExportPanel
-                buttonLabel="Exportar central"
+                buttonLabel="Exportar"
                 className="h-10 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em]"
                 contextOptions={{ currencyDecimals }}
                 defaultPreset="cronograma_ejecutivo"
                 definition={getExportDefinition("work_schedule")}
                 targetId={data.budgetId}
               />
-              <div ref={exportMenuRef} className="relative flex h-10 items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
-                <button
-                  type="button"
-                  aria-label="Abrir acciones de exportacion"
-                  aria-haspopup="menu"
-                  aria-expanded={isExportMenuOpen}
-                  aria-controls="work-schedule-export-menu"
-                  onClick={() => setIsExportMenuOpen((current) => !current)}
-                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                >
-                  Exportar
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-                {isExportMenuOpen ? (
-                  <div
-                    id="work-schedule-export-menu"
-                    role="menu"
-                    aria-label="Acciones de exportacion del cronograma"
-                    className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-64 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        setIsExportMenuOpen(false);
-                      }
-                    }}
-                  >
-                    <WorkScheduleExportMenuButton
-                      label="Exportar CSV"
-                      onClick={() => {
-                        handleExportCsv();
-                        setIsExportMenuOpen(false);
-                      }}
-                    />
-                    {activeView !== "overview" ? (
-                      <WorkScheduleExportMenuButton
-                        label="Exportar XLSX"
-                        onClick={() => {
-                          void handleExportActiveViewXlsx();
-                          setIsExportMenuOpen(false);
-                        }}
-                      />
-                    ) : null}
-                    {activeView === "overview" ? (
-                      <>
-                        <div className="my-1 border-t border-[var(--app-border-soft)]" />
-                        <WorkScheduleExportMenuButton
-                          label="Exportar resumen CSV"
-                          onClick={() => {
-                            handleExportOverviewSummaryCsv();
-                            setIsExportMenuOpen(false);
-                          }}
-                        />
-                        <WorkScheduleExportMenuButton
-                          label="Exportar resumen mensual CSV"
-                          onClick={() => {
-                            handleExportOverviewMonthlySummaryCsv();
-                            setIsExportMenuOpen(false);
-                          }}
-                        />
-                        <WorkScheduleExportMenuButton
-                          label="Exportar paquete ejecutivo CSV"
-                          onClick={() => {
-                            handleExportOverviewExecutivePackageCsv();
-                            setIsExportMenuOpen(false);
-                          }}
-                        />
-                        <WorkScheduleExportMenuButton
-                          label="Exportar paquete ejecutivo XLSX"
-                          onClick={() => {
-                            void handleExportOverviewExecutivePackageXlsx();
-                            setIsExportMenuOpen(false);
-                          }}
-                        />
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+
             </div>
           </div>
 
-          {activeView === "overview" || activeView === "valuation" || activeView === "resources" || activeView === "curve" ? (
-            <div className="space-y-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-[var(--app-text)]">Preferencias de exportacion XLSX:</span>
-                <span className="text-xs text-[var(--app-text-muted)]">{getWorkbookExportTargetLabel(activeView)}</span>
-                <span className="text-xs font-medium text-[var(--app-text-muted)]">Perfiles:</span>
-                {getSupportedWorkbookProfiles(activeView).map((profile) => (
-                  <ExportPreferenceButton
-                    key={profile}
-                    active={
-                      getWorkbookExportProfileFromScope(activeView, getWorkbookExportScopeForView(activeView, {
-                        executiveWorkbookScope,
-                        valuationWorkbookScope,
-                        resourceWorkbookScope,
-                        curveWorkbookScope,
-                      })) === profile
-                    }
-                    onClick={() => {
-                      const nextScope = getWorkbookExportScopeFromProfile(activeView, profile);
-                      if (activeView === "overview") {
-                        setExecutiveWorkbookScope(nextScope);
-                        return;
-                      }
 
-                      if (activeView === "valuation") {
-                        setValuationWorkbookScope(nextScope);
-                        return;
-                      }
-
-                      if (activeView === "resources") {
-                        setResourceWorkbookScope(nextScope);
-                        return;
-                      }
-
-                      setCurveWorkbookScope(nextScope);
-                    }}
-                  >
-                    {getWorkbookExportProfileLabel(profile)}
-                  </ExportPreferenceButton>
-                ))}
-                <span className="text-xs font-medium text-[var(--app-text-muted)]">Alcance:</span>
-                {activeView === "overview" ? (
-                  <>
-                    <ExportPreferenceButton active={executiveWorkbookScope === "detail_only"} onClick={() => setExecutiveWorkbookScope("detail_only")}>
-                      Solo detalle
-                    </ExportPreferenceButton>
-                    <ExportPreferenceButton active={executiveWorkbookScope === "detail_and_total"} onClick={() => setExecutiveWorkbookScope("detail_and_total")}>
-                      Detalle + total
-                    </ExportPreferenceButton>
-                    <ExportPreferenceButton
-                      active={executiveWorkbookScope === "detail_subtotals_and_total"}
-                      onClick={() => setExecutiveWorkbookScope("detail_subtotals_and_total")}
-                    >
-                      Detalle + subtotales + total
-                    </ExportPreferenceButton>
-                  </>
-                ) : null}
-                {activeView === "valuation" ? (
-                  <>
-                    <ExportPreferenceButton active={valuationWorkbookScope === "detail_only"} onClick={() => setValuationWorkbookScope("detail_only")}>
-                      Solo detalle
-                    </ExportPreferenceButton>
-                    <ExportPreferenceButton active={valuationWorkbookScope === "detail_and_total"} onClick={() => setValuationWorkbookScope("detail_and_total")}>
-                      Detalle + total
-                    </ExportPreferenceButton>
-                    <ExportPreferenceButton
-                      active={valuationWorkbookScope === "detail_subtotals_and_total"}
-                      onClick={() => setValuationWorkbookScope("detail_subtotals_and_total")}
-                    >
-                      Detalle + subtotales + total
-                    </ExportPreferenceButton>
-                  </>
-                ) : null}
-                {activeView === "resources" ? (
-                  <>
-                    <ExportPreferenceButton active={resourceWorkbookScope === "detail_only"} onClick={() => setResourceWorkbookScope("detail_only")}>
-                      Solo detalle
-                    </ExportPreferenceButton>
-                    <ExportPreferenceButton active={resourceWorkbookScope === "detail_and_total"} onClick={() => setResourceWorkbookScope("detail_and_total")}>
-                      Detalle + total
-                    </ExportPreferenceButton>
-                    <ExportPreferenceButton
-                      active={resourceWorkbookScope === "detail_subtotals_and_total"}
-                      onClick={() => setResourceWorkbookScope("detail_subtotals_and_total")}
-                    >
-                      Detalle + subtotales + total
-                    </ExportPreferenceButton>
-                  </>
-                ) : null}
-                {activeView === "curve" ? (
-                  <>
-                    <ExportPreferenceButton active={curveWorkbookScope === "detail_only"} onClick={() => setCurveWorkbookScope("detail_only")}>
-                      Solo detalle
-                    </ExportPreferenceButton>
-                    <ExportPreferenceButton active={curveWorkbookScope === "detail_and_total"} onClick={() => setCurveWorkbookScope("detail_and_total")}>
-                      Detalle + total
-                    </ExportPreferenceButton>
-                  </>
-                ) : null}
+          {activeView === "overview" ? (
+            <details className="group overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden">
+                <span className="text-sm font-semibold text-[var(--app-text-strong)]">Panel de desviaciones y Lookahead de obra</span>
+                <ChevronRight
+                  className="h-4 w-4 text-[var(--app-text-muted)] transition group-open:rotate-90"
+                  aria-hidden="true"
+                />
+              </summary>
+              <div className="space-y-4 border-t border-[var(--app-border-soft)] p-4">
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <ScheduleDeviationPanel deviations={scheduleDeviations} />
+                  <LookaheadView lines={presentationLines} asOfDate={asOfDate} />
+                </div>
               </div>
-              <p className="text-xs text-[var(--app-text-muted)]">
-                {describeWorkbookExportPreview(activeView, {
-                  executiveWorkbookScope,
-                  valuationWorkbookScope,
-                  resourceWorkbookScope,
-                  curveWorkbookScope,
-                })}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {buildWorkbookExportPreviewBadges(
-                  activeView,
-                  {
-                    executiveWorkbookScope,
-                    valuationWorkbookScope,
-                    resourceWorkbookScope,
-                    curveWorkbookScope,
-                  },
-                ).map((badge) => (
-                  <span
-                    key={badge}
-                    className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-text-muted)]"
-                  >
-                    {badge}
-                  </span>
-                ))}
-              </div>
-            </div>
+            </details>
           ) : null}
 
           {overviewFilter !== "all" ? (
@@ -1824,13 +1454,6 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           hoveredItemCode={hoveredItemCode}
           onHoverItemCode={setHoveredItemCode}
         />
-      ) : null}
-
-      {activeView === "overview" ? (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <ScheduleDeviationPanel deviations={scheduleDeviations} />
-          <LookaheadView lines={presentationLines} asOfDate={asOfDate} />
-        </div>
       ) : null}
 
       {activeView === "valuation" ? (
@@ -2501,95 +2124,6 @@ function ViewButton({
   );
 }
 
-function ExportPreferenceButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-3 py-1 text-xs transition",
-        active
-          ? "theme-filter-button-active border text-[var(--app-text-strong)]"
-          : "theme-filter-button-inactive border text-[var(--app-text)]",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function WorkScheduleExportMenuButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-[var(--app-text)] transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
-    >
-      {label}
-    </button>
-  );
-}
-
-function Field({ label, children, tooltip }: { label: string; children: React.ReactNode; tooltip?: string }) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const wrapperRef = useRef<HTMLSpanElement | null>(null);
-
-  useEffect(() => {
-    if (!showTooltip) return;
-
-    function handlePointerDown(event: PointerEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setShowTooltip(false);
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [showTooltip]);
-
-  return (
-    <label className="space-y-2 text-sm">
-      <span className="inline-flex items-center gap-1.5 font-medium text-[var(--app-text)]">
-        {label}
-        {tooltip ? (
-          <span ref={wrapperRef} className="relative inline-flex">
-            <Info
-              className="h-3.5 w-3.5 cursor-pointer text-[var(--app-text-muted)] transition-colors hover:text-sky-500"
-              onClick={(event) => {
-                event.preventDefault();
-                setShowTooltip((current) => !current);
-              }}
-            />
-            {showTooltip ? (
-              <span
-                className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 w-72 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1.5 text-[11px] font-normal leading-snug text-[var(--app-text)] shadow-lg whitespace-normal"
-              >
-                {tooltip}
-              </span>
-            ) : null}
-          </span>
-        ) : null}
-      </span>
-      {children}
-    </label>
-  );
-}
-
 type TimelineDay = {
   iso: string;
   date: Date;
@@ -2693,22 +2227,6 @@ function getOverviewFilterStorageKey(budgetId: string) {
 
 function getOverviewMeasuredHeightsStorageKey(budgetId: string) {
   return `work-schedule-overview-measured-heights:${budgetId}`;
-}
-
-function getExecutiveWorkbookScopeStorageKey(budgetId: string) {
-  return `work-schedule-executive-workbook-scope:${budgetId}`;
-}
-
-function getValuationWorkbookScopeStorageKey(budgetId: string) {
-  return `work-schedule-valuation-workbook-scope:${budgetId}`;
-}
-
-function getResourceWorkbookScopeStorageKey(budgetId: string) {
-  return `work-schedule-resource-workbook-scope:${budgetId}`;
-}
-
-function getCurveWorkbookScopeStorageKey(budgetId: string) {
-  return `work-schedule-curve-workbook-scope:${budgetId}`;
 }
 
 function getGenerationStrategyStorageKey(budgetId: string) {
@@ -3395,112 +2913,6 @@ function sanitizeMeasuredHeightsMap(input: unknown) {
 
   return next;
 }
-
-
-function readExecutiveWorkbookScope(budgetId: string): WorkbookExportScope {
-  if (typeof window === "undefined") {
-    return "detail_subtotals_and_total";
-  }
-
-  const storedValue = window.localStorage.getItem(getExecutiveWorkbookScopeStorageKey(budgetId));
-  if (storedValue === "detail_only" || storedValue === "detail_and_total" || storedValue === "detail_subtotals_and_total") {
-    return storedValue;
-  }
-
-  return "detail_subtotals_and_total";
-}
-
-function writeExecutiveWorkbookScope(budgetId: string, scope: WorkbookExportScope) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (scope === "detail_subtotals_and_total") {
-    window.localStorage.removeItem(getExecutiveWorkbookScopeStorageKey(budgetId));
-    return;
-  }
-
-  window.localStorage.setItem(getExecutiveWorkbookScopeStorageKey(budgetId), scope);
-}
-
-function readValuationWorkbookScope(budgetId: string): WorkbookExportScope {
-  if (typeof window === "undefined") {
-    return "detail_subtotals_and_total";
-  }
-
-  const storedValue = window.localStorage.getItem(getValuationWorkbookScopeStorageKey(budgetId));
-  if (storedValue === "detail_only" || storedValue === "detail_and_total" || storedValue === "detail_subtotals_and_total") {
-    return storedValue;
-  }
-
-  return "detail_subtotals_and_total";
-}
-
-function writeValuationWorkbookScope(budgetId: string, scope: WorkbookExportScope) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (scope === "detail_subtotals_and_total") {
-    window.localStorage.removeItem(getValuationWorkbookScopeStorageKey(budgetId));
-    return;
-  }
-
-  window.localStorage.setItem(getValuationWorkbookScopeStorageKey(budgetId), scope);
-}
-
-function readResourceWorkbookScope(budgetId: string): WorkbookExportScope {
-  if (typeof window === "undefined") {
-    return "detail_subtotals_and_total";
-  }
-
-  const storedValue = window.localStorage.getItem(getResourceWorkbookScopeStorageKey(budgetId));
-  if (storedValue === "detail_only" || storedValue === "detail_and_total" || storedValue === "detail_subtotals_and_total") {
-    return storedValue;
-  }
-
-  return "detail_subtotals_and_total";
-}
-
-function writeResourceWorkbookScope(budgetId: string, scope: WorkbookExportScope) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (scope === "detail_subtotals_and_total") {
-    window.localStorage.removeItem(getResourceWorkbookScopeStorageKey(budgetId));
-    return;
-  }
-
-  window.localStorage.setItem(getResourceWorkbookScopeStorageKey(budgetId), scope);
-}
-
-function readCurveWorkbookScope(budgetId: string): WorkbookExportScope {
-  if (typeof window === "undefined") {
-    return "detail_and_total";
-  }
-
-  const storedValue = window.localStorage.getItem(getCurveWorkbookScopeStorageKey(budgetId));
-  if (storedValue === "detail_only" || storedValue === "detail_and_total") {
-    return storedValue;
-  }
-
-  return "detail_and_total";
-}
-
-function writeCurveWorkbookScope(budgetId: string, scope: WorkbookExportScope) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (scope === "detail_and_total") {
-    window.localStorage.removeItem(getCurveWorkbookScopeStorageKey(budgetId));
-    return;
-  }
-
-  window.localStorage.setItem(getCurveWorkbookScopeStorageKey(budgetId), scope);
-}
-
 function calculateOverviewScrollTarget(startDate: string, timelineDays: TimelineDay[], timelineDayIndexByIso?: Map<string, number>) {
   if (!startDate) {
     return 0;

@@ -217,6 +217,27 @@ export function WorkScheduleOverview({
   const [timelinePanelWidth, setTimelinePanelWidth] = useState(() => readOverviewTimelinePanelWidth(data.budgetId));
   const timelinePanelWidthRef = useRef(timelinePanelWidth);
   const pendingViewportMeasureFrameRef = useRef<number | null>(null);
+  // Live width of the horizontal scroll container, observed through a
+  // ResizeObserver so the GanttMiniMap viewport indicator stays in sync
+  // with the actual layout (padding, resize-handle width, runtime
+  // resizing) instead of a static timelinePanelWidth - 24 calculation.
+  const [scrollContainerWidth, setScrollContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const node = scrollContainerRef.current;
+    if (!node || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const update = () => {
+      setScrollContainerWidth(node.clientWidth);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   const [showCostColumns, setShowCostColumns] = useState(() => readOverviewCostColumnsVisibility(data.budgetId));
   const [timelineZoomPercent, setTimelineZoomPercent] = useState(() => readOverviewTimelineZoomPercent(data.budgetId));
   const [tableGroupHeights, setTableGroupHeights] = useState<Record<string, number>>(
@@ -1209,7 +1230,7 @@ export function WorkScheduleOverview({
         <div
           ref={verticalScrollContainerRef}
           data-testid="work-schedule-overview-vertical-scroll"
-          className="max-h-[68vh] overflow-y-auto px-4 pb-2"
+          className="max-h-[85vh] overflow-y-auto px-4 pb-2"
           onScroll={handleVerticalOverviewScroll}
         >
           <div ref={overviewCanvasRef} className="relative">
@@ -1359,7 +1380,7 @@ export function WorkScheduleOverview({
               data-testid="work-schedule-timeline-panel"
               suppressHydrationWarning
               className={cn(
-                "absolute right-0 top-0 bottom-0 z-30 overflow-hidden border bg-[var(--app-surface)]",
+                "absolute right-0 top-0 bottom-0 z-30 flex flex-col overflow-hidden border bg-[var(--app-surface)]",
                 isExcelMode ? "rounded-none border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border-[var(--app-border)] shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)]",
               )}
               style={{ width: `var(${OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR}, ${timelinePanelWidth}px)` }}
@@ -1376,10 +1397,11 @@ export function WorkScheduleOverview({
               </div>
 
               {hasDailyTimeline ? (
+                <>
                 <div
                   ref={scrollContainerRef}
                   data-testid="work-schedule-overview-scroll"
-                  className="h-full overflow-x-auto overflow-y-hidden pl-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pl-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   onScroll={handleOverviewScroll}
                 >
                   <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }} className="text-xs">
@@ -1407,9 +1429,8 @@ export function WorkScheduleOverview({
                               hoveredItemCode === codes.predecessorCode || hoveredItemCode === codes.successorCode
                             );
                             const isDimmed = hoveredItemCode != null && !isRelated;                              return (
-                                <>
+                                <g key={pathKey}>
                                   <path
-                                    key={`${pathKey}-hit`}
                                     d={path.d}
                                     fill="none"
                                     stroke="transparent"
@@ -1439,7 +1460,6 @@ export function WorkScheduleOverview({
                               }}
                             />
                             <path
-                              key={pathKey}
                               d={path.d}
                               fill="none"
                               stroke={isRelated ? "#2563EB" : "#64748b"}
@@ -1451,7 +1471,7 @@ export function WorkScheduleOverview({
                                 isRelated ? "opacity-100" : isDimmed ? "opacity-20" : "hover:stroke-sky-500 hover:stroke-[2.5] opacity-60",
                               )}
                             />
-                                </>
+                                </g>
                           );
                         }
                       )}
@@ -1565,27 +1585,48 @@ export function WorkScheduleOverview({
                         ))}
                       </div>
                     </div>
-                    {hasDailyTimeline ? (
-                      <div className="border-t border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-2.5 py-1.5">
-                        <GanttMiniMap
-                          allLines={allLines}
-                          timelineDayIndexByIso={timelineDayIndexByIso}
-                          timelineContentWidth={timelineContentWidth}
-                          timelineDayCount={timelineDays.length}
-                          scrollLeft={scrollLeft}
-                          viewportWidth={leftTableViewportWidth ?? 600}
-                          showCriticalPath={showCriticalPath}
-                          nearCriticalSlackDays={nearCriticalSlackDays}
-                          onScrollTo={(targetScrollLeft) => {
+                  </div>
+                </div>
+                <div
+                  data-testid="gantt-minimap-wrapper"
+                  className={cn(
+                    "shrink-0 border-t border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-3 py-2",
+                    isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border-soft)]",
+                  )}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-3 text-[var(--app-text-muted)]">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">Mini-mapa del cronograma</span>
+                    <span className="text-[10px] font-normal tracking-normal">Arrastra o haz clic para navegar</span>
+                  </div>
+                  <GanttMiniMap
+                    allLines={allLines}
+                    timelineDayIndexByIso={timelineDayIndexByIso}
+                    timelineContentWidth={timelineContentWidth}
+                    timelineDayCount={timelineDays.length}
+                    scrollLeft={scrollLeft}                          viewportWidth={scrollContainerWidth || Math.max(120, timelinePanelWidth - 24)}
+                          // Fallback (constant subtraction) only fires before the ResizeObserver
+                          // commits the first measurement; afterwards the live clientWidth wins.
+                    showCriticalPath={showCriticalPath}
+                    nearCriticalSlackDays={nearCriticalSlackDays}                          onScrollTo={(targetScrollLeft) => {
                             if (scrollContainerRef.current) {
                               scrollContainerRef.current.scrollLeft = targetScrollLeft;
                             }
+                            if (timelineBottomScrollRef.current) {
+                              timelineBottomScrollRef.current.scrollLeft = targetScrollLeft;
+                            }
+                            // Update React state synchronously so the GanttMiniMap
+                            // viewport indicator tracks the drag in real time.
+                            // The DOM-level scrollLeft assignment alone updates the
+                            // gantt content, but the React state would otherwise
+                            // only commit on the next rAF committed by the browser-
+                            // fired `scroll` event in handleOverviewScroll, and a
+                            // continuous drag cancels that rAF on every pointermove
+                            // before it can fire — leaving the indicator stuck.
+                            setScrollLeft(targetScrollLeft);
                           }}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
+                  />
                 </div>
+                </>
               ) : (
                 <div className="flex h-full items-center justify-center px-8">
                   <div className="max-w-md rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] p-6 text-sm text-[var(--app-text-muted)]">
@@ -2469,6 +2510,8 @@ export function buildTimelineDependencyConnector({
   const sourceDropOffset = 15;
   const arrowOffset = 6;
   const minimumFinalSegment = 10;
+  const sourceUsesEnd = predecessorReference.relation === "FS" || predecessorReference.relation === "FF";
+  const targetUsesStart = predecessorReference.relation === "FS" || predecessorReference.relation === "SS";
   const sameDayOrNextDayDelta = (leftIndex: number, rightIndex: number) => rightIndex - leftIndex;
   const isSameDayHandoff =
     (predecessorReference.relation === "FS" &&
@@ -2480,34 +2523,22 @@ export function buildTimelineDependencyConnector({
     (predecessorReference.relation === "SF" &&
       sameDayOrNextDayDelta(predecessorStartIndex, successorEndIndex) <= 1);
 
-  const sourceX =
-    predecessorReference.relation === "FS" || predecessorReference.relation === "FF"
-      ? predecessorEndX
-      : predecessorStartX;
-  const targetX =
-    predecessorReference.relation === "FS" || predecessorReference.relation === "SS"
-      ? successorStartX
-      : successorEndX;
-  const targetApproachX =
-    predecessorReference.relation === "FS" || predecessorReference.relation === "SS"
-      ? Math.max(0, targetX - arrowOffset)
-      : targetX + arrowOffset;
-  const elbowX =
-    predecessorReference.relation === "FS" || predecessorReference.relation === "FF"
-      ? Math.min(
-          Math.max(sourceX + elbowOffset, targetApproachX - elbowOffset),
-          targetApproachX - minimumFinalSegment,
-        )
-      : Math.max(
-          Math.min(sourceX - elbowOffset, targetApproachX + elbowOffset),
-          targetApproachX + minimumFinalSegment,
-        );
+  const sourceX = sourceUsesEnd ? predecessorEndX : predecessorStartX;
+  const targetX = targetUsesStart ? successorStartX : successorEndX;
+  const targetApproachX = targetUsesStart ? Math.max(0, targetX - arrowOffset) : targetX + arrowOffset;
+  const preferredSourceElbowX = sourceUsesEnd ? sourceX + elbowOffset : sourceX - elbowOffset;
+  const elbowX = targetUsesStart
+    ? Math.min(preferredSourceElbowX, targetApproachX - minimumFinalSegment)
+    : Math.max(preferredSourceElbowX, targetApproachX + minimumFinalSegment);
+
   if (!isSameDayHandoff) {
     return `M ${sourceX} ${predecessorY} H ${elbowX} V ${successorY} H ${targetApproachX} H ${targetX}`;
   }
 
-  const sourceExitX = Math.max(sourceX + sourceExitOffset, elbowX + elbowOffset);
-  const breakY = predecessorY + sourceDropOffset;
+  const sourceExitX = sourceUsesEnd
+    ? Math.max(sourceX + sourceExitOffset, elbowX + elbowOffset)
+    : Math.min(sourceX - sourceExitOffset, elbowX - elbowOffset);
+  const breakY = predecessorY + (successorY >= predecessorY ? sourceDropOffset : -sourceDropOffset);
 
   return `M ${sourceX} ${predecessorY} H ${sourceExitX} V ${breakY} H ${elbowX} V ${successorY} H ${targetApproachX} H ${targetX}`;
 }

@@ -26,6 +26,8 @@ export type ExportPreset =
   | "curva_s"
   | "proyecto_completo_mcp";
 
+export type WorkbookExportScope = "detail_only" | "detail_and_total" | "detail_subtotals_and_total";
+
 export type ExportOptions = {
   scope: ExportScope;
   columns: string[];
@@ -40,6 +42,7 @@ export type ExportOptions = {
   includeCriticalPath: boolean;
   pdfOrientation: PdfOrientation;
   fileName?: string;
+  workbookScope?: WorkbookExportScope;
 };
 
 export type ExportRequest = {
