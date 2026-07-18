@@ -466,7 +466,7 @@ function buildResourceHandlers(mockDb: MockDb): MockTx["resource"] {
       if (args?.where?.id) {
         const res = mockDb.resources.get(args.where.id);
         if (!res) return null;
-        if (args.include?.apuResources === true) {
+        if (args.include?.apuResources) {
           // Model the include path: attach apuResources from the aux Map.
           return {
             ...res,
