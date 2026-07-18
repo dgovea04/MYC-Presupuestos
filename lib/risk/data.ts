@@ -116,6 +116,7 @@ export async function saveRiskVariables(
         await tx.riskVariable.deleteMany({
           where: {
             budgetId,
+            scenarioId: null,
             budgetItemId: variable.budgetItemId,
             variableType: variable.variableType,
           },
@@ -123,25 +124,14 @@ export async function saveRiskVariables(
         continue;
       }
 
-      await tx.riskVariable.upsert({
+      const updated = await tx.riskVariable.updateMany({
         where: {
-          budgetId_budgetItemId_variableType: {
-            budgetId,
-            budgetItemId: variable.budgetItemId,
-            variableType: variable.variableType,
-          },
-        },
-        update: {
-          distributionType: variable.distributionType,
-          minimum: variable.minimum,
-          mostLikely: variable.mostLikely,
-          maximum: variable.maximum,
-          enabled: variable.enabled,
-        },
-        create: {
           budgetId,
+          scenarioId: null,
           budgetItemId: variable.budgetItemId,
           variableType: variable.variableType,
+        },
+        data: {
           distributionType: variable.distributionType,
           minimum: variable.minimum,
           mostLikely: variable.mostLikely,
@@ -149,6 +139,22 @@ export async function saveRiskVariables(
           enabled: variable.enabled,
         },
       });
+
+      if (updated.count === 0) {
+        await tx.riskVariable.create({
+          data: {
+            budgetId,
+            scenarioId: null,
+            budgetItemId: variable.budgetItemId,
+            variableType: variable.variableType,
+            distributionType: variable.distributionType,
+            minimum: variable.minimum,
+            mostLikely: variable.mostLikely,
+            maximum: variable.maximum,
+            enabled: variable.enabled,
+          },
+        });
+      }
     }
   });
 
@@ -171,6 +177,7 @@ export async function saveRiskCorrelations(
   const variables = await prisma.riskVariable.findMany({
     where: {
       budgetId,
+      scenarioId: null,
       budgetItemId: { in: [...scopedItemIds] },
     },
   });
@@ -188,6 +195,7 @@ export async function saveRiskCorrelations(
         await tx.riskCorrelation.deleteMany({
           where: {
             budgetId,
+            scenarioId: null,
             sourceVariableId: normalized.sourceVariableId,
             targetVariableId: normalized.targetVariableId,
           },
@@ -241,12 +249,13 @@ export async function saveRiskSimulationRun(
     prisma.riskVariable.findMany({
       where: {
         budgetId,
+        scenarioId: null,
         budgetItemId: { in: scopedItemIds },
       },
       orderBy: { createdAt: "asc" },
     }),
     prisma.riskCorrelation.findMany({
-      where: { budgetId },
+      where: { budgetId, scenarioId: null },
       orderBy: { createdAt: "asc" },
     }),
   ]);
@@ -508,16 +517,17 @@ async function queryAndSerializeRiskData(
     prisma.riskVariable.findMany({
       where: {
         budgetId,
+        scenarioId: null,
         budgetItemId: { in: scopedItemIds },
       },
       orderBy: { createdAt: "asc" },
     }),
     prisma.riskCorrelation.findMany({
-      where: { budgetId },
+      where: { budgetId, scenarioId: null },
       orderBy: { createdAt: "asc" },
     }),
     prisma.riskSimulationRun.findFirst({
-      where: { budgetId },
+      where: { budgetId, scenarioId: null },
       orderBy: { createdAt: "desc" },
     }),
   ]);
