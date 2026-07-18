@@ -229,6 +229,138 @@ llamarse dentro de `beforeAll` o antes de los tests. Funciona correctamente
 en vitest pero pierde algunas de las features automatic mock-reset de
 `vi.mock`.
 
+## Materialized consumers
+
+Tres Pattern C consumers han rendereado este spec en codigo real:
+
+1. **`lib/data/work-schedule-section.test.ts`** — 4 tests verde contra
+   `getWorkScheduleSection`. Materializa el Pattern C demo descrito en
+   §"Two usage modes" sin variacion. Verificado en commit `9e6fb52`.
+
+2. **`lib/data/resources-bundle.test.ts`** — 14 tests verde contra
+   `resourceMutationTouchesGlobalCatalog` + `prisma.resource.{findMany,
+   count, findFirst, create, update, delete}`. Primera extension del
+   modulo shared a un handler no-work-schedule (`prisma.resource.*`).
+   Demuestra el flujo de extension detallado en §"Extension guide".
+   Verificado en commit `126aa90`.
+
+3. **`lib/data/resources-mutating-bundle.test.ts`** — 15 tests verde contra
+   `createResource`, `createResourceForUser`, `updateResource`,
+   `deleteResource`, `saveResourcesPatch`. Segunda extension: introduce
+   un **`vi.mock` adicional** sobre `@/lib/workspace/access` como
+   **Pattern D** (multi-layer mock). Verificado en commit `261230e`.
+
+### Pattern D: multi-layer mock (workspace + prisma stubs)
+
+Cuando el codigo bajo test depende transitivamente de **multiples modulos**
+que requieren mocks (e.g. mutating resource flows dependen de `prisma` Y de
+`@/lib/workspace/access`), anadir `vi.mock` adicionales. Cada uno es
+independiente; el orden no importa (vitest los hoistea todos antes de los
+static imports):
+
+```typescript
+// Mock layer 1 — Prisma in-memory
+vi.mock("@/lib/db/prisma", async () => {
+  const { makeMockDb } = await import("@/lib/data/__mocks__/in-memory-prisma");
+  bundleRef.current = makeMockDb();
+  return { prisma: bundleRef.current.prismaMock };
+});
+
+// Mock layer 2 — workspace access (stub via vi.mock, NO via vi.spyOn)
+vi.mock("@/lib/workspace/access", () => ({
+  assertWorkspaceMembership: vi.fn().mockResolvedValue({
+    companyId: "company-mock",
+    role: "ADMIN",
+  }),
+}));
+
+// Static imports - codigo bajo test + workspace mock fn (vitest auto-typea)
+import { saveResourcesPatch } from "@/lib/data/resources";
+import { assertWorkspaceMembership } from "@/lib/workspace/access";
+
+// Tests pueden verificar el stub:
+expect(assertWorkspaceMembership).toHaveBeenCalledWith(
+  expect.objectContaining({ userId, companyId, minimumRole: "EDITOR" }),
+);
+```
+
+Para forzar comportamiento especifico del stub en un test particular:
+
+```typescript
+vi.mocked(assertWorkspaceMembership).mockRejectedValueOnce(
+  new Error("Forbidden: user is not a member of company"),
+);
+```
+
+Reset entre tests via `vi.mocked(...).mockClear()` en `afterEach`.
+
+### Pattern variants summary
+
+- **Pattern A** (vi.doMock): mas simple pero pierde auto-reset; OK para
+  test suites pequenos con un solo consumer.
+- **Pattern C** (vi.mock + vi.hoisted sync shell): canónico para multi-
+  consumer reuse. Verificado en 3 tests ahora.
+- **Pattern D** (Pattern C + vi.mock adicionales): extension para codigo
+  bajo test con dependencias transitivas que requieren mocks.
+
+## When to type handler returns
+
+Inicialmente el modulo shared retornaba `Promise<unknown[]>` /
+`Promise<unknown>` para los handlers de `prisma.resource.*` y
+`tx.workScheduleItem.*`. Esto forzaba a los consumers a usar
+`as MockResource[]` (o equivalente) en cada callsite. Round 6 refactorizo
+a retornos tipeados para eliminar los 15 casts en `resources-bundle.test.ts`.
+
+### Breakpoint criteria
+
+De Round 5 → Round 6 registro empirico:
+
+| Criterio | Threshold | Justificación |
+|----------|-----------|---------------|
+| N consumers del handler | N >= 2 | 1 consumer tolera el cast; >= 2 justifica refactor estructural en el handler. |
+| Ratio casts/LOC en consumer | >= 1 cast per 30 LOC | Indica friccion sistematico en el consumer, no anecdote. |
+| Handler read vs write | read | Casts prevalentes en validacion de filter results. |
+| Consumer dense unwrapping | acceso a > 3 fields del result | Cada field access con cast es overhead. |
+
+Si 2+ criterios se cumplen para un handler, hacer el refactor. Round 6
+aplico a `prisma.resource.{findMany, findFirst}` + `tx.workScheduleItem.
+{findUnique, findMany}` que cumplieron los 4 criterios.
+
+### Decision algo
+
+```text
+1. Override del return es trivial (1-line `Promise<unknown[]>` →
+   `Promise<MockResource[]>` sin overload interfaces necesarios)?
+   SI: hacer proactivamente en round 1 del modulo. NO requiere Pattern
+   decision-tree, es mecanico.
+2. Requiere overload interfaces con multiples call signatures
+   (select / include / projection narrowing)?
+   SI: evitarlas. vitest's `MockedFunction<X>` colapsa overloads al
+   signature LAST en callsite resolution (TS18046 / TS2353). En su
+   lugar, hacer el handler devolver UNA forma completa + campos
+   opcionales en el tipo del entity. Ver trade-off documentado en el
+   header de `in-memory-prisma.ts`.
+3. Handler es read-only (find / get / count) vs write
+   (create / update / delete)?
+   READ: typing primero. Casts prevalentes en validation de filter
+   results.
+   WRITE: typing primero si el consumer necesita seed del return value
+   para validaciones downstream (id, timestamps).
+```
+
+### Trade-off conocido: fidelity vs typing
+
+Round 6 dropped Prisma's projection behavior en
+`prisma.resource.findMany({select: { code: true }})`: el mock ahora
+devuelve full `MockResource[]` en vez de `{code: string}[]`. Consumers
+pueden leer `.code` u otros fields directamente. El codigo real
+(Prisma tipado) devuelve solo los keys pedidos.
+
+Consumers **NO deben depender de shape-narrow detection** tipo
+`if ('unitPrice' in result) ...` para distinguir projections. Esto
+breakaria contra el mock pero no contra produccion real. Documentar
+esta restriccion en cualquier test que mock-ea este handler.
+
 ## Fixture conventions
 
 ### Default fixture (3 partidas baseline)
