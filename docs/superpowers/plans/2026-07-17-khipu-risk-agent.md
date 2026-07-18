@@ -343,10 +343,13 @@ scenario        RiskScenario? @relation(fields: [scenarioId], references: [id], 
 createdBy       User? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
 ```
 
-Change `RiskVariable` unique index to:
+Do not use a normal Prisma `@@unique([budgetId, scenarioId, budgetItemId, variableType])` for this rule. PostgreSQL allows multiple `NULL` values in unique indexes, so that would allow duplicate global variables where `scenarioId` is `NULL`.
+
+Replace the current Prisma unique key with query indexes only:
 
 ```prisma
-@@unique([budgetId, scenarioId, budgetItemId, variableType])
+@@index([budgetId, budgetItemId, variableType])
+@@index([budgetId, scenarioId, budgetItemId, variableType])
 ```
 
 - [ ] **Step 4: Create SQL migration**
@@ -359,7 +362,19 @@ CREATE TYPE "RiskScenarioStatus" AS ENUM ('DRAFT', 'APPROVED', 'ARCHIVED');
 CREATE TYPE "RiskInputSource" AS ENUM ('MANUAL', 'AGENT', 'HEURISTIC');
 ```
 
-Create `RiskScenario`, add columns, drop old unique index, and create the new scenario-aware unique index.
+Create `RiskScenario`, add columns, drop the old unique index, and create two partial unique indexes:
+
+```sql
+DROP INDEX IF EXISTS "RiskVariable_budgetId_budgetItemId_variableType_key";
+
+CREATE UNIQUE INDEX "RiskVariable_budget_global_unique"
+ON "RiskVariable"("budgetId", "budgetItemId", "variableType")
+WHERE "scenarioId" IS NULL;
+
+CREATE UNIQUE INDEX "RiskVariable_budget_scenario_unique"
+ON "RiskVariable"("budgetId", "scenarioId", "budgetItemId", "variableType")
+WHERE "scenarioId" IS NOT NULL;
+```
 
 - [ ] **Step 5: Add minimal scenario service**
 

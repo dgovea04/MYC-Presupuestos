@@ -99,10 +99,18 @@ Add optional:
 - `confidence`: decimal from 0 to 1
 - `rationale`: text
 
-Existing unique key must become scenario-aware:
+Existing unique behavior must remain intact:
 
 - global/default variables keep `scenarioId = null`
-- scenario variables use unique `(budgetId, scenarioId, budgetItemId, variableType)`
+- global/default variables remain unique per `(budgetId, budgetItemId, variableType)`
+- scenario variables are unique per `(budgetId, scenarioId, budgetItemId, variableType)`
+
+PostgreSQL treats `NULL` values as distinct inside regular unique indexes, so this must be implemented with partial unique SQL indexes:
+
+- `RiskVariable_budget_global_unique` on `(budgetId, budgetItemId, variableType)` where `scenarioId IS NULL`
+- `RiskVariable_budget_scenario_unique` on `(budgetId, scenarioId, budgetItemId, variableType)` where `scenarioId IS NOT NULL`
+
+Prisma schema should keep non-unique indexes for query support and the migration should create the partial unique indexes manually.
 
 ### Extend RiskCorrelation
 
