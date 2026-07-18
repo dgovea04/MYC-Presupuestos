@@ -150,40 +150,84 @@ lista hardcoded que mantener.
 
 #### 2. `makeMockDb()` factory con isolation (tests concurrentes / multi-fixture)
 
+**Limitacion del naive sync vi.hoisted**: el patron
+`vi.hoisted(() => makeMockDb())` — donde el callback llama directamente a
+`makeMockDb()` referenciando el import estatico — NO funciona en vitest,
+porque `vi.hoisted` corre ANTES de que los imports estaticos esten
+inicializados (`ReferenceError: Cannot access '__vi_import_0__' before
+initialization`). Solo se puede llamar `makeMockDb()` DENTRO de async paths.
+
+**Pattern C (recomendado, copy-pasteable, verified)**:
+
 ```typescript
-import { makeMockDb } from "@/lib/data/__mocks__/in-memory-prisma";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { InMemoryPrisma } from "@/lib/data/__mocks__/in-memory-prisma";
 
-// 1. Hoist the bundle — Viitest lo evalua antes de levantar el vi.mock factory
-const { mockDb, mockTx, prismaMock, reset, populateDefault, addMockBudgetItem } =
-  vi.hoisted(() => makeMockDb());
+// 1. vi.hoisted declara un SHELL sincronico (sin referencias a imports).
+//    vi.hoisted se ejecuta antes de los static imports, asi que el callback
+//    debe retornar solo valores "primitivos" (objetos sync, sin imports).
+const bundleRef = vi.hoisted<{ current: InMemoryPrisma | null }>(() => ({
+  current: null,
+}));
 
-// 2. El factory referencia el bundle hoisted (misma referencia)
-// NUNCA invocar makeMockDb() dentro del factory — cada llamada produce un bundle
-// fresh diferente al top-level y las assertions sobre mockDb/mockTx top-level
-// no coincidiran con las prisma calls que el codigo bajo test vio.
-vi.mock("@/lib/db/prisma", async () => ({ prisma: prismaMock }));
-
-// 3. Imports DEBAJO del vi.mock. NO importar mockDb / mockTx / prismaMock desde
-// in-memory-prisma aqui (eso traeria el singleton default por accidente): usar
-// solo las refs hoisted del bundle.
-import { saveWorkScheduleItem } from "@/lib/data/work-schedule";
-
-beforeEach(() => {
-  reset();
-  populateDefault();
+// 2. vi.mock factory awaits import + popula el shell. Aqui si se puede
+//    hacer await import() porque el factory de vi.mock corre DESPUES de que
+//    los static imports esten inicializados.
+vi.mock("@/lib/db/prisma", async () => {
+  const { makeMockDb } = await import("@/lib/data/__mocks__/in-memory-prisma");
+  bundleRef.current = makeMockDb();
+  return { prisma: bundleRef.current.prismaMock };
 });
 
-it("...", async () => {
-  await saveWorkScheduleItem(DEFAULT_BUDGET_ID, "user-001", input);
-  expect(mockDb.workScheduleItems.size).toBe(1);
-  expect(mockTx.workScheduleItem.create).toHaveBeenCalledTimes(1);
+// 3. Imports DEBAJO del vi.mock — codigo bajo test importa normalmente.
+import { getWorkScheduleSection } from "@/lib/data/work-schedule";
+
+// 4. Helper para acceder el bundle populado (defensivo si algo se rompe).
+function requireBundle(): InMemoryPrisma {
+  if (bundleRef.current === null) {
+    throw new Error("Bundle no inicializado; vi.mock factory debio correr primero.");
+  }
+  return bundleRef.current;
+}
+
+describe("...", () => {
+  beforeEach(() => {
+    const bundle = requireBundle();
+    bundle.reset();
+    bundle.populateDefault();
+  });
+
+  it("...", async () => {
+    requireBundle().addMockBudgetItem({ id: "...", code: "...", ... });
+    const view = await getWorkScheduleSection("budget-001", "user-001");
+    expect(view.groups.length).toBe(1);
+    // ...
+  });
 });
 ```
 
-**Limitacion actual**: este patron NO esta materializado en ningun test consumer
-todavia — los 3 tests del pipeline usan el singleton default (modo 1).
-Trabajos follow-up materializarán un `getWorkScheduleSection.test.ts` que use
-este patron para validar que copy-pastea correctamente.
+**Materializado como demo**: `lib/data/work-schedule-section.test.ts` usa
+exactamente este patron, con 4 tests verde contra `getWorkScheduleSection`.
+bundle.mockDb / bundle.mockTx / bundle.prismaMock / bundle.addMockBudgetItem
+estan todos accesibles sincronicamente via `requireBundle()` despues de que el
+vi.mock factory haya corrido (siempre cierto al momento de ejecutar tests).
+
+**Pattern alternativo (Pattern A: vi.doMock, no hoisted)**:
+
+```typescript
+import { makeMockDb } from "@/lib/data/__mocks__/in-memory-prisma";
+const bundle = makeMockDb(); // top-level, sync
+beforeAll(() => {
+  vi.doMock("@/lib/db/prisma", () => ({ prisma: bundle.prismaMock }));
+});
+import { saveWorkScheduleItem } from "@/lib/data/work-schedule";
+// tests use `bundle.mockDb.X` etc directamente
+```
+
+Este es mas simple que Pattern C, pero `vi.doMock` no es hoisted y debe
+llamarse dentro de `beforeAll` o antes de los tests. Funciona correctamente
+en vitest pero pierde algunas de las features automatic mock-reset de
+`vi.mock`.
 
 ## Fixture conventions
 
