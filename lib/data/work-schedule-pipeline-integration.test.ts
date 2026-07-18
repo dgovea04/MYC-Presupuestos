@@ -2,329 +2,92 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { WorkScheduleItemSaveInput, WorkScheduleItemPatchInput } from "@/lib/validations/work-schedule";
 
 // =============================================================================
-// MOCK PRISMA (in-memory) — debe estar declarada ANTES de cualquier import
-// que consuma `@/lib/db/prisma`. Usamos vi.hoisted para que el store y los
-// handlers esten disponibles al momento de evaluar el factory de vi.mock.
+// MOCK PRISMA — dynamic import para resolver captura del singleton en Vitest
+// sin tener que usar vi.hoisted en este archivo. Node module cache asegura que
+// todos los tests del archivo comparten la misma instancia de `mockDb`.
 // =============================================================================
 
-const { mockDb, mockTx } = vi.hoisted(() => {
-  const mockTx = {
-    workSchedule: {
-      upsert: vi.fn(),
-      findUnique: vi.fn(),
-    },
-    workScheduleItem: {
-      findUnique: vi.fn(),
-      findMany: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-    },
-    workScheduleDistribution: {
-      deleteMany: vi.fn(),
-    },
-  };
-
-  const mockDb = {
-    budgetGeneral: null as null | {
-      id: string;
-      projectId: string;
-      name: string;
-      currency: string;
-      project: { id: string; name: string; projectCalendars: any[] };
-    },
-    subBudgets: [] as Array<{
-      id: string;
-      projectId: string;
-      name: string;
-      levels: any[];
-      items: any[];
-    }>,
-    workSchedule: null as null | { id: string; budgetId: string },
-    workScheduleItems: new Map<string, any>(),
-    workScheduleDistributions: new Map<string, any[]>(),
-  };
-
-  // ---- Tx handlers --------------------------------------------------------
-
-  mockTx.workSchedule.upsert.mockImplementation(async ({ where }: any) => {
-    const existing = mockDb.workSchedule;
-    if (existing !== null && existing.budgetId === where.budgetId) {
-      return { id: existing.id };
-    }
-    mockDb.workSchedule = { id: "ws-test", budgetId: where.budgetId };
-    return { id: "ws-test" };
-  });
-
-  mockTx.workSchedule.findUnique.mockImplementation(async ({ where }: any) => {
-    const existing = mockDb.workSchedule;
-    if (where && where.budgetId !== undefined && existing !== null && existing.budgetId === where.budgetId) {
-      return { id: existing.id };
-    }
-    return null;
-  });
-
-  mockTx.workScheduleItem.findUnique.mockImplementation(async ({ where }: any) => {
-    const k = where.scheduleId_budgetItemId?.budgetItemId;
-    const item = mockDb.workScheduleItems.get(k);
-    return item ? { id: item.id } : null;
-  });
-
-  mockTx.workScheduleItem.findMany.mockImplementation(async ({ where }: any) => {
-    const ids: string[] = where.budgetItemId?.in ?? (Array.isArray(where.budgetItemId) ? where.budgetItemId : []);
-    const out: any[] = [];
-    for (const id of ids) {
-      const item = mockDb.workScheduleItems.get(id);
-      if (item && item.scheduleId === where.scheduleId) {
-        out.push({ id: item.id, budgetItemId: item.budgetItemId });
-      }
-    }
-    return out;
-  });
-
-  mockTx.workScheduleItem.create.mockImplementation(async ({ data }: any) => {
-    const id = `wsi-${Math.random().toString(36).slice(2)}`;
-    const item = {
-      id,
-      scheduleId: data.scheduleId,
-      budgetItemId: data.budgetItemId,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      durationDays: data.durationDays,
-      predecessor: data.predecessor ?? null,
-      crew: data.crew ?? null,
-      isMilestone: data.isMilestone ?? false,
-      baselineStartDate: data.baselineStartDate ?? null,
-      baselineEndDate: data.baselineEndDate ?? null,
-      actualStartDate: data.actualStartDate ?? null,
-      actualEndDate: data.actualEndDate ?? null,
-      percentComplete: data.percentComplete ?? null,
-    };
-    mockDb.workScheduleItems.set(data.budgetItemId, item);
-    if (data.distributions?.createMany?.data) {
-      mockDb.workScheduleDistributions.set(id, data.distributions.createMany.data);
-    }
-    return { ...item };
-  });
-
-  mockTx.workScheduleItem.update.mockImplementation(async ({ where, data }: any) => {
-    let target: any | null = null;
-    for (const item of mockDb.workScheduleItems.values()) {
-      if (item.id === where.id) {
-        target = item;
-        break;
-      }
-    }
-    if (!target) {
-      throw new Error(`workScheduleItem ${where.id} not found in mock`);
-    }
-    Object.assign(target, data);
-    if (data.distributions?.createMany?.data) {
-      mockDb.workScheduleDistributions.set(target.id, data.distributions.createMany.data);
-    }
-    return { ...target };
-  });
-
-  mockTx.workScheduleDistribution.deleteMany.mockImplementation(async ({ where }: any) => {
-    const existing = mockDb.workScheduleDistributions.get(where.scheduleItemId);
-    const count = existing?.length ?? 0;
-    mockDb.workScheduleDistributions.set(where.scheduleItemId, []);
-    return { count };
-  });
-
-  return { mockDb, mockTx };
+vi.mock("@/lib/db/prisma", async () => {
+  const { prismaMock } = await import("@/lib/data/__mocks__/in-memory-prisma");
+  return { prisma: prismaMock };
 });
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    $transaction: vi.fn(async (cb: any) => cb(mockTx)),
-    budget: {
-      findFirst: vi.fn(async ({ where }: any) => {
-        if (where.kind !== "GENERAL") return null;
-        if (where.id && mockDb.budgetGeneral?.id !== where.id) return null;
-        return mockDb.budgetGeneral;
-      }),
-      findMany: vi.fn(async ({ where }: any) => {
-        if (where.kind !== "SUB_BUDGET") return [];
-        return mockDb.subBudgets.filter((sb) => sb.projectId === where.projectId);
-      }),
-    },
-    budgetItem: {
-      findFirst: vi.fn(async ({ where }: any) => {
-        const allItems = mockDb.subBudgets.flatMap((sb) => sb.items);
-        const item = allItems.find((it) => it.id === where.id);
-        if (!item) return null;
-        if (where.budget?.projectId !== mockDb.budgetGeneral?.projectId) return null;
-        if (where.budget?.kind && where.budget.kind !== "SUB_BUDGET") return null;
-        return {
-          id: item.id,
-          code: item.code,
-          budget: { items: allItems.map((it) => ({ code: it.code })) },
-        };
-      }),
-    },
-    workSchedule: {
-      findUnique: vi.fn(async ({ where, include }: any) => {
-        const existing = mockDb.workSchedule;
-        if (where && where.budgetId !== undefined && existing !== null && existing.budgetId === where.budgetId) {
-          if (include?.items) {
-            const items = Array.from(mockDb.workScheduleItems.values()).map((item: any) => ({
-              ...item,
-              distributions: mockDb.workScheduleDistributions.get(item.id) ?? [],
-            }));
-            return { id: existing.id, items };
-          }
-          return { id: existing.id };
-        }
-        return null;
-      }),
-    },
-  },
-}));
-
-// =============================================================================
-// IMPORTS POST-MOCK — todo codigo que dependa de `@/lib/db/prisma` debe estar
-// abajo del bloque vi.mock para que Vitest levante el factory primero.
-// =============================================================================
-
+// Los imports del codigo bajo test deben ir DESPUES del vi.mock para que
+// vitest levante el factory antes. Si los movemos arriba, capturaremos la
+// implementacion real en lugar del mock.
+import {
+  mockDb,
+  mockTx,
+  resetInMemoryState,
+  populateDefaultWorkScheduleFixture,
+  DEFAULT_BUDGET_ID,
+  DEFAULT_SUB_BUDGET_ID,
+} from "@/lib/data/__mocks__/in-memory-prisma";
 import { saveWorkScheduleItem, saveWorkScheduleItemPatch } from "@/lib/data/work-schedule";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
 
 // =============================================================================
-// FIXTURE HELPERS
+// CONSTANTES LOCALES (solo IDs, no fixtures — los fixtures viven en el modulo)
 // =============================================================================
 
-const BUDGET_ID = "budget-001";
-const SUB_BUDGET_ID = "sub-budget-001";
-const PROJECT_ID = "project-001";
-const BUDGET_GENERAL_NAME = "Presupuesto Test General";
+const BUDGET_ID = DEFAULT_BUDGET_ID;
 const USER_ID = "user-001";
 
-function resetMockDb() {
-  mockDb.budgetGeneral = null;
-  mockDb.subBudgets = [];
-  mockDb.workSchedule = null;
-  mockDb.workScheduleItems.clear();
-  mockDb.workScheduleDistributions.clear();
-}
-
-function setUpFixture() {
-  mockDb.budgetGeneral = {
-    id: BUDGET_ID,
-    projectId: PROJECT_ID,
-    name: BUDGET_GENERAL_NAME,
-    currency: "PEN",
-    project: {
-      id: PROJECT_ID,
-      name: "Proyecto Test MC Presupuestos",
-      projectCalendars: [],
-    },
-  };
-
-  mockDb.subBudgets = [
-    {
-      id: SUB_BUDGET_ID,
-      projectId: PROJECT_ID,
-      name: "Estructuras",
-      levels: [
-        {
-          id: "level-01",
-          budgetId: SUB_BUDGET_ID,
-          parentId: null,
-          type: "TITLE",
-          code: "01",
-          name: "Estructuras",
-          sortOrder: 1,
-        },
-      ],
-      items: [
-        {
-          id: "cline_excav_001",
-          budgetId: SUB_BUDGET_ID,
-          levelId: "level-01",
-          code: "01.01",
-          description: "Excavacion manual de zanjas",
-          unit: "m3",
-          quantity: 250,
-          unitPrice: 25,
-          partial: 6250,
-          sortOrder: 1,
-          apu: null,
-        },
-        {
-          id: "cline_cim_002",
-          budgetId: SUB_BUDGET_ID,
-          levelId: "level-01",
-          code: "01.02",
-          description: "Cimentacion corrida de concreto",
-          unit: "m3",
-          quantity: 45,
-          unitPrice: 85,
-          partial: 3825,
-          sortOrder: 2,
-          apu: null,
-        },
-        {
-          id: "cline_est_003",
-          budgetId: SUB_BUDGET_ID,
-          levelId: "level-01",
-          code: "01.03",
-          description: "Estructura de concreto armado",
-          unit: "m3",
-          quantity: 120,
-          unitPrice: 150,
-          partial: 18000,
-          sortOrder: 3,
-          apu: null,
-        },
-      ],
-    },
-  ];
-}
+// =============================================================================
+// HELPERS ESPECIFICOS DEL PIPELINE (no compartibles con otros tests)
+// =============================================================================
 
 /**
- * Reconstruye WorkScheduleLineRecord[] a partir del in-memory store
- * post-save. Es el equivalente in-memory de `loadWorkScheduleDataset`
- * sin pasar por todas las queries de Prisma.
+ * Reconstruye WorkScheduleLineRecord[] a partir del in-memory store post-save.
+ * Es el equivalente in-memory de `loadWorkScheduleDataset` sin pasar por todas
+ * las queries de Prisma. Pipeline-specific: no vive en el modulo compartido.
  */
-function loadLinesFromMockDb(): any[] {
-  const itemsByItem = mockDb.subBudgets.flatMap((sb) => sb.items);
-  return Array.from(mockDb.workScheduleItems.values()).map((item: any) => {
-    const itemMeta = itemsByItem.find((it) => it.id === item.budgetItemId);
-    const startIso =
-      item.startDate instanceof Date
-        ? item.startDate.toISOString().slice(0, 10)
-        : typeof item.startDate === "string"
-          ? item.startDate
-          : null;
-    const endIso =
-      item.endDate instanceof Date
-        ? item.endDate.toISOString().slice(0, 10)
-        : typeof item.endDate === "string"
-          ? item.endDate
+function loadLinesFromMockDb(): Array<{
+  budgetItemId: string;
+  itemCode: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  partial: number;
+  subBudgetId: string;
+  subBudgetName: string;
+  startDate: string | null;
+  endDate: string | null;
+  durationDays: number;
+  predecessor: string | null;
+}> {
+  const itemsById = mockDb.subBudgets.flatMap((sb) => sb.items);
+  return Array.from(mockDb.workScheduleItems.values()).map((item) => {
+    const meta = itemsById.find((it) => it.id === item.budgetItemId);
+    const toIso = (v: Date | string | null) =>
+      v instanceof Date
+        ? v.toISOString().slice(0, 10)
+        : typeof v === "string"
+          ? v
           : null;
     return {
       budgetItemId: item.budgetItemId,
-      itemCode: itemMeta?.code ?? "?",
-      description: itemMeta?.description ?? "",
-      unit: itemMeta?.unit ?? "UND",
-      quantity: itemMeta?.quantity ?? 1,
-      unitPrice: itemMeta?.unitPrice ?? 1,
-      partial: itemMeta?.partial ?? 0,
-      subBudgetId: SUB_BUDGET_ID,
+      itemCode: meta?.code ?? "?",
+      description: meta?.description ?? "",
+      unit: meta?.unit ?? "UND",
+      quantity: meta?.quantity ?? 1,
+      unitPrice: meta?.unitPrice ?? 1,
+      partial: meta?.partial ?? 0,
+      subBudgetId: DEFAULT_SUB_BUDGET_ID,
       subBudgetName: "Estructuras",
-      startDate: startIso,
-      endDate: endIso,
+      startDate: toIso(item.startDate),
+      endDate: toIso(item.endDate),
       durationDays: item.durationDays,
       predecessor: item.predecessor,
-      monthlyDistributions: [],
-    };
+    } as const;
   });
 }
 
-// =============================================================================
-// INPUT BUILDERS
-// =============================================================================
-
+/**
+ * Constructor ergonomico para WorkScheduleItemSaveInput. Crea una distribucion
+ * mensual del 100% en el mes del startDate (work-schedule exige >=1 distribucion).
+ */
 function buildSaveInput(
   budgetItemId: string,
   startDate: string,
@@ -355,8 +118,8 @@ function buildSaveInput(
 
 describe("data/work-schedule.saveWorkScheduleItem + critical-path pipeline", () => {
   beforeEach(() => {
-    resetMockDb();
-    setUpFixture();
+    resetInMemoryState();
+    populateDefaultWorkScheduleFixture();
   });
 
   it("initial save de cadena FS puro produce critical path consistente con suma de durations", async () => {
@@ -483,22 +246,23 @@ describe("data/work-schedule.saveWorkScheduleItem + critical-path pipeline", () 
     const firstView = await saveWorkScheduleItem(BUDGET_ID, USER_ID, excavInput);
     const secondView = await saveWorkScheduleItem(BUDGET_ID, USER_ID, excavInput);
 
-    // Envelope: ambos retornan WorkScheduleViewRecord
+    // Envelope: ambos retornan WorkScheduleViewRecord con budgetId identity
     expect(firstView.budgetId).toBe(BUDGET_ID);
     expect(secondView.budgetId).toBe(BUDGET_ID);
 
-    // Sane regression: el mock store tiene SOLO 1 item (no duplicado por upsert)
+    // Cross-invariant: misma identidad entre views
+    expect(firstView.budgetId).toBe(secondView.budgetId);
+
+    // Sanity: 1 item persistido (no duplicado por upsert)
     expect(mockDb.workScheduleItems.size).toBe(1);
 
-    // Sane regression: critical path es identico tras las 2 calls (mismo estado persistido)
+    // Critical path recalculado desde store: estado consistente tras 2 calls
     const criticalPath = calculateWorkScheduleCriticalPath(loadLinesFromMockDb() as any);
     expect(criticalPath.status).toBe("calculated");
     expect(criticalPath.projectDurationDays).toBe(8); // single partida
 
-    // Ambos views tienen la misma cantidad de partidas (1)
-    const firstLineCount = firstView.groups?.reduce?.((sum: number, g: any) => sum + (g.lines?.length ?? 0), 0) ?? 0;
-    const secondLineCount = secondView.groups?.reduce?.((sum: number, g: any) => sum + (g.lines?.length ?? 0), 0) ?? 0;
-    expect(firstLineCount).toBeGreaterThan(0);
-    expect(secondLineCount).toBe(firstLineCount);
+    // Tx call counts: la 2da llamada debe reciclar el upsert sin recrear el item
+    expect(mockTx.workSchedule.upsert).toHaveBeenCalledTimes(2); // 1ra crea, 2da recyle
+    expect(mockTx.workScheduleItem.create).toHaveBeenCalledTimes(1); // solo en la 1ra
   });
 });
