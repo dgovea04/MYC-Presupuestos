@@ -99,6 +99,7 @@ export const workScheduleGenerateBaseSchema = z.object({
   baseStartDate: isoDateSchema,
   reviewedBudgetItemIds: z.array(z.string().trim().min(1)).optional(),
   options: workScheduleGenerationOptionsSchema.optional(),
+  mode: z.enum(["full", "incremental"]).optional(),
 });
 
 export type WorkScheduleDistributionInput = z.infer<typeof workScheduleDistributionInputSchema>;

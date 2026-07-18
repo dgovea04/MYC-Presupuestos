@@ -530,7 +530,7 @@ export async function generateWorkScheduleBase(
   input: WorkScheduleGenerateBaseInput,
 ): Promise<WorkScheduleViewRecord> {
   const { payload, generation } = await generateWorkScheduleGeneration(budgetId, userId, input);
-  const mode = (payload as Record<string, unknown>).mode ?? "full";
+  const mode = payload.mode ?? "full";
 
   await prisma.$transaction(async (tx) => {
     const schedule = await tx.workSchedule.upsert({

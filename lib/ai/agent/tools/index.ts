@@ -48,7 +48,7 @@ export const reviewTakeoffTool: AgentToolDefinition<
     const templateFormulaKeys = matchingTemplate?.formulaKeys ?? ["manual"];
     const issues = validateMetradoSheet({
       sheetUnit: sheet.unit,
-      templateFormulaKeys: templateFormulaKeys as any,
+      templateFormulaKeys,
       linkedPartidaUnit: sheet.partidaLink?.budgetItemUnit ?? null,
       rows: sheet.rows,
     });
@@ -70,8 +70,8 @@ export const reviewTakeoffTool: AgentToolDefinition<
         id: issue.id,
         severity: issue.severity,
         message: issue.message,
-        rowId: (issue as any).rowId ?? null,
-        field: (issue as any).field ?? null,
+        rowId: "rowId" in issue && typeof issue.rowId === "string" ? issue.rowId : null,
+        field: "field" in issue && typeof issue.field === "string" ? issue.field : null,
       })),
       recommendation: hasErrors
         ? "La hoja tiene errores que deben corregirse antes de enviar el metrado a la partida."
@@ -198,7 +198,7 @@ export const createScheduleTool: AgentToolDefinition<
     const result = await generateWorkScheduleBase(input.budgetId, context.userId, {
       baseStartDate: input.baseStartDate,
       mode: input.mode,
-    } as any);
+    });
 
     return {
       budgetId: input.budgetId,
@@ -403,7 +403,14 @@ export const updateTaskTool: AgentToolDefinition<
     const patch: Record<string, unknown> = { id: input.itemId };
     if (input.duration) patch.realDuration = input.duration;
     if (input.startDate) patch.startDate = input.startDate;
-    await saveWorkScheduleItem(input.budgetId, context.userId, patch as Parameters<typeof saveWorkScheduleItem>[2]);
+    // TODO(saveWorkScheduleItemPatch): patch no satisface `workScheduleItemSaveSchema`
+    // (faltan endDate, durationDays, monthlyDistributions, etc.). Hará ZodError en runtime
+    // hasta que se introduzca un endpoint/función de patch parcial en lib/data/work-schedule.ts.
+    await saveWorkScheduleItem(
+      input.budgetId,
+      context.userId,
+      patch as unknown as Parameters<typeof saveWorkScheduleItem>[2],
+    );
     return { itemId: input.itemId, updated: true };
   },
   summarizeResult: () => "Tarea de cronograma actualizada.",
@@ -426,11 +433,18 @@ export const linkPredecessorTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: linkPredecessorInput,
   execute: async (input, context) => {
-    await saveWorkScheduleItem(input.budgetId, context.userId, {
-      id: input.itemId,
-      predecessorId: input.predecessorItemId,
-      predecessorType: input.type,
-    } as Parameters<typeof saveWorkScheduleItem>[2]);
+    // TODO(saveWorkScheduleItemPatch): ver nota en updateTaskTool.execute. Patch no
+    // satisface `workScheduleItemSaveSchema`; ZodError en runtime hasta introducir
+    // función de patch parcial.
+    await saveWorkScheduleItem(
+      input.budgetId,
+      context.userId,
+      {
+        id: input.itemId,
+        predecessorId: input.predecessorItemId,
+        predecessorType: input.type,
+      } as unknown as Parameters<typeof saveWorkScheduleItem>[2],
+    );
     return { itemId: input.itemId, predecessorId: input.predecessorItemId, type: input.type };
   },
   summarizeResult: (result) => {
@@ -458,10 +472,17 @@ export const moveTaskTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: moveTaskInput,
   execute: async (input, context) => {
-    await saveWorkScheduleItem(input.budgetId, context.userId, {
-      id: input.itemId,
-      startDate: input.startDate,
-    } as Parameters<typeof saveWorkScheduleItem>[2]);
+    // TODO(saveWorkScheduleItemPatch): ver nota en updateTaskTool.execute. Patch no
+    // satisface `workScheduleItemSaveSchema`; ZodError en runtime hasta introducir
+    // función de patch parcial.
+    await saveWorkScheduleItem(
+      input.budgetId,
+      context.userId,
+      {
+        id: input.itemId,
+        startDate: input.startDate,
+      } as unknown as Parameters<typeof saveWorkScheduleItem>[2],
+    );
     return { itemId: input.itemId, newStartDate: input.startDate };
   },
   summarizeResult: (result) => {
@@ -486,20 +507,13 @@ export const calculateCriticalPathTool: AgentToolDefinition<
   inputSchema: calculateCriticalPathInput,
   execute: async (input, context) => {
     const section = await getWorkScheduleSection(input.budgetId, context.userId);
-    const lines = section.lines.map((l) => ({
-      budgetItemId: l.budgetItemId,
-      durationDays: l.duration,
-      startDate: l.startDate,
-      endDate: l.endDate,
-      predecessors: (l as Record<string, unknown>).predecessors as Array<{budgetItemId: string; type: string}> | undefined,
-    }));
-    const result = calculateWorkScheduleCriticalPath(lines);
+    const result = calculateWorkScheduleCriticalPath(section.lines);
     const criticalItems = [...result.itemsByBudgetItemId.values()].filter((i) => i.isCritical);
     return {
       budgetId: input.budgetId,
       projectDurationDays: result.projectDurationDays,
       criticalItemCount: criticalItems.length,
-      totalItems: lines.length,
+      totalItems: section.lines.length,
       status: result.status,
     };
   },

@@ -59,6 +59,7 @@ import {
   previewScheduleTool,
   reviewTakeoffTool,
   createScheduleTool,
+  calculateCriticalPathTool,
 } from "./index";
 import type { AgentToolContext } from "../types";
 
@@ -824,6 +825,179 @@ describe("createScheduleTool", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // scheduleTools array
 // ═══════════════════════════════════════════════════════════════════════════════
+
+function makeCriticalPathFixture() {
+  return [
+    {
+      budgetItemId: "item-1",
+      itemCode: "01.01",
+      durationDays: 5,
+      predecessor: null,
+    },
+    {
+      budgetItemId: "item-2",
+      itemCode: "01.02",
+      durationDays: 3,
+      predecessor: "01.01FS",
+    },
+    {
+      budgetItemId: "item-3",
+      itemCode: "01.03",
+      durationDays: 4,
+      predecessor: "01.02FS",
+    },
+  ];
+}
+
+describe("calculateCriticalPathTool", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("tiene risk=read y NO requiere projectId", () => {
+    expect(calculateCriticalPathTool.risk).toBe("read");
+    expect(calculateCriticalPathTool.requiresProjectId).toBe(false);
+  });
+
+  it("calcula ruta crítica y propaga el resultado de calculateWorkScheduleCriticalPath", async () => {
+    const sectionLines = makeCriticalPathFixture();
+    scheduleMocks.getWorkScheduleSection.mockResolvedValue({ lines: sectionLines });
+    scheduleMocks.calculateWorkScheduleCriticalPath.mockReturnValue({
+      status: "calculated",
+      projectDurationDays: 12,
+      itemsByBudgetItemId: new Map([
+        [
+          "item-1",
+          {
+            budgetItemId: "item-1",
+            itemCode: "01.01",
+            durationDays: 5,
+            earlyStartDay: 0,
+            earlyFinishDay: 4,
+            lateStartDay: 0,
+            lateFinishDay: 4,
+            totalSlackDays: 0,
+            isCritical: true,
+          },
+        ],
+        [
+          "item-2",
+          {
+            budgetItemId: "item-2",
+            itemCode: "01.02",
+            durationDays: 3,
+            earlyStartDay: 5,
+            earlyFinishDay: 7,
+            lateStartDay: 5,
+            lateFinishDay: 7,
+            totalSlackDays: 0,
+            isCritical: true,
+          },
+        ],
+        [
+          "item-3",
+          {
+            budgetItemId: "item-3",
+            itemCode: "01.03",
+            durationDays: 4,
+            earlyStartDay: 8,
+            earlyFinishDay: 11,
+            lateStartDay: 8,
+            lateFinishDay: 11,
+            totalSlackDays: 0,
+            isCritical: true,
+          },
+        ],
+      ]),
+      issues: [],
+    });
+
+    const result = await calculateCriticalPathTool.execute(
+      { budgetId: "budget-1" },
+      makeContext({ userId: "user-1" }),
+    );
+
+    expect(scheduleMocks.getWorkScheduleSection).toHaveBeenCalledWith("budget-1", "user-1");
+    expect(result.budgetId).toBe("budget-1");
+    expect(result.totalItems).toBe(3);
+    expect(result.projectDurationDays).toBe(12);
+    expect(result.criticalItemCount).toBe(3);
+    expect(result.status).toBe("calculated");
+  });
+
+  it("regression catcher: pasa section.lines SIN transformar (predecessor singular, sin predecessors plural)", async () => {
+    // Round 3 fix: si alguien reintroduce el `.map(l => ({ budgetItemId, durationDays: (l as ...).duration, startDate, endDate, predecessors: (l as ...).predecessors }))`
+    // que vivía antes en calculateCriticalPathTool.execute, este test falla:
+    // - el shape que recibe calculateWorkScheduleCriticalPath no tendría `predecessor` (singular) sino `predecessors` (plural);
+    // - el `toEqual(sectionLines)` falla porque las lineas perderían los campos reales.
+    // No eliminar las asserts de `toHaveProperty` + `not.toHaveProperty` aunque parezcan redundantes: son las que capturan el bug del plural.
+    const sectionLines = makeCriticalPathFixture();
+    scheduleMocks.getWorkScheduleSection.mockResolvedValue({ lines: sectionLines });
+    scheduleMocks.calculateWorkScheduleCriticalPath.mockReturnValue({
+      status: "calculated",
+      projectDurationDays: 12,
+      itemsByBudgetItemId: new Map<string, never>(),
+      issues: [],
+    });
+
+    await calculateCriticalPathTool.execute({ budgetId: "budget-1" }, makeContext());
+
+    const callArgs = scheduleMocks.calculateWorkScheduleCriticalPath.mock.calls[0]?.[0];
+    expect(callArgs).toBeDefined();
+    expect(callArgs).toEqual(sectionLines);
+    expect(callArgs).toHaveLength(3);
+    expect(callArgs[0]).toMatchObject({ budgetItemId: "item-1", predecessor: null });
+    expect(callArgs[1]).toMatchObject({ budgetItemId: "item-2", predecessor: "01.01FS" });
+    expect(callArgs[2]).toMatchObject({ budgetItemId: "item-3", predecessor: "01.02FS" });
+    for (const line of callArgs) {
+      expect(line).toHaveProperty("predecessor");
+      expect(line).not.toHaveProperty("predecessors");
+    }
+  });
+
+  it("reporta status=cycle cuando calculateWorkScheduleCriticalPath detecta un ciclo", async () => {
+    const sectionLines = makeCriticalPathFixture();
+    scheduleMocks.getWorkScheduleSection.mockResolvedValue({ lines: sectionLines });
+    scheduleMocks.calculateWorkScheduleCriticalPath.mockReturnValue({
+      status: "cycle",
+      projectDurationDays: 0,
+      itemsByBudgetItemId: new Map<string, never>(),
+      issues: ["El cronograma contiene un ciclo de predecesoras"],
+    });
+
+    const result = await calculateCriticalPathTool.execute({ budgetId: "budget-1" }, makeContext());
+
+    expect(result.status).toBe("cycle");
+    expect(result.projectDurationDays).toBe(0);
+    expect(result.criticalItemCount).toBe(0);
+  });
+
+  it("summarizeResult reporta correctamente tareas críticas y duración", () => {
+    const summary = calculateCriticalPathTool.summarizeResult!({
+      budgetId: "budget-1",
+      projectDurationDays: 12,
+      criticalItemCount: 3,
+      totalItems: 3,
+      status: "calculated",
+    });
+
+    expect(summary).toContain("3 tareas críticas");
+    expect(summary).toContain("12 días");
+  });
+
+  it("summarizeResult sigue funcionando cuando status es 'cycle'", () => {
+    const summary = calculateCriticalPathTool.summarizeResult!({
+      budgetId: "budget-1",
+      projectDurationDays: 0,
+      criticalItemCount: 0,
+      totalItems: 3,
+      status: "cycle",
+    });
+
+    expect(summary).toContain("0 tareas críticas");
+    expect(summary).toContain("0 días");
+  });
+});
 
 describe("scheduleTools array", () => {
   it("incluye previewScheduleTool como primera herramienta", async () => {
