@@ -17,9 +17,15 @@ import { apuTools } from "./apu";
 import { insumoTools } from "./insumos";
 import { projectTools } from "./projects";
 import { mcpBudgetTools } from "./mcp-budget";
+import { riskTools } from "./risk";
+
+type RegisteredAgentTool = Omit<AgentToolDefinition<never, unknown>, "inputSchema" | "execute"> & {
+  inputSchema: z.ZodType;
+  execute: (input: never, context: Parameters<AgentToolDefinition["execute"]>[1]) => Promise<unknown>;
+};
 
 // Re-export all domain tools for single-point registration
-export { budgetTools, partidaTools, apuTools, insumoTools, projectTools, mcpBudgetTools };
+export { budgetTools, partidaTools, apuTools, insumoTools, projectTools, mcpBudgetTools, riskTools };
 
 // ─── Takeoffs (Metrados) ─────────────────────────────────────────────────────
 
@@ -682,12 +688,12 @@ export const dashboardTool: AgentToolDefinition<
 
 // ─── Tool arrays ─────────────────────────────────────────────────────────────
 
-export const takeoffTools: AgentToolDefinition<any, any>[] = [reviewTakeoffTool, createTakeoffTool, importTakeoffTool];
-export const scheduleTools: AgentToolDefinition<any, any>[] = [previewScheduleTool, createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
-export const reportTools: AgentToolDefinition<any, any>[] = [exportReportTool, exportPDFTool, exportExcelTool, exportS10Tool, dashboardTool];
-export const chapterTools: AgentToolDefinition<any, any>[] = [createChapterTool, moveChapterTool, deleteChapterTool];
+export const takeoffTools: RegisteredAgentTool[] = [reviewTakeoffTool, createTakeoffTool, importTakeoffTool];
+export const scheduleTools: RegisteredAgentTool[] = [previewScheduleTool, createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
+export const reportTools: RegisteredAgentTool[] = [exportReportTool, exportPDFTool, exportExcelTool, exportS10Tool, dashboardTool];
+export const chapterTools: RegisteredAgentTool[] = [createChapterTool, moveChapterTool, deleteChapterTool];
 
-export const remainingTools: AgentToolDefinition<any, any>[] = [
+export const remainingTools: RegisteredAgentTool[] = [
   ...takeoffTools,
   ...scheduleTools,
   ...reportTools,
@@ -695,12 +701,13 @@ export const remainingTools: AgentToolDefinition<any, any>[] = [
 ];
 
 /** Todas las herramientas agenticas registrables en el ToolRegistry (33 herramientas). */
-export const allTools: AgentToolDefinition<any, any>[] = [
+export const allTools: RegisteredAgentTool[] = [
   ...budgetTools,
   ...partidaTools,
   ...apuTools,
   ...insumoTools,
   ...projectTools,
   ...mcpBudgetTools,
+  ...riskTools,
   ...remainingTools,
 ];
