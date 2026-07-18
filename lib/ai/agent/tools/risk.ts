@@ -1,8 +1,7 @@
 import { z } from "zod";
 import type { AgentToolDefinition } from "../types";
-import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import { getRiskAnalysisPayload } from "@/lib/risk/data";
-import { buildRiskWorkScheduleSummary } from "@/lib/risk/fallback";
+import { loadRiskWorkScheduleSummary } from "@/lib/risk/fallback";
 import { saveRiskScenario } from "@/lib/risk/scenarios";
 import { runAndSaveRiskSimulation } from "@/lib/risk/simulation-service";
 import { suggestRiskVariables } from "@/lib/risk/suggestions";
@@ -103,7 +102,7 @@ export const suggestRiskVariablesTool: AgentToolDefinition<
   inputSchema: suggestRiskVariablesInputSchema,
   execute: async (input, context) => {
     const payload = await getRiskAnalysisPayload(input.budgetId, context.userId);
-    const workScheduleSummary = await loadAgentWorkScheduleSummary(input.budgetId, context.userId, payload.budget.kind);
+    const workScheduleSummary = await loadRiskWorkScheduleSummary(input.budgetId, context.userId, payload.budget.kind);
     const suggestions = suggestRiskVariables({
       payload,
       workScheduleSummary,
@@ -230,20 +229,3 @@ export const riskTools = [
   runRiskSimulationTool,
   summarizeRiskSimulationTool,
 ] as const;
-
-async function loadAgentWorkScheduleSummary(
-  budgetId: string,
-  userId: string,
-  budgetKind: string,
-) {
-  if (budgetKind !== "GENERAL") {
-    return null;
-  }
-
-  try {
-    const section = await getWorkScheduleSection(budgetId, userId);
-    return buildRiskWorkScheduleSummary(section);
-  } catch {
-    return null;
-  }
-}

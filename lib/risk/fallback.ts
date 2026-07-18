@@ -1,7 +1,7 @@
-import type { RiskAnalysisPayload, RiskWorkScheduleSummary } from "@/types/risk";
+import type { RiskAnalysisPayload, RiskBudgetKind, RiskWorkScheduleSummary } from "@/types/risk";
 import { getBudgetById, getProjectSubBudgetDetails } from "@/lib/data/budgets";
 import { getRiskAnalysisFallbackData } from "@/lib/risk/data";
-import type { getWorkScheduleSection } from "@/lib/data/work-schedule";
+import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 
 export async function buildFallbackRiskAnalysisPayload(input: {
   budgetId: string;
@@ -68,6 +68,23 @@ export async function buildFallbackRiskAnalysisPayload(input: {
     correlations: fallbackRiskData.correlations,
     latestRun: fallbackRiskData.latestRun,
   };
+}
+
+export async function loadRiskWorkScheduleSummary(
+  budgetId: string,
+  userId: string,
+  budgetKind: RiskBudgetKind,
+): Promise<RiskWorkScheduleSummary | null> {
+  if (budgetKind !== "GENERAL") {
+    return null;
+  }
+
+  try {
+    const section = await getWorkScheduleSection(budgetId, userId);
+    return buildRiskWorkScheduleSummary(section);
+  } catch {
+    return null;
+  }
 }
 
 export function buildRiskWorkScheduleSummary(
