@@ -66,6 +66,22 @@ describe("suggestRiskVariables", () => {
     });
   });
 
+  it("returns one top suggestion when maxSuggestions is zero", () => {
+    const suggestions = suggestRiskVariables({
+      payload: payload(),
+      strategy: "balanced",
+      maxSuggestions: 0,
+      workScheduleSummary: null,
+    });
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({
+      budgetItemId: "item-1",
+      variableType: "QUANTITY",
+      impactScore: 1000,
+    });
+  });
+
   it("avoids existing variable keys and caps suggestions by impact score", () => {
     const suggestions = suggestRiskVariables({
       payload: payload([

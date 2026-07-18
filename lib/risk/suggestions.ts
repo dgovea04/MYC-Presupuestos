@@ -100,7 +100,7 @@ export function suggestRiskVariables(input: SuggestRiskVariablesInput): RiskVari
       return suggestions;
     })
     .sort((left, right) => right.impactScore - left.impactScore)
-    .slice(0, Math.max(0, input.maxSuggestions));
+    .slice(0, Math.max(1, input.maxSuggestions));
 }
 
 function variableKey(budgetItemId: string, variableType: RiskVariableType): string {
