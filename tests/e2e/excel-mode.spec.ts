@@ -43,6 +43,10 @@ async function signInWithCredentials(page: Page): Promise<void> {
 
 async function enableExcelMode(page: Page): Promise<void> {
   await page.goto("/settings");
+  // The UserSettingsForm (with the defaultViewMode Select) is inside a
+  // hidden <section id="settings-tab-panel-formats"> until the
+  // "Formatos y visualizacion" tab is activated. Click it first.
+  await page.getByRole("button", { name: /formatos y visualizaci[oó]n/i }).click();
   await expect(page.getByLabel(/vista global por defecto/i)).toBeVisible({ timeout: 30_000 });
   await page.getByLabel(/vista global por defecto/i).selectOption("excel");
   await expect(page.locator('div[data-view-mode="excel"]').first()).toBeVisible({ timeout: 15_000 });
