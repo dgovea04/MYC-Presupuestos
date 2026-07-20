@@ -104,16 +104,16 @@ export function RiskCorrelationsPanel({
         </div>
 
         <div className="overflow-auto">
-          <Table className="min-w-[860px] text-xs">
+          <Table className="min-w-[720px] text-[0.60rem]!">
             <THead className="theme-muted-panel sticky top-0 z-10">
               <TR className="theme-muted-panel hover:theme-muted-panel">
-                <TH className="border-r border-[var(--app-border)] px-3 py-2 text-[11px] uppercase tracking-wide">
+                <TH className="min-w-[200px] border-r border-[var(--app-border)] px-2 py-1.5 text-[0.60rem]! uppercase tracking-wide">
                   Variable
                 </TH>
                 {matrix.variables.map((variable) => (
                   <TH
                     key={variable.id}
-                    className="min-w-[180px] border-r border-[var(--app-border)] px-3 py-2 text-[11px] uppercase tracking-wide"
+                    className="min-w-[110px] border-r border-[var(--app-border)] px-2 py-1.5 text-[0.60rem]! uppercase tracking-wide"
                   >
                     {variable.label}
                   </TH>
@@ -122,12 +122,12 @@ export function RiskCorrelationsPanel({
             </THead>
             <TBody>
               {matrix.variables.map((rowVariable, rowIndex) => (
-                <TR key={rowVariable.id} className="h-14">
-                  <TD className="border-r border-[var(--app-border-soft)] px-3 py-2 font-medium">
+                <TR key={rowVariable.id} className="h-10">
+                  <TD className="border-r border-[var(--app-border-soft)] px-2 py-1 text-[0.60rem]! font-medium">
                     {rowVariable.label}
                   </TD>
                   {matrix.variables.map((columnVariable, columnIndex) => (
-                    <TD key={`${rowVariable.id}:${columnVariable.id}`} className="border-r border-[var(--app-border-soft)] px-3 py-2">
+                    <TD key={`${rowVariable.id}:${columnVariable.id}`} className="border-r border-[var(--app-border-soft)] px-2 py-1">
                         <CorrelationCell
                           cell={matrix.cells[rowIndex]?.[columnIndex] ?? null}
                           columnIndex={columnIndex}
@@ -222,7 +222,7 @@ function CorrelationCell({
   }
 
   if (rowIndex > columnIndex || !cell) {
-    return <span className="theme-subtle-text block text-center">-</span>;
+    return <span className="theme-subtle-text block text-center text-[0.60rem]!">-</span>;
   }
 
   return (
@@ -250,10 +250,10 @@ function EditableCorrelationCell({
   const heatmapClassName = getCorrelationHeatmapClassName(Number.isFinite(coefficient) ? coefficient : 0);
 
   return (
-    <div className={cn("rounded-xl border px-2 py-2 transition-colors", heatmapClassName)}>
+    <div className={cn("rounded-lg border p-0 transition-colors", heatmapClassName)}>
       <Input
         aria-label={`Coeficiente ${cell.key}`}
-        className="h-8 border-white/50 bg-white/80"
+        className="h-7 border-white/50 bg-white/80 text-[11px]"
         disabled={disabled}
         inputMode="decimal"
         onChange={(event) => onDraftChange(cell.key, event.target.value)}

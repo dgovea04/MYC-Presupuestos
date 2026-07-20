@@ -135,11 +135,11 @@ function RiskVariableModalContent({
     <Dialog.Root open onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
-        <Dialog.Content className="theme-surface-card fixed left-1/2 top-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-5 shadow-2xl">
+        <Dialog.Content className="theme-surface-card fixed left-1/2 top-1/2 z-50 w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-4 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <Dialog.Title className="theme-strong-text text-lg font-semibold">Variable de riesgo</Dialog.Title>
-              <Dialog.Description className="theme-muted-text mt-1 text-sm">
+              <Dialog.Title className="theme-strong-text text-base font-semibold">Variable de riesgo</Dialog.Title>
+              <Dialog.Description className="theme-muted-text mt-1 text-[13px]">
                 {item.code || "Sin codigo"} | {item.description} | {variableLabel}
               </Dialog.Description>
             </div>
@@ -154,17 +154,17 @@ function RiskVariableModalContent({
             </Dialog.Close>
           </div>
 
-          <p className="theme-muted-text mt-4 text-xs">
+          <p className="theme-muted-text mt-3 text-[11px]">
             Base actual: {defaultValue} ({helperLabel})
           </p>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <Field id={`risk-minimum-${item.itemId}`} label="Min" onChange={setMinimum} value={minimum} />
             <Field id={`risk-most-likely-${item.itemId}`} label="Probable" onChange={setMostLikely} value={mostLikely} />
             <Field id={`risk-maximum-${item.itemId}`} label="Max" onChange={setMaximum} value={maximum} />
           </div>
 
-          <div className="mt-4 space-y-2">
+          <div className="mt-3 space-y-1.5">
             <Label htmlFor={`risk-distribution-${item.itemId}`}>Distribucion</Label>
             <Select
               aria-label="Distribucion"
@@ -177,19 +177,19 @@ function RiskVariableModalContent({
               <option value="NORMAL">Normal</option>
               <option value="UNIFORM">Uniforme</option>
             </Select>
-            <p className="theme-muted-text text-xs">
+            <p className="theme-muted-text text-[11px]">
               {buildDistributionHelperText(distributionType)}
             </p>
           </div>
 
-          <label className="theme-strong-text mt-4 flex items-center gap-2 text-sm">
+          <label className="theme-strong-text mt-3 flex items-center gap-2 text-[13px]">
             <input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" className="[--control-accent:var(--app-primary)]" />
             Variable activa
           </label>
 
-          {error ? <p className="theme-status-error mt-4 rounded-xl border px-3 py-2 text-sm">{error}</p> : null}
+          {error ? <p className="theme-status-error mt-3 rounded-xl border px-3 py-2 text-[13px]">{error}</p> : null}
 
-          <div className="mt-5 flex justify-between gap-3">
+          <div className="mt-4 flex justify-between gap-3">
             <Button disabled={saving || !onDelete} onClick={deleteCurrent} type="button" variant="outline">
               <Trash2 className="mr-2 h-4 w-4" />
               Eliminar
@@ -211,9 +211,9 @@ function RiskVariableModalContent({
 
 function Field({ id, label, onChange, value }: { id: string; label: string; onChange: (value: string) => void; value: string }) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} inputMode="decimal" onChange={(event) => onChange(event.target.value)} value={value} />
+    <div className="space-y-1.5">
+      <Label className="text-[13px]" htmlFor={id}>{label}</Label>
+      <Input className="h-9" id={id} inputMode="decimal" onChange={(event) => onChange(event.target.value)} value={value} />
     </div>
   );
 }
