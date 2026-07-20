@@ -62,7 +62,7 @@ vi.mock("@/components/ui/table", () => ({
   Table: ({ children }: { children: React.ReactNode }) => <table>{children}</table>,
   THead: ({ children }: { children: React.ReactNode }) => <thead>{children}</thead>,
   TBody: ({ children }: { children: React.ReactNode }) => <tbody>{children}</tbody>,
-  TR: ({ children }: { children: React.ReactNode }) => <tr>{children}</tr>,
+  TR: ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => <tr style={style}>{children}</tr>,
   TH: ({ children }: { children: React.ReactNode }) => <th>{children}</th>,
   TD: ({ children, colSpan }: { children: React.ReactNode; colSpan?: number }) => <td colSpan={colSpan}>{children}</td>,
 }));
@@ -81,8 +81,14 @@ vi.mock("@/components/ui/save-state-badge", () => ({
   SaveStateBadge: () => null,
 }));
 
+const viewModeState: { isExcelMode: boolean } = { isExcelMode: false };
+const formattingSettingsState: { currencyDecimals: number; excelRowHeight: number } = {
+  currencyDecimals: 2,
+  excelRowHeight: 74,
+};
+
 vi.mock("@/components/view-mode/app-view-mode-provider", () => ({
-  useAppViewMode: () => ({ isExcelMode: false }),
+  useAppViewMode: () => ({ isExcelMode: viewModeState.isExcelMode }),
 }));
 
 vi.mock("@/components/view-mode/view-mode-styles", () => ({
@@ -92,8 +98,8 @@ vi.mock("@/components/view-mode/view-mode-styles", () => ({
 
 vi.mock("@/components/providers/formatting-settings-provider", () => ({
   useFormattingSettings: () => ({
-    currencyDecimals: 2,
-    excelRowHeight: 74,
+    currencyDecimals: formattingSettingsState.currencyDecimals,
+    excelRowHeight: formattingSettingsState.excelRowHeight,
   }),
 }));
 
@@ -121,6 +127,11 @@ vi.mock("lucide-react", () => ({
   Loader2: () => null,
   Trash2: () => null,
   X: () => null,
+  Copy: () => null,
+  Edit: () => null,
+  Eye: () => null,
+  Save: () => null,
+  MoreHorizontal: () => null,
 }));
 
 import { PartidasTable } from "@/components/partidas/partidas-table";
@@ -153,6 +164,9 @@ function makePartida(overrides: Partial<CatalogPartidaRecord> = {}): CatalogPart
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  viewModeState.isExcelMode = false;
+  formattingSettingsState.currencyDecimals = 2;
+  formattingSettingsState.excelRowHeight = 74;
 
   if (activeContainer) {
     const root = (activeContainer as HTMLDivElement & { __root?: ReturnType<typeof createRoot> }).__root;
@@ -346,5 +360,69 @@ describe("PartidasTable", () => {
     expect(fetchMock).toHaveBeenCalled();
     expect(document.body.textContent).toContain("Eliminar partida");
     expect(document.body.textContent).toContain("No tienes permisos para eliminar esta partida");
+  });
+
+  // ─── Excel mode density contract (Task 8) ──────────────────────
+
+  it("uses the configured Excel row height for partida rows in Excel mode", async () => {
+    viewModeState.isExcelMode = true;
+    formattingSettingsState.excelRowHeight = 52;
+
+    const { container } = await renderTable([makePartida({ id: "p-1" })]);
+
+    const firstBodyRow = container.querySelector("tbody tr");
+    const height = (firstBodyRow?.getAttribute("style") ?? "").match(/height:\s*(\d+)/)?.[1];
+    expect(height).toBe("52");
+  });
+
+  it("falls back to the default row height in modern mode", async () => {
+    viewModeState.isExcelMode = false;
+    formattingSettingsState.excelRowHeight = 52;
+
+    const { container } = await renderTable([makePartida({ id: "p-1" })]);
+
+    const firstBodyRow = container.querySelector("tbody tr");
+    const height = (firstBodyRow?.getAttribute("style") ?? "").match(/height:\s*(\d+)/)?.[1];
+    expect(height).toBe("74");
+  });
+
+  it("renders compact row actions in Excel mode and hides inline action buttons", async () => {
+    viewModeState.isExcelMode = true;
+
+    const { container } = await renderTable([makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" })]);
+
+    const compactTriggers = container.querySelectorAll('button[aria-label="Abrir acciones de fila"]');
+    expect(compactTriggers.length).toBeGreaterThan(0);
+    expect(container.querySelector('button[data-partida-action="delete"]')).toBeNull();
+    const verApuInline = Array.from(container.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === "Ver APU",
+    );
+    expect(verApuInline).toHaveLength(0);
+  });
+
+  it("opens the delete confirmation dialog from the compact menu in Excel mode", async () => {
+    viewModeState.isExcelMode = true;
+
+    const { container } = await renderTable([
+      makePartida({ id: "p-1", description: "Concreto f'c=210 kg/cm2" }),
+    ]);
+
+    await act(async () => {
+      const trigger = container.querySelector('button[aria-label="Abrir acciones de fila"]');
+      trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+
+    await act(async () => {
+      const items = container.querySelectorAll('[role="menuitem"]');
+      const deleteItem = Array.from(items).find((item) => item.textContent?.includes("Eliminar"));
+      deleteItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.body.textContent).toContain("Eliminar partida");
+    expect(document.body.textContent).toContain("Concreto f'c=210 kg/cm2");
   });
 });

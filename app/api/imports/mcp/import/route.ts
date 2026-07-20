@@ -49,10 +49,10 @@ export async function POST(request: Request) {
     );
 
     revalidatePath("/dashboard");
-    revalidateTag("dashboard-stats");
-    revalidateTag("dashboard-analytics");
-    revalidateTag("projects-list");
-    revalidateTag("project-overview");
+    revalidateTag("dashboard-stats", "max");
+    revalidateTag("dashboard-analytics", "max");
+    revalidateTag("projects-list", "max");
+    revalidateTag("project-overview", "max");
     revalidatePath("/projects");
     revalidatePath(`/projects/${result.projectId}`);
     revalidatePath("/budgets");

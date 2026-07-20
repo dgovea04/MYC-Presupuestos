@@ -19,9 +19,9 @@ import { projectTools } from "./projects";
 import { mcpBudgetTools } from "./mcp-budget";
 import { riskTools } from "./risk";
 
-type RegisteredAgentTool = Omit<AgentToolDefinition<never, unknown>, "inputSchema" | "execute"> & {
+type RegisteredAgentTool = Omit<AgentToolDefinition<unknown, unknown>, "inputSchema" | "execute"> & {
   inputSchema: z.ZodType;
-  execute: (input: never, context: Parameters<AgentToolDefinition["execute"]>[1]) => Promise<unknown>;
+  execute: (input: unknown, context: Parameters<AgentToolDefinition["execute"]>[1]) => Promise<unknown>;
 };
 
 // Re-export all domain tools for single-point registration

@@ -4,8 +4,9 @@ import * as Dialog from "@radix-ui/react-dialog";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
-import { AlertTriangle, GitCompareArrows, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, Copy, Edit, Eye, GitCompareArrows, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { PartidaCreateSheet } from "@/components/partidas/partida-create-sheet";
+import { CompactRowActions } from "@/components/spreadsheet/compact-row-actions";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
@@ -546,17 +547,73 @@ const PartidaTableRow = memo(function PartidaTableRow({
       <TD className={cn("align-middle text-slate-500", textSizeClass)}>{row.apuRows.length} filas</TD>
       <TD className="align-middle">
         <div className="flex justify-end gap-2">
-          <ActionButton action="open" label="Ver APU" size="sm" variant="outline" onClick={() => onSelect(row.id)} />
-          {row.isEditing ? (
-            <>
-              <ActionButton action="save" label="Guardar" size="sm" variant="secondary" disabled={isPending} onClick={() => void onSaveAllDirtyRows()} />
-              <ActionButton action="cancel" label="Cancelar" size="sm" variant="ghost" disabled={isPending} onClick={() => onCancelRow(row.id)} />
-            </>
+          {isExcelMode ? (
+            <CompactRowActions
+              triggerLabel="Abrir acciones de fila"
+              actions={
+                row.isEditing
+                  ? [
+                      {
+                        id: "save",
+                        label: "Guardar",
+                        icon: <Save className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => void onSaveAllDirtyRows(),
+                        disabled: isPending,
+                      },
+                      {
+                        id: "cancel",
+                        label: "Cancelar",
+                        icon: <X className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => onCancelRow(row.id),
+                        disabled: isPending,
+                      },
+                    ]
+                  : [
+                      {
+                        id: "open",
+                        label: "Ver APU",
+                        icon: <Eye className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => onSelect(row.id),
+                      },
+                      {
+                        id: "edit",
+                        label: "Editar",
+                        icon: <Edit className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => onStartEditing(row.id),
+                        disabled: isLockedPreloaded,
+                      },
+                      {
+                        id: "duplicate",
+                        label: "Duplicar",
+                        icon: <Copy className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => onDuplicateRow(row.id),
+                        disabled: isPending,
+                      },
+                      {
+                        id: "delete",
+                        label: "Eliminar",
+                        icon: <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => setDeleteOpen(true),
+                        disabled: isLockedPreloaded || isPending || isDeleting,
+                      },
+                    ]
+              }
+            />
           ) : (
             <>
-              <ActionButton action="edit" label="Editar" size="sm" variant="ghost" disabled={isLockedPreloaded} onClick={() => onStartEditing(row.id)} />
-              <ActionButton action="duplicate" label="Duplicar" size="sm" variant="ghost" disabled={isPending} onClick={() => onDuplicateRow(row.id)} />
-              <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" disabled={isLockedPreloaded || isPending || isDeleting} data-partida-action="delete" data-partida-id={row.id} onClick={() => setDeleteOpen(true)} />
+              <ActionButton action="open" label="Ver APU" size="sm" variant="outline" onClick={() => onSelect(row.id)} />
+              {row.isEditing ? (
+                <>
+                  <ActionButton action="save" label="Guardar" size="sm" variant="secondary" disabled={isPending} onClick={() => void onSaveAllDirtyRows()} />
+                  <ActionButton action="cancel" label="Cancelar" size="sm" variant="ghost" disabled={isPending} onClick={() => onCancelRow(row.id)} />
+                </>
+              ) : (
+                <>
+                  <ActionButton action="edit" label="Editar" size="sm" variant="ghost" disabled={isLockedPreloaded} onClick={() => onStartEditing(row.id)} />
+                  <ActionButton action="duplicate" label="Duplicar" size="sm" variant="ghost" disabled={isPending} onClick={() => onDuplicateRow(row.id)} />
+                  <ActionButton action="delete" label="Eliminar" size="sm" variant="ghost" disabled={isLockedPreloaded || isPending || isDeleting} data-partida-action="delete" data-partida-id={row.id} onClick={() => setDeleteOpen(true)} />
+                </>
+              )}
             </>
           )}
         </div>

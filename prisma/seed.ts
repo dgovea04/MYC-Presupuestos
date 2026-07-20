@@ -67,6 +67,7 @@ async function seedUnifiedIndicesFromWorkbook() {
 
 async function main() {
   const passwordHash = await hashPassword("Demo12345");
+  const verifiedAt = new Date();
   await seedMembershipPlans();
 
   const user = await prisma.user.upsert({
@@ -74,6 +75,7 @@ async function main() {
     update: {
       role: "ADMIN",
       status: "ACTIVE",
+      emailVerifiedAt: verifiedAt,
       membershipPlan: {
         connect: { slug: "empresa" },
       },
@@ -84,6 +86,7 @@ async function main() {
       passwordHash,
       role: "ADMIN",
       status: "ACTIVE",
+      emailVerifiedAt: verifiedAt,
       membershipPlan: {
         connect: { slug: "empresa" },
       },
@@ -94,6 +97,7 @@ async function main() {
     update: {
       role: "USER",
       status: "ACTIVE",
+      emailVerifiedAt: verifiedAt,
       membershipPlan: {
         connect: { slug: "starter" },
       },
@@ -104,6 +108,7 @@ async function main() {
       passwordHash,
       role: "USER",
       status: "ACTIVE",
+      emailVerifiedAt: verifiedAt,
       membershipPlan: {
         connect: { slug: "starter" },
       },

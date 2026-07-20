@@ -4,7 +4,8 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const suggestResourceIuCodesMock = vi.fn(() => []);
+type Suggestion = { code: string; label: string; score: number; source: string };
+const suggestResourceIuCodesMock = vi.fn((..._args: unknown[]) => [] as Suggestion[]);
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({
@@ -68,8 +69,8 @@ vi.mock("@/components/ui/table", () => ({
   }) => <table style={style}>{children}</table>,
   THead: ({ children }: { children: React.ReactNode }) => <thead>{children}</thead>,
   TBody: ({ children }: { children: React.ReactNode }) => <tbody>{children}</tbody>,
-  TR: React.forwardRef<HTMLTableRowElement, { children: React.ReactNode }>(function MockTR({ children }, ref) {
-    return <tr ref={ref}>{children}</tr>;
+  TR: React.forwardRef<HTMLTableRowElement, { children: React.ReactNode; style?: React.CSSProperties }>(function MockTR({ children, style }, ref) {
+    return <tr ref={ref} style={style}>{children}</tr>;
   }),
   TH: ({ children }: { children: React.ReactNode }) => <th>{children}</th>,
   TD: ({ children, colSpan }: { children: React.ReactNode; colSpan?: number }) => <td colSpan={colSpan}>{children}</td>,
@@ -89,8 +90,11 @@ vi.mock("@/components/ui/save-state-badge", () => ({
   SaveStateBadge: () => null,
 }));
 
+const viewModeState: { isExcelMode: boolean } = { isExcelMode: false };
+const formattingSettingsState: { excelRowHeight: number } = { excelRowHeight: 74 };
+
 vi.mock("@/components/view-mode/app-view-mode-provider", () => ({
-  useAppViewMode: () => ({ isExcelMode: false }),
+  useAppViewMode: () => ({ isExcelMode: viewModeState.isExcelMode }),
 }));
 
 vi.mock("@/components/view-mode/view-mode-styles", () => ({
@@ -99,9 +103,7 @@ vi.mock("@/components/view-mode/view-mode-styles", () => ({
 }));
 
 vi.mock("@/components/providers/formatting-settings-provider", () => ({
-  useFormattingSettings: () => ({
-    excelRowHeight: 74,
-  }),
+  useFormattingSettings: () => ({ excelRowHeight: formattingSettingsState.excelRowHeight }),
 }));
 
 vi.mock("@/lib/utils", async (importOriginal) => {
@@ -155,6 +157,8 @@ afterEach(async () => {
   vi.restoreAllMocks();
   suggestResourceIuCodesMock.mockReset();
   suggestResourceIuCodesMock.mockReturnValue([]);
+  viewModeState.isExcelMode = false;
+  formattingSettingsState.excelRowHeight = 74;
 
   if (activeContainer) {
     const root = (activeContainer as HTMLDivElement & { __root?: ReturnType<typeof createRoot> }).__root;
@@ -388,5 +392,69 @@ describe("ResourcesTable", () => {
     expect(fetchMock).toHaveBeenCalled();
     expect(document.body.textContent).toContain("Eliminar insumo");
     expect(document.body.textContent).toContain("No tienes permisos para eliminar este insumo");
+  });
+
+  // ─── Excel mode density contract (Task 8) ──────────────────────
+
+  it("uses the configured Excel row height for resource rows in Excel mode", async () => {
+    viewModeState.isExcelMode = true;
+    formattingSettingsState.excelRowHeight = 52;
+
+    const { container } = await renderTable([makeResource({ id: "r-1" })]);
+
+    const firstBodyRow = container.querySelector("tbody tr");
+    const height = (firstBodyRow?.getAttribute("style") ?? "").match(/height:\s*(\d+)/)?.[1];
+    expect(height).toBe("52");
+  });
+
+  it("falls back to the default row height in modern mode", async () => {
+    viewModeState.isExcelMode = false;
+    formattingSettingsState.excelRowHeight = 52;
+
+    const { container } = await renderTable([makeResource({ id: "r-1" })]);
+
+    const firstBodyRow = container.querySelector("tbody tr");
+    const height = (firstBodyRow?.getAttribute("style") ?? "").match(/height:\s*(\d+)/)?.[1];
+    expect(height).toBe("74");
+  });
+
+  it("renders compact row actions in Excel mode and hides inline action buttons", async () => {
+    viewModeState.isExcelMode = true;
+
+    const { container } = await renderTable([makeResource({ id: "r-1" })]);
+
+    const compactTriggers = container.querySelectorAll('button[aria-label="Abrir acciones de fila"]');
+    expect(compactTriggers.length).toBeGreaterThan(0);
+    expect(container.querySelector('button[data-resource-action="delete"]')).toBeNull();
+    const editarInline = Array.from(container.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === "Editar",
+    );
+    expect(editarInline).toHaveLength(0);
+  });
+
+  it("opens the delete confirmation dialog from the compact menu in Excel mode", async () => {
+    viewModeState.isExcelMode = true;
+
+    const { container } = await renderTable([
+      makeResource({ id: "r-1", description: "Cemento Portland", companyId: "company-1" }),
+    ]);
+
+    await act(async () => {
+      const trigger = container.querySelector('button[aria-label="Abrir acciones de fila"]');
+      trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+
+    await act(async () => {
+      const items = container.querySelectorAll('[role="menuitem"]');
+      const deleteItem = Array.from(items).find((item) => item.textContent?.includes("Eliminar"));
+      deleteItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.body.textContent).toContain("Eliminar insumo");
+    expect(document.body.textContent).toContain("Cemento Portland");
   });
 });

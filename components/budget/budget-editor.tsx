@@ -42,6 +42,10 @@ import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { useSpreadsheetSelection } from "@/components/spreadsheet/use-spreadsheet-selection";
+import { useSpreadsheetKeyboard } from "@/components/spreadsheet/use-spreadsheet-keyboard";
+import { createFillDownPatches } from "@/lib/spreadsheet/fill-down";
+import type { SpreadsheetCellAddress, SpreadsheetRowDefinition } from "@/lib/spreadsheet/cell-address";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { formatAiText } from "@/lib/ai/formatting";
@@ -176,6 +180,10 @@ type ApuSheetSession = {
 };
 
 const editableColumnOrder: EditableColumn[] = ["code", "description", "unit", "quantity"];
+
+function isEditableColumn(value: string | null | undefined): value is EditableColumn {
+  return typeof value === "string" && editableColumnOrder.includes(value as EditableColumn);
+}
 const pasteModeLabel: Record<BudgetPasteMode, string> = {
   flat: "Plano",
   "structured-by-code": "Jerárquico por código",
@@ -421,6 +429,35 @@ export function BudgetEditor({
     });
   }, [catalogInsertTarget, deferredCatalogInsertQuery, indexedPartidasCatalog, partidasCatalog]);
   const editableCells = rowNavigationLookup.orderedEditableCells;
+  const spreadsheetRows = useMemo<SpreadsheetRowDefinition[]>(
+    () =>
+      rows.map((row) => {
+        const rowId = getRowId(row);
+        const editableColumns = getEditableColumnsForRow(row);
+        return {
+          id: rowId,
+          columns: editableColumns.map((column) => ({ id: column, editable: true })),
+        };
+      }),
+    [rows],
+  );
+  const budgetSpreadsheetValueMap = useMemo<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      if (row.kind === "level") {
+        map.set(`${row.level.id}::code`, row.level.code);
+        map.set(`${row.level.id}::description`, row.level.name);
+        continue;
+      }
+      map.set(`${row.item.id}::code`, row.item.code);
+      map.set(`${row.item.id}::description`, row.item.description);
+      map.set(`${row.item.id}::unit`, row.item.unit);
+      map.set(`${row.item.id}::quantity`, String(row.item.quantity));
+    }
+    return map;
+  }, [rows]);
+  const spreadsheetSelection = useSpreadsheetSelection({ rows: spreadsheetRows });
+  const { activateCell: activateSpreadsheetCell } = spreadsheetSelection;
   const levelIdSet = useMemo(() => new Set(summary.levels.map((level) => level.id)), [summary.levels]);
   const effectiveDensityMode: DensityMode = isExcelMode ? "compact" : densityMode;
   const isDensityLockedToCompact = isExcelMode;
@@ -776,6 +813,12 @@ export function BudgetEditor({
         return;
       }
 
+      if (commandOrCtrl && event.key.toLowerCase() === "d" && isExcelMode) {
+        event.preventDefault();
+        applyBudgetFillDown();
+        return;
+      }
+
       const focusedRowId = getFocusedBudgetRowId(editorRoot) ?? activeRowIdRef.current;
       if (!focusedRowId) return;
 
@@ -803,7 +846,9 @@ export function BudgetEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeRowId, apuSheetSession, levelIdSet, openApuSheet, summary]);
+    // applyBudgetFillDown is a stable useCallback identity; intentionally not in deps to keep the
+    // effect from re-binding on every render while avoiding TDZ on the late declaration.
+  }, [activeRowId, apuSheetSession, isExcelMode, levelIdSet, openApuSheet, summary]);
 
   const buildBudgetReviewContext = useCallback(() => ({
     project: projectName ?? "Proyecto sin nombre",
@@ -1798,12 +1843,66 @@ export function BudgetEditor({
     setActiveRowId(rowId);
   }, []);
 
-  const handleCellFocus = useCallback((rowId: string, column: ActiveColumn) => {
-    activeRowIdRef.current = rowId;
-    activeColumnRef.current = column;
-    setActiveRowId(rowId);
-    setActiveColumn(column);
-  }, []);
+  const handleCellFocus = useCallback(
+    (rowId: string, column: ActiveColumn) => {
+      activeRowIdRef.current = rowId;
+      activeColumnRef.current = column;
+      setActiveRowId(rowId);
+      setActiveColumn(column);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isExcelMode || !activeRowId || !isEditableColumn(activeColumn)) return;
+    activateSpreadsheetCell({ rowId: activeRowId, columnId: activeColumn });
+  }, [isExcelMode, activeRowId, activeColumn, activateSpreadsheetCell]);
+
+  const focusSpreadsheetCell = useCallback(
+    (cell: SpreadsheetCellAddress | null) => {
+      if (!cell || !isExcelMode || !isEditableColumn(cell.columnId)) return;
+      focusCell({ rowId: cell.rowId, column: cell.columnId });
+    },
+    [focusCell, isExcelMode],
+  );
+
+  const applyBudgetCellPatch = useCallback(
+    (cell: SpreadsheetCellAddress, value: string) => {
+      const row = rows.find((candidate) => getRowId(candidate) === cell.rowId);
+      if (!row) return;
+      if (row.kind === "level") {
+        if (cell.columnId === "code") updateLevel(row.level.id, { code: value });
+        if (cell.columnId === "description") updateLevel(row.level.id, { name: value });
+        return;
+      }
+      if (cell.columnId === "code") updateItem(row.item.id, { code: value });
+      else if (cell.columnId === "description") updateItem(row.item.id, { description: value });
+      else if (cell.columnId === "unit") updateItem(row.item.id, { unit: value });
+      else if (cell.columnId === "quantity") updateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) });
+    },
+    [rows, updateItem, updateLevel],
+  );
+
+  const applyBudgetFillDown = useCallback(() => {
+    if (!isExcelMode) return;
+    const source = spreadsheetSelection.activeCell;
+    if (!source || !isEditableColumn(source.columnId)) return;
+    const targets = spreadsheetSelection.selectedCells.length > 1 ? spreadsheetSelection.selectedCells : [];
+    const patches = createFillDownPatches({
+      source,
+      targets,
+      values: budgetSpreadsheetValueMap,
+    });
+    for (const patch of patches) {
+      applyBudgetCellPatch(patch.cell, patch.value);
+    }
+  }, [
+    applyBudgetCellPatch,
+    budgetSpreadsheetValueMap,
+    isExcelMode,
+    spreadsheetSelection.activeCell,
+    spreadsheetSelection.selectedCells,
+  ]);
 
   const toggleSummaryCollapsed = useCallback(() => {
     setSummaryCollapsed((current) => !current);

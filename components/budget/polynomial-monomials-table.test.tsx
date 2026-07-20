@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PolynomialMonomialsTable } from "@/components/budget/polynomial-monomials-table";
 import type { PolynomialMonomialRecord } from "@/types/polynomial-formula";
 
+const viewModeState: { isExcelMode: boolean } = { isExcelMode: false };
+
 vi.mock("@/components/view-mode/app-view-mode-provider", () => ({
-  useAppViewMode: () => ({ isExcelMode: false }),
+  useAppViewMode: () => ({ isExcelMode: viewModeState.isExcelMode }),
 }));
+
+afterEach(() => {
+  cleanup();
+  viewModeState.isExcelMode = false;
+});
 
 describe("PolynomialMonomialsTable", () => {
   it("renders an initial compact window and expands the remaining monomials on demand", () => {
@@ -33,6 +40,44 @@ describe("PolynomialMonomialsTable", () => {
     expect(screen.getByText("15 de 15 monomios")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Mostrar menos" })).toBeTruthy();
     expect(screen.getByDisplayValue("Monomio 15")).toBeTruthy();
+  });
+
+  // ─── Excel mode density contract (Task 9) ──────────────────────
+
+  it("wraps the monomial table in the Excel table frame when Excel mode is active", () => {
+    viewModeState.isExcelMode = true;
+
+    render(
+      <PolynomialMonomialsTable
+        monomials={createMonomials(3)}
+        baseIndexOptions={[]}
+        baseIndicesLoading={false}
+        currencyDecimals={2}
+        onChangeMonomial={vi.fn()}
+      />,
+    );
+
+    const frame = screen.getByTestId("polynomial-monomials-table-frame");
+    const className = frame.getAttribute("class") ?? "";
+    expect(className.split(/\s+/)).toContain("rounded-none");
+  });
+
+  it("uses the modern rounded frame in modern mode", () => {
+    viewModeState.isExcelMode = false;
+
+    render(
+      <PolynomialMonomialsTable
+        monomials={createMonomials(3)}
+        baseIndexOptions={[]}
+        baseIndicesLoading={false}
+        currencyDecimals={2}
+        onChangeMonomial={vi.fn()}
+      />,
+    );
+
+    const frame = screen.getByTestId("polynomial-monomials-table-frame");
+    const className = frame.getAttribute("class") ?? "";
+    expect(className.split(/\s+/)).toContain("rounded-2xl");
   });
 });
 

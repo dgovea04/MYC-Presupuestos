@@ -2,10 +2,11 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import { BudgetViewModeProvider } from "@/components/budget/view-mode-provider";
+import { AppViewModeProvider } from "@/components/view-mode/app-view-mode-provider";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import type { BudgetItemRecord } from "@/types/budget";
 import type { CatalogPartidaRecord } from "@/types/partida";
@@ -201,6 +202,43 @@ describe("ApuEditorSheet", () => {
         }),
       }),
     );
+  });
+
+  it("inherits excel view-mode and apu-editor field border scope on the main sheet wrapper", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const root = createRoot(container);
+    (container as HTMLDivElement & { __root?: typeof root }).__root = root;
+
+    const settings = createSettings();
+
+    await act(async () => {
+      root.render(
+        <FormattingSettingsProvider settings={settings}>
+          <AppViewModeProvider initialViewMode="excel">
+            <ApuEditorSheet
+              item={createBudgetItem()}
+              open
+              onClose={vi.fn()}
+              onUpdate={vi.fn()}
+              resourcesCatalog={[]}
+              catalogPartidas={[]}
+              densityMode="compact"
+            />
+          </AppViewModeProvider>
+        </FormattingSettingsProvider>,
+      );
+    });
+
+    const mainSheet = document.querySelector<HTMLElement>(
+      '[data-excel-field-border-scope="apu-editor"][data-view-mode="excel"]',
+    );
+    expect(mainSheet).not.toBeNull();
+    expect(mainSheet!.getAttribute("data-view-mode")).toBe("excel");
+    expect(mainSheet!.getAttribute("data-excel-field-border-scope")).toBe("apu-editor");
+    expect(mainSheet!.style.getPropertyValue("--excel-row-height")).toBe("52px");
+    expect(mainSheet!.style.getPropertyValue("--excel-field-border-color")).toBe("#cbd5e1");
   });
 });
 

@@ -2,8 +2,9 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, Copy, Edit, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import type { ResourceCategory, ResourcePatchFields, ResourcePatchResult, ResourceRecord, ResourceStatePatch } from "@/types/resource";
+import { CompactRowActions } from "@/components/spreadsheet/compact-row-actions";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
@@ -871,7 +872,53 @@ const ResourceTableRow = memo(function ResourceTableRow({
       </TD>
       <TD className="align-middle">
         <div className="flex flex-nowrap justify-end gap-1">
-          {resource.isEditing ? (
+          {isExcelMode ? (
+            <CompactRowActions
+              triggerLabel="Abrir acciones de fila"
+              actions={
+                resource.isEditing
+                  ? [
+                      {
+                        id: "save",
+                        label: "Guardar",
+                        icon: <Save className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => void onSaveRow(resource),
+                        disabled: isPending,
+                      },
+                      {
+                        id: "cancel",
+                        label: "Cancelar",
+                        icon: <X className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => onCancelRow(resource.id),
+                        disabled: isPending,
+                      },
+                    ]
+                  : [
+                      {
+                        id: "edit",
+                        label: "Editar",
+                        icon: <Edit className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => onStartEditing(resource.id),
+                        disabled: (!isOwned && !canEditIuCurrent) || isPending,
+                      },
+                      {
+                        id: "duplicate",
+                        label: "Duplicar",
+                        icon: <Copy className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => void onDuplicateRow(resource),
+                        disabled: isPending,
+                      },
+                      {
+                        id: "delete",
+                        label: "Eliminar",
+                        icon: <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />,
+                        onSelect: () => setDeleteOpen(true),
+                        disabled: !isOwned || isPending || isDeleting,
+                      },
+                    ]
+              }
+            />
+          ) : resource.isEditing ? (
             <>
               <ActionButton action="save" label="Guardar" size="sm" variant="secondary" iconOnly disabled={isPending} className={resourceActionButtonClassName} onClick={() => void onSaveRow(resource)} />
               <ActionButton action="cancel" label="Cancelar" size="sm" variant="ghost" iconOnly disabled={isPending} className={resourceActionButtonClassName} onClick={() => onCancelRow(resource.id)} />

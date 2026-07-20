@@ -4,6 +4,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PartidaApuSheet } from "@/components/partidas/partida-apu-sheet";
+import { AppViewModeProvider } from "@/components/view-mode/app-view-mode-provider";
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import type { CatalogPartidaRecord } from "@/types/partida";
 import type { UserSettingsRecord } from "@/types/settings";
@@ -163,6 +164,39 @@ describe("PartidaApuSheet", () => {
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("inherits excel view-mode and apu-editor field border scope on the sheet wrapper", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const root = createRoot(container);
+    (container as HTMLDivElement & { __root?: typeof root }).__root = root;
+
+    await act(async () => {
+      root.render(
+        <FormattingSettingsProvider settings={createSettings()}>
+          <AppViewModeProvider initialViewMode="excel">
+            <PartidaApuSheet
+              partida={createPartida()}
+              open
+              onClose={vi.fn()}
+              onChange={vi.fn()}
+              resourcesCatalog={[]}
+            />
+          </AppViewModeProvider>
+        </FormattingSettingsProvider>,
+      );
+    });
+
+    const excelWrapper = document.querySelector<HTMLElement>(
+      '[data-view-mode="excel"][data-excel-field-border-scope="apu-editor"]',
+    );
+    expect(excelWrapper).not.toBeNull();
+    expect(excelWrapper!.getAttribute("data-view-mode")).toBe("excel");
+    expect(excelWrapper!.getAttribute("data-excel-field-border-scope")).toBe("apu-editor");
+    expect(excelWrapper!.style.getPropertyValue("--excel-row-height")).toBe("52px");
+    expect(excelWrapper!.style.getPropertyValue("--excel-field-border-color")).toBe("#cbd5e1");
   });
 });
 
