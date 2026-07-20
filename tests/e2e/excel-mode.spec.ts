@@ -46,9 +46,13 @@ async function enableExcelMode(page: Page): Promise<void> {
   // The UserSettingsForm (with the defaultViewMode Select) is inside a
   // hidden <section id="settings-tab-panel-formats"> until the
   // "Formatos y visualizacion" tab is activated. Click it first.
-  await page.getByRole("button", { name: /formatos y visualizaci[oó]n/i }).click();
+  // The tab is a Radix <Tabs> trigger, so role="tab" not role="button".
+  await page.getByRole("tab", { name: /formatos y visualizaci[oó]n/i }).click();
   await expect(page.getByLabel(/vista global por defecto/i)).toBeVisible({ timeout: 30_000 });
-  await page.getByLabel(/vista global por defecto/i).selectOption("excel");
+  // The "Select" is a Radix combobox (role="combobox"), not a native <select>,
+  // so selectOption() is not supported. Click the trigger, then the option.
+  await page.getByLabel(/vista global por defecto/i).click();
+  await page.getByRole("option", { name: /modo excel/i }).click();
   await expect(page.locator('div[data-view-mode="excel"]').first()).toBeVisible({ timeout: 15_000 });
 }
 
