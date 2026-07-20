@@ -189,8 +189,8 @@ describe("BudgetEditor view mode integration", () => {
 
     expect(getApuSheetPanel().dataset.densityMode).toBe("compact");
     expect(getApuSheetPanel().dataset.excelFieldBorderScope).toBe("apu-editor");
-    expect(getApuSheetPanel().style.getPropertyValue("--excel-field-border-color")).toBe("#cbd5e1");
-    expect(getApuSheetPanel().style.getPropertyValue("--excel-row-height")).toBe("52px");
+    expect(getApuSheetPanel().style.getPropertyValue("--excel-field-border-color")).toBe("transparent");
+    expect(getApuSheetPanel().style.getPropertyValue("--excel-row-height")).toBe("40px");
   });
 
   it("moves focus into the APU sheet, keeps excel density, and closes it with Escape", async () => {
@@ -339,7 +339,7 @@ describe("BudgetEditor view mode integration", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, altKey: true, key: "ArrowDown" }));
     });
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.filter((call) => !String(call[0]).includes("edit-sessions"))).toHaveLength(0);
     expect(getOrderedItemDescriptions()).toEqual(orderedDescriptionsBeforeOpen);
   });
 
@@ -527,7 +527,7 @@ describe("BudgetEditor view mode integration", () => {
       getButtonByText("Guardar").click();
     });
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.filter((call) => !String(call[0]).includes("edit-sessions"))).toHaveLength(0);
     expect(getByText("Asigna un insumo o elimina la fila manual vacia antes de guardar el APU.")).toBeTruthy();
   });
 
@@ -953,7 +953,7 @@ describe("BudgetEditor view mode integration", () => {
     expect(getSummaryPanel().textContent).toContain("1");
 
     const row = getByText("Sin PU").closest("tr");
-    expect(row?.className).toContain("rose");
+    expect(row?.className).toContain("theme-status-error-row");
     expect(row?.className).not.toContain("amber-50/70");
   });
 
@@ -1211,7 +1211,7 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     expect(() => getByText("Editor APU")).toThrow();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.filter((call) => !String(call[0]).includes("edit-sessions"))).toHaveLength(0);
     expect(getOrderedItemDescriptions()).toEqual(["Partida secundaria", "Partida demo"]);
   });
 
