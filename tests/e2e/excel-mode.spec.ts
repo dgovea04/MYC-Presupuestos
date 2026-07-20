@@ -35,7 +35,7 @@ const SEED_BUDGET_NAME = "Arquitectura";
 async function signInWithCredentials(page: Page): Promise<void> {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: /iniciar sesi[oó]n/i })).toBeVisible({ timeout: 30_000 });
-  await page.getByLabel(/email/i).fill(SEED_USER_EMAIL);
+  await page.getByLabel(/correo|email/i).fill(SEED_USER_EMAIL);
   await page.getByLabel(/contrase[ñn]a|password/i).fill(SEED_USER_PASSWORD);
   await page.getByRole("button", { name: /entrar|iniciar|sign in/i }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
