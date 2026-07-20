@@ -25,6 +25,14 @@ import { test, expect, type Page, type APIResponse } from "@playwright/test";
  * Auth: credentials sign-in via `/login` form using the seeded admin user
  * `demo@mycpresupuestos.pe` / `Demo12345`. Override via env vars:
  * `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`.
+ *
+ * Setup: `test.beforeAll` flips the demo user's `defaultViewMode` to `"excel"`
+ * via the dev-only POST `/api/dev/set-view-mode` (gated to non-production
+ * by `process.env.NODE_ENV !== "production"`). This bypasses the
+ * custom-tab + Radix Select + save-button UI dance in `/settings` and is
+ * reliable in CI because the change persists in the DB rather than relying
+ * on UI click choreography that breaks when `<Select id="defaultViewMode">`
+ * is rendered inside a hidden tab panel.
  */
 
 const SEED_USER_EMAIL = process.env.E2E_USER_EMAIL ?? "demo@mycpresupuestos.pe";
@@ -39,23 +47,6 @@ async function signInWithCredentials(page: Page): Promise<void> {
   await page.getByLabel(/contrase[ñn]a|password/i).fill(SEED_USER_PASSWORD);
   await page.getByRole("button", { name: /entrar|iniciar|sign in/i }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
-}
-
-async function enableExcelMode(page: Page): Promise<void> {
-  await page.goto("/settings");
-  // The UserSettingsForm (with the defaultViewMode Select) is inside a
-  // hidden <section id="settings-tab-panel-formats"> until the
-  // "Formatos y visualizacion" tab is activated. Click it first.
-  // Note: the settings page uses a CUSTOM tab navigation (a <button> with
-  // onClick + state-based show/hide via hidden class), NOT Radix <Tabs>.
-  // So the trigger is role="button", not role="tab".
-  await page.getByRole("button", { name: /formatos y visualizaci[oó]n/i }).click();
-  await expect(page.getByLabel(/vista global por defecto/i)).toBeVisible({ timeout: 30_000 });
-  // The "Select" is a Radix combobox (role="combobox"), not a native <select>,
-  // so selectOption() is not supported. Click the trigger, then the option.
-  await page.getByLabel(/vista global por defecto/i).click();
-  await page.getByRole("option", { name: /modo excel/i }).click();
-  await expect(page.locator('div[data-view-mode="excel"]').first()).toBeVisible({ timeout: 15_000 });
 }
 
 async function goToSeedProjectAndBudget(page: Page): Promise<{ budgetId: string }> {
@@ -83,16 +74,59 @@ test.describe.configure({ mode: "serial" });
 
 test.describe("Excel-mode pipeline @smoke", () => {
   test.beforeAll(async ({ request }) => {
+    // 1. Server reachability probe.
     const probe = await request.get("/api/auth/session").catch(() => undefined);
     await assertServerIsReachable(probe);
+
+    // 2. Flip the demo user to Excel mode via the dev-only shortcut.
+    // Persists in the DB so every test in this file sees Excel mode without
+    // driving the custom-tab + Radix Select + save-button UI dance in
+    // `/settings`. The route is gated to non-production builds.
+    const setMode = await request.post("/api/dev/set-view-mode", {
+      data: { email: SEED_USER_EMAIL, viewMode: "excel" },
+    });
+    expect(setMode.ok(), "dev /api/dev/set-view-mode must accept the request").toBeTruthy();
+    const setModeJson = await setMode.json();
+    // Response shape is fully pinned by app/api/dev/set-view-mode/route.test.ts.
+    // The e2e only needs to verify the side-effect (defaultViewMode flipped) +
+    // that the route resolved a real userId (sanity for the lookup path).
+    expect(setModeJson.userId, "dev route response must include the resolved userId").toBeTruthy();
+    expect(setModeJson.defaultViewMode, "demo user must be persisted as excel mode").toBe("excel");
+  });
+
+  // Restore the demo user's defaultViewMode to "modern" so subsequent
+  // test runs (or other spec files that share the same seeded DB) don't
+  // inherit Excel mode as the new baseline. Without this, a flaky failure
+  // mid-suite could leave the seed stuck in Excel mode for the next run.
+  test.afterAll(async ({ request }) => {
+    let resetMode: APIResponse | null = null;
+    try {
+      resetMode = await request.post("/api/dev/set-view-mode", {
+        data: { email: SEED_USER_EMAIL, viewMode: "modern" },
+      });
+    } catch (error) {
+      // Don't fail the suite — the reset is best-effort. A missing dev
+      // route on a production build or a teardown-time server crash is
+      // expected to be silently swallowed here.
+      // eslint-disable-next-line no-console -- intentional diagnostic
+      console.warn("[excel-mode] afterAll reset threw:", error);
+      return;
+    }
+    if (!resetMode.ok()) {
+      // eslint-disable-next-line no-console -- intentional diagnostic
+      console.warn(`[excel-mode] afterAll reset returned ${resetMode.status()} ${resetMode.statusText()}`);
+    }
   });
 
   test.beforeEach(async ({ page }) => {
     await signInWithCredentials(page);
-    await enableExcelMode(page);
+    // DB-driven defaultViewMode=excel auto-applies on any page render via
+    // the <AppViewModeProvider>. Verify it lands on the current page so a
+    // regression on the SSR'd FormattingSettingsProvider surfaces here.
+    await expect(page.locator('div[data-view-mode="excel"]').first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test("signs in and switches to Excel mode globally", async ({ page }) => {
+  test("default view mode is Excel (DB-driven) and --excel-row-height is published", async ({ page }) => {
     const excelScope = page.locator('div[data-view-mode="excel"]').first();
     await expect(excelScope).toBeVisible({ timeout: 15_000 });
     const height = await excelScope.evaluate((el) =>
@@ -117,7 +151,7 @@ test.describe("Excel-mode pipeline @smoke", () => {
       await goToSeedProjectAndBudget(page);
       const firstInput = page
         .locator('div[data-view-mode="excel"]')
-        .locator('input')
+        .locator("input")
         .first();
       await firstInput.click();
       await expect(firstInput, "expected once budget-editor renders data-spreadsheet-active").toHaveAttribute(
