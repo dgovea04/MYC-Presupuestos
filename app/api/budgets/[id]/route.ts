@@ -5,6 +5,7 @@ import { recordActivityEvent } from "@/lib/data/activity-events";
 import { BUDGETS_LIST_CACHE_TAG, BUDGET_DETAIL_CACHE_TAG, deleteBudget, getBudgetDetailCacheTag, getBudgetHeaderById, getBudgetLiveUpdateSummaries, saveBudgetPatch, getBudgetById } from "@/lib/data/budgets";
 import { getProjectOverviewCacheTag, PROJECT_OVERVIEW_CACHE_TAG } from "@/lib/data/projects";
 import { recordBudgetChangeEvents } from "@/lib/collaboration/audit";
+import type { CollaborationEntityType } from "@/types/collaboration";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -87,7 +88,14 @@ function revalidateBudgetPaths(projectId: string, budgetId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
-type AuditDiff = { entityType: string; entityId: string; action: string; field: string; oldValue: string | null; newValue: string | null };
+type AuditDiff = {
+  entityType: CollaborationEntityType;
+  entityId: string;
+  action: string;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+};
 
 function buildBudgetAuditDiffs(
   previous: { name: string; currency: string; items: Array<{ id: string; description: string; quantity: number; unitPrice: number; partial: number }> },

@@ -5,11 +5,13 @@ const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   recordActivityEvent: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
   updateUserBudgetTemplate: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -33,7 +35,10 @@ describe("/api/templates/budget/[id]", () => {
     mocks.getAuthSession.mockReset();
     mocks.recordActivityEvent.mockReset();
     mocks.revalidatePath.mockReset();
+    mocks.revalidateTag.mockReset();
+    mocks.revalidateTag.mockReset();
     mocks.updateUserBudgetTemplate.mockReset();
+    mocks.revalidateTag.mockReset();
   });
 
   it("updates a template owned by the current user", async () => {

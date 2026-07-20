@@ -654,6 +654,164 @@ The floating Khipu assistant is the reference implementation for product dark mo
 
 ---
 
+## 13.2. Excel Mode Interaction Contract
+
+Excel mode (`data-view-mode="excel"`) gives power users a spreadsheet-like editing experience inside the budget editor without breaking the SaaS shell. This section is the contract that binds between **the data spreadsheet primitives** (`@/components/spreadsheet`, `@/lib/spreadsheet`) and **any surface that hosts them** (presupuesto editor, APU editor, Subpartida dialog).
+
+### 13.2.1. Activation and scope
+
+- Toggling the view mode in the topbar flips the active surface between `modern` and `excel`. The toggle persists per user.
+- Excel mode is opt-in. Modern mode is the default for new users and for screens that don't host a spreadsheet primitive.
+- A surface opts in by rendering inside `<FormattingSettingsProvider>` and reading density/border/decimal config from the same provider. The data attributes `data-view-mode` and `data-excel-field-border-scope` are the public contract — do not branch on theme classes or internal hooks from outside the surface.
+- APU editor and Subpartida dialog inherit the parent surface's Excel density, row height, decimal behavior, and border scope. They do **not** introduce a second Excel system.
+
+### 13.2.2. Selection model
+
+The selection state is owned by `useSpreadsheetSelection()` and exported as:
+
+| Field | Meaning |
+|---|---|
+| `anchorCellKey` | Stable id of the cell where the current range starts. |
+| `activeCellKey` | Stable id of the cell the cursor is on. When `anchor === active`, the selection is a single cell. |
+| `rangeKeys` | Stable ids of every cell in the rectangular range `min(anchor, active)` → `max(anchor, active)`. Stable across renders for a given `(rowId, columnId)` pair. |
+| `activateCell(key)` | Move the cursor to `key`. Resets the range to a single cell. |
+| `extendSelection(key)` | Move the cursor while keeping the anchor — extends or shrinks the rectangle. |
+| `clearSelection()` | Reset anchor and active. |
+
+Rules:
+
+- Selection is per-surface, not per-table. Two tables on the same page have independent selections.
+- A click on a cell sets `anchor = active = key`. A click then `Shift+Click` on another cell sets `anchor` to the first click and `active` to the second.
+- Keyboard `Arrow*` keys move `active`; held `Shift` extends the range. `Esc` clears the range back to a single cell at the anchor.
+
+### 13.2.3. Keyboard contract
+
+`useSpreadsheetKeyboard({ handler })` is the single owner of keyboard interactions inside an Excel surface.
+
+| Shortcut | Behavior |
+|---|---|
+| `Arrow` | Move active cell by one. Resets range. |
+| `Shift+Arrow` | Extend selection. |
+| `Tab` / `Shift+Tab` | Move active cell horizontally; wrap to next/previous row at edges. |
+| `Enter` / `Shift+Enter` | Move active cell vertically; wrap to next/previous column at edges. |
+| `Esc` | Collapse range back to active. Pressing again clears selection. |
+| `Delete` / `Backspace` | Clear values in the active range (does not delete rows). |
+| `Ctrl/Cmd+D` | Fill-down: copy the anchor cell's value into every other cell in the active range. The anchor stays put. |
+| `Ctrl/Cmd+C` / `Ctrl/Cmd+V` | Copy / paste the rectangular range using a TSV payload carried in the clipboard. Round-trip must be lossless for text and numeric cells. |
+
+The keyboard handler must:
+
+- Be inactive when the focused element is an editable field (`<input>`, `<textarea>`, `[contenteditable="true"]`).
+- Be inactive when the user is typing in a Radix popover, command dialog, or filter input.
+- Respect both `Ctrl` (Windows/Linux) and `Cmd` (macOS) via `e.ctrlKey || e.metaKey`.
+
+### 13.2.4. Range operations contract
+
+- **Fill-down** copies the anchor cell's editable value (or a small tuple of values for multi-field rows) into every other cell in the active range. Numeric values are reused as-is; string values are reused as-is.
+- **Copy/paste** uses `application/x-myc-spreadsheet-tsv` with a TSV fallback. The rectangular range is what the clipboard carries — never the entire row.
+- Empty cells inside a range do **not** block fill-down or paste. They become filled.
+
+### 13.2.5. Data attribute contract
+
+Each interactive cell inside an Excel surface must declare a stable identity so the keyboard and selection layers can resolve the right row/column without prop-drilling.
+
+| Attribute | Where | Example |
+|---|---|---|
+| `data-spreadsheet-row` | Every cell of the row, including non-interactive cells. | `"apu-row-3"` |
+| `data-spreadsheet-col` | Every cell of the column. | `"precio"` |
+| `data-spreadsheet-key` | Only on cells that are activable / editable. | `"apu-row-3:precio"` |
+| `data-spreadsheet-anchor` | Optional. Set to `"true"` on the anchor cell for visual emphasis. | `"true"` |
+
+Keys must be deterministic and stable across renders for the same `(rowId, columnId)` pair. The `columnId` is a stable logical id (not the visual column index) so reordering columns does not break selection or copy/paste.
+
+### 13.2.6. Visual feedback contract
+
+Selection must be visible at all times and must read clearly in both light and dark themes.
+
+| Token | Purpose |
+|---|---|
+| `--excel-selection-bg` | Fill of every cell inside the active range except the anchor. |
+| `--excel-active-cell-ring` | 1–2 px ring drawn around the active cell. |
+| `--excel-anchor-cell-ring` | Optional stronger ring or marker on the anchor. |
+| `--excel-row-height` | Inherited from `FormattingSettingsProvider`. Drives row line-height so the selection ring stays inside the cell. |
+| `--excel-field-border-color` | Inherited from `FormattingSettingsProvider`. Cell borders for visual grid. |
+
+The ring must use `box-shadow: inset 0 0 0 2px var(--excel-active-cell-ring)` rather than a real border so layout doesn't shift when the active cell changes.
+
+### 13.2.7. Inheritance contract
+
+When a Subpartida or APU dialog is opened from a surface that is already in Excel mode, the dialog:
+
+1. Renders `data-view-mode="excel"` on its outer container.
+2. Renders `data-excel-field-border-scope="apu-editor"` on the same container so the field-border opt-out rule from the global stylesheet applies.
+3. Inherits the parent `FormattingSettingsProvider` settings: `excelRowHeight`, `excelShowFieldBorders`, `excelShowZebraRows`, `currencyDecimals`, `unitCostDecimals`.
+4. Does **not** introduce a second view-mode toggle. The dialog remains in the parent's mode for its lifetime.
+
+This contract is enforced by a contract test in `components/apu/apu-editor-sheet.test.tsx` and `components/partidas/partida-apu-sheet.test.tsx` that asserts the wrapper carries both data attributes and exposes the expected CSS variables.
+
+### 13.2.8. Non-goals
+
+Excel mode is **explicitly not**:
+
+- A full spreadsheet engine. Formulas, named ranges, frozen panes, and pivot behavior are out of scope.
+- A replacement for keyboard input inside `<input>` fields. While a field is focused, native text editing wins.
+- A second theme. Excel mode uses the same dark/light tokens as modern mode — only density, row height, borders, and decimals change.
+
+### 13.2.9. Smoke evidence and Playwright coverage
+
+This contract is verified across two complementary layers. The split exists because Excel mode is *opt-in* and most of its interactive contracts only fire on signed-in, in-canvas surfaces — the unauthenticated surface only proves the global CSS pipeline is wired.
+
+#### Public-side smoke (no auth required)
+
+A browser-use smoke test against `npm run dev` on `localhost:3000` confirms, today:
+
+- Landing `/` renders with **zero console errors**.
+- The "Modo Excel" switcher in `app/(auth)/login/page.tsx` and the view-mode Select in `components/settings/user-settings-form.tsx` (`select#defaultViewMode` with options `value="modern"` and `value="excel"`, label `"Vista global por defecto"`) sets the global `<div data-view-mode="...">` attribute and publishes `--excel-row-height: <px>` + `--excel-control-height: calc(var(--excel-row-height) - 8px)` on the same scope (wired via `components/view-mode/app-view-mode-provider.tsx` and `lib/budget/excel-view-css.ts`).
+- The "Vista" section on the landing page (`app/(landing)/page.tsx` plus `app/landing/page.tsx`) renders the Excel-mode description ("Cambia entre una vista moderna y una vista compacta tipo Excel…") and preview image correctly.
+- These public signals lock in the *shipping* contract for the global Excel-mode pipeline (token publication + save-persistence) without requiring a seeded demo user. Regression on `app/globals.css:2094–2200` (the Excel-mode rule block) would surface here before any signed-in interaction test runs.
+
+#### Auth-bounded checks — `tests/e2e/excel-mode.spec.ts` (Playwright route added in Task 12 of `docs/superpowers/plans/2026-07-20-excel-mode-professional-grid.md`)
+
+The Playwright spec covers the five lock-in cells. Each test needs a signed-in seeded demo user (`demo@mycpresupuestos.pe` / `Demo12345`, both with `emailVerifiedAt` set by the `prisma/seed.ts` patch — credentials are otherwise rejected by `lib/auth/options.ts:174`). The dev server is reached via `webServer.reuseExistingServer: true` in `playwright.config.ts`, so a `npm run dev` already running on `localhost:3000` is reused.
+
+| Lock-in cell | Playwright test name | Route / surface | Assertion |
+|---|---|---|---|
+| 1. Budget editor cursor | `budget editor: focused cell data-spreadsheet-active + post-Ctrl+D fill-down` | `/projects/<id>` → `/budgets/<id>` (seed project "Vivienda Multifamiliar San Miguel", budget "Arquitectura") | **Status: `test.fail` (expected-fail by design).** Body contains an explicit `expect(firstInput).toHaveAttribute("data-spreadsheet-active", "true")` assertion. Until `components/budget/budget-editor.tsx` renders the attribute on editable cells (mirror `components/metrados/MetradoSheetTable.tsx:481,482`), this stays red on purpose. The `Ctrl/⌘+D` listener IS wired (budget-editor.tsx ~816), gated on `isExcelMode`. |
+| 2. APU subpartida inheritance | `APU sheet dialog inherits data-view-mode=excel + data-excel-field-border-scope=apu-editor` | opens via `button[aria-label="Abrir editor APU de esta partida"]` (budget-editor.tsx ~4427) → APU sheet dialog | The visible Radix Dialog (matched as `[role="dialog"][data-state="open"]`) contains at least one wrapper carrying both `[data-view-mode="excel"]` AND `[data-excel-field-border-scope="apu-editor"]`. Inherited from `apu-editor-sheet.tsx` (~511/1268/1533) and `partida-apu-sheet.tsx` (~313/759) for subpartida dialogs. |
+| 3. Polynomial frame density | `polynomial formula table: Excel density frame` | `/budgets/<id>/polynomial-formula` (real route; top-level `/polynomial-formula` does not exist) | `[data-testid="polynomial-monomials-table-frame"]` carries `rounded-md` (not `rounded-2xl`) AND tracks `--excel-row-height` on the nearest `[data-view-mode="excel"]` ancestor. |
+| 4. General budget footer density | `general budget footer: --excel-row-height + h-[var(--excel-control-height)] inputs` | `/budgets/<id>/footer` | The closest `[data-view-mode="excel"]` scope publishes `--excel-row-height` as a `<px>` value AND carries inputs with the Tailwind arbitrary-value class `h-[var(--excel-control-height)]` (from `general-budget-footer-table.tsx` ~347 and ~375). |
+| 5. Resources / Partidas compact row actions | `resources table: CompactRowActions menu opens per row` + `partidas table: CompactRowActions menu opens per row` | `/resources` and `/partidas` | The per-row trigger button (`aria-label="Abrir acciones de fila"`, default in `components/spreadsheet/compact-row-actions.tsx`) flips `aria-expanded="true"` after click, and a `role="menu"` surface becomes visible inline. |
+
+The spec runs serially (`test.describe.configure({ mode: "serial" })`), signs in once per test via `signInWithCredentials()` (the `/login` form path through `next-auth` v4), enables Excel mode via the settings form's `<Select id="defaultViewMode">`, then drives each lock-in cell. A `beforeAll` health probe of `/api/auth/session` is fault-tolerant (any status <500 is acceptable — next-auth can return 401 on missing cookies).
+
+#### Drift to reconcile
+
+- **Polynomial table `rounded-md` vs. `rounded-none`.** Plan-doc Tasks 8 referenced `rounded-none`. `polynomial-monomials-table.tsx` (~178) implements `isExcelMode ? "rounded-md …" : "rounded-2xl"`. The Playwright spec asserts `rounded-md` to match the source. The broader Excel-mode CSS contract (`app/globals.css:2120/2138/2161`) leans on `rounded-none`. Surface this in code comment and reconcile either in the source file or in DESIGN.md.
+- **`data-spreadsheet-active` is not yet on budget-editor cells.** Until `components/budget/budget-editor.tsx` adds the attribute (mirror `MetradoSheetTable.tsx:481,482` pattern), the budget-editor test stays as `test.fail`.
+- **`prisma/seed.ts` `emailVerifiedAt` patch is required** for the credentials sign-in path to succeed. Without it, all auth-bounded tests fail at the login step.
+
+#### Run sequence
+
+The suite is staged across two separate fenced blocks so that a partial `npm install` fails loudly instead of silently skipping `prisma/seed`.
+
+**Setup (one-shot, may take a few minutes):**
+
+```shell
+npm install && npm run test:e2e:install
+```
+
+**Runtime (idempotent — re-run safely):**
+
+```shell
+npm run prisma:seed && (npm run dev &) && npm run test:e2e
+```
+
+The `npm run dev` command is parenthesized so the background fork survives the trailing `&&` and `npm run test:e2e` boots against the same dev server. Playwright's `webServer.reuseExistingServer: true` from `playwright.config.ts` reuses any already-running dev server, so the parenthetical launch is optional on a workstation that already has one.
+
+Report-mode expectations: the suite prints **7 passed, 1 expected-fail**; the reported `expected-fail` is the budget-editor Ctrl+D contract that surfaces as red only because the production hook is intentionally not yet wired. CI integration should mark the suite as passing on that pattern.
+
+---
+
 ## 14. Dashboard UI
 
 Dashboards should prioritize clarity and action.

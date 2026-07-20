@@ -9,7 +9,9 @@ import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
+import { useSpreadsheetSelection } from "@/components/spreadsheet/use-spreadsheet-selection";
 import { cn, formatNumber } from "@/lib/utils";
+import { getCellKey, type SpreadsheetCellAddress, type SpreadsheetRowDefinition } from "@/lib/spreadsheet/cell-address";
 import type {
   MetradoFormulaInputKey,
   MetradoFormulaRecord,
@@ -89,6 +91,25 @@ export function MetradoSheetTable({
     });
     return map;
   }, [rows]);
+  const spreadsheetRows = useMemo<SpreadsheetRowDefinition[]>(
+    () =>
+      rows
+        .filter((row) => !row.groupLabel)
+        .map((row) => ({
+          id: row.id,
+          columns: [
+            { id: "sector", editable: true },
+            { id: "eje", editable: true },
+            { id: "nivel", editable: true },
+            { id: "description", editable: true },
+            { id: "formulaKey", editable: true },
+            { id: "unit", editable: true },
+            ...inputColumns.map((key) => ({ id: key, editable: true })),
+          ],
+        })),
+    [rows, inputColumns],
+  );
+  const spreadsheetSelection = useSpreadsheetSelection({ rows: spreadsheetRows });
 
   // Drag-fill: use live refs to avoid stale closures in document event handlers
   const onInputChangeRef = useRef(onInputChange);
@@ -387,6 +408,9 @@ export function MetradoSheetTable({
                   activeCell={activeCell}
                   selected={selectedRowIds.has(row.id)}
                   dragHighlighted={dragTargetSet?.has(row.id) ?? false}
+                  spreadsheetActiveCell={spreadsheetSelection.activeCell}
+                  spreadsheetSelectedKeys={spreadsheetSelection.selectedCellKeys}
+                  onActivateSpreadsheetCell={spreadsheetSelection.activateCell}
                   onSelect={(event) => toggleSelectRow(row.id, event)}
                   onActiveCellChange={onActiveCellChange}
                   onPatchRow={onPatchRow}
@@ -430,6 +454,9 @@ function TextCell({
   ariaLabel,
   value,
   active,
+  cellKey,
+  activeSpreadsheet,
+  selectedSpreadsheet,
   onFocus,
   onChange,
   onDragFillStart,
@@ -437,12 +464,23 @@ function TextCell({
   ariaLabel: string;
   value: string;
   active: boolean;
+  cellKey: string;
+  activeSpreadsheet: boolean;
+  selectedSpreadsheet: boolean;
   onFocus: () => void;
   onChange: (value: string) => void;
   onDragFillStart?: (event: React.PointerEvent) => void;
 }) {
+  const [rowId, columnId] = cellKey.split("::");
   return (
-    <TD className="relative px-1 py-1 group">
+    <TD
+      className="relative px-1 py-1 group"
+      data-spreadsheet-key={cellKey}
+      data-spreadsheet-row={rowId}
+      data-spreadsheet-col={columnId}
+      data-spreadsheet-active={activeSpreadsheet ? "true" : undefined}
+      data-spreadsheet-selected={selectedSpreadsheet ? "true" : undefined}
+    >
       <Input
         aria-label={ariaLabel}
         value={value}
@@ -465,6 +503,9 @@ function NumericCell({
   ariaLabel,
   value,
   active,
+  cellKey,
+  activeSpreadsheet,
+  selectedSpreadsheet,
   onFocus,
   onChange,
   onDragFillStart,
@@ -472,12 +513,23 @@ function NumericCell({
   ariaLabel: string;
   value: number | undefined;
   active: boolean;
+  cellKey: string;
+  activeSpreadsheet: boolean;
+  selectedSpreadsheet: boolean;
   onFocus: () => void;
   onChange: (value: string) => void;
   onDragFillStart?: (event: React.PointerEvent) => void;
 }) {
+  const [rowId, columnId] = cellKey.split("::");
   return (
-    <TD className="relative px-1 py-1 group">
+    <TD
+      className="relative px-1 py-1 group"
+      data-spreadsheet-key={cellKey}
+      data-spreadsheet-row={rowId}
+      data-spreadsheet-col={columnId}
+      data-spreadsheet-active={activeSpreadsheet ? "true" : undefined}
+      data-spreadsheet-selected={selectedSpreadsheet ? "true" : undefined}
+    >
       <Input
         aria-label={ariaLabel}
         type="number"
@@ -611,6 +663,9 @@ function NormalRow({
   activeCell,
   selected,
   dragHighlighted,
+  spreadsheetActiveCell,
+  spreadsheetSelectedKeys,
+  onActivateSpreadsheetCell,
   onSelect,
   onActiveCellChange,
   onPatchRow,
@@ -626,6 +681,9 @@ function NormalRow({
   activeCell: MetradoActiveCell | null;
   selected: boolean;
   dragHighlighted: boolean;
+  spreadsheetActiveCell: SpreadsheetCellAddress | null;
+  spreadsheetSelectedKeys: ReadonlySet<string>;
+  onActivateSpreadsheetCell: (cell: SpreadsheetCellAddress) => void;
   onSelect: (event: React.MouseEvent) => void;
   onActiveCellChange: (cell: MetradoActiveCell) => void;
   onPatchRow: (rowId: string, patch: Partial<Pick<MetradoRowRecord, "sector" | "eje" | "nivel" | "description" | "unit" | "formulaKey">>) => void;
@@ -634,6 +692,28 @@ function NormalRow({
   onDeleteRow: (rowId: string) => void;
   onDragFillStart: (field: string, rawValue: string | number | undefined, isInput: boolean, event: React.PointerEvent) => void;
 }) {
+  function spreadsheetAttrs(field: ActiveCellField) {
+    const cellKey = getCellKey({ rowId: row.id, columnId: field });
+    return {
+      cellKey,
+      activeSpreadsheet:
+        spreadsheetActiveCell !== null &&
+        spreadsheetActiveCell.rowId === row.id &&
+        spreadsheetActiveCell.columnId === field,
+      selectedSpreadsheet: spreadsheetSelectedKeys.has(cellKey),
+    };
+  }
+
+  function handleFocus(field: ActiveCellField) {
+    onActiveCellChange({ rowId: row.id, field });
+    onActivateSpreadsheetCell({ rowId: row.id, columnId: field });
+  }
+
+  const sector = spreadsheetAttrs("sector");
+  const eje = spreadsheetAttrs("eje");
+  const nivel = spreadsheetAttrs("nivel");
+  const description = spreadsheetAttrs("description");
+
   return (
     <TR
       data-row-id={row.id}
@@ -661,7 +741,10 @@ function NormalRow({
         ariaLabel={`Sector fila ${row.sortOrder}`}
         value={row.sector}
         active={isActive(activeCell, row.id, "sector")}
-        onFocus={() => onActiveCellChange({ rowId: row.id, field: "sector" })}
+        cellKey={sector.cellKey}
+        activeSpreadsheet={sector.activeSpreadsheet}
+        selectedSpreadsheet={sector.selectedSpreadsheet}
+        onFocus={() => handleFocus("sector")}
         onChange={(value) => onPatchRow(row.id, { sector: value })}
         onDragFillStart={(e) => onDragFillStart("sector", row.sector, false, e)}
       />
@@ -669,7 +752,10 @@ function NormalRow({
         ariaLabel={`Eje fila ${row.sortOrder}`}
         value={row.eje}
         active={isActive(activeCell, row.id, "eje")}
-        onFocus={() => onActiveCellChange({ rowId: row.id, field: "eje" })}
+        cellKey={eje.cellKey}
+        activeSpreadsheet={eje.activeSpreadsheet}
+        selectedSpreadsheet={eje.selectedSpreadsheet}
+        onFocus={() => handleFocus("eje")}
         onChange={(value) => onPatchRow(row.id, { eje: value })}
         onDragFillStart={(e) => onDragFillStart("eje", row.eje, false, e)}
       />
@@ -677,7 +763,10 @@ function NormalRow({
         ariaLabel={`Nivel fila ${row.sortOrder}`}
         value={row.nivel}
         active={isActive(activeCell, row.id, "nivel")}
-        onFocus={() => onActiveCellChange({ rowId: row.id, field: "nivel" })}
+        cellKey={nivel.cellKey}
+        activeSpreadsheet={nivel.activeSpreadsheet}
+        selectedSpreadsheet={nivel.selectedSpreadsheet}
+        onFocus={() => handleFocus("nivel")}
         onChange={(value) => onPatchRow(row.id, { nivel: value })}
         onDragFillStart={(e) => onDragFillStart("nivel", row.nivel, false, e)}
       />
@@ -685,7 +774,10 @@ function NormalRow({
         ariaLabel={`Descripcion fila ${row.sortOrder}`}
         value={row.description}
         active={isActive(activeCell, row.id, "description")}
-        onFocus={() => onActiveCellChange({ rowId: row.id, field: "description" })}
+        cellKey={description.cellKey}
+        activeSpreadsheet={description.activeSpreadsheet}
+        selectedSpreadsheet={description.selectedSpreadsheet}
+        onFocus={() => handleFocus("description")}
         onChange={(value) => onPatchRow(row.id, { description: value })}
         onDragFillStart={(e) => onDragFillStart("description", row.description, false, e)}
       />
@@ -721,17 +813,23 @@ function NormalRow({
           ))}
         </Select>
       </TD>
-      {inputColumns.map((key) => (
-        <NumericCell
-          key={key}
-          ariaLabel={`${key} fila ${row.sortOrder}`}
-          value={row.inputs[key]}
-          active={isActive(activeCell, row.id, key)}
-          onFocus={() => onActiveCellChange({ rowId: row.id, field: key })}
-          onChange={(value) => onInputChange(row.id, key, value)}
-          onDragFillStart={(e) => onDragFillStart(key, row.inputs[key], true, e)}
-        />
-      ))}
+      {inputColumns.map((key) => {
+        const attrs = spreadsheetAttrs(key);
+        return (
+          <NumericCell
+            key={key}
+            ariaLabel={`${key} fila ${row.sortOrder}`}
+            value={row.inputs[key]}
+            active={isActive(activeCell, row.id, key)}
+            cellKey={attrs.cellKey}
+            activeSpreadsheet={attrs.activeSpreadsheet}
+            selectedSpreadsheet={attrs.selectedSpreadsheet}
+            onFocus={() => handleFocus(key)}
+            onChange={(value) => onInputChange(row.id, key, value)}
+            onDragFillStart={(e) => onDragFillStart(key, row.inputs[key], true, e)}
+          />
+        );
+      })}
       <TD className="px-2 py-1 text-right font-semibold tabular-nums text-slate-900">
         {formatNumber(row.partial, 3)}
       </TD>

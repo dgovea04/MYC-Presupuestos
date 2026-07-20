@@ -195,7 +195,7 @@ export function PolynomialMonomialsTable({
           </div>
         ) : null}
 
-        <div className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
+        <div data-testid="polynomial-monomials-table-frame" className={getTableFrameClassName(isExcelMode, "overflow-x-auto")}>
           <Table className="min-w-[1180px] table-fixed">
             <THead>
               <TR className="theme-muted-panel hover:theme-muted-panel">

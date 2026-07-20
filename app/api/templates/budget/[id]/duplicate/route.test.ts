@@ -5,10 +5,12 @@ const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   recordActivityEvent: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -31,6 +33,7 @@ describe("POST /api/templates/budget/[id]/duplicate", () => {
     mocks.getAuthSession.mockReset();
     mocks.recordActivityEvent.mockReset();
     mocks.revalidatePath.mockReset();
+    mocks.revalidateTag.mockReset();
   });
 
   it("duplicates a template owned by the current user", async () => {
@@ -61,6 +64,7 @@ describe("POST /api/templates/budget/[id]/duplicate", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/templates");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/templates/budget/template-copy");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("dashboard-stats", "max");
   });
 
   it("keeps a successful template duplication when activity logging fails", async () => {

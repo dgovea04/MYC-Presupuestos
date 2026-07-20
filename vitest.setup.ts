@@ -1,3 +1,19 @@
+import { vi } from "vitest";
+
+// Phase 1 Excel-mode note:
+// The global vi.mock("next/cache", ...) below is intentional Phase 1 alignment for the
+// revalidateTag(tag, "max") overload tests in app/api/templates/budget/[id]/*,
+// app/api/imports/mcp/import/route.ts and siblings. It also covers
+// app/api/budgets/[id]/route.ts (AuditDiff narrowing) and app/api/ai/agent/route.ts
+// (RegisteredAgentTool inputSchema). Do not scope per-file without verifying that
+// every other test in vitest's purview still works without it.
+
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+  unstable_cache: vi.fn(),
+}));
+
 class MockResizeObserver implements ResizeObserver {
   observe() {}
 

@@ -5,10 +5,12 @@ const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   recordActivityEvent: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -31,6 +33,7 @@ describe("POST /api/templates/budget/[id]/apply", () => {
     mocks.getAuthSession.mockReset();
     mocks.recordActivityEvent.mockReset();
     mocks.revalidatePath.mockReset();
+    mocks.revalidateTag.mockReset();
   });
 
   it("applies a template and returns the created budget", async () => {
@@ -71,6 +74,7 @@ describe("POST /api/templates/budget/[id]/apply", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/budgets");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/projects/project-1");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
+    expect(mocks.revalidateTag).toHaveBeenCalledWith("dashboard-stats", "max");
   });
 
   it("keeps a successful template application when activity logging fails", async () => {
