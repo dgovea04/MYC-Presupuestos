@@ -46,8 +46,10 @@ async function enableExcelMode(page: Page): Promise<void> {
   // The UserSettingsForm (with the defaultViewMode Select) is inside a
   // hidden <section id="settings-tab-panel-formats"> until the
   // "Formatos y visualizacion" tab is activated. Click it first.
-  // The tab is a Radix <Tabs> trigger, so role="tab" not role="button".
-  await page.getByRole("tab", { name: /formatos y visualizaci[oó]n/i }).click();
+  // Note: the settings page uses a CUSTOM tab navigation (a <button> with
+  // onClick + state-based show/hide via hidden class), NOT Radix <Tabs>.
+  // So the trigger is role="button", not role="tab".
+  await page.getByRole("button", { name: /formatos y visualizaci[oó]n/i }).click();
   await expect(page.getByLabel(/vista global por defecto/i)).toBeVisible({ timeout: 30_000 });
   // The "Select" is a Radix combobox (role="combobox"), not a native <select>,
   // so selectOption() is not supported. Click the trigger, then the option.
