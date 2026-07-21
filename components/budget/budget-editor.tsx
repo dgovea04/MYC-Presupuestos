@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BookOpenCheck, BotMessageSquare, ChevronLeft, ChevronRight, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Type, WandSparkles } from "lucide-react";
+import { Activity, BookOpenCheck, BotMessageSquare, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -45,7 +45,8 @@ import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles"
 import { useSpreadsheetSelection } from "@/components/spreadsheet/use-spreadsheet-selection";
 import { useSpreadsheetKeyboard } from "@/components/spreadsheet/use-spreadsheet-keyboard";
 import { createFillDownPatches } from "@/lib/spreadsheet/fill-down";
-import type { SpreadsheetCellAddress, SpreadsheetRowDefinition } from "@/lib/spreadsheet/cell-address";
+import { getCellKey, type SpreadsheetCellAddress, type SpreadsheetRowDefinition } from "@/lib/spreadsheet/cell-address";
+import { CompactRowActions } from "@/components/spreadsheet/compact-row-actions";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { formatAiText } from "@/lib/ai/formatting";
@@ -392,7 +393,7 @@ export function BudgetEditor({
 
       columns.forEach((column) => {
         const nextCell = { rowId, column } satisfies EditableCell;
-        editableCellIndexByKey.set(getCellKey(rowId, column), orderedEditableCells.length);
+        editableCellIndexByKey.set(getBudgetCellKey(rowId, column), orderedEditableCells.length);
         orderedEditableCells.push(nextCell);
       });
     });
@@ -458,6 +459,10 @@ export function BudgetEditor({
   }, [rows]);
   const spreadsheetSelection = useSpreadsheetSelection({ rows: spreadsheetRows });
   const { activateCell: activateSpreadsheetCell } = spreadsheetSelection;
+  const spreadsheetSelectionKey = useMemo(() => {
+    const keys = spreadsheetSelection.selectedCellKeys;
+    return keys && keys.size > 0 ? Array.from(keys).sort().join("|") : "";
+  }, [spreadsheetSelection.selectedCellKeys]);
   const levelIdSet = useMemo(() => new Set(summary.levels.map((level) => level.id)), [summary.levels]);
   const effectiveDensityMode: DensityMode = isExcelMode ? "compact" : densityMode;
   const isDensityLockedToCompact = isExcelMode;
@@ -592,7 +597,7 @@ export function BudgetEditor({
     if (!catalogSelectorRowId) return;
 
     const updatePosition = () => {
-      const element = cellRefs.current.get(getCellKey(catalogSelectorRowId, "description"));
+      const element = cellRefs.current.get(getBudgetCellKey(catalogSelectorRowId, "description"));
       if (!element) return;
 
       const rect = element.getBoundingClientRect();
@@ -1349,7 +1354,7 @@ export function BudgetEditor({
       pendingCatalogCloseTimeoutRef.current = null;
     }
 
-    const element = cellRefs.current.get(getCellKey(rowId, "description"));
+    const element = cellRefs.current.get(getBudgetCellKey(rowId, "description"));
     if (element) {
       const rect = element.getBoundingClientRect();
       setCatalogMenu({
@@ -1431,7 +1436,7 @@ export function BudgetEditor({
     );
   }
 
-  function duplicateItem(itemId: string) {
+  const duplicateItem = useCallback((itemId: string) => {
     setState((current) => {
       const sourceItem = current.items.find((item) => item.id === itemId);
       if (!sourceItem) return current;
@@ -1461,14 +1466,18 @@ export function BudgetEditor({
         ]),
       };
     });
-  }
+  }, []);
 
-  function removeItem(itemId: string) {
+  const removeItem = useCallback((itemId: string) => {
     setState((current) => ({
       ...current,
       items: normalizeItemSortOrders(current.items.filter((currentItem) => currentItem.id !== itemId)),
     }));
-  }
+  }, []);
+
+  const handleActivateSpreadsheetCell = useCallback((cell: SpreadsheetCellAddress) => {
+    activateSpreadsheetCell(cell);
+  }, [activateSpreadsheetCell]);
 
   function removeLevel(levelId: string) {
     setState((current) => {
@@ -1755,7 +1764,7 @@ export function BudgetEditor({
   }
 
   const setCellRef = useCallback((rowId: string, column: EditableColumn, element: HTMLInputElement | null) => {
-    const key = getCellKey(rowId, column);
+    const key = getBudgetCellKey(rowId, column);
 
     if (!element) {
       cellRefs.current.delete(key);
@@ -1768,7 +1777,7 @@ export function BudgetEditor({
   const focusCell = useCallback((cell: EditableCell | null) => {
     if (!cell) return;
 
-    const element = cellRefs.current.get(getCellKey(cell.rowId, cell.column));
+    const element = cellRefs.current.get(getBudgetCellKey(cell.rowId, cell.column));
     if (!element) return;
 
     element.focus();
@@ -1814,7 +1823,7 @@ export function BudgetEditor({
 
     if (event.key === "Tab") {
       event.preventDefault();
-      const currentIndex = rowNavigationLookup.editableCellIndexByKey.get(getCellKey(rowId, column)) ?? -1;
+      const currentIndex = rowNavigationLookup.editableCellIndexByKey.get(getBudgetCellKey(rowId, column)) ?? -1;
       if (currentIndex === -1) return;
 
       const nextIndex = event.shiftKey ? currentIndex - 1 : currentIndex + 1;
@@ -1919,7 +1928,7 @@ export function BudgetEditor({
 
     pendingCatalogCloseTimeoutRef.current = window.setTimeout(() => {
       pendingCatalogCloseTimeoutRef.current = null;
-      const element = cellRefs.current.get(getCellKey(rowId, "description"));
+      const element = cellRefs.current.get(getBudgetCellKey(rowId, "description"));
       if (document.activeElement === element) return;
       if (activeRowIdRef.current === rowId && activeColumnRef.current === "description") return;
       if (catalogSelectorRowId === rowId) {
@@ -2195,6 +2204,12 @@ export function BudgetEditor({
           onOpenApuSheet={openApuSheet}
           onRunAiItemAction={(kind, itemId) => void runAiItemAction(kind, itemId)}
           itemQualityStateById={itemQualityStateById}
+          spreadsheetActiveCell={spreadsheetSelection.activeCell}
+          spreadsheetSelectedKeys={spreadsheetSelection.selectedCellKeys}
+          onDuplicateItem={duplicateItem}
+          onRemoveItem={removeItem}
+          onActivateSpreadsheetCell={handleActivateSpreadsheetCell}
+          spreadsheetSelectionKey={spreadsheetSelectionKey}
         />
       </Card>
 
@@ -3939,6 +3954,9 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   onNavigate,
   onPasteRows,
   onToggleLevelActionMenu,
+  spreadsheetActiveCell,
+  spreadsheetSelectedKeys,
+  onActivateSpreadsheetCell,
 }: {
   row: Extract<BudgetDisplayRow, { kind: "level" }>;
   densityMode: DensityMode;
@@ -3958,6 +3976,9 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
   onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
   onToggleLevelActionMenu: (rowId: string, kind: "add" | "more", trigger: HTMLElement) => void;
+  spreadsheetActiveCell?: SpreadsheetCellAddress | null;
+  spreadsheetSelectedKeys?: ReadonlySet<string>;
+  onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
 }) {
   const isEditingField = activeRowId === row.level.id && isEditableActiveColumn(activeColumn);
   const isTitleOrSubtitle = row.level.type === "TITLE" || row.level.type === "SUBTITLE";
@@ -3982,12 +4003,12 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
         isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
         activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
       )}
-    >
-      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
-          <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
-          <BufferedInput
-            value={row.level.code}
+    >                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+                        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
+                          <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
+                          <BufferedInput
+                            {...buildSpreadsheetCellDataAttrs(row.level.id, "code", spreadsheetActiveCell, spreadsheetSelectedKeys)}
+                            value={row.level.code}
             onCommit={(value) => onUpdateLevel(row.level.id, { code: value })}
             className={cn(getInputDensityClass(densityMode, isExcelMode), "w-auto max-w-full px-2", isTitleOrSubtitle && "font-medium")}
             style={getCodeInputStyle(row.level.code)}
@@ -3995,19 +4016,21 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
             onKeyDown={(event) => onNavigate(event, row.level.id, "code")}
             onPaste={(event) => onPasteRows(event, row, "code")}
             onFocus={() => onCellFocus(row.level.id, "code")}
+            onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.level.id, columnId: "code" })}
           />
         </div>
-      </TD>
-      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
-          <BufferedInput
-            value={row.level.name}
+      </TD>                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+                        <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
+                          <BufferedInput
+                            {...buildSpreadsheetCellDataAttrs(row.level.id, "description", spreadsheetActiveCell, spreadsheetSelectedKeys)}
+                            value={row.level.name}
             onCommit={(value) => onUpdateLevel(row.level.id, { name: value })}
             className={cn(getInputDensityClass(densityMode, isExcelMode), "flex-1", isTitleOrSubtitle && "font-medium")}
             ref={(element) => onSetCellRef(row.level.id, "description", element)}
             onKeyDown={(event) => onNavigate(event, row.level.id, "description")}
             onPaste={(event) => onPasteRows(event, row, "description")}
             onFocus={() => onCellFocus(row.level.id, "description")}
+            onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.level.id, columnId: "description" })}
           />
           <span
             className={cn(
@@ -4088,6 +4111,12 @@ type BudgetItemTableRowProps = {
   onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
   onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
   qualityState?: BudgetItemQualityState;
+  spreadsheetActiveCell?: SpreadsheetCellAddress | null;
+  spreadsheetSelectedKeys?: ReadonlySet<string>;
+  onDuplicateItem?: (itemId: string) => void;
+  onRemoveItem?: (itemId: string) => void;
+  onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
+  spreadsheetSelectionKey?: string;
 };
 
 type ItemNotePreviewState = {
@@ -4225,6 +4254,12 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onRunAiItemAction,
   onToggleItemActionMenu,
   qualityState,
+  spreadsheetActiveCell,
+  spreadsheetSelectedKeys,
+  onDuplicateItem,
+  onRemoveItem,
+  onActivateSpreadsheetCell,
+  spreadsheetSelectionKey,
 }: BudgetItemTableRowProps) {
   const isEditingField = activeRowId === row.item.id && isEditableActiveColumn(activeColumn);
   const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;
@@ -4257,12 +4292,12 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         itemWarningTone,
         activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
       )}
-    >
-      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
-          <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
-          <BufferedInput
-            value={row.item.code}
+    >                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+                        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
+                          <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
+                          <BufferedInput
+                            {...buildSpreadsheetCellDataAttrs(row.item.id, "code", spreadsheetActiveCell, spreadsheetSelectedKeys)}
+                            value={row.item.code}
             onCommit={(value) => onUpdateItem(row.item.id, { code: value })}
             className={cn(getInputDensityClass(densityMode, isExcelMode), "w-auto max-w-full px-2")}
             style={getCodeInputStyle(row.item.code)}
@@ -4270,15 +4305,16 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             onKeyDown={(event) => onNavigate(event, row.item.id, "code")}
             onPaste={(event) => onPasteRows(event, row, "code")}
             onFocus={() => onCellFocus(row.item.id, "code")}
+            onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "code" })}
           />
         </div>
-      </TD>
-      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <div style={{ paddingLeft: `${row.depth * 18}px` }}>
-          <div className="relative flex min-w-0 flex-wrap items-center gap-2 space-y-1">
-            <div className="min-w-0 flex-1">
-              <BufferedInput
-                value={row.item.description}
+      </TD>                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+                        <div style={{ paddingLeft: `${row.depth * 18}px` }}>
+                          <div className="relative flex min-w-0 flex-wrap items-center gap-2 space-y-1">
+                            <div className="min-w-0 flex-1">
+                              <BufferedInput
+                                {...buildSpreadsheetCellDataAttrs(row.item.id, "description", spreadsheetActiveCell, spreadsheetSelectedKeys)}
+                                value={row.item.description}
                 onCommit={(value) => onUpdateItem(row.item.id, { description: value })}
                 onValueChange={(value) => {
                   onOpenCatalogSelector(row.item.id, value);
@@ -4323,6 +4359,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
                   onOpenCatalogSelector(row.item.id, row.item.description);
                 }}
                 onBlur={() => onScheduleCatalogClose(row.item.id)}
+                onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "description" })}
               />
             </div>
             {hasNoApu ? (
@@ -4350,29 +4387,29 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             ) : null}
           </div>
         </div>
-      </TD>
-      <TD className={getBodyCellClass("unit", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <BufferedInput
-          value={row.item.unit}
+      </TD>                      <TD className={getBodyCellClass("unit", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+                        <BufferedInput
+                          {...buildSpreadsheetCellDataAttrs(row.item.id, "unit", spreadsheetActiveCell, spreadsheetSelectedKeys)}
+                          value={row.item.unit}
           onCommit={(value) => onUpdateItem(row.item.id, { unit: value })}
           className={cn(getInputDensityClass(densityMode, isExcelMode), "text-center")}
           ref={(element) => onSetCellRef(row.item.id, "unit", element)}
           onKeyDown={(event) => onNavigate(event, row.item.id, "unit")}
-          onPaste={(event) => onPasteRows(event, row, "unit")}
-          onFocus={() => onCellFocus(row.item.id, "unit")}
+          onPaste={(event) => onPasteRows(event, row, "unit")}            onFocus={() => onCellFocus(row.item.id, "unit")}
+            onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "unit" })}
         />
-      </TD>
-      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-        <BufferedInput
-          type="text"
+      </TD>                      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+                        <BufferedInput
+                          {...buildSpreadsheetCellDataAttrs(row.item.id, "quantity", spreadsheetActiveCell, spreadsheetSelectedKeys)}
+                          type="text"
           inputMode="decimal"
           value={row.item.quantity}
           onCommit={(value) => onUpdateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) })}
           className={cn(getInputDensityClass(densityMode, isExcelMode), "text-right tabular-nums")}
           ref={(element) => onSetCellRef(row.item.id, "quantity", element)}
           onKeyDown={(event) => onNavigate(event, row.item.id, "quantity")}
-          onPaste={(event) => onPasteRows(event, row, "quantity")}
-          onFocus={() => onCellFocus(row.item.id, "quantity")}
+          onPaste={(event) => onPasteRows(event, row, "quantity")}            onFocus={() => onCellFocus(row.item.id, "quantity")}
+            onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "quantity" })}
         />
       </TD>
       <TD
@@ -4429,15 +4466,25 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             <ExternalLink className="h-4 w-4" />
             APU
           </Button>
-          <IconButton
-            label="Abrir acciones de la partida"
-            onClick={(event) => onToggleItemActionMenu(row.item.id, event.currentTarget)}
-            dataActionTrigger
-            ariaExpanded={isActionOpen}
-            ariaControls={isActionOpen ? `budget-item-menu-${row.item.id}` : undefined}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </IconButton>
+          {isExcelMode && onDuplicateItem && onRemoveItem ? (
+            <CompactRowActions
+              actions={[
+                { id: "duplicate", label: "Duplicar partida", icon: <Copy className="h-4 w-4" />, onSelect: () => onDuplicateItem(row.item.id) },
+                { id: "remove", label: "Eliminar partida", icon: <Trash2 className="h-4 w-4" />, onSelect: () => onRemoveItem(row.item.id) },
+              ]}
+              triggerLabel="Abrir acciones de la partida"
+            />
+          ) : (
+            <IconButton
+              label="Abrir acciones de la partida"
+              onClick={(event) => onToggleItemActionMenu(row.item.id, event.currentTarget)}
+              dataActionTrigger
+              ariaExpanded={isActionOpen}
+              ariaControls={isActionOpen ? `budget-item-menu-${row.item.id}` : undefined}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </IconButton>
+          )}
         </div>
       </TD>
     </TR>
@@ -4462,7 +4509,12 @@ function areBudgetItemRowPropsEqual(
     previous.isCatalogActive === current.isCatalogActive &&
     previous.catalogSuggestions === current.catalogSuggestions &&
     previous.catalogHighlightedIndex === current.catalogHighlightedIndex &&
-    previous.qualityState === current.qualityState
+    previous.qualityState === current.qualityState &&
+    previous.spreadsheetActiveCell === current.spreadsheetActiveCell &&
+    previous.spreadsheetSelectionKey === current.spreadsheetSelectionKey &&
+    previous.onDuplicateItem === current.onDuplicateItem &&
+    previous.onRemoveItem === current.onRemoveItem &&
+    previous.onActivateSpreadsheetCell === current.onActivateSpreadsheetCell
   );
 }
 
@@ -4533,6 +4585,12 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onOpenApuSheet,
   onRunAiItemAction,
   itemQualityStateById,
+  spreadsheetActiveCell,
+  spreadsheetSelectedKeys,
+  onDuplicateItem,
+  onRemoveItem,
+  onActivateSpreadsheetCell,
+  spreadsheetSelectionKey,
 }: {
   projectId: string;
   budgetId: string;
@@ -4578,6 +4636,12 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onOpenApuSheet: (item: BudgetItemRecord) => void;
   onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
   itemQualityStateById: Record<string, BudgetItemQualityState | undefined>;
+  spreadsheetActiveCell?: SpreadsheetCellAddress | null;
+  spreadsheetSelectedKeys?: ReadonlySet<string>;
+  onDuplicateItem?: (itemId: string) => void;
+  onRemoveItem?: (itemId: string) => void;
+  onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
+  spreadsheetSelectionKey?: string;
 }) {
   return (
     <CardContent className={cn("space-y-4", isExcelMode && "space-y-3")}>
@@ -4654,6 +4718,9 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onNavigate={onNavigate}
                   onPasteRows={onPasteRows}
                   onToggleLevelActionMenu={onToggleLevelActionMenu}
+                  spreadsheetActiveCell={spreadsheetActiveCell}
+                  spreadsheetSelectedKeys={spreadsheetSelectedKeys}
+                  onActivateSpreadsheetCell={onActivateSpreadsheetCell}
                 />
               ) : (
                 <BudgetItemTableRow
@@ -4689,6 +4756,12 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onRunAiItemAction={onRunAiItemAction}
                   onToggleItemActionMenu={onToggleItemActionMenu}
                   qualityState={itemQualityStateById[row.item.id]}
+                  spreadsheetActiveCell={spreadsheetActiveCell}
+                  spreadsheetSelectedKeys={spreadsheetSelectedKeys}
+                  onDuplicateItem={onDuplicateItem}
+                  onRemoveItem={onRemoveItem}
+                  onActivateSpreadsheetCell={onActivateSpreadsheetCell}
+                  spreadsheetSelectionKey={spreadsheetSelectionKey}
                 />
               ),
             )}
@@ -5274,7 +5347,7 @@ function getImportedLevelType(depth: number, levelIndexAtDepth: number): BudgetL
   return "ITEM_GROUP";
 }
 
-function getCellKey(rowId: string, column: EditableColumn) {
+function getBudgetCellKey(rowId: string, column: EditableColumn) {
   return `${rowId}:${column}`;
 }
 
@@ -5564,6 +5637,24 @@ function getHeaderCellClass(column: ActiveColumn, activeColumn: ActiveColumn, is
     column === "actions" ? "z-30" : "",
     extraClassName,
   );
+}
+
+function buildSpreadsheetCellDataAttrs(
+  rowId: string,
+  columnId: string,
+  activeCell: SpreadsheetCellAddress | null | undefined,
+  selectedKeys: ReadonlySet<string> | undefined,
+): Record<string, string | undefined> {
+  if (!activeCell && !selectedKeys) return {};
+  const key = getCellKey({ rowId, columnId });
+  const isActive = activeCell?.rowId === rowId && activeCell?.columnId === columnId;
+  const isSelected = selectedKeys?.has(key) ?? false;
+  if (!isActive && !isSelected) return {};
+  return {
+    "data-spreadsheet-key": key,
+    "data-spreadsheet-active": isActive ? "true" : undefined,
+    "data-spreadsheet-selected": isSelected ? "true" : undefined,
+  };
 }
 
 function getBodyCellClass(

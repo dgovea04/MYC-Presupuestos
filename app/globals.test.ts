@@ -21,4 +21,11 @@ describe("excel field border styles", () => {
     expect(globalsCss).toContain("width: 1rem;");
     expect(globalsCss).toContain("height: 1rem;");
   });
+
+  it("styles Excel spreadsheet selection (active cell + selected range)", () => {
+    const globalsCss = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+
+    expect(globalsCss).toContain('[data-view-mode="excel"] [data-spreadsheet-selected="true"]');
+    expect(globalsCss).toContain('[data-view-mode="excel"] [data-spreadsheet-active="true"]');
+  });
 });

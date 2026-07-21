@@ -186,8 +186,9 @@ test.describe("Excel-mode pipeline @smoke", () => {
   //     and `isExcelMode` gating is correct.
   // To unblock: add `data-spreadsheet-active` AT THE BUDGET CELL RENDER
   // mirroring MetradoSheetTable, then drop the test.fail wrapper.
-  test.fail(
-    "[auth-bounded, expected-fail] budget editor cursor: data-spreadsheet-active + post-Ctrl+D fill-down (red until budget-editor.tsx renders the attribute)",
+  test(
+    "[auth-bounded] budget editor cursor: data-spreadsheet-active + post-Ctrl+D fill-down",
+
     async ({ page }) => {
       await goToSeedProjectAndBudget(page);
       const firstInput = page
