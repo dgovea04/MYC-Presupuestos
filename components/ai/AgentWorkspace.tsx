@@ -22,7 +22,7 @@ type AgentWorkspaceProps = {
   projectId?: string;
   className?: string;
   initialObjective?: string;
-  defaultBundleSlug?: string;
+  defaultBundleSlug?: BundleSlug;
   workspaceId?: string;
   workspaceName?: string;
 };

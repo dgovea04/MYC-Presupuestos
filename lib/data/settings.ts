@@ -70,7 +70,7 @@ const userSettingsStoredRowSchema = z.object({
 });
 
 export type AiProviderSettingsInput = {
-  aiProviderPreference: AiProviderPreference;
+  aiProviderPreference?: AiProviderPreference;
   openaiApiKey?: string | null;
   geminiApiKey?: string | null;
   openrouterApiKey?: string | null;
@@ -538,7 +538,7 @@ export async function updateAiProviderSettings(
       defaultIgvRate: 0.18,
       defaultGeneralExpensesRate: 0.10,
       defaultUtilityRate: 0.08,
-      ...(supportsAiProviderPreference ? { aiProviderPreference: input.aiProviderPreference } : {}),
+      ...(supportsAiProviderPreference && input.aiProviderPreference !== undefined ? { aiProviderPreference: input.aiProviderPreference } : {}),
       ...(supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? { openaiApiKey: encryptedOpenaiKey || null } : {}),
       ...(supportsGeminiApiKey && encryptedGeminiKey !== undefined ? { geminiApiKey: encryptedGeminiKey || null } : {}),
       ...(supportsOpenrouterApiKey && encryptedOpenrouterKey !== undefined ? { openrouterApiKey: encryptedOpenrouterKey || null } : {}),
@@ -548,7 +548,7 @@ export async function updateAiProviderSettings(
       ...(supportsAgentModel && input.agentModel !== undefined ? { agentModel: input.agentModel ?? null } : {}),
     },
     update: {
-      ...(supportsAiProviderPreference ? { aiProviderPreference: input.aiProviderPreference } : {}),
+      ...(supportsAiProviderPreference && input.aiProviderPreference !== undefined ? { aiProviderPreference: input.aiProviderPreference } : {}),
       ...(supportsOpenaiApiKey && encryptedOpenaiKey !== undefined ? { openaiApiKey: encryptedOpenaiKey || null } : {}),
       ...(supportsGeminiApiKey && encryptedGeminiKey !== undefined ? { geminiApiKey: encryptedGeminiKey || null } : {}),
       ...(supportsOpenrouterApiKey && encryptedOpenrouterKey !== undefined ? { openrouterApiKey: encryptedOpenrouterKey || null } : {}),

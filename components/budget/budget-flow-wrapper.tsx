@@ -102,7 +102,7 @@ export function BudgetFlowWrapper({
 
     async function loadCatalogs() {
       try {
-        const payload = await fetchEditorCatalogs(catalogBudgetId);
+        const payload = await fetchEditorCatalogs(catalogBudgetId!);
         if (active) {
           setCatalogs(payload);
         }
@@ -132,7 +132,7 @@ export function BudgetFlowWrapper({
 
     async function loadTemplateTraceability() {
       try {
-        const payload = await fetchTemplateTraceability(templateTraceabilityBudgetId);
+        const payload = await fetchTemplateTraceability(templateTraceabilityBudgetId!);
         if (active) {
           setResolvedTemplateTraceability(payload);
         }
