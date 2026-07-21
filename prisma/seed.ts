@@ -14,6 +14,7 @@ import { priceSeedCatalogPartidaApuRows } from "@/lib/seed/catalog-partida-prici
 import { normalizeExcelCellText } from "@/lib/seed/excel-cell-text";
 import { isSubpartidaResourceType, SUBPARTIDA_RESOURCE_TYPE } from "@/lib/apu/subpartidas";
 import { seedAgentWorkflows } from "@/lib/data/seed-agent-workflows";
+import { generatePolynomialFormulaFromBudget } from "@/lib/data/polynomial-formulas";
 
 const prisma = createPrismaClient(["warn", "error"]);
 const DATA_FOR_SEED_DIR = path.resolve(process.cwd(), "data-for-seed");
@@ -452,6 +453,34 @@ async function main() {
 
   await refreshBudgetTotals(budget.id);
   await refreshGeneralBudgetTotals(generalBudget.id);
+
+  // Seed polynomial formulas for ALL sub-budgets so the e2e polynomial-formula
+  // density-frame test can mount <PolynomialMonomialsTable> regardless of which
+  // child budget the sections view selects as the active section.
+  // The sections view (getBudgetPolynomialFormulaSectionsData) picks the first
+  // child budget via orderSubBudgetsBySpecialty — so we seed every child.
+  const seedChildBudgets = await prisma.budget.findMany({
+    where: { parentBudgetId: generalBudget.id },
+    select: { id: true, name: true },
+  });
+  for (const child of seedChildBudgets) {
+    try {
+      const formula = await generatePolynomialFormulaFromBudget(
+        child.id,
+        user.id,
+        { name: `Formula polinomica - ${child.name}`, baseMonth: 1, baseYear: 2026 },
+      );
+      console.info(`Seeded polynomial formula for "${child.name}": ${formula.monomials.length} monomials.`);
+    } catch (error) {
+      // non-fatal — sub-budgets without items (e.g. "Estructuras") have zero
+      // monomials but the editor still renders the <PolynomialMonomialsTable>
+      // frame when formula is non-null, which is what the e2e test asserts.
+      if (error instanceof Error) {
+        console.warn(`Could not seed formula for "${child.name}": ${error.message}`);
+      }
+    }
+  }
+
   const workflowResult = await seedAgentWorkflows(prisma);
   console.info(
     `Seeded ${workflowResult.upserted} agent workflows from templates.`,

@@ -230,16 +230,8 @@ test.describe("Excel-mode pipeline @smoke", () => {
     expect(await apuPane.getAttribute("data-excel-field-border-scope")).toBe("apu-editor");
   });
 
-  // Surface the polynomial-formula density-frame gap as an expected-fail.
-// The polynomial-formula route renders `<PolynomialFormulaEditor>` only
-// when `sectionsData.activeSection` is non-null, which requires the
-// general budget to have a polynomial formula initialized. The seed
-// (prisma/seed.ts) does NOT create a polynomial formula for the demo
-// project, so the table never mounts. Once the seed is extended to
-// create one (or the test is updated to drive a "Generate polynomial
-// formula" click first), drop the test.fail wrapper.
-test.fail(
-  "[auth-bounded, expected-fail] polynomial formula table: Excel density frame (red until seed creates a polynomial formula for the demo general budget)",
+  test(
+  "[auth-bounded] polynomial formula table: Excel density frame",
   async ({ page }) => {
     const { generalBudgetId } = await goToSeedProjectAndBudget(page);
     // Real route is /budgets/[id]/polynomial-formula (verified in
@@ -253,11 +245,12 @@ test.fail(
     await expect(frame).toBeVisible({ timeout: 15_000 });
     const classList = await frame.evaluate((el) => Array.from(el.classList));
 
-    // Source reality (polynomial-monomials-table.tsx line ~178 uses
-    // `isExcelMode ? "rounded-md ..." : "rounded-2xl"`). Plan-doc referenced
-    // `rounded-none` which is the broader CSS-variable Excel-mode contract
-    // in app/globals.css:2120/2138/2161 — see DESIGN.md Diff vs Impl.
-    expect(classList).toContain("rounded-md");
+    // The frame uses getTableFrameClassName which returns `rounded-none`
+    // (the broader CSS-variable Excel-mode table frame contract in
+    // app/globals.css). The plan-doc originally referenced `rounded-md`
+    // but the shared helper uses `rounded-none` + `border-transparent`
+    // to let the background bleed edge-to-edge in Excel mode.
+    expect(classList).toContain("rounded-none");
     expect(classList).not.toContain("rounded-2xl");
 
     const height = await frame.evaluate((el) => {
