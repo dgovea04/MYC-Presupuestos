@@ -152,6 +152,15 @@ test.describe("Excel-mode pipeline @smoke", () => {
 
   test.beforeEach(async ({ page }) => {
     await signInWithCredentials(page);
+    // Wait for SSR hydration + the post-signin route's network requests to
+    // settle before asserting the data-view-mode attribute. Avoids a race
+    // where the locator passes only because Playwright polled late, not
+    // because the SSR'd <AppViewModeProvider> actually published the
+    // attribute. No explicit setTimeout is needed: updateUserSettings in
+    // lib/data/settings.ts already calls processUserSettingsCache.delete(userId)
+    // after the DB write + revalidateTag, so the cache is invalidated
+    // synchronously by the time we land here.
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
     // DB-driven defaultViewMode=excel auto-applies on any page render via
     // the <AppViewModeProvider>. Verify it lands on the current page so a
     // regression on the SSR'd FormattingSettingsProvider surfaces here.
