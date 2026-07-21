@@ -59,3 +59,7 @@ presupuesto-ejemplo/s10/*.S2K
 
 # eslint cache
 /.eslintcache
+
+# playwright test artifacts
+/playwright-report
+/test-results
