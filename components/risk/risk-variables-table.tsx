@@ -22,7 +22,7 @@ type RiskVariableEntry = {
 };
 
 type RiskVariableRow = RiskBudgetItem & {
-  entries: Record<RiskVariableType, RiskVariableEntry>;
+  entries: Partial<Record<RiskVariableType, RiskVariableEntry>>;
 };
 
 type VariableStateFilter = "ALL" | "ACTIVE" | "INACTIVE" | "MISSING";

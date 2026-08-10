@@ -658,7 +658,7 @@ interface MemberRowContext {
   member: MemberInfo;
   currentWorkspace: WorkspaceSummary | undefined;
   panelPopupRef: React.RefObject<HTMLDivElement | null>;
-  setSubmenuAnchor: (anchor: { offsetY: number; memberId: string } | null) => void;
+  setSubmenuAnchor: React.Dispatch<React.SetStateAction<{ offsetY: number; memberId: string } | null>>;
 }
 
 function renderMemberRow(ctx: MemberRowContext) {
@@ -727,7 +727,7 @@ function renderFloatingSubmenu(ctx: {
   removingId: string | null;
   confirmRemoveUserId: string | null;
   suspendUntil: string;
-  setSubmenuAnchor: (anchor: null) => void;
+  setSubmenuAnchor: React.Dispatch<React.SetStateAction<{ offsetY: number; memberId: string } | null>>;
   setConfirmRemoveUserId: (id: string | null) => void;
   setSuspendUntil: (value: string) => void;
   handleChangeRole: (userId: string, role: WorkspaceRole) => void;

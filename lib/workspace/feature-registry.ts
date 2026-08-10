@@ -32,7 +32,7 @@ export function isFeatureAvailableForPlan(
   return currentRank >= requiredRank;
 }
 
-export function getAvailableFeatures(planSlug: string): string[] {
+export function getAvailableFeatures(planSlug: string): WorkspaceFeatureKey[] {
   return WORKSPACE_FEATURES
     .filter((f) => isFeatureAvailableForPlan(f.key, planSlug))
     .map((f) => f.key);

@@ -67,12 +67,12 @@ describe("authOptions callbacks", () => {
     expect(authOptions.cookies?.sessionToken?.name).toContain("myc-presupuestos.session-token");
   });
 
-  it("keeps the NextAuth route handler in the non-optional catch-all segment", () => {
+  it("keeps the NextAuth route handler in the optional catch-all segment", () => {
     const nonOptionalCatchAllRoute = path.join(process.cwd(), "app", "api", "auth", "[...nextauth]", "route.ts");
     const optionalCatchAllRoute = path.join(process.cwd(), "app", "api", "auth", "[[...nextauth]]", "route.ts");
 
-    expect(existsSync(nonOptionalCatchAllRoute)).toBe(true);
-    expect(existsSync(optionalCatchAllRoute)).toBe(false);
+    expect(existsSync(nonOptionalCatchAllRoute)).toBe(false);
+    expect(existsSync(optionalCatchAllRoute)).toBe(true);
   });
 
   it("includes Google as a configured provider", () => {

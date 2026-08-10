@@ -30,6 +30,7 @@ const FORMAT_ICONS: Record<ExportFormat, typeof FileText> = {
   pdf: FileText,
   xlsx: FileSpreadsheet,
   zip: FileArchive,
+  mcp: FileText,
 };
 
 export function ExportPanel({

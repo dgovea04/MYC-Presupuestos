@@ -37,6 +37,8 @@ import {
   type UserSettingsRecord,
 } from "@/types/settings";
 import type { AiContext } from "@/lib/ai/types";
+import type { WorkspaceSummary } from "@/types/workspace";
+import type { FeatureKey } from "@/lib/billing/entitlements";
 
 export async function AppShell({
   aiContext,
@@ -97,7 +99,7 @@ export async function AppShell({
         ? getUserSettings(userId)
         : Promise.resolve(fallbackSettings),
     hasSessionWorkspaces
-      ? Promise.resolve(sessionWorkspaces as { id: string; name: string; role: string; logoUrl: string | null }[])
+      ? Promise.resolve(sessionWorkspaces as WorkspaceSummary[])
       : userId
         ? listUserWorkspaces(userId)
         : Promise.resolve([]),
@@ -133,7 +135,7 @@ export async function AppShell({
                 userEmail={currentUser?.email ?? session?.user?.email}
                 userName={currentUser?.name ?? session?.user?.name}
                 userRole={currentUser?.role ?? session?.user?.role}
-                unlockedFeatures={license?.availableFeatures}
+                unlockedFeatures={license?.availableFeatures as FeatureKey[] | undefined}
               />
             </div>
 
