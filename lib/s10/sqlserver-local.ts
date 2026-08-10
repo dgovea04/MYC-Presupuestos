@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { analyzeS2kBuffer } from "@/lib/s10/s2k-analyzer";
+import { createS10SnapshotContract, serializeS10SnapshotContract } from "@/lib/s10/snapshot-contract";
+import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
 import {
   buildS10BudgetListSql,
   buildS10DatabaseProbeSql,
@@ -61,7 +63,7 @@ export type S10LocalS2kRestoreResult = {
 const s2kBackupHeaderBytes = 4096;
 
 export function isS10LocalSqlServerEnabled() {
-  return process.env.NODE_ENV !== "production" || process.env.MYC_ENABLE_LOCAL_S10_SQLSERVER === "true";
+  return process.env.NODE_ENV === "development";
 }
 
 export function listLocalS10Databases(options: S10LocalSqlServerOptions): S10DatabaseCandidate[] {
@@ -97,7 +99,15 @@ export function exportLocalS10Snapshot(options: S10LocalSnapshotExportOptions) {
 
   try {
     runSqlcmdFile(options, tempSqlPath, tempOutputPath);
-    return extractJsonObjectFromSqlcmdOutput(fs.readFileSync(tempOutputPath, "utf8"));
+    const legacyJson = extractJsonObjectFromSqlcmdOutput(fs.readFileSync(tempOutputPath, "utf8"));
+    const snapshot = parseS10ExportSnapshotJson(legacyJson);
+    return serializeS10SnapshotContract(
+      createS10SnapshotContract(snapshot, {
+        adapter: "sqlserver",
+        databaseName: options.databaseName,
+        budgetCode: options.budgetCode,
+      }),
+    );
   } finally {
     fs.rmSync(tempSqlPath, { force: true });
     fs.rmSync(tempOutputPath, { force: true });

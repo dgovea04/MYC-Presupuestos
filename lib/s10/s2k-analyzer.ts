@@ -16,9 +16,14 @@ export type S10ImportPreview = {
   messages: string[];
 };
 
+export const s2kAnalysisReadBytes = 4096;
 const defaultPreviewBytes = 128;
 
-export function analyzeS2kBuffer(buffer: Buffer, previewBytes = defaultPreviewBytes, sizeBytes = buffer.length): S2kAnalysis {
+export function analyzeS2kBuffer(
+  buffer: Uint8Array,
+  previewBytes = defaultPreviewBytes,
+  sizeBytes = buffer.length,
+): S2kAnalysis {
   const preview = buffer.subarray(0, Math.max(0, previewBytes));
   const asciiPreview = toVisibleAscii(preview);
   const utf16Preview = toVisibleUtf16Le(preview);
@@ -42,7 +47,7 @@ export function createS10ImportPreview({
   sizeBytes,
 }: {
   fileName: string;
-  buffer: Buffer;
+  buffer: Uint8Array;
   sizeBytes?: number;
 }): S10ImportPreview {
   const analysis = analyzeS2kBuffer(buffer, defaultPreviewBytes, sizeBytes);
@@ -59,7 +64,7 @@ export function createS10ImportPreview({
   };
 }
 
-function detectKind(buffer: Buffer, asciiPreview: string, utf16Preview: string): S2kDetectedKind {
+function detectKind(buffer: Uint8Array, asciiPreview: string, utf16Preview: string): S2kDetectedKind {
   if (startsWithBytes(buffer, [0x50, 0x4b])) {
     return "zip";
   }
@@ -75,7 +80,7 @@ function detectKind(buffer: Buffer, asciiPreview: string, utf16Preview: string):
   return "unknown";
 }
 
-function detectSignature(buffer: Buffer, asciiPreview: string, utf16Preview: string) {
+function detectSignature(buffer: Uint8Array, asciiPreview: string, utf16Preview: string) {
   if (startsWithBytes(buffer, [0x50, 0x4b])) {
     return "PK";
   }
@@ -92,7 +97,7 @@ function detectSignature(buffer: Buffer, asciiPreview: string, utf16Preview: str
     return "SQLite format 3";
   }
 
-  return buffer.length > 0 ? buffer.subarray(0, Math.min(8, buffer.length)).toString("hex") : "";
+  return buffer.length > 0 ? toHexPreview(buffer.subarray(0, Math.min(8, buffer.length))) : "";
 }
 
 function getRecommendedAction(kind: S2kDetectedKind) {
@@ -111,7 +116,7 @@ function getRecommendedAction(kind: S2kDetectedKind) {
   return "Comparar la cabecera con respaldos S10 conocidos o enviar una muestra para construir un decoder especifico.";
 }
 
-function startsWithBytes(buffer: Buffer, bytes: readonly number[]) {
+function startsWithBytes(buffer: Uint8Array, bytes: readonly number[]) {
   if (buffer.length < bytes.length) {
     return false;
   }
@@ -119,27 +124,27 @@ function startsWithBytes(buffer: Buffer, bytes: readonly number[]) {
   return bytes.every((byte, index) => buffer[index] === byte);
 }
 
-function isSqlServerTapeBackup(buffer: Buffer, utf16Preview: string) {
+function isSqlServerTapeBackup(buffer: Uint8Array, utf16Preview: string) {
   return startsWithBytes(buffer, [0x54, 0x41, 0x50, 0x45]) && utf16Preview.includes("Microsoft SQL");
 }
 
-function toHexPreview(buffer: Buffer) {
+function toHexPreview(buffer: Uint8Array) {
   return Array.from(buffer)
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join(" ");
 }
 
-function toVisibleAscii(buffer: Buffer) {
+function toVisibleAscii(buffer: Uint8Array) {
   return Array.from(buffer)
     .map((byte) => (byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : "."))
     .join("");
 }
 
-function toVisibleUtf16Le(buffer: Buffer) {
+function toVisibleUtf16Le(buffer: Uint8Array) {
   return [0, 1].map((offset) => decodeUtf16LeFromOffset(buffer, offset)).join("\n");
 }
 
-function decodeUtf16LeFromOffset(buffer: Buffer, offset: number) {
+function decodeUtf16LeFromOffset(buffer: Uint8Array, offset: number) {
   if (buffer.length <= offset) {
     return "";
   }
@@ -147,8 +152,7 @@ function decodeUtf16LeFromOffset(buffer: Buffer, offset: number) {
   const availableLength = buffer.length - offset;
   const evenLength = availableLength - (availableLength % 2);
 
-  return buffer
-    .subarray(offset, offset + evenLength)
-    .toString("utf16le")
+  return new TextDecoder("utf-16le")
+    .decode(buffer.subarray(offset, offset + evenLength))
     .replace(/[^\x20-\x7e]/g, ".");
 }

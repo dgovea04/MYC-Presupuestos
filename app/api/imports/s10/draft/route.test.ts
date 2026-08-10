@@ -7,6 +7,7 @@ vi.mock("@/lib/auth/session", () => ({
 import { POST } from "@/app/api/imports/s10/draft/route";
 import { getAuthSession } from "@/lib/auth/session";
 import type { S10ExportSnapshot } from "@/lib/s10/import-mapper";
+import { createS10SnapshotContract } from "@/lib/s10/snapshot-contract";
 
 const snapshot: S10ExportSnapshot = {
   presupuestos: [
@@ -89,6 +90,25 @@ describe("S10 draft route", () => {
         { kind: "SUB_BUDGET", itemCount: 1 },
       ],
       sampleItems: [{ code: "01", unit: "m3" }],
+    });
+  });
+
+  it("accepts the versioned S10 snapshot envelope", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    const contract = createS10SnapshotContract(snapshot, { adapter: "desktop", budgetCode: "0201003" });
+
+    const response = await POST(
+      new Request("http://localhost/api/imports/s10/draft", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ snapshot: contract, budgetCode: "0201003" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      projectName: "OBRA S10",
+      sourceBudgetCode: "0201003",
     });
   });
 

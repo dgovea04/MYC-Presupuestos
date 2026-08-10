@@ -8,6 +8,7 @@ import {
   type S10ExportSnapshot,
   type S10ImportMapperOptions,
 } from "@/lib/s10/import-mapper";
+import { parseS10SnapshotJson } from "@/lib/s10/snapshot-contract";
 
 export type S10ImportDraftPreviewBudget = {
   id: string;
@@ -133,13 +134,7 @@ export function summarizeS10ImportDraft(draft: MycS10ImportDraft, sampleItemLimi
 }
 
 export function parseS10ExportSnapshotJson(json: string): S10ExportSnapshot {
-  const parsed: unknown = JSON.parse(stripBom(json));
-
-  if (!isS10ExportSnapshot(parsed)) {
-    throw new Error("El JSON no tiene la estructura esperada de un snapshot S10.");
-  }
-
-  return parsed;
+  return parseS10SnapshotJson(json).snapshot;
 }
 
 function createSampleItems(
@@ -265,25 +260,4 @@ function createEmptyResourceCategoryCounts(): Record<ResourceCategory, number> {
     TOOLS: 0,
     SUBCONTRACT: 0,
   };
-}
-
-function isS10ExportSnapshot(value: unknown): value is S10ExportSnapshot {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    Array.isArray(value.presupuestos) &&
-    Array.isArray(value.subpresupuestos) &&
-    Array.isArray(value.partidas) &&
-    Array.isArray(value.apuDetalles)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function stripBom(value: string) {
-  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }

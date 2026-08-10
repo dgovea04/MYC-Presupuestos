@@ -3,6 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { createS10SnapshotContract, serializeS10SnapshotContract } from "@/lib/s10/snapshot-contract";
+import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
 import {
   buildS10BudgetListSql,
   buildS10DatabaseProbeSql,
@@ -114,7 +116,15 @@ function exportSnapshot(cliOptions: CliOptions) {
   try {
     runSqlcmdFile(cliOptions, tempSqlPath, tempOutputPath);
     const output = fs.readFileSync(tempOutputPath, "utf8");
-    const json = `${extractJsonObjectFromSqlcmdOutput(output)}\n`;
+    const legacyJson = extractJsonObjectFromSqlcmdOutput(output);
+    const snapshot = parseS10ExportSnapshotJson(legacyJson);
+    const json = serializeS10SnapshotContract(
+      createS10SnapshotContract(snapshot, {
+        adapter: "sqlserver",
+        databaseName: cliOptions.databaseName,
+        budgetCode: cliOptions.budgetCode,
+      }),
+    );
     const outputPath = path.resolve(cliOptions.outputPath ?? `data-for-seed/s10-export-${cliOptions.budgetCode}.json`);
 
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });

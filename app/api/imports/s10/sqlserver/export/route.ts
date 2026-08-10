@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
-import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
+import { parseS10SnapshotJson } from "@/lib/s10/snapshot-contract";
 import { exportLocalS10Snapshot, isS10LocalSqlServerEnabled } from "@/lib/s10/sqlserver-local";
 import {
   isRecord,
@@ -40,8 +40,8 @@ export async function POST(request: Request) {
       trustServerCertificate: readBooleanRecordValue(body, "trustServerCertificate", true),
     });
 
-    const snapshot = parseS10ExportSnapshotJson(snapshotJson);
-    return NextResponse.json({ snapshot });
+    const { contract } = parseS10SnapshotJson(snapshotJson);
+    return NextResponse.json({ snapshot: contract });
   } catch (error) {
     if (error instanceof S10SqlServerRequestError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

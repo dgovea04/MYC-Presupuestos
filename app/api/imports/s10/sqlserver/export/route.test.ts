@@ -13,6 +13,7 @@ import { POST } from "@/app/api/imports/s10/sqlserver/export/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { exportLocalS10Snapshot, isS10LocalSqlServerEnabled } from "@/lib/s10/sqlserver-local";
 import type { S10ExportSnapshot } from "@/lib/s10/import-mapper";
+import { createS10SnapshotContract, serializeS10SnapshotContract } from "@/lib/s10/snapshot-contract";
 
 const snapshot: S10ExportSnapshot = {
   presupuestos: [{ CodPresupuesto: "0302044", Descripcion: "OBRA S10" }],
@@ -43,7 +44,9 @@ describe("S10 SQL Server export route", () => {
 
   it("exports and parses a S10 snapshot", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
-    vi.mocked(exportLocalS10Snapshot).mockReturnValue(JSON.stringify(snapshot));
+    vi.mocked(exportLocalS10Snapshot).mockReturnValue(
+      serializeS10SnapshotContract(createS10SnapshotContract(snapshot, { adapter: "sqlserver" })),
+    );
 
     const response = await POST(
       new Request("http://localhost/api/imports/s10/sqlserver/export", {
@@ -66,6 +69,12 @@ describe("S10 SQL Server export route", () => {
       password: undefined,
       trustServerCertificate: true,
     });
-    await expect(response.json()).resolves.toMatchObject({ snapshot: { presupuestos: [{ CodPresupuesto: "0302044" }] } });
+    await expect(response.json()).resolves.toMatchObject({
+      snapshot: {
+        schema: "mc.s10.snapshot",
+        contractVersion: "1.0.0",
+        payload: { presupuestos: [{ CodPresupuesto: "0302044" }] },
+      },
+    });
   });
 });

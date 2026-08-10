@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
-import { createS10ImportPreview } from "@/lib/s10/s2k-analyzer";
+import { createS10ImportPreview, s2kAnalysisReadBytes } from "@/lib/s10/s2k-analyzer";
 
 const maxS2kUploadBytes = 160 * 1024 * 1024;
-const s2kAnalysisReadBytes = 4096;
 
 export async function POST(request: Request) {
   const session = await getAuthSession();

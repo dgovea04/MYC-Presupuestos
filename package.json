@@ -23,6 +23,7 @@
     "s10:inspect": "node ./node_modules/tsx/dist/cli.mjs scripts/inspect-s10-sqlserver.ts",
     "s10:sqlserver": "node ./node_modules/tsx/dist/cli.mjs scripts/s10-sqlserver.ts",
     "s10:draft": "node ./node_modules/tsx/dist/cli.mjs scripts/create-s10-import-draft.ts",
+    "s10:snapshot": "node ./node_modules/tsx/dist/cli.mjs scripts/validate-s10-snapshot.ts",
     "migrate:workflows": "node ./node_modules/tsx/dist/cli.mjs scripts/migrate-agent-workflows.ts",
     "test": "node ./node_modules/vitest/vitest.mjs run"
   },

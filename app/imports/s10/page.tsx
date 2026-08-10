@@ -17,11 +17,18 @@ export default async function S10ImportsPage() {
           <PageHeaderCard
             icon={<DatabaseZap className="h-5 w-5" />}
             title="Importador S10"
-            description="Analiza respaldos .s2k y revisa el draft de presupuestos, partidas, APUs e insumos antes de crear datos en MC."
+            description={
+              process.env.NODE_ENV === "production"
+                ? "Importa un snapshot JSON exportado desde S10 y revisa el draft de presupuestos, partidas, APUs e insumos antes de crear datos en MC."
+                : "Prepara datos desde S10 local o importa un snapshot JSON para revisar el draft antes de crear datos en MC."
+            }
           />
         </CardHeader>
         <CardContent className="pt-6">
-          <S10ImporterPageContent companies={companies.map((company) => ({ id: company.id, name: company.name }))} />
+          <S10ImporterPageContent
+            companies={companies.map((company) => ({ id: company.id, name: company.name }))}
+            localToolsEnabled={process.env.NODE_ENV === "development"}
+          />
         </CardContent>
       </Card>
     </AppShell>

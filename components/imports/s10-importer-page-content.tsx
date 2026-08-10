@@ -18,9 +18,10 @@ import { Input } from "@/components/ui/input";
 import { ImportBudgetFooterPreview } from "@/components/imports/import-budget-footer-preview";
 import { ImportProgressPanel, type ImportProgressPanelStep } from "@/components/imports/import-progress-panel";
 import { ImportWarningSummary, ImportWarningsBadge } from "@/components/imports/import-warning-summary";
+import { analyzeS2kFileLocally } from "@/lib/s10/s2k-analyzer-client";
 import type { S10ImportPreview } from "@/lib/s10/s2k-analyzer";
 import type { S10ImportDraftPreview } from "@/lib/s10/import-preview";
-import type { S10ExportSnapshot } from "@/lib/s10/import-mapper";
+import type { S10SnapshotContract } from "@/lib/s10/snapshot-contract";
 
 type RequestState = "idle" | "loading" | "success" | "error";
 type RestoreBackupSourceMode = "path" | "upload";
@@ -72,6 +73,7 @@ type S10LocalRestoreResult = {
 
 type S10ImporterPageContentProps = {
   companies: CompanyOption[];
+  localToolsEnabled: boolean;
 };
 
 type S10ProgressAction = "preview" | "import" | "restore";
@@ -114,7 +116,7 @@ const restoreProgressSteps: ImportProgressPanelStep[] = [
   { label: "Verificando" },
 ];
 
-export function S10ImporterPageContent({ companies }: S10ImporterPageContentProps) {
+export function S10ImporterPageContent({ companies, localToolsEnabled }: S10ImporterPageContentProps) {
   const [s2kFile, setS2kFile] = useState<File | null>(null);
   const [snapshotFile, setSnapshotFile] = useState<File | null>(null);
   const [budgetCode, setBudgetCode] = useState("0201003");
@@ -139,7 +141,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
   const [localDatabases, setLocalDatabases] = useState<S10LocalDatabase[]>([]);
   const [localBudgets, setLocalBudgets] = useState<S10LocalBudget[]>([]);
   const [localRestoreResult, setLocalRestoreResult] = useState<S10LocalRestoreResult | null>(null);
-  const [localSnapshot, setLocalSnapshot] = useState<S10ExportSnapshot | null>(null);
+  const [localSnapshot, setLocalSnapshot] = useState<S10SnapshotContract | null>(null);
   const [draftPreview, setDraftPreview] = useState<S10ImportDraftPreview | null>(null);
   const [importResult, setImportResult] = useState<S10ImportResult | null>(null);
   const [analysisError, setAnalysisError] = useState("");
@@ -191,22 +193,14 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
     setAnalysisState("loading");
     setAnalysisError("");
 
-    const formData = new FormData();
-    formData.set("file", s2kFile);
-
-    const response = await fetch("/api/imports/s10/analyze", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
+    try {
+      const preview = await analyzeS2kFileLocally(s2kFile);
+      setAnalysis(preview);
+      setAnalysisState("success");
+    } catch (error) {
       setAnalysisState("error");
-      setAnalysisError(await readApiError(response));
-      return;
+      setAnalysisError(error instanceof Error ? error.message : "No se pudo analizar el archivo S10 localmente.");
     }
-
-    setAnalysis((await response.json()) as S10ImportPreview);
-    setAnalysisState("success");
   }
 
   async function previewSnapshotDraft() {
@@ -533,7 +527,7 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
     let stopEstimate: (() => void) | null = startEstimatedProgress(setProgressState, "preview");
 
     try {
-      const exportBody = await postJsonWithEstimatedProgress<{ snapshot: S10ExportSnapshot }>(
+      const exportBody = await postJsonWithEstimatedProgress<{ snapshot: S10SnapshotContract }>(
         "/api/imports/s10/sqlserver/export",
         {
           server: localServer.trim() || ".\\SQLEXPRESS",
@@ -599,13 +593,16 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
 
   return (
     <div className="space-y-6">
+      {localToolsEnabled ? (
+        <>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.3fr)_minmax(0,0.7fr)]">
         <section className="rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
+              <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
                 <FileSearch className="h-4 w-4 text-sky-600" />
                 Analizador .s2k
+                <LocalOnlyBadge />
               </div>
               <p className="text-sm text-[var(--app-text-muted)]">Firma, cabecera y tipo probable del respaldo S10.</p>
             </div>
@@ -640,9 +637,10 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
         <section className="rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
+              <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
                 <Upload className="h-4 w-4 text-sky-600" />
                 Restaurar respaldo .S2K
+                <LocalOnlyBadge />
               </div>
               <p className="text-sm text-[var(--app-text-muted)]">
                 Crea una base local de SQL Server desde un respaldo S10 antes de listar presupuestos y exportar el draft.
@@ -744,9 +742,10 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
       <section className="rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
+            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--app-text-strong)]">
               <Server className="h-4 w-4 text-sky-600" />
               SQL Server S10 local
+              <LocalOnlyBadge />
             </div>
             <p className="text-sm text-[var(--app-text-muted)]">Lee bases S10 existentes en SQL Server Express y genera el draft MC.</p>
           </div>
@@ -814,6 +813,9 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
         {localBudgetError ? <InlineMessage tone="error" message={localBudgetError} /> : null}
         {localExportError ? <InlineMessage tone="error" message={localExportError} /> : null}
       </section>
+
+        </>
+      ) : null}
 
       <section className="rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
@@ -1045,6 +1047,10 @@ export function S10ImporterPageContent({ companies }: S10ImporterPageContentProp
       ) : null}
     </div>
   );
+}
+
+function LocalOnlyBadge() {
+  return <Badge className="theme-status-warning text-[10px] font-semibold uppercase tracking-wide">Solo local</Badge>;
 }
 
 function StatusBadge({ state }: { state: RequestState }) {
