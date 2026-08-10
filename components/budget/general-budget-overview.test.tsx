@@ -137,9 +137,24 @@ describe("GeneralBudgetOverview", () => {
     expect(getByText("Consolidado activo")).toBeTruthy();
     expect(getByText("Acero fy=4200")).toBeTruthy();
   });
+
+  it("shows a budget-detail table skeleton while loading consolidated details", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
+
+    const { clickButton } = await renderOverview({ subBudgetDetails: [] });
+
+    await act(async () => {
+      clickButton("Mostrar detalle consolidado");
+    });
+
+    const loadingRegion = document.querySelector('[role="status"][aria-label="Cargando detalle consolidado"]');
+    expect(loadingRegion?.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelector('table[aria-label="Cargando detalle consolidado"]')).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Cargando detalle consolidado...");
+  });
 });
 
-async function renderOverview() {
+async function renderOverview({ subBudgetDetails = createSubBudgetDetails() }: { subBudgetDetails?: BudgetRecord[] } = {}) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -155,7 +170,7 @@ async function renderOverview() {
             projectId="project-1"
             generalBudgetId="general-1"
             subBudgets={createSubBudgetOverview()}
-            subBudgetDetails={createSubBudgetDetails()}
+            subBudgetDetails={subBudgetDetails}
           />
         </AppViewModeProvider>
       </FormattingSettingsProvider>,

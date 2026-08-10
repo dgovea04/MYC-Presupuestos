@@ -25,7 +25,7 @@ vi.mock("@/components/ui/select", () => ({
   ),
 }));
 
-import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
+import { clearWorkspaceSwitcherFetchCacheForTests, WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
 
 const singleWorkspace = [
   { id: "company-1", name: "MYC Ingenieria", role: "OWNER" as const, logoUrl: null },
@@ -102,6 +102,7 @@ async function renderAndFlush(component: React.ReactElement) {
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  clearWorkspaceSwitcherFetchCacheForTests();
   fetchMock = vi.fn();
   fetchMock.mockResolvedValue({
     ok: true,
@@ -111,6 +112,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearWorkspaceSwitcherFetchCacheForTests();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
   cleanup();
@@ -1108,8 +1110,10 @@ describe("WorkspaceSwitcher — integration", () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
       });
 
-      // Loading indicator should be visible while fetch is pending
-      expect(screen.getByText("Cargando...")).toBeTruthy();
+      // Loading skeleton should be visible while fetch is pending
+      const loadingRegion = screen.getByRole("status", { name: "Cargando miembros del workspace" });
+      expect(loadingRegion.getAttribute("aria-busy")).toBe("true");
+      expect(loadingRegion.querySelector(".animate-spin")).toBeFalsy();
 
       // Now resolve the fetch with an error
       await act(async () => {
@@ -1128,7 +1132,7 @@ describe("WorkspaceSwitcher — integration", () => {
       await waitFor(() => {
         expect(screen.getByText("Acceso denegado")).toBeTruthy();
       });
-      expect(screen.queryByText("Cargando...")).toBeNull();
+      expect(screen.queryByRole("status", { name: "Cargando miembros del workspace" })).toBeNull();
     });
   });
 

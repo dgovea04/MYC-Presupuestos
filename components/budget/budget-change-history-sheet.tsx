@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useCallback, useEffect, useState } from "react";
-import { Clock, User, ArrowRight } from "lucide-react";
+import { Clock, User } from "lucide-react";
+import { CollaborationSheetSkeleton } from "@/components/loading/collaboration-sheet-skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import type { BudgetChangeRecord } from "@/types/collaboration";
 
@@ -100,9 +101,7 @@ export const BudgetChangeHistorySheet = memo(function BudgetChangeHistorySheet({
       {/* Events list */}
       <div className="flex-1 overflow-auto px-4 py-3">
         {loading ? (
-          <p className="py-6 text-center text-xs text-[var(--app-text-muted)]">
-            Cargando historial...
-          </p>
+          <CollaborationSheetSkeleton aria-label="Cargando historial de cambios" />
         ) : filteredEvents.length === 0 ? (
           <p className="py-6 text-center text-xs text-[var(--app-text-muted)]">
             Sin cambios registrados aun

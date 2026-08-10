@@ -129,7 +129,7 @@ describe("WorkCalendarsSettings", () => {
       ).toBeTruthy();
     });
 
-    it("shows a spinner while loading then renders calendars", async () => {
+    it("shows a calendar table skeleton while loading then renders calendars", async () => {
       let resolveFetch: (value: unknown) => void = () => {};
       const fetchPromise = new Promise((resolve) => {
         resolveFetch = resolve;
@@ -148,8 +148,10 @@ describe("WorkCalendarsSettings", () => {
         root.render(<WorkCalendarsSettings />);
       });
 
-      // Should show spinner before fetch resolves
-      expect(container.querySelector(".animate-spin")).toBeTruthy();
+      const loadingRegion = container.querySelector('[role="status"][aria-label="Cargando calendarios laborales"]');
+      expect(loadingRegion?.getAttribute("aria-busy")).toBe("true");
+      expect(container.querySelector('table[aria-label="Cargando calendarios laborales"]')).toBeTruthy();
+      expect(container.querySelector(".animate-spin")).toBeFalsy();
 
       // Resolve fetch
       await act(async () => {
@@ -162,8 +164,7 @@ describe("WorkCalendarsSettings", () => {
         await Promise.resolve();
       });
 
-      // Spinner gone, calendar name visible
-      expect(container.querySelector(".animate-spin")).toBeFalsy();
+      expect(container.querySelector('[role="status"][aria-label="Cargando calendarios laborales"]')).toBeFalsy();
       expect(container.textContent).toContain("Lun-Vie 8h");
     });
 

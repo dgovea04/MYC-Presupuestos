@@ -6,6 +6,7 @@ import { Combine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -190,8 +191,23 @@ export function PolynomialMonomialsTable({
         ) : null}
 
         {baseIndicesLoading ? (
-          <div className={cn("theme-muted-panel border px-4 py-3 text-sm theme-muted-text", isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl")}>
-            Cargando indices INEI del mes base...
+          <div
+            aria-busy="true"
+            aria-label="Cargando indices INEI del mes base"
+            className={cn(
+              "theme-muted-panel min-h-[72px] border px-4 py-3",
+              isExcelMode ? "rounded-md border-[var(--app-border-strong)]" : "rounded-2xl",
+            )}
+            role="status"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <SkeletonBlock className="h-8 w-8 rounded-lg" />
+              <div className="min-w-[220px] flex-1 space-y-2">
+                <SkeletonText lines={1} width="w-56" />
+                <SkeletonText lines={1} width="w-72" />
+              </div>
+              <SkeletonBlock className="h-8 w-28 rounded-lg" />
+            </div>
           </div>
         ) : null}
 

@@ -5,6 +5,7 @@ import { Ban, CalendarDays, Calendar, Clock, Loader2, Pencil, Plus, Save, Trash2
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SkeletonTable } from "@/components/ui/loading";
 import { countBits, formatWorkDaysLabel } from "@/lib/work-schedule/calendar";
 import { cn } from "@/lib/utils";
 
@@ -335,8 +336,17 @@ export function WorkCalendarsSettings({ initialCalendars }: { initialCalendars?:
         ) : null}
 
         {loading ? (
-          <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-[var(--app-text-subtle)]" />
+          <div aria-busy="true" aria-label="Cargando calendarios laborales" role="status">
+            <SkeletonTable
+              aria-label="Cargando calendarios laborales"
+              columns={[
+                { id: "name", width: "w-full" },
+                { id: "days", width: "w-24", align: "right" },
+                { id: "hours", width: "w-24", align: "right" },
+                { id: "actions", width: "w-20", align: "right" },
+              ]}
+              rowCount={3}
+            />
           </div>
         ) : (
           <div className="space-y-3">
@@ -730,5 +740,4 @@ function CalendarEditCard({
     </div>
   );
 }
-
 

@@ -4,12 +4,17 @@ import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Select } from "@/components/ui/select";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import type { WorkspaceSummary } from "@/types/workspace";
 import type { WorkspaceRole } from "@/types/workspace";
 
 // Simple in-memory request deduplication for client-side API calls
 const fetchCache = new Map<string, { data: unknown; timestamp: number }>();
 const FETCH_CACHE_TTL = 30_000; // 30s
+
+export function clearWorkspaceSwitcherFetchCacheForTests() {
+  fetchCache.clear();
+}
 
 async function cachedFetch(url: string): Promise<unknown | null> {
   const cached = fetchCache.get(url);
@@ -589,7 +594,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
             {/* Members list */}
             <div className="max-h-56 overflow-y-auto px-2 pb-2">
               {isLoading ? (
-                <p className="px-3 py-4 text-center text-[11px] text-[var(--app-text-muted)]">Cargando...</p>
+                <WorkspaceMembersSkeleton />
               ) : loadError ? (
                 <p className="px-3 py-4 text-center text-[10px] text-[#EF4444]">{loadError}</p>
               ) : members.length === 0 ? (
@@ -653,6 +658,24 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
 }
 
 /* ── Member row helper ── */
+
+function WorkspaceMembersSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Cargando miembros del workspace" className="space-y-1 px-1 py-2" role="status">
+      <SkeletonText lines={1} width="w-28" className="px-1.5" />
+      {Array.from({ length: 3 }, (_, index) => (
+        <div key={index} className="flex min-h-12 items-center gap-2 rounded-lg px-2 py-1.5">
+          <SkeletonBlock className="h-7 w-7 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <SkeletonText lines={1} width={index === 0 ? "w-32" : "w-24"} />
+            <SkeletonText lines={1} width={index === 1 ? "w-40" : "w-28"} />
+          </div>
+          <SkeletonBlock className="h-5 w-12 rounded-full" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface MemberRowContext {
   member: MemberInfo;

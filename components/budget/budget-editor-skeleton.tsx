@@ -33,7 +33,7 @@ export function BudgetEditorSkeleton() {
         <CardContent className="p-0">
           <div className="space-y-0">
             {/* Column headers */}
-            <div className="flex items-center gap-3 border-b border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-4 py-3">
+            <div className="flex min-h-12 items-center gap-3 border-b border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-4 py-3">
               <AppSkeletonBlock className="h-4 w-12" />
               <AppSkeletonBlock className="h-4 flex-1" />
               <AppSkeletonBlock className="h-4 w-16" />
@@ -46,7 +46,7 @@ export function BudgetEditorSkeleton() {
             {Array.from({ length: 10 }).map((_, index) => (
               <div
                 key={index}
-                className={`flex items-center gap-3 border-b border-[var(--app-border-soft)] px-4 ${
+                className={`flex min-h-12 items-center gap-3 border-b border-[var(--app-border-soft)] px-4 ${
                   index % 3 === 0 ? "py-3" : "py-3.5"
                 }`}
               >
@@ -68,7 +68,7 @@ export function BudgetEditorSkeleton() {
       </Card>
 
       {/* Summary panel skeleton */}
-      <Card className="h-fit border-[var(--app-border)] bg-[var(--app-surface)]">
+      <Card className="h-fit min-h-[360px] border-[var(--app-border)] bg-[var(--app-surface)]">
         <CardHeader className="border-b border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)]">
           <AppSkeletonBlock className="h-5 w-24" />
         </CardHeader>

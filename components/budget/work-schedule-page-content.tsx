@@ -17,6 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  WorkScheduleCurveSkeleton,
+  WorkScheduleResourceCalendarSkeleton,
+  WorkScheduleValuationSkeleton,
+} from "@/components/loading/work-schedule-section-skeletons";
 
 const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
@@ -1664,13 +1669,21 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
 
 
 function DerivedViewLoadingCard({ label }: { label: string }) {
-  return (
-    <Card className="rounded-3xl border border-[var(--app-border)] shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)]">
-      <CardContent className="flex min-h-40 items-center justify-center p-8 text-sm text-[var(--app-text-muted)]">
-        {label}...
-      </CardContent>
-    </Card>
-  );
+  const normalizedLabel = label.toLowerCase();
+
+  if (normalizedLabel.includes("valorizado")) {
+    return <WorkScheduleValuationSkeleton />;
+  }
+
+  if (normalizedLabel.includes("insumos")) {
+    return <WorkScheduleResourceCalendarSkeleton />;
+  }
+
+  if (normalizedLabel.includes("curva")) {
+    return <WorkScheduleCurveSkeleton />;
+  }
+
+  return <WorkScheduleValuationSkeleton />;
 }
 
 function DerivedViewUnavailableCard({

@@ -63,6 +63,26 @@ describe("AdminCloudAiSettings", () => {
     expect(getClearOpenaiButton()).toBeTruthy();
   });
 
+  it("shows a cloud AI form skeleton while loading settings", async () => {
+    const fetchPromise = new Promise(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(fetchPromise));
+
+    const nextContainer = document.createElement("div");
+    document.body.appendChild(nextContainer);
+    activeContainer = nextContainer;
+
+    const root = createRoot(nextContainer);
+    (nextContainer as HTMLDivElement & { __root?: typeof root }).__root = root;
+
+    await act(async () => {
+      root.render(<AdminCloudAiSettings />);
+    });
+
+    const loadingRegion = nextContainer.querySelector('[role="status"][aria-label="Cargando proveedores Cloud IA"]');
+    expect(loadingRegion?.getAttribute("aria-busy")).toBe("true");
+    expect(loadingRegion?.querySelector(".animate-spin")).toBeFalsy();
+  });
+
   it("does NOT show the clear button for OpenAI when openaiConfigured is false", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

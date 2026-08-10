@@ -6,6 +6,7 @@ import { DEFAULT_GEMINI_MODEL, GEMINI_MODEL_OPTIONS } from "@/lib/ai/gateway/pro
 import { AGENT_MODELS } from "@/lib/ai/agent/models";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SkeletonForm } from "@/components/ui/loading";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -275,9 +276,11 @@ export function AdminCloudAiSettings() {
         {successMessage ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">{successMessage}</p> : null}
 
         {loading ? (
-          <div className="flex items-center justify-center py-10">
-            <Loader2 className="theme-subtle-text h-6 w-6 animate-spin" />
-          </div>
+          <SkeletonForm
+            aria-label="Cargando proveedores Cloud IA"
+            fieldsPerSection={2}
+            sections={3}
+          />
         ) : (
           <>
             <div className="theme-surface-card rounded-2xl border p-4">

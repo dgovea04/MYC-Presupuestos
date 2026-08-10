@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import {
   QualityMetricsHeader,
   QualityMetricsGrid,
@@ -11,6 +10,7 @@ import {
 } from "@/components/ai/khipu-quality-metrics-ui";
 import type { FeedbackSummary, FeedbackTrendPoint } from "@/components/ai/khipu-quality-metrics-ui";
 import { FeedbackTrendChart } from "@/components/ai/feedback-trend-chart";
+import { KhipuQualityMetricsSkeleton } from "@/components/dashboard/khipu-quality-metrics-skeleton";
 
 type ApiResponse = {
   summary: FeedbackSummary;
@@ -55,14 +55,7 @@ export function KhipuQualityMetricsPanel() {
   }, []);
 
   if (loading) {
-    return (
-      <section className="space-y-4">
-        <div className="flex items-center justify-center py-16 text-slate-400">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="ml-2 text-sm">Cargando metricas de calidad...</span>
-        </div>
-      </section>
-    );
+    return <KhipuQualityMetricsSkeleton />;
   }
 
   if (error) {

@@ -1006,6 +1006,23 @@ describe("BudgetEditor view mode integration", () => {
     expect(getByText("Validar precio unitario antes de cerrar el presupuesto.")).toBeTruthy();
   });
 
+  it("shows a structured item note preview skeleton while notes are loading", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>(() => {}));
+    const { getButtonByText } = await renderEditor({
+      budget: createBudgetWithItemWithoutUsefulPu(),
+    });
+
+    await act(async () => {
+      getButtonByText("Sin PU").dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+
+    const loadingRegion = document.querySelector('[role="status"][aria-label="Cargando notas de la partida"]');
+    expect(fetchSpy).toHaveBeenCalledWith("/api/notes?status=OPEN&budgetItemId=item-warning-1");
+    expect(loadingRegion?.getAttribute("aria-busy")).toBe("true");
+    expect(document.body.textContent).not.toContain("Cargando notas...");
+    expect(loadingRegion?.querySelector(".animate-spin")).toBeFalsy();
+  });
+
   it("explains when title and subtitle were inferred by pattern for text-only guided paste", async () => {
     const { getByText, getInputByValue } = await renderEditor({
       budget: createBudgetWithTwoSectionItems(),

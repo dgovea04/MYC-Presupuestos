@@ -1,6 +1,11 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  WorkScheduleCurveSkeleton,
+  WorkScheduleResourceCalendarSkeleton,
+  WorkScheduleValuationSkeleton,
+} from "@/components/loading/work-schedule-section-skeletons";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import type {
@@ -14,13 +19,21 @@ import type { ResourceCalendarMode, PeriodRangeSelection } from "./types";
 import { InfoTile } from "./ui-elements";
 
 export function DerivedViewLoadingCard({ label }: { label: string }) {
-  return (
-    <Card className="rounded-3xl border border-[var(--app-border)] shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)]">
-      <CardContent className="flex min-h-40 items-center justify-center p-8 text-sm text-[var(--app-text-muted)]">
-        {label}...
-      </CardContent>
-    </Card>
-  );
+  const normalizedLabel = label.toLowerCase();
+
+  if (normalizedLabel.includes("valorizado")) {
+    return <WorkScheduleValuationSkeleton />;
+  }
+
+  if (normalizedLabel.includes("insumos")) {
+    return <WorkScheduleResourceCalendarSkeleton />;
+  }
+
+  if (normalizedLabel.includes("curva")) {
+    return <WorkScheduleCurveSkeleton />;
+  }
+
+  return <WorkScheduleValuationSkeleton />;
 }
 
 export function DerivedViewUnavailableCard({

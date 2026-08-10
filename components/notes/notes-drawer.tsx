@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { Button } from "@/components/ui/button";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -265,9 +266,21 @@ export function NotesDrawer() {
 
             <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
               {loading ? (
-                <div className="theme-surface-card theme-muted-text flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Cargando notas...
+                <div
+                  aria-busy="true"
+                  aria-label="Cargando notas abiertas"
+                  className="theme-surface-card space-y-4 rounded-2xl border px-4 py-4"
+                  role="status"
+                >
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="min-h-[104px] space-y-3 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <SkeletonBlock className="h-4 w-20" radius="full" />
+                        <SkeletonBlock className="h-7 w-16" radius="xl" />
+                      </div>
+                      <SkeletonText lines={2} widths={["w-full", "w-2/3"]} />
+                    </div>
+                  ))}
                 </div>
               ) : notes.length === 0 ? (
                 <div className="theme-dashed-panel theme-muted-text rounded-2xl border border-dashed px-4 py-6 text-sm">

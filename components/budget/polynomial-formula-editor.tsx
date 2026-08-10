@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
 import { Input } from "@/components/ui/input";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
@@ -1017,7 +1018,7 @@ export function PolynomialFormulaEditor({
 
                   {historyOpen ? (
                     <>
-                      {historyLoading ? <p className="theme-muted-text text-sm">Cargando historial de reajustes...</p> : null}
+                      {historyLoading ? <AdjustmentHistorySkeleton /> : null}
                       {historyError ? <p className="text-sm text-rose-600">{historyError}</p> : null}
                       {!historyLoading && !historyError ? (
                         <PolynomialAdjustmentHistory
@@ -1050,6 +1051,26 @@ export function PolynomialFormulaEditor({
           Último reajuste registrado: {formatDate(history[0]?.createdAt ?? null, dateFormat)}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function AdjustmentHistorySkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Cargando historial de reajustes" className="space-y-2" role="status">
+      {Array.from({ length: 4 }, (_, index) => (
+        <div
+          key={index}
+          className="flex min-h-16 flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-elevated)] px-3 py-2"
+        >
+          <div className="min-w-[180px] flex-1 space-y-2">
+            <SkeletonText lines={1} width={index % 2 === 0 ? "w-40" : "w-32"} />
+            <SkeletonText lines={1} width="w-56" />
+          </div>
+          <SkeletonBlock className="h-6 w-20 rounded-full" />
+          <SkeletonBlock className="h-6 w-24 rounded-full" />
+        </div>
+      ))}
     </div>
   );
 }

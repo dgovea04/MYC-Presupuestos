@@ -38,6 +38,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { openNoteDraft } from "@/components/notes/notes-drawer";
 import { Input } from "@/components/ui/input";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -4202,7 +4203,7 @@ function BudgetItemIssueNoteBadge({
             <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
             Notas de la partida
           </span>
-          {previewState.loading ? <span className="block text-[var(--app-text-muted)]">Cargando notas...</span> : null}
+          {previewState.loading ? <ItemNotePreviewSkeleton /> : null}
           {!previewState.loading && previewState.error ? <span className="theme-status-error block rounded-lg border px-2 py-1">{previewState.error}</span> : null}
           {!previewState.loading && !previewState.error && previewState.notes.length === 0 ? (
             <span className="block text-[var(--app-text-muted)]">Sin notas abiertas para esta partida.</span>
@@ -4218,6 +4219,19 @@ function BudgetItemIssueNoteBadge({
           ) : null}
         </span>
       ) : null}
+    </span>
+  );
+}
+
+function ItemNotePreviewSkeleton() {
+  return (
+    <span aria-busy="true" aria-label="Cargando notas de la partida" className="block space-y-2" role="status">
+      {Array.from({ length: 2 }, (_, index) => (
+        <span key={index} className="block min-h-12 rounded-lg border border-amber-200/70 bg-[var(--app-surface)]/70 px-2 py-1.5">
+          <SkeletonText lines={1} width={index === 0 ? "w-48" : "w-40"} />
+          <SkeletonBlock className="mt-1.5 h-2 w-24" />
+        </span>
+      ))}
     </span>
   );
 }

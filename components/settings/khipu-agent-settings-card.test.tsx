@@ -92,6 +92,25 @@ describe("KhipuAgentSettingsCard", () => {
     expect(getByText(/Configura el modelo de IA que usa el Khipu Agente/)).toBeTruthy();
   });
 
+  it("shows an agent settings form skeleton while loading", async () => {
+    const fetchPromise = new Promise(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(fetchPromise));
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const root = createRoot(container);
+    (container as HTMLDivElement & { __root?: ReturnType<typeof createRoot> }).__root = root;
+
+    await act(async () => {
+      root.render(<KhipuAgentSettingsCard />);
+    });
+
+    const loadingRegion = container.querySelector('[role="status"][aria-label="Cargando configuracion de Khipu Agente"]');
+    expect(loadingRegion?.getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelector(".animate-spin")).toBeFalsy();
+  });
+
   it("shows OpenRouter configured badge by default", async () => {
     mockFetch({
       agentModel: DEFAULT_AGENT_MODEL,

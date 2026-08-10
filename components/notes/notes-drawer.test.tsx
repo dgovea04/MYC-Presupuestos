@@ -171,6 +171,21 @@ describe("NotesDrawer", () => {
 
     expect(document.body.textContent).toContain("Carlos Perez");
   });
+
+  it("shows a notes list skeleton while loading open notes", async () => {
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+
+    const { getButtonByText } = await renderDrawer();
+
+    await act(async () => {
+      getButtonByText("Notas").click();
+    });
+
+    const loadingRegion = document.querySelector('[role="status"][aria-label="Cargando notas abiertas"]');
+    expect(loadingRegion?.getAttribute("aria-busy")).toBe("true");
+    expect(document.body.textContent).not.toContain("Cargando notas...");
+    expect(loadingRegion?.querySelector(".animate-spin")).toBeFalsy();
+  });
 });
 
 async function renderDrawer() {

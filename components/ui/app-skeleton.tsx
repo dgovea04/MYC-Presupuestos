@@ -1,13 +1,5 @@
-import { cn } from "@/lib/utils";
+import { SkeletonBlock } from "@/components/ui/loading";
 
 export function AppSkeletonBlock({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        "animate-pulse rounded-lg border border-[var(--app-border-soft)] bg-[var(--app-surface-hover)]/90",
-        className,
-      )}
-    />
-  );
+  return <SkeletonBlock className={className} />;
 }

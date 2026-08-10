@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useState } from "react";
 import { History, RotateCcw, User, AlertTriangle } from "lucide-react";
+import { CollaborationSheetSkeleton } from "@/components/loading/collaboration-sheet-skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import type { BudgetVersionRecord } from "@/types/collaboration";
 
@@ -95,9 +96,7 @@ export const BudgetVersionHistorySheet = memo(function BudgetVersionHistorySheet
       {/* Versions list */}
       <div className="flex-1 overflow-auto px-4 py-3">
         {loading ? (
-          <p className="py-6 text-center text-xs text-[var(--app-text-muted)]">
-            Cargando versiones...
-          </p>
+          <CollaborationSheetSkeleton aria-label="Cargando versiones del presupuesto" />
         ) : versions.length === 0 ? (
           <p className="py-6 text-center text-xs text-[var(--app-text-muted)]">
             Sin versiones guardadas aun

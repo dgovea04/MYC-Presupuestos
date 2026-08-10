@@ -79,6 +79,23 @@ describe("PolynomialMonomialsTable", () => {
     const className = frame.getAttribute("class") ?? "";
     expect(className.split(/\s+/)).toContain("rounded-2xl");
   });
+
+  it("renders a compact base-index skeleton while INEI indices are loading", () => {
+    render(
+      <PolynomialMonomialsTable
+        monomials={createMonomials(3)}
+        baseIndexOptions={[]}
+        baseIndicesLoading
+        currencyDecimals={2}
+        onChangeMonomial={vi.fn()}
+      />,
+    );
+
+    const loadingRegion = screen.getByRole("status", { name: "Cargando indices INEI del mes base" });
+    expect(loadingRegion.getAttribute("aria-busy")).toBe("true");
+    expect(document.body.textContent).not.toContain("Cargando indices INEI del mes base...");
+    expect(loadingRegion.querySelector(".animate-spin")).toBeFalsy();
+  });
 });
 
 function createMonomials(count: number): PolynomialMonomialRecord[] {

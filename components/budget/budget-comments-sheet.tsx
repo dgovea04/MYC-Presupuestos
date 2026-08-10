@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, MessageSquareOff, Reply, Send } from "lucide-react";
+import { CollaborationSheetSkeleton } from "@/components/loading/collaboration-sheet-skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import type { CollaborationCommentRecord } from "@/types/collaboration";
 
@@ -150,9 +151,7 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
       {/* Comments list */}
       <div ref={listRef} data-comments-scroll className="flex-1 overflow-auto px-4 py-3">
         {loading ? (
-          <p className="py-6 text-center text-xs text-[var(--app-text-muted)]">
-            Cargando comentarios...
-          </p>
+          <CollaborationSheetSkeleton aria-label="Cargando comentarios del presupuesto" />
         ) : topLevelComments.length === 0 ? (
           <p className="py-6 text-center text-xs text-[var(--app-text-muted)]">
             Sin comentarios aun

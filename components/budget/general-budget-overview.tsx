@@ -13,6 +13,7 @@ import { BudgetComparisonPanel } from "@/components/budget/budget-comparison-pan
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
+import { SkeletonTable } from "@/components/ui/loading";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
@@ -641,9 +642,7 @@ export function GeneralBudgetOverview({
                 </div>
 
                 {showGeneralDetail && isLoadingSubBudgetDetails && generalDetailBudgets.length === 0 ? (
-                  <div className={cn("border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4 text-sm text-[var(--app-text-muted)]", isExcelMode ? "rounded-md" : "rounded-2xl")}>
-                    Cargando detalle consolidado...
-                  </div>
+                  <BudgetDetailTableSkeleton label="Cargando detalle consolidado" compact={isExcelMode} />
                 ) : showGeneralDetail ? (
                 <div className={getTableFrameClassName(isExcelMode, isExcelMode ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")} data-testid="general-budget-tab-table">
                   <Table className="[&_thead_tr]:border-b-[color:var(--app-border-strong)] [&_tbody_tr]:border-b-[color:var(--app-border-strong)] [&_thead_th]:border-r [&_thead_th]:border-[var(--app-border)] [&_thead_th:last-child]:border-r-0 [&_tbody_td]:border-r [&_tbody_td]:border-[var(--app-border)] [&_tbody_td:last-child]:border-r-0">
@@ -797,9 +796,7 @@ export function GeneralBudgetOverview({
                 </div>
 
                 {!activeBudgetDetail && isLoadingSubBudgetDetails ? (
-                  <div className={cn("border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4 text-sm text-[var(--app-text-muted)]", isExcelMode ? "rounded-md" : "rounded-2xl")}>
-                    Cargando detalle del Sub Presupuesto...
-                  </div>
+                  <BudgetDetailTableSkeleton label="Cargando detalle del Sub Presupuesto" compact={isExcelMode} />
                 ) : null}
 
                 <div
@@ -993,6 +990,26 @@ export function GeneralBudgetOverview({
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function BudgetDetailTableSkeleton({ compact, label }: { compact: boolean; label: string }) {
+  return (
+    <div aria-busy="true" aria-label={label} role="status">
+      <SkeletonTable
+        aria-label={label}
+        compact={compact}
+        columns={[
+          { id: "code", width: "w-20", sticky: true },
+          { id: "description", width: "w-full" },
+          { id: "unit", width: "w-16" },
+          { id: "quantity", width: "w-20", align: "right" },
+          { id: "unitPrice", width: "w-24", align: "right" },
+          { id: "partial", width: "w-24", align: "right" },
+        ]}
+        rowCount={6}
+      />
     </div>
   );
 }

@@ -1,38 +1,21 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SkeletonChart } from "@/components/ui/loading";
 import { OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 
 export function DashboardAnalyticsSectionSkeleton() {
   return (
-    <section className="space-y-4">
+    <section aria-busy="true" aria-label="Cargando analitica y KPIs" className="space-y-4" role="status">
       <OperationalSectionHeader
         title="Analitica y KPIs"
         description="Cargando metricas avanzadas de presupuestos, tendencias y alertas..."
       />
       <div className="grid gap-6 xl:grid-cols-2">
-        <AnalyticsChartSkeleton height="h-64" />
-        <AnalyticsChartSkeleton height="h-64" />
+        <SkeletonChart aria-label="Cargando distribucion de presupuestos" className="min-h-[340px]" />
+        <SkeletonChart aria-label="Cargando tendencia de proyectos" className="min-h-[320px]" />
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
-        <AnalyticsChartSkeleton height="h-64" />
-        <AnalyticsChartSkeleton height="h-64" />
+        <SkeletonChart aria-label="Cargando alertas de costos" className="min-h-[360px]" />
+        <SkeletonChart aria-label="Cargando rendimiento de catalogos" className="min-h-[320px]" />
       </div>
     </section>
-  );
-}
-
-function AnalyticsChartSkeleton({ height }: { height: string }) {
-  return (
-    <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
-      <CardHeader className="px-5 py-4">
-        <CardTitle className="text-base font-medium">
-          <span className="inline-block h-5 w-48 animate-pulse rounded-md bg-slate-200" />
-        </CardTitle>
-      </CardHeader>
-      <CardContent className={`px-5 pb-5 ${height}`}>
-        <div className="flex h-full items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-600 border-t-transparent" />
-        </div>
-      </CardContent>
-    </Card>
   );
 }

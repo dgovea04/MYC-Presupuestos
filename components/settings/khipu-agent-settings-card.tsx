@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bot, Loader2, Save, AlertTriangle, CheckCircle2, Wifi, RefreshCw, Terminal, XCircle, Cloud, Sparkles, Server, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SkeletonForm } from "@/components/ui/loading";
 import { AGENT_MODELS, DEFAULT_AGENT_MODEL, getAgentModelShortLabel, PROVIDER_BADGE, type AgentModelProvider } from "@/lib/ai/agent/models";
 import { cn } from "@/lib/utils";
 
@@ -456,9 +457,11 @@ export function KhipuAgentSettingsCard() {
         {successMessage ? <p className="theme-status-success theme-status-success-strong rounded-2xl border px-4 py-3 text-sm">{successMessage}</p> : null}
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-[var(--app-text-subtle)]" />
-          </div>
+          <SkeletonForm
+            aria-label="Cargando configuracion de Khipu Agente"
+            fieldsPerSection={2}
+            sections={2}
+          />
         ) : (
           <>
             {/* Estado del proveedor */}
