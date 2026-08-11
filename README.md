@@ -195,13 +195,30 @@ npm.cmd run prisma:generate
 npm.cmd run prisma:migrate
 ```
 
-### 5. Cargar datos demo
+### 5. Cargar datos base o demo
 
 ```powershell
 npm.cmd run prisma:seed
 ```
 
-El seed crea usuario demo, empresa, proyecto, presupuesto, insumos, partidas, APUs base, indices y datos iniciales.
+Por defecto el seed crea usuario demo, empresa, proyecto, presupuesto, insumos, partidas, APUs base, indices y datos iniciales.
+
+Para produccion, carga solo planes, catalogos, indices y workflows sin usuarios/proyecto demo:
+
+```powershell
+$env:SEED_DEMO_DATA="false"
+npm.cmd run prisma:seed
+```
+
+Luego crea el administrador oficial:
+
+```powershell
+$env:ADMIN_EMAIL="admin@tu-dominio.com"
+$env:ADMIN_PASSWORD="usa-una-clave-larga-y-unica"
+$env:ADMIN_NAME="Administrador"
+$env:ADMIN_COMPANY_NAME="Tu Empresa"
+npm.cmd run admin:create
+```
 
 ### 6. Migración de agent workflows (Khipu Agent Platform)
 

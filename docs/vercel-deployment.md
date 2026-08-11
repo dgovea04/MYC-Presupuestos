@@ -60,6 +60,23 @@ npx prisma migrate deploy
 npm.cmd run prisma:generate
 ```
 
+Seed base production data without demo users or demo project:
+
+```powershell
+$env:SEED_DEMO_DATA="false"
+npm.cmd run prisma:seed
+```
+
+Create the official production administrator:
+
+```powershell
+$env:ADMIN_EMAIL="admin@tu-dominio.com"
+$env:ADMIN_PASSWORD="usa-una-clave-larga-y-unica"
+$env:ADMIN_NAME="Administrador"
+$env:ADMIN_COMPANY_NAME="Tu Empresa"
+npm.cmd run admin:create
+```
+
 Seed demo data only in disposable Preview environments:
 
 ```powershell
@@ -86,4 +103,3 @@ After deployment, verify:
 - Contact and verification emails.
 - `/api/cron/reactivate-members` with bearer auth.
 - Cloud AI provider health. Ollama and SQL Server S10 local features must stay disabled online.
-
