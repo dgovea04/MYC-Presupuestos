@@ -1269,7 +1269,7 @@ describe("BudgetEditor view mode integration", () => {
   it("keeps the partida explanation action locked for Starter users", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const { getButtonByLabel, getByText } = await renderEditor({
+    const { getButtonByLabel } = await renderEditor({
       budget: createBudgetWithItem(),
       canUseKhipu: false,
     });
@@ -1277,7 +1277,7 @@ describe("BudgetEditor view mode integration", () => {
     const inlineAiButton = getButtonByLabel("Explicar esta partida con IA — Disponible en Pro");
     expect(inlineAiButton.disabled).toBe(true);
     expect(inlineAiButton.getAttribute("aria-disabled")).toBe("true");
-    expect(inlineAiButton.className).toContain("theme-status-warning");
+    expect(inlineAiButton.textContent).toContain("Pro");
 
     await act(async () => {
       getButtonByLabel("Abrir acciones de la partida").click();
@@ -1289,7 +1289,7 @@ describe("BudgetEditor view mode integration", () => {
     expect(menuAiButton).toBeInstanceOf(HTMLButtonElement);
     expect(menuAiButton?.disabled).toBe(true);
     expect(menuAiButton?.getAttribute("aria-disabled")).toBe("true");
-    expect(menuAiButton?.textContent).toContain("Disponible en Pro");
+    expect(menuAiButton?.textContent).toContain("Pro");
     expect(menuAiButton?.querySelector("svg")).toBeTruthy();
 
     await act(async () => {
@@ -1303,20 +1303,24 @@ describe("BudgetEditor view mode integration", () => {
   it("locks the budget review header and AI provider controls for Starter users", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const { getButtonByLabel, getButtonByText } = await renderEditor({
+    const { getButtonByLabel } = await renderEditor({
       budget: createBudgetWithItem(),
       canUseKhipu: false,
     });
 
-    const reviewButton = getButtonByText("Revisar Presupuesto — Disponible en Pro");
+    const reviewButton = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.getAttribute("title") === "Revisar presupuesto con IA — Disponible en Pro",
+    );
+    if (!(reviewButton instanceof HTMLButtonElement)) throw new Error("Missing locked budget review button");
     expect(reviewButton.disabled).toBe(true);
     expect(reviewButton.getAttribute("title")).toContain("Disponible en Pro");
-    expect(reviewButton.className).toContain("theme-status-warning");
+    expect(reviewButton.textContent).toContain("Pro");
 
-    const providerButton = getButtonByText("Ollama · Pro");
+    const providerButton = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.startsWith("Ollama"));
+    if (!(providerButton instanceof HTMLButtonElement)) throw new Error("Missing locked Ollama provider button");
     expect(providerButton.disabled).toBe(true);
     expect(providerButton.getAttribute("aria-disabled")).toBe("true");
-    expect(providerButton.className).toContain("theme-status-warning");
+    expect(providerButton.textContent).toContain("Pro");
 
     await act(async () => {
       getButtonByLabel("Abrir acciones globales del sub presupuesto").click();
@@ -1327,7 +1331,7 @@ describe("BudgetEditor view mode integration", () => {
     );
     expect(menuReviewButton).toBeInstanceOf(HTMLButtonElement);
     expect(menuReviewButton?.disabled).toBe(true);
-    expect(menuReviewButton?.textContent).toContain("Disponible en Pro");
+    expect(menuReviewButton?.textContent).toContain("Pro");
 
     await act(async () => {
       reviewButton.click();

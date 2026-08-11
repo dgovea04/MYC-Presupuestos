@@ -18,7 +18,7 @@ const sections = [
   { id: "work-schedule", label: "Programacion de obra", href: "work-schedule" },
 ] as const;
 
-export function GeneralBudgetSectionShell({
+export async function GeneralBudgetSectionShell({
   budgetId,
   projectId,
   budgetName,

@@ -36,11 +36,18 @@ describe("ApuEditorSheet", () => {
   });
 
   it("locks Khipu actions for Starter users", async () => {
-    const { getButtonByText, getTextByExactMatch } = await renderSheet(createBudgetItem(), { canUseKhipu: false });
+    const { getTextByExactMatch } = await renderSheet(createBudgetItem(), { canUseKhipu: false });
 
-    expect(getButtonByText("Explicar partida · Pro").disabled).toBe(true);
-    expect(getButtonByText("Generar con IA · Pro").disabled).toBe(true);
-    expect(getButtonByText("Khipu · Pro").disabled).toBe(true);
+    const getLockedButton = (label: string) => {
+      const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((candidate) => candidate.textContent?.startsWith(label));
+      if (!(button instanceof HTMLButtonElement)) throw new Error(`Missing locked button: ${label}`);
+      return button;
+    };
+
+    expect(getLockedButton("Explicar partida").disabled).toBe(true);
+    expect(getLockedButton("Generar con IA").disabled).toBe(true);
+    expect(getLockedButton("Khipu").disabled).toBe(true);
+    expect(getTextByExactMatch("Pro")).toBeTruthy();
     expect(getTextByExactMatch("Abrir en Khipu")).toBeNull();
   });
 

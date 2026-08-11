@@ -552,10 +552,11 @@ export function ApuEditorSheet({
                     disabled
                     aria-disabled="true"
                     title="Explicar partida — Disponible en Pro"
-                    className={cn("theme-status-warning theme-status-warning-strong cursor-not-allowed gap-2 opacity-90", isExcelMode && "h-8 px-3 text-xs")}
+                    className={cn("cursor-not-allowed gap-2 whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]", isExcelMode && "h-8 px-3 text-xs")}
                   >
                     <BotMessageSquare className="h-4 w-4" />
-                    Explicar partida · Pro
+                    Explicar partida
+                    <ProLockBadge />
                   </Button>
                 )}
                 <Button
@@ -563,7 +564,7 @@ export function ApuEditorSheet({
                   variant="ghost"
                   className={cn(
                     "gap-2",
-                    !canUseKhipu && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90",
+                    !canUseKhipu && "cursor-not-allowed whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]",
                     isExcelMode && "h-8 px-3 text-xs",
                   )}
                   onClick={() => {
@@ -574,7 +575,8 @@ export function ApuEditorSheet({
                   title={canUseKhipu ? "Generar APU con IA" : "Generar APU con IA — Disponible en Pro"}
                 >
                   <Sparkles className="h-4 w-4" />
-                  {aiApuLoading ? "Generando..." : canUseKhipu ? "Generar con IA" : "Generar con IA · Pro"}
+                  {aiApuLoading ? "Generando..." : "Generar con IA"}
+                  {!canUseKhipu ? <ProLockBadge /> : null}
                 </Button>
                 {canUsePartidaGenerator ? (
                   <Link href={buildPartidaGeneratorHref(currentItemRecord.description, currentItemRecord.unit)}>
@@ -590,10 +592,11 @@ export function ApuEditorSheet({
                     disabled
                     aria-disabled="true"
                     title="Generador de partidas — Disponible en Pro"
-                    className={cn("theme-status-warning theme-status-warning-strong cursor-not-allowed gap-2 opacity-90", isExcelMode && "h-8 px-3 text-xs")}
+                    className={cn("cursor-not-allowed gap-2 whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]", isExcelMode && "h-8 px-3 text-xs")}
                   >
                     <GitCompareArrows className="h-4 w-4" />
-                    Generador · Pro
+                    Generador
+                    <ProLockBadge />
                   </Button>
                 )}
                 {canUseKhipu ? (
@@ -609,9 +612,10 @@ export function ApuEditorSheet({
                     disabled
                     aria-disabled="true"
                     title="Abrir en Khipu — Disponible en Pro"
-                    className={cn("theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90", isExcelMode && "h-8 px-3 text-xs")}
+                    className={cn("cursor-not-allowed gap-2 whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]", isExcelMode && "h-8 px-3 text-xs")}
                   >
-                    Khipu · Pro
+                    Khipu
+                    <ProLockBadge />
                   </Button>
                 )}
                 <Dialog.Close asChild>
@@ -1698,6 +1702,14 @@ function EditableSubpartidaApuDialog({
 }
 
 type AiApuPreviewResult = AiEndpointResult | AiApuCatalogGenerationResult;
+
+function ProLockBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5 text-[10px] font-semibold leading-none text-[var(--app-text-muted)]">
+      Pro
+    </span>
+  );
+}
 
 function AiApuPreview({
   result,

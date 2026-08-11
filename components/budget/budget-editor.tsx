@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BookOpenCheck, BotMessageSquare, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
+import { Activity, BookOpenCheck, BotMessageSquare, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -125,7 +125,7 @@ type ItemActionMenuState = {
   trigger: HTMLElement | null;
 };
 type HeaderActionMenuState = {
-  kind: "add" | "more";
+  kind: "add" | "more" | "ai";
   top: number;
   left: number;
   trigger: HTMLElement | null;
@@ -135,6 +135,12 @@ type AiProvider = "ollama" | "chatgpt-bridge" | "openai" | "gemini" | "openroute
 
 function toBackendProvider(frontend: AiProvider): "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter" {
   return frontend === "chatgpt-bridge" ? "chatgpt_bridge" : frontend;
+}
+
+function getHeaderActionMenuEstimatedHeight(kind: HeaderActionMenuState["kind"]) {
+  if (kind === "add") return HEADER_ADD_MENU_ESTIMATED_HEIGHT;
+  if (kind === "ai") return HEADER_AI_MENU_ESTIMATED_HEIGHT;
+  return HEADER_MORE_MENU_ESTIMATED_HEIGHT;
 }
 type AiBudgetPanelState =
   | {
@@ -208,6 +214,7 @@ const LEVEL_MORE_MENU_ESTIMATED_HEIGHT = 336;
 const ITEM_ACTION_MENU_ESTIMATED_HEIGHT = 184;
 const HEADER_ADD_MENU_ESTIMATED_HEIGHT = 216;
 const HEADER_MORE_MENU_ESTIMATED_HEIGHT = 192;
+const HEADER_AI_MENU_ESTIMATED_HEIGHT = 236;
 const EMPTY_CATALOG_SUGGESTIONS: CatalogPartidaRecord[] = [];
 
 type PendingBridgeBudgetReview = {
@@ -787,7 +794,7 @@ export function BudgetEditor({
       const menuElement = headerActionMenuRef.current;
       const menuSize: FixedMenuSize = {
         width: menuElement?.offsetWidth ?? HEADER_ACTION_MENU_WIDTH,
-        height: menuElement?.offsetHeight ?? (headerActionMenu.kind === "add" ? HEADER_ADD_MENU_ESTIMATED_HEIGHT : HEADER_MORE_MENU_ESTIMATED_HEIGHT),
+        height: menuElement?.offsetHeight ?? getHeaderActionMenuEstimatedHeight(headerActionMenu.kind),
       };
       const nextPosition = getFixedMenuPosition(headerActionMenu.trigger.getBoundingClientRect(), menuSize);
 
@@ -1433,11 +1440,11 @@ export function BudgetEditor({
     );
   }, []);
 
-  function toggleHeaderActionMenu(kind: "add" | "more", trigger: HTMLElement) {
+  function toggleHeaderActionMenu(kind: HeaderActionMenuState["kind"], trigger: HTMLElement) {
     const rect = trigger.getBoundingClientRect();
     const initialPosition = getFixedMenuPosition(rect, {
       width: HEADER_ACTION_MENU_WIDTH,
-      height: kind === "add" ? HEADER_ADD_MENU_ESTIMATED_HEIGHT : HEADER_MORE_MENU_ESTIMATED_HEIGHT,
+      height: getHeaderActionMenuEstimatedHeight(kind),
     });
 
     setHeaderActionMenu((current) =>
@@ -2073,10 +2080,11 @@ export function BudgetEditor({
                     disabled
                     aria-disabled="true"
                     title="Riesgos — Disponible en Pro"
-                    className="theme-status-warning theme-status-warning-strong inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] opacity-90"
+                    className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] opacity-90"
                   >
                     <Activity className="h-4 w-4" />
-                    Riesgos · Pro
+                    Riesgos
+                    <ProLockBadge />
                   </button>
                 )}
                 <div className="inline-flex flex-wrap items-center gap-2 self-end rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)] focus-within:border-[var(--app-border-strong)] focus-within:bg-[var(--app-surface-hover)]">
@@ -2120,7 +2128,7 @@ export function BudgetEditor({
                 >
                   {saving ? "Guardando..." : "Guardar"}
                 </Button>
-                <div className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] p-0.5 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
+                <div className="hidden">
                   {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"] as AiProvider[]).map((p) => (
                     <button
                       key={p}
@@ -2130,28 +2138,43 @@ export function BudgetEditor({
                         aria-disabled={!canUseKhipu ? "true" : undefined}
                         title={canUseKhipu ? `Usar ${getBudgetProviderLabel(p)}` : "Proveedores IA — Disponible en Pro"}
                         className={cn(
-                          "rounded-full px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                          "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
                           provider === p && canUseKhipu ? "theme-filter-button-active" : "text-[var(--app-text-muted)] hover:text-[var(--app-text-strong)]",
-                          !canUseKhipu && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90 hover:text-[var(--app-text-muted)]",
+                          !canUseKhipu && "cursor-not-allowed bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:text-[var(--app-text-muted)]",
                         )}
                       >
-                        {canUseKhipu ? getBudgetProviderLabel(p) : `${getBudgetProviderLabel(p)} · Pro`}
+                        {getBudgetProviderLabel(p)}
+                        {!canUseKhipu ? <ProLockBadge compact /> : null}
                     </button>
                   ))}
                 </div>
+                <div className="flex items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
                 <Button
                   type="button"
                   variant="outline"                    onClick={() => void runAiBudgetReview()}
                     disabled={!canUseKhipu}
                     title={canUseKhipu ? "Revisar presupuesto con IA" : "Revisar presupuesto con IA — Disponible en Pro"}
                     className={cn(
-                      "h-8 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.24)]",
-                      !canUseKhipu && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90 hover:bg-transparent",
+                      "h-8 whitespace-nowrap rounded-full border-0 bg-transparent px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] shadow-none hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]",
+                      !canUseKhipu && "cursor-not-allowed bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text-muted)]",
                     )}
                   >
                     <BotMessageSquare className="mr-2 h-4 w-4" />
-                    {canUseKhipu ? "Revisar Presupuesto" : "Revisar Presupuesto — Disponible en Pro"}
+                    Revisar Presupuesto
+                    {!canUseKhipu ? <ProLockBadge /> : null}
                 </Button>
+                <IconButton
+                  label="Opciones de IA para revisar presupuesto"
+                  onClick={(event) => toggleHeaderActionMenu("ai", event.currentTarget)}
+                  className="h-8 w-8 rounded-full"
+                  dataActionTrigger
+                  dataHeaderActionTrigger
+                  ariaExpanded={headerActionMenu?.kind === "ai"}
+                  ariaControls="budget-header-ai-menu"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </IconButton>
+                </div>
                 <div className="flex items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
                   <button
                     type="button"
@@ -2471,8 +2494,9 @@ export function BudgetEditor({
           />
           <div className="my-1 border-t border-[var(--app-border-soft)]" />
           <LevelActionMenuButton
-            label={canUseKhipu ? "Explicar partida con IA" : "Explicar partida con IA — Disponible en Pro"}
+            label="Explicar partida con IA"
             icon={<BotMessageSquare className="h-4 w-4" />}
+            badge={!canUseKhipu ? <ProLockBadge /> : undefined}
             disabled={!canUseKhipu}
             onClick={() => {
               if (!canUseKhipu) return;
@@ -2481,8 +2505,9 @@ export function BudgetEditor({
             }}
           />
           <LevelActionMenuButton
-            label={canUseKhipu ? "Autocompletar descripcion" : "Autocompletar descripcion — Disponible en Pro"}
+            label="Autocompletar descripcion"
             icon={<WandSparkles className="h-4 w-4" />}
+            badge={!canUseKhipu ? <ProLockBadge /> : undefined}
             disabled={!canUseKhipu}
             onClick={() => {
               if (!canUseKhipu) return;
@@ -2491,8 +2516,9 @@ export function BudgetEditor({
             }}
           />
           <LevelActionMenuButton
-            label={canUseKhipu ? "Sugerir APU" : "Sugerir APU — Disponible en Pro"}
+            label="Sugerir APU"
             icon={<Sparkles className="h-4 w-4" />}
+            badge={!canUseKhipu ? <ProLockBadge /> : undefined}
             disabled={!canUseKhipu}
             onClick={() => {
               if (!canUseKhipu) return;
@@ -2542,10 +2568,16 @@ export function BudgetEditor({
       {headerActionMenu ? (
         <div
           ref={headerActionMenuRef}
-          id={headerActionMenu.kind === "add" ? "budget-header-add-menu" : "budget-header-more-menu"}
+          id={headerActionMenu.kind === "add" ? "budget-header-add-menu" : headerActionMenu.kind === "ai" ? "budget-header-ai-menu" : "budget-header-more-menu"}
           data-header-action-menu
           role="menu"
-          aria-label={headerActionMenu.kind === "add" ? "Agregar contenido al sub presupuesto" : "Acciones globales del sub presupuesto"}
+          aria-label={
+            headerActionMenu.kind === "add"
+              ? "Agregar contenido al sub presupuesto"
+              : headerActionMenu.kind === "ai"
+                ? "Opciones de IA para revisar presupuesto"
+                : "Acciones globales del sub presupuesto"
+          }
           className="fixed z-[92] w-52 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
           style={{
             top: headerActionMenu.top,
@@ -2590,11 +2622,31 @@ export function BudgetEditor({
               />
             </>
           ) : null}
+          {headerActionMenu.kind === "ai" ? (
+            <>
+              {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter"] as AiProvider[]).map((p) => (
+                <LevelActionMenuButton
+                  key={p}
+                  label={getBudgetProviderLabel(p)}
+                  icon={provider === p ? <Check className="h-4 w-4" /> : undefined}
+                  badge={!canUseKhipu ? <ProLockBadge /> : undefined}
+                  disabled={!canUseKhipu}
+                  className={cn(provider === p && canUseKhipu ? "bg-[var(--app-surface-muted)] font-semibold text-[var(--app-text-strong)]" : undefined)}
+                  onClick={() => {
+                    if (!canUseKhipu) return;
+                    setProvider(p);
+                    closeHeaderActionMenu(true);
+                  }}
+                />
+              ))}
+            </>
+          ) : null}
           {headerActionMenu.kind === "more" ? (
             <>
               <LevelActionMenuButton
-                label={canUseTemplates ? "Guardar como plantilla" : "Guardar como plantilla — Disponible en Pro"}
+                label="Guardar como plantilla"
                 icon={<BookOpenCheck className="h-4 w-4" />}
+                badge={!canUseTemplates ? <ProLockBadge /> : undefined}
                 disabled={!canUseTemplates}
                 onClick={() => {
                   if (!canUseTemplates) return;
@@ -2618,8 +2670,9 @@ export function BudgetEditor({
                 }}
               />
               <LevelActionMenuButton
-                label={canUseKhipu ? "Revisar presupuesto con IA" : "Revisar presupuesto con IA — Disponible en Pro"}
+                label="Revisar presupuesto con IA"
                 icon={<BotMessageSquare className="h-4 w-4" />}
+                badge={!canUseKhipu ? <ProLockBadge /> : undefined}
                 disabled={!canUseKhipu}
                 onClick={() => {
                   if (!canUseKhipu) return;
@@ -3018,12 +3071,14 @@ function LevelActionMenuButton({
   label,
   onClick,
   icon,
+  badge,
   className,
   disabled = false,
 }: {
   label: string;
   onClick: () => void;
   icon?: React.ReactNode;
+  badge?: React.ReactNode;
   className?: string;
   disabled?: boolean;
 }) {
@@ -3036,13 +3091,27 @@ function LevelActionMenuButton({
       aria-disabled={disabled ? "true" : undefined}
       className={cn(
         "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--app-text)] transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1",
-        disabled && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90 hover:bg-transparent",
+        disabled && "cursor-not-allowed bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]",
         className,
       )}
     >
       {icon ? <span className="shrink-0 text-[var(--app-text-subtle)]">{icon}</span> : null}
-      {label}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {badge ? <span className="shrink-0">{badge}</span> : null}
     </button>
+  );
+}
+
+function ProLockBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] font-semibold leading-none text-[var(--app-text-muted)]",
+        compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
+      )}
+    >
+      Pro
+    </span>
   );
 }
 
