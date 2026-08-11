@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition, type FormEvent } from "react";
-import { Save } from "lucide-react";
+import { MailCheck, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ type AdminUserRow = {
   id: string;
   name: string;
   email: string;
+  emailVerifiedAt: string | null;
   role: "ADMIN" | "USER";
   status: "ACTIVE" | "SUSPENDED";
   planSlug: string;
@@ -41,6 +42,7 @@ export function AdminUserAccessForm({
   );
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [verifiedUserIds, setVerifiedUserIds] = useState<ReadonlySet<string>>(new Set());
 
   if (!selectedUser) {
     return <p className="theme-dashed-panel theme-muted-text rounded-2xl border px-4 py-6 text-sm">No hay usuarios para administrar.</p>;
@@ -70,6 +72,27 @@ export function AdminUserAccessForm({
       }
 
       setMessage("Usuario actualizado. Refresca la vista si necesitas ver los totales recalculados.");
+    });
+  }
+
+  const isEmailVerified = Boolean(selectedUser.emailVerifiedAt) || verifiedUserIds.has(selectedUser.id);
+
+  function handleVerifyEmail() {
+    setMessage(null);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${selectedUser.id}/verify-email`, {
+        method: "PATCH",
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setMessage(payload?.error ?? "No se pudo validar el correo.");
+        return;
+      }
+
+      setVerifiedUserIds((current) => new Set([...current, selectedUser.id]));
+      setMessage("Correo validado manualmente.");
     });
   }
 
@@ -144,6 +167,25 @@ export function AdminUserAccessForm({
         </p>
         {selectedUser.currentPeriodEnd ? <p>Periodo hasta {formatDateLabel(selectedUser.currentPeriodEnd)}</p> : null}
         {selectedUser.graceEndsAt ? <p>Gracia Pro hasta {formatDateLabel(selectedUser.graceEndsAt)}</p> : null}
+      </div>
+
+      <div className="theme-muted-panel rounded-2xl border px-4 py-3 text-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="theme-filter-button-active inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
+              <MailCheck className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="theme-strong-text font-medium">{isEmailVerified ? "Correo verificado" : "Correo pendiente de validacion"}</p>
+              <p className="theme-muted-text mt-1">{selectedUser.email}</p>
+            </div>
+          </div>
+          {!isEmailVerified ? (
+            <Button type="button" variant="outline" disabled={isPending} onClick={handleVerifyEmail}>
+              {isPending ? "Validando..." : "Validar correo"}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <Button type="submit" disabled={isPending} className="w-full gap-2">

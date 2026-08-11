@@ -283,6 +283,15 @@ describe("account data", () => {
       expect(result.canUpgrade).toBe(false);
     });
 
+    it("falls back to the user's personal plan when no active workspace license is available", async () => {
+      getEffectiveWorkspaceLicenseMock.mockResolvedValue(null);
+
+      const result = await getUserAccountMembership("user-1", null);
+
+      expect(result.effectivePlanSlug).toBe("pro");
+      expect(result.canUpgrade).toBe(false);
+    });
+
     it("throws when user is not found", async () => {
       userFindUniqueMock.mockResolvedValue(null);
 

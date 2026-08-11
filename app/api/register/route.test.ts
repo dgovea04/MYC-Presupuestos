@@ -135,13 +135,13 @@ describe("POST /api/register", () => {
 
   it("returns 400 when the request body fails validation", async () => {
     const response = await POST(
-      buildRequest({ name: "A", email: "not-an-email", password: "12", companyName: "" }),
+      buildRequest({ ...validBody, password: "12" }),
     );
 
     expect(response.status).toBe(400);
-    const json = await response.json();
-    expect(json.error).toBeTruthy();
-    expect(typeof json.error).toBe("string");
+    await expect(response.json()).resolves.toEqual({
+      error: "La contrasena debe tener al menos 8 caracteres",
+    });
     expect(mocks.registerUserWithCompanyMock).not.toHaveBeenCalled();
   });
 

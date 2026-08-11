@@ -5,6 +5,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { upsertPrimaryCompany } from "@/lib/data/company";
 import { USER_COMPANIES_CACHE_TAG } from "@/lib/data/projects";
 import { companySchema } from "@/lib/validations/company";
+import { WORKSPACE_LIST_CACHE_TAG } from "@/lib/workspace/active-workspace";
 
 const VALIDATION_ERROR_MESSAGE = "Revisa los datos de la empresa e intenta nuevamente.";
 const SAVE_ERROR_MESSAGE = "No se pudo guardar la empresa.";
@@ -24,6 +25,8 @@ export async function PATCH(request: Request) {
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag(USER_COMPANIES_CACHE_TAG, "max");
+    revalidateTag(WORKSPACE_LIST_CACHE_TAG, "max");
+    revalidateTag(`${WORKSPACE_LIST_CACHE_TAG}-${session.user.id}`, "max");
     revalidatePath("/projects");
     revalidatePath("/budgets");
     revalidatePath("/resources");

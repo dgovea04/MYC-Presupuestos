@@ -28,8 +28,19 @@ export async function upsertPrimaryCompany(userId: string, input: CompanyInput) 
   });
 
   if (legacyCompany) {
-    await prisma.companyMembership.create({
-      data: {
+    await prisma.companyMembership.upsert({
+      where: {
+        companyId_userId: {
+          companyId: legacyCompany.id,
+          userId,
+        },
+      },
+      update: {
+        role: "OWNER",
+        status: "ACTIVE",
+        suspendedUntil: null,
+      },
+      create: {
         companyId: legacyCompany.id,
         userId,
         role: "OWNER",

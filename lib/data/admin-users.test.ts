@@ -20,7 +20,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: prismaMock,
 }));
 
-import { updateUserAdminAccess } from "@/lib/data/admin-users";
+import { updateUserAdminAccess, verifyUserEmailManually } from "@/lib/data/admin-users";
 
 describe("admin users data", () => {
   beforeEach(() => {
@@ -67,6 +67,19 @@ describe("admin users data", () => {
         status: "ACTIVE",
         userId: "user-1",
         currentPeriodStart: expect.any(Date) as Date,
+      },
+    });
+  });
+
+  it("marks a user's email as verified manually", async () => {
+    prismaMock.user.update.mockResolvedValue({});
+
+    await verifyUserEmailManually("user-1");
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: {
+        emailVerifiedAt: expect.any(Date) as Date,
       },
     });
   });

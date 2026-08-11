@@ -168,7 +168,7 @@ describe("AppShell", () => {
     expect(markup).toContain("Notas");
   });
 
-  it("skips fetching the session when currentUser and settings are provided", async () => {
+  it("skips fetching the session and settings when currentUser and settings are provided", async () => {
     vi.mocked(getAuthSession).mockReset();
     vi.mocked(getUserSettings).mockReset();
     vi.mocked(getActiveWorkspaceId).mockReset();
@@ -180,7 +180,9 @@ describe("AppShell", () => {
       role: "OWNER",
     });
     vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-2");
-    vi.mocked(listUserWorkspaces).mockResolvedValue([]);
+    vi.mocked(listUserWorkspaces).mockResolvedValue([
+      { id: "company-2", name: "Empresa Ana Actualizada", role: "OWNER", logoUrl: null },
+    ]);
 
     const markup = renderToStaticMarkup(
       await AppShell({
@@ -223,7 +225,7 @@ describe("AppShell", () => {
     expect(getAuthSession).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
     expect(getActiveWorkspaceId).not.toHaveBeenCalled();
-    expect(listUserWorkspaces).not.toHaveBeenCalled();
+    expect(listUserWorkspaces).toHaveBeenCalledWith("user-2");
     expect(getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
       userId: "user-2",
       companyId: "company-2",
@@ -413,7 +415,9 @@ describe("AppShell", () => {
         role: "OWNER",
       });
       vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-id-present");
-      vi.mocked(listUserWorkspaces).mockResolvedValue([]);
+      vi.mocked(listUserWorkspaces).mockResolvedValue([
+        { id: "company-id-present", name: "Workspace DB", role: "OWNER", logoUrl: null },
+      ]);
 
       const markup = renderToStaticMarkup(
         await AppShell({
@@ -432,7 +436,7 @@ describe("AppShell", () => {
       expect(getAuthSession).not.toHaveBeenCalled();
       expect(getUserSettings).not.toHaveBeenCalled();
       expect(getActiveWorkspaceId).not.toHaveBeenCalled();
-      expect(listUserWorkspaces).not.toHaveBeenCalled();
+      expect(listUserWorkspaces).toHaveBeenCalledWith("user-with-id");
       expect(getEffectiveWorkspaceLicense).toHaveBeenCalledWith({
         userId: "user-with-id",
         companyId: "company-id-present",
@@ -641,6 +645,52 @@ describe("AppShell", () => {
         userId: "user-workspace",
         companyId: "company-ws",
       });
+    });
+
+    it("uses fresh workspace names from the database instead of stale token workspaces", async () => {
+      vi.mocked(getAuthSession).mockResolvedValue({
+        user: {
+          id: "user-stale",
+          name: "Darcy Govea",
+          email: "legacy04@gmail.com",
+          workspaces: [{ id: "company-legacy", name: "MYC Ingenieria", role: "OWNER", logoUrl: null }],
+        },
+      });
+      vi.mocked(getUserSettings).mockResolvedValue({
+        defaultCurrency: "PEN",
+        currencyDecimals: 2,
+        dateFormat: "DD_MMM_YYYY",
+        appTheme: "light",
+        defaultViewMode: "modern",
+        excelShowFieldBorders: true,
+        excelRowHeight: 52,
+        defaultIgvRate: 0.18,
+        defaultGeneralExpensesRate: 0.1,
+        defaultUtilityRate: 0.08,
+        defaultSubBudgetNames: ["Estructuras"],
+        aiProviderPreference: "auto",
+        floatingKhipuProvider: "ollama",
+        floatingKhipuWidth: 600,
+        floatingKhipuHeight: 500,
+        floatingKhipuFontSize: "normal",
+        floatingKhipuPosition: "bottom-right",
+        floatingKhipuTheme: "light",
+      });
+      vi.mocked(getEffectiveWorkspaceLicense).mockResolvedValue(null);
+      vi.mocked(getActiveWorkspaceId).mockResolvedValue("company-legacy");
+      vi.mocked(listUserWorkspaces).mockResolvedValue([
+        { id: "company-legacy", name: "darcy-govea-empresa", role: "OWNER", logoUrl: null },
+      ]);
+
+      const markup = renderToStaticMarkup(
+        await AppShell({
+          children: <div>Contenido</div>,
+        }),
+      );
+
+      expect(markup).toContain('data-workspace-names="darcy-govea-empresa"');
+      expect(markup).not.toContain("MYC Ingenieria");
+      expect(listUserWorkspaces).toHaveBeenCalledWith("user-stale");
     });
   });
 });

@@ -143,6 +143,7 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
   const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
   const allowance = Math.max(0, monthlyTokenLimit + extraTokens);
   const license = await getEffectiveWorkspaceLicense({ userId, companyId: activeCompanyId });
+  const effectivePlanSlug = license?.planSlug ?? user.membershipPlan?.slug ?? "starter";
   const billingSubscription = user.billingSubscriptions[0] ?? null;
   const graceEndsAt =
     billingSubscription?.status === "PAST_DUE" && billingSubscription.pastDueStartedAt
@@ -152,13 +153,13 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
   return {
     planName: user.membershipPlan?.name ?? "Sin membresia",
     planSlug: user.membershipPlan?.slug ?? "",
-    effectivePlanSlug: license.planSlug,
+    effectivePlanSlug,
     billingProvider: billingSubscription?.provider ?? null,
     billingStatus: billingSubscription?.status ?? null,
     currentPeriodEnd: billingSubscription?.currentPeriodEnd ? ensureDate(billingSubscription.currentPeriodEnd).toISOString() : null,
     graceEndsAt,
     canManageBilling: Boolean(billingSubscription?.stripeCustomerId),
-    canUpgrade: license.planSlug === "starter",
+    canUpgrade: effectivePlanSlug === "starter",
     monthlyTokenLimit,
     extraTokens,
     consumedTokens,

@@ -117,8 +117,8 @@ export function CompanyProfileForm({
       });
       setSuccess("Empresa guardada correctamente.");
       onSubmitSuccess?.();
-    } catch {
-      setError(DEFAULT_SAVE_ERROR);
+    } catch (submissionError) {
+      setError(submissionError instanceof Error && submissionError.message ? submissionError.message : DEFAULT_SAVE_ERROR);
     } finally {
       setPending(false);
     }
@@ -141,8 +141,8 @@ export function CompanyProfileForm({
         locallyHandledPaths: ["/settings"],
       });
       setSuccess("Logo guardado correctamente.");
-    } catch {
-      setError(DEFAULT_SAVE_ERROR);
+    } catch (submissionError) {
+      setError(submissionError instanceof Error && submissionError.message ? submissionError.message : DEFAULT_SAVE_ERROR);
     } finally {
       setLogoPending(false);
     }

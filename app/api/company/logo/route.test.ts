@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -12,6 +13,10 @@ vi.mock("@/lib/data/company", () => ({
   clearPrimaryCompanyLogo: vi.fn(),
   getPrimaryCompany: vi.fn(),
   updatePrimaryCompanyLogo: vi.fn(),
+}));
+
+vi.mock("@/lib/data/projects", () => ({
+  USER_COMPANIES_CACHE_TAG: "user-companies",
 }));
 
 vi.mock("@/lib/company/logo-storage", () => ({

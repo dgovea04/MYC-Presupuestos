@@ -2,12 +2,14 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock } = vi.hoisted(() => ({
+const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock, registerUserWithCompanyMock, ensureUserHasCompanyMock } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
   companyFindFirstMock: vi.fn(),
   companyMembershipFindManyMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
   verifyPasswordMock: vi.fn(),
+  registerUserWithCompanyMock: vi.fn(),
+  ensureUserHasCompanyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -21,6 +23,11 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/lib/auth/password", () => ({
   verifyPassword: verifyPasswordMock,
+}));
+
+vi.mock("@/lib/auth/registration", () => ({
+  ensureUserHasCompany: ensureUserHasCompanyMock,
+  registerUserWithCompany: registerUserWithCompanyMock,
 }));
 
 import { authOptions } from "@/lib/auth/options";
@@ -56,6 +63,8 @@ describe("authOptions callbacks", () => {
     companyMembershipFindManyMock.mockReset();
     userFindUniqueMock.mockReset();
     verifyPasswordMock.mockReset();
+    registerUserWithCompanyMock.mockReset();
+    ensureUserHasCompanyMock.mockReset();
     resetUserProfileColumnSupportCacheForTests();
   });
 
@@ -341,6 +350,46 @@ describe("authOptions callbacks", () => {
       });
 
       expect(result).toBe(false);
+    });
+
+    it("ensures an active existing Google user has an initial company", async () => {
+      queryRawMock
+        .mockResolvedValueOnce([
+          { column_name: "avatarUrl" },
+          { column_name: "phone" },
+          { column_name: "jobTitle" },
+          { column_name: "bio" },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: "user-google-existing",
+            name: "Google User",
+            email: "google@example.com",
+            passwordHash: null,
+            avatarUrl: null,
+            phone: null,
+            jobTitle: null,
+            bio: null,
+            role: "USER",
+            status: "ACTIVE",
+          },
+        ]);
+      ensureUserHasCompanyMock.mockResolvedValue("company-google");
+
+      const result = await runSignInCallback({
+        user: { email: "google@example.com" },
+        account: { provider: "google", type: "oauth", providerAccountId: "123" },
+        profile: { email: "google@example.com", email_verified: true, name: "Google User" },
+        email: undefined,
+        credentials: undefined,
+      });
+
+      expect(result).toBe(true);
+      expect(ensureUserHasCompanyMock).toHaveBeenCalledWith("user-google-existing", {
+        name: "Google User",
+        email: "google@example.com",
+      });
+      expect(registerUserWithCompanyMock).not.toHaveBeenCalled();
     });
   });
 

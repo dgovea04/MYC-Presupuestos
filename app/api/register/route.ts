@@ -8,7 +8,16 @@ import { registerUserWithCompany } from "@/lib/auth/registration";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const data = registerSchema.parse(body);
+    const parsed = registerSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Revisa los datos ingresados." },
+        { status: 400 },
+      );
+    }
+
+    const data = parsed.data;
 
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },

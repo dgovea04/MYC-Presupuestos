@@ -64,14 +64,35 @@ describe("getActiveWorkspaceId", () => {
     expect(result).toBeNull();
   });
 
-  it("falls back to the first active membership when no cookie is stored", async () => {
+  it("falls back to the owned active workspace when no cookie is stored", async () => {
     mockCookieStore.get.mockReturnValue(undefined);
-    mockPrisma.companyMembership.findFirst.mockResolvedValue({ companyId: "company-99" });
+    mockPrisma.companyMembership.findFirst.mockResolvedValueOnce({ companyId: "company-owned" });
 
     const result = await getActiveWorkspaceId("user-1");
 
-    expect(result).toBe("company-99");
+    expect(result).toBe("company-owned");
     expect(mockPrisma.companyMembership.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        status: "ACTIVE",
+        role: "OWNER",
+        company: { userId: "user-1" },
+      },
+      orderBy: { joinedAt: "asc" },
+      select: { companyId: true },
+    });
+  });
+
+  it("falls back to the first active membership when no owned workspace exists", async () => {
+    mockCookieStore.get.mockReturnValue(undefined);
+    mockPrisma.companyMembership.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ companyId: "company-collaboration" });
+
+    const result = await getActiveWorkspaceId("user-1");
+
+    expect(result).toBe("company-collaboration");
+    expect(mockPrisma.companyMembership.findFirst).toHaveBeenNthCalledWith(2, {
       where: { userId: "user-1", status: "ACTIVE" },
       orderBy: { joinedAt: "asc" },
       select: { companyId: true },
@@ -90,7 +111,9 @@ describe("getActiveWorkspaceId", () => {
   it("falls back to first active membership when stored workspace membership is invalid", async () => {
     mockCookieStore.get.mockReturnValue({ value: "company-invalid" });
     mockPrisma.companyMembership.findUnique.mockResolvedValue(null);
-    mockPrisma.companyMembership.findFirst.mockResolvedValue({ companyId: "company-fallback" });
+    mockPrisma.companyMembership.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ companyId: "company-fallback" });
 
     const result = await getActiveWorkspaceId("user-1");
 
@@ -167,7 +190,7 @@ describe("listUserWorkspaces", () => {
     expect(result).toEqual([]);
     expect(mockPrisma.companyMembership.findMany).toHaveBeenCalledWith({
       where: { userId: "user-1", status: "ACTIVE" },
-      include: { company: { select: { name: true, logoUrl: true } } },
+      include: { company: { select: { name: true, logoUrl: true, userId: true } } },
       orderBy: { joinedAt: "asc" },
     });
   });
@@ -177,12 +200,12 @@ describe("listUserWorkspaces", () => {
       {
         companyId: "company-1",
         role: "OWNER",
-        company: { name: "MYC Ingenieria", logoUrl: "/logos/myc.png" },
+        company: { name: "MYC Ingenieria", logoUrl: "/logos/myc.png", userId: "user-1" },
       },
       {
         companyId: "company-2",
         role: "EDITOR",
-        company: { name: "Constructora Demo", logoUrl: null },
+        company: { name: "Constructora Demo", logoUrl: null, userId: "other-user" },
       },
     ]);
 
@@ -191,6 +214,28 @@ describe("listUserWorkspaces", () => {
     expect(result).toEqual([
       { id: "company-1", name: "MYC Ingenieria", role: "OWNER", logoUrl: "/logos/myc.png" },
       { id: "company-2", name: "Constructora Demo", role: "EDITOR", logoUrl: null },
+    ]);
+  });
+
+  it("places the user's owned company before collaborator workspaces", async () => {
+    mockPrisma.companyMembership.findMany.mockResolvedValue([
+      {
+        companyId: "company-myc",
+        role: "EDITOR",
+        company: { name: "MYC Ingenieria", logoUrl: null, userId: "owner-myc" },
+      },
+      {
+        companyId: "company-owned",
+        role: "OWNER",
+        company: { name: "legacy04's Company", logoUrl: null, userId: "user-1" },
+      },
+    ]);
+
+    const result = await listUserWorkspaces("user-1");
+
+    expect(result).toEqual([
+      { id: "company-owned", name: "legacy04's Company", role: "OWNER", logoUrl: null },
+      { id: "company-myc", name: "MYC Ingenieria", role: "EDITOR", logoUrl: null },
     ]);
   });
 

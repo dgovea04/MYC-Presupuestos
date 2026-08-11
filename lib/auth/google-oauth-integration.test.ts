@@ -3,19 +3,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
   companyFindFirstMock: vi.fn(),
+  companyMembershipFindManyMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
   registerUserWithCompanyMock: vi.fn(),
+  ensureUserHasCompanyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     $queryRaw: mocks.queryRawMock,
     company: { findFirst: mocks.companyFindFirstMock },
+    companyMembership: { findMany: mocks.companyMembershipFindManyMock },
     user: { findUnique: mocks.userFindUniqueMock },
   },
 }));
 
 vi.mock("@/lib/auth/registration", () => ({
+  ensureUserHasCompany: mocks.ensureUserHasCompanyMock,
   registerUserWithCompany: mocks.registerUserWithCompanyMock,
 }));
 
@@ -105,8 +109,10 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
   beforeEach(() => {
     mocks.queryRawMock.mockReset();
     mocks.companyFindFirstMock.mockReset();
+    mocks.companyMembershipFindManyMock.mockReset();
     mocks.userFindUniqueMock.mockReset();
     mocks.registerUserWithCompanyMock.mockReset();
+    mocks.ensureUserHasCompanyMock.mockReset();
     resetUserProfileColumnSupportCacheForTests();
   });
 
@@ -141,6 +147,9 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     // profile columns are cached from signIn; only user search needs mocking
     mockDbRows([makeGoogleDbUser()]);
     mocks.companyFindFirstMock.mockResolvedValue(dbCompany);
+    mocks.companyMembershipFindManyMock.mockResolvedValue([
+      { companyId: "company-maria", role: "OWNER", company: { name: "Maria Calderon", logoUrl: null } },
+    ]);
     mocks.userFindUniqueMock.mockResolvedValue(dbMembership);
 
     const token = await runJwtCallback({
@@ -162,6 +171,15 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     expect(token.role).toBe("USER");
     expect(token.status).toBe("ACTIVE");
     expect(token.companyId).toBe("company-maria");
+    expect(token.activeCompanyId).toBe("company-maria");
+    expect(token.workspaces).toEqual([
+      {
+        id: "company-maria",
+        name: "Maria Calderon",
+        role: "OWNER",
+        logoUrl: null,
+      },
+    ]);
     expect(token.plan).toBe("starter");
 
     // ── session: hydrate from token, include companyId and plan ──
@@ -190,6 +208,15 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
       role: "USER",
       status: "ACTIVE",
       companyId: "company-maria",
+      activeCompanyId: "company-maria",
+      workspaces: [
+        {
+          id: "company-maria",
+          name: "Maria Calderon",
+          role: "OWNER",
+          logoUrl: null,
+        },
+      ],
       plan: "starter",
     });
   });
@@ -212,11 +239,18 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
     expect(signInResult).toBe(true);
     expect(mocks.registerUserWithCompanyMock).not.toHaveBeenCalled();
+    expect(mocks.ensureUserHasCompanyMock).toHaveBeenCalledWith("user-maria", {
+      name: "Maria Calderon",
+      email: "maria@gmail.com",
+    });
 
     // ── jwt: load existing user from DB ──
     // profile columns cached from signIn
     mockDbRows([makeGoogleDbUser()]);
     mocks.companyFindFirstMock.mockResolvedValue(dbCompany);
+    mocks.companyMembershipFindManyMock.mockResolvedValue([
+      { companyId: "company-maria", role: "OWNER", company: { name: "Maria Calderon", logoUrl: null } },
+    ]);
     mocks.userFindUniqueMock.mockResolvedValue(dbMembership);
 
     const token = await runJwtCallback({
@@ -233,6 +267,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
     expect(token.id).toBe("user-maria");
     expect(token.companyId).toBe("company-maria");
+    expect(token.activeCompanyId).toBe("company-maria");
     expect(token.plan).toBe("starter");
 
     // ── session ──
@@ -252,6 +287,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
     expect(session?.user?.email).toBe("maria@gmail.com");
     expect(session?.user?.companyId).toBe("company-maria");
+    expect(session?.user?.activeCompanyId).toBe("company-maria");
     expect(session?.user?.plan).toBe("starter");
   });
 
@@ -273,11 +309,18 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
     expect(signInResult).toBe(true);
     expect(mocks.registerUserWithCompanyMock).not.toHaveBeenCalled();
+    expect(mocks.ensureUserHasCompanyMock).toHaveBeenCalledWith("user-maria", {
+      name: "Maria Calderon",
+      email: "maria@gmail.com",
+    });
 
     // ── jwt ──
     // profile columns cached from signIn
     mockDbRows([makeCredentialsDbUser()]);
     mocks.companyFindFirstMock.mockResolvedValue(dbCompany);
+    mocks.companyMembershipFindManyMock.mockResolvedValue([
+      { companyId: "company-maria", role: "OWNER", company: { name: "Maria Calderon", logoUrl: null } },
+    ]);
     mocks.userFindUniqueMock.mockResolvedValue(dbMembership);
 
     const token = await runJwtCallback({
@@ -294,6 +337,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
     expect(token.id).toBe("user-maria");
     expect(token.companyId).toBe("company-maria");
+    expect(token.activeCompanyId).toBe("company-maria");
     expect(token.plan).toBe("starter");
 
     // ── session ──
@@ -313,6 +357,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
     expect(session?.user?.email).toBe("maria@gmail.com");
     expect(session?.user?.companyId).toBe("company-maria");
+    expect(session?.user?.activeCompanyId).toBe("company-maria");
     expect(session?.user?.plan).toBe("starter");
     expect(session?.user?.role).toBe("USER");
     expect(session?.user?.status).toBe("ACTIVE");

@@ -83,11 +83,6 @@ export async function AppShell({
   };
   const userId = session?.user?.id ?? currentUser?.id;
 
-  // Prefer session-provided workspace list from the JWT token to avoid refetches.
-  // Always call getActiveWorkspaceId (cached per-request) for validated active workspace.
-  const sessionWorkspaces = session?.user?.workspaces ?? currentUser?.workspaces ?? [];
-  const hasSessionWorkspaces = sessionWorkspaces.length > 0;
-
   const activeWorkspaceId = currentUser?.activeCompanyId ?? currentUser?.companyId ?? (
     userId ? await measureAsync("appShell.activeWorkspace", () => getActiveWorkspaceId(userId), { userId }) : null
   );  const [settings, workspaces, license] = await measureAsync("appShell.shellData", () => Promise.all([
@@ -96,11 +91,9 @@ export async function AppShell({
       : userId
         ? getUserSettings(userId)
         : Promise.resolve(fallbackSettings),
-    hasSessionWorkspaces
-      ? Promise.resolve(sessionWorkspaces as WorkspaceSummary[])
-      : userId
-        ? listUserWorkspaces(userId)
-        : Promise.resolve([]),
+    userId
+      ? listUserWorkspaces(userId)
+      : Promise.resolve((currentUser?.workspaces ?? session?.user?.workspaces ?? []) as WorkspaceSummary[]),
     userId && activeWorkspaceId
       ? getEffectiveWorkspaceLicense({ userId, companyId: activeWorkspaceId })
       : Promise.resolve(null),

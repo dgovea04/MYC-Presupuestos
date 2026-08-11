@@ -6,7 +6,7 @@ import { z } from "zod";
 import { authSessionCookieName } from "@/lib/auth/cookies";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { registerUserWithCompany } from "@/lib/auth/registration";
+import { ensureUserHasCompany, registerUserWithCompany } from "@/lib/auth/registration";
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { loginSchema } from "@/lib/validations/auth";
 import { listUserWorkspaces } from "@/lib/workspace/active-workspace";
@@ -211,6 +211,16 @@ export const authOptions: NextAuthOptions = {
           if (existingUser.status === "SUSPENDED") {
             return false;
           }
+
+          try {
+            await ensureUserHasCompany(existingUser.id, {
+              name: existingUser.name,
+              email: existingUser.email,
+            });
+          } catch {
+            return false;
+          }
+
           return true;
         }
 

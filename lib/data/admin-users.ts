@@ -55,6 +55,15 @@ export async function updateUserAdminAccess(userId: string, input: UpdateUserAdm
   });
 }
 
+export async function verifyUserEmailManually(userId: string) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      emailVerifiedAt: new Date(),
+    },
+  });
+}
+
 export async function activateManualProRequest(requestId: string) {
   const proPlan = await prisma.membershipPlan.findUnique({
     where: { slug: "pro" },

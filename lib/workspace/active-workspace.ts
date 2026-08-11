@@ -23,6 +23,21 @@ export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(us
     }
   }
 
+  const ownedWorkspace = await prisma.companyMembership.findFirst({
+    where: {
+      userId,
+      status: "ACTIVE",
+      role: "OWNER",
+      company: { userId },
+    },
+    orderBy: { joinedAt: "asc" },
+    select: { companyId: true },
+  });
+
+  if (ownedWorkspace) {
+    return ownedWorkspace.companyId;
+  }
+
   // Fallback: pick the first active membership
   const first = await prisma.companyMembership.findFirst({
     where: { userId, status: "ACTIVE" },
@@ -59,13 +74,27 @@ async function _listUserWorkspaces(userId: string) {
     where: { userId, status: "ACTIVE" },
     include: {
       company: {
-        select: { name: true, logoUrl: true },
+        select: { name: true, logoUrl: true, userId: true },
       },
     },
     orderBy: { joinedAt: "asc" },
   });
 
-  return memberships.map((m) => ({
+  return [...memberships].sort((left, right) => {
+    const leftIsOwned = left.company.userId === userId;
+    const rightIsOwned = right.company.userId === userId;
+
+    if (leftIsOwned !== rightIsOwned) {
+      return leftIsOwned ? -1 : 1;
+    }
+
+    if (left.role !== right.role) {
+      if (left.role === "OWNER") return -1;
+      if (right.role === "OWNER") return 1;
+    }
+
+    return 0;
+  }).map((m) => ({
     id: m.companyId,
     name: m.company.name,
     role: m.role as WorkspaceRole,
