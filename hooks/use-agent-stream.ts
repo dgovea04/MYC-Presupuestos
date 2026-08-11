@@ -1,13 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import type {
-  AgentExecutionState,
-  AgentToolActivitySummary,
-} from "@/lib/ai/agent/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { AgentExecutionState, AgentToolActivitySummary } from "@/lib/ai/agent/types";
 import type { AgentIntent, AgentPendingAction } from "@/lib/ai/agent/intent-router";
-
-// ─── Public types ────────────────────────────────────────────────────────────
 
 export type AgentStreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
 
@@ -41,17 +36,12 @@ export type AgentStreamState = {
 
 export type AgentStreamInput = {
   message: string;
-  /** Historial completo de la conversación para mantener contexto entre turnos */
   messages?: AgentStreamMessage[];
   projectId?: string;
-  /** ID del workspace/empresa activa para pasar al agente como contexto */
   workspaceId?: string;
   mode?: "chat" | "goal" | "workflow";
-  /** Slug del workflow/bundle especialista a usar, ej: "crear-presupuesto-base" */
   workflowId?: string;
-  /** Si es true, no agrega el mensaje al estado de UI (útil para enviar comandos internos) */
   skipMessageAdd?: boolean;
-  /** Mensaje limpio para mostrar en la UI cuando skipMessageAdd=true */
   displayMessage?: string;
 };
 
@@ -65,7 +55,13 @@ const EMPTY_EXECUTION: AgentStreamExecution = {
   latencyMs: null,
 };
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
+function readString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function readStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
 
 export function useAgentStream() {
   const [status, setStatus] = useState<AgentStreamStatus>("idle");
@@ -77,137 +73,14 @@ export function useAgentStream() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const connect = useCallback(async (input: AgentStreamInput) => {
-    // Reset state
-    setStatus("connecting");
-    setError(null);
-    setIntent(null);
-    setPendingAction(null);
-
-    // Si skipMessageAdd está activo, NO mostrar el mensaje en la UI
-    // (útil para comandos internos como la confirmación de presupuesto)
-    if (!input.skipMessageAdd) {
-      const userMessage: AgentStreamMessage = { role: "user", content: input.message };
-      setMessages((prev) => [...prev, userMessage]);
-    } else if (input.displayMessage) {
-      // Mostrar un mensaje limpio en la UI mientras el comando real va internamente
-      setMessages((prev) => [...prev, { role: "user", content: input.displayMessage }]);
-    }
-
-    setExecution((prev) => ({
-      ...EMPTY_EXECUTION,
-      toolActivity: prev.toolActivity, // preserve previous activity if reconnecting
-    }));
-
-    // Create assistant message placeholder for deltas to append to
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      // Incluir historial completo de mensajes para mantener contexto entre turnos
-      // Si no se provee messages, se envía solo el mensaje actual (compatibilidad)
-      const requestMessages = input.messages ?? [
-        { role: "user" as const, content: input.message },
-      ];
-
-      const response = await fetch("/api/ai/agent/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: input.message,
-          messages: requestMessages,
-          projectId: input.projectId,
-          workspaceId: input.workspaceId,
-          mode: input.mode ?? "goal",
-          workflowId: input.workflowId,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: "Error de conexión" }));
-        throw new Error(typeof err.error === "string" ? err.error : `HTTP ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error("El servidor no devolvió un stream.");
-      }
-
-      setStatus("streaming");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse SSE frames from buffer
-        const frames = buffer.split("\n\n");
-        buffer = frames.pop() ?? ""; // keep incomplete frame in buffer
-
-        for (const frame of frames) {
-          if (!frame.trim() || frame.startsWith(":")) continue;
-
-          const eventMatch = frame.match(/^event:\s*(.+)$/m);
-          const dataMatch = frame.match(/^data:\s*(.+)$/m);
-
-          if (!eventMatch || !dataMatch) continue;
-
-          const eventType = eventMatch[1].trim();
-          let parsed: Record<string, unknown>;
-          try {
-            parsed = JSON.parse(dataMatch[1]);
-          } catch {
-            continue; // skip malformed JSON
-          }
-
-          handleEvent(eventType, parsed);
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      const msg = err instanceof Error ? err.message : "Error de conexión.";
-      setError(msg);
-      setStatus("error");
-      // Append error as system message
-      setMessages((prev) => [
-        ...prev,
-        { role: "system", content: `❌ ${msg}` },
-      ]);
-    }
-  }, []);
-
-  const disconnect = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setStatus("idle");
-  }, []);
-
-  // Cleanup on unmount: abort any active stream to prevent zombie connections
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-      abortRef.current = null;
-    };
-  }, []);
-
-  // ── Event handler ──────────────────────────────────────────────────────────
-
-  function handleEvent(type: string, data: Record<string, unknown>) {
+  const handleEvent = useCallback((type: string, data: Record<string, unknown>) => {
     switch (type) {
       case "delta": {
-        const text = data.text as string;
-        // Append delta to last assistant message
+        const text = readString(data.text);
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") {
+          if (last?.role === "assistant") {
             updated[updated.length - 1] = { ...last, content: last.content + text };
           }
           return updated;
@@ -221,7 +94,7 @@ export function useAgentStream() {
           toolActivity: [
             ...prev.toolActivity,
             {
-              toolName: data.toolName as string,
+              toolName: readString(data.toolName, "tool"),
               success: false,
               latencyMs: undefined,
               summary: "En progreso...",
@@ -232,38 +105,38 @@ export function useAgentStream() {
       }
 
       case "tool_result": {
-        const toolName = data.toolName as string;
-        const success = data.success as boolean;
-        const summary = data.summary as string;
-        const latencyMs = data.latencyMs as number;
-
+        const toolName = readString(data.toolName);
+        const success = data.success === true;
+        const summary = readString(data.summary);
+        const latencyMs = typeof data.latencyMs === "number" ? data.latencyMs : undefined;
         setExecution((prev) => ({
           ...prev,
-          toolActivity: prev.toolActivity.map((a) =>
-            a.toolName === toolName && a.summary === "En progreso..."
-              ? { ...a, success, summary, latencyMs }
-              : a,
+          toolActivity: prev.toolActivity.map((activity) =>
+            activity.toolName === toolName && activity.summary === "En progreso..."
+              ? { ...activity, success, summary, latencyMs }
+              : activity,
           ),
         }));
         break;
       }
 
       case "approval_required": {
+        const toolName = readString(data.toolName, "tool");
+        const reason = readString(data.reason);
         setExecution((prev) => ({
           ...prev,
           state: "PENDING_APPROVAL",
           pendingApproval: {
-            approvalId: data.approvalId as string,
-            toolName: data.toolName as string,
-            reason: data.reason as string,
+            approvalId: readString(data.approvalId),
+            toolName,
+            reason,
           },
         }));
-        // Append system message about approval
         setMessages((prev) => [
           ...prev,
           {
             role: "system",
-            content: `⏸️ Se requiere tu aprobación para ejecutar "${data.toolName}": ${data.reason}`,
+            content: `Se requiere tu aprobacion para ejecutar "${toolName}": ${reason}`,
           },
         ]);
         break;
@@ -274,9 +147,9 @@ export function useAgentStream() {
         setExecution((prev) => ({
           ...prev,
           state: "EXECUTED",
-          summary: (data.answer as string) ?? null,
-          warnings: (data.warnings as string[]) ?? [],
-          latencyMs: (data.latencyMs as number) ?? null,
+          summary: typeof data.answer === "string" ? data.answer : null,
+          warnings: readStringArray(data.warnings),
+          latencyMs: typeof data.latencyMs === "number" ? data.latencyMs : null,
         }));
         break;
       }
@@ -292,17 +165,122 @@ export function useAgentStream() {
       }
 
       case "error": {
+        const message = readString(data.message, "Error de conexion.");
         setStatus("error");
-        setError(data.message as string);
+        setError(message);
         setExecution((prev) => ({
           ...prev,
           state: "FAILED",
-          warnings: [...prev.warnings, data.message as string],
+          warnings: [...prev.warnings, message],
         }));
         break;
       }
     }
-  }
+  }, []);
+
+  const connect = useCallback(async (input: AgentStreamInput) => {
+    setStatus("connecting");
+    setError(null);
+    setIntent(null);
+    setPendingAction(null);
+
+    if (!input.skipMessageAdd) {
+      setMessages((prev) => [...prev, { role: "user", content: input.message }]);
+    } else if (input.displayMessage) {
+      setMessages((prev) => [...prev, { role: "user", content: input.displayMessage ?? "" }]);
+    }
+
+    setExecution((prev) => ({
+      ...EMPTY_EXECUTION,
+      toolActivity: prev.toolActivity,
+    }));
+
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const requestMessages = input.messages ?? [{ role: "user" as const, content: input.message }];
+      const response = await fetch("/api/ai/agent/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: input.message,
+          messages: requestMessages,
+          projectId: input.projectId,
+          workspaceId: input.workspaceId,
+          mode: input.mode ?? "goal",
+          workflowId: input.workflowId,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const body: unknown = await response.json().catch(() => ({ error: "Error de conexion" }));
+        const message =
+          typeof body === "object" && body !== null && "error" in body && typeof body.error === "string"
+            ? body.error
+            : `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+
+      if (!response.body) {
+        throw new Error("El servidor no devolvio un stream.");
+      }
+
+      setStatus("streaming");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+
+        for (const frame of frames) {
+          if (!frame.trim() || frame.startsWith(":")) continue;
+
+          const eventMatch = frame.match(/^event:\s*(.+)$/m);
+          const dataMatch = frame.match(/^data:\s*(.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
+
+          let parsed: Record<string, unknown>;
+          try {
+            parsed = JSON.parse(dataMatch[1]) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+
+          handleEvent(eventMatch[1].trim(), parsed);
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      const message = err instanceof Error ? err.message : "Error de conexion.";
+      setError(message);
+      setStatus("error");
+      setMessages((prev) => [...prev, { role: "system", content: message }]);
+    }
+  }, [handleEvent]);
+
+  const disconnect = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setStatus("idle");
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
 
   return {
     status,

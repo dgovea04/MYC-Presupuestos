@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ConnectionModeState = {
   sourceItemCode: string;
@@ -82,7 +82,10 @@ export function useGanttConnectionMode({
   const sessionRef = useRef<ConnectionSession | null>(null);
   const latestStateRef = useRef<ConnectionModeState | null>(null);
   const onConnectRef = useRef(onConnect);
-  onConnectRef.current = onConnect;
+
+  useEffect(() => {
+    onConnectRef.current = onConnect;
+  }, [onConnect]);
 
   const startConnection = useCallback(
     (

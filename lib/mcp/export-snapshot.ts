@@ -10,6 +10,10 @@ import { serializeBudgetTree, serializeProjectResources } from "./serializers/bu
 import { serializeBudgetItems } from "./serializers/apus";
 import { serializePolynomialFormula } from "./serializers/polynomial-formula";
 
+function decimalString(value: { toString(): string } | null): string {
+  return value?.toString() ?? "0";
+}
+
 export async function buildProjectPackageSnapshot(
   projectId: string,
   userId: string,
@@ -41,14 +45,14 @@ export async function buildProjectPackageSnapshot(
       kind: budget.kind,
       name: budget.name,
       currency: budget.currency,
-      igvRate: budget.igvRate,
-      generalExpensesRate: budget.generalExpensesRate,
-      utilityRate: budget.utilityRate,
-      totalDirectCost: budget.totalDirectCost,
-      totalGeneralExpenses: budget.totalGeneralExpenses,
-      totalUtility: budget.totalUtility,
-      totalTax: budget.totalTax,
-      totalAmount: budget.totalAmount,
+      igvRate: decimalString(budget.igvRate),
+      generalExpensesRate: decimalString(budget.generalExpensesRate),
+      utilityRate: decimalString(budget.utilityRate),
+      totalDirectCost: decimalString(budget.totalDirectCost),
+      totalGeneralExpenses: decimalString(budget.totalGeneralExpenses),
+      totalUtility: decimalString(budget.totalUtility),
+      totalTax: decimalString(budget.totalTax),
+      totalAmount: decimalString(budget.totalAmount),
     })),
   );
 
@@ -72,9 +76,9 @@ export async function buildProjectPackageSnapshot(
           code: item.code,
           description: item.description,
           unit: item.unit,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          partial: item.partial,
+          quantity: decimalString(item.quantity),
+          unitPrice: decimalString(item.unitPrice),
+          partial: decimalString(item.partial),
           sortOrder: item.sortOrder,
         })),
       })),
@@ -219,28 +223,28 @@ export async function buildProjectPackageSnapshot(
             name: firstFormula.name,
             baseMonth: firstFormula.baseMonth,
             baseYear: firstFormula.baseYear,
-            totalBaseAmount: firstFormula.totalBaseAmount,
+            totalBaseAmount: decimalString(firstFormula.totalBaseAmount),
             status: firstFormula.status,
             monomials: firstFormula.monomials.map((monomial) => ({
               id: monomial.id,
               code: monomial.code,
               name: monomial.name,
               costGroupKey: monomial.costGroupKey,
-              amount: monomial.amount,
-              coefficient: monomial.coefficient,
+              amount: decimalString(monomial.amount),
+              coefficient: decimalString(monomial.coefficient),
               baseIndexCode: monomial.baseIndexCode,
               baseIndexName: monomial.baseIndexName,
-              baseIndexValue: monomial.baseIndexValue,
+              baseIndexValue: decimalString(monomial.baseIndexValue),
               adjustmentIndexCode: monomial.adjustmentIndexCode,
               adjustmentIndexName: monomial.adjustmentIndexName,
-              adjustmentIndexValue: monomial.adjustmentIndexValue,
+              adjustmentIndexValue: decimalString(monomial.adjustmentIndexValue),
               sortOrder: monomial.sortOrder,
               components: monomial.components.map((component) => ({
                 id: component.id,
                 budgetItemId: component.budgetItemId,
                 apuResourceId: component.apuResourceId,
                 resourceType: component.resourceType,
-                amount: component.amount,
+                amount: decimalString(component.amount),
               })),
             })),
           }

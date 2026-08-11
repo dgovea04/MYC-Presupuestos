@@ -565,7 +565,7 @@ export async function saveWorkScheduleItemPatch(
     endDate,
     durationDays,
     isMilestone:
-      payload.isMilestone !== undefined ? payload.isMilestone : (targetLine.isMilestone ?? false),
+      payload.isMilestone !== undefined ? (payload.isMilestone ?? false) : (targetLine.isMilestone ?? false),
     predecessor:
       payload.predecessor !== undefined ? payload.predecessor : targetLine.predecessor,
     crew: payload.crew !== undefined ? payload.crew : (targetLine.crew ?? null),
@@ -821,27 +821,28 @@ export async function setWorkScheduleBaseline(budgetId: string, userId: string):
     where: { budgetId: budget.id },
     select: {
       id: true,
-      items: {
-        where: {
-          startDate: { not: null },
-          endDate: { not: null },
-        },
-        select: {
-          id: true,
-          startDate: true,
-          endDate: true,
-          durationDays: true,
-        },
-      },
     },
   });
 
-  if (!schedule || schedule.items.length === 0) {
+  if (!schedule) {
+    throw new Error("No hay partidas programadas. Programa al menos una partida antes de establecer la linea base.");
+  }
+
+  const items = await prisma.workScheduleItem.findMany({
+    where: { scheduleId: schedule.id },
+    select: {
+      id: true,
+      startDate: true,
+      endDate: true,
+    },
+  });
+
+  if (items.length === 0) {
     throw new Error("No hay partidas programadas. Programa al menos una partida antes de establecer la linea base.");
   }
 
   await prisma.$transaction(
-    schedule.items.map((item) =>
+    items.map((item) =>
       prisma.workScheduleItem.update({
         where: { id: item.id },
         data: {
@@ -852,7 +853,7 @@ export async function setWorkScheduleBaseline(budgetId: string, userId: string):
     ),
   );
 
-  return { updatedCount: schedule.items.length };
+  return { updatedCount: items.length };
 }
 
 async function getAccessibleGeneralBudget(budgetId: string, userId: string) {

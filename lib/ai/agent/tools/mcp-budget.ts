@@ -5,6 +5,25 @@ import { searchMcpTemplateCandidates } from "@/lib/ai/budget-generation/mcp-temp
 import { previewBudgetFromMcpTemplate } from "@/lib/ai/budget-generation/mcp-budget-preview";
 import { applyMcpBudgetBlueprintToProject } from "@/lib/ai/budget-generation/mcp-budget-applicator";
 
+type McpSubBudgetSummary = {
+  levelsCreated?: number;
+  itemsCreated?: number;
+  apusCreated?: number;
+};
+
+type McpPreviewToolResult = Record<string, unknown> & {
+  subBudgets: McpSubBudgetSummary[];
+  totals: {
+    matchedItems: number;
+    reviewRequiredItems: number;
+  };
+};
+
+type McpApplyToolResult = Record<string, unknown> & {
+  subBudgets: McpSubBudgetSummary[];
+  totalSkipped: number;
+};
+
 // ─── Helper ─────────────────────────────────────────────────────────────────
 
 async function getProjectCompanyId(
@@ -132,8 +151,10 @@ export const previewBudgetFromMcpTemplateTool: AgentToolDefinition<
       assumptions: preview.assumptions,
     };
   },
-  summarizeResult: (result) =>
-    `Vista previa: ${result.subBudgets.length} sub-presupuestos, ${result.totals.matchedItems} partidas OK, ${result.totals.reviewRequiredItems} requieren revisión.`,
+  summarizeResult: (result) => {
+    const preview = result as McpPreviewToolResult;
+    return `Vista previa: ${preview.subBudgets.length} sub-presupuestos, ${preview.totals.matchedItems} partidas OK, ${preview.totals.reviewRequiredItems} requieren revisión.`;
+  },
 };
 
 // ─── applyBudgetFromMcpTemplate ─────────────────────────────────────────────
@@ -208,21 +229,22 @@ export const applyBudgetFromMcpTemplateTool: AgentToolDefinition<
     };
   },
   summarizeResult: (result) => {
-    const totalCreated = result.subBudgets.reduce(
+    const applied = result as McpApplyToolResult;
+    const totalCreated = applied.subBudgets.reduce(
       (sum, sb) =>
         sum +
-        sb.levelsCreated +
-        sb.itemsCreated +
-        sb.apusCreated,
+        (sb.levelsCreated ?? 0) +
+        (sb.itemsCreated ?? 0) +
+        (sb.apusCreated ?? 0),
       0,
     );
-    return `Plantilla aplicada: ${result.subBudgets.length} sub-presupuestos, ${totalCreated} elementos creados, ${result.totalSkipped} partidas omitidas.`;
+    return `Plantilla aplicada: ${applied.subBudgets.length} sub-presupuestos, ${totalCreated} elementos creados, ${applied.totalSkipped} partidas omitidas.`;
   },
 };
 
 // ─── Tool array ─────────────────────────────────────────────────────────────
 
-export const mcpBudgetTools: AgentToolDefinition<any, any>[] = [
+export const mcpBudgetTools = [
   searchMcpTemplatesTool,
   previewBudgetFromMcpTemplateTool,
   applyBudgetFromMcpTemplateTool,

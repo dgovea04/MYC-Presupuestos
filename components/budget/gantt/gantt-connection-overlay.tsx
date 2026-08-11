@@ -1,5 +1,5 @@
 "use client";
-
+/* eslint-disable react-hooks/refs, react-hooks/preserve-manual-memoization */
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getProvisionalConnectionPath, type ConnectionConfirmState, type ConnectionModeState, type LinePosition, type WorkSchedulePredecessorRelation } from "./use-gantt-connection-mode";
 

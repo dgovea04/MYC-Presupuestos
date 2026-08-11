@@ -65,6 +65,10 @@ export interface AgentToolRegistry {
   get(name: string): AgentToolDefinition | undefined;
   /** Lista todas las herramientas registradas. */
   list(): AgentToolDefinition[];
+  /** Lista nombres de herramientas registradas. */
+  getToolNames(): string[];
+  /** Lista nombres configurados para un bundle especialista. */
+  getBundleToolNames(bundleSlug: string): string[];
   /** Convierte al formato esperado por Vercel AI SDK. */
   toSdkDefinitions(): AgentSdkToolDefinition[];
 }

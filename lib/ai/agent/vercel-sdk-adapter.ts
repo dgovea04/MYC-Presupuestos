@@ -1,4 +1,4 @@
-import { generateText, type ModelMessage, type LanguageModel } from "ai";
+import { generateText, stepCountIs, type ModelMessage, type LanguageModel } from "ai";
 import type { z } from "zod";
 import type {
   AgentSdkToolDefinition,
@@ -14,9 +14,9 @@ type GenerateTextToolResult = {
   text: string;
   finishReason: string;
   usage: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
+    inputTokens: number | undefined;
+    outputTokens: number | undefined;
+    totalTokens: number | undefined;
   };
   toolCalls: Array<{
     toolCallId: string;
@@ -84,8 +84,8 @@ export class VercelSdkAdapter implements AgentVercelSdkAdapter {
         system,
         messages: modelMessages,
         tools: sdkTools as Record<string, { description: string; inputSchema: z.ZodType<Record<string, unknown>> }>,
-        maxSteps,
-      })) as GenerateTextToolResult;
+        stopWhen: stepCountIs(maxSteps),
+      })) as unknown as GenerateTextToolResult;
 
       // 🐛 Debug: log si el modelo devuelve respuesta vacía (sin texto, sin tool calls)
       const hasEmptyResponse = !result.text && (!result.toolCalls || result.toolCalls.length === 0);
@@ -110,11 +110,11 @@ export class VercelSdkAdapter implements AgentVercelSdkAdapter {
         toolCalls,
         finishReason,
         provider,
-        model: resolvedModel,
+        model: typeof resolvedModel === "string" ? resolvedModel : "unknown",
         usage: {
-          promptTokens: result.usage.promptTokens,
-          completionTokens: result.usage.completionTokens,
-          totalTokens: result.usage.totalTokens,
+          promptTokens: result.usage.inputTokens ?? 0,
+          completionTokens: result.usage.outputTokens ?? 0,
+          totalTokens: result.usage.totalTokens ?? 0,
         },
         warnings,
       };
@@ -127,7 +127,7 @@ export class VercelSdkAdapter implements AgentVercelSdkAdapter {
         toolCalls: [],
         finishReason: "error",
         provider,
-        model: resolvedModel,
+        model: typeof resolvedModel === "string" ? resolvedModel : "unknown",
         warnings,
       };
     }
@@ -150,7 +150,7 @@ function buildModelMessages(
   // NOTA: el system prompt se pasa como parámetro 'system' de generateText(),
   // NO como mensaje en el array. Solo devolvemos los mensajes de conversación.
   return messages.map((m) => ({
-    role: m.role as "user" | "assistant" | "tool",
+    role: m.role === "assistant" ? "assistant" : "user",
     content: m.content,
   }));
 }

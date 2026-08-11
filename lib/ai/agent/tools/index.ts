@@ -19,10 +19,9 @@ import { projectTools } from "./projects";
 import { mcpBudgetTools } from "./mcp-budget";
 import { riskTools } from "./risk";
 
-type RegisteredAgentTool = Omit<AgentToolDefinition<unknown, unknown>, "inputSchema" | "execute"> & {
-  inputSchema: z.ZodType;
-  execute: (input: unknown, context: Parameters<AgentToolDefinition["execute"]>[1]) => Promise<unknown>;
-};
+function asRegistrableTool(tool: unknown): AgentToolDefinition {
+  return tool as unknown as AgentToolDefinition;
+}
 
 // Re-export all domain tools for single-point registration
 export { budgetTools, partidaTools, apuTools, insumoTools, projectTools, mcpBudgetTools, riskTools };
@@ -212,9 +211,11 @@ export const createScheduleTool: AgentToolDefinition<
       budgetId: input.budgetId,
       baseStartDate: input.baseStartDate,
       mode: input.mode,
-      totalItems: result.generationSummary?.totalItems ?? 0,
-      scheduledItems: result.generationSummary?.scheduledItems ?? 0,
-      unscheduledItems: result.generationSummary?.unscheduledItems ?? 0,
+      totalItems:
+        (result.generationSummary?.generatedCount ?? 0) +
+        (result.generationSummary?.pendingCount ?? 0),
+      scheduledItems: result.generationSummary?.generatedCount ?? 0,
+      unscheduledItems: result.generationSummary?.pendingCount ?? 0,
       timelineStartDate: result.timeline?.startDate ?? null,
       timelineEndDate: result.timeline?.endDate ?? null,
     };
@@ -290,6 +291,7 @@ export const createChapterTool: AgentToolDefinition<
     const newLevelId = crypto.randomUUID();
 
     await saveBudgetPatch(input.budgetId, context.userId, {
+      budget: {},
       levels: {
         create: [
           {
@@ -351,7 +353,12 @@ export const moveChapterTool: AgentToolDefinition<
     const level = budget.levels.find((l) => l.id === input.chapterId);
     if (!level) throw new Error(`Capítulo "${input.chapterId}" no encontrado.`);
     await saveBudgetPatch(input.budgetId, context.userId, {
-      levels: { create: [], update: [{ id: input.chapterId, sortOrder: input.newSortOrder }], delete: [] },
+      budget: {},
+      levels: {
+        create: [],
+        update: [{ id: input.chapterId, changes: { sortOrder: input.newSortOrder } }],
+        delete: [],
+      },
       items: { create: [], update: [], delete: [] },
     });
     return { chapterId: input.chapterId, newSortOrder: input.newSortOrder };
@@ -381,7 +388,8 @@ export const deleteChapterTool: AgentToolDefinition<
     const budget = await getBudgetById(input.budgetId, context.userId);
     if (!budget) throw new Error(`Presupuesto "${input.budgetId}" no encontrado.`);
     await saveBudgetPatch(input.budgetId, context.userId, {
-      levels: { create: [], update: [], delete: [{ id: input.chapterId }] },
+      budget: {},
+      levels: { create: [], update: [], delete: [input.chapterId] },
       items: { create: [], update: [], delete: [] },
     });
     return { chapterId: input.chapterId, deleted: true };
@@ -524,13 +532,14 @@ export const calculateCriticalPathTool: AgentToolDefinition<
   inputSchema: calculateCriticalPathInput,
   execute: async (input, context) => {
     const section = await getWorkScheduleSection(input.budgetId, context.userId);
-    const result = calculateWorkScheduleCriticalPath(section.lines);
+    const lines = section.groups.flatMap((group) => group.lines);
+    const result = calculateWorkScheduleCriticalPath(lines);
     const criticalItems = [...result.itemsByBudgetItemId.values()].filter((i) => i.isCritical);
     return {
       budgetId: input.budgetId,
       projectDurationDays: result.projectDurationDays,
       criticalItemCount: criticalItems.length,
-      totalItems: section.lines.length,
+      totalItems: lines.length,
       status: result.status,
     };
   },
@@ -548,7 +557,12 @@ export const calculateCriticalPathTool: AgentToolDefinition<
 const createTakeoffInput = z.object({
   name: z.string().min(3),
   projectId: z.string().min(1),
-  unit: z.enum(["m", "m2", "m3", "kg", "un", "glb", "p2", "ml", "mes", "dia"]).default("m2"),
+  budgetId: z.string().min(1),
+  budgetItemId: z.string().min(1),
+  templateType: z
+    .enum(["CONCRETE", "REBAR", "FORMWORK", "MASONRY", "PLASTER", "PAINT", "EXCAVATION", "FLOORING", "ROOFING", "CUSTOM"])
+    .default("CUSTOM"),
+  unit: z.enum(["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "mes"]).default("m2"),
 });
 
 export const createTakeoffTool: AgentToolDefinition<
@@ -565,7 +579,10 @@ export const createTakeoffTool: AgentToolDefinition<
       userId: context.userId,
       name: input.name,
       projectId: input.projectId,
-      requestedUnit: input.unit,
+      budgetId: input.budgetId,
+      budgetItemId: input.budgetItemId,
+      templateType: input.templateType,
+      unit: input.unit,
     });
     return { id: sheet.id, name: sheet.name, unit: sheet.unit, projectId: sheet.projectId };
   },
@@ -593,7 +610,7 @@ export const importTakeoffTool: AgentToolDefinition<
     const duplicated = await duplicateMetradoSheet({
       sourceSheetId: input.sourceSheetId,
       userId: context.userId,
-      requestedName: input.newName,
+      name: input.newName,
     });
     return { id: duplicated.id, name: duplicated.name, sourceSheetId: input.sourceSheetId };
   },
@@ -620,7 +637,7 @@ export const exportPDFTool: AgentToolDefinition<
     const budget = await getBudgetById(input.budgetId, context.userId);
     if (!budget) throw new Error(`Presupuesto "${input.budgetId}" no encontrado.`);
     const { createBudgetPdf: createBudgetPdfFn } = await import("@/lib/exports/pdf");
-    const pdfBuffer = await createBudgetPdfFn({ budget } as Parameters<typeof createBudgetPdfFn>[0]);
+    const pdfBuffer = await createBudgetPdfFn(budget);
     return { budgetId: input.budgetId, size: pdfBuffer.byteLength, format: "pdf" };
   },
   summarizeResult: (result) => {
@@ -643,7 +660,7 @@ export const exportExcelTool: AgentToolDefinition<
   execute: async (input, context) => {
     const budget = await getBudgetById(input.budgetId, context.userId);
     if (!budget) throw new Error(`Presupuesto "${input.budgetId}" no encontrado.`);
-    const buffer = await createBudgetWorkbook({ budget } as Parameters<typeof createBudgetWorkbook>[0]);
+    const buffer = await createBudgetWorkbook(budget);
     return { budgetId: input.budgetId, size: buffer.byteLength, format: "xlsx" };
   },
   summarizeResult: (result) => {
@@ -688,12 +705,12 @@ export const dashboardTool: AgentToolDefinition<
 
 // ─── Tool arrays ─────────────────────────────────────────────────────────────
 
-export const takeoffTools: RegisteredAgentTool[] = [reviewTakeoffTool, createTakeoffTool, importTakeoffTool];
-export const scheduleTools: RegisteredAgentTool[] = [previewScheduleTool, createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
-export const reportTools: RegisteredAgentTool[] = [exportReportTool, exportPDFTool, exportExcelTool, exportS10Tool, dashboardTool];
-export const chapterTools: RegisteredAgentTool[] = [createChapterTool, moveChapterTool, deleteChapterTool];
+export const takeoffTools = [reviewTakeoffTool, createTakeoffTool, importTakeoffTool];
+export const scheduleTools = [previewScheduleTool, createScheduleTool, updateTaskTool, linkPredecessorTool, moveTaskTool, calculateCriticalPathTool];
+export const reportTools = [exportReportTool, exportPDFTool, exportExcelTool, exportS10Tool, dashboardTool];
+export const chapterTools = [createChapterTool, moveChapterTool, deleteChapterTool];
 
-export const remainingTools: RegisteredAgentTool[] = [
+export const remainingTools = [
   ...takeoffTools,
   ...scheduleTools,
   ...reportTools,
@@ -701,7 +718,7 @@ export const remainingTools: RegisteredAgentTool[] = [
 ];
 
 /** Todas las herramientas agenticas registrables en el ToolRegistry (33 herramientas). */
-export const allTools: RegisteredAgentTool[] = [
+const rawTools: readonly unknown[] = [
   ...budgetTools,
   ...partidaTools,
   ...apuTools,
@@ -711,3 +728,5 @@ export const allTools: RegisteredAgentTool[] = [
   ...riskTools,
   ...remainingTools,
 ];
+
+export const allTools: AgentToolDefinition[] = rawTools.map(asRegistrableTool);

@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/reactivate-members?secret=<CRON_SECRET>",
+      "path": "/api/cron/reactivate-members",
       "schedule": "*/10 * * * *"
     }
   ]

@@ -902,7 +902,7 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
           });
         })
         .catch((err) => {
-          // eslint-disable-next-line no-console
+           
           console.error("Failed to save Gantt bar change:", err);
           setInlineDrafts((current) => {
             const d = { ...current };

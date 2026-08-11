@@ -18,6 +18,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import type { PartidaApuRowInput } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
+import { ensureDate } from "@/lib/utils";
 import type { PartidaGenerationSaveResult } from "@/types/partida-generation";
 
 export async function searchPartidaGenerationCandidates(userId: string, input: PartidaGenerationSearchInput) {
@@ -220,7 +221,7 @@ async function getGenerationResources(userId: string): Promise<ResourceRecord[]>
     unitPrice: decimalToNumber(resource.unitPrice),
     currency: resource.currency,
     source: resource.source,
-    createdAt: resource.createdAt instanceof Date ? resource.createdAt.toISOString() : undefined,
-    updatedAt: resource.updatedAt instanceof Date ? resource.updatedAt.toISOString() : undefined,
+    createdAt: ensureDate(resource.createdAt).toISOString(),
+    updatedAt: ensureDate(resource.updatedAt).toISOString(),
   }));
 }

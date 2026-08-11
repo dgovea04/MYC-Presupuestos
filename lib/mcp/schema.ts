@@ -42,8 +42,8 @@ export function validateManifestStructure(manifest: unknown): manifest is McpMan
     throw new Error("El manifest.json no contiene el array de modulos.");
   }
 
-  for (const module of manifest.modules) {
-    if (!isRecord(module) || typeof module.path !== "string" || typeof module.id !== "string") {
+  for (const manifestModule of manifest.modules) {
+    if (!isRecord(manifestModule) || typeof manifestModule.path !== "string" || typeof manifestModule.id !== "string") {
       throw new Error("El manifest.json tiene un modulo con formato incorrecto.");
     }
   }
@@ -61,13 +61,13 @@ export function validateRequiredModulesPresent(
 ): string[] {
   const errors: string[] = [];
 
-  for (const module of manifest.modules) {
-    if (!module.required) {
+  for (const manifestModule of manifest.modules) {
+    if (!manifestModule.required) {
       continue;
     }
 
-    if (!extractedPaths.has(module.path)) {
-      errors.push(`Falta el modulo obligatorio ${module.path}.`);
+    if (!extractedPaths.has(manifestModule.path)) {
+      errors.push(`Falta el modulo obligatorio ${manifestModule.path}.`);
     }
   }
 

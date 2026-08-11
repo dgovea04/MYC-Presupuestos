@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
-import { isS10LocalSqlServerEnabled, listLocalS10Databases } from "@/lib/s10/sqlserver-local";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import { parseConnectionInputFromUrl, S10SqlServerRequestError } from "@/app/api/imports/s10/sqlserver/request";
 
 export const runtime = "nodejs";
@@ -14,12 +14,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  if (!isS10LocalSqlServerEnabled()) {
+  if (!isLocalRuntimeEnabled()) {
     return NextResponse.json({ error: "La lectura local de SQL Server S10 solo esta habilitada en entorno local." }, { status: 403 });
   }
 
   try {
     const connection = parseConnectionInputFromUrl(request);
+    const { listLocalS10Databases } = await import(/* turbopackIgnore: true */ "@/lib/s10/sqlserver-local");
     const databases = listLocalS10Databases(connection);
 
     return NextResponse.json({ databases });

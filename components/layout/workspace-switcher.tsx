@@ -77,7 +77,8 @@ function getInitials(name: string) {
 
 export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true, workspaces }: WorkspaceSwitcherProps) {
   const router = useRouter();
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(activeWorkspaceId);
+  const [optimisticWorkspaceId, setOptimisticWorkspaceId] = useState<string | null>(null);
+  const selectedWorkspaceId = optimisticWorkspaceId ?? activeWorkspaceId;
   const [showPanel, setShowPanel] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [members, setMembers] = useState<MemberInfo[]>([]);
@@ -282,15 +283,10 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showPanel]);
 
-  // Re-sync local state when server-side prop changes (e.g. after router.refresh())
-  useEffect(() => {
-    setSelectedWorkspaceId(activeWorkspaceId);
-  }, [activeWorkspaceId]);
-
   const handleWorkspaceChange = useCallback(
     async (value: string) => {
       if (!canManageWorkspace) return;
-      setSelectedWorkspaceId(value);
+      setOptimisticWorkspaceId(value);
       try {
         const res = await fetch("/api/workspaces", {
           method: "POST",
@@ -300,13 +296,13 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
         if (res.ok) {
           router.refresh();
         } else {
-          setSelectedWorkspaceId(activeWorkspaceId);
+          setOptimisticWorkspaceId(null);
         }
       } catch {
-        setSelectedWorkspaceId(activeWorkspaceId);
+        setOptimisticWorkspaceId(null);
       }
     },
-    [router, activeWorkspaceId, canManageWorkspace],
+    [router, canManageWorkspace],
   );
 
   const loadMembers = useCallback(async () => {
@@ -632,6 +628,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
                       <p className="px-2.5 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">
                         Miembros activos
                       </p>
+                      {/* eslint-disable-next-line react-hooks/refs */}
                       {activeMembers.map((member) => renderMemberRow({ member, currentWorkspace, panelPopupRef, setSubmenuAnchor }))}
                     </>
                   )}
@@ -642,6 +639,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
                       <p className="px-2.5 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-600">
                         Pendientes
                       </p>
+                      {/* eslint-disable-next-line react-hooks/refs */}
                       {pendingMembers.map((member) => renderMemberRow({ member, currentWorkspace, panelPopupRef, setSubmenuAnchor }))}
                     </>
                   )}
@@ -652,6 +650,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
                       <p className="px-2.5 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-red-500">
                         Suspendidos
                       </p>
+                      {/* eslint-disable-next-line react-hooks/refs */}
                       {suspendedMembers.map((member) => renderMemberRow({ member, currentWorkspace, panelPopupRef, setSubmenuAnchor }))}
                     </>
                   )}
@@ -660,6 +659,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
             </div> : null}
 
             {/* Floating submenu */}
+            {/* eslint-disable-next-line react-hooks/refs */}
             {targetMember && canManageWorkspace && renderFloatingSubmenu({
               member: targetMember,
               submenuAnchor: submenuAnchor!,

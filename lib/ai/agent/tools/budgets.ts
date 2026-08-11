@@ -178,11 +178,12 @@ export const createBudgetTool: AgentToolDefinition<
     const budget = await createBudget(context.userId, {
       name: input.name,
       projectId: input.projectId,
+      kind: "GENERAL",
       currency: input.currency,
       generalExpensesRate: input.indirectCostPercentage / 100,
       utilityRate: input.utilityPercentage / 100,
       igvRate: input.taxPercentage / 100,
-    } as any);
+    });
 
     const settings = await getUserSettings(context.userId);
     const subBudgetNames =
@@ -343,7 +344,7 @@ export function extractProjectNameFromMessage(
   const pattern = buildProjectNamePattern(delimiters);
   const match = message.match(pattern);
   if (!match) return null;
-  let name = match[1].trim();
+  const name = match[1].trim();
   if (/^(?:de|en|con|para|por|un|una)\s/i.test(name)) return null;
   return name || null;
 }
@@ -599,7 +600,7 @@ export const generateBudgetTool: AgentToolDefinition<
     const levelResults: string[] = [];
     let itemsFromTemplates = 0;
     let itemsFromCatalog = 0;
-    let templatesApplied: string[] = [];
+    const templatesApplied: string[] = [];
 
     // NIVEL 1: proyectos similares
     const similarProjects = await searchSimilarProjects({
@@ -743,7 +744,7 @@ export const generateBudgetTool: AgentToolDefinition<
       } else if (input.templateSource === "mcp") {
         levelResults.push("Nivel 1.5: No se encontraron paquetes .mcp compatibles (templateSource=mcp).");
       } else {
-        levelResults.push(`Nivel 1.5: No hay paquetes .mcp con score suficiente (fuente: ${sourceDecision?.kind ?? "no decidida"}).`);
+        levelResults.push("Nivel 1.5: No hay paquetes .mcp con score suficiente (fuente: no decidida).");
       }
     }
 
@@ -789,7 +790,7 @@ export const generateBudgetTool: AgentToolDefinition<
       const matched = searchSimilarPartidas({ query: effectiveDescription, partidas: allPartidas, limit: 25 });
       if (matched.length > 0) {
         const itemsToCreate = prepareItemsFromCatalogResults(
-          matched as any, subBudgets, effectiveDescription,
+          matched, subBudgets, effectiveDescription,
         );
         await persistItemsAndRefreshTotals(itemsToCreate, effectiveProjectId);
         itemsFromCatalog = itemsToCreate.length;
@@ -909,8 +910,14 @@ export const createBudgetGeneralTool: AgentToolDefinition<
     }
     const settings = await getUserSettings(context.userId);
     const budget = await createBudget(context.userId, {
-      name: input.name, projectId: input.projectId, currency: input.currency,
-    } as any);
+      name: input.name,
+      projectId: input.projectId,
+      kind: "GENERAL",
+      currency: input.currency,
+      generalExpensesRate: 0.1,
+      utilityRate: 0.1,
+      igvRate: 0.18,
+    });
     await prisma.budget.update({ where: { id: budget.id }, data: { kind: "GENERAL" } });
     const subBudgetNames =
       settings.defaultSubBudgetNames.length > 0
@@ -1234,7 +1241,10 @@ export const previewBudgetGenerationTool: AgentToolDefinition<
       requiresConfirmation,
       canApply,
       levels: levelResults,
-      warnings: [...(mcpPreview?.warnings ?? []), ...(sourceDecision?.warnings ?? [])] as string[],
+      warnings: [
+        ...((mcpPreview?.warnings ?? []) as string[]),
+        ...((sourceDecision?.warnings ?? []) as string[]),
+      ],
       canGenerate: !!mcpPreview || !!catalogPreview,
     };
   },
@@ -1295,7 +1305,7 @@ export const previewBudgetGenerationTool: AgentToolDefinition<
 
 // ─── All budget tools ────────────────────────────────────────────────────────
 
-export const budgetTools: AgentToolDefinition<any, any>[] = [
+export const budgetTools = [
   searchBudgetsTool,
   calculateBudgetTool,
   createBudgetTool,

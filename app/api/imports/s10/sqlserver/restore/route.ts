@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { getAuthSession } from "@/lib/auth/session";
-import { isS10LocalSqlServerEnabled, restoreLocalS10Backup } from "@/lib/s10/sqlserver-local";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import {
   isRecord,
   readBooleanRecordValue,
@@ -34,13 +34,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  if (!isS10LocalSqlServerEnabled()) {
+  if (!isLocalRuntimeEnabled()) {
     return NextResponse.json({ error: "La restauracion local de S10 solo esta habilitada en entorno local." }, { status: 403 });
   }
 
   try {
     const input = await readRestoreRequestInput(request);
     try {
+      const { restoreLocalS10Backup } = await import(/* turbopackIgnore: true */ "@/lib/s10/sqlserver-local");
       const result = restoreLocalS10Backup({
         server: input.server,
         backupPath: input.backupPath,

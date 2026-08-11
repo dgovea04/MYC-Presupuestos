@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import { parseS10SnapshotJson } from "@/lib/s10/snapshot-contract";
-import { exportLocalS10Snapshot, isS10LocalSqlServerEnabled } from "@/lib/s10/sqlserver-local";
 import {
   isRecord,
   readBooleanRecordValue,
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  if (!isS10LocalSqlServerEnabled()) {
+  if (!isLocalRuntimeEnabled()) {
     return NextResponse.json({ error: "La lectura local de SQL Server S10 solo esta habilitada en entorno local." }, { status: 403 });
   }
 
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       throw new S10SqlServerRequestError("Envia un body JSON valido.", 400);
     }
 
+    const { exportLocalS10Snapshot } = await import(/* turbopackIgnore: true */ "@/lib/s10/sqlserver-local");
     const snapshotJson = exportLocalS10Snapshot({
       server: readRequiredRecordString(body, "server"),
       databaseName: readRequiredRecordString(body, "databaseName"),

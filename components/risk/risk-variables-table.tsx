@@ -22,7 +22,7 @@ type RiskVariableEntry = {
 };
 
 type RiskVariableRow = RiskBudgetItem & {
-  entries: Partial<Record<RiskVariableType, RiskVariableEntry>>;
+  entries: Record<"QUANTITY" | "UNIT_PRICE", RiskVariableEntry>;
 };
 
 type VariableStateFilter = "ALL" | "ACTIVE" | "INACTIVE" | "MISSING";
@@ -46,19 +46,19 @@ export function RiskVariablesTable({
   onEditVariable: (draftKey: RiskVariableDraftKey) => void;
   variables: RiskVariableRecord[];
 }) {
-  const rows = items.map((item) => ({
+  const rows: RiskVariableRow[] = items.map((item) => ({
     ...item,
     entries: {
       QUANTITY: {
         draftKey: `${item.itemId}:QUANTITY` as RiskVariableDraftKey,
-        variableType: "QUANTITY",
+        variableType: "QUANTITY" as const,
         variable:
           variables.find((variable) => variable.budgetItemId === item.itemId && variable.variableType === "QUANTITY") ??
           null,
       },
       UNIT_PRICE: {
         draftKey: `${item.itemId}:UNIT_PRICE` as RiskVariableDraftKey,
-        variableType: "UNIT_PRICE",
+        variableType: "UNIT_PRICE" as const,
         variable:
           variables.find((variable) => variable.budgetItemId === item.itemId && variable.variableType === "UNIT_PRICE") ??
           null,

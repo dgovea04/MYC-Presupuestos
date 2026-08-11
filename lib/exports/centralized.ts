@@ -158,7 +158,7 @@ async function createProjectPackageExport(request: NormalizedExportRequest, user
   }
 
   return {
-    content: archive.content,
+    content: new Uint8Array(archive.content),
     contentType: CONTENT_TYPES.mcp,
     fileName: archive.fileName,
   };
@@ -623,7 +623,7 @@ function buildWorkSchedulePdfTables(
       rows: [],
       chart: {
         kind: "curve",
-        points: buildWorkScheduleCurveChartPoints(section.curveSeries),
+        points: buildWorkScheduleCurveChartPoints(section.curveSeries ?? []),
       },
     });
   }

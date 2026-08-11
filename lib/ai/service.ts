@@ -308,14 +308,15 @@ export async function* streamChatAiResponse({
         : [{ role: "system" as const, content: "Eres Khipu, un agente técnico especializado en presupuestos de construcción. Usa las herramientas disponibles para analizar, calcular y generar información precisa." }, ...messages];
 
       for await (const event of streamAgentChat({
+        task: "chat",
         messages: agentMessages,
-        apiKey: openRouterApiKey,
+        apiKey,
         modelPreference: model,
         userId: userId ?? "anonymous",
       })) {
         if (event.type === "delta") {
           yield { type: "delta", text: event.text };
-        } else {
+        } else if (event.type === "final") {
           // Final event — merge with the accumulated answer
           answer = event.result.answer;
           yield { type: "final", result: event.result };

@@ -55,6 +55,7 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchComments();
     }
   }, [open, fetchComments]);

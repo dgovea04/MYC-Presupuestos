@@ -82,7 +82,7 @@ export const addInsumoTool: AgentToolDefinition<
       category: input.category,
       unitPrice: input.unitPrice,
       currency: "PEN",
-      code: input.code ?? null,
+      code: input.code,
     });
 
     return {
@@ -161,4 +161,4 @@ export const updatePrecioTool: AgentToolDefinition<
 
 // ─── All insumo tools ────────────────────────────────────────────────────────
 
-export const insumoTools: AgentToolDefinition<any, any>[] = [searchInsumosTool, addInsumoTool, replaceInsumoTool, updatePrecioTool];
+export const insumoTools = [searchInsumosTool, addInsumoTool, replaceInsumoTool, updatePrecioTool];

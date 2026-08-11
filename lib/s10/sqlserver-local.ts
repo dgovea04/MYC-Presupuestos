@@ -116,7 +116,7 @@ export function exportLocalS10Snapshot(options: S10LocalSnapshotExportOptions) {
 }
 
 export function restoreLocalS10Backup(options: S10LocalS2kRestoreOptions): S10LocalS2kRestoreResult {
-  const backupPath = path.resolve(options.backupPath);
+  const backupPath = path.resolve(/*turbopackIgnore: true*/ options.backupPath);
   assertReadableS10Backup(backupPath);
 
   const fileListRows = runSqlcmdQuery(options, buildSqlServerBackupFileListSql(backupPath));

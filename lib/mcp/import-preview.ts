@@ -57,24 +57,24 @@ function analyzeExtractedPackage(fileContents: Map<string, string>): AnalyzeResu
   const errors: string[] = [];
 
   // Check required modules
-  for (const module of typedManifest.modules) {
-    if (!module.required) {
+  for (const manifestModule of typedManifest.modules) {
+    if (!manifestModule.required) {
       continue;
     }
 
-    if (!fileContents.has(module.path)) {
-      errors.push(`Falta el modulo obligatorio ${module.path}.`);
+    if (!fileContents.has(manifestModule.path)) {
+      errors.push(`Falta el modulo obligatorio ${manifestModule.path}.`);
     }
   }
 
   // Check optional modules and warn about missing ones
-  for (const module of typedManifest.modules) {
-    if (module.required) {
+  for (const manifestModule of typedManifest.modules) {
+    if (manifestModule.required) {
       continue;
     }
 
-    if (!fileContents.has(module.path)) {
-      warnings.push(`Modulo opcional ${module.path} no incluido en el paquete.`);
+    if (!fileContents.has(manifestModule.path)) {
+      warnings.push(`Modulo opcional ${manifestModule.path} no incluido en el paquete.`);
     }
   }
 
@@ -83,10 +83,10 @@ function analyzeExtractedPackage(fileContents: Map<string, string>): AnalyzeResu
     errors.push("Falta el archivo project.json del modulo project.");
   }
 
-  const modules = typedManifest.modules.map((module) => ({
-    id: module.id,
-    present: fileContents.has(module.path),
-    required: module.required,
+  const modules = typedManifest.modules.map((manifestModule) => ({
+    id: manifestModule.id,
+    present: fileContents.has(manifestModule.path),
+    required: manifestModule.required,
   }));
 
   const compatibility = errors.length > 0

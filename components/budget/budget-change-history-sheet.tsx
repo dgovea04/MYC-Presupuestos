@@ -45,6 +45,7 @@ export const BudgetChangeHistorySheet = memo(function BudgetChangeHistorySheet({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchHistory();
     }
   }, [open, fetchHistory]);

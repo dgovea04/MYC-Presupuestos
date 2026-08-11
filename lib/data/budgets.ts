@@ -45,7 +45,9 @@ export function getBudgetDetailCacheTag(budgetId: string) {
 
 const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
 
-function normalizeBudgetListEntry<T extends Awaited<ReturnType<typeof prisma.budget.findMany>>[number]>(budget: T): T {
+type BudgetListEntry = Prisma.BudgetGetPayload<{ include: { project: true } }>;
+
+function normalizeBudgetListEntry<T extends BudgetListEntry>(budget: T): T {
   return {
     ...budget,
     createdAt: ensureDate(budget.createdAt),

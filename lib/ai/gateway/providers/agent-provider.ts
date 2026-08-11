@@ -10,6 +10,7 @@ import { allTools } from "@/lib/ai/agent/tools";
 import type { AgentLoopMessage } from "@/lib/ai/agent/contracts";
 import type { AgentExecutionMode } from "@/lib/ai/agent/types";
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 
 export const DEFAULT_AGENT_MODEL = "openrouter/free";
 
@@ -101,7 +102,7 @@ export async function executeAgentProvider(
   let iterations = 0;
   let totalToolCalls = 0;
   const allWarnings: string[] = [];
-  let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
   // Contador de llamadas por herramienta para evitar loops
   const toolCallCounts = new Map<string, number>();
@@ -411,7 +412,7 @@ export async function* streamAgentChat(
 ): AsyncIterable<StreamAgentEvent> {
   const startTime = Date.now();
 
-  let requestedModel =
+  const requestedModel =
     request.modelPreference ||
     DEFAULT_AGENT_MODEL;
 
@@ -466,7 +467,7 @@ export async function* streamAgentChat(
   let iterations = 0;
   let totalToolCalls = 0;
   const allWarnings: string[] = [];
-  let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
   // Contador de llamadas por herramienta para evitar loops
   const toolCallCounts = new Map<string, number>();
@@ -484,7 +485,7 @@ export async function* streamAgentChat(
   const MAX_EMPTY_RETRIES = 2;
 
   // ── Derivar provider real del modelo seleccionado ───────────────────────
-  let provider = getAgentModelProvider(requestedModel) ?? "openrouter";
+  const provider = getAgentModelProvider(requestedModel) ?? "openrouter";
 
   yield { type: "delta", text: `🤖 Khipu Agente iniciando con ${getAgentModelShortLabel(requestedModel)}...\n\n` };
 
@@ -501,7 +502,7 @@ export async function* streamAgentChat(
         goal: request.messages.find((m) => m.role === "user")?.content.slice(0, 500) ?? "Chat",
         provider,
         model: requestedModel,
-          contextSnapshotJson: (request.projectId ? { projectId: request.projectId } : null) as any,
+          contextSnapshotJson: request.projectId ? { projectId: request.projectId } : Prisma.JsonNull,
         },
       });
       executionId = execution.id;
@@ -698,8 +699,10 @@ export async function* streamAgentChat(
             data: {
               executionId,
               toolName: toolCall.name,
-              argumentsJson: (toolCall.arguments ?? {}) as any,
-              resultJson: (result.toolResult.output ? { output: result.toolResult.output } : null) as any,
+              argumentsJson: (toolCall.arguments ?? {}) as Prisma.InputJsonValue,
+              resultJson: result.toolResult.output
+                ? ({ output: result.toolResult.output } as Prisma.InputJsonValue)
+                : Prisma.JsonNull,
               latencyMs: Date.now() - toolStartTime,
               success: result.success,
               errorMessage: result.success ? null : result.summary,

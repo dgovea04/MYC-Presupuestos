@@ -132,7 +132,7 @@ export function extractBudgetBlueprintFromMcpModules(input: {
   }
 
   // ── Parse APUs (optional for MVP) ────────────────────────────────────────
-  let apuById: Map<
+  const apuById: Map<
     string,
     {
       id: string;

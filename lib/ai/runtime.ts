@@ -222,6 +222,14 @@ function buildProviderHealth(
       configured: true,
       reachable: null,
     },
+    agent: {
+      configured:
+        (cloudConfigured?.gemini ?? false) ||
+        (cloudConfigured?.openrouter ?? false) ||
+        hasEnvValue(process.env.GEMINI_API_KEY) ||
+        hasEnvValue(process.env.OPENROUTER_API_KEY),
+      reachable: null,
+    },
   };
 }
 

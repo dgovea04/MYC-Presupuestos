@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { AiViewContextBridge } from "@/hooks/use-ai-view-context";
 import { getAuthSession } from "@/lib/auth/session";
 import { getEffectiveWorkspaceLicense } from "@/lib/workspace/entitlements";
+import type { WorkspaceFeatureKey } from "@/lib/workspace/feature-registry";
 import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode, type ViewMode } from "@/lib/budget/view-mode";
 import { getUserSettings } from "@/lib/data/settings";
 import { AppBackButton } from "@/components/layout/app-back-button";
@@ -109,7 +110,7 @@ export async function AppShell({
   const initialSidebarMode = isSidebarMode(storedSidebarModeCookie) ? storedSidebarModeCookie : null;
   const appTheme = settings.appTheme ?? DEFAULT_APP_THEME;
   const initialSidebarWidth = getSidebarWidthCssValue("expanded");
-  const unlockedFeatures = (license?.availableFeatures ?? []) as FeatureKey[];
+  const unlockedFeatures = (license?.availableFeatures ?? []) as WorkspaceFeatureKey[];
   const canManageWorkspace = unlockedFeatures.includes("workspace.management");
 
   return (

@@ -13,7 +13,19 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "tests/**",
+    "scripts/**",
+    "playwright-report/**",
+    "test-results/**",
   ]),
+  {
+    files: ["next.config.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

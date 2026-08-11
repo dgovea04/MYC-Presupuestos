@@ -143,7 +143,7 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
   const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
   const allowance = Math.max(0, monthlyTokenLimit + extraTokens);
   const license = await getEffectiveWorkspaceLicense({ userId, companyId: activeCompanyId });
-  const effectivePlanSlug = license?.planSlug ?? user.membershipPlan?.slug ?? "starter";
+  const effectivePlanSlug = normalizePlanSlug(license?.planSlug ?? user.membershipPlan?.slug);
   const billingSubscription = user.billingSubscriptions[0] ?? null;
   const graceEndsAt =
     billingSubscription?.status === "PAST_DUE" && billingSubscription.pastDueStartedAt
@@ -167,6 +167,10 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
     allowance,
     availableTokens: Math.max(0, allowance - consumedTokens - reservedTokens),
   };
+}
+
+function normalizePlanSlug(slug?: string | null): "starter" | "pro" | "empresa" {
+  return slug === "pro" || slug === "empresa" ? slug : "starter";
 }
 
 export async function updateUserAccountProfile(userId: string, input: AccountProfileInput): Promise<AccountRecord> {

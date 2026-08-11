@@ -223,7 +223,7 @@ export const removePartidaTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: removePartidaInput,
   execute: async (input, _context) => {
-    await saveCatalogPartidasPatch({ create: [], update: [], delete: [{ clientId: input.partidaId }] });
+    await saveCatalogPartidasPatch({ create: [], update: [], delete: [input.partidaId] });
     return { partidaId: input.partidaId, removed: true };
   },
   summarizeResult: () => "Partida eliminada del catálogo.",
@@ -231,7 +231,7 @@ export const removePartidaTool: AgentToolDefinition<
 
 // ─── All partida tools ───────────────────────────────────────────────────────
 
-export const partidaTools: AgentToolDefinition<any, any>[] = [
+export const partidaTools = [
   searchPartidasTool,
   suggestPartidasTool,
   addPartidaTool,

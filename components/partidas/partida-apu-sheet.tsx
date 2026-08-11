@@ -372,7 +372,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
             onApply={applyAiApuSuggestion}
             onDismiss={() => setAiApuResult(null)}
             onSelectSimilarPartida={selectAiApuSimilarPartida}
-            khipuHref={canUseKhipu ? buildAiHref("apu", currentPartida.description, currentPartida.unit) : undefined}
+            khipuHref={canUseKhipu ? buildAiHref("apu", currentPartida.description ?? "", currentPartida.unit ?? "") : ""}
           />
         ) : null}
 

@@ -16,6 +16,68 @@ type PersistenceContext = {
   budgetIdMap: Map<string, string>;
 };
 
+type McpApuModule = {
+  apus: Array<{
+    id: string;
+    budgetItemId: string;
+    name: string;
+    unit: string;
+    performance: string | number;
+    totalUnitCost: string | number;
+    resources: Array<{
+      id: string;
+      resourceId: string | null;
+      resourceType: string;
+      crew: string | number | null;
+      quantity: string | number;
+      unitPrice: string | number;
+      subtotal: string | number;
+      resourceDescription: string | null;
+    }>;
+  }>;
+};
+
+type McpFooterModule = {
+  footers: Array<{
+    budgetId: string;
+    rows: Array<{
+      variable: string;
+      description: string;
+      formula: string | null;
+      manualValue: string | number;
+      iu: string | null;
+      highlight: boolean;
+      sortOrder: number;
+    }>;
+  }>;
+};
+
+type McpBudgetItemsModule = {
+  budgets: Array<{
+    budgetId: string;
+    budgetName: string;
+    levels: Array<{
+      id: string;
+      parentId: string | null;
+      type: string;
+      code: string;
+      name: string;
+      sortOrder: number;
+    }>;
+    items: Array<{
+      id: string;
+      levelId: string | null;
+      code: string;
+      description: string;
+      unit: string;
+      quantity: string;
+      unitPrice: string;
+      partial: string;
+      sortOrder: number;
+    }>;
+  }>;
+};
+
 const importTransactionOptions = {
   maxWait: 10_000,
   timeout: 120_000,
@@ -122,70 +184,29 @@ export async function importProjectPackageToMyc(
     let totalApuCount = 0;
 
     // Read budget items data
-    let budgetItemsData: {
-      budgets: Array<{
-        budgetId: string;
-        budgetName: string;
-        levels: Array<{
-          id: string;
-          parentId: string | null;
-          type: string;
-          code: string;
-          name: string;
-          sortOrder: number;
-        }>;
-        items: Array<{
-          id: string;
-          levelId: string | null;
-          code: string;
-          description: string;
-          unit: string;
-          quantity: string;
-          unitPrice: string;
-          partial: string;
-          sortOrder: number;
-        }>;
-      }>;
-    } | null = null;
+    let budgetItemsData: McpBudgetItemsModule | null = null;
 
     try {
-      budgetItemsData = readModule("budgets/budget-items.json") as typeof budgetItemsData;
+      budgetItemsData = readModule("budgets/budget-items.json") as McpBudgetItemsModule;
     } catch {
       warnings.push("No se pudieron leer los items del presupuesto.");
     }
 
     // Read APUs data
-    let apusData: {
-      apus: Array<{
-        id: string;
-        budgetItemId: string;
-        name: string;
-        unit: string;
-        performance: string | number;
-        totalUnitCost: string | number;
-        resources: Array<{
-          id: string;
-          resourceId: string | null;
-          resourceType: string;
-          crew: string | number | null;
-          quantity: string | number;
-          unitPrice: string | number;
-          subtotal: string | number;
-          resourceDescription: string | null;
-        }>;
-      }>;
-    } | null = null;
+    let apusData: McpApuModule | null = null;
 
     try {
-      apusData = readModule("budgets/apus.json") as typeof apusData;
+      apusData = readModule("budgets/apus.json") as McpApuModule;
     } catch {
       warnings.push("No se pudieron leer los APUs del presupuesto.");
     }
 
-    const apuById = new Map<string, { id: string; name: string; unit: string; performance: string | number; totalUnitCost: string | number; resources: Array<{ id: string; resourceId: string | null; resourceType: string; crew: string | number | null; quantity: string | number; unitPrice: string | number; subtotal: string | number; resourceDescription: string | null }> }>(apusData?.apus.map((apu) => [apu.budgetItemId, apu] as [string, typeof apu]) ?? []);
+    const apuById = new Map(
+      (apusData?.apus ?? []).map((apu) => [apu.budgetItemId, apu] as const),
+    );
 
     // Build items-by-budget lookup
-    const itemsByBudgetId = new Map<string, NonNullable<typeof budgetItemsData>["budgets"][number]>();
+    const itemsByBudgetId = new Map<string, McpBudgetItemsModule["budgets"][number]>();
     if (budgetItemsData) {
       for (const budgetItems of budgetItemsData.budgets) {
         itemsByBudgetId.set(budgetItems.budgetId, budgetItems);
@@ -483,10 +504,10 @@ async function persistFooterRows(
   sourceBudgetId: string,
   persistedBudgetId: string,
 ) {
-  let footerData: { footers: Array<{ budgetId: string; rows: Array<{ variable: string; description: string; formula: string | null; manualValue: string | number; iu: string | null; highlight: boolean; sortOrder: number }> }> } | null = null;
+  let footerData: McpFooterModule | null = null;
 
   try {
-    footerData = ctx.readModule("budgets/footer.json") as typeof footerData;
+    footerData = ctx.readModule("budgets/footer.json") as McpFooterModule;
   } catch {
     return;
   }
@@ -510,5 +531,3 @@ async function persistFooterRows(
     })),
   });
 }
-
-

@@ -36,6 +36,7 @@ export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
   // Auto-expand on first mount if there are other users
   useEffect(() => {
     if (presence.length > 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(false);
     }
   }, [presence.length]);

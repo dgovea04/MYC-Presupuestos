@@ -23,6 +23,7 @@ const PROVIDER_LABELS: Record<AiProviderPreference, string> = {
   openai: "OpenAI",
   gemini: "Gemini",
   openrouter: "OpenRouter",
+  agent: "Khipu Agente",
 };
 
 const POSITION_LABELS: Record<FloatingKhipuPosition, string> = {

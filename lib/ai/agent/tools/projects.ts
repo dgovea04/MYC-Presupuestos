@@ -196,9 +196,6 @@ export const searchCompaniesTool: AgentToolDefinition<
         id: c.id,
         name: c.name,
         ruc: c.ruc,
-        email: c.email,
-        phone: c.phone,
-        address: c.address,
       })),
     };
   },
@@ -208,7 +205,7 @@ export const searchCompaniesTool: AgentToolDefinition<
 
 // ─── All project tools ───────────────────────────────────────────────────────
 
-export const projectTools: AgentToolDefinition<any, any>[] = [
+export const projectTools = [
   searchProjectsTool,
   searchCompaniesTool,
   createProjectTool,

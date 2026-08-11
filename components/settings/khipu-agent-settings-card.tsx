@@ -476,7 +476,10 @@ export function KhipuAgentSettingsCard() {
                 onRetry={() => void checkOllamaStatus(selectedModel)}
               />
             ) : (
-              <ProviderStatusBadge provider={selectedProvider} configured={selectedProvider === "google" ? geminiConfigured : openrouterConfigured} />
+              <ProviderStatusBadge
+                provider={selectedProvider === "google" ? "google" : "openrouter"}
+                configured={selectedProvider === "google" ? geminiConfigured : openrouterConfigured}
+              />
             )}
 
             {/* Selector de modelo */}

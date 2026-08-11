@@ -15,7 +15,7 @@ export function toSerializableNumber(value: Prisma.Decimal | number | null | und
   return value.toNumber();
 }
 
-type SerializableBudget = Prisma.BudgetGetPayload<{}>;
+type SerializableBudget = Prisma.BudgetGetPayload<object>;
 
 /**
  * Serializes a Prisma Budget record into a plain object suitable for

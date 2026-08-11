@@ -8,6 +8,9 @@ const workspaceRoot = projectRoot.includes(`${path.sep}.worktrees${path.sep}`)
   : projectRoot;
 
 const nextConfig: NextConfig = {
+  typescript: {
+    tsconfigPath: "tsconfig.build.json",
+  },
   turbopack: {
     root: workspaceRoot,
   },
@@ -41,7 +44,7 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ["pdfkit"],
   webpack: (config, { isServer }) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const webpack = require("webpack");
 
     if (!isServer) {

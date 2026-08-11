@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
-import { getAvailableFeatures } from "@/lib/workspace/feature-registry";
+import { getAvailableFeatures, type WorkspaceFeatureKey } from "@/lib/workspace/feature-registry";
 import type { WorkspaceRole } from "@/types/workspace";
 
 export class WorkspaceFeatureAccessError extends Error {
@@ -80,8 +80,8 @@ export const getEffectiveWorkspaceLicense = cache(
 );
 
 export function hasFeatureAccess(
-  license: { availableFeatures: string[] } | null,
-  feature: string,
+  license: { availableFeatures: WorkspaceFeatureKey[] } | null,
+  feature: WorkspaceFeatureKey,
 ): boolean {
   if (!license) return false;
   return license.availableFeatures.includes(feature);
@@ -90,7 +90,7 @@ export function hasFeatureAccess(
 export async function assertWorkspaceFeatureAccess(options: {
   userId: string;
   companyId: string;
-  feature: string;
+  feature: WorkspaceFeatureKey;
 }) {
   const license = await getEffectiveWorkspaceLicense({
     userId: options.userId,

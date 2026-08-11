@@ -267,9 +267,13 @@ export function recalculateWorkScheduleLineFromReferences(
       case "SS":
         return addDays(predecessorLine.startDate, reference.lagDays);
       case "FF":
-        return addDays(predecessorLine.endDate, reference.lagDays - line.durationDays + 1);
+        return line.durationDays == null
+          ? null
+          : addDays(predecessorLine.endDate, reference.lagDays - line.durationDays + 1);
       case "SF":
-        return addDays(predecessorLine.startDate, reference.lagDays - line.durationDays + 1);
+        return line.durationDays == null
+          ? null
+          : addDays(predecessorLine.startDate, reference.lagDays - line.durationDays + 1);
       default:
         return null;
     }

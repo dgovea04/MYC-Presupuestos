@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { CSSProperties, ReactNode } from "react";
 import { GlobalAiAssistantProvider } from "@/components/ai/global-ai-assistant-provider";
 import { getAuthSession } from "@/lib/auth/session";
@@ -23,21 +22,8 @@ import {
 import { DEFAULT_APP_THEME } from "@/types/settings";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-  weight: ["400", "500", "600", "700"],
-});
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-plus-jakarta-sans",
-  display: "swap",
-  weight: ["400", "500", "600", "700"],
-});
-
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000"),
   title: "MC Presupuestos",
   description: "Plataforma moderna de costos y presupuestos de obra para Peru",
 };
@@ -73,7 +59,7 @@ export default async function RootLayout({
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${plusJakartaSans.variable} h-full antialiased`}
+      className="h-full antialiased"
       data-theme={initialTheme}
       data-view-mode={initialViewMode}
       style={htmlStyle}

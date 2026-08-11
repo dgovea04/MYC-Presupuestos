@@ -112,7 +112,7 @@ export function AgentWorkspace({
   } | null>(null);
   const [forcefulCommandSent, setForcefulCommandSent] = useState(false);
   const fallbackTriggeredRef = useRef(false);
-  const postCreateDismissedRef = useRef(false);
+  const [postCreateDismissed, setPostCreateDismissed] = useState(false);
   const prevCreateProjectCountRef = useRef(0);
 
   // ── Panel layout ─────────────────────────────────────────────────────────
@@ -188,7 +188,7 @@ export function AgentWorkspace({
 
   const showPostCreateConfirmation =
     !streaming && status === "done" && fallbackStatus === "idle" &&
-    !postCreateDismissedRef.current &&
+    !postCreateDismissed &&
     streamExec.toolActivity.length > 0 &&
     streamExec.toolActivity.some((a) => a.toolName === "createProject" && a.success === true) &&
     !streamExec.toolActivity.some((a) => a.toolName === "previewBudgetGeneration") &&
@@ -287,6 +287,7 @@ export function AgentWorkspace({
 
   useEffect(() => {
     if (status === "streaming" || status === "connecting") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFallbackChatMessage(null);
       setFallbackStatus("idle");
       setFallbackActivity(null);
@@ -298,7 +299,7 @@ export function AgentWorkspace({
   useEffect(() => {
     const createProjectCount = streamExec.toolActivity.filter((a) => a.toolName === "createProject" && a.success).length;
     if (createProjectCount > prevCreateProjectCountRef.current) {
-      postCreateDismissedRef.current = false;
+      setPostCreateDismissed(false);
     }
     prevCreateProjectCountRef.current = createProjectCount;
   }, [streamExec.toolActivity]);
@@ -344,7 +345,7 @@ export function AgentWorkspace({
 
   const handlePostCreateCancel = useCallback(() => {
     if (loading || streaming) return;
-    postCreateDismissedRef.current = true;
+    setPostCreateDismissed(true);
     setObjective("");
     connect({
       message: "No quiero generar presupuesto ahora. El proyecto vacío es suficiente. Confirma que el proyecto fue creado exitosamente y espera instrucciones.", displayMessage: "No, solo el proyecto",

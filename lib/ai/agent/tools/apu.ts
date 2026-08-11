@@ -183,8 +183,8 @@ export const updateAPUTool: AgentToolDefinition<
     const result = await saveCatalogPartidasPatch({
       create: [],
       update: [{
-        clientId: existing.id,
-        data: {
+        id: existing.id,
+        changes: {
           description: input.description ?? existing.description,
           unit: input.unit ?? existing.unit,
           unitPrice: input.unitPrice ?? existing.unitPrice,
@@ -195,7 +195,7 @@ export const updateAPUTool: AgentToolDefinition<
       }],
       delete: [],
     });
-    const updated = result.updated[0]?.partida;
+    const updated = result.updated[0];
     return { id: input.partidaId, description: updated?.description, unit: updated?.unit, unitPrice: updated?.unitPrice };
   },
   summarizeResult: (result) => `APU "${result.description}" actualizado.`,
@@ -246,4 +246,4 @@ export const optimizeAPUTool: AgentToolDefinition<
 
 // ─── All APU tools ───────────────────────────────────────────────────────────
 
-export const apuTools: AgentToolDefinition<any, any>[] = [reviewAPUTool, calculateAPUTool, createAPUTool, updateAPUTool, generateAPUTool, optimizeAPUTool];
+export const apuTools = [reviewAPUTool, calculateAPUTool, createAPUTool, updateAPUTool, generateAPUTool, optimizeAPUTool];
