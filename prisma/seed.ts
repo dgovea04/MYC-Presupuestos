@@ -499,6 +499,8 @@ async function seedMembershipPlans() {
     "ai.local",
     "khipu.agent",
     "partidas.similarity",
+    "metrados.advanced",
+    "templates.budget",
     "work_schedule.intelligent",
     "polynomial_formula",
     "polynomial_formula.adjustments",

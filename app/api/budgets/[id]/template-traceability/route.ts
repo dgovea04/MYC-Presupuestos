@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetHeaderById } from "@/lib/data/budgets";
 import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-events";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "templates.budget");
+  if (accessResponse) return accessResponse;
 
   try {
     const { id: budgetId } = await params;

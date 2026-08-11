@@ -12,9 +12,12 @@ import { KhipuAgentSettingsCard } from "@/components/settings/khipu-agent-settin
 import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoCard } from "@/components/ui/info-cards";
+import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { APP_SETTINGS_UPDATED_EVENT } from "@/lib/settings/events";
 import { WorkCalendarsSettings } from "@/components/settings/work-calendars-settings";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { isLocalClientRuntimeEnabled } from "@/lib/runtime/local-capabilities";
+
 import type { AccountRecord } from "@/types/account";
 import type { UserSettingsRecord } from "@/types/settings";
 
@@ -38,7 +41,7 @@ const SETTINGS_TABS = [
   {
     id: "ai",
     label: "IA",
-    description: "Ollama, proveedores cloud y configuracion de Khipu.",
+    description: "Proveedores cloud, capacidades locales y configuracion de Khipu.",
   },
   {
     id: "calendars",
@@ -56,6 +59,7 @@ export function SettingsPageContent({
   account,
   initialSettings,
   initialWorkCalendars,
+  canUseKhipu = true,
 }: {
   company?: {
     name?: string | null;
@@ -65,6 +69,7 @@ export function SettingsPageContent({
   account: AccountRecord;
   initialSettings: UserSettingsRecord;
   initialWorkCalendars?: { id: string; name: string; workDays: number; workHoursPerDay: number }[];
+  canUseKhipu?: boolean;
 }) {
   const [companyState, setCompanyState] = useState(company);
   const [settings, setSettings] = useState(initialSettings);
@@ -289,26 +294,36 @@ export function SettingsPageContent({
         className={cn(activeTab === "ai" ? "block" : "hidden")}
       >
         <div className="space-y-6">
-          <div className="grid items-start gap-6 xl:grid-cols-2">
-            <div className="space-y-6">
-              <FloatingKhipuSettingsCard
-                settings={settings}
-                onSaved={(khipu) => {
-                  setSettings({ ...settings, ...khipu });
-                  window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: khipu }));
-                }}
-              />
-              <KhipuAgentSettingsCard />
-            </div>
+          {canUseKhipu ? (
+            <div className="grid items-start gap-6 xl:grid-cols-2">
+              <div className="space-y-6">
+                <FloatingKhipuSettingsCard
+                  settings={settings}
+                  onSaved={(khipu) => {
+                    setSettings({ ...settings, ...khipu });
+                    window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: khipu }));
+                  }}
+                />
+                <KhipuAgentSettingsCard />
+              </div>
 
-            <div className="space-y-6">
-              <CloudAiSettingsCard />
+              <div className="space-y-6">
+                <CloudAiSettingsCard />
+              </div>
             </div>
-          </div>
+          ) : (
+            <UpgradeCTA
+              title="Khipu y proveedores IA disponibles en Pro"
+              description="Actualiza tu plan para desbloquear Khipu, sus configuraciones y las acciones asistidas dentro de presupuestos y APUs."
+              benefits={["Chat tecnico contextual", "Generacion y revision de APU", "Agente con herramientas y aprobaciones"]}
+            />
+          )}
 
-          <div>
-            <LocalAiSettingsCard />
-          </div>
+          {isLocalClientRuntimeEnabled() && canUseKhipu ? (
+            <div>
+              <LocalAiSettingsCard />
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

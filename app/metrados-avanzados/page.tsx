@@ -2,11 +2,14 @@ import { redirect } from "next/navigation";
 import { Ruler } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { MetradosDashboard } from "@/components/metrados/MetradosDashboard";
 import { parseMetradoTemplateTypeParam } from "@/components/metrados/metrado-view-model";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import {
   listCustomMetradoFormulas,
   listMetradoCreationOptions,
@@ -23,6 +26,31 @@ export default async function MetradosAvanzadosPage({
 
   if (!session) {
     redirect("/login");
+  }
+
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
+  if (!hasFeatureAccess(license, "metrados.advanced")) {
+    return (
+      <AppShell currentUser={session.user}>
+        <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+          <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
+            <PageHeaderCard
+              icon={<Ruler className="h-5 w-5" />}
+              title="Metrados avanzados"
+              description="Crea hojas de quantity takeoff con formulas, validaciones y vinculo directo a partidas del presupuesto."
+            />
+          </CardHeader>
+          <CardContent className="pt-6">
+            <UpgradeCTA
+              title="Metrados avanzados disponibles en Pro"
+              description="Desbloquea hojas de quantity takeoff, formulas, validaciones e integración directa con tus partidas."
+              benefits={["Hojas de metrados vinculadas", "Formulas y validaciones", "Exportación y envío a partidas"]}
+            />
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
   }
 
   const resolvedSearchParams = await searchParams;

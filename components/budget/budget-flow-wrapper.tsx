@@ -79,6 +79,11 @@ export function BudgetFlowWrapper({
   partidasCatalog,
   resourcesCatalog,
   catalogBudgetId,
+  canUseKhipu = true,
+  canUsePartidaGenerator = true,
+  canUseTemplates = true,
+  canUseRiskAnalysis = true,
+  canUseCollaboration = true,
 }: {
   budget: BudgetRecord;
   projectName?: string;
@@ -87,6 +92,11 @@ export function BudgetFlowWrapper({
   partidasCatalog: CatalogPartidaRecord[];
   resourcesCatalog: ResourceRecord[];
   catalogBudgetId?: string;
+  canUseKhipu?: boolean;
+  canUsePartidaGenerator?: boolean;
+  canUseTemplates?: boolean;
+  canUseRiskAnalysis?: boolean;
+  canUseCollaboration?: boolean;
 }) {
   const [catalogs, setCatalogs] = useState({
     partidasCatalog,
@@ -125,7 +135,7 @@ export function BudgetFlowWrapper({
   }, [catalogBudgetId]);
 
   useEffect(() => {
-    if (!templateTraceabilityBudgetId || templateTraceability) return;
+    if (!canUseTemplates || !templateTraceabilityBudgetId || templateTraceability) return;
 
     let active = true;
     let timeoutId: number | null = null;
@@ -151,15 +161,20 @@ export function BudgetFlowWrapper({
         window.clearTimeout(timeoutId);
       }
     };
-  }, [templateTraceability, templateTraceabilityBudgetId]);
+  }, [canUseTemplates, templateTraceability, templateTraceabilityBudgetId]);
 
   return (
     <BudgetFlow
       budget={budget}
       projectName={projectName}
-      templateTraceability={templateTraceability ?? resolvedTemplateTraceability}
+      templateTraceability={canUseTemplates ? templateTraceability ?? resolvedTemplateTraceability : null}
       partidasCatalog={catalogs.partidasCatalog}
       resourcesCatalog={catalogs.resourcesCatalog}
+      canUseKhipu={canUseKhipu}
+      canUsePartidaGenerator={canUsePartidaGenerator}
+      canUseTemplates={canUseTemplates}
+      canUseRiskAnalysis={canUseRiskAnalysis}
+      canUseCollaboration={canUseCollaboration}
     />
   );
 }

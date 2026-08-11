@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const HEARTBEAT_INTERVAL = 10_000;
 
 interface UseEditSessionOptions {
   budgetId: string;
+  enabled?: boolean;
 }
 
 interface EditSessionInfo {
@@ -15,13 +16,15 @@ interface EditSessionInfo {
   field: string;
 }
 
-export function useEditSession({ budgetId }: UseEditSessionOptions) {
+export function useEditSession({ budgetId, enabled = true }: UseEditSessionOptions) {
   const [activeSession, setActiveSession] = useState<EditSessionInfo | null>(null);
   const activeSessionRef = useRef<EditSessionInfo | null>(null);
   const heartbeatRef = useRef<number | null>(null);
 
   const startEditSession = useCallback(
     async (entityType: string, entityId: string, field: string) => {
+      if (!enabled || !budgetId) return;
+
       // Finish any existing session first (read from ref to avoid stale closure)
       const currentSession = activeSessionRef.current;
       if (currentSession) {
@@ -76,7 +79,7 @@ export function useEditSession({ budgetId }: UseEditSessionOptions) {
         // non-critical
       }
     },
-    [budgetId],
+    [budgetId, enabled],
   );
 
   const finishCurrentSession = useCallback(async () => {
@@ -101,6 +104,11 @@ export function useEditSession({ budgetId }: UseEditSessionOptions) {
       heartbeatRef.current = null;
     }
   }, [budgetId]);
+
+  useEffect(() => {
+    if (enabled) return;
+    void finishCurrentSession();
+  }, [enabled, finishCurrentSession]);
 
   return {
     activeSession,

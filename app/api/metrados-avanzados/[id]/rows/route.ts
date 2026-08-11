@@ -7,6 +7,7 @@ import type {
   MetradoRowRecord,
   MetradoUnit,
 } from "@/types/metrado";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 const units = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"] as const satisfies MetradoUnit[];
 const inputsSchema = z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.number().finite()).default({});
@@ -36,6 +37,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   try {
     const { id } = await params;

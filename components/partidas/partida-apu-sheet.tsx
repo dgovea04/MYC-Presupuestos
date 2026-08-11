@@ -34,9 +34,10 @@ type PartidaApuSheetProps = {
   onClose: () => void;
   onChange: (partida: EditableCatalogPartida) => void;
   resourcesCatalog: ResourceRecord[];
+  canUseKhipu?: boolean;
 };
 
-export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCatalog }: PartidaApuSheetProps) {
+export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCatalog, canUseKhipu = true }: PartidaApuSheetProps) {
   const { currencyDecimals, excelRowHeight, excelShowFieldBorders } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
   const addResourceSearchRef = useRef<HTMLInputElement | null>(null);
@@ -327,27 +328,29 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
             <p className={cn("mt-1 text-slate-500", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {activePartida.unit}</p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <Link href={buildAiHref("chat", currentPartida.description, currentPartida.unit, "Explica tecnicamente esta partida y valida su rendimiento.")}>
+            {canUseKhipu ? <Link href={buildAiHref("chat", currentPartida.description, currentPartida.unit, "Explica tecnicamente esta partida y valida su rendimiento.")}>
               <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
                 <BotMessageSquare className="h-4 w-4" />
                 Explicar partida
               </Button>
-            </Link>
-            <Button
-              type="button"
-              variant="ghost"
-              className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}
-              onClick={() => void generateAiApuSuggestion()}
-              disabled={isReadonly || aiApuLoading}
-            >
-                <Sparkles className="h-4 w-4" />
-                {aiApuLoading ? "Generando..." : "Generar con IA"}
-            </Button>
-            <Link href={buildAiHref("apu", currentPartida.description, currentPartida.unit)}>
+            </Link> : null}
+            {canUseKhipu ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}
+                onClick={() => void generateAiApuSuggestion()}
+                disabled={isReadonly || aiApuLoading}
+              >
+                  <Sparkles className="h-4 w-4" />
+                  {aiApuLoading ? "Generando..." : "Generar con IA"}
+              </Button>
+            ) : null}
+            {canUseKhipu ? <Link href={buildAiHref("apu", currentPartida.description, currentPartida.unit)}>
               <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
                 Abrir en Khipu
               </Button>
-            </Link>
+            </Link> : null}
             <Dialog.Close asChild>
               <Button variant="outline" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
                 Cerrar
@@ -369,7 +372,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
             onApply={applyAiApuSuggestion}
             onDismiss={() => setAiApuResult(null)}
             onSelectSimilarPartida={selectAiApuSimilarPartida}
-            khipuHref={buildAiHref("apu", currentPartida.description, currentPartida.unit)}
+            khipuHref={canUseKhipu ? buildAiHref("apu", currentPartida.description, currentPartida.unit) : undefined}
           />
         ) : null}
 

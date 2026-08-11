@@ -18,6 +18,7 @@ interface BudgetCollaborationWrapperProps {
   projectId: string;
   budgetName: string;
   userId: string;
+  canUseCollaboration?: boolean;
   children: React.ReactNode;
 }
 
@@ -26,6 +27,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   projectId,
   budgetName,
   userId,
+  canUseCollaboration = true,
   children,
 }: BudgetCollaborationWrapperProps) {
   const [activeSheet, setActiveSheet] = useState<SheetKind>(null);
@@ -39,11 +41,12 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
     budgetId,
     route: typeof window !== "undefined" ? window.location.pathname : `/budgets/${budgetId}`,
     module: "budget",
+    enabled: canUseCollaboration,
   });
 
   // Collaboration stream
   const fetchPresence = useCallback(async () => {
-    if (!collaborationAvailable) return;
+    if (!canUseCollaboration || !collaborationAvailable) return;
 
     try {
       const response = await fetch(`/api/budgets/${budgetId}/collaboration/presence`);
@@ -58,7 +61,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
     } catch {
       // silent
     }
-  }, [budgetId, collaborationAvailable]);
+  }, [budgetId, canUseCollaboration, collaborationAvailable]);
 
   const fetchPresenceRef = useRef(fetchPresence);
   fetchPresenceRef.current = fetchPresence;
@@ -69,6 +72,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   // Collaboration stream
   const { connected } = useBudgetCollaborationStream({
     budgetId,
+    enabled: canUseCollaboration,
     onEvent: useCallback((event: CollaborationStreamEvent) => {
       fetchPresenceRef.current();
 
@@ -97,7 +101,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   }, [budgetId]);
 
   useEffect(() => {
-    if (!collaborationAvailable) return;
+    if (!canUseCollaboration || !collaborationAvailable) return;
 
     const timeoutId = window.setTimeout(() => {
       fetchPresenceRef.current();
@@ -107,7 +111,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
       window.clearTimeout(timeoutId);
       clearInterval(interval);
     };
-  }, [budgetId, collaborationAvailable, fetchPresence]);
+  }, [budgetId, canUseCollaboration, collaborationAvailable, fetchPresence]);
 
   const handleSaveVersion = useCallback(async () => {
     try {
@@ -151,13 +155,14 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
             setActiveSheet((current) => (current === "versions" ? null : "versions"))
           }
           onSaveVersion={handleSaveVersion}
+          canUseCollaboration={canUseCollaboration}
         />
       </div>
 
       {/* Main content with optional side sheet */}
       <div className="flex gap-0">
         <div className="min-w-0 flex-1">{children}</div>
-        {activeSheet ? (
+        {canUseCollaboration && activeSheet ? (
           <div ref={sheetRef} className={sheetWidth + " shrink-0 overflow-hidden transition-all"}>
             {activeSheet === "comments" ? (
               <BudgetCommentsSheet

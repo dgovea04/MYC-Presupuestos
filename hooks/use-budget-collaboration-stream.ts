@@ -15,12 +15,14 @@ interface UseBudgetCollaborationStreamOptions {
   budgetId: string;
   onEvent?: (event: CollaborationStreamEvent) => void;
   reconnectInterval?: number;
+  enabled?: boolean;
 }
 
 export function useBudgetCollaborationStream({
   budgetId,
   onEvent,
   reconnectInterval = 3000,
+  enabled = true,
 }: UseBudgetCollaborationStreamOptions) {
   const [connected, setConnected] = useState(false);
   const onEventRef = useRef(onEvent);
@@ -42,7 +44,7 @@ export function useBudgetCollaborationStream({
   }, []);
 
   const scheduleReconnect = useCallback(() => {
-    if (!mountedRef.current || disabledRef.current) return;
+    if (!mountedRef.current || disabledRef.current || !enabled) return;
     clearReconnect();
     reconnectTimeoutRef.current = window.setTimeout(() => {
       connectRef.current?.();
@@ -59,7 +61,7 @@ export function useBudgetCollaborationStream({
   );
 
   const connect = useCallback(() => {
-    if (!mountedRef.current || disabledRef.current) return;
+    if (!mountedRef.current || disabledRef.current || !enabled) return;
     clearReconnect();
 
     if (abortRef.current) {
@@ -130,7 +132,7 @@ export function useBudgetCollaborationStream({
       .catch(() => {
         handleDisconnect(controller);
       });
-  }, [budgetId, clearReconnect, handleDisconnect]);
+  }, [budgetId, clearReconnect, enabled, handleDisconnect]);
 
   useEffect(() => {
     connectRef.current = connect;
@@ -139,7 +141,9 @@ export function useBudgetCollaborationStream({
   useEffect(() => {
     mountedRef.current = true;
     disabledRef.current = false;
-    connect();
+    if (enabled) {
+      connect();
+    }
 
     return () => {
       mountedRef.current = false;
@@ -149,7 +153,7 @@ export function useBudgetCollaborationStream({
         abortRef.current = null;
       }
     };
-  }, [clearReconnect, connect]);
+  }, [clearReconnect, connect, enabled]);
 
   return { connected };
 }

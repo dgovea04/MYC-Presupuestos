@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBudgetVersionSnapshot, listBudgetVersionSnapshots } from "@/lib/collaboration/versions";
 import { versionCreateSchema, versionQuerySchema } from "@/lib/validations/collaboration";
+import { getWorkspaceFeatureAccessStatus } from "@/lib/workspace/entitlements";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -27,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     console.error("GET versions failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo cargar las versiones" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }
@@ -47,7 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     console.error("POST version failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo crear la version" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }

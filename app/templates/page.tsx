@@ -1,10 +1,13 @@
 import { BookOpen } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { TemplateLibraryPageContent } from "@/components/templates/template-library-page-content";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { listTemplateLibraryActivityEvents } from "@/lib/data/activity-events";
 import { listUserBudgetTemplates } from "@/lib/data/budget-templates";
 import { getTemplateLibrarySummary, listTemplateLibraryItems } from "@/lib/templates/template-library";
@@ -19,6 +22,31 @@ export default async function TemplatesPage({
 }) {
   const session = await getAuthSession();
   const resolvedSearchParams = (await searchParams) ?? {};
+  const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session!.user.id, companyId: activeWorkspaceId });
+  if (!hasFeatureAccess(license, "templates.budget")) {
+    return (
+      <AppShell currentUser={session!.user}>
+        <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+          <CardHeader className="rounded-2xl bg-[var(--app-surface-elevated)]">
+            <PageHeaderCard
+              icon={<BookOpen className="h-5 w-5" />}
+              title="Plantillas"
+              description="Biblioteca base para reutilizar estructuras tecnicas de presupuestos, APU, gastos generales, metrados y cierre documental."
+            />
+          </CardHeader>
+          <CardContent className="pt-6">
+            <UpgradeCTA
+              title="Plantillas disponibles en Pro"
+              description="Guarda y reutiliza estructuras técnicas, partidas, APU y criterios documentales sin reconstruir tu flujo."
+              benefits={["Biblioteca de presupuestos", "Reutilización de estructuras y APU", "Aplicación rápida en nuevos proyectos"]}
+            />
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
+  }
+
   const [userTemplates, activityEvents] = await Promise.all([
     listUserBudgetTemplates(session!.user.id),
     listTemplateLibraryActivityEvents({ userId: session!.user.id }),

@@ -40,6 +40,7 @@ describe("LocalAiSettingsCard", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/ai/health");
     expect(getByText("Integracion de IA Local")).toBeTruthy();
+    expect(getByText("Solo local")).toBeTruthy();
     expect(getByText("Con fallback")).toBeTruthy();
     expect(getByText("llama3.1")).toBeTruthy();
     expect(getByText("ollama pull mistral")).toBeTruthy();

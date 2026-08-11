@@ -8,6 +8,7 @@ import {
   updateMetradoSheetMetadata,
 } from "@/lib/data/metrados";
 import type { MetradoUnit } from "@/types/metrado";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 const units = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"] as const satisfies MetradoUnit[];
 
@@ -26,6 +27,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   const { id } = await params;
   const sheet = await getMetradoSheetById(id, session.user.id);
@@ -70,6 +74,9 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   const { id } = await params;
   const deleted = await deleteMetradoSheet(id, session.user.id);

@@ -42,6 +42,9 @@ type ApuEditorSheetProps = {
   onUpdate: (item: BudgetItemRecord) => void;
   resourcesCatalog: ResourceRecord[];
   catalogPartidas: CatalogPartidaRecord[];
+  canUseKhipu?: boolean;
+  canUsePartidaGenerator?: boolean;
+  canUseCollaboration?: boolean;
   restoreFocusElement?: HTMLElement | null;
   densityMode: "compact" | "comfortable";
   budgetId?: string;
@@ -60,6 +63,9 @@ export function ApuEditorSheet({
   onUpdate,
   resourcesCatalog,
   catalogPartidas,
+  canUseKhipu = true,
+  canUsePartidaGenerator = true,
+  canUseCollaboration = true,
   restoreFocusElement,
   densityMode,
   budgetId,
@@ -101,23 +107,24 @@ export function ApuEditorSheet({
     activeSession,
     startEditSession,
     finishCurrentSession,
-  } = useEditSession({ budgetId: budgetId ?? "" });
+  } = useEditSession({ budgetId: budgetId ?? "", enabled: canUseCollaboration });
 
   useBudgetPresenceHeartbeat({
     budgetId: budgetId ?? "",
     route: `APU: ${item?.description ?? "APU"}`,
     module: "apu-editor",
+    enabled: canUseCollaboration,
   });
 
   useEffect(() => {
-    if (!budgetId || !open || !currentItemId) return;
+    if (!canUseCollaboration || !budgetId || !open || !currentItemId) return;
 
     startEditSession("APU", currentItemId, "apu-editor");
 
     return () => {
       finishCurrentSession();
     };
-  }, [open, currentItemId, budgetId, startEditSession, finishCurrentSession]);
+  }, [canUseCollaboration, open, currentItemId, budgetId, startEditSession, finishCurrentSession]);
   const indexedResourcesCatalog = useMemo(
     () =>
       resourcesCatalog.map((resource) => ({
@@ -531,33 +538,82 @@ export function ApuEditorSheet({
                 ) : null}
               </div>
               <div className="flex flex-wrap justify-end gap-2">
-                <Link href={buildAiHref("chat", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice, "Explica tecnicamente esta partida y valida su rendimiento.")}>
-                  <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
+                {canUseKhipu ? (
+                  <Link href={buildAiHref("chat", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice, "Explica tecnicamente esta partida y valida su rendimiento.")}>
+                    <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
+                      <BotMessageSquare className="h-4 w-4" />
+                      Explicar partida
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled
+                    aria-disabled="true"
+                    title="Explicar partida — Disponible en Pro"
+                    className={cn("theme-status-warning theme-status-warning-strong cursor-not-allowed gap-2 opacity-90", isExcelMode && "h-8 px-3 text-xs")}
+                  >
                     <BotMessageSquare className="h-4 w-4" />
-                    Explicar partida
+                    Explicar partida · Pro
                   </Button>
-                </Link>
+                )}
                 <Button
                   type="button"
                   variant="ghost"
-                  className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}
-                  onClick={() => void generateAiApuSuggestion()}
-                  disabled={aiApuLoading}
+                  className={cn(
+                    "gap-2",
+                    !canUseKhipu && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90",
+                    isExcelMode && "h-8 px-3 text-xs",
+                  )}
+                  onClick={() => {
+                    if (canUseKhipu) void generateAiApuSuggestion();
+                  }}
+                  disabled={!canUseKhipu || aiApuLoading}
+                  aria-disabled={!canUseKhipu ? "true" : undefined}
+                  title={canUseKhipu ? "Generar APU con IA" : "Generar APU con IA — Disponible en Pro"}
                 >
                   <Sparkles className="h-4 w-4" />
-                  {aiApuLoading ? "Generando..." : "Generar con IA"}
+                  {aiApuLoading ? "Generando..." : canUseKhipu ? "Generar con IA" : "Generar con IA · Pro"}
                 </Button>
-                <Link href={buildPartidaGeneratorHref(currentItemRecord.description, currentItemRecord.unit)}>
-                  <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
+                {canUsePartidaGenerator ? (
+                  <Link href={buildPartidaGeneratorHref(currentItemRecord.description, currentItemRecord.unit)}>
+                    <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
+                      <GitCompareArrows className="h-4 w-4" />
+                      Generador de partidas
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled
+                    aria-disabled="true"
+                    title="Generador de partidas — Disponible en Pro"
+                    className={cn("theme-status-warning theme-status-warning-strong cursor-not-allowed gap-2 opacity-90", isExcelMode && "h-8 px-3 text-xs")}
+                  >
                     <GitCompareArrows className="h-4 w-4" />
-                    Generador de partidas
+                    Generador · Pro
                   </Button>
-                </Link>
-                <Link href={buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice)}>
-                  <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
-                    Abrir en Khipu
+                )}
+                {canUseKhipu ? (
+                  <Link href={buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice)}>
+                    <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
+                      Abrir en Khipu
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled
+                    aria-disabled="true"
+                    title="Abrir en Khipu — Disponible en Pro"
+                    className={cn("theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90", isExcelMode && "h-8 px-3 text-xs")}
+                  >
+                    Khipu · Pro
                   </Button>
-                </Link>
+                )}
                 <Dialog.Close asChild>
                   <Button ref={closeButtonRef} variant="outline" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
                     Cerrar
@@ -579,7 +635,7 @@ export function ApuEditorSheet({
                 onApply={applyAiApuSuggestion}
                 onDismiss={() => setAiApuResult(null)}
                 onSelectSimilarPartida={selectAiApuSimilarPartida}
-                khipuHref={buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice)}
+                khipuHref={canUseKhipu ? buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice) : undefined}
               />
             ) : null}
 
@@ -1656,7 +1712,7 @@ function AiApuPreview({
   onApply: () => void;
   onDismiss: () => void;
   onSelectSimilarPartida: (partidaId: string) => void;
-  khipuHref: string;
+  khipuHref?: string;
 }) {
   const catalogData = isAiApuCatalogGenerationResult(result) ? result : null;
   const structuredData = isAiApuCatalogGenerationResult(result)
@@ -1683,9 +1739,11 @@ function AiApuPreview({
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           {result.fallbackUsed ? <span className="theme-status-warning rounded-full border px-2.5 py-1 text-xs font-medium">Fallback activo</span> : null}
-          <Link href={khipuHref}>
-            <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>Abrir en Khipu</Button>
-          </Link>
+          {khipuHref ? (
+            <Link href={khipuHref}>
+              <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>Abrir en Khipu</Button>
+            </Link>
+          ) : null}
         </div>
       </div>
 

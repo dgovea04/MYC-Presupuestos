@@ -1,4 +1,5 @@
 import { withAiRoute } from "@/lib/ai/route-handler";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { listActiveWorkflows } from "@/lib/data/agent-workflows";
 
 /**
@@ -9,7 +10,8 @@ import { listActiveWorkflows } from "@/lib/data/agent-workflows";
  * y herramientas permitidas asociadas.
  */
 export async function GET() {
-  return withAiRoute(async () => {
+  return withAiRoute(async (session) => {
+    await assertFeatureAccess({ userId: session.user.id, feature: "khipu.agent" });
     const workflows = await listActiveWorkflows();
 
     const result = workflows.map((w) => ({

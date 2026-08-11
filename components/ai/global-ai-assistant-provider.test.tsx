@@ -48,6 +48,13 @@ describe("GlobalAiAssistantProvider", () => {
     expect(getLauncher()).toBeTruthy();
   });
 
+  it("hides the floating launcher when Khipu access is unavailable", async () => {
+    await renderProvider("/dashboard", <div>Contenido</div>, false);
+
+    expect(document.querySelector("[data-khipu-launcher]")).toBeNull();
+    expect(document.body.textContent).toContain("Contenido");
+  });
+
   it("hides the floating launcher on auth routes", async () => {
     await renderProvider("/login", <div>Login</div>);
 
@@ -115,7 +122,7 @@ describe("GlobalAiAssistantProvider", () => {
   });
 });
 
-async function renderProvider(pathname: string, children: React.ReactNode) {
+async function renderProvider(pathname: string, children: React.ReactNode, canUseKhipu = true) {
   mockPathname = pathname;
   window.history.replaceState({}, "", pathname);
   const container = document.createElement("div");
@@ -126,7 +133,7 @@ async function renderProvider(pathname: string, children: React.ReactNode) {
   activeRoot = root;
 
   await act(async () => {
-    root.render(<GlobalAiAssistantProvider>{children}</GlobalAiAssistantProvider>);
+    root.render(<GlobalAiAssistantProvider canUseKhipu={canUseKhipu}>{children}</GlobalAiAssistantProvider>);
   });
 
   return { container, root };

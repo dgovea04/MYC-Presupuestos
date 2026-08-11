@@ -90,9 +90,7 @@ export async function AppShell({
 
   const activeWorkspaceId = currentUser?.activeCompanyId ?? currentUser?.companyId ?? (
     userId ? await measureAsync("appShell.activeWorkspace", () => getActiveWorkspaceId(userId), { userId }) : null
-  );
-
-  const [settings, workspaces, license] = await measureAsync("appShell.shellData", () => Promise.all([
+  );  const [settings, workspaces, license] = await measureAsync("appShell.shellData", () => Promise.all([
     initialSettings
       ? Promise.resolve(initialSettings)
       : userId
@@ -118,6 +116,8 @@ export async function AppShell({
   const initialSidebarMode = isSidebarMode(storedSidebarModeCookie) ? storedSidebarModeCookie : null;
   const appTheme = settings.appTheme ?? DEFAULT_APP_THEME;
   const initialSidebarWidth = getSidebarWidthCssValue("expanded");
+  const unlockedFeatures = (license?.availableFeatures ?? []) as FeatureKey[];
+  const canManageWorkspace = unlockedFeatures.includes("workspace.management");
 
   return (
     <FormattingSettingsProvider settings={settings}>
@@ -158,6 +158,7 @@ export async function AppShell({
                         <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--app-text-muted)]">Workspace</p>
                         <WorkspaceSwitcher
                           activeWorkspaceId={activeWorkspaceId}
+                          canManageWorkspace={canManageWorkspace}
                           workspaces={workspaces}
                         />
                       </div>

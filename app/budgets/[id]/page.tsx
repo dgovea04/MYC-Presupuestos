@@ -24,6 +24,8 @@ import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { decimalToNumber, stripBudgetProjectForClient } from "@/lib/db/serializers";
 import { measureAsync } from "@/lib/platform/performance";
 import { cn, ensureDate, formatCurrency, formatDate } from "@/lib/utils";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -64,6 +66,14 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
     notFound();
   }
 
+  const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
+  const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
+  const canUseKhipu = hasFeatureAccess(license, "khipu.agent");
+  const canUsePartidaGenerator = hasFeatureAccess(license, "partidas.similarity");
+  const canUseTemplates = hasFeatureAccess(license, "templates.budget");
+  const canUseRiskAnalysis = hasFeatureAccess(license, "risk_analysis");
+  const canUseCollaboration = hasFeatureAccess(license, "collaboration.realtime");
+
   const project = await measureAsync("page.budgetDetail.projectOverview", () => getProjectBudgetOverviewById(budget.projectId, session.user.id), {
     budgetId: budget.id,
     projectId: budget.projectId,
@@ -75,7 +85,9 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
   }
 
   if (budget.kind === "GENERAL") {
-    const templateTraceability = await getBudgetTemplateCreationTraceability({ userId: session.user.id, budgetId: budget.id });
+    const templateTraceability = canUseTemplates
+      ? await getBudgetTemplateCreationTraceability({ userId: session.user.id, budgetId: budget.id })
+      : null;
     const subBudgets = orderSubBudgetsBySpecialty(project.budgets.filter((item) => item.kind === "SUB_BUDGET"));
 
     return (
@@ -94,7 +106,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           viewSummary: `Presupuesto general ${budget.name} del proyecto ${project.name}.`,
         }}
       >
-        <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id}>
+        <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id} canUseCollaboration={canUseCollaboration}>
         <div className="space-y-5">
           <Card className="theme-surface-card rounded-2xl">
             <CardHeader className="theme-surface-card-gradient gap-4 rounded-2xl">
@@ -224,12 +236,14 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                       description="Cronograma consolidado, calendario valorizado, insumos por periodo y curva S basica."
                       icon={<FileSpreadsheet className="h-5 w-5" />}
                     />
-                    <BudgetQuickActionLink
-                      href={`/budgets/${budget.id}/risk-analysis`}
-                      title="Riesgos Monte Carlo"
-                      description="Simulacion probabilistica de metrados con percentiles y contingencias del presupuesto."
-                      icon={<Activity className="h-5 w-5" />}
-                    />
+                    {hasFeatureAccess(license, "risk_analysis") ? (
+                      <BudgetQuickActionLink
+                        href={`/budgets/${budget.id}/risk-analysis`}
+                        title="Riesgos Monte Carlo"
+                        description="Simulacion probabilistica de metrados con percentiles y contingencias del presupuesto."
+                        icon={<Activity className="h-5 w-5" />}
+                      />
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
@@ -286,7 +300,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         viewSummary: `Sub presupuesto ${budget.name} del proyecto ${project.name}.`,
       }}
     >
-      <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id}>
+      <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id} canUseCollaboration={canUseCollaboration}>
       <BudgetFlowWrapper
         budget={budgetForClient}
         projectName={project.name}
@@ -295,6 +309,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         catalogBudgetId={budget.id}
         partidasCatalog={[]}
         resourcesCatalog={[]}
+        canUseKhipu={canUseKhipu}
+        canUsePartidaGenerator={canUsePartidaGenerator}
+        canUseTemplates={canUseTemplates}
+        canUseRiskAnalysis={canUseRiskAnalysis}
+        canUseCollaboration={canUseCollaboration}
       />
       </BudgetCollaborationWrapper>
     </AppShell>

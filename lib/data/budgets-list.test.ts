@@ -63,4 +63,29 @@ describe("getBudgetsByUser", () => {
     expect(budgets[0]?.project.createdAt).toBeInstanceOf(Date);
     expect(budgets[0]?.updatedAt.toISOString()).toBe("2026-06-25T15:30:00.000Z");
   });
+
+  it("filters general budgets by the active workspace company when provided", async () => {
+    mocks.budgetFindMany.mockResolvedValue([]);
+
+    await getBudgetsByUser("user-1", "company-active");
+
+    expect(mocks.budgetFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          kind: "GENERAL",
+          project: expect.objectContaining({
+            companyId: "company-active",
+            company: {
+              memberships: {
+                some: {
+                  userId: "user-1",
+                  status: "ACTIVE",
+                },
+              },
+            },
+          }),
+        }),
+      }),
+    );
+  });
 });

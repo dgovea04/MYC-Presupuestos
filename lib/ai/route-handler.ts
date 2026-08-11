@@ -41,6 +41,10 @@ export async function withAiRoute(handler: (session: AiRouteSession) => Promise<
     }
 
     if (error instanceof AiRuntimeError) {
+      if (error.code === "local_only") {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+
       if (error.code === "connection" || error.code === "model_missing" || error.code === "timeout") {
         return NextResponse.json({ error: error.message }, { status: 503 });
       }

@@ -3,6 +3,9 @@ import { cookies } from "next/headers";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { CSSProperties, ReactNode } from "react";
 import { GlobalAiAssistantProvider } from "@/components/ai/global-ai-assistant-provider";
+import { getAuthSession } from "@/lib/auth/session";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode } from "@/lib/budget/view-mode";
 import {
   getSidebarWidthCssValue,
@@ -44,7 +47,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: ReactNode;
 }>) {
-  const cookieStore = await cookies();
+  const [cookieStore, session] = await Promise.all([cookies(), getAuthSession()]);
+  const activeWorkspaceId = session?.user?.id ? await getActiveWorkspaceId(session.user.id) : null;
+  const license = session?.user?.id
+    ? await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId })
+    : null;
+  const canUseKhipu = hasFeatureAccess(license, "khipu.agent");
   const storedThemeCookie = cookieStore.get(APP_THEME_COOKIE_NAME)?.value;
   const storedViewModeCookie = cookieStore.get(APP_VIEW_MODE_COOKIE_NAME)?.value;
   const storedSidebarModeCookie = cookieStore.get(SIDEBAR_MODE_COOKIE_NAME)?.value;
@@ -77,7 +85,7 @@ export default async function RootLayout({
             __html: `(function(){var w=localStorage.getItem('myc-khipu-agent-chat-panel-width');if(w){document.documentElement.style.setProperty('--chat-width',w+'px');}})()`,
           }}
         />
-        <GlobalAiAssistantProvider>{children}</GlobalAiAssistantProvider>
+        <GlobalAiAssistantProvider canUseKhipu={canUseKhipu}>{children}</GlobalAiAssistantProvider>
       </body>
     </html>
   );

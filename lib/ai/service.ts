@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { AiRuntimeError } from "@/lib/ai/errors";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import { resolveAiModel } from "@/lib/ai/models";
 import {
   askOllama,
@@ -322,7 +323,11 @@ export async function* streamChatAiResponse({
         }
       }
     } else {
-      // Ollama (default)
+      // Ollama is intentionally restricted to the local desktop/dev runtime.
+      if (!isLocalRuntimeEnabled()) {
+        throw new AiRuntimeError("local_only", "Ollama solo esta disponible en la app local.");
+      }
+
       const availableModels = await listInstalledOllamaModels(fetchImpl);
       const resolution = resolveAiModel(action, availableModels);
       resolvedModel = resolution.model;

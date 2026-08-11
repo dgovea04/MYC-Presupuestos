@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { assertWorkspaceFeatureAccess } from "@/lib/workspace/entitlements";
 import { inviteWorkspaceMemberSchema, changeRoleSchema, removeMemberSchema, toggleStatusSchema } from "@/lib/validations/workspace";
 
 export async function GET(
@@ -16,6 +17,11 @@ export async function GET(
   const { id: companyId } = await params;
 
   try {
+    await assertWorkspaceFeatureAccess({
+      userId: session.user.id,
+      companyId,
+      feature: "workspace.management",
+    });
     await assertWorkspaceMembership({
       userId: session.user.id,
       companyId,
@@ -67,6 +73,11 @@ export async function POST(
 
   // Ensure caller has ADMIN or OWNER role
   try {
+    await assertWorkspaceFeatureAccess({
+      userId: session.user.id,
+      companyId,
+      feature: "workspace.management",
+    });
     await assertWorkspaceMembership({
       userId: session.user.id,
       companyId,
@@ -187,6 +198,11 @@ export async function PATCH(
 
   // Only OWNER can change roles or status
   try {
+    await assertWorkspaceFeatureAccess({
+      userId: session.user.id,
+      companyId,
+      feature: "workspace.management",
+    });
     await assertWorkspaceMembership({
       userId: session.user.id,
       companyId,
@@ -331,6 +347,11 @@ export async function DELETE(
 
   // Only OWNER can remove members
   try {
+    await assertWorkspaceFeatureAccess({
+      userId: session.user.id,
+      companyId,
+      feature: "workspace.management",
+    });
     await assertWorkspaceMembership({
       userId: session.user.id,
       companyId,

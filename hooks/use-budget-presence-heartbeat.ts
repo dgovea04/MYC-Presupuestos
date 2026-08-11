@@ -16,12 +16,14 @@ interface UseBudgetPresenceHeartbeatOptions {
   budgetId: string;
   route: string;
   module: string;
+  enabled?: boolean;
 }
 
 export function useBudgetPresenceHeartbeat({
   budgetId,
   route,
   module,
+  enabled = true,
 }: UseBudgetPresenceHeartbeatOptions) {
   const intervalRef = useRef<number | null>(null);
   const initialHeartbeatTimeoutRef = useRef<number | null>(null);
@@ -69,7 +71,7 @@ export function useBudgetPresenceHeartbeat({
   }, [budgetId, route, module, stopHeartbeat]);
 
   useEffect(() => {
-    if (!budgetId) return;
+    if (!budgetId || !enabled) return;
 
     disabledRef.current = false;
     isActiveRef.current = true;
@@ -126,7 +128,7 @@ export function useBudgetPresenceHeartbeat({
 
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [sendHeartbeat, budgetId, route, module, stopHeartbeat]);
+  }, [sendHeartbeat, budgetId, route, module, stopHeartbeat, enabled]);
 
   return { sendHeartbeat: () => sendHeartbeat({ force: true }) };
 }

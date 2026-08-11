@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
+import { BudgetCollaborationWrapper } from "@/components/budget/budget-collaboration-wrapper";
 import { GeneralBudgetSectionTabs } from "@/components/budget/general-budget-section-tabs";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import type { UserSettingsRecord } from "@/types/settings";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 
 const sections = [
   { id: "resources", label: "Lista de insumos", href: "resources" },
@@ -44,6 +47,12 @@ export function GeneralBudgetSectionShell({
   settings?: UserSettingsRecord;
   children: React.ReactNode;
 }) {
+  const activeWorkspaceId = currentUser?.id ? await getActiveWorkspaceId(currentUser.id) : null;
+  const license = currentUser?.id
+    ? await getEffectiveWorkspaceLicense({ userId: currentUser.id, companyId: activeWorkspaceId })
+    : null;
+  const canUseCollaboration = hasFeatureAccess(license, "collaboration.realtime");
+
   return (
     <AppShell currentUser={currentUser} settings={settings}>
       <div className="space-y-5">
@@ -81,7 +90,15 @@ export function GeneralBudgetSectionShell({
           </CardContent>
         </Card>
 
-        {children}
+        <BudgetCollaborationWrapper
+          budgetId={budgetId}
+          projectId={projectId}
+          budgetName={budgetName}
+          userId={currentUser?.id ?? ""}
+          canUseCollaboration={canUseCollaboration}
+        >
+          {children}
+        </BudgetCollaborationWrapper>
       </div>
     </AppShell>
   );

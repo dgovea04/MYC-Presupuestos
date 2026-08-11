@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { withAiRoute } from "@/lib/ai/route-handler";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 /**
  * GET /api/ai/executions/[id]
@@ -12,6 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   return withAiRoute(async (session) => {
+    await assertFeatureAccess({ userId: session.user.id, feature: "khipu.agent" });
     const { id } = await params;
 
     const execution = await prisma.agentExecution.findUnique({

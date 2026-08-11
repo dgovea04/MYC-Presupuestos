@@ -4,6 +4,14 @@ vi.mock("@/lib/auth/session", () => ({
   getAuthSession: vi.fn(),
 }));
 
+vi.mock("@/lib/workspace/entitlements", () => ({
+  assertWorkspaceFeatureAccess: vi.fn(),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidateTag: vi.fn(),
+}));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     companyMembership: {

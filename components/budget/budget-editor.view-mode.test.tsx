@@ -1266,6 +1266,78 @@ describe("BudgetEditor view mode integration", () => {
     expect(getByText("Sugerir APU")).toBeTruthy();
   });
 
+  it("keeps the partida explanation action locked for Starter users", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { getButtonByLabel, getByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+      canUseKhipu: false,
+    });
+
+    const inlineAiButton = getButtonByLabel("Explicar esta partida con IA — Disponible en Pro");
+    expect(inlineAiButton.disabled).toBe(true);
+    expect(inlineAiButton.getAttribute("aria-disabled")).toBe("true");
+    expect(inlineAiButton.className).toContain("theme-status-warning");
+
+    await act(async () => {
+      getButtonByLabel("Abrir acciones de la partida").click();
+    });
+
+    const menuAiButton = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((button) =>
+      button.textContent?.includes("Explicar partida con IA"),
+    );
+    expect(menuAiButton).toBeInstanceOf(HTMLButtonElement);
+    expect(menuAiButton?.disabled).toBe(true);
+    expect(menuAiButton?.getAttribute("aria-disabled")).toBe("true");
+    expect(menuAiButton?.textContent).toContain("Disponible en Pro");
+    expect(menuAiButton?.querySelector("svg")).toBeTruthy();
+
+    await act(async () => {
+      menuAiButton?.click();
+    });
+
+    expect(document.body.textContent).not.toContain("Explicacion tecnica IA");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("locks the budget review header and AI provider controls for Starter users", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { getButtonByLabel, getButtonByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+      canUseKhipu: false,
+    });
+
+    const reviewButton = getButtonByText("Revisar Presupuesto — Disponible en Pro");
+    expect(reviewButton.disabled).toBe(true);
+    expect(reviewButton.getAttribute("title")).toContain("Disponible en Pro");
+    expect(reviewButton.className).toContain("theme-status-warning");
+
+    const providerButton = getButtonByText("Ollama · Pro");
+    expect(providerButton.disabled).toBe(true);
+    expect(providerButton.getAttribute("aria-disabled")).toBe("true");
+    expect(providerButton.className).toContain("theme-status-warning");
+
+    await act(async () => {
+      getButtonByLabel("Abrir acciones globales del sub presupuesto").click();
+    });
+
+    const menuReviewButton = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((button) =>
+      button.textContent?.includes("Revisar presupuesto con IA"),
+    );
+    expect(menuReviewButton).toBeInstanceOf(HTMLButtonElement);
+    expect(menuReviewButton?.disabled).toBe(true);
+    expect(menuReviewButton?.textContent).toContain("Disponible en Pro");
+
+    await act(async () => {
+      reviewButton.click();
+      menuReviewButton?.click();
+      providerButton.click();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("offers a visible budget review action and sends the enriched budget context to IA", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -1504,7 +1576,12 @@ describe("BudgetEditor view mode integration", () => {
 
 });
 
-async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?: CatalogPartidaRecord[]; resourcesCatalog?: ResourceRecord[] }) {
+async function renderEditor(options?: {
+  budget?: BudgetRecord;
+  canUseKhipu?: boolean;
+  partidasCatalog?: CatalogPartidaRecord[];
+  resourcesCatalog?: ResourceRecord[];
+}) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -1514,13 +1591,13 @@ async function renderEditor(options?: { budget?: BudgetRecord; partidasCatalog?:
 
   await act(async () => {
     root.render(
-      <BudgetViewModeProvider>
-        <BudgetEditor
-          budget={options?.budget ?? createBudget()}
-          partidasCatalog={options?.partidasCatalog ?? []}
-          projectName="Proyecto Demo"
-          resourcesCatalog={options?.resourcesCatalog ?? []}
-        />
+      <BudgetViewModeProvider>          <BudgetEditor
+            budget={options?.budget ?? createBudget()}
+            canUseKhipu={options?.canUseKhipu}
+            partidasCatalog={options?.partidasCatalog ?? []}
+            projectName="Proyecto Demo"
+            resourcesCatalog={options?.resourcesCatalog ?? []}
+          />
         <TestViewModeControls />
       </BudgetViewModeProvider>,
     );

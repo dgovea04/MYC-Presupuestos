@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { getAiProviderSettings, updateAiProviderSettings, type AiProviderSettingsInput } from "@/lib/data/settings";
 import { AGENT_MODELS } from "@/lib/ai/agent/models";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 const VALID_AGENT_MODEL_IDS = new Set(AGENT_MODELS.map((model) => model.id));
 const AI_PROVIDER_PREFERENCE_OPTIONS = [
@@ -20,9 +22,16 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "khipu.agent");
+  if (accessResponse) return accessResponse;
+
   try {
     const settings = await getAiProviderSettings(session.user.id);
-    return NextResponse.json(settings);
+    return NextResponse.json(
+      !isLocalRuntimeEnabled() && settings.aiProviderPreference === "ollama"
+        ? { ...settings, aiProviderPreference: "auto" }
+        : settings,
+    );
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Error al cargar configuración de IA." },
@@ -36,6 +45,9 @@ export async function PUT(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "khipu.agent");
+  if (accessResponse) return accessResponse;
 
   try {
     const body: unknown = await request.json();
@@ -249,11 +261,14 @@ function validateAiProviderPreference(raw: unknown): AiProviderPreferenceValidat
       ].join(" "),
     };
   }
-  if (!VALID_AI_PROVIDER_PREFERENCES.has(trimmed)) {
+  if (!VALID_AI_PROVIDER_PREFERENCES.has(trimmed) || (trimmed === "ollama" && !isLocalRuntimeEnabled())) {
     return {
       ok: false,
       invalidValue: trimmed,
-      message: buildInvalidAiProviderPreferenceError(trimmed),
+      message:
+        trimmed === "ollama" && !isLocalRuntimeEnabled()
+          ? "Ollama solo esta disponible en la app local. Selecciona un proveedor cloud o Automatico."
+          : buildInvalidAiProviderPreferenceError(trimmed),
     };
   }
   // The .has() lookup above guarantees `trimmed` is in the curated enum, so

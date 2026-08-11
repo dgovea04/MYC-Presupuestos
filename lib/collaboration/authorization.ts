@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { assertWorkspaceFeatureAccess } from "@/lib/workspace/entitlements";
 
 /**
  * Resolves the company and project for a given budget, verifying the user
@@ -33,6 +34,12 @@ export async function resolveBudgetOwnership(budgetId: string, userId: string) {
   if (!budget) {
     throw new Error("No tienes permisos para acceder a este presupuesto");
   }
+
+  await assertWorkspaceFeatureAccess({
+    userId,
+    companyId: budget.project.companyId,
+    feature: "collaboration.realtime",
+  });
 
   return {
     companyId: budget.project.companyId,

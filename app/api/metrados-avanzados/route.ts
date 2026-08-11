@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { createMetradoSheet, listMetradoSheetsByUser } from "@/lib/data/metrados";
 import type { MetradoTemplateType } from "@/types/metrado";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 const templateTypes = [
   "CONCRETE",
@@ -34,6 +35,9 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
+
   const sheets = await listMetradoSheetsByUser(session.user.id);
   return NextResponse.json({ sheets });
 }
@@ -44,6 +48,9 @@ export async function POST(request: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   try {
     const body = createSheetSchema.parse(await request.json());

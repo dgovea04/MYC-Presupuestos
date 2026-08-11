@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { generateBudgetTool } from "@/lib/ai/agent/tools/budgets";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 /**
  * POST /api/ai/agent/generate-budget
@@ -20,6 +21,7 @@ import { generateBudgetTool } from "@/lib/ai/agent/tools/budgets";
  */
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
+    await assertFeatureAccess({ userId: session.user.id, feature: "khipu.agent" });
     const body = await request.json();
     const {
       projectId,

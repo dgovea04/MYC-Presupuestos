@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { SkeletonForm } from "@/components/ui/loading";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { isLocalClientRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 type AiProviderPreference = "auto" | "ollama" | "chatgpt_bridge" | "openai" | "gemini" | "openrouter";
 type TestResult = "idle" | "ok" | "fail";
@@ -27,7 +28,9 @@ type AiProviderSettingsState = {
 
 const PROVIDER_OPTIONS: Array<{ value: AiProviderPreference; label: string; description: string }> = [
   { value: "auto", label: "Automatico (recomendado)", description: "Khipu elige el mejor proveedor segun la tarea." },
-  { value: "ollama", label: "Ollama local", description: "Modelos locales. Sin costo de API." },
+  ...(isLocalClientRuntimeEnabled()
+    ? [{ value: "ollama" as const, label: "Ollama local", description: "Modelos locales. Sin costo de API." }]
+    : []),
   { value: "chatgpt_bridge", label: "ChatGPT Bridge", description: "Usa ChatGPT via extension del navegador." },
   { value: "openai", label: "ChatGPT API", description: "API de OpenAI con tu propia key." },
   { value: "gemini", label: "Gemini API", description: "API de Google Gemini con tu propia key." },
@@ -579,6 +582,7 @@ function readAiProviderSettings(payload: unknown): AiProviderSettingsState {
 
 function readProviderPreference(value: unknown): AiProviderPreference {
   if (typeof value === "string" && ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter"].includes(value)) {
+    if (value === "ollama" && !isLocalClientRuntimeEnabled()) return "auto";
     return value as AiProviderPreference;
   }
   return "auto";

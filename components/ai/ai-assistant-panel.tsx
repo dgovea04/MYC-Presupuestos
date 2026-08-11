@@ -53,6 +53,7 @@ import type { KhipuAction } from "@/lib/ai/actions";
 import { useKhipuActionDispatcher } from "@/hooks/use-khipu-action-dispatcher";
 import { useKhipuActionRegistry } from "@/components/ai/khipu-action-registry";
 import { cn } from "@/lib/utils";
+import { isLocalClientRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import type { FloatingKhipuTheme } from "@/types/settings";
 
 type AiAssistantPanelLayout = "page" | "floating";
@@ -244,6 +245,9 @@ export function AiAssistantPanel({
     controller.bridgeState,
     controller.cloudConfigured,
   );
+  const providerOptions: AssistantProvider[] = isLocalClientRuntimeEnabled()
+    ? ["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter", "agent"]
+    : ["chatgpt-bridge", "openai", "gemini", "openrouter", "agent"];
   const contextRows = [
     { label: "Proyecto", value: controller.context.project },
     { label: "Modulo", value: controller.context.module },
@@ -731,7 +735,7 @@ export function AiAssistantPanel({
             <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
               <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter", "agent"] as AssistantProvider[]).map((provider) => (
+                {providerOptions.map((provider) => (
                   <button
                     key={provider}
                     className={cn(
@@ -747,6 +751,11 @@ export function AiAssistantPanel({
                   </button>
                 ))}
               </div>
+              {isLocalClientRuntimeEnabled() && controller.provider === "ollama" ? (
+                <p className="mt-3 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  Solo local
+                </p>
+              ) : null}
               {controller.provider === "chatgpt-bridge" ? (
                 <p className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
                   Estado: {readBridgeStateLabel(controller.bridgeState)}

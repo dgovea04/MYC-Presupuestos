@@ -58,11 +58,12 @@ function normalizeBudgetListEntry<T extends Awaited<ReturnType<typeof prisma.bud
   };
 }
 
-const _getBudgetsByUser = async (userId: string) => {
+const _getBudgetsByUser = async (userId: string, activeCompanyId?: string | null) => {
   const budgets = await prisma.budget.findMany({
     where: {
       kind: "GENERAL",
       project: {
+        companyId: activeCompanyId ?? undefined,
         company: {
           memberships: {
             some: {
@@ -85,14 +86,16 @@ const _getBudgetsByUser = async (userId: string) => {
 };
 
 export const getBudgetsByUser = cache(
-  async (userId: string) => {
+  async (userId: string, activeCompanyId?: string | null) => {
     if (shouldBypassPersistentCache) {
-      return _getBudgetsByUser(userId);
+      return _getBudgetsByUser(userId, activeCompanyId);
     }
 
     return unstable_cache(
-      async (uid: string) => _getBudgetsByUser(uid),
-      [BUDGETS_LIST_CACHE_TAG],
+      async (uid: string) => _getBudgetsByUser(uid, activeCompanyId),
+      activeCompanyId
+        ? [BUDGETS_LIST_CACHE_TAG, userId, activeCompanyId]
+        : [BUDGETS_LIST_CACHE_TAG, userId],
       { tags: [BUDGETS_LIST_CACHE_TAG] },
     )(userId);
   },

@@ -144,7 +144,12 @@ export function LocalAiSettingsCard() {
               <BotMessageSquare className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle>Integracion de IA Local</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle>Integracion de IA Local</CardTitle>
+                <span className="theme-status-warning theme-status-warning-strong rounded-full border px-2.5 py-1 text-xs font-semibold">
+                  Solo local
+                </span>
+              </div>
               <CardDescription>
                 Diagnostico de Ollama, modelos requeridos y reglas de uso seguro para MC Presupuestos.
               </CardDescription>

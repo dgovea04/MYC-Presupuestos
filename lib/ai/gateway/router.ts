@@ -1,4 +1,5 @@
 import type { AiProviderId, KhipuAiTask } from "@/lib/ai/gateway/types";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 export type ResolveAiProviderInput = {
   provider: AiProviderId;
@@ -7,27 +8,29 @@ export type ResolveAiProviderInput = {
 
 type ExecutableProviderId = Exclude<AiProviderId, "auto">;
 
-const AUTO_PROVIDER_BY_TASK: Record<KhipuAiTask, ExecutableProviderId> = {
-  autocomplete: "ollama",
-  suggest_insumos: "ollama",
-  review_apu: "openai",
-  review_budget: "openai",
-  generate_apu: "openai",
-  generate_partida: "openai",
-  review_formula_polinomica: "openai",
-  review_quantity_takeoff: "openai",
-  montecarlo_risk_analysis: "gemini",
-  chat: process.env.NODE_ENV === "development" ? "chatgpt_bridge" : "openai",
-};
+function getAutoProviderByTask(task: KhipuAiTask): ExecutableProviderId {
+  if (task === "autocomplete" || task === "suggest_insumos") {
+    return isLocalRuntimeEnabled() ? "ollama" : "openai";
+  }
 
-const CLOUD_FALLBACK_CHAIN: ExecutableProviderId[] = ["openai", "gemini", "ollama"];
+  if (task === "chat" && process.env.NODE_ENV === "development") {
+    return "chatgpt_bridge";
+  }
+
+  if (task === "montecarlo_risk_analysis") return "gemini";
+  return "openai";
+}
+
+function getCloudFallbackChain(): ExecutableProviderId[] {
+  return isLocalRuntimeEnabled() ? ["openai", "gemini", "ollama"] : ["openai", "gemini"];
+}
 
 export function resolveAiProvider({ provider, task }: ResolveAiProviderInput): ExecutableProviderId {
   if (provider !== "auto") {
     return provider;
   }
 
-  return AUTO_PROVIDER_BY_TASK[task];
+  return getAutoProviderByTask(task);
 }
 
 export function getProviderFallbackChain(input: ResolveAiProviderInput): ExecutableProviderId[] {
@@ -38,11 +41,11 @@ export function getProviderFallbackChain(input: ResolveAiProviderInput): Executa
   }
 
   if (resolvedProvider === "openai") {
-    return CLOUD_FALLBACK_CHAIN;
+    return getCloudFallbackChain();
   }
 
   if (resolvedProvider === "gemini") {
-    return ["gemini", "ollama"];
+    return isLocalRuntimeEnabled() ? ["gemini", "ollama"] : ["gemini", "openai"];
   }
 
   if (resolvedProvider === "openrouter") {

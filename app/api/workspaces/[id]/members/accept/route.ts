@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { WORKSPACE_LIST_CACHE_TAG } from "@/lib/workspace/active-workspace";
+import { assertWorkspaceFeatureAccess } from "@/lib/workspace/entitlements";
 
 export async function POST(
   _request: Request,
@@ -14,6 +15,19 @@ export async function POST(
   }
 
   const { id: companyId } = await params;
+
+  try {
+    await assertWorkspaceFeatureAccess({
+      userId: session.user.id,
+      companyId,
+      feature: "workspace.management",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Workspace no disponible" },
+      { status: 403 },
+    );
+  }
 
   const membership = await prisma.companyMembership.findUnique({
     where: {

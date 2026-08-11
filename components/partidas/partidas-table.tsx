@@ -49,10 +49,14 @@ export function PartidasTable({
   initialFilter = "",
   partidas,
   resourcesCatalog,
+  canUseKhipu = true,
+  canUsePartidaGenerator = true,
 }: {
   initialFilter?: string;
   partidas: CatalogPartidaRecord[];
   resourcesCatalog: ResourceRecord[];
+  canUseKhipu?: boolean;
+  canUsePartidaGenerator?: boolean;
 }) {
   const { isExcelMode } = useAppViewMode();
   const { currencyDecimals, excelRowHeight } = useFormattingSettings();
@@ -364,12 +368,14 @@ export function PartidasTable({
                   <Plus className="h-4 w-4" />
                   Nueva partida
                 </Button>
-                <Link href="/partidas/generar">
-                  <Button variant="outline" size="sm" className="gap-2 bg-[var(--app-surface)]">
-                    <GitCompareArrows className="h-4 w-4" />
-                    Generar por similitud
-                  </Button>
-                </Link>
+                {canUsePartidaGenerator ? (
+                  <Link href="/partidas/generar">
+                    <Button variant="outline" size="sm" className="gap-2 bg-[var(--app-surface)]">
+                      <GitCompareArrows className="h-4 w-4" />
+                      Generar por similitud
+                    </Button>
+                  </Link>
+                ) : null}
                 <Button variant="outline" size="sm" className="bg-[var(--app-surface)]" onClick={() => fileInputRef.current?.click()}>
                   Importar Excel
                 </Button>
@@ -450,6 +456,7 @@ export function PartidasTable({
         resourcesCatalog={resourcesCatalog}
         onClose={() => setSelectedId(null)}
         onChange={(partida) => patchRow(partida.id, partida)}
+        canUseKhipu={canUseKhipu}
       />
       <PartidaPastePreviewSheet pendingPaste={pendingPaste} onClose={closePastePreview} onConfirm={applyPendingPaste} />
     </div>

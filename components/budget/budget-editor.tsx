@@ -307,12 +307,22 @@ export function BudgetEditor({
   partidasCatalog,
   projectName,
   templateTraceability,
+  canUseKhipu = true,
+  canUsePartidaGenerator = true,
+  canUseTemplates = true,
+  canUseRiskAnalysis = true,
+  canUseCollaboration = true,
 }: {
   budget: BudgetRecord;
   resourcesCatalog: ResourceRecord[];
   partidasCatalog: CatalogPartidaRecord[];
   projectName?: string;
   templateTraceability?: BudgetTemplateCreationTraceability | null;
+  canUseKhipu?: boolean;
+  canUsePartidaGenerator?: boolean;
+  canUseTemplates?: boolean;
+  canUseRiskAnalysis?: boolean;
+  canUseCollaboration?: boolean;
 }) {
   const router = useRouter();
   const { currencyDecimals, excelRowHeight } = useFormattingSettings();
@@ -1070,6 +1080,8 @@ export function BudgetEditor({
   }, []);
 
   async function runAiItemAction(kind: "chat" | "autocomplete", itemId: string) {
+    if (!canUseKhipu) return;
+
     const item = state.items.find((candidate) => candidate.id === itemId);
     if (!item) return;
 
@@ -1115,6 +1127,8 @@ export function BudgetEditor({
   }
 
   async function runAiBudgetReview() {
+    if (!canUseKhipu) return;
+
     const title = "Revision IA del presupuesto";
     setAiPanel({ kind: "review", title, result: null, loading: true, error: "" });
 
@@ -2045,13 +2059,26 @@ export function BudgetEditor({
             </div>
             <div className="flex flex-col gap-1.5 xl:min-w-0 xl:items-end">
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                <Link
-                  href={`/budgets/${budget.id}/risk-analysis`}
-                  className="theme-budget-risk-link inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                >
-                  <Activity className="h-4 w-4" />
-                  Riesgos
-                </Link>
+                {canUseRiskAnalysis ? (
+                  <Link
+                    href={`/budgets/${budget.id}/risk-analysis`}
+                    className="theme-budget-risk-link inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  >
+                    <Activity className="h-4 w-4" />
+                    Riesgos
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    title="Riesgos — Disponible en Pro"
+                    className="theme-status-warning theme-status-warning-strong inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] opacity-90"
+                  >
+                    <Activity className="h-4 w-4" />
+                    Riesgos · Pro
+                  </button>
+                )}
                 <div className="inline-flex flex-wrap items-center gap-2 self-end rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)] focus-within:border-[var(--app-border-strong)] focus-within:bg-[var(--app-surface-hover)]">
                       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--app-text-muted)]">Densidad</p>
                       <div className="inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-elevated)] p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
@@ -2098,25 +2125,32 @@ export function BudgetEditor({
                     <button
                       key={p}
                       type="button"
-                      onClick={() => setProvider(p)}
-                      aria-pressed={provider === p}
-                      className={cn(
-                        "rounded-full px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
-                        provider === p ? "theme-filter-button-active" : "text-[var(--app-text-muted)] hover:text-[var(--app-text-strong)]",
-                      )}
-                    >
-                      {getBudgetProviderLabel(p)}
+                      onClick={() => setProvider(p)}                        disabled={!canUseKhipu}
+                        aria-pressed={provider === p}
+                        aria-disabled={!canUseKhipu ? "true" : undefined}
+                        title={canUseKhipu ? `Usar ${getBudgetProviderLabel(p)}` : "Proveedores IA — Disponible en Pro"}
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                          provider === p && canUseKhipu ? "theme-filter-button-active" : "text-[var(--app-text-muted)] hover:text-[var(--app-text-strong)]",
+                          !canUseKhipu && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90 hover:text-[var(--app-text-muted)]",
+                        )}
+                      >
+                        {canUseKhipu ? getBudgetProviderLabel(p) : `${getBudgetProviderLabel(p)} · Pro`}
                     </button>
                   ))}
                 </div>
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={() => void runAiBudgetReview()}
-                  className="h-8 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.24)]"
-                >
-                  <BotMessageSquare className="mr-2 h-4 w-4" />
-                  Revisar Presupuesto
+                  variant="outline"                    onClick={() => void runAiBudgetReview()}
+                    disabled={!canUseKhipu}
+                    title={canUseKhipu ? "Revisar presupuesto con IA" : "Revisar presupuesto con IA — Disponible en Pro"}
+                    className={cn(
+                      "h-8 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.24)]",
+                      !canUseKhipu && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90 hover:bg-transparent",
+                    )}
+                  >
+                    <BotMessageSquare className="mr-2 h-4 w-4" />
+                    {canUseKhipu ? "Revisar Presupuesto" : "Revisar Presupuesto — Disponible en Pro"}
                 </Button>
                 <div className="flex items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
                   <button
@@ -2204,6 +2238,7 @@ export function BudgetEditor({
           onApplyCatalogPartida={applyCatalogPartidaToItem}
           onOpenApuSheet={openApuSheet}
           onRunAiItemAction={(kind, itemId) => void runAiItemAction(kind, itemId)}
+          canUseKhipu={canUseKhipu}
           itemQualityStateById={itemQualityStateById}
           spreadsheetActiveCell={spreadsheetSelection.activeCell}
           spreadsheetSelectedKeys={spreadsheetSelection.selectedCellKeys}
@@ -2241,6 +2276,9 @@ export function BudgetEditor({
             setApuSheetSession(null);
           }}
           onUpdate={handleApuItemUpdate}
+          canUseKhipu={canUseKhipu}
+          canUsePartidaGenerator={canUsePartidaGenerator}
+          canUseCollaboration={canUseCollaboration}
         />
       ) : null}
 
@@ -2433,25 +2471,31 @@ export function BudgetEditor({
           />
           <div className="my-1 border-t border-[var(--app-border-soft)]" />
           <LevelActionMenuButton
-            label="Explicar partida con IA"
+            label={canUseKhipu ? "Explicar partida con IA" : "Explicar partida con IA — Disponible en Pro"}
             icon={<BotMessageSquare className="h-4 w-4" />}
+            disabled={!canUseKhipu}
             onClick={() => {
+              if (!canUseKhipu) return;
               void runAiItemAction("chat", itemActionMenu.rowId);
               closeItemActionMenu(true);
             }}
           />
           <LevelActionMenuButton
-            label="Autocompletar descripcion"
+            label={canUseKhipu ? "Autocompletar descripcion" : "Autocompletar descripcion — Disponible en Pro"}
             icon={<WandSparkles className="h-4 w-4" />}
+            disabled={!canUseKhipu}
             onClick={() => {
+              if (!canUseKhipu) return;
               void runAiItemAction("autocomplete", itemActionMenu.rowId);
               closeItemActionMenu(true);
             }}
           />
           <LevelActionMenuButton
-            label="Sugerir APU"
+            label={canUseKhipu ? "Sugerir APU" : "Sugerir APU — Disponible en Pro"}
             icon={<Sparkles className="h-4 w-4" />}
+            disabled={!canUseKhipu}
             onClick={() => {
+              if (!canUseKhipu) return;
               const item = summary.items.find((candidate) => candidate.id === itemActionMenu.rowId);
               if (item) {
                 scheduleUiTimeout(() => openApuSheet(item), 0);
@@ -2549,9 +2593,11 @@ export function BudgetEditor({
           {headerActionMenu.kind === "more" ? (
             <>
               <LevelActionMenuButton
-                label="Guardar como plantilla"
+                label={canUseTemplates ? "Guardar como plantilla" : "Guardar como plantilla — Disponible en Pro"}
                 icon={<BookOpenCheck className="h-4 w-4" />}
+                disabled={!canUseTemplates}
                 onClick={() => {
+                  if (!canUseTemplates) return;
                   setSaveTemplateDialogOpen(true);
                   closeHeaderActionMenu();
                 }}
@@ -2572,9 +2618,11 @@ export function BudgetEditor({
                 }}
               />
               <LevelActionMenuButton
-                label="Revisar presupuesto con IA"
+                label={canUseKhipu ? "Revisar presupuesto con IA" : "Revisar presupuesto con IA — Disponible en Pro"}
                 icon={<BotMessageSquare className="h-4 w-4" />}
+                disabled={!canUseKhipu}
                 onClick={() => {
+                  if (!canUseKhipu) return;
                   void runAiBudgetReview();
                   closeHeaderActionMenu(true);
                 }}
@@ -2748,6 +2796,9 @@ function ApuSheetController({
   partidasCatalog,
   resourcesCatalog,
   budgetId,
+  canUseKhipu = true,
+  canUsePartidaGenerator = true,
+  canUseCollaboration = true,
 }: {
   initialItem: BudgetItemRecord;
   initialRestoreFocusElement: HTMLElement | null;
@@ -2757,6 +2808,9 @@ function ApuSheetController({
   partidasCatalog: CatalogPartidaRecord[];
   resourcesCatalog: ResourceRecord[];
   budgetId: string;
+  canUseKhipu?: boolean;
+  canUsePartidaGenerator?: boolean;
+  canUseCollaboration?: boolean;
 }) {
   const [draftItem, setDraftItem] = useState<BudgetItemRecord | null>(initialItem);
   const [restoreFocusElement, setRestoreFocusElement] = useState<HTMLElement | null>(initialRestoreFocusElement);
@@ -2782,6 +2836,9 @@ function ApuSheetController({
       restoreFocusElement={restoreFocusElement}
       densityMode={densityMode}
       budgetId={budgetId}
+      canUseKhipu={canUseKhipu}
+      canUsePartidaGenerator={canUsePartidaGenerator}
+      canUseCollaboration={canUseCollaboration}
     />
   );
 }
@@ -2962,18 +3019,26 @@ function LevelActionMenuButton({
   onClick,
   icon,
   className,
+  disabled = false,
 }: {
   label: string;
   onClick: () => void;
   icon?: React.ReactNode;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       role="menuitem"
-      className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--app-text)] transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1", className)}
+      disabled={disabled}
+      aria-disabled={disabled ? "true" : undefined}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--app-text)] transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1",
+        disabled && "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90 hover:bg-transparent",
+        className,
+      )}
     >
       {icon ? <span className="shrink-0 text-[var(--app-text-subtle)]">{icon}</span> : null}
       {label}
@@ -4110,6 +4175,7 @@ type BudgetItemTableRowProps = {
   onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
   onOpenApuSheet: (item: BudgetItemRecord) => void;
   onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
+  canUseKhipu: boolean;
   onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
   qualityState?: BudgetItemQualityState;
   spreadsheetActiveCell?: SpreadsheetCellAddress | null;
@@ -4266,6 +4332,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onApplyCatalogPartida,
   onOpenApuSheet,
   onRunAiItemAction,
+  canUseKhipu,
   onToggleItemActionMenu,
   qualityState,
   spreadsheetActiveCell,
@@ -4461,13 +4528,20 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => onRunAiItemAction("chat", row.item.id)}
-            className="theme-budget-ai-pill h-7 gap-1 rounded-full border px-2 text-[10px] font-medium tracking-[0.08em]"
-            title="Explicar esta partida con IA"
-            aria-label="Explicar esta partida con IA"
+            disabled={!canUseKhipu}
+            onClick={() => {
+              if (canUseKhipu) onRunAiItemAction("chat", row.item.id);
+            }}
+            className={cn(
+              "h-7 gap-1 rounded-full border px-2 text-[10px] font-medium tracking-[0.08em]",
+              canUseKhipu ? "theme-budget-ai-pill" : "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90",
+            )}
+            title={canUseKhipu ? "Explicar esta partida con IA" : "Explicar esta partida con IA — Disponible en Pro"}
+            aria-label={canUseKhipu ? "Explicar esta partida con IA" : "Explicar esta partida con IA — Disponible en Pro"}
+            aria-disabled={!canUseKhipu ? "true" : undefined}
           >
             <BotMessageSquare className="h-3.5 w-3.5" />
-            IA
+            {canUseKhipu ? "IA" : "Pro"}
           </Button>
           <Button
             size="sm"
@@ -4598,6 +4672,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onApplyCatalogPartida,
   onOpenApuSheet,
   onRunAiItemAction,
+  canUseKhipu,
   itemQualityStateById,
   spreadsheetActiveCell,
   spreadsheetSelectedKeys,
@@ -4649,6 +4724,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
   onOpenApuSheet: (item: BudgetItemRecord) => void;
   onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
+  canUseKhipu: boolean;
   itemQualityStateById: Record<string, BudgetItemQualityState | undefined>;
   spreadsheetActiveCell?: SpreadsheetCellAddress | null;
   spreadsheetSelectedKeys?: ReadonlySet<string>;
@@ -4764,11 +4840,11 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onPasteRows={onPasteRows}
                   onOpenCatalogSelector={onOpenCatalogSelector}
                   onCloseCatalogSelector={onCloseCatalogSelector}
-                  onScheduleCatalogClose={onScheduleCatalogClose}
-                  onApplyCatalogPartida={onApplyCatalogPartida}
-                  onOpenApuSheet={onOpenApuSheet}
-                  onRunAiItemAction={onRunAiItemAction}
-                  onToggleItemActionMenu={onToggleItemActionMenu}
+                  onScheduleCatalogClose={onScheduleCatalogClose}                   onApplyCatalogPartida={onApplyCatalogPartida}
+                   onOpenApuSheet={onOpenApuSheet}
+                   onRunAiItemAction={onRunAiItemAction}
+                   canUseKhipu={canUseKhipu}
+                   onToggleItemActionMenu={onToggleItemActionMenu}
                   qualityState={itemQualityStateById[row.item.id]}
                   spreadsheetActiveCell={spreadsheetActiveCell}
                   spreadsheetSelectedKeys={spreadsheetSelectedKeys}

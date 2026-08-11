@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { getMetradoSheetById } from "@/lib/data/metrados";
 import { normalizeMetradoImportRows } from "@/lib/metrados/excel-import";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 const importBodySchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())),
@@ -15,6 +16,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   try {
     const { id } = await params;

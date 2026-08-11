@@ -4,9 +4,11 @@ import { withAiRoute } from "@/lib/ai/route-handler";
 import { aiApuCatalogGenerateRequestSchema } from "@/lib/ai/validation";
 import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getResourcesByUser } from "@/lib/data/resources";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
+    await assertFeatureAccess({ userId: session.user.id, feature: "khipu.agent" });
     const data = aiApuCatalogGenerateRequestSchema.parse(await request.json());
     const [partidas, resources] = await Promise.all([
       getCatalogPartidas(),

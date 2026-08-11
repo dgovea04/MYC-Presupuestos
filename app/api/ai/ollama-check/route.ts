@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { listInstalledOllamaModels, OllamaConnectionError } from "@/lib/ai/ollama";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 export type OllamaCheckResponse = {
   reachable: boolean;
@@ -20,6 +21,10 @@ export async function GET(request: Request) {
   const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (!isLocalRuntimeEnabled()) {
+    return NextResponse.json({ error: "Ollama solo esta disponible en la app local." }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);

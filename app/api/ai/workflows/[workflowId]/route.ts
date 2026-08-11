@@ -1,4 +1,5 @@
 import { withAiRoute } from "@/lib/ai/route-handler";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { getWorkflowById } from "@/lib/data/agent-workflows";
 
 /**
@@ -20,7 +21,8 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workflowId: string }> },
 ) {
-  return withAiRoute(async () => {
+  return withAiRoute(async (session) => {
+    await assertFeatureAccess({ userId: session.user.id, feature: "khipu.agent" });
     const { workflowId } = await params;
 
     try {

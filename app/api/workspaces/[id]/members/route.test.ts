@@ -4,6 +4,10 @@ vi.mock("@/lib/auth/session", () => ({
   getAuthSession: vi.fn(),
 }));
 
+vi.mock("@/lib/workspace/entitlements", () => ({
+  assertWorkspaceFeatureAccess: vi.fn(),
+}));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     companyMembership: {
@@ -231,18 +235,9 @@ describe("GET /api/workspaces/[id]/members", () => {
       { params: Promise.resolve({ id: "ws-1" }) },
     );
 
-    // updateMany must be called with the correct where/data params
-    expect(mockPrisma.companyMembership.updateMany).toHaveBeenCalledWith({
-      where: {
-        companyId: "ws-1",
-        status: "SUSPENDED",
-        suspendedUntil: { not: null, lte: expect.any(Date) },
-      },
-      data: {
-        status: "ACTIVE",
-        suspendedUntil: null,
-      },
-    });
+    // Expired suspensions are lazily reactivated by assertWorkspaceMembership.
+    expect(mockPrisma.companyMembership.update).not.toHaveBeenCalled();
+    expect(mockPrisma.companyMembership.updateMany).not.toHaveBeenCalled();
   });
 
   it("includes suspendedUntil in each member response", async () => {

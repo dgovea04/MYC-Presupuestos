@@ -3,6 +3,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
 import { listUserWorkspaces, setActiveWorkspaceId, WORKSPACE_LIST_CACHE_TAG } from "@/lib/workspace/active-workspace";
 import { activeWorkspaceSelectionSchema } from "@/lib/validations/workspace";
+import { assertWorkspaceFeatureAccess, isWorkspaceFeatureAccessError } from "@/lib/workspace/entitlements";
 
 export async function GET() {
   const session = await getAuthSession();
@@ -24,6 +25,11 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = activeWorkspaceSelectionSchema.parse(body);
 
+    await assertWorkspaceFeatureAccess({
+      userId: session.user.id,
+      companyId: parsed.companyId,
+      feature: "workspace.management",
+    });
     await setActiveWorkspaceId(session.user.id, parsed.companyId);
 
     revalidatePath("/", "layout");
@@ -33,7 +39,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo cambiar de workspace" },
-      { status: 400 },
+      { status: isWorkspaceFeatureAccessError(error) ? 403 : 400 },
     );
   }
 }

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { duplicateMetradoSheet } from "@/lib/data/metrados";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 const duplicateSheetSchema = z.object({
   name: z.string().trim().min(1).optional(),
@@ -16,6 +17,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   try {
     const { id } = await params;

@@ -50,6 +50,89 @@ describe("SettingsPageContent", () => {
     vi.restoreAllMocks();
   });
 
+  it("hides the local Ollama settings card in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    await act(async () => {
+      root.render(
+        <SettingsPageContent
+          account={{ email: "maria@example.com", id: "user-1", jobTitle: "Ingeniera", name: "Maria Lopez", phone: "999999999" }}
+          company={{ logoUrl: null, name: "MYC", ruc: "123" }}
+          initialSettings={{
+            aiProviderPreference: "auto",
+            appTheme: DEFAULT_APP_THEME,
+            currencyDecimals: 2,
+            dateFormat: "DD_MMM_YYYY",
+            defaultCurrency: "PEN",
+            defaultGeneralExpensesRate: 0.1,
+            defaultIgvRate: 0.18,
+            defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+            defaultUtilityRate: 0.08,
+            defaultViewMode: DEFAULT_VIEW_MODE,
+            excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+            excelShowFieldBorders: true,
+            floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+            floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+            floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+            floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+            floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+            floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+          }}
+        />,
+      );
+    });
+
+    const aiTab = [...container.querySelectorAll("button")].find((element) => element.textContent?.includes("IA"));
+    await act(async () => {
+      aiTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector("#settings-tab-panel-ai")?.textContent).not.toContain("Local AI Settings Card");
+    vi.unstubAllEnvs();
+  });
+
+  it("shows the Pro upgrade state instead of Khipu settings when access is unavailable", async () => {
+    await act(async () => {
+      root.render(
+        <SettingsPageContent
+          canUseKhipu={false}
+          account={{ email: "maria@example.com", id: "user-1", jobTitle: "Ingeniera", name: "Maria Lopez", phone: "999999999" }}
+          company={{ logoUrl: null, name: "MYC", ruc: "123" }}
+          initialSettings={{
+            aiProviderPreference: "auto",
+            appTheme: DEFAULT_APP_THEME,
+            currencyDecimals: 2,
+            dateFormat: "DD_MMM_YYYY",
+            defaultCurrency: "PEN",
+            defaultGeneralExpensesRate: 0.1,
+            defaultIgvRate: 0.18,
+            defaultSubBudgetNames: [...DEFAULT_INITIAL_SUB_BUDGET_NAMES],
+            defaultUtilityRate: 0.08,
+            defaultViewMode: DEFAULT_VIEW_MODE,
+            excelRowHeight: DEFAULT_EXCEL_ROW_HEIGHT,
+            excelShowFieldBorders: true,
+            floatingKhipuFontSize: FLOATING_KHIPU_DEFAULTS.fontSize,
+            floatingKhipuHeight: FLOATING_KHIPU_DEFAULTS.height,
+            floatingKhipuPosition: FLOATING_KHIPU_DEFAULTS.position,
+            floatingKhipuProvider: FLOATING_KHIPU_DEFAULTS.provider,
+            floatingKhipuTheme: FLOATING_KHIPU_DEFAULTS.theme,
+            floatingKhipuWidth: FLOATING_KHIPU_DEFAULTS.width,
+          }}
+        />,
+      );
+    });
+
+    const aiTab = [...container.querySelectorAll("button")].find((element) => element.textContent?.includes("IA"));
+    await act(async () => {
+      aiTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const aiPanel = container.querySelector("#settings-tab-panel-ai");
+    expect(aiPanel?.textContent).toContain("Khipu y proveedores IA disponibles en Pro");
+    expect(aiPanel?.textContent).not.toContain("Floating Khipu Settings Card");
+    expect(aiPanel?.textContent).not.toContain("Cloud AI Settings Card");
+  });
+
   it("shows general by default and switches between the three tabs", async () => {
     await act(async () => {
       root.render(

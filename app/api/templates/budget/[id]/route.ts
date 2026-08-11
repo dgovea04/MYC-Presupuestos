@@ -4,12 +4,16 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { deleteUserBudgetTemplate, updateUserBudgetTemplate } from "@/lib/data/budget-templates";
 import { recordActivityEvent } from "@/lib/data/activity-events";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "templates.budget");
+  if (accessResponse) return accessResponse;
 
   const { id } = await params;
 
@@ -32,6 +36,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "templates.budget");
+  if (accessResponse) return accessResponse;
 
   const { id } = await params;
 

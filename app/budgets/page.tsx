@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetsByUser } from "@/lib/data/budgets";
+import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { ensureDate } from "@/lib/utils";
 
 export default async function BudgetsPage({
@@ -16,7 +17,8 @@ export default async function BudgetsPage({
 }) {
   const session = await getAuthSession();
   const resolvedSearchParams = (await searchParams) ?? {};
-  const budgets = await getBudgetsByUser(session!.user.id);
+  const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
+  const budgets = await getBudgetsByUser(session!.user.id, activeWorkspaceId);
   const templateIntent = resolveGeneralExpenseTemplateIntent(resolvedSearchParams.template);
 
   return (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { upsertPresenceHeartbeat, removePresence, listActivePresence } from "@/lib/collaboration/presence";
 import { presenceUpsertSchema } from "@/lib/validations/collaboration";
+import { getWorkspaceFeatureAccessStatus } from "@/lib/workspace/entitlements";
 
 function isRequestAbortError(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
@@ -36,7 +37,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     console.error("GET presence failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo cargar la presencia" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }
@@ -66,7 +67,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     console.error("POST presence failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo actualizar la presencia" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }
@@ -89,7 +90,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     console.error("DELETE presence failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo eliminar la presencia" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }

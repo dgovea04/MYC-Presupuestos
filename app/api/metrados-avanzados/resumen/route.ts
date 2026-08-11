@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
 import { getMetradoProjectSummary } from "@/lib/data/metrados";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 export async function GET(request: NextRequest) {
   const session = await getAuthSession();
@@ -9,6 +10,9 @@ export async function GET(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   const { searchParams } = request.nextUrl;
   const projectId = searchParams.get("projectId");

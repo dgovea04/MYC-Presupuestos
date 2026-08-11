@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CompactStatCard } from "@/components/ui/compact-stat-card";
@@ -40,6 +41,7 @@ import {
   type DashboardPendingItem,
 } from "@/lib/data/dashboard";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { DashboardAnalyticsSection } from "@/components/dashboard/dashboard-analytics-section";
 import { DashboardAnalyticsSectionSkeleton } from "@/components/dashboard/dashboard-analytics-section-skeleton";
 import { getProjectStatusLabel } from "@/lib/project-status";
@@ -60,10 +62,13 @@ export default async function DashboardPage({
 
   const resolvedSearchParams = (await searchParams) ?? {};
   const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
-  const [stats, settings] = await Promise.all([
+  const [stats, settings, license] = await Promise.all([
     getDashboardStats(session.user.id, activeWorkspaceId),
     getUserSettings(session.user.id),
+    getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId }),
   ]);
+  const canUseKhipu = hasFeatureAccess(license, "khipu.agent");
+  const canUseTemplates = hasFeatureAccess(license, "templates.budget");
   const selectedPriority = resolvePendingPriorityFilter(resolvedSearchParams.priority);
   const selectedPendingTab = resolvePendingTab(resolvedSearchParams.pendingTab);
   const requestedPendingPage = resolvePageNumber(resolvedSearchParams.pendingPage);
@@ -501,8 +506,9 @@ export default async function DashboardPage({
         </Card>
       </section>
 
-      <Card className="dashboard-surface-card dashboard-surface-card-soft border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
-        <CardContent className="space-y-4 p-6">
+      {canUseTemplates ? (
+        <Card className="dashboard-surface-card dashboard-surface-card-soft border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)]">
+          <CardContent className="space-y-4 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <OperationalSectionHeader
               title="Plantillas reutilizables"
@@ -564,8 +570,15 @@ export default async function DashboardPage({
               action="Explorar biblioteca"
             />
           )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        <UpgradeCTA
+          title="Plantillas disponibles en Pro"
+          description="Guarda y reutiliza estructuras técnicas de presupuestos, partidas y APU sin reconstruir tu flujo."
+          benefits={["Biblioteca de presupuestos", "Reutilización de estructuras y APU", "Aplicación rápida en nuevos proyectos"]}
+        />
+      )}
 
       <section className="grid gap-6 lg:grid-cols-2">
         <Card className="min-h-full">
@@ -643,9 +656,11 @@ export default async function DashboardPage({
         <DashboardAnalyticsSection />
       </Suspense>
 
-      <Suspense fallback={<KhipuQualityMetricsSkeleton />}>
-        <KhipuQualityMetrics />
-      </Suspense>
+      {canUseKhipu ? (
+        <Suspense fallback={<KhipuQualityMetricsSkeleton />}>
+          <KhipuQualityMetrics />
+        </Suspense>
+      ) : null}
     </AppShell>
   );
 }

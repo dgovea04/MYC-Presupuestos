@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   listUserWorkspaces: vi.fn(),
   setActiveWorkspaceId: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -14,10 +15,17 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/workspace/active-workspace", () => ({
   listUserWorkspaces: mocks.listUserWorkspaces,
   setActiveWorkspaceId: mocks.setActiveWorkspaceId,
+  WORKSPACE_LIST_CACHE_TAG: "workspace-list",
+}));
+
+vi.mock("@/lib/workspace/entitlements", () => ({
+  assertWorkspaceFeatureAccess: vi.fn(),
+  isWorkspaceFeatureAccessError: () => false,
 }));
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
 }));
 
 import { GET, POST } from "@/app/api/workspaces/route";

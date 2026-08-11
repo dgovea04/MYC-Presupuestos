@@ -3,6 +3,8 @@
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
+import { Lock, Sparkles } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import type { WorkspaceSummary } from "@/types/workspace";
@@ -56,6 +58,7 @@ interface PendingInvitation {
 
 interface WorkspaceSwitcherProps {
   activeWorkspaceId: string;
+  canManageWorkspace?: boolean;
   workspaces: WorkspaceSummary[];
 }
 
@@ -72,7 +75,7 @@ function getInitials(name: string) {
   return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
 }
 
-export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSwitcherProps) {
+export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true, workspaces }: WorkspaceSwitcherProps) {
   const router = useRouter();
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(activeWorkspaceId);
   const [showPanel, setShowPanel] = useState(false);
@@ -286,6 +289,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
 
   const handleWorkspaceChange = useCallback(
     async (value: string) => {
+      if (!canManageWorkspace) return;
       setSelectedWorkspaceId(value);
       try {
         const res = await fetch("/api/workspaces", {
@@ -302,7 +306,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
         setSelectedWorkspaceId(activeWorkspaceId);
       }
     },
-    [router, activeWorkspaceId],
+    [router, activeWorkspaceId, canManageWorkspace],
   );
 
   const loadMembers = useCallback(async () => {
@@ -388,7 +392,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
   }, []);
 
   const logoVisible = currentWorkspace?.logoUrl ? !brokenLogoUrls.has(currentWorkspace.logoUrl) : false;
-  const canManage = currentWorkspace && (currentWorkspace.role === "OWNER" || currentWorkspace.role === "ADMIN");
+  const canManage = canManageWorkspace && currentWorkspace && (currentWorkspace.role === "OWNER" || currentWorkspace.role === "ADMIN");
   const activeMembers = members.filter((m) => m.status === "ACTIVE");
   const pendingMembers = members.filter((m) => m.status === "INVITED");
   const suspendedMembers = members.filter((m) => m.status === "SUSPENDED");
@@ -531,8 +535,29 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
               </div>
             </div>
 
+            {!canManageWorkspace ? (
+              <div className="mx-4 mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white text-amber-700">
+                    <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold">Workspace disponible en Pro</p>
+                    <p className="mt-1 text-[11px] leading-5 text-amber-800">Starter incluye un workspace personal. Cambiar de workspace, invitar y administrar miembros requiere Pro.</p>
+                    <Link
+                      href="/account"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    >
+                      <Sparkles className="h-3 w-3" aria-hidden="true" />
+                      Actualizar a Pro
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {/* Workspace switcher select (for multiple workspaces) */}
-            {workspaces.length > 1 && (
+            {canManageWorkspace && workspaces.length > 1 && (
               <div className="px-4 pb-2">
                 <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">
                   Cambiar workspace
@@ -552,12 +577,12 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
             )}
 
             {/* Divider (only when there's content above to separate) */}
-            {(workspaces.length > 1 || canManage) && (
+            {(canManageWorkspace && workspaces.length > 1 || canManage) && (
               <div className="mx-4 border-t border-[var(--app-border)]" />
             )}
 
-            {/* Invite section (only for managers) */}
-            {canManage && (
+            {/* Invite section (only for managers with Workspace Pro access) */}
+            {canManage && canManageWorkspace && (
               <div className="px-4 pt-2 pb-1">
                 <div className="flex gap-1.5">
                   <input
@@ -592,7 +617,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
             {canManage && <div className="mx-4 my-2 border-t border-[var(--app-border)]" />}
 
             {/* Members list */}
-            <div className="max-h-56 overflow-y-auto px-2 pb-2">
+            {canManageWorkspace ? <div className="max-h-56 overflow-y-auto px-2 pb-2">
               {isLoading ? (
                 <WorkspaceMembersSkeleton />
               ) : loadError ? (
@@ -632,10 +657,10 @@ export function WorkspaceSwitcher({ activeWorkspaceId, workspaces }: WorkspaceSw
                   )}
                 </div>
               )}
-            </div>
+            </div> : null}
 
             {/* Floating submenu */}
-            {targetMember && renderFloatingSubmenu({
+            {targetMember && canManageWorkspace && renderFloatingSubmenu({
               member: targetMember,
               submenuAnchor: submenuAnchor!,
               submenuRef,

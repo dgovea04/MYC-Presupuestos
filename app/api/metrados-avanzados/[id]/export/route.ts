@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { getMetradoSheetById } from "@/lib/data/metrados";
 import { createMetradoWorkbook } from "@/lib/metrados/excel-export";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 const excelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -12,6 +13,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "metrados.advanced");
+  if (accessResponse) return accessResponse;
 
   const { id } = await params;
   const sheet = await getMetradoSheetById(id, session.user.id);

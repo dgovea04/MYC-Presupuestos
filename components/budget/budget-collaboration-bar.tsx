@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useCallback, useEffect, useState } from "react";
-import { MessageSquare, Clock, Save, History, Users, Wifi, WifiOff } from "lucide-react";
+import { MessageSquare, Clock, Save, History, Users, Wifi, WifiOff, Lock, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { CollaborationPresenceRecord } from "@/types/collaboration";
 
@@ -15,6 +16,7 @@ interface BudgetCollaborationBarProps {
   onOpenHistory: () => void;
   onOpenVersions: () => void;
   onSaveVersion: () => void;
+  canUseCollaboration?: boolean;
 }
 
 export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
@@ -27,6 +29,7 @@ export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
   onOpenHistory,
   onOpenVersions,
   onSaveVersion,
+  canUseCollaboration = true,
 }: BudgetCollaborationBarProps) {
   const [collapsed, setCollapsed] = useState(true);
 
@@ -36,6 +39,18 @@ export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
       setCollapsed(false);
     }
   }, [presence.length]);
+
+  const lockedUpgrade = (
+    <div className="flex items-center gap-1.5">
+      <Link
+        href="/account"
+        className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+      >
+        <Sparkles className="h-3 w-3" aria-hidden="true" />
+        Actualizar a Pro
+      </Link>
+    </div>
+  );
 
   const actionButtons = (
     <div className="flex items-center gap-0.5">
@@ -63,20 +78,35 @@ export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
       <div className="flex items-center gap-1 px-3 py-1.5">
         <button
           type="button"
-          onClick={() => setCollapsed(false)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-medium text-[var(--app-text-muted)] transition hover:border-[var(--app-border-strong)] hover:text-[var(--app-text-strong)]"
-          title="Abrir barra de colaboracion"
-          aria-label="Abrir barra de colaboracion"
+          onClick={() => canUseCollaboration && setCollapsed(false)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+            canUseCollaboration
+              ? "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-[var(--app-border-strong)] hover:text-[var(--app-text-strong)]"
+              : "border-amber-200 bg-amber-50 text-amber-800",
+          )}
+          title={canUseCollaboration ? "Abrir barra de colaboracion" : "Colaboracion simultanea disponible en Pro"}
+          aria-label={canUseCollaboration ? "Abrir barra de colaboracion" : "Colaboracion simultanea disponible en Pro"}
         >
-          <Users className="h-3.5 w-3.5" />
+          {canUseCollaboration ? <Users className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
           Colaboracion
         </button>
-        {actionButtons}
-        {presence.length > 1 ? (
+        {canUseCollaboration ? actionButtons : lockedUpgrade}
+        {canUseCollaboration && presence.length > 1 ? (
           <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">
             {presence.length}
           </span>
         ) : null}
+      </div>
+    );
+  }
+
+  if (!canUseCollaboration) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 shadow-sm">
+        <Lock className="h-3.5 w-3.5 text-amber-700" aria-hidden="true" />
+        <span className="text-xs font-semibold text-amber-900">Colaboracion simultanea disponible en Pro</span>
+        {lockedUpgrade}
       </div>
     );
   }

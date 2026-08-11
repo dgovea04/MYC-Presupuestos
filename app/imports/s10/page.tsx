@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getUserCompanies } from "@/lib/data/projects";
+import { isLocalServerRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 export default async function S10ImportsPage() {
   const session = await getAuthSession();
@@ -18,7 +19,7 @@ export default async function S10ImportsPage() {
             icon={<DatabaseZap className="h-5 w-5" />}
             title="Importador S10"
             description={
-              process.env.NODE_ENV === "production"
+              !isLocalServerRuntimeEnabled()
                 ? "Importa un snapshot JSON exportado desde S10 y revisa el draft de presupuestos, partidas, APUs e insumos antes de crear datos en MC."
                 : "Prepara datos desde S10 local o importa un snapshot JSON para revisar el draft antes de crear datos en MC."
             }
@@ -27,7 +28,7 @@ export default async function S10ImportsPage() {
         <CardContent className="pt-6">
           <S10ImporterPageContent
             companies={companies.map((company) => ({ id: company.id, name: company.name }))}
-            localToolsEnabled={process.env.NODE_ENV === "development"}
+            localToolsEnabled={isLocalServerRuntimeEnabled()}
           />
         </CardContent>
       </Card>

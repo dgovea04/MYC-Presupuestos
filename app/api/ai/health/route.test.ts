@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth/session", () => ({
   getAuthSession: vi.fn(),
@@ -18,6 +18,11 @@ import { getAiHealth } from "@/lib/ai/runtime";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 describe("GET /api/ai/health", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+  });
+
   it("returns 401 when unauthenticated", async () => {
     vi.mocked(getAuthSession).mockResolvedValue(null);
 
@@ -25,6 +30,27 @@ describe("GET /api/ai/health", () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("rejects local diagnostics in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    vi.mocked(assertFeatureAccess).mockResolvedValue({
+      availableFeatures: ["exports.basic", "polynomial_formula"],
+      budgetLimit: 5,
+      budgetUsage: 1,
+      isInGracePeriod: false,
+      planName: "Starter",
+      planSlug: "starter",
+      projectLimit: 3,
+      projectUsage: 1,
+    });
+
+    const response = await GET();
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "El diagnostico de Ollama solo esta disponible en la app local." });
+    expect(getAiHealth).not.toHaveBeenCalled();
   });
 
   it("returns Ollama diagnostics with model availability", async () => {

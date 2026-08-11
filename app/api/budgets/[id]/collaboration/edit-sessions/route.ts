@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { startEditSession } from "@/lib/collaboration/edit-sessions";
+import { getWorkspaceFeatureAccessStatus } from "@/lib/workspace/entitlements";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -17,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     console.error("POST edit session failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo iniciar la sesion de edicion" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }

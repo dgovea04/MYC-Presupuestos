@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { listCommentsForEntity, createComment } from "@/lib/collaboration/comments";
+import { getWorkspaceFeatureAccessStatus } from "@/lib/workspace/entitlements";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -31,7 +32,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     console.error("GET comments failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo cargar los comentarios" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }
@@ -51,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     console.error("POST comment failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo crear el comentario" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }

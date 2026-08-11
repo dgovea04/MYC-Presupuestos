@@ -3,6 +3,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { listBudgetChangeEvents } from "@/lib/collaboration/audit";
 import { changeEventQuerySchema } from "@/lib/validations/collaboration";
 import type { CollaborationEntityType, CollaborationChangeSource } from "@/types/collaboration";
+import { getWorkspaceFeatureAccessStatus } from "@/lib/workspace/entitlements";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -46,7 +47,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     console.error("GET history failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo cargar el historial" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }

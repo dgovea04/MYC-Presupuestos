@@ -1,4 +1,4 @@
-export type AiRuntimeErrorCode = "connection" | "model_missing" | "invalid_response" | "validation_failed" | "timeout";
+export type AiRuntimeErrorCode = "connection" | "model_missing" | "invalid_response" | "validation_failed" | "timeout" | "local_only";
 
 export class AiRuntimeError extends Error {
   code: AiRuntimeErrorCode;

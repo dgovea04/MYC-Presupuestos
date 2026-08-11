@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getProviderFallbackChain, resolveAiProvider } from "@/lib/ai/gateway/router";
 import { stableHash } from "@/lib/ai/gateway/hash";
+import { afterEach, vi } from "vitest";
 
 describe("AI gateway router", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("routes auto provider by task without leaking provider choices into routes", () => {
     expect(resolveAiProvider({ provider: "auto", task: "autocomplete" })).toBe("ollama");
     expect(resolveAiProvider({ provider: "auto", task: "suggest_insumos" })).toBe("ollama");
@@ -14,6 +19,14 @@ describe("AI gateway router", () => {
   it("keeps explicit provider selections exact", () => {
     expect(resolveAiProvider({ provider: "ollama", task: "review_budget" })).toBe("ollama");
     expect(resolveAiProvider({ provider: "gemini", task: "autocomplete" })).toBe("gemini");
+  });
+
+  it("removes local Ollama from automatic production routing", () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(resolveAiProvider({ provider: "auto", task: "autocomplete" })).toBe("openai");
+    expect(getProviderFallbackChain({ provider: "auto", task: "review_budget" })).toEqual(["openai", "gemini"]);
+    expect(getProviderFallbackChain({ provider: "auto", task: "montecarlo_risk_analysis" })).toEqual(["gemini", "openai"]);
   });
 
   it("uses the PRD fallback chain only for auto cloud routes", () => {

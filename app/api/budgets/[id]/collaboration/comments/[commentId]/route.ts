@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { resolveComment, reopenComment } from "@/lib/collaboration/comments";
+import { getWorkspaceFeatureAccessStatus } from "@/lib/workspace/entitlements";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; commentId: string }> }) {
   const session = await getAuthSession();
@@ -27,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     console.error("PATCH comment failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo actualizar el comentario" },
-      { status: 400 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }

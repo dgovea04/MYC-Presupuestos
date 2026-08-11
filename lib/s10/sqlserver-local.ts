@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -63,7 +64,7 @@ export type S10LocalS2kRestoreResult = {
 const s2kBackupHeaderBytes = 4096;
 
 export function isS10LocalSqlServerEnabled() {
-  return process.env.NODE_ENV === "development";
+  return isLocalRuntimeEnabled();
 }
 
 export function listLocalS10Databases(options: S10LocalSqlServerOptions): S10DatabaseCandidate[] {

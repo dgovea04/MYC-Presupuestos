@@ -10,13 +10,17 @@ vi.mock("next/headers", () => ({
   })),
 }));
 
+vi.mock("@/lib/auth/session", () => ({
+  getAuthSession: vi.fn(async () => null),
+}));
+
 vi.mock("next/font/google", () => ({
   Inter: () => ({ variable: "font-inter" }),
   Plus_Jakarta_Sans: () => ({ variable: "font-plus-jakarta-sans" }),
 }));
 
 vi.mock("@/components/ai/global-ai-assistant-provider", () => ({
-  GlobalAiAssistantProvider: ({ children }: { children: ReactNode }) => {
+  GlobalAiAssistantProvider: ({ children }: { children: ReactNode; canUseKhipu?: boolean }) => {
     globalAiAssistantProviderSpy(children);
     return <div data-global-ai-provider="true">{children}</div>;
   },

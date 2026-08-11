@@ -7,12 +7,16 @@ import {
   listUserBudgetTemplates,
 } from "@/lib/data/budget-templates";
 import { recordActivityEvent } from "@/lib/data/activity-events";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 export async function GET() {
   const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "templates.budget");
+  if (accessResponse) return accessResponse;
 
   const templates = await listUserBudgetTemplates(session.user.id);
   return NextResponse.json(templates);
@@ -23,6 +27,9 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const accessResponse = await getFeatureAccessResponse(session.user.id, "templates.budget");
+  if (accessResponse) return accessResponse;
 
   try {
     const input = parseCreateBudgetTemplateRequest(await request.json());

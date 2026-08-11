@@ -2,7 +2,7 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { screen, waitFor } from "@testing-library/react";
+import { waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import { BudgetViewModeProvider } from "@/components/budget/view-mode-provider";
@@ -33,6 +33,15 @@ describe("ApuEditorSheet", () => {
 
     document.body.innerHTML = "";
     vi.restoreAllMocks();
+  });
+
+  it("locks Khipu actions for Starter users", async () => {
+    const { getButtonByText, getTextByExactMatch } = await renderSheet(createBudgetItem(), { canUseKhipu: false });
+
+    expect(getButtonByText("Explicar partida · Pro").disabled).toBe(true);
+    expect(getButtonByText("Generar con IA · Pro").disabled).toBe(true);
+    expect(getButtonByText("Khipu · Pro").disabled).toBe(true);
+    expect(getTextByExactMatch("Abrir en Khipu")).toBeNull();
   });
 
   it("renders category subtotal cards and colors row grips by category", async () => {
@@ -247,6 +256,9 @@ async function renderSheet(
   overrides?: {
     onUpdate?: (item: BudgetItemRecord) => void;
     catalogPartidas?: CatalogPartidaRecord[];
+    canUseKhipu?: boolean;
+    canUsePartidaGenerator?: boolean;
+    canUseCollaboration?: boolean;
   },
 ) {
   const nextContainer = document.createElement("div");
@@ -267,6 +279,9 @@ async function renderSheet(
             onUpdate={overrides?.onUpdate ?? (() => undefined)}
             resourcesCatalog={[]}
             catalogPartidas={overrides?.catalogPartidas ?? []}
+            canUseKhipu={overrides?.canUseKhipu}
+            canUsePartidaGenerator={overrides?.canUsePartidaGenerator}
+            canUseCollaboration={overrides?.canUseCollaboration}
             densityMode="comfortable"
           />
         </BudgetViewModeProvider>
@@ -309,11 +324,7 @@ async function renderSheet(
     },
     getTextByExactMatch: (text: string) => {
       const element = [...document.querySelectorAll("*")].find((candidate) => candidate.textContent?.trim() === text);
-      if (!(element instanceof HTMLElement)) {
-        throw new Error(`Missing text: ${text}`);
-      }
-
-      return element;
+      return element instanceof HTMLElement ? element : null;
     },
   };
 }

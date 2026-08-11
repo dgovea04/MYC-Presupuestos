@@ -13,6 +13,7 @@ import type {
 // ─── Module imports ─────────────────────────────────────────────
 
 import { DEFAULT_AGENT_MODEL } from "@/lib/ai/agent/models";
+import { isLocalClientRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import { loadHealth, loadCloudStatus } from "@/components/ai/controller-health";
 import {
   readStoredHistory,
@@ -180,9 +181,12 @@ type ProjectFeedbackSummaryState = {
 const VALID_PROVIDERS = new Set(["ollama", "chatgpt-bridge", "openai", "gemini", "openrouter", "agent"]);
 
 function readInitialProvider(raw?: string): AssistantProvider {
-  if (typeof raw === "string" && VALID_PROVIDERS.has(raw)) return raw as AssistantProvider;
-  if (raw === "auto") return "ollama";
-  return "ollama";
+  if (typeof raw === "string" && VALID_PROVIDERS.has(raw)) {
+    if (raw === "ollama" && !isLocalClientRuntimeEnabled()) return "openai";
+    return raw as AssistantProvider;
+  }
+  if (raw === "auto") return isLocalClientRuntimeEnabled() ? "ollama" : "openai";
+  return isLocalClientRuntimeEnabled() ? "ollama" : "openai";
 }
 
 function generateSyncSourceId() {
@@ -280,7 +284,7 @@ export function useAiAssistantController({
 
   // Reload agent model when project changes (per-project persistence)
   useEffect(() => {
-    setAgentModelState(readStoredAgentModel(projectId));
+    queueMicrotask(() => setAgentModelState(readStoredAgentModel(projectId)));
   }, [projectId]);
 
   useEffect(() => {
@@ -518,7 +522,8 @@ export function useAiAssistantController({
   }
 
   function setProvider(nextProvider: AssistantProvider) {
-    setProviderState(nextProvider);
+    const safeProvider = nextProvider === "ollama" && !isLocalClientRuntimeEnabled() ? "openai" : nextProvider;
+    setProviderState(safeProvider);
     pendingBridgeRequestId.current = null;
     latestBridgeRequest.current = null;
     clearPendingBridgeTimeout(pendingBridgeTimeoutId);

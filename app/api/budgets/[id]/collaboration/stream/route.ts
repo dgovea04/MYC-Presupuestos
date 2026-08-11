@@ -3,6 +3,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { resolveBudgetOwnership } from "@/lib/collaboration/authorization";
 import { subscribeBudgetEvents } from "@/lib/collaboration/events";
 import { SSE_PING_INTERVAL_MS } from "@/lib/collaboration/types";
+import { getWorkspaceFeatureAccessStatus } from "@/lib/workspace/entitlements";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -21,7 +22,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Acceso denegado" },
-      { status: 403 },
+      { status: getWorkspaceFeatureAccessStatus(error) },
     );
   }
 

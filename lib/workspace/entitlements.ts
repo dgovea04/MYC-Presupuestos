@@ -2,7 +2,26 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getAvailableFeatures } from "@/lib/workspace/feature-registry";
-import type { WorkspaceContextEnvelope, WorkspaceRole } from "@/types/workspace";
+import type { WorkspaceRole } from "@/types/workspace";
+
+export class WorkspaceFeatureAccessError extends Error {
+  readonly statusCode = 403;
+
+  constructor(readonly feature: string) {
+    super(`La funcionalidad "${feature}" no esta disponible en tu plan`);
+    this.name = "WorkspaceFeatureAccessError";
+  }
+}
+
+export function isWorkspaceFeatureAccessError(error: unknown): error is WorkspaceFeatureAccessError {
+  return error instanceof WorkspaceFeatureAccessError;
+}
+
+const WORKSPACE_FEATURE_ACCESS_STATUS = 403;
+
+export function getWorkspaceFeatureAccessStatus(error: unknown): number {
+  return isWorkspaceFeatureAccessError(error) ? WORKSPACE_FEATURE_ACCESS_STATUS : 400;
+}
 
 const _getEffectiveWorkspaceLicense = async (options: {
   userId: string;
@@ -83,6 +102,6 @@ export async function assertWorkspaceFeatureAccess(options: {
   }
 
   if (!license.availableFeatures.includes(options.feature)) {
-    throw new Error(`La funcionalidad "${options.feature}" no esta disponible en tu plan`);
+    throw new WorkspaceFeatureAccessError(options.feature);
   }
 }

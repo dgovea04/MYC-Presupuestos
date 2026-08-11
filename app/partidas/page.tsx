@@ -8,6 +8,7 @@ import { getCatalogPartidas } from "@/lib/data/partidas";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { decimalToNumber } from "@/lib/db/serializers";
+import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 
 export default async function PartidasPage({
   searchParams,
@@ -18,7 +19,13 @@ export default async function PartidasPage({
   const resolvedSearchParams = await searchParams;
   const initialFilter = readSearchParam(resolvedSearchParams.q);
   const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
-  const [partidas, resources] = await Promise.all([getCatalogPartidas(), getResourcesByUser(session!.user.id, activeWorkspaceId)]);
+  const [partidas, resources, license] = await Promise.all([
+    getCatalogPartidas(),
+    getResourcesByUser(session!.user.id, activeWorkspaceId),
+    getEffectiveWorkspaceLicense({ userId: session!.user.id, companyId: activeWorkspaceId }),
+  ]);
+  const canUseKhipu = hasFeatureAccess(license, "khipu.agent");
+  const canUsePartidaGenerator = hasFeatureAccess(license, "partidas.similarity");
 
   return (
     <AppShell
@@ -41,6 +48,8 @@ export default async function PartidasPage({
           <PartidasTable
             partidas={partidas}
             initialFilter={initialFilter}
+            canUseKhipu={canUseKhipu}
+            canUsePartidaGenerator={canUsePartidaGenerator}
             resourcesCatalog={resources.map((resource) => ({
               id: resource.id,
               companyId: resource.companyId,

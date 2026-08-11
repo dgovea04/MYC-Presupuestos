@@ -4,6 +4,8 @@ export const PRO_FEATURES = [
   "ai.local",
   "khipu.agent",
   "partidas.similarity",
+  "metrados.advanced",
+  "templates.budget",
   "work_schedule.intelligent",
   "polynomial_formula.adjustments",
   "risk_analysis",

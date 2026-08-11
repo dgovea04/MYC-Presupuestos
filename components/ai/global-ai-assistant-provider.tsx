@@ -22,7 +22,7 @@ const MODULE_HINTS: Record<string, string> = {
   resources: "Recursos",
 };
 
-export function GlobalAiAssistantProvider({ children }: { children: ReactNode }) {
+export function GlobalAiAssistantProvider({ children, canUseKhipu = true }: { children: ReactNode; canUseKhipu?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const visible = pathname ? !isHiddenAssistantRoute(pathname) : false;
@@ -31,7 +31,7 @@ export function GlobalAiAssistantProvider({ children }: { children: ReactNode })
   return (
     <AiViewContextProvider value={viewContext}>
       {children}
-      {visible ? <FloatingAiAssistant open={open} onOpenChange={setOpen} /> : null}
+      {visible && canUseKhipu ? <FloatingAiAssistant open={open} onOpenChange={setOpen} /> : null}
       <Toaster position="bottom-right" richColors closeButton />
     </AiViewContextProvider>
   );

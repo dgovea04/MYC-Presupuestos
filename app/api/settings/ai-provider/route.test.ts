@@ -14,9 +14,14 @@ vi.mock("@/lib/data/settings", () => ({
   updateAiProviderSettings: updateAiProviderSettingsMock,
 }));
 
+vi.mock("@/lib/billing/route-access", () => ({
+  getFeatureAccessResponse: vi.fn().mockResolvedValue(null),
+}));
+
 import { PUT, readOptionalTrimmedString } from "@/app/api/settings/ai-provider/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { AGENT_MODELS } from "@/lib/ai/agent/models";
+import { getFeatureAccessResponse } from "@/lib/billing/route-access";
 
 function mockAuthSession(userId = "user-1") {
   vi.mocked(getAuthSession).mockResolvedValue({
@@ -66,12 +71,23 @@ async function put(body: unknown): Promise<Response> {
 describe("/api/settings/ai-provider — agentModel whitelist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getFeatureAccessResponse).mockResolvedValue(null);
     mockAuthSession();
     updateAiProviderSettingsMock.mockResolvedValue(makeAiSettingsPayload());
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("rejects authenticated users without Khipu access before reading settings", async () => {
+    vi.mocked(getFeatureAccessResponse).mockResolvedValue(new Response(JSON.stringify({ error: "Pro requerido" }), { status: 403 }));
+
+    const response = await put({ aiProviderPreference: "auto" });
+
+    expect(response.status).toBe(403);
+    expect(getAiProviderSettingsMock).not.toHaveBeenCalled();
+    expect(updateAiProviderSettingsMock).not.toHaveBeenCalled();
   });
 
   it("accepts a known agentModel from AGENT_MODELS", async () => {
@@ -224,6 +240,7 @@ describe("/api/settings/ai-provider — aiProviderPreference whitelist + ausenci
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getFeatureAccessResponse).mockResolvedValue(null);
     mockAuthSession();
     updateAiProviderSettingsMock.mockResolvedValue(makeAiSettingsPayload());
   });
@@ -254,6 +271,19 @@ describe("/api/settings/ai-provider — aiProviderPreference whitelist + ausenci
       "user-1",
       expect.objectContaining({ aiProviderPreference: "gemini" }),
     );
+  });
+
+  it("rechaza Ollama como preferencia en producción", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    const response = await put({ aiProviderPreference: "ollama" });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: string; field: string };
+    expect(body.field).toBe("aiProviderPreference");
+    expect(body.error).toContain("Ollama solo esta disponible");
+    expect(updateAiProviderSettingsMock).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
   });
 
   it("rechaza un aiProviderPreference desconocido con 400 y lista los valores válidos", async () => {
@@ -573,6 +603,7 @@ describe("readOptionalTrimmedString — direct unit tests", () => {
 describe("readOptionalTrimmedString — clear-vs-skip semantics for the 6 input fields", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getFeatureAccessResponse).mockResolvedValue(null);
     mockAuthSession();
     updateAiProviderSettingsMock.mockResolvedValue(makeAiSettingsPayload());
   });

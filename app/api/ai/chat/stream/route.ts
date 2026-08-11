@@ -5,6 +5,7 @@ import { streamChatAiResponse } from "@/lib/ai/service";
 import { aiChatRequestSchema } from "@/lib/ai/validation";
 import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -12,16 +13,24 @@ const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiChatRequestSchema.parse(await request.json());
+    const effectiveProvider = data.provider === "auto" ? (isLocalRuntimeEnabled() ? "ollama" : "openai") : data.provider;
+    if (effectiveProvider === "ollama" && !isLocalRuntimeEnabled()) {
+      return new Response(JSON.stringify({ error: "Ollama solo esta disponible en la app local." }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const messages = buildChatMessages(data);
 
     // Inject user API keys for cloud provider streaming
     const streamInput: Parameters<typeof streamChatAiResponse>[0] = {
       messages,
       userId: session.user.id,
-      provider: data.provider,
+      provider: effectiveProvider,
     };
 
-    if (data.provider === "openai") {
+    if (effectiveProvider === "openai") {
       const [apiKey, settings, systemSettings] = await Promise.all([
         getDecryptedOpenaiApiKey(session.user.id),
         getAiProviderSettings(session.user.id),
@@ -29,7 +38,7 @@ export async function POST(request: Request) {
       ]);
       streamInput.apiKey = apiKey || systemSettings.openaiApiKey || undefined;
       streamInput.modelPreference = settings.openaiModel || systemSettings.openaiModel || undefined;
-    } else if (data.provider === "gemini") {
+    } else if (effectiveProvider === "gemini") {
       const [apiKey, settings, systemSettings] = await Promise.all([
         getDecryptedGeminiApiKey(session.user.id),
         getAiProviderSettings(session.user.id),
@@ -37,7 +46,7 @@ export async function POST(request: Request) {
       ]);
       streamInput.apiKey = apiKey || systemSettings.geminiApiKey || undefined;
       streamInput.modelPreference = settings.geminiModel || systemSettings.geminiModel || undefined;
-    } else if (data.provider === "openrouter") {
+    } else if (effectiveProvider === "openrouter") {
       const [apiKey, settings, systemSettings] = await Promise.all([
         getDecryptedOpenrouterApiKey(session.user.id),
         getAiProviderSettings(session.user.id),
@@ -45,7 +54,7 @@ export async function POST(request: Request) {
       ]);
       streamInput.apiKey = apiKey || systemSettings.openrouterApiKey || undefined;
       streamInput.modelPreference = settings.openrouterModel || systemSettings.openrouterModel || undefined;
-    } else if (data.provider === "agent") {
+    } else if (effectiveProvider === "agent") {
       const [apiKey, systemSettings] = await Promise.all([
         getDecryptedOpenrouterApiKey(session.user.id),
         getSystemSettings(),

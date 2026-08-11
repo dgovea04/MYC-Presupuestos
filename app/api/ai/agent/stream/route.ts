@@ -14,6 +14,8 @@ import { createOllama } from "ollama-ai-provider-v2";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { detectAgentIntent, type AgentIntent, type AgentPendingAction } from "@/lib/ai/agent/intent-router";
 import { buildAgentSystemPrompt } from "@/lib/ai/agent/prompt-builder";
+import { AiRuntimeError } from "@/lib/ai/errors";
+import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -205,6 +207,10 @@ export async function POST(request: Request) {
     }
 
     // ── Construir LanguageModel según el provider del modelo ──────────────
+    if (provider === "ollama" && !isLocalRuntimeEnabled()) {
+      throw new AiRuntimeError("local_only", "Ollama solo esta disponible en la app local.");
+    }
+
     let prebuiltModel: unknown = undefined;
 
     if (provider === "google" && modelPreference && geminiApiKey) {

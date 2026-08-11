@@ -24,6 +24,11 @@ describe("billing entitlements", () => {
     expect(hasFeatureAccess(license, "exports.basic")).toBe(true);
     expect(hasFeatureAccess(license, "polynomial_formula")).toBe(true);
     expect(hasFeatureAccess(license, "polynomial_formula.adjustments")).toBe(false);
+    expect(hasFeatureAccess(license, "khipu.agent")).toBe(false);
+    expect(hasFeatureAccess(license, "partidas.similarity")).toBe(false);
+    expect(hasFeatureAccess(license, "metrados.advanced")).toBe(false);
+    expect(hasFeatureAccess(license, "templates.budget")).toBe(false);
+    expect(hasFeatureAccess(license, "risk_analysis")).toBe(false);
     await expect(assertFeatureAccess({ feature: "ai.local", prisma, userId: "user-1" })).rejects.toBeInstanceOf(FeatureAccessError);
   });
 
@@ -40,6 +45,8 @@ describe("billing entitlements", () => {
     expect(license.planSlug).toBe("pro");
     expect(hasFeatureAccess(license, "ai.local")).toBe(true);
     expect(hasFeatureAccess(license, "partidas.similarity")).toBe(true);
+    expect(hasFeatureAccess(license, "metrados.advanced")).toBe(true);
+    expect(hasFeatureAccess(license, "templates.budget")).toBe(true);
     expect(hasFeatureAccess(license, "polynomial_formula.adjustments")).toBe(true);
     await expect(assertFeatureAccess({ feature: "risk_analysis", prisma, userId: "user-1" })).resolves.toEqual(license);
   });

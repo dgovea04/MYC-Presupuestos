@@ -53,7 +53,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
     icon: FileSpreadsheet,
     children: [
       { href: "/budgets", label: "Presupuestos", icon: FileSpreadsheet },
-      { href: "/metrados-avanzados", label: "Metrados", icon: Ruler },
+      { href: "/metrados-avanzados", label: "Metrados", icon: Ruler, requiredFeature: "metrados.advanced" },
     ],
   },
   {
@@ -91,7 +91,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
       { href: "/resources", label: "Catalogo de Insumos", icon: Wrench },
       { href: "/partidas", label: "Catalogo de Partidas", icon: Rows3 },
       { href: "/partidas/generar", label: "Generador de partidas", icon: Sparkles, requiredFeature: "partidas.similarity" },
-      { href: "/templates", label: "Plantillas", icon: BookOpen },
+      { href: "/templates", label: "Plantillas", icon: BookOpen, requiredFeature: "templates.budget" },
     ],
   },
   {

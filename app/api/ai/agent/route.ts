@@ -11,6 +11,7 @@ import { createToolExecutor } from "@/lib/ai/agent/tool-executor";
 import { createVercelSdkAdapter } from "@/lib/ai/agent/vercel-sdk-adapter";
 import { createApprovalService } from "@/lib/ai/agent/approval-service";
 import type { AgentExecutionState } from "@/lib/ai/agent/types";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 /**
  * POST /api/ai/agent
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiAgentRequestSchema.parse(await request.json());
     const userId = session.user.id;
+    await assertFeatureAccess({ userId, feature: "khipu.agent" });
 
     // Si es una reanudación, continuar desde el executionId
     if (data.executionId) {
