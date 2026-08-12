@@ -48,7 +48,11 @@ describe("loading page skeletons", () => {
   it("renders dashboard skeleton with chart regions", () => {
     const { container } = render(<DashboardPageSkeleton />);
 
-    expect(screen.getByRole("status", { name: "Cargando dashboard" }).getAttribute("aria-busy")).toBe("true");
+    const dashboardStatus = screen.getByRole("status", { name: "Cargando dashboard" });
+
+    expect(dashboardStatus.getAttribute("aria-busy")).toBe("true");
+    expect(dashboardStatus.firstElementChild?.classList.contains("grid")).toBe(true);
+    expect(dashboardStatus.firstElementChild?.querySelectorAll(".min-h-\\[164px\\]")).toHaveLength(4);
     expect(container.querySelectorAll(".min-h-\\[164px\\]")).toHaveLength(4);
     expect(container.querySelectorAll(".min-h-\\[300px\\]")).toHaveLength(2);
     expect(container.querySelectorAll(".min-h-\\[460px\\]")).toHaveLength(2);

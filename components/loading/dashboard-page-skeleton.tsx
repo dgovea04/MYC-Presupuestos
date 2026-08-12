@@ -1,9 +1,8 @@
-import { PageSkeletonFrame } from "@/components/loading/page-skeleton-frame";
 import { SkeletonBlock, SkeletonCard, SkeletonIcon, SkeletonText } from "@/components/ui/loading";
 
 export function DashboardPageSkeleton() {
   return (
-    <PageSkeletonFrame aria-label="Cargando dashboard" actions={0} titleWidth="w-48" descriptionWidth="w-80">
+    <section aria-busy="true" aria-label="Cargando dashboard" className="space-y-5" role="status">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
           <SkeletonCard key={index} className="min-h-[164px]" contentClassName="flex h-full flex-col justify-between space-y-4 py-6">
@@ -110,7 +109,7 @@ export function DashboardPageSkeleton() {
           </SkeletonCard>
         ))}
       </section>
-    </PageSkeletonFrame>
+    </section>
   );
 }
 
