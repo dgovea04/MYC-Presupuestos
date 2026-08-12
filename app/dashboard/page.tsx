@@ -144,7 +144,7 @@ export default async function DashboardPage({
       </section>
 
       {showOnboarding ? (
-        <Card className="dashboard-section-surface dashboard-surface-card dashboard-surface-card-primary bg-[linear-gradient(135deg,#ffffff_0%,#f4fbff_52%,#eff6ff_100%)]">
+        <Card className="dashboard-section-surface dashboard-surface-card dashboard-surface-card-primary bg-[var(--app-surface)]">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader
               title="Primeros pasos"
@@ -798,7 +798,7 @@ function OnboardingStepCard({
         `dashboard-onboarding-card ${completed ? "dashboard-onboarding-card-completed" : "dashboard-onboarding-card-pending"} group flex h-full flex-col justify-between rounded-2xl border px-4 py-4 transition`,
         completed
           ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
-          : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50/50",
+          : "border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] text-[var(--app-text-muted)] hover:border-sky-300 hover:bg-sky-50/50",
       )}
     >
       <div className="space-y-3">
@@ -807,14 +807,16 @@ function OnboardingStepCard({
             "inline-flex h-9 w-9 items-center justify-center rounded-xl",
             completed
               ? "bg-emerald-100 text-emerald-700"
-              : "bg-slate-100 text-slate-600 group-hover:bg-sky-100 group-hover:text-sky-700",
+              : "bg-[var(--app-surface-strong)] text-[var(--app-text-muted)] group-hover:bg-sky-100 group-hover:text-sky-700",
           )}
         >
           {completed ? <CheckCircle2 className="h-4 w-4" /> : <ListChecks className="h-4 w-4" />}
         </span>
         <div>
-          <p className="font-medium text-slate-950">{title}</p>
-          <p className={cn("mt-1 text-sm leading-5", completed ? "text-emerald-800" : "text-slate-500")}>{description}</p>
+          <p className="font-medium text-[var(--app-text-strong)]">{title}</p>
+          <p className={cn("mt-1 text-sm leading-5", completed ? "text-emerald-800" : "text-[var(--app-text-muted)]")}>
+            {description}
+          </p>
         </div>
       </div>
       <span className={cn("mt-4 text-xs font-semibold uppercase tracking-[0.16em]", completed ? "text-emerald-700" : "text-sky-700")}>
