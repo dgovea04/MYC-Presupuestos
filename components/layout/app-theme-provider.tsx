@@ -24,13 +24,11 @@ export function AppThemeProvider({
   const [theme, setTheme] = useState<AppThemeOption>(() => readStoredAppTheme() ?? initialTheme);
 
   useEffect(() => {
-    applyAppThemeToDocument(theme);
-    persistAppTheme(theme);
+    const shouldTransition =
+      typeof document !== "undefined" && document.documentElement.dataset.theme !== theme;
 
-    return () => {
-      delete document.documentElement.dataset.theme;
-      delete document.body.dataset.theme;
-    };
+    applyAppThemeToDocument(theme, { transition: shouldTransition });
+    persistAppTheme(theme);
   }, [theme]);
 
   useEffect(() => {
@@ -51,7 +49,7 @@ export function AppThemeProvider({
 
   return (
     <AppThemeContext.Provider value={value}>
-      <div data-theme={theme} className="theme-app min-h-screen bg-[var(--app-bg)]">
+      <div className="theme-app min-h-screen bg-[var(--app-bg)]">
         {children}
       </div>
     </AppThemeContext.Provider>

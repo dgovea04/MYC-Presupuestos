@@ -27,6 +27,9 @@ html {
   --app-border-soft: #e2e8f0;
   --app-border: #cbd5e1;
   --app-border-strong: #94a3b8;
+  --app-section-border: #e2e8f0;
+  --app-section-border-soft: #e2e8f0;
+  --app-section-border-strong: #cbd5e1;
   --table-border: #cbd5e1;
   --table-border-soft: #e2e8f0;
   --table-border-strong: #94a3b8;
@@ -114,6 +117,9 @@ html {
   --app-border-soft: var(--khipu-dark-hairline-soft);
   --app-border: var(--khipu-dark-hairline);
   --app-border-strong: var(--khipu-dark-hairline-strong);
+  --app-section-border: var(--khipu-dark-hairline);
+  --app-section-border-soft: var(--khipu-dark-hairline-soft);
+  --app-section-border-strong: var(--khipu-dark-hairline-strong);
   --table-border: #333;
   --table-border-soft: #1a1a1a;
   --table-border-strong: #333;
@@ -169,6 +175,9 @@ html {
   --color-app-border-soft: var(--app-border-soft);
   --color-app-border: var(--app-border);
   --color-app-border-strong: var(--app-border-strong);
+  --color-app-section-border: var(--app-section-border);
+  --color-app-section-border-soft: var(--app-section-border-soft);
+  --color-app-section-border-strong: var(--app-section-border-strong);
   --color-table-border: var(--table-border);
   --color-table-border-soft: var(--table-border-soft);
   --color-table-border-strong: var(--table-border-strong);
@@ -253,14 +262,169 @@ body,
   color: var(--app-text);
 }
 
-.theme-app-card {
+:where(
+  [data-theme-transitioning] .theme-app,
+  [data-theme-transitioning] .theme-app *,
+  [data-theme-transitioning] .theme-app *::before,
+  [data-theme-transitioning] .theme-app *::after
+) {
+  transition: background-color 180ms ease, color 180ms ease, fill 180ms ease, stroke 180ms ease,
+    box-shadow 180ms ease, outline-color 180ms ease, text-decoration-color 180ms ease;
+  transition-duration: 180ms !important;
+  transition-delay: 0ms !important;
+  transition-timing-function: ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    [data-theme-transitioning] .theme-app,
+    [data-theme-transitioning] .theme-app *,
+    [data-theme-transitioning] .theme-app *::before,
+    [data-theme-transitioning] .theme-app *::after
+  ) {
+    transition-duration: 0ms !important;
+  }
+}
+
+[data-theme-transitioning] .theme-app [class*="border"] {
+  transition-property: background-color, color, fill, stroke, box-shadow, outline-color, text-decoration-color, transform, opacity !important;
+}
+
+/* Neutral border utilities must never fall back to currentColor during a theme switch. */
+[data-theme-transitioning] .theme-app :where(
+  [class~="border"],
+  [class~="border-slate-100"],
+  [class~="border-slate-200"],
+  [class~="border-slate-300"]
+):not(
+  [class*="border-sky-"],
+  [class*="border-blue-"],
+  [class*="border-amber-"],
+  [class*="border-emerald-"],
+  [class*="border-green-"],
+  [class*="border-rose-"],
+  [class*="border-red-"],
+  [class*="border-violet-"]
+) {
+  border-color: var(--app-transition-border, var(--app-border-soft)) !important;
+}
+
+/* Structural surfaces must resolve their border from the active theme in the same frame. */
+[data-theme-transitioning] .theme-app :is(
+  .ui-card,
+  .ui-card-header,
+  .theme-app-card,
+  .theme-surface-card,
+  .theme-surface-card-gradient,
+  .theme-surface-card-warm,
+  .theme-muted-panel,
+  .theme-muted-panel-strong,
+  .theme-surface-panel,
+  .dashboard-surface-card,
+  .dashboard-stat-card,
+  .dashboard-action-link,
+  .dashboard-onboarding-card,
+  .dashboard-record-link,
+  .dashboard-stat-card-footer,
+  .dashboard-recent-budget-summary,
+  .app-shell-header
+) {
+  border-color: var(--app-transition-border, var(--app-section-border)) !important;
+  transition-property: background-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;
+}
+
+[data-theme-transitioning] .theme-app :where(
+  .ui-card,
+  .ui-card-header,
+  .theme-app-card,
+  .app-shell-header
+) {
+  border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;
+}
+
+[data-theme-transitioning] .theme-app :where(.theme-dashed-panel, .dashboard-empty-state) {
+  border-color: var(--app-transition-border, var(--app-section-border-strong)) !important;
+}
+
+[data-theme-transitioning] .theme-app :where(.dashboard-stat-card-footer) {
+  border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;
+}
+
+/* Use the same atomic surface treatment for neutral dashboard sections. */
+[data-theme-transitioning] .theme-app :is(
+  .dashboard-surface-card-soft,
+  .dashboard-action-link-default,
+  .dashboard-record-link,
+  .dashboard-onboarding-card-pending
+) {
+  border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;
+}
+
+/* Preserve intentional accent borders while keeping them synchronized with the active theme. */
+[data-theme-transitioning] .theme-app :is(
+  .dashboard-surface-card-primary,
+  .dashboard-stat-card-primary,
+  .dashboard-action-link-primary,
+  .dashboard-recent-budget-summary
+) {
+  border-color: color-mix(in srgb, var(--app-primary) 28%, transparent) !important;
+}
+
+[data-theme-transitioning] .theme-app :is(
+  .dashboard-stat-card-attention,
+  .dashboard-stat-card-attention .dashboard-stat-card-footer
+) {
+  border-color: color-mix(in srgb, var(--app-warning) 28%, transparent) !important;
+}
+
+[data-theme-transitioning] .theme-app :is(.dashboard-stat-card-primary .dashboard-stat-card-footer) {
+  border-color: color-mix(in srgb, var(--app-primary) 28%, transparent) !important;
+}
+
+[data-theme-transitioning] .theme-app :is(
+  .dashboard-onboarding-card-completed,
+  .theme-status-success,
+  .theme-status-link-success
+) {
+  border-color: color-mix(in srgb, var(--app-success) 28%, transparent) !important;
+}
+
+/* All top-level dashboard sections share one explicit border target. */
+[data-theme-transitioning] .theme-app :is(.dashboard-section-surface) {
+  border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;
+}
+
+[data-theme-transitioning] .dashboard-stat-card,
+[data-theme-transitioning] .dashboard-stat-card * {
+  transition: none !important;
+}
+
+[data-theme-transitioning] .theme-app .app-shell-header {
+  border-color: var(--app-transition-border, var(--app-border-soft)) !important;
+  transition: none !important;
+}
+
+/* Cards always use a semantic border; never fall back to the `border` utility's currentColor. */
+.ui-card {
   border-color: var(--app-border-soft);
+}
+
+.ui-card-header {
+  border-bottom-color: var(--app-border-soft);
+}
+
+.dashboard-section-surface {
+  border-color: var(--app-section-border-soft);
+}
+
+.theme-app-card {
+  border-color: var(--app-section-border-soft);
   background: var(--app-surface);
   color: var(--app-text);
 }
 
 .theme-app-card-elevated {
-  border-color: var(--app-border);
+  border-color: var(--app-section-border);
   background: var(--app-surface-elevated);
   color: var(--app-text);
 }
@@ -356,37 +520,37 @@ body,
 }
 
 .theme-surface-card {
-  border-color: #e2e8f0;
+  border-color: var(--app-section-border);
   background: #ffffff;
 }
 
 .theme-surface-card-gradient {
-  border-color: #e2e8f0;
+  border-color: var(--app-section-border);
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .theme-surface-card-warm {
-  border-color: #e2e8f0;
+  border-color: var(--app-section-border);
   background: linear-gradient(180deg, #fffdf8 0%, #fffaf0 100%);
 }
 
 .theme-muted-panel {
-  border-color: #e2e8f0;
+  border-color: var(--app-section-border);
   background: #f8fafc;
 }
 
 .theme-muted-panel-strong {
-  border-color: #e2e8f0;
+  border-color: var(--app-section-border);
   background: rgba(248, 250, 252, 0.7);
 }
 
 .theme-dashed-panel {
-  border-color: #cbd5e1;
+  border-color: var(--app-section-border-strong);
   background: #f8fafc;
 }
 
 .theme-surface-panel {
-  border-color: #e2e8f0;
+  border-color: var(--app-section-border);
   background: #ffffff;
 }
 
@@ -629,7 +793,7 @@ body,
 [data-theme="dark"] .theme-surface-card-gradient,
 [data-theme="dark"] .theme-surface-card-warm,
 [data-theme="dark"] .theme-surface-panel {
-  border-color: var(--app-border);
+  border-color: var(--app-section-border);
   background: var(--app-surface);
 }
 
@@ -638,17 +802,17 @@ body,
 }
 
 [data-theme="dark"] .theme-muted-panel {
-  border-color: var(--app-border);
+  border-color: var(--app-section-border);
   background: var(--app-surface-muted);
 }
 
 [data-theme="dark"] .theme-muted-panel-strong {
-  border-color: var(--app-border);
+  border-color: var(--app-section-border);
   background: var(--app-surface-muted);
 }
 
 [data-theme="dark"] .theme-dashed-panel {
-  border-color: var(--app-border-strong);
+  border-color: var(--app-section-border-strong);
   background: var(--app-surface-muted);
 }
 
@@ -938,13 +1102,13 @@ body,
 }
 
 [data-theme="dark"] .ui-card {
-  border-color: var(--app-border-soft);
+  border-color: var(--app-section-border-soft);
   background: var(--app-surface);
   color: var(--app-text);
 }
 
 [data-theme="dark"] .ui-card-header {
-  border-color: var(--app-border-soft);
+  border-color: var(--app-section-border-soft);
 }
 
 [data-theme="dark"] .ui-card-title {
@@ -1357,9 +1521,17 @@ body,
   box-shadow: 0 24px 48px -32px rgba(0, 0, 0, 0.55);
 }
 
-[data-theme="dark"] .dashboard-surface-card-primary,
-[data-theme="dark"] .dashboard-surface-card-soft {
+[data-theme="dark"] .dashboard-surface-card-primary {
   border-color: var(--app-border);
+  background: var(--app-surface);
+}
+
+[data-theme="dark"] .dashboard-section-surface {
+  border-color: var(--app-section-border-soft) !important;
+}
+
+[data-theme="dark"] .dashboard-surface-card-soft {
+  border-color: var(--app-section-border-soft);
   background: var(--app-surface);
 }
 
@@ -1448,7 +1620,7 @@ body,
 }
 
 [data-theme="dark"] .dashboard-action-link.dashboard-action-link-default {
-  border-color: var(--app-border) !important;
+  border-color: var(--app-section-border-soft) !important;
   background: var(--app-surface) !important;
 }
 
@@ -1526,6 +1698,11 @@ body,
   background: var(--app-surface);
 }
 
+[data-theme="dark"] .dashboard-onboarding-card-pending {
+  border-color: var(--app-border);
+  background: var(--app-surface);
+}
+
 [data-theme="dark"] .dashboard-onboarding-card:hover {
   border-color: rgba(37, 99, 235, 0.28);
   background: rgba(37, 99, 235, 0.08);
@@ -1560,7 +1737,7 @@ body,
 }
 
 [data-theme="dark"] .dashboard-record-link {
-  border-color: var(--app-border);
+  border-color: var(--app-section-border-soft);
   background: var(--app-surface);
 }
 
@@ -2263,6 +2440,55 @@ body,
 [data-view-mode="excel"] [data-theme="dark"] .ui-card-header,
 [data-theme="dark"] [data-view-mode="excel"] .ui-card-header {
   border-bottom-color: var(--app-border-soft) !important;
+}
+
+/* Excel overrides are declared late in the stylesheet, so repeat the atomic theme rule after them. */
+[data-theme-transitioning] [data-view-mode="excel"] .theme-app :is(
+  .ui-card,
+  .ui-card-header,
+  .theme-app-card,
+  .theme-surface-card,
+  .theme-surface-card-gradient,
+  .theme-surface-card-warm,
+  .theme-muted-panel,
+  .theme-muted-panel-strong,
+  .theme-surface-panel,
+  .dashboard-surface-card,
+  .dashboard-stat-card,
+  .dashboard-action-link,
+  .dashboard-onboarding-card,
+  .dashboard-record-link,
+  .dashboard-stat-card-footer,
+  .dashboard-recent-budget-summary,
+  .app-shell-header
+) {
+  border-color: var(--app-transition-border, var(--app-section-border)) !important;
+  transition-property: background-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;
+}
+
+[data-theme-transitioning] [data-view-mode="excel"] .theme-app :is(
+  .ui-card-header,
+  .theme-app-card,
+  .app-shell-header
+) {
+  border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;
+}
+
+[data-theme-transitioning] [data-view-mode="excel"] .theme-app :is(.theme-dashed-panel, .dashboard-empty-state) {
+  border-color: var(--app-transition-border, var(--app-section-border-strong)) !important;
+}
+
+[data-theme-transitioning] [data-view-mode="excel"] .theme-app :is(
+  .dashboard-surface-card-soft,
+  .dashboard-action-link-default,
+  .dashboard-record-link,
+  .dashboard-onboarding-card-pending
+) {
+  border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;
+}
+
+[data-theme-transitioning] [data-view-mode="excel"] .theme-app :is(.dashboard-section-surface) {
+  border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;
 }
 
 @media (min-width: 640px) {

@@ -954,7 +954,7 @@ function AiApuPreview({
 
 function PreviewMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-sky-100 bg-white px-3 py-2">
+    <div className="rounded-xl border border-[var(--app-border-soft)] bg-white px-3 py-2">
       <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 font-semibold text-slate-900">{value}</p>
     </div>

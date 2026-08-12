@@ -135,7 +135,7 @@ export async function AppShell({
 
             <main className="flex min-h-full min-w-0 flex-col gap-5">
               <LiveDataRefresh />
-              <header className="z-10 flex flex-col gap-4 rounded-3xl border border-[var(--app-border-soft)] bg-[var(--app-surface)]/90 px-6 py-5 shadow-sm backdrop-blur md:flex-row md:items-center md:justify-between">
+              <header className="app-shell-header z-10 flex flex-col gap-4 rounded-3xl border border-[var(--app-border-soft)] bg-[var(--app-surface)]/90 px-6 py-5 shadow-sm backdrop-blur md:flex-row md:items-center md:justify-between">
                 <div className="flex flex-col gap-2">
                   <AppBackButton />
                   <div>

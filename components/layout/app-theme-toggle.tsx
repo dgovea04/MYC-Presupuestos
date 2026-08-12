@@ -4,14 +4,12 @@ import { Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppTheme } from "@/components/layout/app-theme-provider";
-import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { APP_SETTINGS_UPDATED_EVENT } from "@/lib/settings/events";
-import { persistAppTheme } from "@/lib/theme/app-theme";
+import { applyAppThemeToDocument, persistAppTheme } from "@/lib/theme/app-theme";
 import type { UserSettingsRecord } from "@/types/settings";
 
 export function AppThemeToggle() {
   const { setTheme, theme } = useAppTheme();
-  const settings = useFormattingSettings();
   const [pending, setPending] = useState(false);
   const isDark = theme === "dark";
 
@@ -19,7 +17,12 @@ export function AppThemeToggle() {
     if (pending) return;
 
     setPending(true);
+    const previousTheme = theme;
     const nextTheme = isDark ? "light" : "dark";
+
+    applyAppThemeToDocument(nextTheme, { transition: true });
+    setTheme(nextTheme);
+    persistAppTheme(nextTheme);
 
     try {
       const response = await fetch("/api/settings");
@@ -42,11 +45,24 @@ export function AppThemeToggle() {
       }
 
       const savedSettings = (await saveResponse.json()) as UserSettingsRecord;
-      setTheme(savedSettings.appTheme ?? nextTheme);
-      persistAppTheme(savedSettings.appTheme ?? nextTheme);
+      const savedTheme = savedSettings.appTheme ?? nextTheme;
+
+      if (savedTheme !== nextTheme) {
+        applyAppThemeToDocument(savedTheme, { transition: true });
+      }
+
+      setTheme(savedTheme);
+      persistAppTheme(savedTheme);
       window.dispatchEvent(new CustomEvent(APP_SETTINGS_UPDATED_EVENT, { detail: savedSettings }));
     } catch {
-      setTheme(settings.appTheme ?? theme);
+      const fallbackTheme = previousTheme;
+
+      if (fallbackTheme !== nextTheme) {
+        applyAppThemeToDocument(fallbackTheme, { transition: true });
+      }
+
+      setTheme(fallbackTheme);
+      persistAppTheme(fallbackTheme);
     } finally {
       setPending(false);
     }

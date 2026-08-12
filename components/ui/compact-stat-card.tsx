@@ -14,7 +14,7 @@ export function CompactStatCard({
 }) {
   const { isExcelMode } = useAppViewMode();
   const tones = {
-    sky: "border-sky-100 bg-[var(--app-surface)] text-sky-700",
+    sky: "border-[var(--app-border-soft)] bg-[var(--app-surface)] text-sky-700",
     slate: "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)]",
     violet: "border-violet-100 bg-[var(--app-surface)] text-violet-700",
     rose: "border-rose-100 bg-[var(--app-surface)] text-rose-700",

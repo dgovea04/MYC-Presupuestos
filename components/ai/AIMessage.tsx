@@ -35,7 +35,7 @@ export function AIMessage({
       <article
         className={cn(
           "min-w-0 rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm",
-          tone === "assistant" && (isDark ? "border-[var(--khipu-dark-hairline-strong)] bg-[var(--khipu-dark-surface)] text-[var(--khipu-dark-body)]" : "border-sky-100 bg-sky-50/70 text-slate-800"),
+          tone === "assistant" && (isDark ? "border-[var(--khipu-dark-hairline-strong)] bg-[var(--khipu-dark-surface)] text-[var(--khipu-dark-body)]" : "border-[var(--app-border-soft)] bg-sky-50/70 text-slate-800"),
           tone === "user" && (isDark ? "border-[var(--khipu-dark-hairline-strong)] bg-[var(--khipu-dark-surface-elevated)] text-[var(--khipu-dark-body-strong)]" : "border-slate-200 bg-white text-slate-800"),
           tone === "error" && (isDark ? "border-rose-500/30 bg-[#2a1418] text-rose-200" : "border-rose-200 bg-rose-50 text-rose-800"),
         )}
