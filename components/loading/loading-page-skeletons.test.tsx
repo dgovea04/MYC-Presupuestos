@@ -99,14 +99,30 @@ describe("loading page skeletons", () => {
     expect(container.querySelectorAll("table")).toHaveLength(0);
   });
 
-  it("renders catalog skeleton as toolbar plus table without a duplicate page header", () => {
+  it("renders catalog skeleton with the real page card, header, toolbar and table", () => {
     const { container } = render(<CatalogPageSkeleton kind="resources" />);
 
     const catalogStatus = screen.getByRole("status", { name: "Cargando catalogo de insumos" });
 
+    expect(catalogStatus.getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelectorAll(".ui-card")).toHaveLength(1);
+    expect(container.querySelector('[data-skeleton-section="catalog-header"]')).toBeDefined();
+    expect(container.querySelector('[data-skeleton-section="catalog-toolbar"]')).toBeDefined();
+    expect(container.querySelector('[data-skeleton-section="catalog-table"]')).toBeDefined();
     expect(screen.getByRole("table", { name: "Cargando catalogo de insumos" })).toBeDefined();
-    expect(catalogStatus.firstElementChild?.classList.contains("min-h-10")).toBe(true);
-    expect(container.querySelectorAll(".min-h-10")).toHaveLength(1);
+  });
+
+  it("renders templates and metrados skeletons without a false catalog table", () => {
+    const templates = render(<CatalogPageSkeleton kind="templates" />);
+    expect(screen.getByRole("status", { name: "Cargando plantillas" })).toBeDefined();
+    expect(templates.container.querySelector('[data-skeleton-section="template-library"]')).toBeDefined();
+    expect(templates.container.querySelectorAll("table")).toHaveLength(0);
+
+    templates.unmount();
+    const metrados = render(<CatalogPageSkeleton kind="metrados" />);
+    expect(screen.getByRole("status", { name: "Cargando metrados" })).toBeDefined();
+    expect(metrados.container.querySelector('[data-skeleton-section="metrados-editor"]')).toBeDefined();
+    expect(screen.getByRole("table", { name: "Cargando tabla de metrados" })).toBeDefined();
   });
 
   it("renders dashboard skeleton with chart regions", () => {
@@ -123,12 +139,22 @@ describe("loading page skeletons", () => {
     expect(container.querySelectorAll(".min-h-\\[280px\\]")).toHaveLength(2);
   });
 
-  it("renders settings skeleton as forms without a duplicate page header", () => {
-    render(<SettingsPageSkeleton />);
+  it("renders settings skeleton with tabs, main content and summary columns", () => {
+    const { container } = render(<SettingsPageSkeleton />);
 
-    const settingsStatuses = screen.getAllByRole("status", { name: "Cargando configuracion" });
+    const settingsStatus = screen.getByRole("status", { name: "Cargando configuracion" });
 
-    expect(settingsStatuses.length).toBeGreaterThan(0);
-    expect(settingsStatuses[0]?.firstElementChild?.classList.contains("space-y-4")).toBe(true);
+    expect(settingsStatus.getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelectorAll(".ui-card")).toHaveLength(4);
+    expect(container.querySelectorAll("[data-skeleton-section]")).toHaveLength(0);
+    expect(container.querySelectorAll(".grid").length).toBeGreaterThan(2);
+  });
+
+  it("renders account skeleton with profile forms and side summaries", () => {
+    const { container } = render(<SettingsPageSkeleton kind="account" />);
+
+    expect(screen.getByRole("status", { name: "Cargando cuenta" })).toBeDefined();
+    expect(container.querySelectorAll(".ui-card")).toHaveLength(3);
+    expect(container.querySelectorAll(".min-h-\\[190px\\]")).toHaveLength(0);
   });
 });
