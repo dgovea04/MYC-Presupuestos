@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
+    "postinstall": "node ./node_modules/prisma/build/index.js generate",
     "dev": "node ./node_modules/next/dist/bin/next dev",
     "dev:turbo": "node ./node_modules/next/dist/bin/next dev",
     "dev:webpack": "node ./node_modules/next/dist/bin/next dev --webpack",
