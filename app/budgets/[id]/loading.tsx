@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { BudgetEditorPageSkeleton } from "@/components/loading/budget-editor-page-skeleton";
+import { BudgetDetailLoading } from "@/components/loading/budget-detail-loading";
 
-export default async function BudgetDetailLoading() {
+export default async function BudgetDetailLoadingPage() {
   return (
     <AppShell>
-      <BudgetEditorPageSkeleton />
+      <BudgetDetailLoading />
     </AppShell>
   );
 }

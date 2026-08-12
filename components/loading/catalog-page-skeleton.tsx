@@ -1,4 +1,3 @@
-import { PageSkeletonFrame } from "@/components/loading/page-skeleton-frame";
 import { SkeletonTable, SkeletonToolbar, type SkeletonTableColumn } from "@/components/ui/loading";
 
 const labels = {
@@ -55,9 +54,9 @@ const columnsByKind: Record<CatalogSkeletonKind, SkeletonTableColumn[]> = {
 
 export function CatalogPageSkeleton({ kind }: { kind: CatalogSkeletonKind }) {
   return (
-    <PageSkeletonFrame aria-label={labels[kind]} actions={1}>
+    <section aria-busy="true" aria-label={labels[kind]} className="space-y-4" role="status">
       <SkeletonToolbar search filters={2} actions={1} />
       <SkeletonTable aria-label={labels[kind]} columns={columnsByKind[kind]} rowCount={8} />
-    </PageSkeletonFrame>
+    </section>
   );
 }
