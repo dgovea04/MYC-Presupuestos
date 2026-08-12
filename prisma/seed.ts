@@ -67,9 +67,21 @@ async function seedUnifiedIndicesFromWorkbook() {
 }
 
 async function main() {
+  const shouldSeedDemoData = process.env.SEED_DEMO_DATA !== "false";
+  await seedMembershipPlans();
+  await seedUnifiedIndicesFromWorkbook();
+  await seedGeneralResourcesCatalog();
+  await seedGeneralPartidasCatalog();
+  await seedAutocreatedPartidaResourceCurrentIus();
+
+  if (!shouldSeedDemoData) {
+    console.info("Skipped demo users and demo project because SEED_DEMO_DATA=false.");
+    await seedWorkflowTemplates();
+    return;
+  }
+
   const passwordHash = await hashPassword("Demo12345");
   const verifiedAt = new Date();
-  await seedMembershipPlans();
 
   const user = await prisma.user.upsert({
     where: { email: "demo@mycpresupuestos.pe" },
@@ -171,11 +183,6 @@ async function main() {
       },
     });
   }
-
-  await seedUnifiedIndicesFromWorkbook();
-  await seedGeneralResourcesCatalog();
-  await seedGeneralPartidasCatalog();
-  await seedAutocreatedPartidaResourceCurrentIus();
 
   const demoResources = await Promise.all([
     findCatalogResource("CEMENTO PORTLAND TIPO I (42.5KG)", ResourceCategory.MATERIAL, "BLS"),
@@ -481,6 +488,10 @@ async function main() {
     }
   }
 
+  await seedWorkflowTemplates();
+}
+
+async function seedWorkflowTemplates() {
   const workflowResult = await seedAgentWorkflows(prisma);
   console.info(
     `Seeded ${workflowResult.upserted} agent workflows from templates.`,
