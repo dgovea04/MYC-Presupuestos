@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { issueEmailVerification } from "@/lib/auth/email-verification";
 import { registerSchema } from "@/lib/validations/auth";
 import { hashPassword } from "@/lib/auth/password";
-import { registerUserWithCompany } from "@/lib/auth/registration";
+import { registerUserWithCompanyAndDemo } from "@/lib/auth/registration";
 
 export async function POST(request: Request) {
   try {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ese correo ya esta registrado" }, { status: 409 });
     }
 
-    const registration = await registerUserWithCompany({
+    const registration = await registerUserWithCompanyAndDemo({
       name: data.name,
       email: data.email,
       passwordHash: await hashPassword(data.password),
@@ -63,6 +63,7 @@ export async function POST(request: Request) {
         ok: true,
         requiresEmailVerification: true,
         verificationEmailSent,
+        demoProject: registration.demoProject,
       },
       { status: 201 },
     );
