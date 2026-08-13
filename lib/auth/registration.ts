@@ -25,10 +25,11 @@ export async function registerUserWithCompany(params: {
   email: string;
   passwordHash?: string;
   avatarUrl?: string;
+  emailVerifiedAt?: Date;
   companyName?: string;
   ruc?: string;
 }) {
-  const { name, email, passwordHash, avatarUrl, companyName, ruc } = params;
+  const { name, email, passwordHash, avatarUrl, emailVerifiedAt, companyName, ruc } = params;
 
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -37,6 +38,7 @@ export async function registerUserWithCompany(params: {
         email,
         passwordHash: (passwordHash ?? null) as string | null,
         avatarUrl: avatarUrl ?? null,
+        emailVerifiedAt: emailVerifiedAt ?? null,
         membershipPlan: {
           connectOrCreate: {
             where: { slug: "starter" },

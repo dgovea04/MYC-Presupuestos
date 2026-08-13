@@ -229,6 +229,7 @@ export const authOptions: NextAuthOptions = {
             name: googleProfile.name ?? googleProfile.email.split("@")[0],
             email: googleProfile.email,
             avatarUrl: googleProfile.picture,
+            emailVerifiedAt: new Date(),
           });
         } catch {
           return false;

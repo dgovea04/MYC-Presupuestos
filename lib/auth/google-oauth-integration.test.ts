@@ -141,6 +141,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
       name: "Maria Calderon",
       email: "maria@gmail.com",
       avatarUrl: "https://lh3.googleusercontent.com/photo",
+      emailVerifiedAt: expect.any(Date) as Date,
     });
 
     // ── jwt: reconcile from DB, set companyId and plan ──
