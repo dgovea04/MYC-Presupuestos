@@ -15,13 +15,13 @@ describe("BudgetDetailLoading", () => {
     vi.mocked(useParams).mockReturnValue({ id: "budget-1" });
   });
 
-  it("keeps a neutral layout before the budget kind is resolved", () => {
+  it("uses the general budget layout while the budget kind is resolving", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
     const { container } = render(<BudgetDetailLoading />);
 
-    expect(container.querySelector('[data-skeleton-section="resolving-content"]')).toBeDefined();
-    expect(container.querySelector('[data-skeleton-section="overview"]')).toBeNull();
+    expect(container.querySelector('[data-skeleton-section="overview"]')).toBeDefined();
+    expect(container.querySelector('[data-skeleton-section="resolving-content"]')).toBeNull();
   });
 
   it("renders the sub budget editor skeleton after resolving SUB_BUDGET", async () => {

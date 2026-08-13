@@ -4,7 +4,6 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BudgetDetailPageSkeleton,
-  BudgetLoadingResolverSkeleton,
   BudgetSubBudgetPageSkeleton,
 } from "@/components/loading/budget-detail-page-skeleton";
 
@@ -47,5 +46,5 @@ export function BudgetDetailLoading() {
 
   if (kind === "SUB_BUDGET") return <BudgetSubBudgetPageSkeleton />;
   if (kind === "GENERAL") return <BudgetDetailPageSkeleton />;
-  return <BudgetLoadingResolverSkeleton />;
+  return <BudgetDetailPageSkeleton />;
 }

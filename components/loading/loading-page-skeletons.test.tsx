@@ -37,7 +37,7 @@ describe("loading page skeletons", () => {
     expect(container.querySelectorAll("[aria-hidden='true']").length).toBeGreaterThanOrEqual(4);
   });
 
-  it("renders general budget skeleton with overview sections and consolidated tables", () => {
+  it("renders general budget skeleton with overview sections and the initial consolidated view", () => {
     const { container } = render(<BudgetDetailPageSkeleton />);
 
     const budgetStatus = screen.getByRole("status", { name: "Cargando presupuesto" });
@@ -58,7 +58,7 @@ describe("loading page skeletons", () => {
     expect(collaborationSection?.classList.contains("justify-end")).toBe(true);
     expect(collaborationSection?.querySelectorAll(".animate-pulse")).toHaveLength(5);
     expect(screen.getByRole("table", { name: "Cargando tabla consolidada" })).toBeDefined();
-    expect(screen.getByRole("table", { name: "Cargando detalle del presupuesto" })).toBeDefined();
+    expect(screen.queryByRole("table", { name: "Cargando detalle del presupuesto" })).toBeNull();
     expect(container.querySelectorAll(".min-h-\\[112px\\]")).toHaveLength(0);
   });
 

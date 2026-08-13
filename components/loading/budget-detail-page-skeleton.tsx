@@ -159,35 +159,37 @@ export function BudgetDetailPageSkeleton() {
       <div data-skeleton-section="connected-detail">
         <SkeletonCard className="rounded-2xl" contentClassName="space-y-4">
           <BudgetSectionHeading titleWidth="w-72" descriptionWidth="w-[46rem]" />
-        <div className="flex flex-wrap items-center gap-2">
-          <SkeletonBlock className="h-4 w-32" radius="md" />
-          {Array.from({ length: 4 }).map((_, index) => (
-            <SkeletonBlock key={index} className={index === 0 ? "h-9 w-44" : "h-9 w-36"} radius="full" />
-          ))}
-        </div>
-        <div className="flex flex-col gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <SkeletonBlock className="h-5 w-48" radius="md" />
-            <SkeletonBlock className="h-4 w-96" radius="md" />
+          <div className="flex flex-wrap items-center gap-2">
+            <SkeletonBlock className="h-4 w-32" radius="md" />
+            {Array.from({ length: 4 }).map((_, index) => (
+              <SkeletonBlock key={index} className={index === 0 ? "h-9 w-44" : "h-9 w-36"} radius="full" />
+            ))}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <SkeletonBlock className="h-9 w-32" radius="xl" />
-            <SkeletonButton className="w-48" size="sm" />
+
+          <div className="flex flex-col gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <SkeletonBlock className="h-5 w-44" radius="md" />
+                <SkeletonBlock className="h-6 w-36" radius="full" />
+              </div>
+              <SkeletonBlock className="h-4 w-96" radius="md" />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <SkeletonBlock className="h-7 w-32" radius="md" />
+              <SkeletonButton className="w-44" size="sm" />
+            </div>
           </div>
-        </div>
-        <SkeletonTable
-          aria-label="Cargando detalle del presupuesto"
-          compact
-          columns={[
-            { id: "code", width: "w-20", sticky: true },
-            { id: "description", width: "w-full" },
-            { id: "unit", width: "w-16" },
-            { id: "quantity", width: "w-20", align: "right" },
-            { id: "unitPrice", width: "w-24", align: "right" },
-            { id: "partial", width: "w-24", align: "right" },
-          ]}
-          rowCount={6}
-        />
+
+          <div className="rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <SkeletonBlock className="h-4 w-[28rem]" radius="md" />
+                <SkeletonBlock className="h-3 w-72" radius="md" />
+              </div>
+              <SkeletonButton className="w-48" size="sm" />
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2">
             <SkeletonButton className="w-28" size="sm" />
             <SkeletonButton className="w-28" size="sm" />
