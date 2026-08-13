@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { createBillingErrorResponse } from "@/lib/billing/api";
+import { prisma } from "@/lib/db/prisma";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { createCentralizedExport, createExportResponse } from "@/lib/exports/centralized";
-import type { ExportRequest } from "@/lib/exports/definitions";
+import type { ExportRequest, ExportTarget } from "@/lib/exports/definitions";
 
 export const runtime = "nodejs";
 
@@ -20,6 +22,7 @@ export async function POST(request: Request) {
     }
 
     const result = await createCentralizedExport(body, session.user.id);
+    await trackDemoExportCompleted(body, session.user.id, session.user.activeCompanyId ?? session.user.companyId ?? "");
     return createExportResponse(result);
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);
@@ -30,6 +33,40 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+const BUDGET_EXPORT_TARGETS: readonly ExportTarget[] = [
+  "budget",
+  "apu",
+  "budget_resources",
+  "general_expenses",
+  "budget_footer",
+  "polynomial_formula",
+  "work_schedule",
+];
+
+async function trackDemoExportCompleted(request: ExportRequest, userId: string, companyId: string) {
+  if (!companyId || !BUDGET_EXPORT_TARGETS.includes(request.target)) {
+    return;
+  }
+
+  const budget = await prisma.budget.findFirst({
+    where: { id: request.targetId },
+    select: {
+      projectId: true,
+      project: { select: { isDemo: true } },
+    },
+  });
+
+  if (!budget?.project.isDemo) {
+    return;
+  }
+
+  await trackServerEvent("demo_export_completed", {
+    userId,
+    companyId,
+    projectId: budget.projectId,
+  });
 }
 
 function requiresAdvancedExport(request: ExportRequest) {

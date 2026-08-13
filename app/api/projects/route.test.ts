@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   recordActivityEvent: vi.fn(),
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
+  projectCount: vi.fn(),
+  projectFindFirst: vi.fn(),
+  trackServerEvent: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -30,6 +33,19 @@ vi.mock("@/lib/data/activity-events", () => ({
   recordActivityEvent: mocks.recordActivityEvent,
 }));
 
+vi.mock("@/lib/analytics/events", () => ({
+  trackServerEvent: mocks.trackServerEvent,
+}));
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    project: {
+      count: mocks.projectCount,
+      findFirst: mocks.projectFindFirst,
+    },
+  },
+}));
+
 import { POST } from "@/app/api/projects/route";
 
 describe("POST /api/projects", () => {
@@ -39,6 +55,9 @@ describe("POST /api/projects", () => {
     mocks.recordActivityEvent.mockReset();
     mocks.revalidatePath.mockReset();
     mocks.revalidateTag.mockReset();
+    mocks.projectCount.mockReset();
+    mocks.projectFindFirst.mockReset();
+    mocks.trackServerEvent.mockReset();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -82,6 +101,47 @@ describe("POST /api/projects", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/projects/project-1");
     expect(mocks.revalidateTag).toHaveBeenCalledWith("dashboard-analytics:company-1", "max");
+  });
+
+  it("tracks the first non-demo project after a demo project exists", async () => {
+    const project = { id: "project-1", name: "Hospital Norte", companyId: "company-1", isDemo: false };
+
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.createProject.mockResolvedValue(project);
+    mocks.projectFindFirst.mockResolvedValue({ id: "demo-project-1" });
+    mocks.projectCount.mockResolvedValue(1);
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ companyId: "company-1", name: "Hospital Norte", status: "PLANNING" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.trackServerEvent).toHaveBeenCalledWith("first_non_demo_project_created", {
+      userId: "user-1",
+      companyId: "company-1",
+      projectId: "project-1",
+    });
+  });
+
+  it("does not track later non-demo projects", async () => {
+    const project = { id: "project-2", name: "Edificio Sur", companyId: "company-1", isDemo: false };
+
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.createProject.mockResolvedValue(project);
+    mocks.projectFindFirst.mockResolvedValue({ id: "demo-project-1" });
+    mocks.projectCount.mockResolvedValue(2);
+
+    await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ companyId: "company-1", name: "Edificio Sur", status: "PLANNING" }),
+      }),
+    );
+
+    expect(mocks.trackServerEvent).not.toHaveBeenCalled();
   });
 
   it("keeps a successful creation when activity logging fails", async () => {

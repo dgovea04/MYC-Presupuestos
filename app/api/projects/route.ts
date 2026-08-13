@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { ZodError } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { createBillingErrorResponse } from "@/lib/billing/api";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { createProject } from "@/lib/data/projects";
+import { prisma } from "@/lib/db/prisma";
 import { DASHBOARD_ANALYTICS_CACHE_TAG, getDashboardAnalyticsCacheTag } from "@/lib/dashboard/analytics";
 import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 
@@ -18,6 +20,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const project = await createProject(session.user.id, body);
     await safelyRecordProjectCreatedActivity(project.id, project.name, session.user.id, getRequestTemplateId(body));
+    await trackFirstNonDemoProjectCreated(project.id, project.companyId, project.isDemo, session.user.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag(DASHBOARD_ANALYTICS_CACHE_TAG, "max");
@@ -37,6 +40,30 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo crear el proyecto" }, { status: 400 });
   }
+}
+
+async function trackFirstNonDemoProjectCreated(projectId: string, companyId: string, isDemo: boolean, userId: string) {
+  if (isDemo) {
+    return;
+  }
+
+  const [demoProject, nonDemoProjectCount] = await Promise.all([
+    prisma.project.findFirst({
+      where: { companyId, isDemo: true },
+      select: { id: true },
+    }),
+    prisma.project.count({ where: { companyId, isDemo: false } }),
+  ]);
+
+  if (!demoProject || nonDemoProjectCount !== 1) {
+    return;
+  }
+
+  await trackServerEvent("first_non_demo_project_created", {
+    userId,
+    companyId,
+    projectId,
+  });
 }
 
 function getRequestTemplateId(body: unknown) {

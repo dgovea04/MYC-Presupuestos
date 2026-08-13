@@ -4,6 +4,18 @@ vi.mock("@/lib/auth/session", () => ({
   getAuthSession: vi.fn(),
 }));
 
+vi.mock("@/lib/analytics/events", () => ({
+  trackServerEvent: vi.fn(),
+}));
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    budget: {
+      findFirst: vi.fn(),
+    },
+  },
+}));
+
 vi.mock("@/lib/exports/centralized", () => ({
   createCentralizedExport: vi.fn(),
   createExportResponse: (result: { content: BodyInit; contentType: string; fileName: string }) =>
@@ -28,10 +40,71 @@ import { POST } from "@/app/api/exports/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { createCentralizedExport } from "@/lib/exports/centralized";
+import { trackServerEvent } from "@/lib/analytics/events";
+import { prisma } from "@/lib/db/prisma";
 
 describe("central exports route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("tracks a completed export for a demo budget", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({
+      expires: new Date().toISOString(),
+      user: { id: "user-1", activeCompanyId: "company-1" },
+    });
+    vi.mocked(createCentralizedExport).mockResolvedValue({
+      content: Buffer.from("xlsx"),
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      fileName: "presupuesto-budget-1.xlsx",
+    });
+    vi.mocked(prisma.budget.findFirst).mockResolvedValue({ projectId: "project-1", project: { isDemo: true } });
+
+    const response = await POST(
+      new Request("http://localhost/api/exports", {
+        method: "POST",
+        body: JSON.stringify({
+          target: "budget",
+          targetId: "budget-1",
+          format: "xlsx",
+          preset: "presupuesto_detallado",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(trackServerEvent).toHaveBeenCalledWith("demo_export_completed", {
+      userId: "user-1",
+      companyId: "company-1",
+      projectId: "project-1",
+    });
+  });
+
+  it("does not track exports for non-demo budgets", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({
+      expires: new Date().toISOString(),
+      user: { id: "user-1", companyId: "company-1" },
+    });
+    vi.mocked(createCentralizedExport).mockResolvedValue({
+      content: Buffer.from("xlsx"),
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      fileName: "presupuesto-budget-1.xlsx",
+    });
+    vi.mocked(prisma.budget.findFirst).mockResolvedValue({ projectId: "project-1", project: { isDemo: false } });
+
+    await POST(
+      new Request("http://localhost/api/exports", {
+        method: "POST",
+        body: JSON.stringify({
+          target: "budget",
+          targetId: "budget-1",
+          format: "xlsx",
+          preset: "presupuesto_detallado",
+        }),
+      }),
+    );
+
+    expect(trackServerEvent).not.toHaveBeenCalled();
   });
 
   it("returns a binary export response with download headers", async () => {
