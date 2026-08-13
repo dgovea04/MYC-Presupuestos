@@ -461,6 +461,7 @@ const _getProjectOverviewById = async (id: string, userId: string) => {
       id: true,
       companyId: true,
       name: true,
+      isDemo: true,
       clientName: true,
       location: true,
       projectType: true,

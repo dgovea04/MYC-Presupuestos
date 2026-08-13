@@ -19,6 +19,7 @@ import { getUserSettings } from "@/lib/data/settings";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectActivityHistory } from "@/components/projects/project-activity-history";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
+import { DemoProjectGuide } from "@/components/onboarding/demo-project-guide";
 import { resolveProjectGeneralBudget } from "@/lib/projects/general-budget";
 import { getProjectOtherSections } from "@/lib/projects/other-sections";
 import { buildingSubtypeLabel, contractTypeLabel, projectCategoryLabel } from "@/lib/projects/labels";
@@ -172,6 +173,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             ) : null}
           </CardContent>
         </Card>
+
+        {project.isDemo ? <DemoProjectGuide /> : null}
 
         <ProjectBudgetSections
           projectId={project.id}
