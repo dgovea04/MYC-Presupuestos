@@ -645,6 +645,8 @@ model Project {
   startDate                  DateTime?
   endDate                    DateTime?
   status                     ProjectStatus               @default(PLANNING)
+  isDemo                     Boolean                     @default(false)
+  demoKey                    String?
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   company                    Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -667,6 +669,8 @@ model Project {
   attachments                ProjectAttachment[]
 
   @@index([companyId])
+  @@index([companyId, isDemo])
+  @@index([companyId, demoKey])
 }
 
 model AiSessionFeedbackEvent {
