@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/db/prisma";
+import {
+  ensureDemoProjectForCompany,
+  type DemoProjectCreationResult,
+} from "@/lib/onboarding/demo-project";
 
 function normalizeCompanyNameSource(value: string) {
   return value
@@ -74,6 +78,30 @@ export async function registerUserWithCompany(params: {
 }
 
 export type RegisteredUser = Awaited<ReturnType<typeof registerUserWithCompany>>;
+
+export type RegisteredUserWithDemo = RegisteredUser & {
+  demoProject: DemoProjectCreationResult;
+};
+
+export async function registerUserWithCompanyAndDemo(params: {
+  name: string;
+  email: string;
+  passwordHash?: string;
+  avatarUrl?: string;
+  emailVerifiedAt?: Date;
+  companyName?: string;
+  ruc?: string;
+  createDemoProject?: boolean;
+}): Promise<RegisteredUserWithDemo> {
+  const registration = await registerUserWithCompany(params);
+  const demoProject = await ensureDemoProjectForCompany({
+    userId: registration.user.id,
+    companyId: registration.company.id,
+    enabled: params.createDemoProject ?? true,
+  });
+
+  return { ...registration, demoProject };
+}
 
 export async function ensureUserHasCompany(userId: string, options?: { name?: string | null; email?: string | null }) {
   const ownedCompanyMembership = await prisma.companyMembership.findFirst({

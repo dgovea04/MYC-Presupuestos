@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   membershipFindFirst: vi.fn(),
   membershipUpsert: vi.fn(),
   transaction: vi.fn(),
+  ensureDemoProjectForCompany: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -24,7 +25,15 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
-import { ensureUserHasCompany, registerUserWithCompany } from "@/lib/auth/registration";
+vi.mock("@/lib/onboarding/demo-project", () => ({
+  ensureDemoProjectForCompany: mocks.ensureDemoProjectForCompany,
+}));
+
+import {
+  ensureUserHasCompany,
+  registerUserWithCompany,
+  registerUserWithCompanyAndDemo,
+} from "@/lib/auth/registration";
 
 describe("ensureUserHasCompany", () => {
   beforeEach(() => {
@@ -183,6 +192,84 @@ describe("registerUserWithCompany", () => {
         name: "jose-alvarez-empresa",
         ruc: null,
       },
+    });
+  });
+});
+
+describe("registerUserWithCompanyAndDemo", () => {
+  beforeEach(() => {
+    mocks.ensureDemoProjectForCompany.mockReset();
+    mocks.transaction.mockReset();
+  });
+
+  it("creates user/company and then creates the onboarding demo", async () => {
+    const tx = {
+      user: {
+        create: vi.fn().mockResolvedValue({ id: "user-1", name: "Maria", email: "maria@example.com" }),
+      },
+      company: {
+        create: vi.fn().mockResolvedValue({ id: "company-1" }),
+      },
+      companyMembership: {
+        create: vi.fn().mockResolvedValue({ companyId: "company-1" }),
+      },
+    };
+    mocks.transaction.mockImplementation(async (callback: (transactionClient: typeof tx) => Promise<unknown>) =>
+      callback(tx),
+    );
+    mocks.ensureDemoProjectForCompany.mockResolvedValue({
+      status: "created",
+      projectId: "project-demo",
+      generalBudgetId: "budget-demo",
+      warnings: [],
+    });
+
+    const result = await registerUserWithCompanyAndDemo({
+      name: "Maria",
+      email: "maria@example.com",
+    });
+
+    expect(result.demoProject.status).toBe("created");
+    expect(mocks.ensureDemoProjectForCompany).toHaveBeenCalledWith({
+      userId: "user-1",
+      companyId: "company-1",
+      enabled: true,
+    });
+  });
+
+  it("can skip demo creation explicitly", async () => {
+    const tx = {
+      user: {
+        create: vi.fn().mockResolvedValue({ id: "user-1", name: "Maria", email: "maria@example.com" }),
+      },
+      company: {
+        create: vi.fn().mockResolvedValue({ id: "company-1" }),
+      },
+      companyMembership: {
+        create: vi.fn().mockResolvedValue({ companyId: "company-1" }),
+      },
+    };
+    mocks.transaction.mockImplementation(async (callback: (transactionClient: typeof tx) => Promise<unknown>) =>
+      callback(tx),
+    );
+    mocks.ensureDemoProjectForCompany.mockResolvedValue({
+      status: "skipped",
+      projectId: null,
+      generalBudgetId: null,
+      warnings: [],
+    });
+
+    const result = await registerUserWithCompanyAndDemo({
+      name: "Maria",
+      email: "maria@example.com",
+      createDemoProject: false,
+    });
+
+    expect(result.demoProject.status).toBe("skipped");
+    expect(mocks.ensureDemoProjectForCompany).toHaveBeenCalledWith({
+      userId: "user-1",
+      companyId: "company-1",
+      enabled: false,
     });
   });
 });
