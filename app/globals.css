@@ -291,15 +291,36 @@ body,
   color: var(--app-text);
 }
 
+/* Neutral border utilities use a stable semantic default even outside transition windows. */
+.theme-app :where(
+  [class~="border"],
+  [class~="border-slate-100"],
+  [class~="border-slate-200"],
+  [class~="border-slate-300"]
+):not(
+  [class*="border-sky-"],
+  [class*="border-blue-"],
+  [class*="border-amber-"],
+  [class*="border-emerald-"],
+  [class*="border-green-"],
+  [class*="border-rose-"],
+  [class*="border-red-"],
+  [class*="border-violet-"],
+  [class*="border-transparent"]
+) {
+  border-color: var(--app-border-soft);
+}
+
 :where(
   [data-theme-transitioning] .theme-app,
   [data-theme-transitioning] .theme-app *,
   [data-theme-transitioning] .theme-app *::before,
   [data-theme-transitioning] .theme-app *::after
 ) {
-  transition: background-color 180ms ease, color 180ms ease, fill 180ms ease, stroke 180ms ease,
-    box-shadow 180ms ease, outline-color 180ms ease, text-decoration-color 180ms ease;
-  transition-duration: 180ms !important;
+  transition: background-color 220ms ease, background 220ms ease, border-color 220ms ease, color 220ms ease,
+    fill 220ms ease, stroke 220ms ease, box-shadow 220ms ease, outline-color 220ms ease,
+    text-decoration-color 220ms ease;
+  transition-duration: 220ms !important;
   transition-delay: 0ms !important;
   transition-timing-function: ease !important;
 }
@@ -316,7 +337,7 @@ body,
 }
 
 [data-theme-transitioning] .theme-app [class*="border"] {
-  transition-property: background-color, color, fill, stroke, box-shadow, outline-color, text-decoration-color, transform, opacity !important;
+  transition-property: background-color, background, border-color, color, fill, stroke, box-shadow, outline-color, text-decoration-color, transform, opacity !important;
 }
 
 /* Neutral border utilities must never fall back to currentColor during a theme switch. */
@@ -333,7 +354,8 @@ body,
   [class*="border-green-"],
   [class*="border-rose-"],
   [class*="border-red-"],
-  [class*="border-violet-"]
+  [class*="border-violet-"],
+  [class*="border-transparent"]
 ) {
   border-color: var(--app-transition-border, var(--app-border-soft)) !important;
 }
@@ -359,7 +381,7 @@ body,
   .app-shell-header
 ) {
   border-color: var(--app-transition-border, var(--app-section-border)) !important;
-  transition-property: background-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;
+  transition-property: background-color, background, border-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;
 }
 
 [data-theme-transitioning] .theme-app :where(
@@ -2492,7 +2514,7 @@ body,
   .app-shell-header
 ) {
   border-color: var(--app-transition-border, var(--app-section-border)) !important;
-  transition-property: background-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;
+  transition-property: background-color, background, border-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;
 }
 
 [data-theme-transitioning] [data-view-mode="excel"] .theme-app :is(

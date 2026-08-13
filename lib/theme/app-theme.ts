@@ -63,7 +63,7 @@ export function applyAppThemeToDocument(theme: AppThemeOption, options: { transi
   if (transitionToken) {
     const prefersReducedMotion =
       typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const duration = prefersReducedMotion ? 0 : 180;
+    const duration = prefersReducedMotion ? 0 : 220;
 
     appThemeTransitionTimeout = window.setTimeout(() => {
       let clearedCurrentTransition = false;

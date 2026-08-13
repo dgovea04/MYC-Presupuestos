@@ -49,7 +49,7 @@ describe("app theme helpers", () => {
       expect(document.documentElement.dataset.themeTransitioning).toBeDefined();
       expect(document.documentElement.dataset.themeTransitioning).not.toBe(firstTransitionToken);
 
-      vi.advanceTimersByTime(179);
+      vi.advanceTimersByTime(219);
       expect(document.documentElement.dataset.themeTransitioning).toBeDefined();
 
       vi.advanceTimersByTime(1);

@@ -44,15 +44,18 @@ describe("excel field border styles", () => {
 
     expect(globalsCss).toContain("[data-theme-transitioning] .theme-app *");
     expect(globalsCss).toContain(":where(");
-    expect(globalsCss).toContain("transition: background-color 180ms ease");
-    expect(globalsCss).not.toContain("border-color 180ms ease");
+    expect(globalsCss).toContain(
+      "transition: background-color 220ms ease, background 220ms ease, border-color 220ms ease, color 220ms ease",
+    );
     expect(globalsCss).toContain("@media (prefers-reduced-motion: reduce)");
     expect(globalsCss).toContain("[data-theme-transitioning] .dashboard-stat-card");
     expect(globalsCss).toContain("[data-theme-transitioning] .theme-app [class*=\"border\"]");
     expect(globalsCss).toContain('[class~="border-slate-200"]');
     expect(globalsCss).toContain('[class~="border"]');
     expect(globalsCss).toContain("Neutral border utilities must never fall back to currentColor");
-    expect(globalsCss).toContain("transition-property: background-color, color");
+    expect(globalsCss).toContain("Neutral border utilities use a stable semantic default even outside transition windows.");
+    expect(globalsCss).toContain(".theme-app :where(\n  [class~=\"border\"],\n  [class~=\"border-slate-100\"],");
+    expect(globalsCss).toContain("transition-property: background-color, background, border-color, color");
     expect(globalsCss).toContain("transition: none !important;");
     expect(globalsCss).toContain("[data-theme-transitioning] .theme-app .app-shell-header");
     expect(globalsCss).toContain("border-color: var(--app-transition-border, var(--app-border-soft)) !important;");
@@ -70,7 +73,7 @@ describe("excel field border styles", () => {
     expect(globalsCss).toContain("border-color: var(--app-transition-border, var(--app-section-border)) !important;");
     expect(globalsCss).toContain("border-color: var(--app-transition-border, var(--app-section-border-soft)) !important;");
     expect(globalsCss).toContain("border-color: var(--app-transition-border, var(--app-section-border-strong)) !important;");
-    expect(globalsCss).toContain("transition-property: background-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;");
+    expect(globalsCss).toContain("transition-property: background-color, background, border-color, color, fill, stroke, outline-color, text-decoration-color, transform, opacity !important;");
     expect(globalsCss).toContain("--app-transition-border");
     expect(globalsCss).toContain(".dashboard-surface-card-primary,");
     expect(globalsCss).toContain(".dashboard-surface-card-soft,");
@@ -87,4 +90,5 @@ describe("excel field border styles", () => {
     expect(globalsCss).toContain('[data-theme-transitioning] [data-view-mode="excel"] .theme-app :is(');
     expect(globalsCss).toContain("Excel overrides are declared late in the stylesheet");
   });
+
 });
