@@ -160,11 +160,11 @@ describe("WorkSchedulePageContent", () => {
   // Partial-date guard in `handleActivateInlineRow`: trap pinned in `utils/edit-helpers.test.ts`.
 
   it("renders grouped sub budgets and opens the side editor for a partida", async () => {
-    const { clickByText, getByText, getByTestId, getAllByTestId } = await renderContent();
+    const { clickByText, getByText, queryByText, getByTestId, getAllByTestId } = await renderContent();
 
     expect(getByText("Arquitectura")).toBeTruthy();
     expect(getByText("Estructuras")).toBeTruthy();
-    expect(getByText("2 periodos")).toBeTruthy();
+    expect(queryByText("2 periodos")).toBeNull();
     const ganttBars = getAllByTestId("gantt-bar");
     expect(ganttBars.length).toBeGreaterThan(0);
     expect(getAllByTestId("work-schedule-month-band")).toHaveLength(2);
@@ -213,6 +213,67 @@ describe("WorkSchedulePageContent", () => {
     expect(document.querySelector('[data-testid="work-schedule-month-band"]')?.textContent).toBe("Sin rango programado");
     expect(document.querySelector('[data-testid="work-schedule-week-band"]')?.textContent).toBe("Sin semanas");
     expect(document.querySelector('[data-testid="work-schedule-empty-day-header"]')).toBeTruthy();
+
+    const minimapSpacer = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-timeline-minimap-spacer"]',
+    );
+    expect(minimapSpacer?.style.height).toBe("92px");
+  });
+
+  it("synchronizes modern mode data row heights at 45px across the table and Gantt", async () => {
+    await renderContent();
+
+    const tableRow = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-table-row-item-1"]',
+    );
+    const timelineRow = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-timeline-row"][data-line-id="item-1"]',
+    );
+
+    expect(tableRow?.style.height).toBe("45px");
+    expect(timelineRow?.style.height).toBe("45px");
+  });
+
+  it("does not apply Excel header spacing or font sizing in modern mode", async () => {
+    await renderContent();
+
+    const leftPanel = document.querySelector<HTMLElement>('[data-testid="work-schedule-left-panel"]');
+    const table = document.querySelector<HTMLTableElement>('[data-testid="work-schedule-left-scroll"] table');
+
+    expect(leftPanel?.className).not.toContain("pt-[32px]");
+    expect(leftPanel?.className).toContain("pt-0");
+    expect(table?.className).not.toContain("[&_th]:text-[11px]");
+
+    const leftHeaderCell = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-left-scroll"] th',
+    );
+    const timelineHeader = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-timeline-header"]',
+    );
+
+    expect(leftHeaderCell?.className).toContain("h-[73px]");
+    expect(timelineHeader?.className).toContain("h-[73px]");
+  });
+
+  it("keeps Excel header spacing and compact font sizing in Excel mode", async () => {
+    const { queryByText } = await renderWithView(createView(), createSettings({ defaultViewMode: "excel" }));
+
+    const leftPanel = document.querySelector<HTMLElement>('[data-testid="work-schedule-left-panel"]');
+    const table = document.querySelector<HTMLTableElement>('[data-testid="work-schedule-left-scroll"] table');
+
+    expect(leftPanel?.className).toContain("pt-[32px]");
+    expect(table?.className).toContain("[&_th]:text-[11px]");
+
+    const leftHeaderCell = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-left-scroll"] th',
+    );
+    const timelineHeader = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-timeline-header"]',
+    );
+
+    expect(leftHeaderCell?.className).toContain("h-[72px]");
+    expect(timelineHeader?.className).toContain("h-[72px]");
+    expect(queryByText("2 periodos")).toBeNull();
   });
 
   it("renders the Hito toggle button with the icon, label 'Hito', and title 'Marcar como hito' in the inactive state", async () => {
@@ -1392,7 +1453,7 @@ describe("WorkSchedulePageContent", () => {
     expect(getInputByLabel("Zoom").value).toBe("10");
   });
 
-  it("syncs gantt row heights from the table rows", async () => {
+  it("keeps modern Gantt group and data rows at the fixed 45px height", async () => {
     const { getByTestId, getTimelineRowByLineId } = await renderContent();
 
     const groupRow = getByTestId("work-schedule-table-group-row-sub-1");
@@ -1405,8 +1466,9 @@ describe("WorkSchedulePageContent", () => {
       window.dispatchEvent(new Event("resize"));
     });
 
-    expect(getByTestId("work-schedule-timeline-group-row-sub-1").style.height).toBe("44px");
-    expect(getTimelineRowByLineId("item-1").style.height).toBe("86px");
+    expect(groupRow.style.height).toBe("45px");
+    expect(getByTestId("work-schedule-timeline-group-row-sub-1").style.height).toBe("45px");
+    expect(getTimelineRowByLineId("item-1").style.height).toBe("45px");
   });
 
   it("hides PU and Parcial by default in cronograma and allows showing them from the header", async () => {

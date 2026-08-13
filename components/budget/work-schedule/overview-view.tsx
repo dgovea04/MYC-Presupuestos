@@ -48,13 +48,18 @@ export const timelineWeekFormatter = new Intl.DateTimeFormat("es-PE", {
 export const DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH = DEFAULT_WORK_SCHEDULE_TIMELINE_PANEL_WIDTH;
 export const MIN_OVERVIEW_TIMELINE_PANEL_WIDTH = 360;
 export const OVERVIEW_HEADER_HEIGHT_CLASS = "h-[72px]";
+export const MODERN_OVERVIEW_HEADER_HEIGHT_CLASS = "h-[73px]";
 export const OVERVIEW_GROUP_ROW_HEIGHT_CLASS = "h-10";
+export const MODERN_OVERVIEW_GROUP_ROW_HEIGHT = 45;
+export const MODERN_OVERVIEW_GROUP_ROW_HEIGHT_CLASS = "h-[45px]";
 export const OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS = "h-[44px]";
 export const OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR = "--work-schedule-timeline-panel-width";
 export const OVERVIEW_VIRTUAL_SCROLL_FALLBACK_HEIGHT = 720;
 export const OVERVIEW_VIRTUAL_OVERSCAN_PX = 320;
 export const OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT = 40;
 export const OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT = 40;
+export const MODERN_OVERVIEW_ROW_HEIGHT = 45;
+export const OVERVIEW_TIMELINE_MINIMAP_RESERVED_HEIGHT = 92;
 export const OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT = 40;
 export const OVERVIEW_TIMELINE_DAY_WIDTH_PX = 16;
 export const OVERVIEW_TIMELINE_DAY_GAP_PX = 1;
@@ -202,6 +207,7 @@ export function WorkScheduleOverview({
   const leftScrollViewportRef = useRef<HTMLDivElement | null>(null);
   const leftBottomScrollRef = useRef<HTMLDivElement | null>(null);
   const timelinePanelRef = useRef<HTMLDivElement | null>(null);
+  const timelineMinimapRef = useRef<HTMLDivElement | null>(null);
   const resizeSessionRef = useRef<{ startX: number; startWidth: number; leftPanelWidth: number } | null>(null);
   const pendingScrollWriteFrameRef = useRef<number | null>(null);
   const pendingVerticalScrollFrameRef = useRef<number | null>(null);
@@ -222,6 +228,7 @@ export function WorkScheduleOverview({
   // with the actual layout (padding, resize-handle width, runtime
   // resizing) instead of a static timelinePanelWidth - 24 calculation.
   const [scrollContainerWidth, setScrollContainerWidth] = useState(0);
+  const [timelineMinimapHeight, setTimelineMinimapHeight] = useState(OVERVIEW_TIMELINE_MINIMAP_RESERVED_HEIGHT);
 
   useEffect(() => {
     const node = scrollContainerRef.current;
@@ -238,6 +245,38 @@ export function WorkScheduleOverview({
       observer.disconnect();
     };
   }, []);
+
+  useLayoutEffect(() => {
+    if (!hasDailyTimeline) {
+      return;
+    }
+
+    const minimapWrapper = timelineMinimapRef.current;
+    if (!minimapWrapper) {
+      return;
+    }
+
+    const updateMinimapHeight = () => {
+      const measuredHeight = Math.ceil(minimapWrapper.getBoundingClientRect().height);
+      if (measuredHeight > 0) {
+        setTimelineMinimapHeight((currentHeight) => (currentHeight === measuredHeight ? currentHeight : measuredHeight));
+      }
+    };
+
+    updateMinimapHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(updateMinimapHeight);
+    observer.observe(minimapWrapper);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasDailyTimeline, timelinePanelWidth]);
+
   const [showCostColumns, setShowCostColumns] = useState(() => readOverviewCostColumnsVisibility(data.budgetId));
   const [timelineZoomPercent, setTimelineZoomPercent] = useState(() => readOverviewTimelineZoomPercent(data.budgetId));
   const [tableGroupHeights, setTableGroupHeights] = useState<Record<string, number>>(
@@ -361,7 +400,9 @@ export function WorkScheduleOverview({
         kind: "group",
         group,
         collapsed,
-        estimatedHeight: tableGroupHeights[group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
+        estimatedHeight: isExcelMode
+          ? tableGroupHeights[group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT
+          : MODERN_OVERVIEW_GROUP_ROW_HEIGHT,
       });
 
       if (collapsed) {
@@ -389,13 +430,15 @@ export function WorkScheduleOverview({
           kind: "row",
           group,
           row,
-          estimatedHeight: tableLineHeights[row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
+          estimatedHeight: isExcelMode
+            ? tableLineHeights[row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT
+            : MODERN_OVERVIEW_ROW_HEIGHT,
         });
       }
     }
 
     return items;
-  }, [collapsedGroups, collapsedLevelIds, tableGroupHeights, tableLineHeights, visibleGroups]);
+  }, [collapsedGroups, collapsedLevelIds, isExcelMode, tableGroupHeights, tableLineHeights, visibleGroups]);
   const overviewVirtualWindow = useMemo(
     () =>
       buildOverviewVirtualWindow({
@@ -471,17 +514,21 @@ export function WorkScheduleOverview({
 
     for (const item of overviewVirtualWindow.visibleItems) {
       if (item.kind === "group") {
-        cursorTop += normalizeMeasuredHeight(
-          tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
-          OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
-        );
+        cursorTop += isExcelMode
+          ? normalizeMeasuredHeight(
+              tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
+              OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+            )
+          : MODERN_OVERVIEW_GROUP_ROW_HEIGHT;
         continue;
       }
 
-      const rowHeight = normalizeMeasuredHeight(
-        tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
-        OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
-      );
+      const rowHeight = isExcelMode
+        ? normalizeMeasuredHeight(
+            tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
+            OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+          )
+        : MODERN_OVERVIEW_ROW_HEIGHT;
 
       if (item.row.kind === "line") {
         positions.set(item.row.line.itemCode, {
@@ -495,7 +542,7 @@ export function WorkScheduleOverview({
     }
 
     return positions;
-  }, [overviewVirtualWindow, tableGroupHeights, tableLineHeights]);
+  }, [isExcelMode, overviewVirtualWindow, tableGroupHeights, tableLineHeights]);
   const timelineDependencyPaths = useMemo(
     () =>
       buildTimelineDependencyPaths({
@@ -1130,6 +1177,10 @@ export function WorkScheduleOverview({
     document.body.style.userSelect = "none";
   }
 
+  const overviewHeaderHeightClass = isExcelMode
+    ? OVERVIEW_HEADER_HEIGHT_CLASS
+    : MODERN_OVERVIEW_HEADER_HEIGHT_CLASS;
+
   return (
     <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardContent className="space-y-4 p-0">
@@ -1239,8 +1290,10 @@ export function WorkScheduleOverview({
               ref={leftPanelRef}
               data-testid="work-schedule-left-panel"
               className={cn(
-                "overflow-hidden border bg-[var(--app-surface)] pt-[32px]",
-                isExcelMode ? "rounded-none border-[var(--app-border-strong)]" : "rounded-2xl border-[var(--app-border)]",
+                "overflow-hidden border bg-[var(--app-surface)]",
+                isExcelMode
+                  ? "rounded-none border-[var(--app-border-strong)] pt-[32px]"
+                  : "rounded-2xl border-[var(--app-border)] pt-0",
               )}
             >
               <div
@@ -1251,31 +1304,36 @@ export function WorkScheduleOverview({
                 style={leftTableViewportStyle}
               >
                 <div style={{ width: `${leftTableWidth}px`, minWidth: `${leftTableWidth}px` }}>
-                  <Table className="table-fixed [&_td]:p-2 [&_td]:text-xs [&_th]:px-2 [&_th]:text-[11px]">
+                  <Table
+                    className={cn(
+                      "table-fixed [&_td]:p-2 [&_td]:text-xs [&_th]:px-2",
+                      isExcelMode && "[&_th]:text-[11px]",
+                    )}
+                  >
                     <colgroup>
                       {leftTableColumnWidths.map((width, index) => (
                         <col key={`work-schedule-left-col-${index}`} style={{ width: `${width}px` }} />
                       ))}
                     </colgroup>
                     <THead className="bg-[var(--app-surface-muted)]">
-                      <TR className={OVERVIEW_HEADER_HEIGHT_CLASS}>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "bg-[var(--app-surface-strong)] px-1 py-0 text-center align-middle !text-[10px] text-[var(--app-text-muted)]")}>#</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Item</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Partida</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Duracion</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Inicio</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Fin</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Inicio real</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Fin real</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>% Avance</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Predecesora</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Cuadrilla</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Rendimiento</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Unidad</TH>
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Metrado</TH>
-                        {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>PU</TH> : null}
-                        {showCostColumns ? <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "py-0 align-middle")}>Parcial</TH> : null}
-                        <TH className={cn(OVERVIEW_HEADER_HEIGHT_CLASS, "w-[168px] py-0 text-right align-middle")}>Accion</TH>
+                      <TR className={overviewHeaderHeightClass}>
+                        <TH className={cn(overviewHeaderHeightClass, "bg-[var(--app-surface-strong)] px-1 py-0 text-center align-middle !text-[10px] text-[var(--app-text-muted)]")}>#</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Item</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Partida</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Duracion</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Inicio</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Fin</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Inicio real</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Fin real</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>% Avance</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Predecesora</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Cuadrilla</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Rendimiento</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Unidad</TH>
+                        <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Metrado</TH>
+                        {showCostColumns ? <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>PU</TH> : null}
+                        {showCostColumns ? <TH className={cn(overviewHeaderHeightClass, "py-0 align-middle")}>Parcial</TH> : null}
+                        <TH className={cn(overviewHeaderHeightClass, "w-[168px] py-0 text-right align-middle")}>Accion</TH>
                       </TR>
                     </THead>
                     <TBody>
@@ -1291,7 +1349,11 @@ export function WorkScheduleOverview({
                             ref={(element) => setGroupRowRef(item.group.subBudgetId, element)}
                             data-testid={`work-schedule-table-group-row-${item.group.subBudgetId}`}
                             data-group-row-id={item.group.subBudgetId}
-                            className={cn("bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]", OVERVIEW_GROUP_ROW_HEIGHT_CLASS)}
+                            className={cn(
+                              "bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]",
+                              isExcelMode ? OVERVIEW_GROUP_ROW_HEIGHT_CLASS : MODERN_OVERVIEW_GROUP_ROW_HEIGHT_CLASS,
+                            )}
+                            style={isExcelMode ? undefined : { height: `${MODERN_OVERVIEW_GROUP_ROW_HEIGHT}px` }}
                           >
                             <TD className="bg-[var(--app-surface-strong)] px-1 text-center align-middle !text-[10px] font-medium text-[var(--app-text-muted)]">
                               {overviewRowNumbers[`group:${item.group.subBudgetId}`] ?? ""}
@@ -1331,6 +1393,7 @@ export function WorkScheduleOverview({
                             onEditLine={onEditLine}
                             rowNumber={overviewRowNumbers[`row:${item.row.rowId}`] ?? null}
                             onRegisterRow={setLineRowRef}
+                            rowHeight={isExcelMode ? undefined : MODERN_OVERVIEW_ROW_HEIGHT}
                             inlineDraft={inlineDrafts[item.row.line.budgetItemId] ?? null}
                             isInlineActive={activeInlineRowId === item.row.line.budgetItemId}
                             inlineSaveState={inlineSaveStateById[item.row.line.budgetItemId] ?? "idle"}
@@ -1354,6 +1417,7 @@ export function WorkScheduleOverview({
                             collapsed={collapsedLevelIds[item.row.rowId] === true}
                             onToggleCollapsed={onToggleCollapsedLevel}
                             onRegisterRow={setLineRowRef}
+                            rowHeight={isExcelMode ? undefined : MODERN_OVERVIEW_ROW_HEIGHT}
                           />
                         ),
                       )}
@@ -1375,6 +1439,14 @@ export function WorkScheduleOverview({
                 </div>
               </div>
             </div>
+
+            {hasDailyTimeline ? (
+              <div
+                aria-hidden="true"
+                data-testid="work-schedule-timeline-minimap-spacer"
+                style={{ height: `${timelineMinimapHeight}px` }}
+              />
+            ) : null}
 
             <div
               ref={timelinePanelRef}
@@ -1530,13 +1602,15 @@ export function WorkScheduleOverview({
                             data-testid={`work-schedule-timeline-group-row-${item.group.subBudgetId}`}
                             className={cn(
                               "flex items-center justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-muted)] px-2.5 text-xs font-semibold text-[var(--app-text-strong)]",
-                              OVERVIEW_GROUP_ROW_HEIGHT_CLASS,
+                              isExcelMode ? OVERVIEW_GROUP_ROW_HEIGHT_CLASS : MODERN_OVERVIEW_GROUP_ROW_HEIGHT_CLASS,
                             )}
                             style={{
-                              height: `${normalizeMeasuredHeight(
-                                tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
-                                OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
-                              )}px`,
+                              height: `${isExcelMode
+                                ? normalizeMeasuredHeight(
+                                    tableGroupHeights[item.group.subBudgetId] ?? OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT,
+                                    OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+                                  )
+                                : MODERN_OVERVIEW_GROUP_ROW_HEIGHT}px`,
                             }}
                           >
                             <span>{item.group.subBudgetName}</span>
@@ -1562,10 +1636,12 @@ export function WorkScheduleOverview({
                             timelineDayWidth={getZoomedTimelineDayWidth(timelineZoomPercent)}
                             timelineDayGap={getZoomedTimelineDayGap(timelineZoomPercent)}
                             highlighted={item.row.kind === "line" && highlightedBudgetItemId === item.row.line.budgetItemId}
-                            rowHeight={normalizeMeasuredHeight(
-                              tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
-                              OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
-                            )}
+                            rowHeight={isExcelMode
+                              ? normalizeMeasuredHeight(
+                                  tableLineHeights[item.row.rowId] ?? OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT,
+                                  OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT,
+                                )
+                              : MODERN_OVERVIEW_ROW_HEIGHT}
                             timelineStartIso={data.timeline.startDate}
                             timelineEndIso={data.timeline.endDate}
                             onGanttBarChange={onGanttBarChange}
@@ -1593,6 +1669,7 @@ export function WorkScheduleOverview({
                   </div>
                 </div>
                 <div
+                  ref={timelineMinimapRef}
                   data-testid="gantt-minimap-wrapper"
                   className={cn(
                     "shrink-0 border-t border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-3 py-2",
@@ -1699,6 +1776,7 @@ export function WorkScheduleOverview({
 type WorkScheduleLineTableRowProps = {
   line: WorkScheduleLineRecord;
   rowNumber: number | null;
+  rowHeight?: number;
   displayPredecessor: string;
   dateFormat: string;
   currency: string;
@@ -1725,6 +1803,7 @@ type WorkScheduleLineTableRowProps = {
 const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
   line,
   rowNumber,
+  rowHeight,
   displayPredecessor,
   dateFormat,
   currency,
@@ -1780,6 +1859,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
       data-inline-row-id={inlineRowId}
       data-highlighted={highlighted ? "true" : "false"}
       data-critical={showCriticalPath && line.criticalPath?.isCritical ? "true" : (showCriticalPath && line.criticalPath && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays ? "near" : "false")}
+      style={rowHeight ? { height: `${rowHeight}px` } : undefined}
       className={cn(
         showCriticalPath && line.criticalPath?.isCritical ? "bg-rose-50/80 dark:bg-rose-500/10" : (showCriticalPath && line.criticalPath && line.criticalPath.totalSlackDays > 0 && line.criticalPath.totalSlackDays <= nearCriticalSlackDays ? "bg-amber-50/80 dark:bg-amber-500/10" : ""),
         highlighted ? "bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/12 dark:ring-amber-500/30" : "",
@@ -1843,9 +1923,6 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
               <PenSquare className="h-[13px] w-[13px]" style={{ height: "13px", width: "13px" }} />
             </Button>
           </div>
-          <p className="truncate whitespace-nowrap pt-0.5 text-[11px] text-[var(--app-text-muted)]">
-            {line.monthlyDistributions.length || 0} periodos
-          </p>
           {inlineError ? <p className="truncate whitespace-nowrap text-[11px] text-rose-600">{inlineError}</p> : null}
         </div>
       </TD>
@@ -2034,6 +2111,7 @@ const WorkScheduleLineTableRow = memo(function WorkScheduleLineTableRow({
 type WorkScheduleLevelTableRowProps = {
   row: Extract<WorkScheduleDisplayRowRecord, { kind: "level" }>;
   rowNumber: number | null;
+  rowHeight?: number;
   dateFormat: string;
   currency: string;
   currencyDecimals: number;
@@ -2046,6 +2124,7 @@ type WorkScheduleLevelTableRowProps = {
 const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
   row,
   rowNumber,
+  rowHeight,
   dateFormat,
   currency,
   currencyDecimals,
@@ -2060,7 +2139,13 @@ const WorkScheduleLevelTableRow = memo(function WorkScheduleLevelTableRow({
       : "bg-[var(--app-surface-muted)] font-medium text-[var(--app-text)]";
 
   return (
-    <TR ref={(element) => onRegisterRow(row.rowId, element)} data-testid={`work-schedule-table-row-${row.rowId}`} data-table-row-id={row.rowId} className={cn(toneClassName)}>
+    <TR
+      ref={(element) => onRegisterRow(row.rowId, element)}
+      data-testid={`work-schedule-table-row-${row.rowId}`}
+      data-table-row-id={row.rowId}
+      style={rowHeight ? { height: `${rowHeight}px` } : undefined}
+      className={cn(toneClassName)}
+    >
       <TD className="bg-[var(--app-surface-strong)] px-1 text-center align-middle !text-[10px] font-medium text-[var(--app-text-muted)]">{rowNumber ?? ""}</TD>
       <TD className="align-middle">{row.itemCode}</TD>
       <TD className="align-middle">
@@ -2127,7 +2212,10 @@ function TimelineHeader({
   return (
     <div
       data-testid="work-schedule-timeline-header"
-      className="border-b border-[var(--app-border)] bg-[var(--app-surface)]"
+      className={cn(
+        "border-b border-[var(--app-border)] bg-[var(--app-surface)]",
+        isExcelMode ? OVERVIEW_HEADER_HEIGHT_CLASS : MODERN_OVERVIEW_HEADER_HEIGHT_CLASS,
+      )}
     >
       <div className="grid gap-px bg-[var(--app-border)]" style={{ gridTemplateColumns }}>
         {months.map((month, index) => (
@@ -2199,6 +2287,7 @@ function areWorkScheduleLineTableRowPropsEqual(
   return (
     previousProps.line === nextProps.line &&
     previousProps.rowNumber === nextProps.rowNumber &&
+    previousProps.rowHeight === nextProps.rowHeight &&
     previousProps.displayPredecessor === nextProps.displayPredecessor &&
     previousProps.dateFormat === nextProps.dateFormat &&
     previousProps.currency === nextProps.currency &&
@@ -2229,6 +2318,7 @@ function areWorkScheduleLevelTableRowPropsEqual(
   return (
     previousProps.row === nextProps.row &&
     previousProps.rowNumber === nextProps.rowNumber &&
+    previousProps.rowHeight === nextProps.rowHeight &&
     previousProps.dateFormat === nextProps.dateFormat &&
     previousProps.currency === nextProps.currency &&
     previousProps.currencyDecimals === nextProps.currencyDecimals &&
