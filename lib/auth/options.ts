@@ -6,9 +6,13 @@ import { z } from "zod";
 import { authSessionCookieName } from "@/lib/auth/cookies";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { ensureUserHasCompany, registerUserWithCompany } from "@/lib/auth/registration";
+import {
+  ensureUserHasCompany,
+  registerUserWithCompanyAndDemo,
+} from "@/lib/auth/registration";
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { loginSchema } from "@/lib/validations/auth";
+import { ensureDemoProjectForCompany } from "@/lib/onboarding/demo-project";
 import { listUserWorkspaces } from "@/lib/workspace/active-workspace";
 
 const authSecret =
@@ -213,9 +217,15 @@ export const authOptions: NextAuthOptions = {
           }
 
           try {
-            await ensureUserHasCompany(existingUser.id, {
+            const companyId = await ensureUserHasCompany(existingUser.id, {
               name: existingUser.name,
               email: existingUser.email,
+            });
+
+            await ensureDemoProjectForCompany({
+              userId: existingUser.id,
+              companyId,
+              enabled: true,
             });
           } catch {
             return false;
@@ -225,7 +235,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          await registerUserWithCompany({
+          await registerUserWithCompanyAndDemo({
             name: googleProfile.name ?? googleProfile.email.split("@")[0],
             email: googleProfile.email,
             avatarUrl: googleProfile.picture,

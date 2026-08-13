@@ -5,8 +5,9 @@ const mocks = vi.hoisted(() => ({
   companyFindFirstMock: vi.fn(),
   companyMembershipFindManyMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
-  registerUserWithCompanyMock: vi.fn(),
+  registerUserWithCompanyAndDemoMock: vi.fn(),
   ensureUserHasCompanyMock: vi.fn(),
+  ensureDemoProjectForCompanyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -20,7 +21,11 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/lib/auth/registration", () => ({
   ensureUserHasCompany: mocks.ensureUserHasCompanyMock,
-  registerUserWithCompany: mocks.registerUserWithCompanyMock,
+  registerUserWithCompanyAndDemo: mocks.registerUserWithCompanyAndDemoMock,
+}));
+
+vi.mock("@/lib/onboarding/demo-project", () => ({
+  ensureDemoProjectForCompany: mocks.ensureDemoProjectForCompanyMock,
 }));
 
 import { authOptions } from "@/lib/auth/options";
@@ -111,8 +116,9 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     mocks.companyFindFirstMock.mockReset();
     mocks.companyMembershipFindManyMock.mockReset();
     mocks.userFindUniqueMock.mockReset();
-    mocks.registerUserWithCompanyMock.mockReset();
+    mocks.registerUserWithCompanyAndDemoMock.mockReset();
     mocks.ensureUserHasCompanyMock.mockReset();
+    mocks.ensureDemoProjectForCompanyMock.mockReset();
     resetUserProfileColumnSupportCacheForTests();
   });
 
@@ -123,7 +129,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     // ── signIn: no existing user → registerUserWithCompany ──
     mockProfileColumns();
     mockDbRows([]);
-    mocks.registerUserWithCompanyMock.mockResolvedValue({
+    mocks.registerUserWithCompanyAndDemoMock.mockResolvedValue({
       user: { id: "user-maria" },
       company: { id: "company-maria" },
     });
@@ -137,7 +143,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     });
 
     expect(signInResult).toBe(true);
-    expect(mocks.registerUserWithCompanyMock).toHaveBeenCalledWith({
+    expect(mocks.registerUserWithCompanyAndDemoMock).toHaveBeenCalledWith({
       name: "Maria Calderon",
       email: "maria@gmail.com",
       avatarUrl: "https://lh3.googleusercontent.com/photo",
@@ -239,7 +245,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     });
 
     expect(signInResult).toBe(true);
-    expect(mocks.registerUserWithCompanyMock).not.toHaveBeenCalled();
+    expect(mocks.registerUserWithCompanyAndDemoMock).not.toHaveBeenCalled();
     expect(mocks.ensureUserHasCompanyMock).toHaveBeenCalledWith("user-maria", {
       name: "Maria Calderon",
       email: "maria@gmail.com",
@@ -309,7 +315,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     });
 
     expect(signInResult).toBe(true);
-    expect(mocks.registerUserWithCompanyMock).not.toHaveBeenCalled();
+    expect(mocks.registerUserWithCompanyAndDemoMock).not.toHaveBeenCalled();
     expect(mocks.ensureUserHasCompanyMock).toHaveBeenCalledWith("user-maria", {
       name: "Maria Calderon",
       email: "maria@gmail.com",
@@ -396,7 +402,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     });
 
     expect(signInResult).toBe(false);
-    expect(mocks.registerUserWithCompanyMock).not.toHaveBeenCalled();
+    expect(mocks.registerUserWithCompanyAndDemoMock).not.toHaveBeenCalled();
   });
 
   it("denies the full flow: registration failure is caught and returns false", async () => {
@@ -405,7 +411,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
 
     mockProfileColumns();
     mockDbRows([]);
-    mocks.registerUserWithCompanyMock.mockRejectedValue(new Error("DB connection failed"));
+    mocks.registerUserWithCompanyAndDemoMock.mockRejectedValue(new Error("DB connection failed"));
 
     const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
@@ -416,6 +422,6 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     });
 
     expect(signInResult).toBe(false);
-    expect(mocks.registerUserWithCompanyMock).toHaveBeenCalledTimes(1);
+    expect(mocks.registerUserWithCompanyAndDemoMock).toHaveBeenCalledTimes(1);
   });
 });

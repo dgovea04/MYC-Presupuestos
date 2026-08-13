@@ -2,14 +2,15 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock, registerUserWithCompanyMock, ensureUserHasCompanyMock } = vi.hoisted(() => ({
+const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock, registerUserWithCompanyAndDemoMock, ensureUserHasCompanyMock, ensureDemoProjectForCompanyMock } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
   companyFindFirstMock: vi.fn(),
   companyMembershipFindManyMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
   verifyPasswordMock: vi.fn(),
-  registerUserWithCompanyMock: vi.fn(),
+  registerUserWithCompanyAndDemoMock: vi.fn(),
   ensureUserHasCompanyMock: vi.fn(),
+  ensureDemoProjectForCompanyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -27,7 +28,11 @@ vi.mock("@/lib/auth/password", () => ({
 
 vi.mock("@/lib/auth/registration", () => ({
   ensureUserHasCompany: ensureUserHasCompanyMock,
-  registerUserWithCompany: registerUserWithCompanyMock,
+  registerUserWithCompanyAndDemo: registerUserWithCompanyAndDemoMock,
+}));
+
+vi.mock("@/lib/onboarding/demo-project", () => ({
+  ensureDemoProjectForCompany: ensureDemoProjectForCompanyMock,
 }));
 
 import { authOptions } from "@/lib/auth/options";
@@ -63,8 +68,9 @@ describe("authOptions callbacks", () => {
     companyMembershipFindManyMock.mockReset();
     userFindUniqueMock.mockReset();
     verifyPasswordMock.mockReset();
-    registerUserWithCompanyMock.mockReset();
+    registerUserWithCompanyAndDemoMock.mockReset();
     ensureUserHasCompanyMock.mockReset();
+    ensureDemoProjectForCompanyMock.mockReset();
     resetUserProfileColumnSupportCacheForTests();
   });
 
@@ -352,7 +358,40 @@ describe("authOptions callbacks", () => {
       expect(result).toBe(false);
     });
 
-    it("ensures an active existing Google user has an initial company", async () => {
+    it("registers a new Google user with a company and demo project", async () => {
+      queryRawMock
+        .mockResolvedValueOnce([
+          { column_name: "avatarUrl" },
+          { column_name: "phone" },
+          { column_name: "jobTitle" },
+          { column_name: "bio" },
+          { column_name: "emailVerifiedAt" },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const result = await runSignInCallback({
+        user: { email: "maria@example.com" },
+        account: { provider: "google", type: "oauth", providerAccountId: "123" },
+        profile: {
+          email: "maria@example.com",
+          email_verified: true,
+          name: "Maria Calderon",
+          picture: "https://example.com/avatar.png",
+        },
+        email: undefined,
+        credentials: undefined,
+      });
+
+      expect(result).toBe(true);
+      expect(registerUserWithCompanyAndDemoMock).toHaveBeenCalledWith({
+        name: "Maria Calderon",
+        email: "maria@example.com",
+        avatarUrl: "https://example.com/avatar.png",
+        emailVerifiedAt: expect.any(Date),
+      });
+    });
+
+    it("ensures an active existing Google user has an initial company and demo project", async () => {
       queryRawMock
         .mockResolvedValueOnce([
           { column_name: "avatarUrl" },
@@ -389,7 +428,12 @@ describe("authOptions callbacks", () => {
         name: "Google User",
         email: "google@example.com",
       });
-      expect(registerUserWithCompanyMock).not.toHaveBeenCalled();
+      expect(ensureDemoProjectForCompanyMock).toHaveBeenCalledWith({
+        userId: "user-google-existing",
+        companyId: "company-google",
+        enabled: true,
+      });
+      expect(registerUserWithCompanyAndDemoMock).not.toHaveBeenCalled();
     });
   });
 
