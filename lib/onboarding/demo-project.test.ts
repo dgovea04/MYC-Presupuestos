@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   projectFindFirst: vi.fn(),
   analyzeProjectPackageBuffer: vi.fn(),
   importProjectPackageToMyc: vi.fn(),
+  trackServerEvent: vi.fn(),
 }));
 
 vi.mock("node:fs/promises", () => ({
@@ -27,6 +28,10 @@ vi.mock("@/lib/mcp/import-persistence", () => ({
   importProjectPackageToMyc: mocks.importProjectPackageToMyc,
 }));
 
+vi.mock("@/lib/analytics/events", () => ({
+  trackServerEvent: mocks.trackServerEvent,
+}));
+
 import { ensureDemoProjectForCompany } from "@/lib/onboarding/demo-project";
 
 describe("ensureDemoProjectForCompany", () => {
@@ -35,6 +40,7 @@ describe("ensureDemoProjectForCompany", () => {
     mocks.projectFindFirst.mockReset();
     mocks.analyzeProjectPackageBuffer.mockReset();
     mocks.importProjectPackageToMyc.mockReset();
+    mocks.trackServerEvent.mockReset();
   });
 
   it("skips when disabled", async () => {
@@ -62,6 +68,27 @@ describe("ensureDemoProjectForCompany", () => {
 
     expect(mocks.readFile).not.toHaveBeenCalled();
     expect(mocks.importProjectPackageToMyc).not.toHaveBeenCalled();
+    expect(mocks.trackServerEvent).toHaveBeenCalledWith("demo_project_already_exists", {
+      userId: "user-1",
+      companyId: "company-1",
+      projectId: "project-demo",
+      generalBudgetId: "budget-general",
+      warnings: [],
+    });
+  });
+
+  it("continues when analytics tracking fails", async () => {
+    mocks.projectFindFirst.mockResolvedValue({ id: "project-demo", budgets: [{ id: "budget-general" }] });
+    mocks.trackServerEvent.mockRejectedValue(new Error("analytics unavailable"));
+
+    await expect(
+      ensureDemoProjectForCompany({ userId: "user-1", companyId: "company-1" }),
+    ).resolves.toEqual({
+      status: "already_exists",
+      projectId: "project-demo",
+      generalBudgetId: "budget-general",
+      warnings: [],
+    });
   });
 
   it("returns failed when the existing-demo lookup fails", async () => {
@@ -125,6 +152,13 @@ describe("ensureDemoProjectForCompany", () => {
         },
       },
     );
+    expect(mocks.trackServerEvent).toHaveBeenCalledWith("demo_project_created", {
+      userId: "user-1",
+      companyId: "company-1",
+      projectId: "project-created",
+      generalBudgetId: "budget-created",
+      warnings: ["formula warning"],
+    });
   });
 
   it("returns failed when the template cannot be imported", async () => {
@@ -137,6 +171,13 @@ describe("ensureDemoProjectForCompany", () => {
     expect(result.projectId).toBeNull();
     expect(result.generalBudgetId).toBeNull();
     expect(result.warnings[0]).toContain("No se pudo crear el proyecto demo");
+    expect(mocks.trackServerEvent).toHaveBeenCalledWith("demo_project_creation_failed", {
+      userId: "user-1",
+      companyId: "company-1",
+      projectId: null,
+      generalBudgetId: null,
+      warnings: result.warnings,
+    });
   });
 
   it("returns already_exists when a concurrent import creates the demo first", async () => {

@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { prisma } from "@/lib/db/prisma";
+import {
+  trackServerEvent,
+  type AnalyticsEventName,
+  type AnalyticsEventPayload,
+} from "@/lib/analytics/events";
 import { importProjectPackageToMyc } from "@/lib/mcp/import-persistence";
 import { analyzeProjectPackageBuffer } from "@/lib/mcp/import-preview";
 
@@ -69,6 +74,31 @@ function isUniqueConstraintError(error: unknown): boolean {
   );
 }
 
+async function trackDemoProjectEvent(
+  name: AnalyticsEventName,
+  payload: AnalyticsEventPayload,
+): Promise<void> {
+  try {
+    await trackServerEvent(name, payload);
+  } catch (error) {
+    console.error("Analytics event failed", error);
+  }
+}
+
+function analyticsPayload(
+  userId: string,
+  companyId: string,
+  result: DemoProjectCreationResult,
+): AnalyticsEventPayload {
+  return {
+    userId,
+    companyId,
+    projectId: result.projectId,
+    generalBudgetId: result.generalBudgetId,
+    warnings: result.warnings,
+  };
+}
+
 export async function ensureDemoProjectForCompany(params: {
   userId: string;
   companyId: string;
@@ -81,19 +111,29 @@ export async function ensureDemoProjectForCompany(params: {
   try {
     const existingDemo = await findExistingDemoProject(params.companyId);
     if (existingDemo) {
-      return existingDemoProjectResult(existingDemo);
+      const result = existingDemoProjectResult(existingDemo);
+      await trackDemoProjectEvent(
+        "demo_project_already_exists",
+        analyticsPayload(params.userId, params.companyId, result),
+      );
+      return result;
     }
 
     const buffer = await readFile(demoTemplatePath);
     const analysis = analyzeProjectPackageBuffer(buffer);
 
     if (analysis.preview.compatibility === "unsupported") {
-      return {
+      const result: DemoProjectCreationResult = {
         status: "failed",
         projectId: null,
         generalBudgetId: null,
         warnings: [`No se pudo crear el proyecto demo: ${analysis.preview.errors.join(", ")}`],
       };
+      await trackDemoProjectEvent(
+        "demo_project_creation_failed",
+        analyticsPayload(params.userId, params.companyId, result),
+      );
+      return result;
     }
 
     const readModule = (path: string): unknown => {
@@ -119,26 +159,46 @@ export async function ensureDemoProjectForCompany(params: {
       },
     });
 
-    return {
+    const demoProjectResult: DemoProjectCreationResult = {
       status: "created",
       projectId: result.projectId,
       generalBudgetId: result.generalBudgetId,
       warnings: result.warnings,
     };
+    await trackDemoProjectEvent(
+      "demo_project_created",
+      analyticsPayload(params.userId, params.companyId, demoProjectResult),
+    );
+    return demoProjectResult;
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       try {
         const existingDemo = await findExistingDemoProject(params.companyId);
         if (existingDemo) {
-          return existingDemoProjectResult(existingDemo);
+          const result = existingDemoProjectResult(existingDemo);
+          await trackDemoProjectEvent(
+            "demo_project_already_exists",
+            analyticsPayload(params.userId, params.companyId, result),
+          );
+          return result;
         }
       } catch (lookupError) {
         console.error("Demo project lookup after unique conflict failed", lookupError);
-        return failedDemoProjectResult(lookupError);
+        const result = failedDemoProjectResult(lookupError);
+        await trackDemoProjectEvent(
+          "demo_project_creation_failed",
+          analyticsPayload(params.userId, params.companyId, result),
+        );
+        return result;
       }
     }
 
     console.error("Demo project creation failed", error);
-    return failedDemoProjectResult(error);
+    const result = failedDemoProjectResult(error);
+    await trackDemoProjectEvent(
+      "demo_project_creation_failed",
+      analyticsPayload(params.userId, params.companyId, result),
+    );
+    return result;
   }
 }
