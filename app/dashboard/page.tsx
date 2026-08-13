@@ -49,6 +49,7 @@ import { getUserSettings } from "@/lib/data/settings";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { KhipuQualityMetrics } from "@/components/dashboard/khipu-quality-metrics";
 import { KhipuQualityMetricsSkeleton } from "@/components/dashboard/khipu-quality-metrics-skeleton";
+import { DemoProjectWelcomeDialog } from "@/components/onboarding/demo-project-welcome-dialog";
 
 export default async function DashboardPage({
   searchParams,
@@ -117,6 +118,13 @@ export default async function DashboardPage({
         viewSummary: "Resumen operativo del portafolio con proyectos activos, pendientes y analitica.",
       }}
     >
+      {isDemoOnlyWorkspace && stats.recentProject ? (
+        <DemoProjectWelcomeDialog
+          projectId={stats.recentProject.id}
+          projectName={stats.recentProject.name}
+        />
+      ) : null}
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Proyectos activos"

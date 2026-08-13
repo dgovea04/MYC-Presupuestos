@@ -36,6 +36,7 @@ describe("DemoProjectTour", () => {
     );
 
     expect(await screen.findByText("Paso 2 de 5")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Abrir tutorial interactivo" })).toBeNull();
     expect(document.querySelector(".demo-tour-click-label-modern")?.textContent).toBe("Click aquí");
     expect(screen.getByTestId("demo-tour-step-general-budget").className).toContain("border-emerald-200");
 
@@ -45,6 +46,28 @@ describe("DemoProjectTour", () => {
       expect(screen.getByText("Paso 3 de 5")).toBeTruthy();
       expect(screen.getByTestId("demo-tour-step-structures").className).toContain("border-emerald-200");
     });
+  });
+
+  it("opens when the dashboard explicitly starts the tutorial", async () => {
+    mocks.pathname = "/projects/project-demo";
+
+    window.localStorage.setItem(
+      "mc-demo-project-tour:project-demo",
+      JSON.stringify({ completed: ["general-budget", "structures", "apu", "formula", "export"] }),
+    );
+
+    render(
+      <DemoProjectTour
+        config={{
+          projectId: "project-demo",
+          generalBudgetId: "budget-general",
+          structuresBudgetId: "budget-structures",
+        }}
+        autoOpen
+      />,
+    );
+
+    expect(await screen.findByText("¡Tutorial completado!")).toBeTruthy();
   });
 
   it("marks export only after the export action event", async () => {
@@ -67,6 +90,8 @@ describe("DemoProjectTour", () => {
     );
 
     expect(await screen.findByText("Paso 5 de 5")).toBeTruthy();
+    expect(screen.getByText("Vuelve al proyecto, pulsa “Exportar” y descarga el archivo .mcp.")).toBeTruthy();
+    expect(screen.queryByText(/elige Excel o PDF/)).toBeNull();
 
     window.dispatchEvent(
       new CustomEvent("mc-demo-tour-action", {

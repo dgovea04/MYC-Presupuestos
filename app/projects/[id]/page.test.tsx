@@ -16,7 +16,12 @@ vi.mock("@/components/layout/app-shell", () => ({
 }));
 
 vi.mock("@/components/onboarding/demo-project-guide", () => ({
-  DemoProjectGuide: () => <div>5 minutos para conocer MC Presupuestos</div>,
+  DemoProjectGuide: ({ autoOpen }: { autoOpen?: boolean }) => (
+    <div>
+      5 minutos para conocer MC Presupuestos
+      {autoOpen ? " tutorial-auto-open" : ""}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/exports/export-panel", () => ({
@@ -133,6 +138,17 @@ describe("ProjectDetailPage demo guide", () => {
     const tree = await ProjectDetailPage({ params: Promise.resolve({ id: "project-1" }) });
 
     expect(renderToStaticMarkup(tree)).toContain("5 minutos para conocer MC Presupuestos");
+  });
+
+  it("passes the automatic tutorial signal to a demo project", async () => {
+    mocks.getProjectOverviewById.mockResolvedValue(createProject({ isDemo: true }));
+
+    const tree = await ProjectDetailPage({
+      params: Promise.resolve({ id: "project-1" }),
+      searchParams: Promise.resolve({ demoTour: "1" }),
+    });
+
+    expect(renderToStaticMarkup(tree)).toContain("tutorial-auto-open");
   });
 
   it("does not render the five-minute guide for a non-demo project", async () => {

@@ -40,16 +40,24 @@ type DemoTourActionDetail = {
 const TOUR_ACTION_EVENT = "mc-demo-tour-action";
 const TOUR_OPEN_EVENT = "mc-demo-tour-open";
 
-export function DemoProjectGuide({ config }: { config: DemoProjectTourConfig }) {
-  return <DemoProjectTour config={config} showGuideCard />;
+export function DemoProjectGuide({
+  config,
+  autoOpen = false,
+}: {
+  config: DemoProjectTourConfig;
+  autoOpen?: boolean;
+}) {
+  return <DemoProjectTour config={config} showGuideCard autoOpen={autoOpen} />;
 }
 
 export function DemoProjectTour({
   config,
   showGuideCard = false,
+  autoOpen = false,
 }: {
   config: DemoProjectTourConfig;
   showGuideCard?: boolean;
+  autoOpen?: boolean;
 }) {
   const pathname = usePathname();
   const steps = useMemo(() => buildDemoTourSteps(config), [config]);
@@ -73,7 +81,7 @@ export function DemoProjectTour({
             ? parsed.completed.filter((id): id is DemoTourStepId => steps.some((step) => step.id === id))
             : [];
           setCompleted(validCompleted);
-          setIsOpen(validCompleted.length < steps.length);
+          setIsOpen(autoOpen || validCompleted.length < steps.length);
         } else {
           setIsOpen(true);
         }
@@ -85,7 +93,7 @@ export function DemoProjectTour({
     }, 0);
 
     return () => window.clearTimeout(hydrationTimeout);
-  }, [steps, storageKey]);
+  }, [autoOpen, steps, storageKey]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -249,14 +257,14 @@ export function DemoProjectTour({
   return (
     <>
       {showGuideCard ? (
-        <Card className="theme-surface-card rounded-2xl border-sky-200 shadow-[0_18px_40px_-30px_rgba(37,99,235,0.4)]">
+        <Card className="theme-surface-card rounded-2xl border-[var(--app-border-soft)] shadow-[0_18px_40px_-30px_rgba(37,99,235,0.28)] dark:shadow-black/30">
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-base">5 minutos para conocer MC Presupuestos</CardTitle>
                 <Badge variant="secondary">Demo</Badge>
               </div>
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-primary-soft)]">
                 {completedCount}/{steps.length} completados
               </span>
             </div>
@@ -274,16 +282,16 @@ export function DemoProjectTour({
                     className={cn(
                       "rounded-2xl border px-3 py-3 text-sm transition",
                       isStepCompleted
-                        ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
+                        ? "border-emerald-200 bg-emerald-50/70 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200"
                         : "border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)]",
                     )}
                     data-testid={`demo-tour-step-${step.id}`}
                   >
                     <div className="flex items-start gap-2">
                       {isStepCompleted ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden="true" />
                       ) : (
-                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--app-text-subtle)]" aria-hidden="true" />
                       )}
                       <span>
                         <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-current/70">Paso {index + 1}</span>
@@ -294,13 +302,15 @@ export function DemoProjectTour({
                 );
               })}
             </ol>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" className="gap-2" onClick={() => setIsOpen(true)}>
-                <HelpCircle className="h-4 w-4" />
-                {isComplete ? "Repasar tutorial" : "Abrir tutorial interactivo"}
-              </Button>
-              <p className="text-xs text-[var(--app-text-muted)]">El progreso se guarda en este navegador para este proyecto demo.</p>
-            </div>
+            {!isOpen ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" className="gap-2" onClick={() => setIsOpen(true)}>
+                  <HelpCircle className="h-4 w-4" />
+                  {isComplete ? "Repasar tutorial" : "Abrir tutorial interactivo"}
+                </Button>
+                <p className="text-xs text-[var(--app-text-muted)]">Si la guía no se abre automáticamente, puedes iniciarla desde aquí.</p>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -309,10 +319,10 @@ export function DemoProjectTour({
         <Button
           type="button"
           variant="outline"
-          className="fixed bottom-4 right-4 z-[100] gap-2 rounded-full bg-[var(--app-surface)] shadow-lg"
+          className="fixed bottom-4 right-4 z-[100] gap-2 rounded-full border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)] shadow-lg"
           onClick={() => setIsOpen(true)}
         >
-          <HelpCircle className="h-4 w-4 text-sky-600" />
+          <HelpCircle className="h-4 w-4 text-[var(--app-primary-soft)]" />
           Guía interactiva
         </Button>
       ) : null}
@@ -321,11 +331,11 @@ export function DemoProjectTour({
         <aside
           aria-live="polite"
           aria-label="Tutorial interactivo del proyecto demo"
-          className="theme-surface-card fixed bottom-4 right-4 z-[100] w-[min( calc(100vw-2rem),24rem)] rounded-2xl border border-sky-200 p-4 shadow-2xl shadow-slate-950/20"
+          className="theme-surface-card fixed bottom-4 right-4 z-[100] w-[min( calc(100vw-2rem),24rem)] rounded-2xl border border-[var(--app-border-soft)] p-4 shadow-2xl shadow-slate-950/20 dark:shadow-black/40"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Guía interactiva</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--app-primary-soft)]">Guía interactiva</p>
               <p className="mt-1 font-semibold text-[var(--app-text-strong)]">
                 {isComplete ? "¡Tutorial completado!" : `Paso ${completedCount + 1} de ${steps.length}`}
               </p>
@@ -356,11 +366,11 @@ export function DemoProjectTour({
                 <p className="font-medium text-[var(--app-text-strong)]">{activeStep.title}</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--app-text-muted)]">{activeStep.description}</p>
               </div>
-              <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-xs leading-5 text-sky-900">
+              <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-xs leading-5 text-sky-900 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-200">
                 <span className="font-semibold">Qué debes hacer:</span> {activeStep.help}
               </div>
               {activeStepOnCurrentRoute ? (
-                <p className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                <p className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 className="h-4 w-4" />
                   El botón correcto está resaltado en la pantalla.
                 </p>
@@ -432,7 +442,7 @@ function buildDemoTourSteps(config: DemoProjectTourConfig): DemoTourStep[] {
       id: "export",
       title: "Exporta el proyecto",
       description: "Genera un archivo para compartir o continuar trabajando fuera de MC Presupuestos.",
-      help: "Vuelve al proyecto, pulsa “Exportar”, elige Excel o PDF y descarga el archivo.",
+      help: "Vuelve al proyecto, pulsa “Exportar” y descarga el archivo .mcp.",
       target: "export-project",
       route: `/projects/${config.projectId}`,
       routeLabel: "proyecto demo",
@@ -449,4 +459,4 @@ function persistState(storageKey: string, completed: DemoTourStepId[]) {
 }
 
 function DemoProjectGuideSkeleton() {
-  return <div className="min-h-40 rounded-2xl border border-sky-100 bg-sky-50/30" aria-hidden="true" />;}
+  return <div className="min-h-40 rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)]" aria-hidden="true" />;}

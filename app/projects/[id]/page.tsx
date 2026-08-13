@@ -74,8 +74,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjectDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ demoTour?: string }>;
+}) {
   const { id } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
   const session = await getAuthSession();
   const [project, settings] = await Promise.all([getProjectOverviewById(id, session!.user.id), getUserSettings(session!.user.id)]);
 
@@ -178,6 +185,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
         {project.isDemo ? (
           <DemoProjectGuide
+            autoOpen={resolvedSearchParams.demoTour === "1"}
             config={{
               projectId: project.id,
               generalBudgetId: generalBudget?.id ?? null,
