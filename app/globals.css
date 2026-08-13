@@ -2454,6 +2454,13 @@ body,
   padding-inline: 0;
 }
 
+/* Keep the mini sidebar toggle compact even when the Excel control scale is active. */
+[data-view-mode="excel"] .ui-button[aria-label="Expandir sidebar"] {
+  width: 40px;
+  height: 20px;
+  padding: 0;
+}
+
 [data-view-mode="excel"] :is(.ui-button, .ui-select-trigger, .ui-select-item, [data-excel-field-trigger="true"]) svg {
   width: 1rem;
   height: 1rem;

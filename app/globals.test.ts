@@ -22,6 +22,15 @@ describe("excel field border styles", () => {
     expect(globalsCss).toContain("height: 1rem;");
   });
 
+  it("keeps the mini sidebar expand button compact in excel mode", () => {
+    const globalsCss = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+
+    expect(globalsCss).toContain('[data-view-mode="excel"] .ui-button[aria-label="Expandir sidebar"]');
+    expect(globalsCss).toContain("width: 40px;");
+    expect(globalsCss).toContain("height: 20px;");
+    expect(globalsCss).toContain("padding: 0;");
+  });
+
   it("styles Excel spreadsheet selection (active cell + selected range)", () => {
     const globalsCss = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
