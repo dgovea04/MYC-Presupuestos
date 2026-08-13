@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
+    $executeRaw: vi.fn(),
     $transaction: vi.fn(),
     billingSubscription: {
       create: vi.fn(),
@@ -24,6 +25,7 @@ import { updateUserAdminAccess, verifyUserEmailManually } from "@/lib/data/admin
 
 describe("admin users data", () => {
   beforeEach(() => {
+    prismaMock.$executeRaw.mockReset();
     prismaMock.$transaction.mockReset();
     prismaMock.billingSubscription.create.mockReset();
     prismaMock.billingSubscription.updateMany.mockReset();
@@ -72,16 +74,17 @@ describe("admin users data", () => {
   });
 
   it("marks a user's email as verified manually", async () => {
-    prismaMock.user.update.mockResolvedValue({});
+    prismaMock.$executeRaw.mockResolvedValue(1);
 
     await verifyUserEmailManually("user-1");
 
-    expect(prismaMock.user.update).toHaveBeenCalledWith({
-      where: { id: "user-1" },
-      data: {
-        emailVerifiedAt: expect.any(Date) as Date,
-      },
-    });
+    expect(prismaMock.$executeRaw).toHaveBeenCalledOnce();
+  });
+
+  it("reports when the selected user no longer exists", async () => {
+    prismaMock.$executeRaw.mockResolvedValue(0);
+
+    await expect(verifyUserEmailManually("missing-user")).rejects.toThrow("Usuario no encontrado");
   });
 });
 

@@ -56,12 +56,15 @@ export async function updateUserAdminAccess(userId: string, input: UpdateUserAdm
 }
 
 export async function verifyUserEmailManually(userId: string) {
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      emailVerifiedAt: new Date(),
-    },
-  });
+  const updatedUsers = await prisma.$executeRaw`
+    UPDATE "User"
+    SET "emailVerifiedAt" = NOW()
+    WHERE "id" = ${userId}
+  `;
+
+  if (updatedUsers === 0) {
+    throw new Error("Usuario no encontrado");
+  }
 }
 
 export async function activateManualProRequest(requestId: string) {
