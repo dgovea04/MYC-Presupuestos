@@ -562,6 +562,7 @@ const _getProjectBudgetOverviewById = async (id: string, userId: string) => {
       id: true,
       companyId: true,
       name: true,
+      isDemo: true,
       clientName: true,
       updatedAt: true,
       budgets: {
@@ -719,6 +720,7 @@ export async function getProjectHeaderById(id: string, userId: string) {
       id: true,
       companyId: true,
       name: true,
+      isDemo: true,
       clientName: true,
       location: true,
       projectType: true,

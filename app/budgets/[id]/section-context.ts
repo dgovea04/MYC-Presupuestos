@@ -35,9 +35,14 @@ export async function getGeneralBudgetSectionContext(id: string) {
     notFound();
   }
 
+  const structuresBudget = projectBudgetOverview?.budgets.find(
+    (candidate) => candidate.kind === "SUB_BUDGET" && candidate.name === "Estructuras",
+  ) ?? null;
+
   return {
     session,
     currentUser: session.user,
+    structuresBudgetId: structuresBudget?.id ?? null,
     budget: {
       ...budget,
       igvRate: decimalToNumber(budget.igvRate),

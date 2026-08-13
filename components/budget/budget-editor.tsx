@@ -4616,6 +4616,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             size="sm"
             variant="ghost"
             onClick={() => onOpenApuSheet(row.item)}
+            data-demo-tour-target="open-apu"
             className="h-7 gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)]/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-[var(--app-text-muted)] shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface)]"
             title="Abrir editor APU de esta partida"
             aria-label="Abrir editor APU de esta partida"

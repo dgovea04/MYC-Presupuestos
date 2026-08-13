@@ -15,6 +15,10 @@ vi.mock("@/components/layout/app-shell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
+vi.mock("@/components/onboarding/demo-project-guide", () => ({
+  DemoProjectGuide: () => <div>5 minutos para conocer MC Presupuestos</div>,
+}));
+
 vi.mock("@/components/exports/export-panel", () => ({
   ExportPanel: () => null,
 }));

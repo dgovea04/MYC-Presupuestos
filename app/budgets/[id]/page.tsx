@@ -18,6 +18,7 @@ import { getBudgetTemplateCreationTraceability } from "@/lib/data/activity-event
 import { getBudgetById } from "@/lib/data/budgets";
 import { BudgetFlowWrapper } from "@/components/budget/budget-flow-wrapper";
 import { BudgetCollaborationWrapper } from "@/components/budget/budget-collaboration-wrapper";
+import { DemoProjectTour } from "@/components/onboarding/demo-project-tour";
 import { getProjectBudgetOverviewById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
@@ -89,6 +90,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       ? await getBudgetTemplateCreationTraceability({ userId: session.user.id, budgetId: budget.id })
       : null;
     const subBudgets = orderSubBudgetsBySpecialty(project.budgets.filter((item) => item.kind === "SUB_BUDGET"));
+    const structuresBudget = subBudgets.find((item) => item.name === "Estructuras") ?? null;
 
     return (
       <AppShell
@@ -106,6 +108,15 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           viewSummary: `Presupuesto general ${budget.name} del proyecto ${project.name}.`,
         }}
       >
+        {project.isDemo ? (
+          <DemoProjectTour
+            config={{
+              projectId: project.id,
+              generalBudgetId: budget.id,
+              structuresBudgetId: structuresBudget?.id ?? null,
+            }}
+          />
+        ) : null}
         <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id} canUseCollaboration={canUseCollaboration}>
         <div className="space-y-5">
           <Card className="theme-surface-card rounded-2xl">
@@ -188,7 +199,11 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                     </div>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       <Link href={`/budgets/${subBudget.id}`}>
-                        <ActionButton action="open" label="Abrir Sub Presupuesto" />
+                        <ActionButton
+                          action="open"
+                          label="Abrir Sub Presupuesto"
+                          data-demo-tour-target={subBudget.name === "Estructuras" ? "open-structures" : undefined}
+                        />
                       </Link>
                       <SubBudgetDeleteButton subBudgetId={subBudget.id} subBudgetName={subBudget.name} />
                     </div>
@@ -227,6 +242,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                     <BudgetQuickActionLink
                       href={`/budgets/${budget.id}/polynomial-formula`}
                       title="Fórmula polinómica"
+                      tourTarget="open-formula"
                       description="Bloque listo para recuperar la fórmula polinómica dentro del flujo principal."
                       icon={<Sigma className="h-5 w-5" />}
                     />
@@ -300,6 +316,15 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
         viewSummary: `Sub presupuesto ${budget.name} del proyecto ${project.name}.`,
       }}
     >
+      {project.isDemo ? (
+        <DemoProjectTour
+          config={{
+            projectId: project.id,
+            generalBudgetId: budget.parentBudgetId ?? null,
+            structuresBudgetId: budget.name === "Estructuras" ? budget.id : null,
+          }}
+        />
+      ) : null}
       <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id} canUseCollaboration={canUseCollaboration}>
       <BudgetFlowWrapper
         budget={budgetForClient}
@@ -335,12 +360,14 @@ function BudgetQuickActionLink({
   description,
   icon,
   tone = "default",
+  tourTarget,
 }: {
   href: string;
   title: string;
   description: string;
   icon: ReactNode;
   tone?: "default" | "primary";
+  tourTarget?: string;
 }) {
   const tones = {
     default: {
@@ -362,6 +389,7 @@ function BudgetQuickActionLink({
   return (
     <Link
       href={href}
+      data-demo-tour-target={tourTarget}
       className={cn(
         "group flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.22)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_18px_38px_-26px_rgba(15,23,42,0.26)]",
         palette.link,

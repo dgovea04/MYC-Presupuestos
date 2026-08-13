@@ -6,6 +6,35 @@ html {
   scroll-behavior: smooth;
 }
 
+.demo-tour-highlight-emerald {
+  position: relative;
+  z-index: 61;
+  scroll-margin-top: 140px;
+  border-radius: 0.75rem;
+  outline: 3px solid var(--color-emerald-700, #047857);
+  outline-offset: 4px;
+}
+
+.demo-tour-click-label-modern {
+  position: fixed;
+  z-index: 120;
+  display: inline-flex;
+  transform: translateX(-50%);
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  border: none;
+  border-radius: 0.75rem;
+  background: var(--color-emerald-700, #047857);
+  padding: 0.55rem 0.9rem;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
 :root {
   --font-inter: "Inter";
   --font-plus-jakarta-sans: "Plus Jakarta Sans";

@@ -116,7 +116,7 @@ export function ProjectBudgetSections({
                   </div>
                 </div>
                 <Link href={`/budgets/${general.id}`}>
-                  <ActionButton action="open" label="Abrir editor" />
+                  <ActionButton action="open" label="Abrir editor" data-demo-tour-target="open-general-budget" />
                 </Link>
               </div>
             ) : (
@@ -151,7 +151,12 @@ export function ProjectBudgetSections({
                     </div>
                     <div className="mt-4">
                       <Link href={`/budgets/${budget.id}`}>
-                        <ActionButton action="open" label="Abrir Sub Presupuesto" variant="outline" />
+                        <ActionButton
+                          action="open"
+                          label="Abrir Sub Presupuesto"
+                          variant="outline"
+                          data-demo-tour-target={budget.name === "Estructuras" ? "open-structures" : undefined}
+                        />
                       </Link>
                     </div>
                   </div>

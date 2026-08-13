@@ -36,6 +36,15 @@ vi.mock("next/navigation", () => ({
   notFound: mocks.notFound,
 }));
 
+vi.mock("@/lib/workspace/active-workspace", () => ({
+  getActiveWorkspaceId: vi.fn().mockResolvedValue("company-1"),
+}));
+
+vi.mock("@/lib/workspace/entitlements", () => ({
+  getEffectiveWorkspaceLicense: vi.fn().mockResolvedValue({}),
+  hasFeatureAccess: vi.fn(() => true),
+}));
+
 vi.mock("@/components/layout/app-shell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <div data-testid="app-shell">{children}</div>,
 }));

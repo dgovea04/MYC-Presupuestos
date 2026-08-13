@@ -1,4 +1,5 @@
 import { PolynomialFormulaEditor } from "@/components/budget/polynomial-formula-editor";
+import { DemoProjectTour } from "@/components/onboarding/demo-project-tour";
 import { PolynomialFormulaSectionTabs } from "@/components/budget/polynomial-formula-section-tabs";
 import { GeneralBudgetSectionShell } from "@/components/budget/general-budget-section-shell";
 import { getGeneralBudgetSectionContext } from "@/app/budgets/[id]/section-context";
@@ -19,7 +20,7 @@ export default async function GeneralBudgetPolynomialFormulaPage({
 }) {
   const { id } = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
-  const { budget, currentUser, project, session, settings } = await getGeneralBudgetSectionContext(id);
+  const { budget, currentUser, project, session, settings, structuresBudgetId } = await getGeneralBudgetSectionContext(id);
   const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
   const license = await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId });
   const canUsePolynomialAdjustments = hasFeatureAccess(license, "polynomial_formula.adjustments");
@@ -52,7 +53,16 @@ export default async function GeneralBudgetPolynomialFormulaPage({
       currentUser={currentUser}
       settings={settings}
     >
-      <div className="space-y-6">
+      {project.isDemo ? (
+        <DemoProjectTour
+          config={{
+            projectId: project.id,
+            generalBudgetId: budget.id,
+            structuresBudgetId: structuresBudgetId,
+          }}
+        />
+      ) : null}
+      <div className="space-y-6" data-demo-tour-target="open-formula">
         {sectionsData.hasSubBudgetSections ? (
           <>
             <div className="theme-status-info theme-status-info-strong rounded-2xl border px-4 py-3 text-sm leading-6">

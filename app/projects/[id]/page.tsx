@@ -86,6 +86,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const generalBudget = resolveProjectGeneralBudget(project.budgets);
   const generalBudgetsCount = generalBudget ? 1 : 0;
   const subBudgets = project.budgets.filter((budget) => budget.kind === "SUB_BUDGET");
+  const structuresBudget = subBudgets.find((budget) => budget.name === "Estructuras") ?? null;
   const otherSections = getProjectOtherSections(generalBudget?.id ?? null);
   const attachments = await getProjectAttachments(project.id);
   const activityEvents = await listProjectActivityEvents({
@@ -127,6 +128,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                     defaultPreset="proyecto_completo_mcp"
                     definition={getExportDefinition("project_package")}
                     targetId={project.id}
+                    tourTarget={project.isDemo ? "export-project" : undefined}
                   />
                   <Link href={`/projects/${project.id}/edit`}>
                     <ActionButton action="edit" label="Editar proyecto" variant="outline" />
@@ -174,7 +176,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </CardContent>
         </Card>
 
-        {project.isDemo ? <DemoProjectGuide /> : null}
+        {project.isDemo ? (
+          <DemoProjectGuide
+            config={{
+              projectId: project.id,
+              generalBudgetId: generalBudget?.id ?? null,
+              structuresBudgetId: structuresBudget?.id ?? null,
+            }}
+          />
+        ) : null}
 
         <ProjectBudgetSections
           projectId={project.id}

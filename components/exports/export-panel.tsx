@@ -15,6 +15,7 @@ type ExportPanelProps = {
   contextOptions?: Partial<ExportOptions>;
   className?: string;
   buttonLabel?: string;
+  tourTarget?: string;
 };
 
 const FORMAT_LABELS: Record<ExportFormat, string> = {
@@ -40,6 +41,7 @@ export function ExportPanel({
   defaultPreset,
   definition,
   targetId,
+  tourTarget,
 }: ExportPanelProps) {
   const defaultPresetDefinition = definition.presets.find((preset) => preset.id === defaultPreset) ?? definition.presets[0];
   const [open, setOpen] = useState(false);
@@ -102,6 +104,13 @@ export function ExportPanel({
     try {
       const result = visiblePreview ? { blob: visiblePreview.blob, fileName: visiblePreview.fileName } : await requestExportBlob(payload);
       downloadBlob(result.fileName, result.blob);
+      if (tourTarget) {
+        window.dispatchEvent(
+          new CustomEvent("mc-demo-tour-action", {
+            detail: { action: "export", target: tourTarget },
+          }),
+        );
+      }
       setStatus("idle");
       setOpen(false);
     } catch (downloadError) {
@@ -143,7 +152,7 @@ export function ExportPanel({
       }}
     >
       <Dialog.Trigger asChild>
-        <Button className={cn("gap-2", className)} variant="secondary">
+        <Button className={cn("gap-2", className)} variant="secondary" data-demo-tour-target={tourTarget}>
           <Download className="h-4 w-4" />
           {buttonLabel}
         </Button>
