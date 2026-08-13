@@ -144,6 +144,44 @@ describe("POST /api/projects", () => {
     expect(mocks.trackServerEvent).not.toHaveBeenCalled();
   });
 
+  it("returns 201 when first-project analytics lookup fails", async () => {
+    const project = { id: "project-1", name: "Hospital Norte", companyId: "company-1", isDemo: false };
+
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.createProject.mockResolvedValue(project);
+    mocks.projectFindFirst.mockRejectedValue(new Error("analytics lookup unavailable"));
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ companyId: "company-1", name: "Hospital Norte", status: "PLANNING" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual(project);
+  });
+
+  it("returns 201 when first-project analytics tracking fails", async () => {
+    const project = { id: "project-1", name: "Hospital Norte", companyId: "company-1", isDemo: false };
+
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.createProject.mockResolvedValue(project);
+    mocks.projectFindFirst.mockResolvedValue({ id: "demo-project-1" });
+    mocks.projectCount.mockResolvedValue(1);
+    mocks.trackServerEvent.mockRejectedValue(new Error("analytics unavailable"));
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ companyId: "company-1", name: "Hospital Norte", status: "PLANNING" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual(project);
+  });
+
   it("keeps a successful creation when activity logging fails", async () => {
     const project = { id: "project-1", name: "Hospital Norte", companyId: "company-1" };
 
