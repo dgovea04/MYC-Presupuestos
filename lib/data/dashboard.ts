@@ -204,6 +204,9 @@ async function _getDashboardStats(userId: string, activeCompanyId?: string | nul
       })),
     )
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  const realProjects = projectsWithCompany.filter((project) => !project.isDemo);
+  const realProjectIds = new Set(realProjects.map((project) => project.id));
+  const realGeneralBudgets = generalBudgets.filter((budget) => realProjectIds.has(budget.projectId));
   const generalBudgetByProjectId = new Map(generalBudgets.map((budget) => [budget.projectId, budget]));
   const projectNameByProjectId = new Map(projectsWithCompany.map((project) => [project.id, project.name]));
   const polynomialFormulaRouteBudgetIdByBudgetId = buildPolynomialFormulaRouteBudgetIdByBudgetId(
@@ -216,12 +219,14 @@ async function _getDashboardStats(userId: string, activeCompanyId?: string | nul
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const pendingItems = [...getPendingItems(projectsWithCompany), ...mapNoteTasksToPendingItems(noteTasks)];
+  const pendingItems = [...getPendingItems(realProjects), ...mapNoteTasksToPendingItems(noteTasks)];
 
   return {
     companiesCount,
     projectsCount: projectsWithCompany.length,
+    realProjectsCount: realProjects.length,
     budgetsCount: generalBudgets.length,
+    realBudgetsCount: realGeneralBudgets.length,
     portfolioValue: generalBudgets.reduce((sum, budget) => sum + decimalToNumber(budget.totalAmount), 0),
     monthlyAdjustmentsCount: adjustments.filter(
       (adjustment) => adjustment.month === currentMonth && adjustment.year === currentYear,

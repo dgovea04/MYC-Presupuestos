@@ -26,8 +26,8 @@ export function buildDashboardOnboardingSteps(stats: DashboardOnboardingStats): 
       completed: stats.companiesCount > 0,
     },
     {
-      title: "Proyecto",
-      description: "Crea la obra y define cliente, ubicacion y estado.",
+      title: "Proyecto real",
+      description: "Crea una obra real y define cliente, ubicacion y estado.",
       href: "/projects/new",
       completed: stats.projectsCount > 0,
     },

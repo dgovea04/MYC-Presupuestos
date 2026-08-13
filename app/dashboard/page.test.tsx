@@ -77,14 +77,48 @@ describe("DashboardPage", () => {
     expect(markup).toContain("Abrir Edificio Multifamiliar - Demo");
     expect(markup).toContain('href="/projects/new"');
     expect(markup).toContain("Crear proyecto propio");
+    expect(markup).not.toContain("Configura tu primer proyecto real");
+  });
+
+  it("shows real-project onboarding when a real project exists alongside the demo", async () => {
+    mocks.getDashboardStats.mockResolvedValue(
+      createDashboardStats({
+        realProjectsCount: 1,
+        realBudgetsCount: 0,
+        projectsCount: 2,
+      }),
+    );
+
+    const tree = await DashboardPage({ searchParams: Promise.resolve({}) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).toContain("Configura tu primer proyecto real");
+    expect(markup).toContain("Proyecto real");
+  });
+
+  it("hides real-project onboarding after the first real project", async () => {
+    mocks.getDashboardStats.mockResolvedValue(
+      createDashboardStats({
+        realProjectsCount: 2,
+        realBudgetsCount: 1,
+        projectsCount: 3,
+      }),
+    );
+
+    const tree = await DashboardPage({ searchParams: Promise.resolve({}) });
+    const markup = renderToStaticMarkup(tree);
+
+    expect(markup).not.toContain("Configura tu primer proyecto real");
   });
 });
 
-function createDashboardStats(): DashboardStats {
+function createDashboardStats(overrides: Partial<DashboardStats> = {}): DashboardStats {
   return {
     companiesCount: 1,
     projectsCount: 1,
+    realProjectsCount: 0,
     budgetsCount: 0,
+    realBudgetsCount: 0,
     portfolioValue: 0,
     monthlyAdjustmentsCount: 0,
     pendingCount: 0,
@@ -110,5 +144,6 @@ function createDashboardStats(): DashboardStats {
       latestTemplate: null,
     },
     recentActivity: [],
+    ...overrides,
   };
 }

@@ -97,9 +97,15 @@ export default async function DashboardPage({
   const paginatedPendingItems = paginateItems(filteredPendingItems, requestedPendingPage, DASHBOARD_SECTION_PAGE_SIZE);
   const paginatedRecentActivity = paginateItems(stats.recentActivity, requestedActivityPage, DASHBOARD_SECTION_PAGE_SIZE);
   const groupedPendingItems = groupPendingItemsByPriority(paginatedPendingItems.items);
-  const onboardingSteps = buildDashboardOnboardingSteps(stats);
-  const showOnboarding = shouldShowDashboardOnboarding(stats);
-  const isDemoOnlyWorkspace = stats.projectsCount === 1 && stats.recentProject?.isDemo === true;
+  const onboardingStats = {
+    budgetsCount: stats.realBudgetsCount,
+    companiesCount: stats.companiesCount,
+    pendingItems: stats.pendingItems,
+    projectsCount: stats.realProjectsCount,
+  };
+  const onboardingSteps = buildDashboardOnboardingSteps(onboardingStats);
+  const isDemoOnlyWorkspace = stats.projectsCount > 0 && stats.realProjectsCount === 0;
+  const showOnboarding = !isDemoOnlyWorkspace && shouldShowDashboardOnboarding(onboardingStats);
 
   return (
     <AppShell
@@ -148,8 +154,8 @@ export default async function DashboardPage({
         <Card className="dashboard-section-surface dashboard-surface-card dashboard-surface-card-primary bg-[var(--app-surface)]">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader
-              title="Primeros pasos"
-              description="Completa el flujo base para dejar lista la obra: empresa, proyecto, presupuesto, formula y primer seguimiento."
+              title="Configura tu primer proyecto real"
+              description="Completa el flujo base de una obra real: empresa, proyecto, presupuesto, formula y primer seguimiento."
             />
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               {onboardingSteps.map((step) => (

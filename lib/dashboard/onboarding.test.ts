@@ -14,7 +14,7 @@ describe("buildDashboardOnboardingSteps", () => {
 
     expect(readCompletionMap(steps)).toEqual({
       Empresa: true,
-      Proyecto: false,
+      "Proyecto real": false,
       Presupuesto: false,
       Formula: false,
       Seguimiento: false,
@@ -34,7 +34,7 @@ describe("buildDashboardOnboardingSteps", () => {
 
     expect(readCompletionMap(steps)).toEqual({
       Empresa: true,
-      Proyecto: true,
+      "Proyecto real": true,
       Presupuesto: true,
       Formula: false,
       Seguimiento: false,
