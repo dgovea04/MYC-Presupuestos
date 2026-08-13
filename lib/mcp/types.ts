@@ -104,4 +104,12 @@ export type McpImportPersistenceResult = {
 export type McpImportPersistenceOptions = {
   companyId: string;
   mode: "restore_as_new_project";
+  projectOverrides?: {
+    name?: string;
+    clientName?: string | null;
+    location?: string | null;
+    projectType?: string | null;
+    isDemo?: boolean;
+    demoKey?: string | null;
+  };
 };

@@ -465,6 +465,33 @@ describe("importProjectPackageToMyc", () => {
     });
   });
 
+  it("applies project overrides during restore", async () => {
+    await importProjectPackageToMyc("user-1", makeManifest(), makeModuleReader(fixtureModules), {
+      companyId: "company-1",
+      mode: "restore_as_new_project",
+      projectOverrides: {
+        name: "Edificio Multifamiliar - Demo",
+        clientName: "Cliente Demo",
+        location: "Lima, Peru",
+        projectType: "Edificacion",
+        isDemo: true,
+        demoKey: "edificio-multifamiliar",
+      },
+    });
+
+    expect(mocks.projectCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: "company-1",
+        name: "Edificio Multifamiliar - Demo",
+        clientName: "Cliente Demo",
+        location: "Lima, Peru",
+        projectType: "Edificacion",
+        isDemo: true,
+        demoKey: "edificio-multifamiliar",
+      }),
+    });
+  });
+
   it("rejects import when user lacks workspace membership", async () => {
     mocks.assertWorkspaceMembership.mockRejectedValue(new Error("No tienes acceso a este workspace"));
 

@@ -137,16 +137,29 @@ export async function importProjectPackageToMyc(
     };
 
     // Create project
+    const projectOverrides = options.projectOverrides;
+
     const project = await tx.project.create({
       data: {
         companyId: options.companyId,
-        name: projectData.name,
-        clientName: projectData.clientName,
-        location: projectData.location,
-        projectType: projectData.projectType ?? "Importado .mcp",
+        name: projectOverrides?.name ?? projectData.name,
+        clientName:
+          projectOverrides && "clientName" in projectOverrides
+            ? projectOverrides.clientName
+            : projectData.clientName,
+        location:
+          projectOverrides && "location" in projectOverrides
+            ? projectOverrides.location
+            : projectData.location,
+        projectType:
+          projectOverrides && "projectType" in projectOverrides
+            ? projectOverrides.projectType ?? "Importado .mcp"
+            : projectData.projectType ?? "Importado .mcp",
         startDate: projectData.startDate ? new Date(projectData.startDate) : null,
         endDate: projectData.endDate ? new Date(projectData.endDate) : null,
         status: "PLANNING",
+        isDemo: projectOverrides?.isDemo ?? false,
+        demoKey: projectOverrides?.demoKey ?? null,
       },
     });
 
