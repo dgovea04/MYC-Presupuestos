@@ -22,18 +22,10 @@ export type DemoProjectCreationResult = {
   warnings: string[];
 };
 
-export async function ensureDemoProjectForCompany(params: {
-  userId: string;
-  companyId: string;
-  enabled?: boolean;
-}): Promise<DemoProjectCreationResult> {
-  if (params.enabled === false) {
-    return { status: "skipped", projectId: null, generalBudgetId: null, warnings: [] };
-  }
-
-  const existingDemo = await prisma.project.findFirst({
+const findExistingDemoProject = (companyId: string) =>
+  prisma.project.findFirst({
     where: {
-      companyId: params.companyId,
+      companyId,
       OR: [{ demoKey: demoProjectKey }, { name: demoProjectName }],
     },
     select: {
@@ -46,16 +38,52 @@ export async function ensureDemoProjectForCompany(params: {
     },
   });
 
-  if (existingDemo) {
-    return {
-      status: "already_exists",
-      projectId: existingDemo.id,
-      generalBudgetId: existingDemo.budgets[0]?.id ?? null,
-      warnings: [],
-    };
+function existingDemoProjectResult(existingDemo: { id: string; budgets: { id: string }[] }) {
+  return {
+    status: "already_exists" as const,
+    projectId: existingDemo.id,
+    generalBudgetId: existingDemo.budgets[0]?.id ?? null,
+    warnings: [],
+  };
+}
+
+function failedDemoProjectResult(error: unknown): DemoProjectCreationResult {
+  return {
+    status: "failed",
+    projectId: null,
+    generalBudgetId: null,
+    warnings: [
+      `No se pudo crear el proyecto demo: ${
+        error instanceof Error ? error.message : "error inesperado"
+      }`,
+    ],
+  };
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
+}
+
+export async function ensureDemoProjectForCompany(params: {
+  userId: string;
+  companyId: string;
+  enabled?: boolean;
+}): Promise<DemoProjectCreationResult> {
+  if (params.enabled === false) {
+    return { status: "skipped", projectId: null, generalBudgetId: null, warnings: [] };
   }
 
   try {
+    const existingDemo = await findExistingDemoProject(params.companyId);
+    if (existingDemo) {
+      return existingDemoProjectResult(existingDemo);
+    }
+
     const buffer = await readFile(demoTemplatePath);
     const analysis = analyzeProjectPackageBuffer(buffer);
 
@@ -98,17 +126,19 @@ export async function ensureDemoProjectForCompany(params: {
       warnings: result.warnings,
     };
   } catch (error) {
-    console.error("Demo project creation failed", error);
+    if (isUniqueConstraintError(error)) {
+      try {
+        const existingDemo = await findExistingDemoProject(params.companyId);
+        if (existingDemo) {
+          return existingDemoProjectResult(existingDemo);
+        }
+      } catch (lookupError) {
+        console.error("Demo project lookup after unique conflict failed", lookupError);
+        return failedDemoProjectResult(lookupError);
+      }
+    }
 
-    return {
-      status: "failed",
-      projectId: null,
-      generalBudgetId: null,
-      warnings: [
-        `No se pudo crear el proyecto demo: ${
-          error instanceof Error ? error.message : "error inesperado"
-        }`,
-      ],
-    };
+    console.error("Demo project creation failed", error);
+    return failedDemoProjectResult(error);
   }
 }

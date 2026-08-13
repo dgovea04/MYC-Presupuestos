@@ -64,6 +64,21 @@ describe("ensureDemoProjectForCompany", () => {
     expect(mocks.importProjectPackageToMyc).not.toHaveBeenCalled();
   });
 
+  it("returns failed when the existing-demo lookup fails", async () => {
+    mocks.projectFindFirst.mockRejectedValue(new Error("database unavailable"));
+
+    await expect(
+      ensureDemoProjectForCompany({ userId: "user-1", companyId: "company-1" }),
+    ).resolves.toEqual({
+      status: "failed",
+      projectId: null,
+      generalBudgetId: null,
+      warnings: ["No se pudo crear el proyecto demo: database unavailable"],
+    });
+
+    expect(mocks.readFile).not.toHaveBeenCalled();
+  });
+
   it("imports the demo project from the mcp asset", async () => {
     const buffer = Buffer.from("mcp-data");
     const manifest = { project: { name: "Original" } };
@@ -122,5 +137,35 @@ describe("ensureDemoProjectForCompany", () => {
     expect(result.projectId).toBeNull();
     expect(result.generalBudgetId).toBeNull();
     expect(result.warnings[0]).toContain("No se pudo crear el proyecto demo");
+  });
+
+  it("returns already_exists when a concurrent import creates the demo first", async () => {
+    const buffer = Buffer.from("mcp-data");
+    const manifest = { project: { name: "Original" } };
+    const fileContents = new Map<string, string>([
+      ["project.json", JSON.stringify({ name: "Original" })],
+    ]);
+
+    mocks.projectFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "project-demo", budgets: [{ id: "budget-general" }] });
+    mocks.readFile.mockResolvedValue(buffer);
+    mocks.analyzeProjectPackageBuffer.mockReturnValue({
+      manifest,
+      fileContents,
+      preview: { compatibility: "supported", errors: [] },
+    });
+    mocks.importProjectPackageToMyc.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+    );
+
+    await expect(
+      ensureDemoProjectForCompany({ userId: "user-1", companyId: "company-1" }),
+    ).resolves.toEqual({
+      status: "already_exists",
+      projectId: "project-demo",
+      generalBudgetId: "budget-general",
+      warnings: [],
+    });
   });
 });

@@ -670,7 +670,7 @@ model Project {
 
   @@index([companyId])
   @@index([companyId, isDemo])
-  @@index([companyId, demoKey])
+  @@unique([companyId, demoKey])
 }
 
 model AiSessionFeedbackEvent {
