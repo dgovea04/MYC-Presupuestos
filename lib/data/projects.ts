@@ -287,6 +287,8 @@ const _getProjectsListByUser = async (userId: string, activeCompanyId?: string |
       id: true,
       companyId: true,
       name: true,
+      isDemo: true,
+      demoKey: true,
       clientName: true,
       location: true,
       projectType: true,

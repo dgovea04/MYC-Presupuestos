@@ -10,6 +10,7 @@ import { downloadBlob, requestExportBlob } from "@/lib/exports/download";
 import type { ProjectRecord } from "@/types/project";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ProjectStatusBadge } from "@/components/ui/context-badges";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { Input } from "@/components/ui/input";
@@ -216,7 +217,12 @@ const ProjectTableRow = memo(function ProjectTableRow({
   return (
     <>
       <TR className="hover:bg-[var(--app-surface-muted)]/80">
-        <TD className="font-medium text-[var(--app-text-strong)]">{project.name}</TD>
+        <TD className="font-medium text-[var(--app-text-strong)]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{project.name}</span>
+            {project.isDemo ? <Badge variant="secondary">Demo</Badge> : null}
+          </div>
+        </TD>
         <TD>{project.clientName || "Pendiente"}</TD>
         <TD>{project.location || "Pendiente"}</TD>
         <TD>

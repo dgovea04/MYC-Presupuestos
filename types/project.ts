@@ -12,6 +12,8 @@ export type ProjectRecord = {
   id: string;
   companyId: string;
   name: string;
+  isDemo: boolean;
+  demoKey: string | null;
   clientName?: string | null;
   location?: string | null;
   projectType?: string | null;

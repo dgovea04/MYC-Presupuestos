@@ -50,6 +50,8 @@ export default async function ProjectsPage() {
               id: project.id,
               companyId: project.companyId,
               name: project.name,
+              isDemo: project.isDemo,
+              demoKey: project.demoKey,
               clientName: project.clientName,
               location: project.location,
               projectType: project.projectType,

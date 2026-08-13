@@ -99,6 +99,7 @@ export default async function DashboardPage({
   const groupedPendingItems = groupPendingItemsByPriority(paginatedPendingItems.items);
   const onboardingSteps = buildDashboardOnboardingSteps(stats);
   const showOnboarding = shouldShowDashboardOnboarding(stats);
+  const isDemoOnlyWorkspace = stats.projectsCount === 1 && stats.recentProject?.isDemo === true;
 
   return (
     <AppShell
@@ -204,8 +205,12 @@ export default async function DashboardPage({
                 </div>
 
                 <div className="flex flex-wrap gap-3 pt-1">
-                  <PrimaryLink href={`/projects/${stats.recentProject.id}`}>Continuar proyecto</PrimaryLink>
-                  {stats.recentProject.generalBudget ? (
+                  <PrimaryLink href={`/projects/${stats.recentProject.id}`}>
+                    {isDemoOnlyWorkspace ? "Abrir Edificio Multifamiliar - Demo" : "Continuar proyecto"}
+                  </PrimaryLink>
+                  {isDemoOnlyWorkspace ? (
+                    <SecondaryLink href="/projects/new">Crear proyecto propio</SecondaryLink>
+                  ) : stats.recentProject.generalBudget ? (
                     <SecondaryLink href={`/budgets/${stats.recentProject.generalBudget.id}`}>
                       Abrir presupuesto general
                     </SecondaryLink>

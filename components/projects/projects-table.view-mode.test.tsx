@@ -2,6 +2,7 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
+import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BudgetViewModeProvider, useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { ProjectsTable } from "@/components/projects/projects-table";
@@ -57,6 +58,19 @@ describe("ProjectsTable excel view mode", () => {
 
     expect(rowActionTexts).toHaveLength(2);
     expect(rowActionTexts.filter((actions) => actions.includes("Duplicar"))).toHaveLength(rowActionTexts.length);
+  });
+
+  it("shows a Demo badge for the onboarding demo project", async () => {
+    await renderProjectsTable([
+      {
+        ...createProject("project-demo", "Edificio Multifamiliar - Demo"),
+        isDemo: true,
+        demoKey: "edificio-multifamiliar",
+      },
+    ]);
+
+    expect(screen.getByText("Demo")).not.toBeNull();
+    expect(screen.getByText("Edificio Multifamiliar - Demo")).not.toBeNull();
   });
 
   it("duplicates a project row locally and broadcasts refresh paths", async () => {
@@ -229,7 +243,12 @@ describe("ProjectsTable excel view mode", () => {
   });
 });
 
-async function renderProjectsTable() {
+async function renderProjectsTable(
+  projects: Array<ProjectRecord & { budgetsCount: number; isDemo?: boolean; demoKey?: string | null }> = [
+    createProject("project-1", "Edificio Central"),
+    createProject("project-2", "Hospital Norte"),
+  ],
+) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -240,7 +259,7 @@ async function renderProjectsTable() {
   await act(async () => {
     root.render(
       <BudgetViewModeProvider>
-        <ProjectsTableModeHarness />
+        <ProjectsTableModeHarness projects={projects} />
       </BudgetViewModeProvider>,
     );
   });
@@ -316,7 +335,7 @@ async function renderProjectsTable() {
   };
 }
 
-function ProjectsTableModeHarness() {
+function ProjectsTableModeHarness({ projects }: { projects: Array<ProjectRecord & { budgetsCount: number; isDemo?: boolean; demoKey?: string | null }> }) {
   const { setViewMode } = useBudgetViewMode();
 
   return (
@@ -324,7 +343,7 @@ function ProjectsTableModeHarness() {
       <button data-testid="excel-mode-button" type="button" onClick={() => setViewMode("excel")}>
         Excel
       </button>
-      <ProjectsTable projects={[createProject("project-1", "Edificio Central"), createProject("project-2", "Hospital Norte")]} />
+      <ProjectsTable projects={projects} />
     </>
   );
 }
@@ -334,6 +353,8 @@ function createProject(id: string, name: string): ProjectRecord & { budgetsCount
     id,
     companyId: "company-1",
     name,
+    isDemo: false,
+    demoKey: null,
     clientName: "Cliente Demo",
     location: "Lima",
     status: "IN_PROGRESS",

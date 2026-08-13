@@ -4,7 +4,11 @@ import type { ComponentPropsWithoutRef } from "react";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { cn } from "@/lib/utils";
 
-export function Badge({ className, children, ...props }: ComponentPropsWithoutRef<"span">) {
+type BadgeProps = ComponentPropsWithoutRef<"span"> & {
+  variant?: "secondary";
+};
+
+export function Badge({ className, children, variant: _variant, ...props }: BadgeProps) {
   const { isExcelMode } = useAppViewMode();
 
   return (

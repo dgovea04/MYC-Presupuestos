@@ -98,6 +98,8 @@ async function _getDashboardStats(userId: string, activeCompanyId?: string | nul
       select: {
         id: true,
         name: true,
+        isDemo: true,
+        demoKey: true,
         location: true,
         status: true,
         updatedAt: true,
@@ -229,6 +231,8 @@ async function _getDashboardStats(userId: string, activeCompanyId?: string | nul
       ? {
           id: projectsWithCompany[0].id,
           name: projectsWithCompany[0].name,
+          isDemo: projectsWithCompany[0].isDemo,
+          demoKey: projectsWithCompany[0].demoKey,
           companyName: projectsWithCompany[0].companyName,
           status: projectsWithCompany[0].status,
           updatedAt: projectsWithCompany[0].updatedAt,
