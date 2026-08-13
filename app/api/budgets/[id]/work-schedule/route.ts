@@ -12,7 +12,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 
   try {
-    await assertFeatureAccess({ userId: session.user.id, feature: "work_schedule.intelligent" });
     const { id } = await params;
     const section = await getWorkScheduleOverviewSection(id, session.user.id);
     return NextResponse.json(section);
@@ -34,7 +33,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   try {
-    await assertFeatureAccess({ userId: session.user.id, feature: "work_schedule.intelligent" });
     const { id } = await params;
     const body = await request.json();
     const section = await saveWorkScheduleItem(id, session.user.id, body);
@@ -59,7 +57,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 
   try {
-    await assertFeatureAccess({ userId: session.user.id, feature: "work_schedule.intelligent" });
     const { id } = await params;
     const result = await setWorkScheduleBaseline(id, session.user.id);
     revalidatePath(`/budgets/${id}`);

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { createBillingErrorResponse } from "@/lib/billing/api";
-import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { getWorkScheduleResourceCalendarSection } from "@/lib/data/work-schedule";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +10,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 
   try {
-    await assertFeatureAccess({ userId: session.user.id, feature: "work_schedule.intelligent" });
     const { id } = await params;
     const resourceCalendar = await getWorkScheduleResourceCalendarSection(id, session.user.id);
     return NextResponse.json(resourceCalendar);

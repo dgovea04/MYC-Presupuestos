@@ -459,10 +459,11 @@ export function WorkScheduleOverview({
     () =>
       Math.max(
         480,
+        timelinePanelWidth - 24,
         timelineDays.length * getZoomedTimelineDayWidth(timelineZoomPercent) +
           Math.max(0, timelineDays.length - 1) * getZoomedTimelineDayGap(timelineZoomPercent),
       ),
-    [timelineDays.length, timelineZoomPercent],
+    [timelineDays.length, timelinePanelWidth, timelineZoomPercent],
   );
   const visibleTimelineLinePositions = useMemo(() => {
     const positions = new Map<string, VisibleTimelineLinePosition>();
@@ -1404,7 +1405,11 @@ export function WorkScheduleOverview({
                   className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pl-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   onScroll={handleOverviewScroll}
                 >
-                  <div style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }} className="text-xs">
+                  <div
+                    data-testid="work-schedule-timeline-content"
+                    style={{ width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }}
+                    className="text-xs"
+                  >
                     <TimelineHeader
                       timelineDays={timelineDays}
                       isExcelMode={isExcelMode}
@@ -2110,12 +2115,20 @@ function TimelineHeader({
   isExcelMode: boolean;
   timelineDayWidth: number;
 }) {
-  const months = groupTimelineMonths(timelineDays);
-  const weeks = groupTimelineWeeks(timelineDays);
+  const hasTimelineDays = timelineDays.length > 0;
+  const months = hasTimelineDays
+    ? groupTimelineMonths(timelineDays)
+    : [{ key: "empty-range", label: "Sin rango programado", length: 1 }];
+  const weeks = hasTimelineDays
+    ? groupTimelineWeeks(timelineDays)
+    : [{ key: "empty-week", label: "Sin semanas", length: 1 }];
   const gridTemplateColumns = `repeat(${timelineDays.length || 1}, minmax(${timelineDayWidth}px, 1fr))`;
 
   return (
-    <div className="border-b border-[var(--app-border)] bg-[var(--app-surface)]">
+    <div
+      data-testid="work-schedule-timeline-header"
+      className="border-b border-[var(--app-border)] bg-[var(--app-surface)]"
+    >
       <div className="grid gap-px bg-[var(--app-border)]" style={{ gridTemplateColumns }}>
         {months.map((month, index) => (
           <div
@@ -2144,6 +2157,7 @@ function TimelineHeader({
             {weeks.map((week) => (
               <div
                 key={week.key}
+                data-testid="work-schedule-week-band"
                 className="flex h-5 items-center justify-center bg-[var(--app-surface-muted)] px-1.5 text-center text-[11px] font-semibold text-[var(--app-text-muted)]"
                 style={{ gridColumn: `span ${week.length}` }}
               >
@@ -2152,15 +2166,24 @@ function TimelineHeader({
             ))}
           </div>
           <div className="grid gap-px bg-[var(--app-surface-strong)]" style={{ gridTemplateColumns }}>
-            {timelineDays.map((day) => (
+            {hasTimelineDays ? (
+              timelineDays.map((day) => (
+                <div
+                  key={day.iso}
+                  data-testid="work-schedule-timeline-day-header"
+                  className="flex h-8 items-center justify-center bg-[var(--app-surface)] text-[9px] uppercase tracking-wide text-[var(--app-text-muted)]"
+                >
+                  {dayFormatter.format(day.date).slice(0, 1)}
+                </div>
+              ))
+            ) : (
               <div
-                key={day.iso}
-                data-testid="work-schedule-timeline-day-header"
+                data-testid="work-schedule-empty-day-header"
                 className="flex h-8 items-center justify-center bg-[var(--app-surface)] text-[9px] uppercase tracking-wide text-[var(--app-text-muted)]"
               >
-                {dayFormatter.format(day.date).slice(0, 1)}
+                Programa una partida para ver el detalle diario
               </div>
-            ))}
+            )}
           </div>
         </>
       ) : null}

@@ -77,6 +77,7 @@ import {
 
 type WorkSchedulePageContentProps = {
   initialData: WorkScheduleViewRecord;
+  canUseIntelligentSchedule?: boolean;
 };
 
 type ActiveView = "overview" | "valuation" | "resources" | "curve";
@@ -182,8 +183,17 @@ type GenerationLevelPreviewGroup = {
   levels: GenerationLevelPreviewRow[];
 };
 
-export function WorkSchedulePageContent({ initialData }: WorkSchedulePageContentProps) {
-  return <WorkSchedulePageContentInner key={initialData.budgetId} initialData={initialData} />;
+export function WorkSchedulePageContent({
+  initialData,
+  canUseIntelligentSchedule = true,
+}: WorkSchedulePageContentProps) {
+  return (
+    <WorkSchedulePageContentInner
+      key={initialData.budgetId}
+      initialData={initialData}
+      canUseIntelligentSchedule={canUseIntelligentSchedule}
+    />
+  );
 }
 
 /** Recalculate durationDays from startDate/endDate to match server-side
@@ -260,7 +270,10 @@ function normalizeWorkScheduleView(data: WorkScheduleViewRecord): WorkScheduleVi
   };
 }
 
-function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentProps) {
+function WorkSchedulePageContentInner({
+  initialData,
+  canUseIntelligentSchedule = true,
+}: WorkSchedulePageContentProps) {
   const normalizedInitialData = normalizeWorkScheduleView(initialData);
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
@@ -1316,20 +1329,37 @@ function WorkSchedulePageContentInner({ initialData }: WorkSchedulePageContentPr
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 lg:ml-auto">
               {activeView === "overview" ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-10 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em]"
-                  onClick={() => {
-                    setGenerationBaseDate(data.timeline.startDate ?? new Date().toISOString().slice(0, 10));
-                    setGenerationError("");
-                    setGenerationState("idle");
-                    setIsGenerationDialogOpen(true);
-                  }}
-                >
-                  <WandSparkles className="h-4 w-4" />
-                  Generar cronograma inteligente
-                </Button>
+                canUseIntelligentSchedule ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em]"
+                    title="Generar cronograma inteligente"
+                    onClick={() => {
+                      setGenerationBaseDate(data.timeline.startDate ?? new Date().toISOString().slice(0, 10));
+                      setGenerationError("");
+                      setGenerationState("idle");
+                      setIsGenerationDialogOpen(true);
+                    }}
+                  >
+                    <WandSparkles className="h-4 w-4" />
+                    Generar cronograma inteligente
+                  </Button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    title="Cronograma inteligente disponible en Pro"
+                    className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] opacity-90"
+                  >
+                    <WandSparkles className="h-4 w-4" />
+                    Generar cronograma inteligente
+                    <span className="inline-flex shrink-0 items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5 text-[10px] font-semibold leading-none text-[var(--app-text-muted)]">
+                      Pro
+                    </span>
+                  </button>
+                )
               ) : null}
               <ExportPanel
                 buttonLabel="Exportar"

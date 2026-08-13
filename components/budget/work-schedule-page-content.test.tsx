@@ -180,6 +180,41 @@ describe("WorkSchedulePageContent", () => {
     expect(getByText("Distribucion mensual")).toBeTruthy();
   });
 
+  it("locks only intelligent schedule generation for users without Pro", async () => {
+    const { getByText } = await renderWithView(createView(), createSettings(), false);
+
+    const generationButton = document.querySelector<HTMLButtonElement>(
+      'button[title="Cronograma inteligente disponible en Pro"]',
+    );
+
+    expect(generationButton).toBeTruthy();
+    expect(generationButton?.disabled).toBe(true);
+    expect(generationButton?.textContent).toContain("Pro");
+    expect(generationButton?.className).toContain("bg-[var(--app-surface-muted)]");
+    expect(generationButton?.className).toContain("opacity-90");
+    expect(document.querySelector('[data-testid="work-schedule-table-row-item-1"]')).toBeTruthy();
+    expect(getByText("Editar")).toBeTruthy();
+  });
+
+  it("keeps the empty Gantt panel width and timeline header aligned before scheduling", async () => {
+    await renderWithView(createViewWithEmptyTimeline(), createSettings());
+
+    const timelinePanel = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-timeline-panel"]',
+    );
+    const timelineContent = document.querySelector<HTMLElement>(
+      '[data-testid="work-schedule-timeline-content"]',
+    );
+
+    expect(timelinePanel).toBeTruthy();
+    expect(timelineContent).toBeTruthy();
+    expect(timelineContent?.style.width).toBe("948px");
+    expect(document.querySelector('[data-testid="work-schedule-timeline-header"]')).toBeTruthy();
+    expect(document.querySelector('[data-testid="work-schedule-month-band"]')?.textContent).toBe("Sin rango programado");
+    expect(document.querySelector('[data-testid="work-schedule-week-band"]')?.textContent).toBe("Sin semanas");
+    expect(document.querySelector('[data-testid="work-schedule-empty-day-header"]')).toBeTruthy();
+  });
+
   it("renders the Hito toggle button with the icon, label 'Hito', and title 'Marcar como hito' in the inactive state", async () => {
     await renderContent();
 
@@ -1928,7 +1963,11 @@ async function renderContentWithPartialWeekTimeline() {
   return renderWithView(createViewWithPartialWeekTimeline(), createSettings());
 }
 
-async function renderWithView(view: WorkScheduleViewRecord, settings: UserSettingsRecord) {
+async function renderWithView(
+  view: WorkScheduleViewRecord,
+  settings: UserSettingsRecord,
+  canUseIntelligentSchedule = true,
+) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
   activeContainer = nextContainer;
@@ -1940,7 +1979,10 @@ async function renderWithView(view: WorkScheduleViewRecord, settings: UserSettin
     root.render(
       <FormattingSettingsProvider settings={settings}>
         <AppViewModeProvider initialViewMode={settings.defaultViewMode}>
-          <WorkSchedulePageContent initialData={view} />
+          <WorkSchedulePageContent
+            initialData={view}
+            canUseIntelligentSchedule={canUseIntelligentSchedule}
+          />
         </AppViewModeProvider>
       </FormattingSettingsProvider>,
     );
@@ -2394,6 +2436,29 @@ function createViewWithDependencyPreview(): WorkScheduleViewRecord {
     timeline: {
       startDate: "2026-03-01",
       endDate: "2026-03-08",
+    },
+  };
+}
+
+function createViewWithEmptyTimeline(): WorkScheduleViewRecord {
+  const view = createView();
+  const groups = view.groups.map((group) => ({
+    ...group,
+    lines: group.lines.map((line) => ({
+      ...line,
+      startDate: null,
+      endDate: null,
+      durationDays: null,
+      monthlyDistributions: [],
+    })),
+  }));
+
+  return {
+    ...view,
+    groups: rebuildTestWorkScheduleRows(groups),
+    timeline: {
+      startDate: null,
+      endDate: null,
     },
   };
 }

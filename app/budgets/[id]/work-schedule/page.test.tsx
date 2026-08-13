@@ -28,7 +28,12 @@ vi.mock("@/components/budget/general-budget-section-shell", () => ({
 }));
 
 vi.mock("@/components/budget/work-schedule-page-content", () => ({
-  WorkSchedulePageContent: () => <div data-testid="work-schedule-content" />,
+  WorkSchedulePageContent: ({ canUseIntelligentSchedule }: { canUseIntelligentSchedule?: boolean }) => (
+    <div
+      data-testid="work-schedule-content"
+      data-can-use-intelligent-schedule={String(canUseIntelligentSchedule)}
+    />
+  ),
 }));
 
 vi.mock("@/lib/workspace/active-workspace", () => ({
@@ -81,18 +86,20 @@ describe("WorkSchedulePage", () => {
     const markup = renderToStaticMarkup(tree);
 
     expect(markup).toContain("data-testid=\"work-schedule-content\"");
+    expect(markup).toContain("data-can-use-intelligent-schedule=\"true\"");
     expect(markup).not.toContain("data-testid=\"upgrade-cta\"");
   });
 
-  it("renders UpgradeCTA when license lacks work_schedule.intelligent", async () => {
+  it("keeps the schedule visible and passes the intelligent feature lock to the content", async () => {
     mocks.hasFeatureAccess.mockReturnValue(false);
 
     const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
     const markup = renderToStaticMarkup(tree);
 
-    expect(markup).toContain("data-testid=\"upgrade-cta\"");
-    expect(markup).toContain("Cronograma inteligente disponible en Pro");
-    expect(markup).not.toContain("data-testid=\"work-schedule-content\"");
+    expect(markup).toContain("data-testid=\"work-schedule-content\"");
+    expect(markup).toContain("data-can-use-intelligent-schedule=\"false\"");
+    expect(markup).not.toContain("data-testid=\"upgrade-cta\"");
+    expect(mocks.getWorkScheduleOverviewSection).toHaveBeenCalledWith("budget-1", "user-1");
   });
 
   it("calls getActiveWorkspaceId and getEffectiveWorkspaceLicense", async () => {
@@ -109,15 +116,15 @@ describe("WorkSchedulePage", () => {
     );
   });
 
-  it("skips fetching work schedule section when feature is unavailable", async () => {
+  it("fetches the schedule section even when the intelligent feature is unavailable", async () => {
     mocks.hasFeatureAccess.mockReturnValue(false);
 
     await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
 
-    expect(mocks.getWorkScheduleOverviewSection).not.toHaveBeenCalled();
+    expect(mocks.getWorkScheduleOverviewSection).toHaveBeenCalledWith("budget-1", "user-1");
   });
 
-  it("renders UpgradeCTA when workspace is null", async () => {
+  it("keeps the schedule visible when workspace is null", async () => {
     mocks.getActiveWorkspaceId.mockResolvedValue(null);
     mocks.getEffectiveWorkspaceLicense.mockResolvedValue(null);
     mocks.hasFeatureAccess.mockReturnValue(false);
@@ -125,6 +132,7 @@ describe("WorkSchedulePage", () => {
     const tree = await WorkSchedulePage({ params: Promise.resolve({ id: "budget-1" }) });
     const markup = renderToStaticMarkup(tree);
 
-    expect(markup).toContain("data-testid=\"upgrade-cta\"");
+    expect(markup).toContain("data-testid=\"work-schedule-content\"");
+    expect(markup).toContain("data-can-use-intelligent-schedule=\"false\"");
   });
 });

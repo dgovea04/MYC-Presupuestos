@@ -26,7 +26,7 @@ vi.mock("@/lib/billing/entitlements", async (importOriginal) => {
 import { GET, PATCH, POST } from "@/app/api/budgets/[id]/work-schedule/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { generateWorkScheduleBase, getWorkScheduleOverviewSection, saveWorkScheduleItem } from "@/lib/data/work-schedule";
-import { assertFeatureAccess, FeatureAccessError } from "@/lib/billing/entitlements";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 describe("budget work schedule route", () => {
   it("returns 401 when unauthenticated", async () => {
@@ -40,22 +40,33 @@ describe("budget work schedule route", () => {
     await expect(response.json()).resolves.toEqual({ error: "No autenticado" });
   });
 
-  it("returns an upgrade payload when the user does not have Pro access", async () => {
+  it("returns the schedule overview without requiring the intelligent feature", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
-    vi.mocked(assertFeatureAccess).mockRejectedValueOnce(new FeatureAccessError("work_schedule.intelligent"));
+    vi.mocked(getWorkScheduleOverviewSection).mockResolvedValue({
+      budgetId: "budget-1",
+      budgetName: "Presupuesto General",
+      projectName: "Proyecto demo",
+      currency: "PEN",
+      groups: [],
+      valuationCalendar: null,
+      resourceCalendar: null,
+      curveSeries: null,
+      timeline: { startDate: null, endDate: null },
+      scale: {
+        periodCount: 0,
+        timelineDayCount: 0,
+        canLoadDailyTimeline: true,
+        canLoadDerivedCalendars: true,
+      },
+    });
 
     const response = await GET(new Request("http://localhost/api/budgets/budget-1/work-schedule"), {
       params: Promise.resolve({ id: "budget-1" }),
     });
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({
-      error: "Esta funcionalidad esta disponible en Pro.",
-      feature: "work_schedule.intelligent",
-      upgradeRequired: true,
-      upgradeUrl: "/account",
-    });
-    expect(getWorkScheduleOverviewSection).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(assertFeatureAccess).not.toHaveBeenCalled();
+    expect(getWorkScheduleOverviewSection).toHaveBeenCalledWith("budget-1", "user-1");
   });
 
   it("returns the consolidated work schedule on GET", async () => {
@@ -83,7 +94,7 @@ describe("budget work schedule route", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "work_schedule.intelligent" });
+    expect(assertFeatureAccess).not.toHaveBeenCalled();
     expect(getWorkScheduleOverviewSection).toHaveBeenCalledWith("budget-1", "user-1");
   });
 
@@ -129,7 +140,7 @@ describe("budget work schedule route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "work_schedule.intelligent" });
+    expect(assertFeatureAccess).not.toHaveBeenCalled();
     expect(saveWorkScheduleItem).toHaveBeenCalledWith("budget-1", "user-1", payload);
   });
 

@@ -9,19 +9,9 @@ vi.mock("@/lib/data/work-schedule", () => ({
   getWorkScheduleValuationCalendarSection: vi.fn(),
 }));
 
-vi.mock("@/lib/billing/entitlements", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/billing/entitlements")>();
-
-  return {
-    ...actual,
-    assertFeatureAccess: vi.fn(),
-  };
-});
-
 import { GET } from "@/app/api/budgets/[id]/work-schedule/valuation-calendar/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { getWorkScheduleValuationCalendarSection } from "@/lib/data/work-schedule";
-import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
 describe("valuation calendar route", () => {
   it("passes the requested monthly slice to the valuation loader", async () => {
@@ -39,7 +29,6 @@ describe("valuation calendar route", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "work_schedule.intelligent" });
     expect(getWorkScheduleValuationCalendarSection).toHaveBeenCalledWith("budget-1", "user-1", {
       fromPeriodKey: "2026-04",
       toPeriodKey: "2026-04",
