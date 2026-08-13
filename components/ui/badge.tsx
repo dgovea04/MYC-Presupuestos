@@ -8,13 +8,14 @@ type BadgeProps = ComponentPropsWithoutRef<"span"> & {
   variant?: "secondary";
 };
 
-export function Badge({ className, children, variant: _variant, ...props }: BadgeProps) {
+export function Badge({ className, children, variant, ...props }: BadgeProps) {
   const { isExcelMode } = useAppViewMode();
 
   return (
     <span
       className={cn(
         "ui-badge inline-flex bg-[var(--app-surface-muted)] px-2.5 py-1 text-xs font-medium text-[var(--app-text-muted)]",
+        variant === "secondary" && "border border-[var(--app-border)] bg-[var(--app-surface)]",
         isExcelMode ? "rounded-sm" : "rounded-full",
         className,
       )}
