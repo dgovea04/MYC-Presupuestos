@@ -235,6 +235,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     // ── signIn: user already exists (Google account) ──
     mockProfileColumns();
     mockDbRows([makeGoogleDbUser()]);
+    mocks.ensureUserHasCompanyMock.mockResolvedValue("company-maria");
 
     const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
@@ -249,6 +250,11 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     expect(mocks.ensureUserHasCompanyMock).toHaveBeenCalledWith("user-maria", {
       name: "Maria Calderon",
       email: "maria@gmail.com",
+    });
+    expect(mocks.ensureDemoProjectForCompanyMock).toHaveBeenCalledWith({
+      userId: "user-maria",
+      companyId: "company-maria",
+      enabled: true,
     });
 
     // ── jwt: load existing user from DB ──
@@ -305,6 +311,7 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     // ── signIn: user already exists with passwordHash ──
     mockProfileColumns();
     mockDbRows([makeCredentialsDbUser()]);
+    mocks.ensureUserHasCompanyMock.mockResolvedValue("company-maria");
 
     const signInResult = await runSignInCallback({
       user: { email: googleProfile.email },
@@ -319,6 +326,11 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
     expect(mocks.ensureUserHasCompanyMock).toHaveBeenCalledWith("user-maria", {
       name: "Maria Calderon",
       email: "maria@gmail.com",
+    });
+    expect(mocks.ensureDemoProjectForCompanyMock).toHaveBeenCalledWith({
+      userId: "user-maria",
+      companyId: "company-maria",
+      enabled: true,
     });
 
     // ── jwt ──
