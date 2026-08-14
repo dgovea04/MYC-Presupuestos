@@ -45,3 +45,12 @@ describe("next.config image allowlist", () => {
     expect(nextConfig.images?.formats).toEqual(["image/avif", "image/webp"]);
   });
 });
+
+describe("next config server file tracing", () => {
+  it("includes the onboarding demo project asset in production server functions", () => {
+    expect(nextConfig.outputFileTracingIncludes).toMatchObject({
+      "/api/register": ["./data-for-seed/demo-projects/edificio-multifamiliar-demo.mcp"],
+      "/api/auth/**": ["./data-for-seed/demo-projects/edificio-multifamiliar-demo.mcp"],
+    });
+  });
+});

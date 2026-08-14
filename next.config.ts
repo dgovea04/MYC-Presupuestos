@@ -6,10 +6,15 @@ const projectRoot = process.cwd();
 const workspaceRoot = projectRoot.includes(`${path.sep}.worktrees${path.sep}`)
   ? path.resolve(projectRoot, "..", "..")
   : projectRoot;
+const demoProjectTemplateAsset = "./data-for-seed/demo-projects/edificio-multifamiliar-demo.mcp";
 
 const nextConfig: NextConfig = {
   typescript: {
     tsconfigPath: "tsconfig.build.json",
+  },
+  outputFileTracingIncludes: {
+    "/api/register": [demoProjectTemplateAsset],
+    "/api/auth/**": [demoProjectTemplateAsset],
   },
   turbopack: {
     root: workspaceRoot,
