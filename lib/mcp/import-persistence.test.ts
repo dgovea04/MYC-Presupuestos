@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   budgetFooterRowCreateMany: vi.fn(),
   apuCreate: vi.fn(),
   apuResourceCreate: vi.fn(),
+  resourceCreate: vi.fn(),
   polynomialFormulaCreate: vi.fn(),
   polynomialMonomialCreate: vi.fn(),
   polynomialMonomialComponentCreate: vi.fn(),
@@ -275,6 +276,7 @@ describe("importProjectPackageToMyc", () => {
     mocks.budgetFooterRowCreateMany.mockResolvedValue({ count: 1 });
     mocks.apuCreate.mockResolvedValue({ id: "apu-created" });
     mocks.apuResourceCreate.mockResolvedValue({ id: "apu-res-created" });
+    mocks.resourceCreate.mockResolvedValue({ id: "resource-created" });
     mocks.polynomialFormulaCreate.mockResolvedValue({ id: "formula-created" });
     mocks.polynomialMonomialCreate.mockResolvedValue({ id: "monomial-created" });
     mocks.polynomialMonomialComponentCreate.mockResolvedValue({ id: "component-created" });
@@ -288,6 +290,7 @@ describe("importProjectPackageToMyc", () => {
         budgetFooterRow: { createMany: mocks.budgetFooterRowCreateMany },
         apu: { create: mocks.apuCreate },
         apuResource: { create: mocks.apuResourceCreate },
+        resource: { create: mocks.resourceCreate },
         polynomialFormula: { create: mocks.polynomialFormulaCreate },
         polynomialMonomial: { create: mocks.polynomialMonomialCreate },
         polynomialMonomialComponent: { create: mocks.polynomialMonomialComponentCreate },
@@ -401,7 +404,7 @@ describe("importProjectPackageToMyc", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           apuId: "apu-created",
-          resourceId: "res-1",
+          resourceId: null,
           resourceType: "MATERIAL",
           quantity: "1.0500",
           unitPrice: "280.0000",
@@ -463,6 +466,56 @@ describe("importProjectPackageToMyc", () => {
       resourceCount: 0,
       warnings: [],
     });
+  });
+
+  it("remaps packaged project resources before creating APU resource rows", async () => {
+    const manifest = makeManifest();
+    const readModule = makeModuleReader({
+      ...fixtureModules,
+      "budgets/project-resources.json": {
+        resources: [
+          {
+            id: "res-1",
+            code: "MAT-001",
+            description: "Cemento Portland Tipo I",
+            category: "MATERIAL",
+            unit: "bol",
+            currency: "PEN",
+            unitPrice: "280.0000",
+            iu: "21",
+            iuCurrent: "21",
+          },
+        ],
+      },
+    });
+
+    await importProjectPackageToMyc("user-1", manifest, readModule, {
+      companyId: "company-1",
+      mode: "restore_as_new_project",
+    });
+
+    expect(mocks.resourceCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: "company-1",
+        code: "MAT-001",
+        description: "Cemento Portland Tipo I",
+        category: "MATERIAL",
+        unit: "bol",
+        currency: "PEN",
+        unitPrice: "280.0000",
+        iu: "21",
+        iuCurrent: "21",
+        source: "mcp-import",
+      }),
+    });
+    expect(mocks.apuResourceCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          resourceId: "resource-created",
+        }),
+      }),
+    );
   });
 
   it("applies project overrides during restore", async () => {

@@ -13,6 +13,7 @@ type PersistenceContext = {
   levelIdMap: Map<string, string>;
   budgetItemIdMap: Map<string, string>;
   apuResourceIdMap: Map<string, string>;
+  resourceIdMap: Map<string, string>;
   budgetIdMap: Map<string, string>;
 };
 
@@ -78,6 +79,20 @@ type McpBudgetItemsModule = {
   }>;
 };
 
+type McpProjectResourcesModule = {
+  resources: Array<{
+    id: string;
+    code: string;
+    description: string;
+    category: string;
+    unit: string;
+    currency: string;
+    unitPrice: string | number;
+    iu: string | null;
+    iuCurrent: string | null;
+  }>;
+};
+
 const importTransactionOptions = {
   maxWait: 10_000,
   timeout: 120_000,
@@ -103,6 +118,7 @@ export async function importProjectPackageToMyc(
       levelIdMap: new Map(),
       budgetItemIdMap: new Map(),
       apuResourceIdMap: new Map(),
+      resourceIdMap: new Map(),
       budgetIdMap: new Map(),
     };
 
@@ -217,6 +233,8 @@ export async function importProjectPackageToMyc(
     const apuById = new Map(
       (apusData?.apus ?? []).map((apu) => [apu.budgetItemId, apu] as const),
     );
+
+    await persistProjectResources(ctx, options.companyId, warnings);
 
     // Build items-by-budget lookup
     const itemsByBudgetId = new Map<string, McpBudgetItemsModule["budgets"][number]>();
@@ -419,7 +437,7 @@ async function persistBudgetStructure(
     }>;
   }>,
 ) {
-  const { tx, levelIdMap, budgetItemIdMap, apuResourceIdMap } = ctx;
+  const { tx, levelIdMap, budgetItemIdMap, apuResourceIdMap, resourceIdMap } = ctx;
 
   // Create levels — handle out-of-order parent-child relationships
   // by re-queuing levels whose parent hasn't been created yet
@@ -493,7 +511,7 @@ async function persistBudgetStructure(
         const createdResource = await tx.apuResource.create({
           data: {
             apuId: createdApu.id,
-            resourceId: resource.resourceId,
+            resourceId: resource.resourceId ? resourceIdMap.get(resource.resourceId) ?? null : null,
             resourceType: resource.resourceType,
             crew: resource.crew ?? null,
             quantity: resource.quantity,
@@ -510,6 +528,43 @@ async function persistBudgetStructure(
   }
 
   return { itemCount: budgetData.items.length, apuCount };
+}
+
+async function persistProjectResources(
+  ctx: PersistenceContext,
+  companyId: string,
+  warnings: string[],
+) {
+  let projectResourcesData: McpProjectResourcesModule | null = null;
+
+  try {
+    projectResourcesData = ctx.readModule("budgets/project-resources.json") as McpProjectResourcesModule;
+  } catch {
+    return;
+  }
+
+  for (const resource of projectResourcesData.resources ?? []) {
+    const createdResource = await ctx.tx.resource.create({
+      data: {
+        companyId,
+        code: resource.code,
+        description: resource.description,
+        category: resource.category as never,
+        unit: resource.unit,
+        unitPrice: resource.unitPrice,
+        currency: resource.currency,
+        iu: resource.iu,
+        iuCurrent: resource.iuCurrent,
+        source: "mcp-import",
+      },
+    });
+
+    ctx.resourceIdMap.set(resource.id, createdResource.id);
+  }
+
+  if (projectResourcesData.resources?.length === 0) {
+    warnings.push("El paquete .mcp no contiene recursos de proyecto para vincular los APU.");
+  }
 }
 
 async function persistFooterRows(
