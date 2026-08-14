@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth/session";
+import { notifyPrimaryAdminSecurityEvent } from "@/lib/auth/admin-security-alert";
+import { recordAdminAudit } from "@/lib/data/admin-audit";
 import {
   getSystemSettings,
   updateSystemSettings,
@@ -7,7 +9,7 @@ import {
 } from "@/lib/data/system-settings";
 
 export async function GET() {
-  const session = await requireAdminSession();
+  const session = await requireAdminSession("system_settings.read");
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
@@ -24,7 +26,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const session = await requireAdminSession();
+  const session = await requireAdminSession("system_settings.manage", request);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
@@ -47,6 +49,24 @@ export async function PUT(request: Request) {
     };
 
     const settings = await updateSystemSettings(input);
+    await recordAdminAudit({
+      actorUserId: session.user.id,
+      targetUserId: null,
+      targetEmail: session.user.email ?? "sistema",
+      action: "SYSTEM_SETTINGS_UPDATED",
+      detail: "Configuracion de proveedores Cloud IA actualizada.",
+      metadata: {
+        openaiApiKeyChanged: typeof body.openaiApiKey === "string",
+        geminiApiKeyChanged: typeof body.geminiApiKey === "string",
+        openrouterApiKeyChanged: typeof body.openrouterApiKey === "string",
+      },
+      ...getAdminActionContext(request),
+    });
+    await notifyPrimaryAdminSecurityEvent({
+      action: "SYSTEM_SETTINGS_UPDATED",
+      actorEmail: session.user.email ?? session.user.id,
+      detail: "Se actualizaron proveedores o modelos Cloud IA del sistema.",
+    });
     return NextResponse.json(toSafeSystemSettings(settings));
   } catch (error) {
     return NextResponse.json(
@@ -70,6 +90,13 @@ function readOptionalModel(value: unknown): string | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getAdminActionContext(request: Request) {
+  return {
+    ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip"),
+    userAgent: request.headers.get("user-agent"),
+  };
 }
 
 function toSafeSystemSettings(settings: Awaited<ReturnType<typeof getSystemSettings>>) {

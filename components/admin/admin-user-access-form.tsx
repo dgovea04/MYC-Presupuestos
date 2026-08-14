@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, MailCheck, Save, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
+import { KeyRound, LifeBuoy, LogOut, MailCheck, Save, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ type AdminUserRow = {
   email: string;
   emailVerifiedAt: string | null;
   role: "ADMIN" | "USER";
+  adminProfile?: "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR" | null;
   status: "ACTIVE" | "SUSPENDED";
   planSlug: string;
   billingMode?: string;
@@ -32,16 +33,31 @@ type AdminPlanOption = {
 export function AdminUserAccessForm({
   currentUserId,
   isSuperAdmin,
+  canManageAccess: canManageAccessProp,
+  canManageLifecycle: canManageLifecycleProp,
+  canImpersonate: canImpersonateProp,
+  canRevokeSessions: canRevokeSessionsProp,
+  canVerifyEmail: canVerifyEmailProp,
   plans,
   users,
 }: {
   currentUserId?: string;
   isSuperAdmin?: boolean;
+  canManageAccess?: boolean;
+  canManageLifecycle?: boolean;
+  canImpersonate?: boolean;
+  canRevokeSessions?: boolean;
+  canVerifyEmail?: boolean;
   plans: AdminPlanOption[];
   users: AdminUserRow[];
 }) {
   const router = useRouter();
   const protectedUserId = currentUserId ?? "";
+  const canManageAccess = canManageAccessProp ?? true;
+  const canManageLifecycle = canManageLifecycleProp ?? true;
+  const canImpersonate = canImpersonateProp ?? true;
+  const canRevokeSessions = canRevokeSessionsProp ?? true;
+  const canVerifyEmail = canVerifyEmailProp ?? true;
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? "");
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId) ?? users[0] ?? null,
@@ -57,6 +73,10 @@ export function AdminUserAccessForm({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canManageAccess) {
+      setMessage("Tu perfil no tiene permiso para modificar el acceso del usuario.");
+      return;
+    }
     setMessage(null);
     const formData = new FormData(event.currentTarget);
 
@@ -65,7 +85,8 @@ export function AdminUserAccessForm({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          role: String(formData.get("role") ?? "USER"),
+          role: String(formData.get("role") ?? selectedUser.role),
+          adminProfile: String(formData.get("adminProfile") ?? selectedUser.adminProfile ?? "") || null,
           status: String(formData.get("status") ?? "ACTIVE"),
           membershipPlanSlug: String(formData.get("membershipPlanSlug") ?? ""),
           aiTokenExtraMonthly: Number(formData.get("aiTokenExtraMonthly") ?? 0),
@@ -101,6 +122,36 @@ export function AdminUserAccessForm({
       setVerifiedUserIds((current) => new Set([...current, selectedUser.id]));
       setMessage("Correo validado manualmente.");
       router.refresh();
+    });
+  }
+
+  function handleSupportSession() {
+    setMessage(null);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${selectedUser.id}/support-session`, { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as { error?: string; redirectTo?: string } | null;
+      if (!response.ok || !payload?.redirectTo) {
+        setMessage(payload?.error ?? "No se pudo iniciar la sesión de soporte.");
+        return;
+      }
+      window.location.assign(payload.redirectTo);
+    });
+  }
+
+  function handleRevokeSessions() {
+    setMessage(null);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${selectedUser.id}/sessions/revoke`, { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        setMessage(payload?.error ?? "No se pudieron cerrar las sesiones activas.");
+        return;
+      }
+
+      setMessage("Sesiones activas revocadas. El usuario deberá iniciar sesión nuevamente.");
     });
   }
 
@@ -149,13 +200,19 @@ export function AdminUserAccessForm({
       return;
     }
 
+    const reason = window.prompt("Indica el motivo de la eliminacion permanente (minimo 10 caracteres).");
+
+    if (reason === null) {
+      return;
+    }
+
     setMessage(null);
 
     startTransition(async () => {
       const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmationEmail }),
+        body: JSON.stringify({ confirmationEmail, reason }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
 
@@ -164,7 +221,7 @@ export function AdminUserAccessForm({
         return;
       }
 
-      setMessage("Usuario eliminado permanentemente.");
+      setMessage("Solicitud de eliminación creada. Otro administrador activo debe aprobarla.");
       router.refresh();
     });
   }
@@ -189,10 +246,17 @@ export function AdminUserAccessForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="admin-user-role">Rol</Label>
-          <Select id="admin-user-role" name="role" defaultValue={selectedUser.role} key={`${selectedUser.id}-role-${selectedUser.role}`}>
+          <Select
+            id="admin-user-role"
+            name="role"
+            defaultValue={selectedUser.role}
+            disabled={!canManageAccess || !isSuperAdmin}
+            key={`${selectedUser.id}-role-${selectedUser.role}`}
+          >
             <option value="USER">Usuario</option>
             <option value="ADMIN">Administrador</option>
           </Select>
+          {!isSuperAdmin ? <p className="theme-subtle-text text-xs">Solo el administrador principal puede cambiar roles.</p> : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="admin-user-status">Estado</Label>
@@ -205,11 +269,30 @@ export function AdminUserAccessForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
+          <Label htmlFor="admin-user-profile">Perfil administrativo</Label>
+          <Select
+            id="admin-user-profile"
+            name="adminProfile"
+            defaultValue={selectedUser.adminProfile ?? (selectedUser.role === "ADMIN" ? "ADMIN" : "")}
+            disabled={!canManageAccess || !isSuperAdmin}
+            key={`${selectedUser.id}-profile-${selectedUser.adminProfile ?? "none"}`}
+          >
+            <option value="">Sin perfil</option>
+            <option value="SUPER_ADMIN" disabled>Administrador principal</option>
+            <option value="ADMIN">Administrador operativo</option>
+            <option value="SUPPORT">Soporte</option>
+            <option value="BILLING_ADMIN">Facturación</option>
+            <option value="AUDITOR">Auditor</option>
+          </Select>
+          {!isSuperAdmin ? <p className="theme-subtle-text text-xs">Solo el administrador principal puede cambiar perfiles.</p> : null}
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="admin-user-plan">Membresia</Label>
           <Select
             id="admin-user-plan"
             name="membershipPlanSlug"
             defaultValue={selectedUser.planSlug || plans[0]?.slug}
+            disabled={!canManageAccess}
             key={`${selectedUser.id}-plan-${selectedUser.planSlug}`}
           >
             {plans.map((plan) => (
@@ -228,6 +311,7 @@ export function AdminUserAccessForm({
             min={0}
             step={1}
             defaultValue={selectedUser.aiTokenExtraMonthly}
+            disabled={!canManageAccess}
             key={`${selectedUser.id}-tokens-${selectedUser.aiTokenExtraMonthly}`}
           />
         </div>
@@ -254,7 +338,7 @@ export function AdminUserAccessForm({
             </div>
           </div>
           {!isEmailVerified ? (
-            <Button type="button" variant="outline" disabled={isPending} onClick={handleVerifyEmail}>
+            <Button type="button" variant="outline" disabled={isPending || !canVerifyEmail} onClick={handleVerifyEmail}>
               {isPending ? "Validando..." : "Validar correo"}
             </Button>
           ) : null}
@@ -273,10 +357,26 @@ export function AdminUserAccessForm({
               Enviar cambio de contrasena
             </Button>
           ) : null}
+          {canImpersonate ? (
+            <Button type="button" variant="outline" disabled={isPending} onClick={handleSupportSession} className="gap-2">
+              <LifeBuoy className="h-4 w-4" />
+              Abrir soporte limitado
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
-            disabled={isPending || selectedUser.id === protectedUserId}
+            disabled={isPending || !canRevokeSessions}
+            onClick={handleRevokeSessions}
+            className="gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesiones activas
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending || !canManageLifecycle || selectedUser.id === protectedUserId}
             onClick={handleStatusChange}
             className="gap-2"
           >
@@ -286,13 +386,13 @@ export function AdminUserAccessForm({
           {isSuperAdmin && selectedUser.id !== protectedUserId ? (
             <Button type="button" variant="destructive" disabled={isPending} onClick={handlePermanentDelete} className="gap-2 sm:col-span-2">
               <Trash2 className="h-4 w-4" />
-              Eliminar permanentemente
+              Solicitar eliminación permanente
             </Button>
           ) : null}
         </div>
       </div>
 
-      <Button type="submit" disabled={isPending} className="w-full gap-2">
+      <Button type="submit" disabled={isPending || !canManageAccess} className="w-full gap-2">
         <Save className="h-4 w-4" />
         {isPending ? "Guardando..." : "Guardar acceso"}
       </Button>

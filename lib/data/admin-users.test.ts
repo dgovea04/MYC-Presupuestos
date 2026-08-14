@@ -54,6 +54,7 @@ describe("admin users data", () => {
       where: { id: "user-1" },
       data: {
         role: "ADMIN",
+        adminProfile: "ADMIN",
         status: "ACTIVE",
         membershipPlanId: "plan-pro",
         aiTokenExtraMonthly: 500,

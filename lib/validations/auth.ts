@@ -11,6 +11,7 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: z.email("Email invalido"),
   password: z.string().min(8, "La contrasena debe tener al menos 8 caracteres"),
+  mfaCode: z.string().trim().max(20).optional(),
 });
 
 export const resendVerificationSchema = z.object({

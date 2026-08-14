@@ -9,7 +9,7 @@ const lifecycleSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdminSession();
+  const session = await requireAdminSession("users.manage_lifecycle");
 
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

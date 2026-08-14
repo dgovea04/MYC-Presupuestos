@@ -2,11 +2,13 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 import { requireAdminSession } from "@/lib/auth/session";
-import { deleteAdminUserPermanently, updateUserAdminAccess } from "@/lib/data/admin-users";
+import { notifyPrimaryAdminSecurityEvent } from "@/lib/auth/admin-security-alert";
+import { requestAdminUserDeletion } from "@/lib/data/admin-deletion-approvals";
+import { updateUserAdminAccess } from "@/lib/data/admin-users";
 import { adminUserAccessSchema } from "@/lib/validations/admin";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdminSession();
+  const session = await requireAdminSession("users.manage_access");
 
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -31,10 +33,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 const deleteUserSchema = z.object({
   confirmationEmail: z.string().trim().email(),
+  reason: z.string().trim().min(10).max(500),
 });
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdminSession();
+  const session = await requireAdminSession("users.delete_permanently", request);
 
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -44,16 +47,28 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { id } = await params;
     const payload = deleteUserSchema.parse(await request.json());
 
-    await deleteAdminUserPermanently(id, session.user.id, payload.confirmationEmail, getAdminActionContext(request));
+    const approval = await requestAdminUserDeletion(
+      id,
+      session.user.id,
+      payload.confirmationEmail,
+      payload.reason,
+      getAdminActionContext(request),
+    );
+    await notifyPrimaryAdminSecurityEvent({
+      action: "USER_DELETION_REQUESTED",
+      actorEmail: session.user.email ?? session.user.id,
+      targetEmail: approval.targetEmail,
+      detail: `Solicitud de eliminación permanente creada. Motivo: ${payload.reason}`,
+    });
     revalidatePath("/admin");
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, approvalId: approval.approvalId, expiresAt: approval.expiresAt.toISOString() }, { status: 202 });
   } catch (error) {
     if (error instanceof ZodError) {
-      return NextResponse.json({ error: "Escribe el correo del usuario para confirmar la eliminacion." }, { status: 400 });
+      return NextResponse.json({ error: "Escribe el correo y un motivo de al menos 10 caracteres para solicitar la eliminacion." }, { status: 400 });
     }
 
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo eliminar el usuario." }, { status: 400 });
+    return NextResponse.json(      { error: error instanceof Error ? error.message : "No se pudo crear la solicitud de eliminación." }, { status: 400 });
   }
 }
 

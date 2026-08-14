@@ -82,7 +82,7 @@ export async function consumePasswordResetToken(token: string, newPassword: stri
 
     await tx.$executeRaw`
       UPDATE "User"
-      SET "passwordHash" = ${passwordHash}, "passwordChangedAt" = NOW(), "updatedAt" = NOW()
+      SET "passwordHash" = ${passwordHash}, "passwordChangedAt" = NOW(), "sessionVersion" = "sessionVersion" + 1, "updatedAt" = NOW()
       WHERE "id" = ${match.userId}
     `;
 

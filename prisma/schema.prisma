@@ -128,6 +128,14 @@ enum UserRole {
   USER
 }
 
+enum AdminProfile {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT
+  BILLING_ADMIN
+  AUDITOR
+}
+
 enum UserStatus {
   ACTIVE
   SUSPENDED
@@ -284,9 +292,15 @@ model User {
   jobTitle                      String?
   bio                           String?
   role                          UserRole                    @default(USER)
+  adminProfile                  AdminProfile?
   status                        UserStatus                  @default(ACTIVE)
   isSuperAdmin                  Boolean                     @default(false)
+  mfaEnabled                    Boolean                     @default(false)
+  mfaSecretEncrypted            String?
   passwordChangedAt             DateTime?
+  sessionVersion                Int                         @default(0)
+  deletionScheduledAt           DateTime?
+  deletionReason                String?
   membershipPlanId              String?
   aiTokenExtraMonthly           Int                         @default(0)
   passwordHash                  String?
@@ -311,7 +325,11 @@ model User {
   budgetTemplates               BudgetTemplate[]
   emailVerificationTokens       EmailVerificationToken[]
   passwordResetTokens            PasswordResetToken[]
+  adminMfaRecoveryCodes           AdminMfaRecoveryCode[]
   adminAuditLogs                 AdminAuditLog[]            @relation("AdminAuditActor")
+  deletionApprovalsRequested     AdminDeletionApproval[]    @relation("DeletionApprovalRequester")
+  deletionApprovalsApproved      AdminDeletionApproval[]    @relation("DeletionApprovalApprover")
+  deletionApprovalTargets        AdminDeletionApproval[]    @relation("DeletionApprovalTarget")
   collaborationPresences        CollaborationPresence[]
   collaborationEditSessions     CollaborationEditSession[]
   collaborationCommentsCreated  CollaborationComment[]      @relation("CommentCreatedBy")
@@ -357,6 +375,54 @@ model PasswordResetToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("password_reset_tokens")
+}
+
+model SecurityRateLimitBucket {
+  id              String   @id @default(cuid())
+  bucketKey       String   @unique
+  windowStartedAt DateTime
+  attempts        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([windowStartedAt])
+  @@map("security_rate_limit_buckets")
+}
+
+model AdminMfaRecoveryCode {
+  id        String   @id @default(cuid())
+  userId    String
+  codeHash  String   @unique
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("admin_mfa_recovery_codes")
+}
+
+model AdminDeletionApproval {
+  id               String   @id @default(cuid())
+  targetUserId     String?
+  targetEmail      String
+  requestedById    String?
+  approvedById     String?
+  confirmationEmail String
+  reason           String
+  status           String   @default("PENDING")
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  decidedAt        DateTime?
+  executedAt       DateTime?
+  deletionReminderSentAt DateTime?
+  targetUser       User?    @relation("DeletionApprovalTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  requestedBy      User?    @relation("DeletionApprovalRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  approvedBy       User?    @relation("DeletionApprovalApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, expiresAt])
+  @@index([targetUserId])
+  @@index([requestedById])
+  @@map("admin_deletion_approvals")
 }
 
 model AdminAuditLog {

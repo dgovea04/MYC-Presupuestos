@@ -71,7 +71,8 @@ async function main() {
 
   await prisma.$executeRaw`
     UPDATE "User"
-    SET "isSuperAdmin" = ${email === PRIMARY_ADMIN_EMAIL}
+    SET "isSuperAdmin" = ${email === PRIMARY_ADMIN_EMAIL},
+        "adminProfile" = ${email === PRIMARY_ADMIN_EMAIL ? "SUPER_ADMIN" : "ADMIN"}::"AdminProfile"
     WHERE "id" = ${user.id}
   `;
 

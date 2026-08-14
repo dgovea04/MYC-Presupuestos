@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db/prisma";
 import { issuePasswordReset } from "@/lib/auth/password-reset";
+import { revokeUserSessions } from "@/lib/auth/session-revocation";
 import { recordAdminAudit, type AdminAuditInput } from "@/lib/data/admin-audit";
 
 export type AdminUserRole = "ADMIN" | "USER";
+export type AdminProfile = "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR";
 export type AdminUserStatus = "ACTIVE" | "SUSPENDED";
 
 export type AdminActionContext = Pick<AdminAuditInput, "ipAddress" | "userAgent">;
@@ -11,6 +13,7 @@ export type UpdateUserAdminAccessInput = {
   aiTokenExtraMonthly: number;
   membershipPlanSlug: string;
   role: AdminUserRole;
+  adminProfile?: AdminProfile | null;
   status: AdminUserStatus;
 };
 
@@ -28,17 +31,36 @@ export async function updateUserAdminAccess(
     throw new Error("Plan de membresia no encontrado");
   }
 
+  const requestedAdminProfile = input.role === "ADMIN" ? input.adminProfile ?? "ADMIN" : null;
   const targetUsers = actorUserId
-    ? await prisma.$queryRaw<Array<{ email: string; isSuperAdmin: boolean }>>`
-        SELECT "email", "isSuperAdmin"
+    ? await prisma.$queryRaw<Array<{ email: string; role: AdminUserRole; adminProfile: AdminProfile | null; status: AdminUserStatus; isSuperAdmin: boolean }>>`
+        SELECT "email", "role", "adminProfile", "status", "isSuperAdmin"
         FROM "User"
         WHERE "id" = ${userId}
         LIMIT 1
       `
     : [];
+  const targetUser = targetUsers[0];
 
-  if (actorUserId && targetUsers[0]?.isSuperAdmin) {
+  if (actorUserId && targetUser?.isSuperAdmin) {
     throw new Error("El administrador principal no puede ser modificado desde este panel.");
+  }
+
+  if (requestedAdminProfile === "SUPER_ADMIN") {
+    throw new Error("El perfil de administrador principal está reservado para la cuenta protegida.");
+  }
+
+  if (actorUserId && targetUser && (targetUser.role !== input.role || targetUser.adminProfile !== requestedAdminProfile)) {
+    const actors = await prisma.$queryRaw<Array<{ isSuperAdmin: boolean }>>`
+      SELECT "isSuperAdmin"
+      FROM "User"
+      WHERE "id" = ${actorUserId}
+      LIMIT 1
+    `;
+
+    if (!actors[0]?.isSuperAdmin) {
+      throw new Error("Solo el administrador principal puede cambiar roles administrativos.");
+    }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -46,11 +68,20 @@ export async function updateUserAdminAccess(
       where: { id: userId },
       data: {
         role: input.role,
+        adminProfile: requestedAdminProfile,
         status: input.status,
         membershipPlanId: membershipPlan.id,
         aiTokenExtraMonthly: Math.max(0, Math.trunc(input.aiTokenExtraMonthly)),
       },
     });
+
+    if (targetUser && targetUser.status !== input.status) {
+      await tx.$executeRaw`
+        UPDATE "User"
+        SET "sessionVersion" = "sessionVersion" + 1
+        WHERE "id" = ${userId}
+      `;
+    }
 
     if (membershipPlan.slug === "starter") {
       await tx.billingSubscription.updateMany({
@@ -76,15 +107,16 @@ export async function updateUserAdminAccess(
     }
   });
 
-  if (actorUserId && targetUsers[0]) {
+  if (actorUserId && targetUser) {
     await recordAdminAudit({
       actorUserId,
       targetUserId: userId,
-      targetEmail: targetUsers[0].email,
+      targetEmail: targetUser.email,
       action: "USER_ACCESS_UPDATED",
       detail: "Rol, estado, membresia o tokens extra actualizados.",
       metadata: {
         role: input.role,
+        adminProfile: requestedAdminProfile,
         status: input.status,
         membershipPlanSlug: input.membershipPlanSlug,
         aiTokenExtraMonthly: Math.max(0, Math.trunc(input.aiTokenExtraMonthly)),
@@ -162,8 +194,8 @@ export async function updateAdminUserStatus(
     throw new Error("No puedes cambiar el estado de tu propia cuenta.");
   }
 
-  const users = await prisma.$queryRaw<Array<{ email: string; role: AdminUserRole; status: AdminUserStatus; isSuperAdmin: boolean }>>`
-    SELECT "email", "role", "status", "isSuperAdmin"
+  const users = await prisma.$queryRaw<Array<{ email: string; role: AdminUserRole; adminProfile: AdminProfile | null; status: AdminUserStatus; isSuperAdmin: boolean }>>`
+    SELECT "email", "role", "adminProfile", "status", "isSuperAdmin"
     FROM "User"
     WHERE "id" = ${userId}
     LIMIT 1
@@ -190,11 +222,13 @@ export async function updateAdminUserStatus(
     }
   }
 
-  await prisma.$executeRaw`
-    UPDATE "User"
-    SET "status" = ${status}, "updatedAt" = NOW()
-    WHERE "id" = ${userId}
-  `;
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "User"
+      SET "status" = ${status}, "sessionVersion" = "sessionVersion" + 1, "updatedAt" = NOW()
+      WHERE "id" = ${userId}
+    `;
+  });
 
   await recordAdminAudit({
     actorUserId,
@@ -206,29 +240,9 @@ export async function updateAdminUserStatus(
   });
 }
 
-export async function deleteAdminUserPermanently(
-  userId: string,
-  actorUserId: string,
-  confirmationEmail: string,
-  context?: AdminActionContext,
-) {
-  if (userId === actorUserId) {
-    throw new Error("No puedes eliminar tu propia cuenta.");
-  }
-
-  const actors = await prisma.$queryRaw<Array<{ isSuperAdmin: boolean }>>`
-    SELECT "isSuperAdmin"
-    FROM "User"
-    WHERE "id" = ${actorUserId}
-    LIMIT 1
-  `;
-
-  if (!actors[0]?.isSuperAdmin) {
-    throw new Error("Solo el administrador principal puede eliminar usuarios permanentemente.");
-  }
-
-  const users = await prisma.$queryRaw<Array<{ email: string; isSuperAdmin: boolean }>>`
-    SELECT "email", "isSuperAdmin"
+export async function revokeAdminUserSessions(userId: string, actorUserId: string, context?: AdminActionContext) {
+  const users = await prisma.$queryRaw<Array<{ email: string }>>`
+    SELECT "email"
     FROM "User"
     WHERE "id" = ${userId}
     LIMIT 1
@@ -239,25 +253,14 @@ export async function deleteAdminUserPermanently(
     throw new Error("Usuario no encontrado.");
   }
 
-  if (user.isSuperAdmin) {
-    throw new Error("El administrador principal no puede ser eliminado.");
-  }
-
-  if (confirmationEmail.trim().toLowerCase() !== user.email.toLowerCase()) {
-    throw new Error("La confirmacion no coincide con el correo del usuario.");
-  }
-
-  await prisma.$executeRaw`
-    DELETE FROM "User"
-    WHERE "id" = ${userId}
-  `;
+  await revokeUserSessions(userId);
 
   await recordAdminAudit({
     actorUserId,
     targetUserId: userId,
     targetEmail: user.email,
-    action: "USER_DELETED_PERMANENTLY",
-    detail: "Usuario eliminado permanentemente.",
+    action: "USER_SESSIONS_REVOKED",
+    detail: "Todas las sesiones activas del usuario fueron revocadas.",
     ...context,
   });
 }

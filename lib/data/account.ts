@@ -262,7 +262,7 @@ export async function updateUserPassword(userId: string, input: AccountPasswordI
 
   await prisma.$queryRaw<Array<unknown>>`
     UPDATE "User"
-    SET "passwordHash" = ${await hashPassword(data.newPassword)}, "passwordChangedAt" = NOW(), "updatedAt" = NOW()
+    SET "passwordHash" = ${await hashPassword(data.newPassword)}, "passwordChangedAt" = NOW(), "sessionVersion" = "sessionVersion" + 1, "updatedAt" = NOW()
     WHERE "id" = ${userId}
   `;
 }

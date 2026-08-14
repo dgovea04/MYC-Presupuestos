@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCronRequest } from "@/lib/auth/cron-auth";
 import { prisma } from "@/lib/db/prisma";
 
 /**
@@ -12,21 +13,16 @@ import { prisma } from "@/lib/db/prisma";
  *   curl https://.../api/cron/reactivate-members?secret=<CRON_SECRET>
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
+  const authorization = isAuthorizedCronRequest(request);
+
+  if (!authorization.configured) {
     return NextResponse.json(
       { error: "CRON_SECRET not configured" },
       { status: 500 },
     );
   }
 
-  // Accept secret via Bearer token OR query parameter (for Vercel Cron)
-  const { searchParams } = new URL(request.url);
-  const querySecret = searchParams.get("secret");
-  const auth = request.headers.get("Authorization");
-  const bearerToken = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-
-  if (bearerToken !== secret && querySecret !== secret) {
+  if (!authorization.authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

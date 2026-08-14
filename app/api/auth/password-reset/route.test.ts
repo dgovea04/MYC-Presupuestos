@@ -6,6 +6,12 @@ vi.mock("@/lib/auth/password-reset", () => ({
   consumePasswordResetToken: consumePasswordResetTokenMock,
 }));
 
+vi.mock("@/lib/auth/rate-limit", () => ({
+  consumeRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, retryAfterSeconds: 900 }),
+  getRateLimitHeaders: vi.fn().mockReturnValue({}),
+  getRequestClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
+
 import { POST } from "@/app/api/auth/password-reset/route";
 
 describe("password reset route", () => {

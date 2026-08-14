@@ -1,9 +1,13 @@
 /* @vitest-environment jsdom */
 
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginForm } from "@/components/auth/login-form";
+
+afterEach(() => {
+  cleanup();
+});
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -37,6 +41,35 @@ describe("LoginForm", () => {
     vi.unstubAllGlobals();
   });
 
+  it("reveals the MFA step after a failed login and submits the code on retry", async () => {
+    mocks.signIn
+      .mockResolvedValueOnce({ error: "CredentialsSignin" })
+      .mockResolvedValueOnce({ ok: true, error: null });
+
+    render(<LoginForm />);
+
+    fireEvent.change(screen.getByLabelText("Contrasena"), { target: { value: "password123" } });
+    const submitButton = screen.getByRole("button", { name: "Iniciar sesion" });
+    const form = submitButton.closest("form");
+    fireEvent.submit(form!);
+
+    await waitFor(() => expect(screen.getByLabelText("Código MFA o código de recuperación")).toBeTruthy());
+    const mfaInput = screen.getByLabelText("Código MFA o código de recuperación");
+    fireEvent.change(mfaInput, { target: { value: "123456" } });
+    expect((mfaInput as HTMLInputElement).value).toBe("123456");
+    await waitFor(() => expect((submitButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.submit(form!);
+
+    await waitFor(() => {
+      expect(mocks.signIn).toHaveBeenLastCalledWith("credentials", {
+        email: "maria@example.com",
+        password: "password123",
+        mfaCode: "123456",
+        redirect: false,
+      });
+    });
+  });
+
   it("shows the verification notice and can resend the verification email", async () => {
     vi.stubGlobal(
       "fetch",
@@ -45,7 +78,7 @@ describe("LoginForm", () => {
 
     render(<LoginForm />);
 
-    expect(screen.getByText(/Revisa tu correo/i)).toBeTruthy();
+    expect(screen.getAllByText(/Revisa tu correo/i)).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Reenviar verificacion" }));
 

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { authSessionCookieName } from "@/lib/auth/cookies";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
+import { verifyAdminMfaCode } from "@/lib/auth/admin-mfa";
+import { consumeRateLimit } from "@/lib/auth/rate-limit";
 import {
   ensureUserHasCompany,
   registerUserWithCompanyAndDemo,
@@ -34,9 +36,12 @@ const authUserSchema = z.object({
   bio: z.string().nullable().optional(),
   emailVerifiedAt: z.date().nullable().optional(),
   passwordChangedAt: z.date().nullable().optional(),
+  sessionVersion: z.number().int().nonnegative().optional().default(0),
   role: z.enum(["ADMIN", "USER"]).optional().default("USER"),
+  adminProfile: z.enum(["SUPER_ADMIN", "ADMIN", "SUPPORT", "BILLING_ADMIN", "AUDITOR"]).nullable().optional().default(null),
   status: z.enum(["ACTIVE", "SUSPENDED"]).optional().default("ACTIVE"),
   isSuperAdmin: z.boolean().optional().default(false),
+  mfaEnabled: z.boolean().optional().default(false),
 });
 
 type AuthUserRecord = z.infer<typeof authUserSchema>;
@@ -62,17 +67,20 @@ function normalizeAuthUser(row: unknown): AuthUserRecord | null {
     bio: parsedUser.data.bio ?? null,
     emailVerifiedAt: parsedUser.data.emailVerifiedAt ?? null,
     passwordChangedAt: parsedUser.data.passwordChangedAt ?? null,
+    sessionVersion: parsedUser.data.sessionVersion,
     passwordHash: parsedUser.data.passwordHash ?? null,
     role: parsedUser.data.role,
+    adminProfile: parsedUser.data.adminProfile,
     status: parsedUser.data.status,
     isSuperAdmin: parsedUser.data.isSuperAdmin,
+    mfaEnabled: parsedUser.data.mfaEnabled,
   };
 }
 
 async function getAuthUserByEmail(email: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
-    SELECT "id", "name", "email", "passwordHash", "emailVerifiedAt", "passwordChangedAt", "role", "status", "isSuperAdmin"
+    SELECT "id", "name", "email", "passwordHash", "emailVerifiedAt", "passwordChangedAt", "sessionVersion", "role", "adminProfile", "status", "isSuperAdmin", "mfaEnabled"
     ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
     ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
     ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
@@ -85,8 +93,10 @@ async function getAuthUserByEmail(email: string) {
   return normalizeAuthUser(rows[0]);
 }
 
-async function getAuthUserById(userId: string) {
-  if (shouldUseAuthUserProcessCache) {
+async function getAuthUserById(userId: string, options?: { bypassCache?: boolean }) {
+  const useCache = shouldUseAuthUserProcessCache && !options?.bypassCache;
+
+  if (useCache) {
     const existing = authUserByIdCache.get(userId);
     if (existing && existing.expiresAt > Date.now()) {
       return existing.value;
@@ -95,7 +105,7 @@ async function getAuthUserById(userId: string) {
 
   const value = getAuthUserByIdFromDatabase(userId);
 
-  if (shouldUseAuthUserProcessCache) {
+  if (useCache) {
     authUserByIdCache.set(userId, {
       expiresAt: Date.now() + AUTH_USER_PROCESS_CACHE_TTL_MS,
       value: value.catch((error: unknown) => {
@@ -111,7 +121,7 @@ async function getAuthUserById(userId: string) {
 async function getAuthUserByIdFromDatabase(userId: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
-    SELECT "id", "name", "email", "role", "status", "isSuperAdmin", "passwordChangedAt"
+    SELECT "id", "name", "email", "role", "adminProfile", "status", "isSuperAdmin", "mfaEnabled", "passwordChangedAt", "sessionVersion"
     ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
     ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
     ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
@@ -124,7 +134,17 @@ async function getAuthUserByIdFromDatabase(userId: string) {
   return normalizeAuthUser(rows[0]);
 }
 
-function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "avatarUrl" | "phone" | "jobTitle" | "bio" | "role" | "status" | "isSuperAdmin">) {
+function getCredentialLoginIp(headers: Record<string, unknown> | undefined) {
+  const realIp = headers?.["x-real-ip"];
+  if (typeof realIp === "string" && realIp.trim()) return realIp.trim();
+
+  const forwardedFor = headers?.["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) return forwardedFor.split(",")[0]?.trim() || "unknown";
+
+  return "unknown";
+}
+
+function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "avatarUrl" | "phone" | "jobTitle" | "bio" | "role" | "adminProfile" | "status" | "isSuperAdmin" | "mfaEnabled" | "sessionVersion">) {
   return {
     id: user.id,
     name: user.name,
@@ -134,8 +154,11 @@ function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "
     jobTitle: user.jobTitle,
     bio: user.bio,
     role: user.role,
+    adminProfile: user.adminProfile,
     status: user.status,
     isSuperAdmin: user.isSuperAdmin,
+    mfaEnabled: user.mfaEnabled,
+    sessionVersion: user.sessionVersion,
   };
 }
 
@@ -164,15 +187,33 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        mfaCode: { label: "Código MFA", type: "text" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = loginSchema.safeParse(credentials);
 
         if (!parsed.success) {
           return null;
         }
 
-        const user = await getAuthUserByEmail(parsed.data.email);
+        const normalizedEmail = parsed.data.email.toLowerCase();
+        const clientIp = getCredentialLoginIp(request.headers as Record<string, unknown> | undefined);
+        const accountRateLimit = await consumeRateLimit({
+          key: `credentials-login:account:${normalizedEmail}`,
+          maxAttempts: 10,
+          windowMs: 15 * 60 * 1000,
+        });
+        const originRateLimit = await consumeRateLimit({
+          key: `credentials-login:origin:${clientIp}`,
+          maxAttempts: 50,
+          windowMs: 15 * 60 * 1000,
+        });
+
+        if (!accountRateLimit.allowed || !originRateLimit.allowed) {
+          return null;
+        }
+
+        const user = await getAuthUserByEmail(normalizedEmail);
 
         if (!user?.passwordHash || user.status === "SUSPENDED") {
           return null;
@@ -186,6 +227,12 @@ export const authOptions: NextAuthOptions = {
 
         if (!user.emailVerifiedAt) {
           return null;
+        }
+
+        if (user.isSuperAdmin && user.mfaEnabled) {
+          if (!parsed.data.mfaCode || !(await verifyAdminMfaCode(user.id, parsed.data.mfaCode))) {
+            return null;
+          }
         }
 
         return toSessionProfile(user);
@@ -218,6 +265,10 @@ export const authOptions: NextAuthOptions = {
 
         if (existingUser) {
           if (existingUser.status === "SUSPENDED") {
+            return false;
+          }
+
+          if (existingUser.isSuperAdmin && existingUser.mfaEnabled) {
             return false;
           }
 
@@ -271,8 +322,11 @@ export const authOptions: NextAuthOptions = {
             token.jobTitle = dbUser.jobTitle ?? null;
             token.bio = dbUser.bio ?? null;
             token.role = dbUser.role;
+            token.adminProfile = dbUser.adminProfile;
             token.status = dbUser.status;
             token.isSuperAdmin = dbUser.isSuperAdmin;
+            token.mfaEnabled = dbUser.mfaEnabled;
+            token.sessionVersion = dbUser.sessionVersion;
           }
         } else {
           token.id = user.id;
@@ -283,8 +337,11 @@ export const authOptions: NextAuthOptions = {
           token.jobTitle = "jobTitle" in user ? (user.jobTitle as string | null | undefined) ?? null : null;
           token.bio = "bio" in user ? (user.bio as string | null | undefined) ?? null : null;
           token.role = "role" in user ? (user.role as "ADMIN" | "USER" | undefined) ?? "USER" : "USER";
+          token.adminProfile = "adminProfile" in user ? (user.adminProfile as "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR" | null | undefined) ?? null : null;
           token.status = "status" in user ? (user.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE" : "ACTIVE";
           token.isSuperAdmin = "isSuperAdmin" in user ? Boolean(user.isSuperAdmin) : false;
+          token.mfaEnabled = "mfaEnabled" in user ? Boolean(user.mfaEnabled) : false;
+          token.sessionVersion = "sessionVersion" in user && typeof user.sessionVersion === "number" ? user.sessionVersion : 0;
         }
 
         const userId = token.id as string | undefined;
@@ -309,7 +366,8 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user && token.id) {
-        const currentUser = await getAuthUserById(token.id as string);
+        const currentUser = await getAuthUserById(token.id as string, { bypassCache: true });
+        const sessionVersionMismatch = currentUser !== null && currentUser.sessionVersion !== Number(token.sessionVersion ?? 0);
         const sessionIssuedAt = typeof token.iat === "number" ? token.iat * 1000 : null;
         const passwordChangedAfterSession = Boolean(
           currentUser?.passwordChangedAt &&
@@ -317,7 +375,8 @@ export const authOptions: NextAuthOptions = {
             currentUser.passwordChangedAt.getTime() > sessionIssuedAt,
         );
 
-        session.user.id = passwordChangedAfterSession ? "" : (token.id as string);
+        const sessionInvalidated = !currentUser || currentUser.status === "SUSPENDED" || passwordChangedAfterSession || sessionVersionMismatch;
+        session.user.id = sessionInvalidated ? "" : (token.id as string);
         session.user.name = currentUser?.name ?? (token.name as string | null | undefined) ?? session.user.name ?? null;
         session.user.email = currentUser?.email ?? (token.email as string | null | undefined) ?? session.user.email ?? null;
         session.user.avatarUrl = currentUser?.avatarUrl ?? (token.avatarUrl as string | null | undefined) ?? null;
@@ -325,8 +384,10 @@ export const authOptions: NextAuthOptions = {
         session.user.jobTitle = currentUser?.jobTitle ?? (token.jobTitle as string | null | undefined) ?? null;
         session.user.bio = currentUser?.bio ?? (token.bio as string | null | undefined) ?? null;
         session.user.role = currentUser?.role ?? (token.role as "ADMIN" | "USER" | undefined) ?? "USER";
+        session.user.adminProfile = currentUser?.adminProfile ?? (token.adminProfile as "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR" | null | undefined) ?? null;
         session.user.status = currentUser?.status ?? (token.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE";
         const isSuperAdmin = currentUser?.isSuperAdmin ?? Boolean(token.isSuperAdmin);
+        session.user.mfaEnabled = currentUser?.mfaEnabled ?? Boolean(token.mfaEnabled);
         if (isSuperAdmin) {
           session.user.isSuperAdmin = true;
         } else {

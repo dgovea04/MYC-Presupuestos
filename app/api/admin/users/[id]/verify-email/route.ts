@@ -4,7 +4,7 @@ import { requireAdminSession } from "@/lib/auth/session";
 import { verifyUserEmailManually } from "@/lib/data/admin-users";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdminSession();
+  const session = await requireAdminSession("users.verify_email");
 
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

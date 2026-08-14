@@ -2,12 +2,14 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock, registerUserWithCompanyAndDemoMock, ensureUserHasCompanyMock, ensureDemoProjectForCompanyMock } = vi.hoisted(() => ({
+const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock, verifyAdminMfaCodeMock, consumeRateLimitMock, registerUserWithCompanyAndDemoMock, ensureUserHasCompanyMock, ensureDemoProjectForCompanyMock } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
   companyFindFirstMock: vi.fn(),
   companyMembershipFindManyMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
   verifyPasswordMock: vi.fn(),
+  verifyAdminMfaCodeMock: vi.fn(),
+  consumeRateLimitMock: vi.fn(),
   registerUserWithCompanyAndDemoMock: vi.fn(),
   ensureUserHasCompanyMock: vi.fn(),
   ensureDemoProjectForCompanyMock: vi.fn(),
@@ -24,6 +26,14 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/lib/auth/password", () => ({
   verifyPassword: verifyPasswordMock,
+}));
+
+vi.mock("@/lib/auth/admin-mfa", () => ({
+  verifyAdminMfaCode: verifyAdminMfaCodeMock,
+}));
+
+vi.mock("@/lib/auth/rate-limit", () => ({
+  consumeRateLimit: consumeRateLimitMock,
 }));
 
 vi.mock("@/lib/auth/registration", () => ({
@@ -68,6 +78,8 @@ describe("authOptions callbacks", () => {
     companyMembershipFindManyMock.mockReset();
     userFindUniqueMock.mockReset();
     verifyPasswordMock.mockReset();
+    verifyAdminMfaCodeMock.mockReset();
+    consumeRateLimitMock.mockReset().mockResolvedValue({ allowed: true, remaining: 9, retryAfterSeconds: 900 });
     registerUserWithCompanyAndDemoMock.mockReset();
     ensureUserHasCompanyMock.mockReset();
     ensureDemoProjectForCompanyMock.mockReset();
@@ -139,6 +151,100 @@ describe("authOptions callbacks", () => {
     ).toBeNull();
   });
 
+  it("blocks credential attempts after the persistent account rate limit is exceeded", async () => {
+    consumeRateLimitMock.mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterSeconds: 600 });
+    const credentialsProvider = authOptions.providers.find((provider) => provider.id === "credentials");
+    if (!credentialsProvider || credentialsProvider.type !== "credentials" || !credentialsProvider.options) {
+      throw new Error("Missing credentials provider");
+    }
+    const authorize = (credentialsProvider.options as { authorize: (credentials: Record<string, unknown>, request: never) => Promise<unknown> }).authorize;
+
+    expect(await authorize({ email: "admin@example.com", password: "password123" }, {} as never)).toBeNull();
+    expect(queryRawMock).not.toHaveBeenCalled();
+  });
+
+  it("requires and validates MFA for the primary administrator during credentials login", async () => {
+    queryRawMock
+      .mockResolvedValueOnce([
+        { column_name: "avatarUrl" },
+        { column_name: "phone" },
+        { column_name: "jobTitle" },
+        { column_name: "bio" },
+        { column_name: "emailVerifiedAt" },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "primary-1",
+          name: "Administrador Principal",
+          email: "admin@example.com",
+          passwordHash: "stored-hash",
+          role: "ADMIN",
+          status: "ACTIVE",
+          isSuperAdmin: true,
+          mfaEnabled: true,
+          emailVerifiedAt: new Date("2026-08-14T10:00:00.000Z"),
+        },
+      ]);
+    verifyPasswordMock.mockResolvedValue(true);
+    verifyAdminMfaCodeMock.mockResolvedValue(false);
+
+    const credentialsProvider = authOptions.providers.find((provider) => provider.id === "credentials");
+    if (!credentialsProvider || credentialsProvider.type !== "credentials" || !credentialsProvider.options) {
+      throw new Error("Missing credentials provider");
+    }
+    const authorize = (credentialsProvider.options as { authorize: (credentials: Record<string, unknown>, request: never) => Promise<unknown> }).authorize;
+
+    expect(await authorize({ email: "admin@example.com", password: "password123" }, {} as never)).toBeNull();
+    expect(verifyAdminMfaCodeMock).not.toHaveBeenCalled();
+
+    queryRawMock.mockResolvedValueOnce([
+      {
+        id: "primary-1",
+        name: "Administrador Principal",
+        email: "admin@example.com",
+        passwordHash: "stored-hash",
+        role: "ADMIN",
+        status: "ACTIVE",
+        isSuperAdmin: true,
+        mfaEnabled: true,
+        emailVerifiedAt: new Date("2026-08-14T10:00:00.000Z"),
+      },
+    ]);
+
+    const secondLoginResult = await authorize({ email: "admin@example.com", password: "password123", mfaCode: "123456" }, {} as never);
+    expect(secondLoginResult).toBeNull();
+    expect(verifyAdminMfaCodeMock).toHaveBeenCalledWith("primary-1", "123456");
+  });
+
+  it("allows the primary administrator to complete credentials login with valid MFA", async () => {
+    queryRawMock
+      .mockResolvedValueOnce([{ column_name: "avatarUrl" }, { column_name: "phone" }, { column_name: "jobTitle" }, { column_name: "bio" }])
+      .mockResolvedValueOnce([
+        {
+          id: "primary-1",
+          name: "Administrador Principal",
+          email: "admin@example.com",
+          passwordHash: "stored-hash",
+          role: "ADMIN",
+          adminProfile: "SUPER_ADMIN",
+          status: "ACTIVE",
+          isSuperAdmin: true,
+          mfaEnabled: true,
+          emailVerifiedAt: new Date("2026-08-14T10:00:00.000Z"),
+        },
+      ]);
+    verifyPasswordMock.mockResolvedValue(true);
+    verifyAdminMfaCodeMock.mockResolvedValue(true);
+
+    const credentialsProvider = authOptions.providers.find((provider) => provider.id === "credentials");
+    if (!credentialsProvider || credentialsProvider.type !== "credentials" || !credentialsProvider.options) {
+      throw new Error("Missing credentials provider");
+    }
+    const authorize = (credentialsProvider.options as { authorize: (credentials: Record<string, unknown>, request: never) => Promise<unknown> }).authorize;
+
+    expect(await authorize({ email: "admin@example.com", password: "password123", mfaCode: "123456" }, {} as never)).toMatchObject({ id: "primary-1", isSuperAdmin: true, mfaEnabled: true });
+  });
+
   it("hydrates session user fields from the latest database snapshot", async () => {
     queryRawMock
       .mockResolvedValueOnce([
@@ -192,7 +298,9 @@ describe("authOptions callbacks", () => {
       jobTitle: "Ingeniera Residente",
       bio: "Especialista en costos",
       role: "USER",
+      adminProfile: null,
       status: "ACTIVE",
+      mfaEnabled: false,
       companyId: null,
       activeCompanyId: null,
       workspaces: [],
@@ -200,7 +308,7 @@ describe("authOptions callbacks", () => {
     });
   });
 
-  it("falls back to token values when the database snapshot is unavailable", async () => {
+  it("invalidates a token when its user no longer exists", async () => {
     queryRawMock
       .mockResolvedValueOnce([
         { column_name: "avatarUrl" },
@@ -237,7 +345,7 @@ describe("authOptions callbacks", () => {
     });
 
     expect(session?.user).toEqual({
-      id: "user-1",
+      id: "",
       name: "Nombre Token",
       email: "token@example.com",
       avatarUrl: "/uploads/avatars/token.webp",
@@ -245,12 +353,47 @@ describe("authOptions callbacks", () => {
       jobTitle: "Coordinador de obra",
       bio: "Perfil desde token",
       role: "USER",
+      adminProfile: null,
       status: "ACTIVE",
+      mfaEnabled: false,
       companyId: "company-1",
       activeCompanyId: null,
       workspaces: [],
       plan: "pro",
     });
+  });
+
+  it("invalidates a session when the persisted version differs from the JWT", async () => {
+    queryRawMock
+      .mockResolvedValueOnce([
+        { column_name: "avatarUrl" },
+        { column_name: "phone" },
+        { column_name: "jobTitle" },
+        { column_name: "bio" },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "user-1",
+          name: "Maria",
+          email: "maria@example.com",
+          role: "USER",
+          status: "ACTIVE",
+          sessionVersion: 3,
+        },
+      ]);
+
+    const session = await runSessionCallback({
+      session: {
+        expires: "2026-05-18T12:00:00.000Z",
+        user: { name: "Maria", email: "maria@example.com" },
+      },
+      token: { id: "user-1", name: "Maria", email: "maria@example.com", sessionVersion: 2 },
+      user: undefined,
+      newSession: undefined,
+      trigger: "update",
+    });
+
+    expect(session?.user.id).toBe("");
   });
 
   it("hydrates session gracefully when optional profile columns are not yet migrated", async () => {
@@ -295,7 +438,9 @@ describe("authOptions callbacks", () => {
       jobTitle: null,
       bio: null,
       role: "USER",
+      adminProfile: null,
       status: "ACTIVE",
+      mfaEnabled: false,
       companyId: "company-demo",
       activeCompanyId: null,
       workspaces: [],

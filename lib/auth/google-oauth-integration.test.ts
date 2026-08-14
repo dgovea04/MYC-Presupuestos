@@ -213,7 +213,9 @@ describe("Google OAuth — integration flow (signIn → jwt → session)", () =>
       jobTitle: null,
       bio: null,
       role: "USER",
+      adminProfile: null,
       status: "ACTIVE",
+      mfaEnabled: false,
       companyId: "company-maria",
       activeCompanyId: "company-maria",
       workspaces: [

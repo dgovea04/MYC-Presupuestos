@@ -4,6 +4,11 @@ vi.mock("@/lib/auth/session", () => ({
   requireAdminSession: vi.fn(),
 }));
 
+vi.mock("@/lib/data/admin-audit", () => ({
+  recordAdminAudit: vi.fn(),
+}));
+vi.mock("@/lib/auth/admin-security-alert", () => ({ notifyPrimaryAdminSecurityEvent: vi.fn().mockResolvedValue(false) }));
+
 const { getSystemSettingsMock, updateSystemSettingsMock } = vi.hoisted(() => ({
   getSystemSettingsMock: vi.fn(),
   updateSystemSettingsMock: vi.fn(),

@@ -17,9 +17,11 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState("");
+  const [showMfaCode, setShowMfaCode] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
 
   const verifyEmail = searchParams.get("verifyEmail") === "1";
@@ -35,13 +37,15 @@ export function LoginForm() {
     const result = await signIn("credentials", {
       email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
+      mfaCode: String(formData.get("mfaCode") ?? "").trim() || undefined,
       redirect: false,
     });
 
     setLoading(false);
 
     if (result?.error) {
-      setError("Credenciales invalidas o correo pendiente de verificacion");
+      setShowMfaCode(true);
+      setError("Credenciales invalidas, correo pendiente de verificacion o código MFA requerido");
       return;
     }
 
@@ -113,8 +117,23 @@ export function LoginForm() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Contrasena</Label>
-        <Input id="password" name="password" type="password" placeholder="........" required />
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          placeholder="........"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+        />
       </div>
+      {showMfaCode ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <Label htmlFor="mfaCode">Código MFA o código de recuperación</Label>
+          <Input id="mfaCode" name="mfaCode" inputMode="numeric" autoComplete="one-time-code" placeholder="123456" className="mt-2 bg-white" />
+          <p className="mt-1 text-xs text-sky-800">Si tu cuenta administrativa tiene MFA activado, ingresa el código de tu aplicación autenticadora.</p>
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       <Button className="w-full" type="submit" disabled={loading}>
         {loading ? "Ingresando..." : "Iniciar sesion"}

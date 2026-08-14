@@ -9,8 +9,10 @@ declare module "next-auth" {
       jobTitle?: string | null;
       bio?: string | null;
       role?: "ADMIN" | "USER";
+      adminProfile?: "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR" | null;
       status?: "ACTIVE" | "SUSPENDED";
       isSuperAdmin?: boolean;
+      mfaEnabled?: boolean;
       companyId?: string | null;
       activeCompanyId?: string | null;
       workspaces?: { id: string; name: string; role: string; logoUrl: string | null }[];
@@ -27,8 +29,11 @@ declare module "next-auth/jwt" {
     jobTitle?: string | null;
     bio?: string | null;
     role?: "ADMIN" | "USER";
+    adminProfile?: "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR" | null;
     status?: "ACTIVE" | "SUSPENDED";
     isSuperAdmin?: boolean;
+    mfaEnabled?: boolean;
+    sessionVersion?: number;
     companyId?: string | null;
     activeCompanyId?: string | null;
     workspaces?: { id: string; name: string; role: string; logoUrl: string | null }[];

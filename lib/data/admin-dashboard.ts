@@ -2,20 +2,48 @@ import { prisma } from "@/lib/db/prisma";
 import { getCurrentAiUsagePeriod } from "@/lib/ai/usage";
 import { ensureDate } from "@/lib/utils";
 
-type AdminDashboardFilters = {
+export type AdminDashboardFilters = {
   plan?: string;
   role?: "ADMIN" | "USER";
   status?: "ACTIVE" | "SUSPENDED";
+  query?: string;
+  page?: number;
 };
+
+export const ADMIN_USERS_PAGE_SIZE = 25;
+
+export function normalizeAdminUserQuery(value?: string) {
+  const normalized = value?.trim().slice(0, 100);
+  return normalized || undefined;
+}
+
+export function normalizeAdminUserPage(value?: number) {
+  return Number.isInteger(value) && value && value > 0 ? value : 1;
+}
 
 export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}) {
   const periodStart = getCurrentAiUsagePeriod();
+  const requestedPage = normalizeAdminUserPage(filters.page);
+  const query = normalizeAdminUserQuery(filters.query);
   const userWhere = {
     role: filters.role,
     status: filters.status,
     membershipPlan: filters.plan ? { slug: filters.plan } : undefined,
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" as const } },
+            { email: { contains: query, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
   };
-  const [users, plans, currentUsage, actionUsage, manualPaymentRequests] = await Promise.all([
+  const activeUserWhere = { ...userWhere, status: "ACTIVE" as const };
+  const suspendedUserWhere = { ...userWhere, status: "SUSPENDED" as const };
+  const totalUsers = await prisma.user.count({ where: userWhere });
+  const totalPages = Math.max(1, Math.ceil(totalUsers / ADMIN_USERS_PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+  const [users, activeUsers, suspendedUsers, adminUsers, plans, currentUsage, actionUsage, manualPaymentRequests] = await Promise.all([
     prisma.user.findMany({
       where: userWhere,
       select: {
@@ -24,6 +52,7 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
         email: true,
         emailVerifiedAt: true,
         role: true,
+        adminProfile: true,
         status: true,
         aiTokenExtraMonthly: true,
         createdAt: true,
@@ -61,7 +90,12 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
         },
       },
       orderBy: { createdAt: "desc" },
+      skip: (page - 1) * ADMIN_USERS_PAGE_SIZE,
+      take: ADMIN_USERS_PAGE_SIZE,
     }),
+    prisma.user.count({ where: activeUserWhere }),
+    prisma.user.count({ where: suspendedUserWhere }),
+    prisma.user.count({ where: { ...userWhere, role: "ADMIN" as const } }),
     prisma.membershipPlan.findMany({
       where: { isActive: true },
       select: {
@@ -125,9 +159,6 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
     }),
   ]);
 
-  const totalUsers = users.length;
-  const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
-  const suspendedUsers = users.filter((user) => user.status === "SUSPENDED").length;
   const userRows = users.map((user) => {
     const usage = user.aiUsagePeriods[0];
     const baseLimit = user.membershipPlan?.monthlyTokenLimit ?? 0;
@@ -142,6 +173,7 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       email: user.email,
       emailVerifiedAt: user.emailVerifiedAt ? ensureDate(user.emailVerifiedAt).toISOString() : null,
       role: user.role,
+      adminProfile: user.adminProfile,
       status: user.status,
       companyName: user.companies[0]?.name ?? "Sin empresa",
       planName: user.membershipPlan?.name ?? "Sin plan",
@@ -170,7 +202,7 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       totalUsers,
       activeUsers,
       suspendedUsers,
-      adminUsers: users.filter((user) => user.role === "ADMIN").length,
+      adminUsers,
       monthlyConsumedTokens: currentUsage._sum.consumedTokens ?? 0,
       monthlyReservedTokens: currentUsage._sum.reservedTokens ?? 0,
     },
@@ -196,6 +228,13 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
     })),
     topUsers: [...userRows].sort((left, right) => right.consumedTokens - left.consumedTokens).slice(0, 5),
     users: userRows,
+    pagination: {
+      page,
+      pageSize: ADMIN_USERS_PAGE_SIZE,
+      totalUsers,
+      totalPages,
+      query: query ?? "",
+    },
     manualPaymentRequests: manualPaymentRequests.map((request) => ({
       id: request.id,
       createdAt: ensureDate(request.createdAt).toISOString(),

@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { consumePasswordResetToken } from "@/lib/auth/password-reset";
+import { consumeRateLimit, getRateLimitHeaders, getRequestClientIp } from "@/lib/auth/rate-limit";
 import { passwordResetSchema } from "@/lib/validations/account";
 
 export async function POST(request: Request) {
+  const rateLimit = await consumeRateLimit({
+    key: `password-reset:${getRequestClientIp(request)}`,
+    maxAttempts: 10,
+    windowMs: 15 * 60 * 1000,
+  });
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Demasiadas solicitudes. Intenta nuevamente más tarde." }, { status: 429, headers: getRateLimitHeaders(rateLimit) });
+  }
+
   try {
     const payload = passwordResetSchema.parse(await request.json());
     const result = await consumePasswordResetToken(payload.token, payload.newPassword);

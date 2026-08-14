@@ -2,7 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { Activity, Bot, ShieldCheck, Users } from "lucide-react";
+import { AdminAuditLog } from "@/components/admin/admin-audit-log";
+import { AdminAuditRetentionControl } from "@/components/admin/admin-audit-retention-control";
+import { AdminBulkUserActions } from "@/components/admin/admin-bulk-user-actions";
+import { AdminDeletionApprovals } from "@/components/admin/admin-deletion-approvals";
+import { AdminSecurityOverview } from "@/components/admin/admin-security-overview";
 import { AdminCloudAiSettings } from "@/components/admin/admin-cloud-ai-settings";
+import { AdminMfaSettings } from "@/components/admin/admin-mfa-settings";
 import { AdminUserAccessForm } from "@/components/admin/admin-user-access-form";
 import { ManualPaymentRequests } from "@/components/admin/manual-payment-requests";
 import { AppShell } from "@/components/layout/app-shell";
@@ -10,14 +16,36 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CompactStatCard } from "@/components/ui/compact-stat-card";
 import { OperationalPanel, OperationalSectionHeader } from "@/components/ui/operational-surfaces";
+import { hasAdminCapability } from "@/lib/auth/admin-permissions";
 import { requireAdminSession } from "@/lib/auth/session";
-import { getAdminDashboardStats } from "@/lib/data/admin-dashboard";
+import {
+  getAdminDashboardStats,
+  normalizeAdminUserPage,
+  normalizeAdminUserQuery,
+} from "@/lib/data/admin-dashboard";
+import {
+  listAdminAuditLogs,
+  normalizeAdminAuditAction,
+  normalizeAdminAuditPage,
+  normalizeAdminAuditQuery,
+} from "@/lib/data/admin-audit";
 import { getUserSettings } from "@/lib/data/settings";
+import { listPendingAdminDeletionApprovals, listScheduledAdminDeletions } from "@/lib/data/admin-deletion-approvals";
+import { getAdminSecurityOverview } from "@/lib/data/admin-security";
 
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ plan?: string; role?: string; status?: string }>;
+  searchParams?: Promise<{
+    plan?: string;
+    role?: string;
+    status?: string;
+    q?: string;
+    page?: string;
+    auditQ?: string;
+    auditAction?: string;
+    auditPage?: string;
+  }>;
 }) {
   const session = await requireAdminSession();
 
@@ -25,6 +53,14 @@ export default async function AdminPage({
     redirect("/dashboard");
   }
 
+  const canManageAccess = hasAdminCapability(session.user, "users.manage_access");
+  const canManageLifecycle = hasAdminCapability(session.user, "users.manage_lifecycle");
+  const canImpersonate = hasAdminCapability(session.user, "users.impersonate");
+  const canApproveDeletion = hasAdminCapability(session.user, "users.approve_deletion");
+  const canManageDeletionGracePeriod = hasAdminCapability(session.user, "users.delete_permanently");
+  const canRevokeSessions = hasAdminCapability(session.user, "users.revoke_sessions");
+  const canVerifyEmail = hasAdminCapability(session.user, "users.verify_email");
+  const canManageAuditRetention = hasAdminCapability(session.user, "audit.manage_retention");
   const resolvedSearchParams = (await searchParams) ?? {};
   const roleFilter: "ADMIN" | "USER" | undefined =
     resolvedSearchParams.role === "ADMIN" || resolvedSearchParams.role === "USER"
@@ -38,10 +74,21 @@ export default async function AdminPage({
     plan: resolvedSearchParams.plan || undefined,
     role: roleFilter,
     status: statusFilter,
+    query: normalizeAdminUserQuery(resolvedSearchParams.q),
+    page: normalizeAdminUserPage(Number(resolvedSearchParams.page ?? "1")),
   };
-  const [settings, stats] = await Promise.all([
+  const auditFilters = {
+    query: normalizeAdminAuditQuery(resolvedSearchParams.auditQ),
+    action: normalizeAdminAuditAction(resolvedSearchParams.auditAction),
+    page: normalizeAdminAuditPage(Number(resolvedSearchParams.auditPage ?? "1")),
+  };
+  const [settings, stats, auditLogs, deletionApprovals, scheduledDeletions, securityOverview] = await Promise.all([
     getUserSettings(session.user.id),
     getAdminDashboardStats(filters),
+    listAdminAuditLogs(auditFilters),
+    listPendingAdminDeletionApprovals(),
+    listScheduledAdminDeletions(),
+    getAdminSecurityOverview(),
   ]);
 
   return (
@@ -114,18 +161,83 @@ export default async function AdminPage({
       </section>
 
       <section>
-        <AdminCloudAiSettings />
+        {session.user.isSuperAdmin ? (
+          <div className="space-y-6">
+            <AdminMfaSettings />
+            <AdminCloudAiSettings />
+          </div>
+        ) : (
+          <Card className="theme-surface-card">
+            <CardContent className="space-y-2 p-6">
+              <OperationalSectionHeader
+                title="Proveedores Cloud IA del sistema"
+                description="La configuración de API keys y modelos queda reservada al administrador principal."
+              />
+              <p className="theme-muted-text text-sm">
+                Puedes consultar el estado general, pero no modificar secretos ni modelos de la organización.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </section>
+
+      <section>
+        <AdminSecurityOverview overview={securityOverview} />
+      </section>
+
+      <section>
+        <AdminDeletionApprovals
+          currentUserId={session.user.id}
+          canApprove={canApproveDeletion}
+          canManageGracePeriod={canManageDeletionGracePeriod}
+          approvals={deletionApprovals}
+          scheduledDeletions={scheduledDeletions}
+        />
+      </section>
+
+      <section>
+        <AdminAuditRetentionControl enabled={canManageAuditRetention} />
+      </section>
+
+      <section>
+        <AdminAuditLog
+          entries={auditLogs.entries}
+          actions={auditLogs.actions}
+          filters={auditLogs.filters}
+          pagination={auditLogs.pagination}
+          preservedFilters={filters}
+        />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
         <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
-            <OperationalPanel title="Usuarios" description="Control operativo de rol, estado, plan y cupo extra mensual." />
+            <OperationalPanel title="Usuarios" description="Busca y administra usuarios con filtros server-side, rol, estado, plan y cupo extra mensual." />
+            <form action="/admin" method="get" className="flex flex-col gap-2 sm:flex-row">
+              <input
+                name="q"
+                defaultValue={filters.query}
+                placeholder="Buscar por nombre o correo..."
+                aria-label="Buscar usuarios por nombre o correo"
+                className="theme-surface-card theme-strong-text min-h-10 flex-1 rounded-xl border px-3 text-sm outline-none transition placeholder:text-[var(--app-text-muted)] focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              />
+              {filters.plan ? <input type="hidden" name="plan" value={filters.plan} /> : null}
+              {filters.role ? <input type="hidden" name="role" value={filters.role} /> : null}
+              {filters.status ? <input type="hidden" name="status" value={filters.status} /> : null}
+              <button type="submit" className="theme-filter-button-active min-h-10 rounded-xl border px-4 text-sm font-medium transition hover:brightness-95">
+                Buscar
+              </button>
+              {filters.query ? (
+                <Link href={buildAdminUsersHref({ ...filters, query: undefined, page: 1 })} className="theme-filter-button min-h-10 rounded-xl border px-4 py-2 text-center text-sm font-medium">
+                  Limpiar
+                </Link>
+              ) : null}
+            </form>
             <div className="flex flex-wrap gap-2">
-              <FilterLink href="/admin" label="Todos" active={!filters.plan && !filters.role && !filters.status} />
-              <FilterLink href="/admin?status=ACTIVE" label="Activos" active={filters.status === "ACTIVE"} />
-              <FilterLink href="/admin?status=SUSPENDED" label="Suspendidos" active={filters.status === "SUSPENDED"} />
-              <FilterLink href="/admin?role=ADMIN" label="Admins" active={filters.role === "ADMIN"} />
+              <FilterLink href={buildAdminUsersHref({ ...filters, page: 1, query: filters.query })} label="Todos" active={!filters.plan && !filters.role && !filters.status} />
+              <FilterLink href={buildAdminUsersHref({ ...filters, status: "ACTIVE", role: undefined, page: 1 })} label="Activos" active={filters.status === "ACTIVE"} />
+              <FilterLink href={buildAdminUsersHref({ ...filters, status: "SUSPENDED", role: undefined, page: 1 })} label="Suspendidos" active={filters.status === "SUSPENDED"} />
+              <FilterLink href={buildAdminUsersHref({ ...filters, role: "ADMIN", status: undefined, page: 1 })} label="Admins" active={filters.role === "ADMIN"} />
             </div>
             <div className="theme-surface-card overflow-x-auto rounded-2xl border">
               <div className="min-w-[760px]">
@@ -137,24 +249,61 @@ export default async function AdminPage({
                   <span>Tokens</span>
                   <span>Cupo</span>
                 </div>
-                {stats.users.map((user) => (
-                  <div
-                    key={user.id}
-                    className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] border-t border-[var(--app-border-soft)] px-4 py-3 text-sm text-[var(--app-text)]"
-                  >
-                    <div className="min-w-0">
-                      <p className="theme-strong-text truncate font-medium">{user.name}</p>
-                      <p className="theme-muted-text truncate text-xs">{user.email}</p>
-                      <p className="theme-subtle-text truncate text-xs">{user.companyName}</p>
+                {stats.users.length === 0 ? (
+                  <p className="theme-muted-text border-t border-[var(--app-border-soft)] px-4 py-8 text-center text-sm">
+                    No encontramos usuarios con estos filtros.
+                  </p>
+                ) : (
+                  stats.users.map((user) => (
+                    <div
+                      key={user.id}
+                      className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.8fr_0.8fr] border-t border-[var(--app-border-soft)] px-4 py-3 text-sm text-[var(--app-text)]"
+                    >
+                      <div className="min-w-0">
+                        <p className="theme-strong-text truncate font-medium">{user.name}</p>
+                        <p className="theme-muted-text truncate text-xs">{user.email}</p>
+                        <p className="theme-subtle-text truncate text-xs">{user.companyName}</p>
+                      </div>
+                      <span>{user.planName}</span>
+                      <span>{formatBillingState(user.billingMode, user.billingStatus)}</span>
+                      <span>{user.status === "ACTIVE" ? "Activo" : "Suspendido"}</span>
+                      <span>{formatTokenCount(user.consumedTokens)}</span>
+                      <span>{formatTokenCount(user.allowance)}</span>
                     </div>
-                    <span>{user.planName}</span>
-                    <span>{formatBillingState(user.billingMode, user.billingStatus)}</span>
-                    <span>{user.status === "ACTIVE" ? "Activo" : "Suspendido"}</span>
-                    <span>{formatTokenCount(user.consumedTokens)}</span>
-                    <span>{formatTokenCount(user.allowance)}</span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
+            </div>
+            <AdminBulkUserActions
+              users={stats.users}
+              currentUserId={session.user.id}
+              canManageLifecycle={canManageLifecycle}
+              canRevokeSessions={canRevokeSessions}
+            />
+            <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="theme-muted-text">
+                Página {stats.pagination.page} de {stats.pagination.totalPages} · {stats.pagination.totalUsers} usuarios encontrados
+              </p>
+              {stats.pagination.totalPages > 1 ? (
+                <nav aria-label="Paginación de usuarios" className="flex items-center gap-2">
+                  {stats.pagination.page > 1 ? (
+                    <Link
+                      href={buildAdminUsersHref({ ...filters, page: stats.pagination.page - 1 })}
+                      className="theme-filter-button rounded-xl border px-3 py-1.5 font-medium"
+                    >
+                      Anterior
+                    </Link>
+                  ) : null}
+                  {stats.pagination.page < stats.pagination.totalPages ? (
+                    <Link
+                      href={buildAdminUsersHref({ ...filters, page: stats.pagination.page + 1 })}
+                      className="theme-filter-button-active rounded-xl border px-3 py-1.5 font-medium"
+                    >
+                      Siguiente
+                    </Link>
+                  ) : null}
+                </nav>
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -165,6 +314,11 @@ export default async function AdminPage({
             <AdminUserAccessForm
               currentUserId={session.user.id}
               isSuperAdmin={Boolean(session.user.isSuperAdmin)}
+              canManageAccess={canManageAccess}
+              canManageLifecycle={canManageLifecycle}
+              canImpersonate={canImpersonate}
+              canRevokeSessions={canRevokeSessions}
+              canVerifyEmail={canVerifyEmail}
               plans={stats.plans}
               users={stats.users}
             />
@@ -173,6 +327,25 @@ export default async function AdminPage({
       </section>
     </AppShell>
   );
+}
+
+function buildAdminUsersHref(filters: {
+  plan?: string;
+  role?: "ADMIN" | "USER";
+  status?: "ACTIVE" | "SUSPENDED";
+  query?: string;
+  page?: number;
+}) {
+  const params = new URLSearchParams();
+
+  if (filters.query) params.set("q", filters.query);
+  if (filters.plan) params.set("plan", filters.plan);
+  if (filters.role) params.set("role", filters.role);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.page && filters.page > 1) params.set("page", String(filters.page));
+
+  const query = params.toString();
+  return query ? `/admin?${query}` : "/admin";
 }
 
 function formatBillingState(mode: string, status: string | null) {

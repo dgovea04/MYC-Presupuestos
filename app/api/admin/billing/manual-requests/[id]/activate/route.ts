@@ -5,7 +5,7 @@ import { requireAdminSession } from "@/lib/auth/session";
 import { activateManualProRequest } from "@/lib/data/admin-users";
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireAdminSession();
+  const session = await requireAdminSession("billing.manage");
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -13,6 +13,13 @@ vi.mock("@/lib/data/admin-users", () => ({
   requestAdminPasswordReset: mocks.requestAdminPasswordReset,
 }));
 
+vi.mock("@/lib/auth/rate-limit", () => ({
+  consumeRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 4, retryAfterSeconds: 3600 }),
+  getRateLimitHeaders: vi.fn().mockReturnValue({}),
+  getRequestClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
+vi.mock("@/lib/auth/admin-security-alert", () => ({ notifyPrimaryAdminSecurityEvent: vi.fn().mockResolvedValue(false) }));
+
 import { POST } from "@/app/api/admin/users/[id]/password-reset/route";
 
 describe("admin password reset route", () => {

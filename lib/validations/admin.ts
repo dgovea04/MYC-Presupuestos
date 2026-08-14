@@ -14,6 +14,7 @@ const numericInputSchema = z.union([
 
 export const adminUserAccessSchema = z.object({
   role: z.enum(["ADMIN", "USER"]),
+  adminProfile: z.enum(["SUPER_ADMIN", "ADMIN", "SUPPORT", "BILLING_ADMIN", "AUDITOR"]).nullable().optional().default(null),
   status: z.enum(["ACTIVE", "SUSPENDED"]),
   membershipPlanSlug: z.string().trim().min(1),
   aiTokenExtraMonthly: numericInputSchema.pipe(z.number().int().min(0).max(10_000_000)),
