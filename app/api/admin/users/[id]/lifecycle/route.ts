@@ -1,7 +1,12 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/session";
-import { verifyUserEmailManually } from "@/lib/data/admin-users";
+import { updateAdminUserStatus } from "@/lib/data/admin-users";
+
+const lifecycleSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED"]),
+});
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAdminSession();
@@ -12,13 +17,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   try {
     const { id } = await params;
+    const payload = lifecycleSchema.parse(await request.json());
 
-    await verifyUserEmailManually(id, session.user.id, getAdminActionContext(request));
+    await updateAdminUserStatus(id, payload.status, session.user.id, getAdminActionContext(request));
     revalidatePath("/admin");
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error inesperado" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo actualizar el estado." }, { status: 400 });
   }
 }
 

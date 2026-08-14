@@ -33,8 +33,10 @@ const authUserSchema = z.object({
   jobTitle: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
   emailVerifiedAt: z.date().nullable().optional(),
+  passwordChangedAt: z.date().nullable().optional(),
   role: z.enum(["ADMIN", "USER"]).optional().default("USER"),
   status: z.enum(["ACTIVE", "SUSPENDED"]).optional().default("ACTIVE"),
+  isSuperAdmin: z.boolean().optional().default(false),
 });
 
 type AuthUserRecord = z.infer<typeof authUserSchema>;
@@ -59,16 +61,18 @@ function normalizeAuthUser(row: unknown): AuthUserRecord | null {
     jobTitle: parsedUser.data.jobTitle ?? null,
     bio: parsedUser.data.bio ?? null,
     emailVerifiedAt: parsedUser.data.emailVerifiedAt ?? null,
+    passwordChangedAt: parsedUser.data.passwordChangedAt ?? null,
     passwordHash: parsedUser.data.passwordHash ?? null,
     role: parsedUser.data.role,
     status: parsedUser.data.status,
+    isSuperAdmin: parsedUser.data.isSuperAdmin,
   };
 }
 
 async function getAuthUserByEmail(email: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
-    SELECT "id", "name", "email", "passwordHash", "emailVerifiedAt", "role", "status"
+    SELECT "id", "name", "email", "passwordHash", "emailVerifiedAt", "passwordChangedAt", "role", "status", "isSuperAdmin"
     ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
     ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
     ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
@@ -107,7 +111,7 @@ async function getAuthUserById(userId: string) {
 async function getAuthUserByIdFromDatabase(userId: string) {
   const profileColumns = await getUserProfileColumnSupport();
   const rows = await prisma.$queryRaw<Array<unknown>>`
-    SELECT "id", "name", "email", "role", "status"
+    SELECT "id", "name", "email", "role", "status", "isSuperAdmin", "passwordChangedAt"
     ${profileColumns.avatarUrl ? Prisma.sql`, "avatarUrl"` : Prisma.empty}
     ${profileColumns.phone ? Prisma.sql`, "phone"` : Prisma.empty}
     ${profileColumns.jobTitle ? Prisma.sql`, "jobTitle"` : Prisma.empty}
@@ -120,7 +124,7 @@ async function getAuthUserByIdFromDatabase(userId: string) {
   return normalizeAuthUser(rows[0]);
 }
 
-function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "avatarUrl" | "phone" | "jobTitle" | "bio" | "role" | "status">) {
+function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "avatarUrl" | "phone" | "jobTitle" | "bio" | "role" | "status" | "isSuperAdmin">) {
   return {
     id: user.id,
     name: user.name,
@@ -131,6 +135,7 @@ function toSessionProfile(user: Pick<AuthUserRecord, "id" | "name" | "email" | "
     bio: user.bio,
     role: user.role,
     status: user.status,
+    isSuperAdmin: user.isSuperAdmin,
   };
 }
 
@@ -267,6 +272,7 @@ export const authOptions: NextAuthOptions = {
             token.bio = dbUser.bio ?? null;
             token.role = dbUser.role;
             token.status = dbUser.status;
+            token.isSuperAdmin = dbUser.isSuperAdmin;
           }
         } else {
           token.id = user.id;
@@ -278,6 +284,7 @@ export const authOptions: NextAuthOptions = {
           token.bio = "bio" in user ? (user.bio as string | null | undefined) ?? null : null;
           token.role = "role" in user ? (user.role as "ADMIN" | "USER" | undefined) ?? "USER" : "USER";
           token.status = "status" in user ? (user.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE" : "ACTIVE";
+          token.isSuperAdmin = "isSuperAdmin" in user ? Boolean(user.isSuperAdmin) : false;
         }
 
         const userId = token.id as string | undefined;
@@ -303,8 +310,14 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user && token.id) {
         const currentUser = await getAuthUserById(token.id as string);
+        const sessionIssuedAt = typeof token.iat === "number" ? token.iat * 1000 : null;
+        const passwordChangedAfterSession = Boolean(
+          currentUser?.passwordChangedAt &&
+            sessionIssuedAt &&
+            currentUser.passwordChangedAt.getTime() > sessionIssuedAt,
+        );
 
-        session.user.id = token.id as string;
+        session.user.id = passwordChangedAfterSession ? "" : (token.id as string);
         session.user.name = currentUser?.name ?? (token.name as string | null | undefined) ?? session.user.name ?? null;
         session.user.email = currentUser?.email ?? (token.email as string | null | undefined) ?? session.user.email ?? null;
         session.user.avatarUrl = currentUser?.avatarUrl ?? (token.avatarUrl as string | null | undefined) ?? null;
@@ -313,6 +326,12 @@ export const authOptions: NextAuthOptions = {
         session.user.bio = currentUser?.bio ?? (token.bio as string | null | undefined) ?? null;
         session.user.role = currentUser?.role ?? (token.role as "ADMIN" | "USER" | undefined) ?? "USER";
         session.user.status = currentUser?.status ?? (token.status as "ACTIVE" | "SUSPENDED" | undefined) ?? "ACTIVE";
+        const isSuperAdmin = currentUser?.isSuperAdmin ?? Boolean(token.isSuperAdmin);
+        if (isSuperAdmin) {
+          session.user.isSuperAdmin = true;
+        } else {
+          delete session.user.isSuperAdmin;
+        }
         session.user.companyId = token.companyId ?? null;
         session.user.activeCompanyId = token.activeCompanyId ?? null;
         session.user.workspaces = Array.isArray(token.workspaces) ? token.workspaces : [];

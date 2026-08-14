@@ -42,7 +42,10 @@ describe("admin user verify email route", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
-    expect(verifyUserEmailManually).toHaveBeenCalledWith("user-1");
+    expect(verifyUserEmailManually).toHaveBeenCalledWith("user-1", "admin-1", {
+      ipAddress: null,
+      userAgent: null,
+    });
     expect(revalidatePath).toHaveBeenCalledWith("/admin");
   });
 });

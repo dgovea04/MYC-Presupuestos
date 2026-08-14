@@ -47,9 +47,21 @@ export const accountPasswordSchema = z
     path: ["confirmPassword"],
   });
 
+export const passwordResetSchema = z
+  .object({
+    token: z.string().trim().min(1, "El enlace de recuperacion no es valido."),
+    newPassword: z.string().min(8, "La nueva contrasena debe tener al menos 8 caracteres."),
+    confirmPassword: z.string().min(8, "Confirma tu nueva contrasena."),
+  })
+  .refine((payload) => payload.newPassword === payload.confirmPassword, {
+    message: "La confirmacion de contrasena no coincide.",
+    path: ["confirmPassword"],
+  });
+
 export const accountAvatarUploadSchema = z.object({
   avatar: avatarFileSchema,
 });
 
 export type AccountProfileInput = z.infer<typeof accountProfileSchema>;
 export type AccountPasswordInput = z.infer<typeof accountPasswordSchema>;
+export type PasswordResetInput = z.infer<typeof passwordResetSchema>;

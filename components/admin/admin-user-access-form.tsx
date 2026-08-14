@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition, type FormEvent } from "react";
-import { MailCheck, Save } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { KeyRound, MailCheck, Save, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,12 +30,18 @@ type AdminPlanOption = {
 };
 
 export function AdminUserAccessForm({
+  currentUserId,
+  isSuperAdmin,
   plans,
   users,
 }: {
+  currentUserId?: string;
+  isSuperAdmin?: boolean;
   plans: AdminPlanOption[];
   users: AdminUserRow[];
 }) {
+  const router = useRouter();
+  const protectedUserId = currentUserId ?? "";
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? "");
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId) ?? users[0] ?? null,
@@ -93,6 +100,72 @@ export function AdminUserAccessForm({
 
       setVerifiedUserIds((current) => new Set([...current, selectedUser.id]));
       setMessage("Correo validado manualmente.");
+      router.refresh();
+    });
+  }
+
+  function handlePasswordReset() {
+    setMessage(null);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${selectedUser.id}/password-reset`, { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        setMessage(payload?.error ?? "No se pudo enviar el enlace de cambio de contrasena.");
+        return;
+      }
+
+      setMessage("Enlace de cambio de contrasena enviado por correo.");
+    });
+  }
+
+  function handleStatusChange() {
+    const nextStatus = selectedUser.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    setMessage(null);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${selectedUser.id}/lifecycle`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        setMessage(payload?.error ?? "No se pudo actualizar el estado del usuario.");
+        return;
+      }
+
+      setMessage(nextStatus === "SUSPENDED" ? "Usuario desactivado." : "Usuario reactivado.");
+      router.refresh();
+    });
+  }
+
+  function handlePermanentDelete() {
+    const confirmationEmail = window.prompt(`Escribe ${selectedUser.email} para confirmar la eliminacion permanente.`);
+
+    if (confirmationEmail === null) {
+      return;
+    }
+
+    setMessage(null);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmationEmail }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        setMessage(payload?.error ?? "No se pudo eliminar el usuario.");
+        return;
+      }
+
+      setMessage("Usuario eliminado permanentemente.");
+      router.refresh();
     });
   }
 
@@ -116,14 +189,14 @@ export function AdminUserAccessForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="admin-user-role">Rol</Label>
-          <Select id="admin-user-role" name="role" defaultValue={selectedUser.role} key={`${selectedUser.id}-role`}>
+          <Select id="admin-user-role" name="role" defaultValue={selectedUser.role} key={`${selectedUser.id}-role-${selectedUser.role}`}>
             <option value="USER">Usuario</option>
             <option value="ADMIN">Administrador</option>
           </Select>
         </div>
         <div className="space-y-2">
           <Label htmlFor="admin-user-status">Estado</Label>
-          <Select id="admin-user-status" name="status" defaultValue={selectedUser.status} key={`${selectedUser.id}-status`}>
+          <Select id="admin-user-status" name="status" defaultValue={selectedUser.status} key={`${selectedUser.id}-status-${selectedUser.status}`}>
             <option value="ACTIVE">Activo</option>
             <option value="SUSPENDED">Suspendido</option>
           </Select>
@@ -137,7 +210,7 @@ export function AdminUserAccessForm({
             id="admin-user-plan"
             name="membershipPlanSlug"
             defaultValue={selectedUser.planSlug || plans[0]?.slug}
-            key={`${selectedUser.id}-plan`}
+            key={`${selectedUser.id}-plan-${selectedUser.planSlug}`}
           >
             {plans.map((plan) => (
               <option key={plan.slug} value={plan.slug}>
@@ -155,7 +228,7 @@ export function AdminUserAccessForm({
             min={0}
             step={1}
             defaultValue={selectedUser.aiTokenExtraMonthly}
-            key={`${selectedUser.id}-tokens`}
+            key={`${selectedUser.id}-tokens-${selectedUser.aiTokenExtraMonthly}`}
           />
         </div>
       </div>
@@ -183,6 +256,37 @@ export function AdminUserAccessForm({
           {!isEmailVerified ? (
             <Button type="button" variant="outline" disabled={isPending} onClick={handleVerifyEmail}>
               {isPending ? "Validando..." : "Validar correo"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="theme-muted-panel space-y-3 rounded-2xl border px-4 py-3">
+        <div>
+          <p className="theme-strong-text font-medium">Acciones avanzadas</p>
+          <p className="theme-muted-text mt-1 text-xs">Las acciones quedan registradas para control administrativo.</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {isSuperAdmin ? (
+            <Button type="button" variant="outline" disabled={isPending} onClick={handlePasswordReset} className="gap-2">
+              <KeyRound className="h-4 w-4" />
+              Enviar cambio de contrasena
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending || selectedUser.id === protectedUserId}
+            onClick={handleStatusChange}
+            className="gap-2"
+          >
+            {selectedUser.status === "ACTIVE" ? <ShieldOff className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+            {selectedUser.status === "ACTIVE" ? "Desactivar usuario" : "Reactivar usuario"}
+          </Button>
+          {isSuperAdmin && selectedUser.id !== protectedUserId ? (
+            <Button type="button" variant="destructive" disabled={isPending} onClick={handlePermanentDelete} className="gap-2 sm:col-span-2">
+              <Trash2 className="h-4 w-4" />
+              Eliminar permanentemente
             </Button>
           ) : null}
         </div>

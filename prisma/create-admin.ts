@@ -2,6 +2,7 @@ import { createPrismaClient } from "@/lib/db/prisma-client";
 import { hashPassword } from "@/lib/auth/password";
 
 const prisma = createPrismaClient(["warn", "error"]);
+const PRIMARY_ADMIN_EMAIL = "dgovea04@gmail.com";
 
 function requiredEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -67,6 +68,12 @@ async function main() {
       membershipPlanId: empresaPlan.id,
     },
   });
+
+  await prisma.$executeRaw`
+    UPDATE "User"
+    SET "isSuperAdmin" = ${email === PRIMARY_ADMIN_EMAIL}
+    WHERE "id" = ${user.id}
+  `;
 
   const existingCompany = await prisma.company.findFirst({
     where: { userId: user.id },

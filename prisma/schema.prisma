@@ -285,6 +285,8 @@ model User {
   bio                           String?
   role                          UserRole                    @default(USER)
   status                        UserStatus                  @default(ACTIVE)
+  isSuperAdmin                  Boolean                     @default(false)
+  passwordChangedAt             DateTime?
   membershipPlanId              String?
   aiTokenExtraMonthly           Int                         @default(0)
   passwordHash                  String?
@@ -308,6 +310,8 @@ model User {
   customMetradoFormulas         CustomMetradoFormula[]
   budgetTemplates               BudgetTemplate[]
   emailVerificationTokens       EmailVerificationToken[]
+  passwordResetTokens            PasswordResetToken[]
+  adminAuditLogs                 AdminAuditLog[]            @relation("AdminAuditActor")
   collaborationPresences        CollaborationPresence[]
   collaborationEditSessions     CollaborationEditSession[]
   collaborationCommentsCreated  CollaborationComment[]      @relation("CommentCreatedBy")
@@ -339,6 +343,39 @@ model EmailVerificationToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?
+  targetUserId String?
+  targetEmail  String
+  action       String
+  detail       String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  actorUser    User?    @relation("AdminAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([targetUserId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("admin_audit_logs")
 }
 
 model MembershipPlan {

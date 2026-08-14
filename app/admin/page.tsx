@@ -162,7 +162,12 @@ export default async function AdminPage({
         <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Gestion de acceso" description="Edita plan, rol, estado y tokens extra por usuario." />
-            <AdminUserAccessForm plans={stats.plans} users={stats.users} />
+            <AdminUserAccessForm
+              currentUserId={session.user.id}
+              isSuperAdmin={Boolean(session.user.isSuperAdmin)}
+              plans={stats.plans}
+              users={stats.users}
+            />
           </CardContent>
         </Card>
       </section>

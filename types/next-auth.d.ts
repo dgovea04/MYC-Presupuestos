@@ -10,6 +10,7 @@ declare module "next-auth" {
       bio?: string | null;
       role?: "ADMIN" | "USER";
       status?: "ACTIVE" | "SUSPENDED";
+      isSuperAdmin?: boolean;
       companyId?: string | null;
       activeCompanyId?: string | null;
       workspaces?: { id: string; name: string; role: string; logoUrl: string | null }[];
@@ -27,6 +28,7 @@ declare module "next-auth/jwt" {
     bio?: string | null;
     role?: "ADMIN" | "USER";
     status?: "ACTIVE" | "SUSPENDED";
+    isSuperAdmin?: boolean;
     companyId?: string | null;
     activeCompanyId?: string | null;
     workspaces?: { id: string; name: string; role: string; logoUrl: string | null }[];
