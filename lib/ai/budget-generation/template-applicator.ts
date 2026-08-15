@@ -204,7 +204,7 @@ export async function applyTemplateToSubBudget(
     }
 
     // 3. Map template levels to existing or new levels in the target budget
-    const { levelIdMap, newLevels } = await mapTemplateLevels(
+    const { levelIdMap } = await mapTemplateLevels(
       applyTx,
       template.snapshot,
       targetBudget.id,
@@ -213,7 +213,6 @@ export async function applyTemplateToSubBudget(
     // 4. Create items from template into the target budget
     let itemsAdded = 0;
     let apusCreated = 0;
-    let totalDirectCostAdded = 0;
 
     for (const item of template.snapshot.items) {
       const levelId = item.levelKey ? levelIdMap.get(item.levelKey) ?? null : null;
@@ -237,8 +236,6 @@ export async function applyTemplateToSubBudget(
       });
 
       itemsAdded++;
-      totalDirectCostAdded += item.partial;
-
       // Create APU if present
       if (item.apu) {
         try {

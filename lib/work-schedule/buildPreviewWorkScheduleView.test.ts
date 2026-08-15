@@ -105,7 +105,7 @@ describe("buildPreviewWorkScheduleView", () => {
     expect(resultLineA?.endDate).toBe("2026-03-14");
   });
 
-  it("does NOT recalculate successor dates when predecessor is dragged", () => {
+  it("recalculates successor dates when predecessor is dragged", () => {
     const lines = [
       buildLine({
         budgetItemId: "item-A",
@@ -176,14 +176,14 @@ describe("buildPreviewWorkScheduleView", () => {
     expect(resultLineA?.startDate).toBe("2026-03-05");
     expect(resultLineA?.endDate).toBe("2026-03-14");
 
-    // Line B should KEEP its original dates (not recalculated from predecessor)
+    // Line B follows the edited predecessor through its finish-to-start dependency.
     expect(resultLineB).toBeDefined();
-    expect(resultLineB?.startDate).toBe("2026-03-08");
-    expect(resultLineB?.endDate).toBe("2026-03-15");
+    expect(resultLineB?.startDate).toBe("2026-03-15");
+    expect(resultLineB?.endDate).toBe("2026-03-22");
     expect(resultLineB?.durationDays).toBe(8);
   });
 
-  it("does NOT recalculate successor dates in a chain (A->B->C)", () => {
+  it("recalculates successor dates in a chain (A->B->C)", () => {
     const lines = [
       buildLine({
         budgetItemId: "item-A",
@@ -264,13 +264,11 @@ describe("buildPreviewWorkScheduleView", () => {
     expect(resultLineA?.startDate).toBe("2026-03-10");
     expect(resultLineA?.endDate).toBe("2026-03-17");
 
-    // B should keep its original dates (not recalculated from A's new position)
-    expect(resultLineB?.startDate).toBe("2026-03-04");
-    expect(resultLineB?.endDate).toBe("2026-03-06");
-
-    // C should keep its original dates (not recalculated from B's position)
-    expect(resultLineC?.startDate).toBe("2026-03-05");
-    expect(resultLineC?.endDate).toBe("2026-03-06");
+    // B and C follow the edited predecessor chain through their dependencies.
+    expect(resultLineB?.startDate).toBe("2026-03-18");
+    expect(resultLineB?.endDate).toBe("2026-03-20");
+    expect(resultLineC?.startDate).toBe("2026-03-21");
+    expect(resultLineC?.endDate).toBe("2026-03-22");
   });
 
   it("returns null when there are no drafts or editing lines", () => {

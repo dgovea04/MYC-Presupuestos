@@ -1,8 +1,4 @@
 import type {
-  AgentToolCall,
-  AgentToolResult,
-} from "./types";
-import type {
   AgentPolicyEngine,
   AgentToolExecutor,
   AgentToolRegistry,

@@ -18,6 +18,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState("");
@@ -130,7 +131,16 @@ export function LoginForm() {
       {showMfaCode ? (
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
           <Label htmlFor="mfaCode">Código MFA o código de recuperación</Label>
-          <Input id="mfaCode" name="mfaCode" inputMode="numeric" autoComplete="one-time-code" placeholder="123456" className="mt-2 bg-white" />
+          <Input
+            id="mfaCode"
+            name="mfaCode"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="123456"
+            value={mfaCode}
+            onChange={(event) => setMfaCode(event.target.value)}
+            className="mt-2 bg-white"
+          />
           <p className="mt-1 text-xs text-sky-800">Si tu cuenta administrativa tiene MFA activado, ingresa el código de tu aplicación autenticadora.</p>
         </div>
       ) : null}

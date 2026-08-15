@@ -1,5 +1,3 @@
-import { decimalToString } from "@/lib/db/serializers";
-
 export type McpSerializedProject = {
   id: string;
   name: string;

@@ -123,7 +123,7 @@ describe("landing primitives", () => {
 
     const featureSection = container.querySelector("#features");
     const heroInner = container.querySelector("section > .landing-shell");
-    const heroChip = [...container.querySelectorAll("span")].find((node) => node.textContent?.includes("IA local revisable"));
+    const heroChip = [...container.querySelectorAll("span")].find((node) => node.textContent?.includes("Khipu IA integrada"));
 
     expect(featureSection?.className).toContain("landing-section");
     expect(featureSection?.className).toContain("landing-shell");
@@ -147,7 +147,7 @@ describe("landing primitives", () => {
     expect(heroSurface).not.toBeNull();
     expect(previewSurface).not.toBeNull();
     expect(comparisonSurface).not.toBeNull();
-    expect(container.textContent).toContain("Presupuesta obras con mÃ¡s control");
+    expect(container.textContent).toContain("La forma antigua de presupuestar obra ya no alcanza.");
     expect(container.textContent).toContain("Presupuesto de estructuras");
     expect(container.textContent).toContain("Comparativo de experiencia operativa");
   });

@@ -14,9 +14,11 @@ type GenerateTextToolResult = {
   text: string;
   finishReason: string;
   usage: {
-    inputTokens: number | undefined;
-    outputTokens: number | undefined;
-    totalTokens: number | undefined;
+    inputTokens?: number;
+    outputTokens?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
   };
   toolCalls: Array<{
     toolCallId: string;
@@ -112,9 +114,12 @@ export class VercelSdkAdapter implements AgentVercelSdkAdapter {
         provider,
         model: typeof resolvedModel === "string" ? resolvedModel : "unknown",
         usage: {
-          promptTokens: result.usage.inputTokens ?? 0,
-          completionTokens: result.usage.outputTokens ?? 0,
-          totalTokens: result.usage.totalTokens ?? 0,
+          promptTokens: result.usage.inputTokens ?? result.usage.promptTokens ?? 0,
+          completionTokens: result.usage.outputTokens ?? result.usage.completionTokens ?? 0,
+          totalTokens:
+            result.usage.totalTokens ??
+            (result.usage.inputTokens ?? result.usage.promptTokens ?? 0) +
+              (result.usage.outputTokens ?? result.usage.completionTokens ?? 0),
         },
         warnings,
       };

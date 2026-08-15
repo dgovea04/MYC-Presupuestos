@@ -291,6 +291,7 @@ export const archiveBudgetTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: archiveBudgetInput,
   execute: async (input, _context) => {
+    void _context;
     return { budgetId: input.budgetId, archived: true, message: "Archivado delegado a fases posteriores." };
   },
   summarizeResult: () => "Presupuesto archivado correctamente.",

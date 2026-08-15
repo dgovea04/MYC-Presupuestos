@@ -44,7 +44,7 @@ import type {
 export { getExportDefinition, getExportDefinitions };
 
 export type ExportResult = {
-  content: BodyInit;
+  content: string | Buffer | ArrayBuffer;
   contentType: string;
   fileName: string;
 };
@@ -158,14 +158,18 @@ async function createProjectPackageExport(request: NormalizedExportRequest, user
   }
 
   return {
-    content: new Uint8Array(archive.content),
+    content: archive.content,
     contentType: CONTENT_TYPES.mcp,
     fileName: archive.fileName,
   };
 }
 
 export function createExportResponse(result: ExportResult) {
-  return new NextResponse(result.content, {
+  const content = result.content instanceof Uint8Array
+    ? Uint8Array.from(result.content).buffer
+    : result.content;
+
+  return new NextResponse(content as unknown as BodyInit, {
     headers: {
       "Content-Type": result.contentType,
       "Content-Disposition": `attachment; filename="${sanitizeFileName(result.fileName)}"`,

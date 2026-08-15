@@ -1,5 +1,4 @@
 import { buildStoredZip } from "@/lib/exports/centralized";
-import type { McpArchiveEntry } from "./types";
 
 export { buildStoredZip };
 
@@ -23,7 +22,6 @@ export function extractStoredZip(buffer: Buffer | Uint8Array): Map<string, strin
   }
 
   const totalEntries = buf.readUInt16LE(eocdOffset + 10);
-  const centralDirectorySize = buf.readUInt32LE(eocdOffset + 12);
   const centralDirectoryOffset = buf.readUInt32LE(eocdOffset + 16);
 
   if (totalEntries === 0) {

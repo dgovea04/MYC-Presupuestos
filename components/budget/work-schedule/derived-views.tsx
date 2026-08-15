@@ -7,16 +7,14 @@ import {
   WorkScheduleValuationSkeleton,
 } from "@/components/loading/work-schedule-section-skeletons";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 import type {
   WorkScheduleCurvePointRecord,
   WorkSchedulePeriodRecord,
   WorkScheduleResourceCalendarRow,
   WorkScheduleValuationCalendarRow,
-  WorkScheduleValuationCalendarRecord,
 } from "@/types/work-schedule";
 import type { ResourceCalendarMode, PeriodRangeSelection } from "./types";
-import { InfoTile } from "./ui-elements";
 
 export function DerivedViewLoadingCard({ label }: { label: string }) {
   const normalizedLabel = label.toLowerCase();

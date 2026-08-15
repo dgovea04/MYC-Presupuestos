@@ -140,6 +140,7 @@ describe("createBudgetTool", () => {
     expect(createBudget).toHaveBeenCalledWith("user-99", {
       name: "Hospital General",
       projectId: "proj-1",
+      kind: "GENERAL",
       currency: "PEN",
       generalExpensesRate: 0.15, // 15/100
       utilityRate: 0.08,         // 8/100
@@ -150,6 +151,7 @@ describe("createBudgetTool", () => {
   it("usa defaults de Zod para porcentajes y los convierte a decimales", async () => {
     const parsedInput = createBudgetTool.inputSchema.parse({
       projectId: "proj-1",
+      kind: "GENERAL",
       name: "Hospital General",
     });
     // parsedInput: { projectId, name, currency: "PEN", indirectCostPercentage: 10, utilityPercentage: 10, taxPercentage: 18 }

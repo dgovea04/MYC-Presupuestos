@@ -1258,7 +1258,6 @@ function AddSubpartidaDialog({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0);
   const [selectedPartidaId, setSelectedPartidaId] = useState<string | null>(null);
-  const deferredQuery = useDeferredValue(query);
   const indexedPartidas = useMemo(
     () =>
       catalogPartidas.map((partida) => ({
@@ -1268,7 +1267,7 @@ function AddSubpartidaDialog({
     [catalogPartidas],
   );
   const suggestions = useMemo(() => {
-    const normalizedQuery = normalizeResourceSearchText(deferredQuery);
+    const normalizedQuery = normalizeResourceSearchText(query);
     return indexedPartidas
       .filter(({ searchText }) => {
         if (!normalizedQuery) return true;
@@ -1276,7 +1275,7 @@ function AddSubpartidaDialog({
       })
       .map(({ partida }) => partida)
       .slice(0, 40);
-  }, [deferredQuery, indexedPartidas]);
+  }, [indexedPartidas, query]);
   const showSuggestions =
     (isSearchFocused || (query.trim().length > 0 && selectedPartidaId === null)) && suggestions.length > 0;
   const selectedPartida =

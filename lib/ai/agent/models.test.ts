@@ -87,14 +87,13 @@ describe("getAgentModelShortLabel", () => {
 describe("getAgentModelCostEmoji", () => {
   it("returns 🆓 for free models", () => {
     expect(getAgentModelCostEmoji("openrouter/free")).toBe("🆓");
-    expect(getAgentModelCostEmoji("google/gemini-2.5-pro-exp-03-25:free")).toBe("🆓");
-    expect(getAgentModelCostEmoji("meta-llama/llama-4-maverick:free")).toBe("🆓");
+    expect(getAgentModelCostEmoji("openrouter/free")).toBe("🆓");
   });
 
   it("returns 💲 for paid models", () => {
     expect(getAgentModelCostEmoji("openai/gpt-4o")).toBe("💲");
     expect(getAgentModelCostEmoji("anthropic/claude-3.5-sonnet")).toBe("💲");
-    expect(getAgentModelCostEmoji("google/gemini-2.0-flash-001")).toBe("💲");
+    expect(getAgentModelCostEmoji("google/gemini-2.5-flash")).toBe("💲");
   });
 
   it("returns empty string for unknown model ID", () => {

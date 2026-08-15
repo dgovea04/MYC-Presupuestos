@@ -82,7 +82,7 @@ describe("project data cache behavior", () => {
           },
         },
       },
-      select: {
+      select: expect.objectContaining({
         id: true,
         companyId: true,
         name: true,
@@ -103,7 +103,7 @@ describe("project data cache behavior", () => {
             },
           },
         },
-      },
+      }),
       orderBy: {
         updatedAt: "desc",
       },

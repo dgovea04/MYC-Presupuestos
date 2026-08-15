@@ -88,8 +88,8 @@ export async function POST(request: Request) {
   // that wraps `getUserSettings` via `unstable_cache`. No revalidatePath is
   // needed because the dev route is invoked from the test runner, which
   // triggers a fresh SSR on the next page navigation.
-  revalidateTag(USER_SETTINGS_CACHE_TAG, "max");
-  revalidateTag(`${USER_SETTINGS_CACHE_TAG}:${user.id}`, "max");
+  revalidateTag(USER_SETTINGS_CACHE_TAG, { expire: 0 });
+  revalidateTag(`${USER_SETTINGS_CACHE_TAG}:${user.id}`, { expire: 0 });
 
   return NextResponse.json({
     userId: user.id,

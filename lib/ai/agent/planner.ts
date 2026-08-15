@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { AgentExecutionMode, PlannedStep } from "./types";
+import type { PlannedStep } from "./types";
 import type { AgentPlanner, PlannerInput } from "./contracts";
 import {
   getWorkflowTemplate,
@@ -219,7 +219,7 @@ const KEYWORD_TOOLS: Array<{
  */
 export class AgentPlannerImpl implements AgentPlanner {
   async plan(params: PlannerInput): Promise<PlannedStep[]> {
-    const { mode, workflowId } = params;
+    const { workflowId } = params;
 
     // Si se proporciona un workflowId, reemplazar el goal con la plantilla
     // y limitar las herramientas disponibles al bundle correspondiente.

@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { addWorkDays, type CalendarExceptionMap } from "@/lib/work-schedule/calendar";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
-import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors, type WorkSchedulePredecessorReference } from "@/lib/work-schedule/predecessors";
+import { tryParseWorkSchedulePredecessors, type WorkSchedulePredecessorReference } from "@/lib/work-schedule/predecessors";
 import type {
   WorkScheduleCurvePointRecord,
   WorkScheduleLineRecord,
@@ -143,6 +143,7 @@ export function recalculateDependentWorkScheduleLines(
   workDaysBitmask?: number,
   exceptionMap?: CalendarExceptionMap,
 ) {
+  void exceptionMap;
   const nextLines = lines.map((line) => ({
     ...line,
     monthlyDistributions: line.monthlyDistributions.map((distribution) => ({ ...distribution })),

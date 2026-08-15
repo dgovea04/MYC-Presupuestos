@@ -1,14 +1,13 @@
 "use client";
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type UIEvent as ReactUIEvent } from "react";
-import { CalendarDays, ChartSpline, ChevronDown, Diamond, Info, MoreHorizontal, Package2, PenLine, PenSquare, Save, WandSparkles, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Diamond, PenSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { calculateWorkScheduleDurationDays } from "@/lib/calculations/work-schedule";
-import { countWorkDays } from "@/lib/work-schedule/calendar";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
 import { TimelineRow as GanttTimelineRow } from "@/components/budget/gantt/timeline-row";
 import { GanttConnectionOverlay } from "@/components/budget/gantt/gantt-connection-overlay";
@@ -16,8 +15,6 @@ import { DependencyEditPopover } from "@/components/budget/gantt/dependency-edit
 import { GanttMiniMap } from "@/components/budget/gantt/gantt-minimap";
 import { useGanttConnectionMode, type LinePosition, type WorkSchedulePredecessorRelation } from "@/components/budget/gantt/use-gantt-connection-mode";
 import type { GanttBarChangeResult } from "@/components/budget/gantt/gantt-utils";
-import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
-import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import type { DateFormatOption } from "@/types/settings";
 import {
   clampWorkScheduleTimelinePanelWidth,

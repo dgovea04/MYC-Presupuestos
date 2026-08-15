@@ -16,6 +16,7 @@
     "prisma:migrate": "node ./node_modules/prisma/build/index.js migrate dev",
     "prisma:seed": "node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts",
     "admin:create": "node ./node_modules/tsx/dist/cli.mjs prisma/create-admin.ts",
+    "e2e:configure": "node ./node_modules/tsx/dist/cli.mjs scripts/configure-e2e-user.ts",
     "work-schedule:profile": "node ./node_modules/tsx/dist/cli.mjs scripts/profile-work-schedule.ts",
     "prisma:normalize-resource-iu": "node ./node_modules/tsx/dist/cli.mjs prisma/normalize-resource-iu-codes.ts",
     "prisma:repair-companies": "node ./node_modules/tsx/dist/cli.mjs prisma/repair-company-duplicates.ts",

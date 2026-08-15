@@ -222,7 +222,7 @@ export function MetradosDashboard({
     return () => {
       finishCurrentSession();
     };
-  }, [selectedSheet?.id, budgetId, startEditSession, finishCurrentSession]);
+  }, [selectedSheet, budgetId, startEditSession, finishCurrentSession]);
 
   const filteredBudgets = budgets.filter((budget) => budget.projectId === projectId);
   const filteredPartidas = partidas.filter((partida) => partida.budgetId === budgetId);

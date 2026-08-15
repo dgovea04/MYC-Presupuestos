@@ -1,4 +1,3 @@
-import type { WorkScheduleMonthlyDistributionRecord } from "@/types/work-schedule";
 import type { EditableLine } from "../types";
 
 export function getOverviewMeasuredHeightsStorageKey(budgetId: string) {

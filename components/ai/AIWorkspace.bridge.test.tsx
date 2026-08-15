@@ -248,7 +248,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const bridgeListener = vi.fn<(event: Event) => void>();
     window.addEventListener("MYCBridgeSendPrompt", bridgeListener);
 
-    const { getByText } = await renderWorkspace();
+    const { getButtonByText, getByText } = await renderWorkspace();
     await act(async () => {
       getButtonByText("Bridge").click();
     });

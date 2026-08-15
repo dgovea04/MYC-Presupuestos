@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import type { WorkScheduleLineRecord, WorkScheduleMonthlyDistributionRecord } from "@/types/work-schedule";
+import type { WorkScheduleLineRecord } from "@/types/work-schedule";
 
 export type WorkScheduleCurvePoint = {
   period: string;

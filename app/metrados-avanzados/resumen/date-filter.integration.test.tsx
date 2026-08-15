@@ -122,6 +122,10 @@ async function renderFilter(overrides?: {
     return [...container.querySelectorAll("button")].find((b) => pattern.test(b.textContent ?? "")) ?? null;
   }
 
+  function getPortalButtonByText(pattern: RegExp): HTMLButtonElement | null {
+    return [...document.body.querySelectorAll("button")].find((b) => pattern.test(b.textContent ?? "")) ?? null;
+  }
+
   function getInputByPlaceholder(pattern: RegExp): HTMLInputElement | null {
     const input = [...container.querySelectorAll("input")].find(
       (i) => pattern.test(i.getAttribute("placeholder") ?? ""),
@@ -137,6 +141,7 @@ async function renderFilter(overrides?: {
     container,
     getSavedPresetChips,
     getButtonByText,
+    getPortalButtonByText,
     getInputByPlaceholder,
     getDeleteButtons,
   };
@@ -295,7 +300,7 @@ describe("ResumenDateFilter integration", () => {
     ];
     window.localStorage.setItem(PRESETS_KEY, JSON.stringify(initialPresets));
 
-    const { getDeleteButtons } = await renderFilter();
+    const { getPortalButtonByText, getDeleteButtons } = await renderFilter();
 
     // Should have 2 delete buttons (one per preset)
     const deleteBtns = getDeleteButtons();
@@ -304,6 +309,13 @@ describe("ResumenDateFilter integration", () => {
     // Delete the first preset
     await act(async () => {
       deleteBtns[0]!.click();
+    });
+
+    const confirmDeleteButton = getPortalButtonByText(/^Eliminar preset$/);
+    expect(confirmDeleteButton).toBeTruthy();
+
+    await act(async () => {
+      confirmDeleteButton!.click();
     });
 
     // Verify DOM: only 1 chip left

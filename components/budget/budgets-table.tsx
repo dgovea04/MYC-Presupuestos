@@ -48,7 +48,7 @@ export function BudgetsTable({
   const [optimisticBudgets, setOptimisticBudgets] = useState<Record<string, Partial<BudgetRow>>>({});
   const [filter, setFilter] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [error] = useState("");
   const deferredFilter = useDeferredValue(filter);
 
   useEffect(() => {

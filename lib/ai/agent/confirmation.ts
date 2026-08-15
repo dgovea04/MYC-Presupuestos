@@ -83,7 +83,6 @@ const MODIFY_PHRASES = [
  */
 export function detectConfirmation(message: string): ConfirmationResult {
   const lower = message.toLowerCase().trim();
-  const words = lower.split(/\s+/);
 
   // ── Exact affirmative (high confidence) ─────────────────────────────────
   for (const phrase of AFFIRMATIVE_PHRASES) {

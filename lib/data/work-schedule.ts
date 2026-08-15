@@ -24,11 +24,9 @@ import {
   workScheduleItemPatchSchema,
   workScheduleItemSaveSchema,
   workScheduleGenerationCustomPhaseKeywordsSchema,
-  workScheduleGenerationSettingsSchema,
   type WorkScheduleGenerateBaseInput,
   type WorkScheduleItemPatchInput,
   type WorkScheduleItemSaveInput,
-  type WorkScheduleGenerationSettings,
 } from "@/lib/validations/work-schedule";
 import type { BudgetLevelRecord, BudgetRecord } from "@/types/budget";
 import type {

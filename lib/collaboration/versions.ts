@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db/prisma";
 import { resolveBudgetOwnership } from "./authorization";
 import { serializeVersion, serializeVersionWithSnapshot } from "./serializers";
 import { publishBudgetEvent } from "./events";
-import { versionCreateSchema, type VersionCreateInput } from "@/lib/validations/collaboration";
 import type { BudgetVersionRecord, BudgetVersionDetailRecord } from "@/types/collaboration";
 
 type RawVersion = {

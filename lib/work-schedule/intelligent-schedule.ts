@@ -3,7 +3,6 @@ import { addWorkDays, type CalendarExceptionMap } from "@/lib/work-schedule/cale
 import { formatGeneratedPredecessor } from "@/lib/work-schedule/predecessors";
 import { classifyWorkFrontPhase, sortWorkFrontLines, type WorkFrontLine } from "@/lib/work-schedule/work-front-phase";
 import type {
-  InterSubBudgetParallelism,
   LevelLinkageMode,
   WorkScheduleGenerationIssueRecord,
   WorkScheduleGenerationOptions,
@@ -654,7 +653,6 @@ function calculateOptimalCrewAndDuration(
 function buildSimilarityClusters(lines: WorkScheduleLineRecord[]): WorkScheduleLineRecord[][] {
   const clusters: WorkScheduleLineRecord[][] = [];
   const remaining = new Set(lines.map((line) => line.budgetItemId));
-  const lineById = new Map(lines.map((line) => [line.budgetItemId, line]));
 
   for (const line of lines) {
     if (!remaining.has(line.budgetItemId)) {

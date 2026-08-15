@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   budgetFormSpy: vi.fn(),
   getAuthSession: vi.fn(),
   getProjectsByUser: vi.fn(),
+  getActiveWorkspaceId: vi.fn(),
   getUserSettings: vi.fn(),
 }));
 
@@ -44,6 +45,10 @@ vi.mock("@/lib/data/projects", () => ({
   getProjectsByUser: mocks.getProjectsByUser,
 }));
 
+vi.mock("@/lib/workspace/active-workspace", () => ({
+  getActiveWorkspaceId: mocks.getActiveWorkspaceId,
+}));
+
 vi.mock("@/lib/data/settings", () => ({
   getUserSettings: mocks.getUserSettings,
 }));
@@ -55,6 +60,7 @@ describe("NewBudgetPage", () => {
     vi.clearAllMocks();
 
     mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.getActiveWorkspaceId.mockResolvedValue(null);
     mocks.getProjectsByUser.mockResolvedValue([
       { id: "project-1", name: "Proyecto Uno" },
       { id: "project-2", name: "Proyecto Dos" },
@@ -75,7 +81,8 @@ describe("NewBudgetPage", () => {
     const markup = renderToStaticMarkup(tree);
 
     expect(markup).toContain('data-testid="budget-form"');
-    expect(mocks.getProjectsByUser).toHaveBeenCalledWith("user-1");
+    expect(mocks.getActiveWorkspaceId).toHaveBeenCalledWith("user-1");
+    expect(mocks.getProjectsByUser).toHaveBeenCalledWith("user-1", null);
     expect(mocks.getUserSettings).toHaveBeenCalledWith("user-1");
     expect(mocks.budgetFormSpy).toHaveBeenCalledTimes(1);
     expect(mocks.budgetFormSpy).toHaveBeenCalledWith({

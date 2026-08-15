@@ -23,7 +23,11 @@ import { measureAsync } from "@/lib/platform/performance";
 
 export const USER_SETTINGS_CACHE_TAG = "user-settings";
 const shouldBypassPersistentCache = process.env.NODE_ENV !== "production" || process.env.VITEST === "true";
-const shouldUseProcessCache = process.env.NODE_ENV !== "production" && process.env.VITEST !== "true";
+// Development route handlers and page bundles can have separate module
+// instances, so a process cache cannot be reliably invalidated across them.
+// Always read settings freshly outside production; production uses the tagged
+// persistent cache below and explicit revalidation after writes.
+const shouldUseProcessCache = false;
 const PROCESS_SETTINGS_CACHE_TTL_MS = 5_000;
 
 type ProcessSettingsCacheEntry = {

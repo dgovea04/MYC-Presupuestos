@@ -49,7 +49,7 @@ export function useBudgetCollaborationStream({
     reconnectTimeoutRef.current = window.setTimeout(() => {
       connectRef.current?.();
     }, reconnectInterval);
-  }, [clearReconnect, reconnectInterval]);
+  }, [clearReconnect, enabled, reconnectInterval]);
 
   const handleDisconnect = useCallback(
     (controller: AbortController) => {

@@ -16,8 +16,7 @@ import type {
   WorkScheduleMonthlyDistributionRecord,
   WorkScheduleViewRecord,
 } from "@/types/work-schedule";
-import type { EditableLine, WorkScheduleGenerationFormState } from "../types";
-import type { WorkScheduleGenerationOptions } from "@/types/work-schedule";
+import type { EditableLine } from "../types";
 import { updateEditableLineDuration } from "../overview-view";
 import { compareIsoDates } from "./overview-helpers";
 
@@ -240,7 +239,6 @@ export function updateEditableLinePredecessor(
   line: EditableLine,
   predecessor: string,
   {
-    lineByBudgetItemId: _lineByBudgetItemId,
     lineByCode,
     rowNumberToItemCode,
   }: {

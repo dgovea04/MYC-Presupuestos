@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   useCallback,
   useEffect,
@@ -9,14 +8,10 @@ import {
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
-  type UIEvent as ReactUIEvent,
 } from "react";
-import { CalendarDays, ChartSpline, ChevronDown, ChevronRight, Info, Package2, PenLine, PenSquare, Save, WandSparkles, X } from "lucide-react";
+import { CalendarDays, ChartSpline, ChevronRight, Package2, PenSquare, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   WorkScheduleCurveSkeleton,
   WorkScheduleResourceCalendarSkeleton,
@@ -28,16 +23,12 @@ import { OperationalPanel } from "@/components/ui/operational-surfaces";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
-import type { DateFormatOption } from "@/types/settings";
 import {
   buildWorkScheduleView,
-  calculateWorkScheduleDurationDays,
   recalculateDependentWorkScheduleLines,
   recalculateWorkScheduleLineFromPredecessors,
 } from "@/lib/calculations/work-schedule";
-import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
-import { useEditSession } from "@/hooks/use-edit-session";
-import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
+import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { getExportDefinition } from "@/lib/exports/definitions";
 import { parseWorkSchedulePredecessors, tryParseWorkSchedulePredecessors } from "@/lib/work-schedule/predecessors";
@@ -52,13 +43,12 @@ import type {
   WorkScheduleDisplayRowRecord,
   WorkScheduleGenerationOptions,
   WorkScheduleGenerationStrategy,
-  WorkScheduleMonthlyDistributionRecord,
   WorkSchedulePeriodRecord,
   WorkScheduleResourceCalendarRow,
   WorkScheduleValuationCalendarRow,
   WorkScheduleViewRecord,
 } from "@/types/work-schedule";
-import { WorkScheduleOverview, buildTimelineDays, formatPredecessorForDisplay, formatPredecessorToken, formatPredecessorForStorage, updateEditableLineDates, updateEditableLineCrew, updateEditableLineDuration, parseEditableCrew, isPendingWorkScheduleLine, hasIncompleteDistribution } from "./work-schedule/overview-view";
+import { WorkScheduleOverview, buildTimelineDays, formatPredecessorToken, updateEditableLineDates, updateEditableLineDuration, isPendingWorkScheduleLine, hasIncompleteDistribution } from "./work-schedule/overview-view";
 import type { EditableLine } from "./work-schedule/types";
 import { WorkScheduleEditorSheet } from "./work-schedule/editor-sheet";
 import { WorkScheduleGenerationDialog } from "./work-schedule/generation-dialog";
@@ -66,7 +56,7 @@ import { ScheduleDeviationPanel } from "./work-schedule/schedule-deviation-panel
 import { LookaheadView } from "./work-schedule/lookahead-view";
 import { ResourceCapacityPanel } from "./work-schedule/resource-capacity-panel";
 import { ReschedulePreviewDialog } from "./work-schedule/reschedule-preview-dialog";
-import { createEditableLine, serializeEditableLine, createNextDistribution, parseCustomPhaseKeywords } from "./work-schedule/utils/edit-helpers";
+import { createEditableLine, serializeEditableLine, parseCustomPhaseKeywords } from "./work-schedule/utils/edit-helpers";
 import { detectWorkScheduleDeviations } from "@/lib/work-schedule/progress";
 import { detectResourceOverallocations } from "@/lib/work-schedule/resource-capacity";
 import { buildWorkScheduleReschedulePreview, type WorkScheduleRescheduleImpact } from "@/lib/work-schedule/rescheduling";
@@ -87,67 +77,6 @@ type DerivedCalendarView = Exclude<ActiveView, "overview">;
 
 type OverviewFilter = "all" | "pending" | "incomplete_distribution" | "scheduled";
 type ResourceCalendarMode = "amounts" | "quantities";
-type OverviewVirtualItem =
-  | {
-      key: string;
-      kind: "group";
-      group: WorkScheduleViewRecord["groups"][number];
-      collapsed: boolean;
-      estimatedHeight: number;
-    }
-  | {
-      key: string;
-      kind: "row";
-      group: WorkScheduleViewRecord["groups"][number];
-      row: WorkScheduleDisplayRowRecord;
-      estimatedHeight: number;
-    };
-
-const dayFormatter = new Intl.DateTimeFormat("es-PE", { weekday: "short", timeZone: "UTC" });
-const timelineWeekFormatter = new Intl.DateTimeFormat("es-PE", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-const DEFAULT_OVERVIEW_TIMELINE_PANEL_WIDTH = 972;
-const MIN_OVERVIEW_TIMELINE_PANEL_WIDTH = 360;
-const OVERVIEW_HEADER_HEIGHT_CLASS = "h-[72px]";
-const OVERVIEW_GROUP_ROW_HEIGHT_CLASS = "h-10";
-const OVERVIEW_BOTTOM_FOOTER_HEIGHT_CLASS = "h-[44px]";
-const OVERVIEW_TIMELINE_PANEL_WIDTH_CSS_VAR = "--work-schedule-timeline-panel-width";
-const OVERVIEW_VIRTUAL_SCROLL_FALLBACK_HEIGHT = 720;
-const OVERVIEW_VIRTUAL_OVERSCAN_PX = 320;
-const OVERVIEW_GROUP_ROW_ESTIMATED_HEIGHT = 40;
-const OVERVIEW_LINE_ROW_ESTIMATED_HEIGHT = 40;
-const OVERVIEW_SYNCHRONIZED_MIN_ROW_HEIGHT = 40;
-const OVERVIEW_TIMELINE_DAY_WIDTH_PX = 16;
-const OVERVIEW_TIMELINE_DAY_GAP_PX = 1;
-const MIN_OVERVIEW_TIMELINE_ZOOM_PERCENT = 10;
-const MAX_OVERVIEW_TIMELINE_ZOOM_PERCENT = 500;
-const DEFAULT_OVERVIEW_TIMELINE_ZOOM_PERCENT = 100;
-const MIN_LEGIBLE_TIMELINE_DAY_WIDTH_PX = 8;
-const OVERVIEW_TABLE_COLUMN_WIDTHS = {
-  rowNumber: 36,
-  item: 96,
-  partida: 360,
-  duration: 88,
-  start: 118,
-  end: 118,
-  predecessor: 100,
-  crew: 92,
-  performance: 118,
-  unit: 84,
-  quantity: 88,
-  unitPrice: 98,
-  partial: 110,
-  action: 88,
-} as const;
-
-type OverviewMeasuredHeightsCache = {
-  groups: Record<string, number>;
-  lines: Record<string, number>;
-};
 
 type PredecessorRowNumberMaps = {
   itemCodeToRowNumber: Map<string, number>;
@@ -277,7 +206,7 @@ function WorkSchedulePageContentInner({
   const normalizedInitialData = normalizeWorkScheduleView(initialData);
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
-  const { state: data, setState: setData, undo, redo, canUndo, canRedo } = useUndoRedo<WorkScheduleViewRecord>(normalizedInitialData);
+  const { state: data, setState: setData, undo, redo } = useUndoRedo<WorkScheduleViewRecord>(normalizedInitialData);
   const [activeView, setActiveView] = useState<ActiveView>(() => readActiveView(normalizedInitialData.budgetId));
   const [editingLine, setEditingLine] = useState<EditableLine | null>(() =>
     readEditingLine(normalizedInitialData, buildPredecessorRowNumberMaps(normalizedInitialData.groups).itemCodeToRowNumber),
@@ -291,7 +220,6 @@ function WorkSchedulePageContentInner({
   const [overviewScrollRequest, setOverviewScrollRequest] = useState<number | null>(null);
   const [highlightedBudgetItemId, setHighlightedBudgetItemId] = useState<string | null>(null);
   const [hoveredItemCode, setHoveredItemCode] = useState<string | null>(null);
-  const handleUnhoverBar = useCallback(() => setHoveredItemCode(null), []);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [error, setError] = useState("");
   const [activeInlineRowId, setActiveInlineRowId] = useState<string | null>(null);
@@ -515,7 +443,7 @@ function WorkSchedulePageContentInner({
     return detectResourceOverallocations({ demands, limits });
   }, [data.resourceCalendar?.rows]);
 
-  async function persistWorkScheduleLine(line: EditableLine) {
+  const persistWorkScheduleLine = useCallback(async (line: EditableLine) => {
     const response = await fetch(`/api/budgets/${data.budgetId}/work-schedule`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -528,7 +456,7 @@ function WorkSchedulePageContentInner({
     }
 
     return (await response.json()) as WorkScheduleViewRecord;
-  }
+  }, [data.budgetId, predecessorRowNumberToItemCode]);
 
   const loadDerivedViewData = useCallback(async (view: DerivedCalendarView, range?: PeriodRangeSelection) => {
     setDerivedDataLoadState((current) => ({ ...current, [view]: "loading" }));
@@ -572,7 +500,7 @@ function WorkSchedulePageContentInner({
         [view]: loadError instanceof Error ? loadError.message : "No se pudo cargar la vista derivada del cronograma",
       }));
     }
-  }, [data.budgetId]);
+  }, [data.budgetId, setData]);
 
   useEffect(() => {
     if (activeView === "overview") {
@@ -924,7 +852,7 @@ function WorkSchedulePageContentInner({
           });
         });
     },
-    [persistWorkScheduleLine, presentationLinesByCode],
+    [persistWorkScheduleLine, presentationLinesByCode, setData],
   );
 
 
@@ -963,7 +891,7 @@ function WorkSchedulePageContentInner({
           });
         });
     },
-    [persistWorkScheduleLine, presentationLinesByCode],
+    [persistWorkScheduleLine, presentationLinesByCode, setData],
   );
 
   const handleEditDependencySave = useCallback(
@@ -1001,7 +929,7 @@ function WorkSchedulePageContentInner({
           });
         });
     },
-    [persistWorkScheduleLine, presentationLinesByCode],
+    [persistWorkScheduleLine, presentationLinesByCode, setData],
   );
 
   const handleEditDependencyDelete = useCallback(
@@ -1068,7 +996,7 @@ function WorkSchedulePageContentInner({
           });
         });
     },
-    [presentationLinesByCode],
+    [presentationLinesByCode, persistWorkScheduleLine, setData],
   );
 
   useLayoutEffect(() => {
@@ -1734,19 +1662,6 @@ function DerivedViewUnavailableCard({
 }
 
 
-type WorkScheduleLevelTableRowProps = {
-  row: Extract<WorkScheduleDisplayRowRecord, { kind: "level" }>;
-  rowNumber: number | null;
-  dateFormat: string;
-  currency: string;
-  currencyDecimals: number;
-  showCostColumns: boolean;
-  collapsed: boolean;
-  onToggleCollapsed: (rowId: string) => void;
-  onRegisterRow: (rowId: string, element: HTMLElement | null) => void;
-};
-
-
 function ValuationCalendarView({
   rows,
   periods,
@@ -2172,12 +2087,6 @@ type TimelineDay = {
   date: Date;
 };
 
-type VisibleTimelineLinePosition = {
-  line: WorkScheduleLineRecord;
-  top: number;
-  height: number;
-};
-
 
 function summarizeView(data: WorkScheduleViewRecord) {
   const programmedItems = data.groups.reduce(
@@ -2252,10 +2161,6 @@ function getEditingLineStorageKey(budgetId: string) {
 }
 
 
-function getOverviewTimelineZoomStorageKey(budgetId: string) {
-  return `work-schedule-overview-timeline-zoom:${budgetId}`;
-}
-
 function getResourceCalendarModeStorageKey(budgetId: string) {
   return `work-schedule-resource-calendar-mode:${budgetId}`;
 }
@@ -2266,10 +2171,6 @@ function getCriticalPathVisibilityStorageKey(budgetId: string) {
 
 function getOverviewFilterStorageKey(budgetId: string) {
   return `work-schedule-overview-filter:${budgetId}`;
-}
-
-function getOverviewMeasuredHeightsStorageKey(budgetId: string) {
-  return `work-schedule-overview-measured-heights:${budgetId}`;
 }
 
 function getGenerationStrategyStorageKey(budgetId: string) {
@@ -2745,6 +2646,8 @@ export function buildPreviewWorkScheduleView({
     );
   }
 
+  // Keep successor dates synchronized with edited predecessor dates so the
+  // preview matches the persisted schedule dependency rules.
   for (const draft of draftEntries.values()) {
     nextLines = recalculateDependentWorkScheduleLines(nextLines, draft.budgetItemId);
   }
@@ -2939,23 +2842,6 @@ function writeOverviewFilter(budgetId: string, overviewFilter: OverviewFilter) {
   window.localStorage.setItem(getOverviewFilterStorageKey(budgetId), overviewFilter);
 }
 
-
-function sanitizeMeasuredHeightsMap(input: unknown) {
-  if (!input || typeof input !== "object") {
-    return {};
-  }
-
-  const next: Record<string, number> = {};
-  for (const [key, value] of Object.entries(input)) {
-    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-      continue;
-    }
-
-    next[key] = Math.round(value);
-  }
-
-  return next;
-}
 function calculateOverviewScrollTarget(startDate: string, timelineDays: TimelineDay[], timelineDayIndexByIso?: Map<string, number>) {
   if (!startDate) {
     return 0;
@@ -3083,110 +2969,6 @@ function clampPeriodKey(periodKey: string, maxPeriodKey: string) {
 }
 
 
-
-function getResourceWorkbookFamilyCode(resourceCode: string) {
-  const [familyCode] = resourceCode.split("-");
-  return familyCode?.trim() || "Sin grupo";
-}
-
-
-function getExcelColumnLetter(columnNumber: number) {
-  let current = columnNumber;
-  let result = "";
-
-  while (current > 0) {
-    const remainder = (current - 1) % 26;
-    result = String.fromCharCode(65 + remainder) + result;
-    current = Math.floor((current - 1) / 26);
-  }
-
-  return result;
-}
-
-
-function escapeCsvValue(value: string) {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replaceAll('"', '""')}"`;
-  }
-
-  return value;
-}
-
-
-
-
-function createDistributionFromStartDate(startDate: string) {
-  if (startDate) {
-    const [year, month] = startDate.split("-").map((segment) => Number(segment));
-    if (Number.isFinite(year) && Number.isFinite(month)) {
-      return {
-        year,
-        month,
-        percentage: 100,
-      };
-    }
-  }
-
-  const currentDate = new Date();
-  return {
-    year: currentDate.getUTCFullYear(),
-    month: currentDate.getUTCMonth() + 1,
-    percentage: 100,
-  };
-}
-
-function buildInitialDistributionsFromRange(startDate: string, endDate: string) {
-  if (!startDate) {
-    return [createDistributionFromStartDate("")];
-  }
-
-  const safeEndDate = endDate && compareIsoDates(endDate, startDate) >= 0 ? endDate : startDate;
-  const months = listMonthsInRange(startDate, safeEndDate);
-
-  if (months.length <= 1) {
-    return [createDistributionFromStartDate(startDate)];
-  }
-
-  const basePercentage = 100 / months.length;
-  const roundedBase = Number(basePercentage.toFixed(4));
-  const distributions = months.map((month) => ({
-    year: month.year,
-    month: month.month,
-    percentage: roundedBase,
-  }));
-
-  const assigned = distributions.reduce((sum, distribution) => sum + distribution.percentage, 0);
-  const difference = Number((100 - assigned).toFixed(4));
-  const lastIndex = distributions.length - 1;
-
-  if (lastIndex >= 0 && difference !== 0) {
-    distributions[lastIndex] = {
-      ...distributions[lastIndex],
-      percentage: Number((distributions[lastIndex].percentage + difference).toFixed(4)),
-    };
-  }
-
-  return distributions;
-}
-
-function updateDistribution(
-  line: EditableLine,
-  index: number,
-  field: keyof WorkScheduleMonthlyDistributionRecord,
-  value: number,
-  onChange: (line: EditableLine | null) => void,
-) {
-  const nextDistributions = line.monthlyDistributions.map((distribution, rowIndex) =>
-    rowIndex === index ? { ...distribution, [field]: value } : distribution,
-  );
-
-  onChange({
-    ...line,
-    monthlyDistributions: nextDistributions,
-  });
-}
-
-
 function updateEditableLinePredecessor(
   line: EditableLine,
   predecessor: string,
@@ -3284,58 +3066,4 @@ function calculateLagDaysFromMovedSuccessor(
     default:
       return 0;
   }
-}
-
-
-function compareIsoDates(left: string, right: string) {
-  return left.localeCompare(right);
-}
-
-function shouldHydrateInitialDistribution(previousLine: EditableLine) {
-  if (!previousLine.startDate) {
-    return previousLine.monthlyDistributions.length === 1 && Number(previousLine.monthlyDistributions[0]?.percentage) === 100;
-  }
-
-  const expected = buildInitialDistributionsFromRange(previousLine.startDate, previousLine.endDate);
-  if (expected.length !== previousLine.monthlyDistributions.length) {
-    return false;
-  }
-
-  return expected.every((distribution, index) => {
-    const current = previousLine.monthlyDistributions[index];
-    return (
-      current?.year === distribution.year &&
-      current?.month === distribution.month &&
-      Number(current?.percentage) === distribution.percentage
-    );
-  });
-}
-
-function listMonthsInRange(startDate: string, endDate: string) {
-  const months: Array<{ year: number; month: number }> = [];
-  const cursor = new Date(`${startDate}T00:00:00.000Z`);
-  const end = new Date(`${endDate}T00:00:00.000Z`);
-
-  cursor.setUTCDate(1);
-  end.setUTCDate(1);
-
-  while (cursor.getTime() <= end.getTime()) {
-    months.push({
-      year: cursor.getUTCFullYear(),
-      month: cursor.getUTCMonth() + 1,
-    });
-    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-  }
-
-  return months;
-}
-
-function addIsoDays(startDate: string, days: number) {
-  const date = new Date(`${startDate}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) {
-    return startDate;
-  }
-
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
 }

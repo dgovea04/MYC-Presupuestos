@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import type { WorkScheduleLineRecord } from "@/types/work-schedule";
 
 export type LookaheadViewProps = {

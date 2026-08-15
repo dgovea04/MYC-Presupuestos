@@ -12,24 +12,13 @@ import { getAgentModelProvider } from "@/lib/ai/agent/models";
 import { prisma } from "@/lib/db/prisma";
 import { createOllama } from "ollama-ai-provider-v2";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { detectAgentIntent, type AgentIntent, type AgentPendingAction } from "@/lib/ai/agent/intent-router";
+import { detectAgentIntent, type AgentPendingAction } from "@/lib/ai/agent/intent-router";
 import { buildAgentSystemPrompt } from "@/lib/ai/agent/prompt-builder";
 import { AiRuntimeError } from "@/lib/ai/errors";
 import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
-
-/** Tipos de eventos SSE que emite este endpoint. */
-type AgentStreamEvent =
-  | { type: "intent"; intent: Pick<AgentIntent, "type" | "confidence" | "reason" | "extracted" | "suggestedTools" | "requiredFields"> }
-  | { type: "pending_action"; pendingAction: AgentPendingAction | null }
-  | { type: "delta"; text: string }
-  | { type: "tool_start"; toolName: string }
-  | { type: "tool_result"; toolName: string; success: boolean; summary: string; latencyMs: number }
-  | { type: "approval_required"; toolName: string; reason: string }
-  | { type: "final"; answer: string; warnings: string[]; latencyMs: number }
-  | { type: "error"; message: string };
 
 /**
  * POST /api/ai/agent/stream

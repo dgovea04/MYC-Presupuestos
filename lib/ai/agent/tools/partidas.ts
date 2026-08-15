@@ -34,6 +34,7 @@ export const searchPartidasTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: searchPartidasInput,
   execute: async (input, _context) => {
+    void _context;
     const effectiveQuery = input.query ?? "";
     const allPartidas = await getCatalogPartidas();
     const lowerQuery = effectiveQuery.toLowerCase();
@@ -74,6 +75,7 @@ export const suggestPartidasTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: suggestPartidasInput,
   execute: async (input, _context) => {
+    void _context;
     // Stub: delegará a AI suggestion service en fases posteriores
     const allPartidas = await getCatalogPartidas();
     const keywords = input.description.toLowerCase().split(/\s+/);
@@ -115,6 +117,7 @@ export const addPartidaTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: addPartidaInput,
   execute: async (input, _context) => {
+    void _context;
     const result = await saveCatalogPartidasPatch({
       create: [
         {
@@ -166,6 +169,7 @@ export const duplicatePartidaTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: duplicatePartidaInput,
   execute: async (input, _context) => {
+    void _context;
     const all = await getCatalogPartidas();
     const source = all.find((p) => p.id === input.partidaId);
     if (!source) throw new Error(`Partida "${input.partidaId}" no encontrada.`);
@@ -204,6 +208,7 @@ export const reorderPartidasTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: reorderPartidasInput,
   execute: async (input, _context) => {
+    void _context;
     return { reorderedCount: input.partidaIds.length, message: "Reordenamiento delegado a fases posteriores." };
   },
   summarizeResult: (result) => `${result.reorderedCount} partidas reordenadas.`,
@@ -223,6 +228,7 @@ export const removePartidaTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: removePartidaInput,
   execute: async (input, _context) => {
+    void _context;
     await saveCatalogPartidasPatch({ create: [], update: [], delete: [input.partidaId] });
     return { partidaId: input.partidaId, removed: true };
   },

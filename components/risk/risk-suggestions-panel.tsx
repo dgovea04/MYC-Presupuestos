@@ -29,6 +29,7 @@ export function RiskSuggestionsPanel({
   savedScenarioName = "",
   suggestions,
 }: RiskSuggestionsPanelProps) {
+  void onSaveApprovedScenario;
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => new Set(suggestions.map((suggestion) => suggestion.id)));
 
   const acceptedSuggestions = useMemo(

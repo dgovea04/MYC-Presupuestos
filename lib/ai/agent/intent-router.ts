@@ -1,4 +1,4 @@
-import { detectConfirmation, type ConfirmationResult } from "./confirmation";
+import { detectConfirmation } from "./confirmation";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

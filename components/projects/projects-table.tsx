@@ -67,6 +67,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   }, []);
 
   const exportProjectMcp = useCallback(async (id: string, _name: string) => {
+    void _name;
     setPendingId(id);
     setError("");
 

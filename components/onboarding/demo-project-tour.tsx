@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CheckCircle2, ChevronRight, Circle, HelpCircle, RotateCcw, X } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +71,20 @@ export function DemoProjectTour({
   const isComplete = completedCount === steps.length;
   const activeStepOnCurrentRoute = activeStep?.route === pathname;
 
+  const updateCompleted = useCallback((nextIds: DemoTourStepId[]) => {
+    setCompleted((current) => {
+      const next = Array.from(new Set([...current, ...nextIds]));
+      persistState(storageKey, next);
+      return next;
+    });
+  }, [storageKey]);
+
+  const completeStep = useCallback((stepId: DemoTourStepId) => {
+    if (completed.includes(stepId)) return;
+    updateCompleted([stepId]);
+    setIsOpen(true);
+  }, [completed, updateCompleted]);
+
   useEffect(() => {
     const hydrationTimeout = window.setTimeout(() => {
       try {
@@ -132,7 +146,7 @@ export function DemoProjectTour({
       window.removeEventListener(TOUR_ACTION_EVENT, handleTourAction);
       window.removeEventListener(TOUR_OPEN_EVENT, handleTourOpen);
     };
-  }, []);
+  }, [completeStep]);
 
   useEffect(() => {
     function handleTargetClick(event: MouseEvent) {
@@ -149,7 +163,7 @@ export function DemoProjectTour({
 
     document.addEventListener("click", handleTargetClick, true);
     return () => document.removeEventListener("click", handleTargetClick, true);
-  }, [activeStep, pathname]);
+  }, [activeStep, completeStep, pathname]);
 
   useEffect(() => {
     if (!isOpen || !activeStep || !activeStepOnCurrentRoute) {
@@ -229,20 +243,6 @@ export function DemoProjectTour({
       removeTargetDecorations();
     };
   }, [activeStep, activeStepOnCurrentRoute, isOpen]);
-
-  function updateCompleted(nextIds: DemoTourStepId[]) {
-    setCompleted((current) => {
-      const next = Array.from(new Set([...current, ...nextIds]));
-      persistState(storageKey, next);
-      return next;
-    });
-  }
-
-  function completeStep(stepId: DemoTourStepId) {
-    if (completed.includes(stepId)) return;
-    updateCompleted([stepId]);
-    setIsOpen(true);
-  }
 
   function resetTour() {
     setCompleted([]);

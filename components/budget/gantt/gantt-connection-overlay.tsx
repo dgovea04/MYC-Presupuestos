@@ -108,7 +108,6 @@ export const GanttConnectionOverlay = memo(function GanttConnectionOverlay({
   onEndConnection,
   onConfirmConnection,
   onCancelConfirmConnection,
-  onCancelConnection,
 }: GanttConnectionOverlayProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

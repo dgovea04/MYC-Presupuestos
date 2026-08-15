@@ -7,9 +7,10 @@ import { getWorkScheduleSection } from "@/lib/data/work-schedule";
 import { createMetradoSheet, duplicateMetradoSheet, getMetradoSheetById, listMetradoTemplates } from "@/lib/data/metrados";
 import { validateMetradoSheet, hasBlockingMetradoIssues } from "@/lib/metrados/validation";
 import { calculateWorkScheduleCriticalPath } from "@/lib/work-schedule/critical-path";
-import { createApuWorkbook, createBudgetWorkbook } from "@/lib/exports/excel";
+import { createBudgetWorkbook } from "@/lib/exports/excel";
 import { prisma } from "@/lib/db/prisma";
 import type { WorkScheduleItemPatchInput } from "@/lib/validations/work-schedule";
+import type { WorkScheduleLineRecord, WorkScheduleViewRecord } from "@/types/work-schedule";
 
 import { budgetTools } from "./budgets";
 import { partidaTools } from "./partidas";
@@ -246,6 +247,7 @@ export const exportReportTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: exportReportInput,
   execute: async (input, _context) => {
+    void _context;
     return {
       budgetId: input.budgetId,
       format: input.format,
@@ -532,7 +534,8 @@ export const calculateCriticalPathTool: AgentToolDefinition<
   inputSchema: calculateCriticalPathInput,
   execute: async (input, context) => {
     const section = await getWorkScheduleSection(input.budgetId, context.userId);
-    const lines = section.groups.flatMap((group) => group.lines);
+    const legacySection = section as WorkScheduleViewRecord & { lines?: WorkScheduleLineRecord[] };
+    const lines = section.groups?.flatMap((group) => group.lines) ?? legacySection.lines ?? [];
     const result = calculateWorkScheduleCriticalPath(lines);
     const criticalItems = [...result.itemsByBudgetItemId.values()].filter((i) => i.isCritical);
     return {
@@ -681,6 +684,7 @@ export const exportS10Tool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: exportS10Input,
   execute: async (input, _context) => {
+    void _context;
     return { budgetId: input.budgetId, message: "Exportación S10 delegada a fases posteriores.", pending: true };
   },
   summarizeResult: () => "Exportación S10 solicitada.",
@@ -698,6 +702,7 @@ export const dashboardTool: AgentToolDefinition<
   requiresProjectId: true,
   inputSchema: dashboardInput,
   execute: async (input, _context) => {
+    void _context;
     return { projectId: input.projectId, message: "Dashboard delegado a fases posteriores.", pending: true };
   },
   summarizeResult: () => "Dashboard generado.",

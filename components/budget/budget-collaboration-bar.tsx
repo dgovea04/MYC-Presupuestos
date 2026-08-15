@@ -1,7 +1,7 @@
 "use client";
 
-import { memo, useCallback, useEffect, useState } from "react";
-import { MessageSquare, Clock, Save, History, Users, Wifi, WifiOff, Lock, Sparkles } from "lucide-react";
+import { memo, useEffect, useState } from "react";
+import { MessageSquare, Clock, Save, History, Users, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { CollaborationPresenceRecord } from "@/types/collaboration";
@@ -20,8 +20,6 @@ interface BudgetCollaborationBarProps {
 }
 
 export const BudgetCollaborationBar = memo(function BudgetCollaborationBar({
-  budgetId,
-  projectId,
   connected,
   presence,
   activeCommentCount,

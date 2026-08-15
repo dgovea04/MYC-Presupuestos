@@ -6,10 +6,12 @@ const mocks = vi.hoisted(() => ({
   listUserBudgetTemplates: vi.fn(),
   recordActivityEvent: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -23,6 +25,10 @@ vi.mock("@/lib/data/budget-templates", () => ({
 
 vi.mock("@/lib/data/activity-events", () => ({
   recordActivityEvent: mocks.recordActivityEvent,
+}));
+
+vi.mock("@/lib/billing/route-access", () => ({
+  getFeatureAccessResponse: vi.fn().mockResolvedValue(null),
 }));
 
 import { GET, POST } from "@/app/api/templates/budget/route";

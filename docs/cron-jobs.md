@@ -1,66 +1,54 @@
-# Cron Jobs — MC Presupuestos
+# Cron jobs — MC Presupuestos
 
-## `GET /api/cron/reactivate-members`
+Los jobs están definidos en `vercel.json` y se ejecutan diariamente a las `08:00 UTC` en el entorno desplegado:
 
-Proactively reactivates workspace members whose timed suspension has expired (`suspendedUntil` ≤ now).
+| Endpoint | Propósito |
+|---|---|
+| `GET /api/cron/reactivate-members` | Reactivar membresías suspendidas cuyo `suspendedUntil` ya venció. |
+| `GET /api/cron/notify-deletion-reminders` | Notificar al administrador principal sobre eliminaciones cuyo periodo de gracia venció. No elimina cuentas automáticamente. |
 
-### Setup
+## Configuración
 
-1. **Set `CRON_SECRET`** in your environment (add to `.env`):
-   ```
-   CRON_SECRET=<your-secure-random-string>
-   ```
-   Generate a secure secret: `openssl rand -hex 32`
+1. Configurar `CRON_SECRET` en Vercel para el entorno correspondiente.
+2. Confirmar que `vercel.json` está incluido en el commit desplegado.
+3. Confirmar en el panel de Vercel que aparecen ambos jobs y su próximo horario.
+4. Revisar los Runtime Logs después de la primera ejecución.
 
-2. **Configure your scheduler** to call the endpoint periodically:
+Vercel envía el header:
 
-   **Vercel Cron Jobs** (recommended):
-   Add to `vercel.json`:
-   ```json
-   {
-     "crons": [
-       {
-         "path": "/api/cron/reactivate-members",
-         "schedule": "*/10 * * * *"
-       }
-     ]
-   }
-   ```
-   Then set `CRON_SECRET` in your Vercel environment variables and add a `Authorization` header:
-   ```json
-   {
-     "crons": [
-       {
-         "path": "/api/cron/reactivate-members",
-         "schedule": "*/10 * * * *"
-       }
-     ]
-   }
-   ```
-   > **Note:** Vercel cron jobs run on deployed environments only (Production/Preview), not locally.
+```text
+Authorization: Bearer <CRON_SECRET>
+```
 
-   **GitHub Actions**:
-   ```yaml
-   name: Reactivate expired suspensions
-   on:
-     schedule:
-       - cron: "*/10 * * * *"
-   jobs:
-     reactivate:
-       runs-on: ubuntu-latest
-       steps:
-         - run: |
-             curl -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-               https://your-domain.com/api/cron/reactivate-members
-   ```
+El código también admite `?secret=...` por compatibilidad, pero no debe usarse en operación normal porque el secreto puede quedar expuesto en URLs, historial o logs.
 
-   **Manual testing**:
-   ```bash
-   curl -H "Authorization: Bearer <CRON_SECRET>" \
-     http://localhost:3000/api/cron/reactivate-members
-   ```
+## Prueba manual
 
-### Response
+No incluir el secreto directamente en el historial de shell:
+
+```bash
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<dominio-canonico>/api/cron/reactivate-members
+
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<dominio-canonico>/api/cron/notify-deletion-reminders
+```
+
+Resultados esperados:
+
+- `200`: token válido y operación completada.
+- `401`: token ausente, incorrecto o con formato inválido.
+- `500`: `CRON_SECRET` no está configurado o la operación interna falló.
+
+## Reactivación de membresías
+
+`/api/cron/reactivate-members` ejecuta una actualización sobre membresías con:
+
+- `status = SUSPENDED`
+- `suspendedUntil` no nulo
+- `suspendedUntil <= NOW()`
+
+La respuesta incluye el número de membresías reactivadas y la hora de comprobación:
 
 ```json
 {
@@ -69,28 +57,24 @@ Proactively reactivates workspace members whose timed suspension has expired (`s
 }
 ```
 
-- `reactivated`: number of members that were reactivated in this run
-- `checkedAt`: ISO timestamp of when the check was performed
+El cron es una capa de defensa adicional. La lista de miembros y las comprobaciones de acceso también deben impedir el acceso mientras una membresía siga suspendida.
 
-### How it works
+## Recordatorios de eliminación
 
-1. The endpoint receives a GET request with a `Bearer <CRON_SECRET>` authorization header
-2. If the secret matches `CRON_SECRET` env var, it runs:
-   ```sql
-   UPDATE company_memberships
-   SET status = 'ACTIVE', suspendedUntil = NULL
-   WHERE status = 'SUSPENDED'
-     AND suspendedUntil IS NOT NULL
-     AND suspendedUntil <= NOW()
-   ```
-3. Returns the count of reactivated members
+`/api/cron/notify-deletion-reminders` llama a `notifyDueAdminDeletions()` y devuelve el resultado del procesamiento junto con `checkedAt`.
 
-### Defense-in-depth
+- Solo notifica solicitudes vencidas que aún corresponda recordar.
+- No ejecuta eliminaciones permanentes.
+- La eliminación definitiva continúa requiriendo autorización del administrador principal y MFA.
+- Revisar los logs de Resend y la auditoría administrativa si un envío falla.
 
-The cron endpoint is one of three layers that ensure timely reactivation:
+## Seguridad y operación
 
-| Layer | Trigger | Scope |
-|---|---|---|
-| **Cron endpoint** (`/api/cron/reactivate-members`) | External scheduler (every 10 min) | All workspaces |
-| **GET members list** (`/api/workspaces/[id]/members`) | Owner/Admin opens member panel | One workspace |
-| **Access check** (`assertWorkspaceMembership`) | Suspended user attempts any access | One user |
+- [ ] Mantener `CRON_SECRET` fuera del código fuente, URLs y logs.
+- [ ] Usar un secreto distinto en Preview y Production.
+- [ ] No ejecutar estos endpoints sin bearer auth en producción.
+- [ ] Confirmar que no existen jobs duplicados en otro scheduler.
+- [ ] Revisar errores 5xx y timeouts después de cada despliegue.
+- [ ] Si se rota `CRON_SECRET`, actualizar Vercel antes de la siguiente ejecución y repetir la prueba manual.
+
+Vercel Cron no se ejecuta con `npm run dev`; para probar localmente se debe iniciar la aplicación y llamar los endpoints con `CRON_SECRET` configurado.

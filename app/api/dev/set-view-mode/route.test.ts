@@ -159,8 +159,8 @@ describe("dev /api/dev/set-view-mode", () => {
       "user-1",
       expect.objectContaining({ defaultViewMode: "excel" }),
     );
-    expect(revalidateTagMock).toHaveBeenCalledWith("user-settings", "max");
-    expect(revalidateTagMock).toHaveBeenCalledWith("user-settings:user-1", "max");
+    expect(revalidateTagMock).toHaveBeenCalledWith("user-settings", { expire: 0 });
+    expect(revalidateTagMock).toHaveBeenCalledWith("user-settings:user-1", { expire: 0 });
     // Guard the order assertion: without this, if a future refactor drops
     // the revalidateTag call entirely, `invocationCallOrder[0]` is undefined
     // and `.toBeLessThan(...)` would silently pass.

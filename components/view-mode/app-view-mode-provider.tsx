@@ -70,11 +70,9 @@ export function AppViewModeProvider({
     const fallbackMode = coerceViewMode(initialViewMode ?? defaultViewMode);
     const nextMode = storedModeExists ? readStoredViewMode(storage) : fallbackMode;
 
-    if (viewMode !== nextMode) {
-      startTransition(() => {
-        setViewModeState(nextMode);
-      });
-    }
+    startTransition(() => {
+      setViewModeState(nextMode);
+    });
 
     if (storedModeExists) {
       writeStoredViewMode(storage, nextMode);
@@ -82,7 +80,7 @@ export function AppViewModeProvider({
     }
 
     applyViewModeToDocument(fallbackMode);
-  }, [defaultViewMode, initialViewMode, viewMode]);
+  }, [defaultViewMode, initialViewMode]);
 
   useEffect(() => {
     const handleSettingsUpdated = (event: Event) => {

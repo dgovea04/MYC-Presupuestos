@@ -71,8 +71,9 @@ export function decimalToNumber(value: Prisma.Decimal | number | null | undefine
 export function stripBudgetProjectForClient<T extends { project?: unknown }>(
   budget: T,
 ): Omit<T, "project"> {
-  const { project: _stripped, ...serializable } = budget;
-  return serializable;
+  return Object.fromEntries(
+    Object.entries(budget).filter(([key]) => key !== "project"),
+  ) as Omit<T, "project">;
 }
 
 export function decimalToString(value: Prisma.Decimal | string | number | null | undefined) {

@@ -26,6 +26,8 @@ export function persistAppTheme(theme: AppThemeOption) {
 }
 
 export function applyAppThemeToDocument(theme: AppThemeOption, _options: { transition?: boolean } = {}) {
+  void _options;
+
   if (typeof document === "undefined") {
     return;
   }

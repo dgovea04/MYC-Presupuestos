@@ -85,8 +85,6 @@ export function mapMcpSubBudgetToExisting(input: {
   mcpName: string;
   existingNames: string[];
 }): string | null {
-  const normalizedMcp = normalizeSubBudgetName(input.mcpName);
-
   for (const existing of input.existingNames) {
     if (isSameSubBudgetName(input.mcpName, existing)) {
       return existing;

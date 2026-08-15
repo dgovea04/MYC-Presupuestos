@@ -100,10 +100,10 @@ describe("parseDelphinDprjToS10Snapshot", () => {
     );
   }, 30000);
   it("keeps Delphin budgets as sub budgets when they contain their own title tree", () => {
-    const buffer = readFileSync(resolve("presupuesto-ejemplo/de/Hospital.dprj"));
+    const buffer = readFileSync(resolve("presupuesto-ejemplo/de/Hospital-2.dprj"));
     const snapshot = parseDelphinDprjToS10Snapshot({
       buffer,
-      fileName: "Hospital.dprj",
+      fileName: "Hospital-2.dprj",
     });
 
     expect(snapshot.subpresupuestos).toEqual([
@@ -250,15 +250,16 @@ describe("parseDelphinDprjToS10Snapshot", () => {
     }
   }, 30000);
 
-  it("surfaces a clear error when Colegios.dprj has an invalid BinaryFormatter object graph", () => {
-    const buffer = readFileSync(resolve("presupuesto-ejemplo/de/Colegios.dprj"));
+  it("maps the Colegios Delphin export when its BinaryFormatter graph is valid", () => {
+    const buffer = readFileSync(resolve("presupuesto-ejemplo/de/Colegios-2.dprj"));
+    const snapshot = parseDelphinDprjToS10Snapshot({
+      buffer,
+      fileName: "Colegios-2.dprj",
+    });
 
-    expect(() =>
-      parseDelphinDprjToS10Snapshot({
-        buffer,
-        fileName: "Colegios.dprj",
-      }),
-    ).toThrow(/objectID cannot be less than or equal to zero/i);
+    expect(snapshot.presupuestos).toHaveLength(1);
+    expect(snapshot.subpresupuestos.length).toBeGreaterThan(0);
+    expect(snapshot.partidas.length).toBeGreaterThan(0);
   }, 30000);
 });
 

@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Check, Loader2, MessageSquarePlus, Share2, StickyNote, Trash2, UserPlus, X } from "lucide-react";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -440,7 +441,7 @@ function NoteCard({
           {/* Author */}
           <div className="mt-2 flex items-center gap-2">
             {note.author.avatarUrl ? (
-              <img src={note.author.avatarUrl} alt={note.author.name} className="h-5 w-5 rounded-full" />
+              <Image src={note.author.avatarUrl} alt={note.author.name} width={20} height={20} className="h-5 w-5 rounded-full" />
             ) : (
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600">
                 {note.author.name.charAt(0).toUpperCase()}
@@ -487,7 +488,7 @@ function NoteCard({
                   <div key={user.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white">
                     <div className="flex items-center gap-2 min-w-0">
                       {user.avatarUrl ? (
-                        <img src={user.avatarUrl} alt={user.name} className="h-5 w-5 flex-shrink-0 rounded-full" />
+                        <Image src={user.avatarUrl} alt={user.name} width={20} height={20} className="h-5 w-5 flex-shrink-0 rounded-full" />
                       ) : (
                         <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-300 text-[10px] font-semibold text-slate-700">
                           {user.name.charAt(0).toUpperCase()}

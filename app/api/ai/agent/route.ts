@@ -9,7 +9,6 @@ import { allTools } from "@/lib/ai/agent/tools";
 import { createPolicyEngine } from "@/lib/ai/agent/policy-engine";
 import { createToolExecutor } from "@/lib/ai/agent/tool-executor";
 import { createVercelSdkAdapter } from "@/lib/ai/agent/vercel-sdk-adapter";
-import { createApprovalService } from "@/lib/ai/agent/approval-service";
 import type { AgentExecutionState } from "@/lib/ai/agent/types";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
 
@@ -65,7 +64,6 @@ export async function POST(request: Request) {
     const policyEngine = createPolicyEngine();
     const adapter = createVercelSdkAdapter();
     const planner = createPlanner();
-    const approvalService = createApprovalService();
 
     let mode = data.mode ?? "chat";
     let message = data.message;

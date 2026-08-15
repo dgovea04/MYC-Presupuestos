@@ -44,7 +44,6 @@ import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
 import { useSpreadsheetSelection } from "@/components/spreadsheet/use-spreadsheet-selection";
-import { useSpreadsheetKeyboard } from "@/components/spreadsheet/use-spreadsheet-keyboard";
 import { createFillDownPatches } from "@/lib/spreadsheet/fill-down";
 import { getCellKey, type SpreadsheetCellAddress, type SpreadsheetRowDefinition } from "@/lib/spreadsheet/cell-address";
 import { CompactRowActions } from "@/components/spreadsheet/compact-row-actions";
@@ -487,6 +486,7 @@ export function BudgetEditor({
   const lastSavedSnapshot = useRef(summary);
   const isHydrated = useRef(false);
   const saveBudgetRef = useRef<((isAutosave?: boolean) => Promise<void>) | null>(null);
+  const applyBudgetFillDownRef = useRef<(() => void) | null>(null);
   const cellRefs = useRef(new Map<string, HTMLInputElement>());
   const editorRootRef = useRef<HTMLDivElement>(null);
   const activeRowIdRef = useRef<string | null>(null);
@@ -838,7 +838,7 @@ export function BudgetEditor({
 
       if (commandOrCtrl && event.key.toLowerCase() === "d" && isExcelMode) {
         event.preventDefault();
-        applyBudgetFillDown();
+        applyBudgetFillDownRef.current?.();
         return;
       }
 
@@ -1889,14 +1889,6 @@ export function BudgetEditor({
     activateSpreadsheetCell({ rowId: activeRowId, columnId: activeColumn });
   }, [isExcelMode, activeRowId, activeColumn, activateSpreadsheetCell]);
 
-  const focusSpreadsheetCell = useCallback(
-    (cell: SpreadsheetCellAddress | null) => {
-      if (!cell || !isExcelMode || !isEditableColumn(cell.columnId)) return;
-      focusCell({ rowId: cell.rowId, column: cell.columnId });
-    },
-    [focusCell, isExcelMode],
-  );
-
   const applyBudgetCellPatch = useCallback(
     (cell: SpreadsheetCellAddress, value: string) => {
       const row = rows.find((candidate) => getRowId(candidate) === cell.rowId);
@@ -1934,6 +1926,8 @@ export function BudgetEditor({
     spreadsheetSelection.activeCell,
     spreadsheetSelection.selectedCells,
   ]);
+
+  applyBudgetFillDownRef.current = applyBudgetFillDown;
 
   const toggleSummaryCollapsed = useCallback(() => {
     setSummaryCollapsed((current) => !current);
@@ -4409,7 +4403,6 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onDuplicateItem,
   onRemoveItem,
   onActivateSpreadsheetCell,
-  spreadsheetSelectionKey,
 }: BudgetItemTableRowProps) {
   const isEditingField = activeRowId === row.item.id && isEditableActiveColumn(activeColumn);
   const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;

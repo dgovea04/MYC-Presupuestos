@@ -108,7 +108,7 @@ export class ResponseBuilder implements AgentResponseBuilder {
       if (step) {
         return {
           ...pendingApproval,
-          impactSummary: this.buildImpactSummary(step, pendingApproval),
+          impactSummary: this.buildImpactSummary(step),
         };
       }
     }
@@ -119,7 +119,7 @@ export class ResponseBuilder implements AgentResponseBuilder {
       if (toolStep) {
         return {
           ...pendingApproval,
-          impactSummary: this.buildImpactSummary(toolStep, pendingApproval),
+          impactSummary: this.buildImpactSummary(toolStep),
         };
       }
     }
@@ -130,10 +130,7 @@ export class ResponseBuilder implements AgentResponseBuilder {
   /**
    * Construye un texto legible del impacto esperado de la aprobación.
    */
-  private buildImpactSummary(
-    step: PlannedStep,
-    _pendingApproval: NonNullable<AgentOrchestratorOutput["pendingApproval"]>,
-  ): string {
+  private buildImpactSummary(step: PlannedStep): string {
     const lines: string[] = [];
 
     lines.push(`Paso: "${step.title}"`);

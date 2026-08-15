@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
+  revalidateTag: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -21,6 +22,10 @@ vi.mock("@/lib/data/activity-events", () => ({
 
 vi.mock("@/lib/data/metrados", () => ({
   duplicateMetradoSheet: mocks.duplicateMetradoSheet,
+}));
+
+vi.mock("@/lib/billing/route-access", () => ({
+  getFeatureAccessResponse: vi.fn().mockResolvedValue(null),
 }));
 
 import { POST } from "@/app/api/metrados-avanzados/[id]/duplicate/route";

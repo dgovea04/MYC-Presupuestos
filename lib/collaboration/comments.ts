@@ -4,10 +4,8 @@ import { serializeComment } from "./serializers";
 import { publishBudgetEvent } from "./events";
 import {
   commentCreateSchema,
-  commentUpdateSchema,
   commentsQuerySchema,
   type CommentCreateInput,
-  type CommentUpdateInput,
 } from "@/lib/validations/collaboration";
 import type { CollaborationCommentRecord } from "@/types/collaboration";
 
@@ -106,7 +104,7 @@ export async function resolveComment(
 ): Promise<CollaborationCommentRecord> {
   await resolveBudgetOwnership(budgetId, userId);
 
-  const comment = await ensureCommentAccess(commentId, budgetId);
+  await ensureCommentAccess(commentId, budgetId);
 
   const updated = await prisma.collaborationComment.update({
     where: { id: commentId },

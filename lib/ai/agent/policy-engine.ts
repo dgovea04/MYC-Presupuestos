@@ -1,4 +1,3 @@
-import type { AgentExecutionMode, AgentToolRisk } from "./types";
 import type { AgentPolicyEngine, PolicyInput, PolicyOutput } from "./contracts";
 
 /**

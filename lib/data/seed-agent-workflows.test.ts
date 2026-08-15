@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { WORKFLOW_TEMPLATES } from "@/lib/ai/agent/workflows";
 import { seedAgentWorkflows } from "./seed-agent-workflows";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -18,13 +19,13 @@ describe("seedAgentWorkflows", () => {
     vi.resetAllMocks();
   });
 
-  it("upserts all 8 workflow templates", async () => {
+  it("upserts every workflow template", async () => {
     mockUpsert.mockResolvedValue({});
 
     const result = await seedAgentWorkflows(mockPrisma);
 
-    expect(result.upserted).toBe(8);
-    expect(mockUpsert).toHaveBeenCalledTimes(8);
+    expect(result.upserted).toBe(WORKFLOW_TEMPLATES.length);
+    expect(mockUpsert).toHaveBeenCalledTimes(WORKFLOW_TEMPLATES.length);
   });
 
   it("upserts with correct slug and bundle toolNames", async () => {
@@ -79,7 +80,7 @@ describe("seedAgentWorkflows", () => {
     const result = await seedAgentWorkflows(mockPrisma);
 
     expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.upserted).toBeLessThan(8);
+    expect(result.upserted).toBeLessThan(WORKFLOW_TEMPLATES.length);
   });
 
   it("returns correct upserted count when some fail", async () => {
@@ -91,6 +92,6 @@ describe("seedAgentWorkflows", () => {
     const result = await seedAgentWorkflows(mockPrisma);
 
     expect(result.upserted).toBe(1);
-    expect(result.errors.length).toBe(7);
+    expect(result.errors.length).toBe(WORKFLOW_TEMPLATES.length - 1);
   });
 });

@@ -62,6 +62,7 @@ export const reviewAPUTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: reviewAPUInput,
   execute: async (input, _context) => {
+    void _context;
     // Stub: delegará a AI review service en fases posteriores
     return {
       apuDescription: input.apuDescription,
@@ -85,6 +86,7 @@ export const calculateAPUTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: calculateAPUInput,
   execute: async (input, _context) => {
+    void _context;
     const materialsCost = (input.materials ?? []).reduce(
       (sum, m) => sum + m.quantity * (m.unitPrice ?? 0),
       0
@@ -137,6 +139,7 @@ export const createAPUTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: createAPUInput,
   execute: async (input, _context) => {
+    void _context;
     const result = await saveCatalogPartidasPatch({
       create: [{
         clientId: crypto.randomUUID(),
@@ -177,6 +180,7 @@ export const updateAPUTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: updateAPUInput,
   execute: async (input, _context) => {
+    void _context;
     const all = await getCatalogPartidas();
     const existing = all.find((p) => p.id === input.partidaId);
     if (!existing) throw new Error(`APU "${input.partidaId}" no encontrado.`);
@@ -217,6 +221,7 @@ export const generateAPUTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: generateAPUInput,
   execute: async (input, _context) => {
+    void _context;
     return { description: input.description, unit: input.unit, message: "Generación de APU delegada a fases posteriores.", pending: true };
   },
   summarizeResult: (result) => `APU generado para "${result.description}".`,
@@ -236,6 +241,7 @@ export const optimizeAPUTool: AgentToolDefinition<
   requiresProjectId: false,
   inputSchema: optimizeAPUInput,
   execute: async (input, _context) => {
+    void _context;
     const all = await getCatalogPartidas();
     const partida = all.find((p) => p.id === input.partidaId);
     if (!partida) throw new Error(`APU "${input.partidaId}" no encontrado.`);

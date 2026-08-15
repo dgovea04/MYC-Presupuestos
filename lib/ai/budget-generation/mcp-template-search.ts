@@ -32,7 +32,6 @@ export async function searchMcpTemplateCandidates(input: {
 }): Promise<McpTemplateCandidate[]> {
   const limit = input.limit ?? 5;
   const normalizedQuery = normalizePartidaText(input.description);
-  const queryTokens = uniqueTokens(input.description);
 
   // Detect project types from description
   const detectedTypes = detectProjectTypes(input.description, input.projectType);

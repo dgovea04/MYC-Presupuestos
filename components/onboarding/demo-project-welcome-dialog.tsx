@@ -3,12 +3,24 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { ArrowRight, Building2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useSyncExternalStore, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
 const WELCOME_STORAGE_PREFIX = "mc-demo-project-welcome:";
 type WelcomeStatus = "started" | "dismissed";
+type WelcomeSnapshot = WelcomeStatus | "unseen" | "hydrating";
+
+const HYDRATING_SNAPSHOT: WelcomeSnapshot = "hydrating";
+
+function readWelcomeSnapshot(storageKey: string): Exclude<WelcomeSnapshot, "hydrating"> {
+  try {
+    const status = window.localStorage.getItem(storageKey);
+    return status === "started" || status === "dismissed" ? status : "unseen";
+  } catch {
+    return "unseen";
+  }
+}
 
 export function DemoProjectWelcomeDialog({
   projectId,
@@ -18,20 +30,27 @@ export function DemoProjectWelcomeDialog({
   projectName: string;
 }) {
   const storageKey = `${WELCOME_STORAGE_PREFIX}${projectId}`;
-  const closeReason = useRef<WelcomeStatus | null>(null);
-  const [open, setOpen] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const storedStatus = useSyncExternalStore(
+    (onStoreChange) => {
+      const handleStorage = (event: StorageEvent) => {
+        if (event.key === null || event.key === storageKey) {
+          onStoreChange();
+        }
+      };
 
-  useEffect(() => {
-    try {
-      const status = window.localStorage.getItem(storageKey);
-      setOpen(status !== "started" && status !== "dismissed");
-    } catch {
-      setOpen(true);
-    }
-
-    setIsHydrated(true);
-  }, [storageKey]);
+      window.addEventListener("storage", handleStorage);
+      return () => window.removeEventListener("storage", handleStorage);
+    },
+    () => readWelcomeSnapshot(storageKey),
+    () => HYDRATING_SNAPSHOT,
+  );
+  const [closedStorageKey, setClosedStorageKey] = useState<string | null>(null);
+  const isHydrated = storedStatus !== HYDRATING_SNAPSHOT;
+  const open =
+    isHydrated &&
+    closedStorageKey !== storageKey &&
+    storedStatus !== "started" &&
+    storedStatus !== "dismissed";
 
   function persistStatus(status: WelcomeStatus) {
     try {
@@ -42,23 +61,15 @@ export function DemoProjectWelcomeDialog({
   }
 
   function closeWithStatus(status: WelcomeStatus) {
-    closeReason.current = status;
     persistStatus(status);
-    setOpen(false);
+    setClosedStorageKey(storageKey);
   }
 
   function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
-
     if (!nextOpen) {
-      const status = closeReason.current ?? "dismissed";
-      persistStatus(status);
-      closeReason.current = null;
+      persistStatus("dismissed");
+      setClosedStorageKey(storageKey);
     }
-  }
-
-  if (!isHydrated) {
-    return null;
   }
 
   return (

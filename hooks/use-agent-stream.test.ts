@@ -524,7 +524,11 @@ describe("useAgentStream", () => {
       const stream = makeSseStream([
         {
           event: "approval_required",
-          data: { toolName: "deleteChapter", reason: "Eliminar capítulo 3 del presupuesto" },
+          data: {
+            approvalId: "approval-1",
+            toolName: "deleteChapter",
+            reason: "Eliminar capítulo 3 del presupuesto",
+          },
         },
       ]);
       mockFetchOk(stream);
@@ -536,6 +540,7 @@ describe("useAgentStream", () => {
 
       expect(result.current.execution.state).toBe("PENDING_APPROVAL");
       expect(result.current.execution.pendingApproval).toEqual({
+        approvalId: "approval-1",
         toolName: "deleteChapter",
         reason: "Eliminar capítulo 3 del presupuesto",
       });

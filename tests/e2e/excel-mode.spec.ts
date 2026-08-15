@@ -1,4 +1,4 @@
-import { test, expect, type Page, type APIResponse } from "@playwright/test";
+import { test, expect, type APIResponse, type Cookie, type Page } from "@playwright/test";
 
 /**
  * MC Presupuestos — Excel-mode end-to-end smoke test.
@@ -6,7 +6,7 @@ import { test, expect, type Page, type APIResponse } from "@playwright/test";
  * Verifies the five Excel-mode interaction contracts wired across the
  * Excel-mode rollout (Tasks 1-10 of
  * docs/superpowers/plans/2026-07-20-excel-mode-professional-grid.md) hold
- * end-to-end in a real browser, behind a seeded demo user session.
+ * end-to-end in a real browser, behind an isolated local E2E user session.
  *
  * Lock-in cells:
  *   1. Budget editor: focused cell carries `data-spreadsheet-active="true"`
@@ -22,11 +22,11 @@ import { test, expect, type Page, type APIResponse } from "@playwright/test";
  *   5. Resources / Partidas tables: each row renders a `CompactRowActions`
  *      trigger that expands into a per-row action menu.
  *
- * Auth: credentials sign-in via `/login` form using the seeded admin user
- * `demo@mycpresupuestos.pe` / `Demo12345`. Override via env vars:
- * `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`.
+ * Auth: credentials sign-in via `/login` form using the isolated local E2E user.
+ * Defaults are `e2e@mycpresupuestos.local` / `E2eLocalTest123!`. Override via
+ * env vars: `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`.
  *
- * Setup: `test.beforeAll` flips the demo user's `defaultViewMode` to `"excel"`
+ * Setup: `test.beforeAll` flips the E2E user's `defaultViewMode` to `"excel"`
  * via the dev-only POST `/api/dev/set-view-mode` (gated to non-production
  * by `process.env.NODE_ENV !== "production"`). This bypasses the
  * custom-tab + Radix Select + save-button UI dance in `/settings` and is
@@ -35,10 +35,10 @@ import { test, expect, type Page, type APIResponse } from "@playwright/test";
  * is rendered inside a hidden tab panel.
  */
 
-const SEED_USER_EMAIL = process.env.E2E_USER_EMAIL ?? "demo@mycpresupuestos.pe";
-const SEED_USER_PASSWORD = process.env.E2E_USER_PASSWORD ?? "Demo12345";
-const SEED_PROJECT_NAME = "Vivienda Multifamiliar San Miguel";
-const SEED_BUDGET_NAME = "Arquitectura";
+const SEED_USER_EMAIL = process.env.E2E_USER_EMAIL ?? "e2e@mycpresupuestos.local";
+const SEED_USER_PASSWORD = process.env.E2E_USER_PASSWORD ?? "E2eLocalTest123!";
+const SEED_PROJECT_NAME = process.env.E2E_PROJECT_NAME ?? "Edificio Multifamiliar - Demo";
+const SEED_BUDGET_NAME = process.env.E2E_BUDGET_NAME ?? "Arquitectura";
 
 async function signInWithCredentials(page: Page): Promise<void> {
   await page.goto("/login");
@@ -104,13 +104,24 @@ async function assertServerIsReachable(response: APIResponse | undefined): Promi
 
 test.describe.configure({ mode: "serial" });
 
+let authCookies: Cookie[] = [];
+
 test.describe("Excel-mode pipeline @smoke", () => {
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async ({ browser, request }) => {
+    // Authenticate once and reuse the session across the serial tests. The
+    // application rate-limits repeated login attempts by account and origin;
+    // logging in before every test would exercise that defense instead of the
+    // Excel-mode contracts.
+    const authContext = await browser.newContext();
+    const authPage = await authContext.newPage();
+    await signInWithCredentials(authPage);
+    authCookies = (await authContext.cookies()).filter((cookie) => cookie.name !== "app_view_mode");
+    await authContext.close();
     // 1. Server reachability probe.
     const probe = await request.get("/api/auth/session").catch(() => undefined);
     await assertServerIsReachable(probe);
 
-    // 2. Flip the demo user to Excel mode via the dev-only shortcut.
+    // 2. Flip the isolated E2E user to Excel mode via the dev-only shortcut.
     // Persists in the DB so every test in this file sees Excel mode without
     // driving the custom-tab + Radix Select + save-button UI dance in
     // `/settings`. The route is gated to non-production builds.
@@ -123,11 +134,11 @@ test.describe("Excel-mode pipeline @smoke", () => {
     // The e2e only needs to verify the side-effect (defaultViewMode flipped) +
     // that the route resolved a real userId (sanity for the lookup path).
     expect(setModeJson.userId, "dev route response must include the resolved userId").toBeTruthy();
-    expect(setModeJson.defaultViewMode, "demo user must be persisted as excel mode").toBe("excel");
+    expect(setModeJson.defaultViewMode, "E2E user must be persisted as excel mode").toBe("excel");
   });
 
-  // Restore the demo user's defaultViewMode to "modern" so subsequent
-  // test runs (or other spec files that share the same seeded DB) don't
+  // Restore the E2E user's defaultViewMode to "modern" so subsequent test
+  // runs (or other spec files that share the same seeded DB) don't
   // inherit Excel mode as the new baseline. Without this, a flaky failure
   // mid-suite could leave the seed stuck in Excel mode for the next run.
   test.afterAll(async ({ request }) => {
@@ -151,7 +162,9 @@ test.describe("Excel-mode pipeline @smoke", () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await signInWithCredentials(page);
+    await page.context().addCookies(authCookies);
+    await page.context().clearCookies({ name: "app_view_mode" });
+    await page.goto("/dashboard");
     // Wait for SSR hydration + the post-signin route's network requests to
     // settle before asserting the data-view-mode attribute. Avoids a race
     // where the locator passes only because Playwright polled late, not
@@ -176,16 +189,11 @@ test.describe("Excel-mode pipeline @smoke", () => {
     expect(height, "--excel-row-height must be published on the Excel-mode scope").toMatch(/\d+px/);
   });
 
-  // Surface the budget-editor Ctrl+D + data-spreadsheet-active gap as an
-  // expected-fail. The production hook is missing:
-  //   - components/budget/budget-editor.tsx does NOT currently render
-  //     `data-spreadsheet-active="true"` on focused editable cells
-  //     (the contract lives in components/metrados/MetradoSheetTable.tsx
-  //     lines 481/482/530/531 only).
-  //   - The applyBudgetFillDown listener IS wired (budget-editor.tsx ~816)
-  //     and `isExcelMode` gating is correct.
-  // To unblock: add `data-spreadsheet-active` AT THE BUDGET CELL RENDER
-  // mirroring MetradoSheetTable, then drop the test.fail wrapper.
+  // Surface the budget-editor cursor contract and keep the failure diagnostic
+  // if the production cell implementation regresses:
+  // The focused cell must expose `data-spreadsheet-active="true"`; this
+  // test intentionally remains a normal assertion so a missing contract
+  // fails the suite instead of hiding a production regression.
   test(
     "[auth-bounded] budget editor cursor: data-spreadsheet-active + post-Ctrl+D fill-down",
 
@@ -239,10 +247,34 @@ test.describe("Excel-mode pipeline @smoke", () => {
     // GENERAL budget via getGeneralBudgetSectionContext(id) — passing a
     // sub-budget id here renders a 404, so we use generalBudgetId.
     await page.goto(`/budgets/${generalBudgetId}/polynomial-formula`);
-    await page.waitForLoadState("networkidle", { timeout: 30_000 });
+    const sectionLink = page.getByRole("link", {
+      name: new RegExp(`^${SEED_BUDGET_NAME} \\d+ monomios$`, "i"),
+    });
+    await expect(sectionLink).toBeVisible({ timeout: 30_000 });
+    await sectionLink.click();
+    await page.waitForURL(/\/polynomial-formula\?section=/, { timeout: 30_000 });
+
+    const generateFormulaButton = page.getByRole("button", { name: /generar fórmula/i });
+    if (await generateFormulaButton.count() > 0) {
+      await expect(generateFormulaButton).toBeVisible({ timeout: 15_000 });
+      const generationResponsePromise = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          /\/api\/budgets\/[^/]+\/polynomial-formula$/.test(response.url()),
+        { timeout: 30_000 },
+      );
+      await generateFormulaButton.click();
+      const generationResponse = await generationResponsePromise;
+      expect(
+        generationResponse.ok(),
+        `formula generation failed: ${await generationResponse.text()}`,
+      ).toBeTruthy();
+    }
 
     const frame = page.locator('[data-testid="polynomial-monomials-table-frame"]');
-    await expect(frame).toBeVisible({ timeout: 15_000 });
+    // The route can keep background requests active; the frame is the stable
+    // readiness signal for this contract.
+    await expect(frame).toBeVisible({ timeout: 30_000 });
     const classList = await frame.evaluate((el) => Array.from(el.classList));
 
     // The frame uses getTableFrameClassName which returns `rounded-none`
@@ -266,11 +298,12 @@ test.describe("Excel-mode pipeline @smoke", () => {
     // resolves the GENERAL budget via getGeneralBudgetSectionContext, so
     // passing a sub-budget id renders a 404.
     await page.goto(`/budgets/${generalBudgetId}/footer`);
-    await page.waitForLoadState("networkidle", { timeout: 30_000 });
 
     const excelScope = page.locator('div[data-view-mode="excel"]').first();
-    await expect(excelScope).toBeVisible({ timeout: 15_000 });
-
+    // The footer can keep background requests active, so `networkidle` is not
+    // a reliable readiness signal for this route. The rendered Excel scope is
+    // the contract this test needs to verify.
+    await expect(excelScope).toBeVisible({ timeout: 30_000 });
     // From general-budget-footer-table.tsx line ~347/375: inputs carry the
     // arbitrary-value class `h-[var(--excel-control-height)]` in Excel mode.
     const control = excelScope.locator('[class*="h-[var(--excel-control-height)]"]').first();

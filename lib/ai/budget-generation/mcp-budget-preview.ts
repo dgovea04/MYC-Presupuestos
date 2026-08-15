@@ -1,5 +1,3 @@
-import type { McpBudgetBlueprint } from "./mcp-blueprint";
-import type { McpCatalogItemMatch } from "./mcp-catalog-matcher";
 import { matchBlueprintItemsToCatalog } from "./mcp-catalog-matcher";
 import { scaleBlueprintQuantities } from "./mcp-quantity-scaler";
 import { extractBudgetBlueprintFromStoredPackage } from "./mcp-template-extractor";

@@ -45,7 +45,6 @@ export class AgentOrchestratorImpl implements AgentOrchestrator {
 
   async run(request: RunAgentRequest): Promise<AgentOrchestratorOutput> {
     const executionId = request.executionId ?? crypto.randomUUID();
-    const startTime = Date.now();
     const warnings: string[] = [];
     const toolActivity: AgentToolActivitySummary[] = [];
 
