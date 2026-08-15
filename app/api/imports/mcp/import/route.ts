@@ -1,6 +1,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { createBillingErrorResponse } from "@/lib/billing/api";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { analyzeProjectPackageBuffer } from "@/lib/mcp/import-preview";
@@ -47,6 +48,15 @@ export async function POST(request: Request) {
         mode: "restore_as_new_project",
       },
     );
+
+    await safelyTrackImportCompleted({
+      userId: session.user.id,
+      companyId: input.companyId,
+      projectId: result.projectId,
+      generalBudgetId: result.generalBudgetId,
+      import_source: "mcp",
+      format: "mcp",
+    });
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
@@ -117,6 +127,21 @@ function readRequiredFormString(formData: FormData, key: string) {
   }
 
   return value;
+}
+
+async function safelyTrackImportCompleted(payload: {
+  userId: string;
+  companyId: string;
+  projectId: string;
+  generalBudgetId: string;
+  import_source: string;
+  format: string;
+}) {
+  try {
+    await trackServerEvent("budget_imported", payload);
+  } catch {
+    // Analytics must not turn a successful import into an API failure.
+  }
 }
 
 class ImportRequestError extends Error {

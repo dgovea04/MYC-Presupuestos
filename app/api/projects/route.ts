@@ -19,7 +19,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const project = await createProject(session.user.id, body);
-    await safelyRecordProjectCreatedActivity(project.id, project.name, session.user.id, getRequestTemplateId(body));
+    const templateId = getRequestTemplateId(body);
+    await safelyRecordProjectCreatedActivity(project.id, project.name, session.user.id, templateId);
+    await safelyTrackProjectCreated(project.id, project.companyId, project.isDemo, templateId, session.user.id);
     await safelyTrackFirstNonDemoProjectCreated(project.id, project.companyId, project.isDemo, session.user.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
@@ -39,6 +41,26 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo crear el proyecto" }, { status: 400 });
+  }
+}
+
+async function safelyTrackProjectCreated(
+  projectId: string,
+  companyId: string,
+  isDemo: boolean,
+  templateId: string | null,
+  userId: string,
+) {
+  try {
+    await trackServerEvent("project_created", {
+      userId,
+      companyId,
+      projectId,
+      is_demo: isDemo,
+      creation_source: templateId ?? "manual",
+    });
+  } catch {
+    // Analytics must not turn a successful project creation into an API failure.
   }
 }
 

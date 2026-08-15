@@ -4,6 +4,8 @@ import { issueEmailVerification } from "@/lib/auth/email-verification";
 import { registerSchema } from "@/lib/validations/auth";
 import { hashPassword } from "@/lib/auth/password";
 import { registerUserWithCompanyAndDemo } from "@/lib/auth/registration";
+import { trackServerEvent } from "@/lib/analytics/events";
+import { getAnalyticsRequestContext } from "@/lib/analytics/request-context";
 
 export async function POST(request: Request) {
   try {
@@ -45,6 +47,20 @@ export async function POST(request: Request) {
       companyName: data.companyName,
       ruc: data.ruc || undefined,
     });
+
+    try {
+      const analyticsContext = getAnalyticsRequestContext(request);
+      await trackServerEvent("signup_completed", {
+        userId: registration.user.id,
+        clientId: analyticsContext.clientId,
+        companyId: registration.company.id,
+        registration_method: "email",
+        demo_status: registration.demoProject.status,
+        ...analyticsContext.params,
+      });
+    } catch {
+      // Analytics must not turn a successful registration into an API failure.
+    }
 
     let verificationEmailSent = true;
 

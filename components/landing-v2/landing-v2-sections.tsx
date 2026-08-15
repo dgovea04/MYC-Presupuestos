@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { TrackPricingView } from "@/components/analytics/track-pricing-view";
 import { Check, Minus, Star } from "lucide-react";
 import {
   comparisonRows,
@@ -236,6 +237,7 @@ export function LandingV2TestimonialsSection() {
 export function LandingV2PricingSection() {
   return (
     <section id="precios" className="bg-[#0f0f0f] px-4 py-20 sm:px-6 md:py-24">
+      <TrackPricingView />
       <div className="mx-auto max-w-[1200px]">
         <SectionHeading
           badge="Precios"

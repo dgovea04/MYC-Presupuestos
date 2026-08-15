@@ -15,6 +15,7 @@ import {
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { loginSchema } from "@/lib/validations/auth";
 import { ensureDemoProjectForCompany } from "@/lib/onboarding/demo-project";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { listUserWorkspaces } from "@/lib/workspace/active-workspace";
 
 const authSecret =
@@ -291,12 +292,18 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          await registerUserWithCompanyAndDemo({
+          const registration = await registerUserWithCompanyAndDemo({
             name: googleProfile.name ?? googleProfile.email.split("@")[0],
             email: googleProfile.email,
             avatarUrl: googleProfile.picture,
             emailVerifiedAt: new Date(),
           });
+          void trackServerEvent("signup_completed", {
+            userId: registration.user.id,
+            companyId: registration.company.id,
+            registration_method: "google",
+            demo_status: registration.demoProject?.status ?? "unknown",
+          }).catch(() => undefined);
         } catch {
           return false;
         }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getAuthSession } from "@/lib/auth/session";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { BUDGETS_LIST_CACHE_TAG, BUDGET_DETAIL_CACHE_TAG, deleteBudget, getBudgetDetailCacheTag, getBudgetHeaderById, getBudgetLiveUpdateSummaries, saveBudgetPatch, getBudgetById } from "@/lib/data/budgets";
 import { getProjectOverviewCacheTag, PROJECT_OVERVIEW_CACHE_TAG } from "@/lib/data/projects";
@@ -26,6 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const budget = await saveBudgetPatch(id, session.user.id, body);
+    await safelyTrackApuCreated(body, id, session.user.id, session.user.activeCompanyId ?? session.user.companyId);
     
     await recordActivityEvent({
       userId: session.user.id,
@@ -71,6 +73,51 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo eliminar el presupuesto" }, { status: 400 });
   }
+}
+
+async function safelyTrackApuCreated(
+  body: unknown,
+  budgetId: string,
+  userId: string,
+  companyId?: string | null,
+) {
+  if (!containsApuWrite(body)) {
+    return;
+  }
+
+  try {
+    await trackServerEvent("apu_created", {
+      userId,
+      companyId,
+      generalBudgetId: budgetId,
+      creation_source: "budget_editor",
+    });
+  } catch {
+    // Analytics must not turn a successful budget save into an API failure.
+  }
+}
+
+function containsApuWrite(body: unknown): boolean {
+  if (!isRecord(body)) {
+    return false;
+  }
+
+  const items = body.items;
+  if (!isRecord(items)) {
+    return false;
+  }
+
+  const createdItems = Array.isArray(items.create) ? items.create : [];
+  const updatedItems = Array.isArray(items.update) ? items.update : [];
+
+  return (
+    createdItems.some((item) => isRecord(item) && item.apu !== null && item.apu !== undefined) ||
+    updatedItems.some((item) => isRecord(item) && isRecord(item.changes) && "apu" in item.changes)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function revalidateBudgetPaths(projectId: string, budgetId: string) {

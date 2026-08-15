@@ -1,3 +1,4 @@
+import { trackServerEvent } from "@/lib/analytics/events";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
 import { buildChatMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
@@ -88,6 +89,12 @@ export async function POST(request: Request) {
               summary: data.message,
               userId: session.user.id,
             });
+            void trackServerEvent("khipu_used", {
+              userId: session.user.id,
+              companyId: session.user.activeCompanyId ?? session.user.companyId,
+              action_type: "chat_stream",
+              provider: effectiveProvider,
+            }).catch(() => undefined);
             writeEvent(controller, "final", finalResult);
           }
         } catch (error) {

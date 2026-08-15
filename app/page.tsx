@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { TrackLandingView } from "@/components/analytics/track-landing-view";
 import { BenefitsSection } from "@/components/landing/benefits-section";
 import { ComparisonSection } from "@/components/landing/comparison-section";
 import { FaqSection } from "@/components/landing/faq-section";
@@ -40,6 +41,7 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
+      <TrackLandingView path="/" />
       <LandingNavbar />
       <HeroSection />
       <LegacyPainSection />

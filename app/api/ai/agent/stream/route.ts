@@ -1,3 +1,4 @@
+import { trackServerEvent } from "@/lib/analytics/events";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import type { AiMessage } from "@/lib/ai/types";
 import { aiAgentRequestSchema } from "@/lib/ai/agent/validation";
@@ -284,6 +285,12 @@ export async function POST(request: Request) {
             }
 
             if (event.type === "final") {
+              void trackServerEvent("khipu_used", {
+                userId: session.user.id,
+                companyId: session.user.activeCompanyId ?? session.user.companyId,
+                action_type: "agent_stream",
+                provider: "agent",
+              }).catch(() => undefined);
               writeEvent(controller, "final", {
                 answer: event.result.answer,
                 warnings: event.result.warnings ?? [],

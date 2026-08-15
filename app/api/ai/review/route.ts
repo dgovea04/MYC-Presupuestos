@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { executeAiTask } from "@/lib/ai/gateway/execute";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
 import { withAiRoute } from "@/lib/ai/route-handler";
@@ -17,6 +18,12 @@ export async function POST(request: Request) {
       projectId: data.projectId,
       userId: session.user.id,
     });
+    void trackServerEvent("khipu_used", {
+      userId: session.user.id,
+      companyId: session.user.activeCompanyId ?? session.user.companyId,
+      action_type: "review",
+      provider: data.provider,
+    }).catch(() => undefined);
 
     return NextResponse.json(
       await attachProjectHistoryEntry({

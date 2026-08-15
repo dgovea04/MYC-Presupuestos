@@ -141,7 +141,14 @@ describe("POST /api/projects", () => {
       }),
     );
 
-    expect(mocks.trackServerEvent).not.toHaveBeenCalled();
+    expect(mocks.trackServerEvent).toHaveBeenCalledWith("project_created", {
+      userId: "user-1",
+      companyId: "company-1",
+      projectId: "project-2",
+      is_demo: false,
+      creation_source: "manual",
+    });
+    expect(mocks.trackServerEvent).not.toHaveBeenCalledWith("first_non_demo_project_created", expect.anything());
   });
 
   it("returns 201 when first-project analytics lookup fails", async () => {

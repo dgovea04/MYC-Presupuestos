@@ -1,10 +1,12 @@
 import type { DashboardPendingItem } from "@/lib/data/dashboard";
+import type { OnboardingRecommendation } from "@/lib/dashboard/onboarding-recommendation";
 
 export type DashboardOnboardingStats = {
   budgetsCount: number;
   companiesCount: number;
   pendingItems: DashboardPendingItem[];
   projectsCount: number;
+  recommendedAhaMoment?: OnboardingRecommendation | null;
 };
 
 export type DashboardOnboardingStep = {
@@ -17,8 +19,7 @@ export type DashboardOnboardingStep = {
 export function buildDashboardOnboardingSteps(stats: DashboardOnboardingStats): DashboardOnboardingStep[] {
   const missingFormula = stats.pendingItems.find((item) => item.type === "MISSING_POLYNOMIAL_FORMULA");
   const missingAdjustments = stats.pendingItems.find((item) => item.type === "MISSING_ADJUSTMENTS");
-
-  return [
+  const baseSteps: DashboardOnboardingStep[] = [
     {
       title: "Empresa",
       description: "Completa los datos que apareceran en reportes y firmas.",
@@ -49,6 +50,20 @@ export function buildDashboardOnboardingSteps(stats: DashboardOnboardingStats): 
       href: missingAdjustments?.href ?? "/dashboard?priority=medium",
       completed: stats.projectsCount > 0 && stats.budgetsCount > 0 && !missingAdjustments,
     },
+  ];
+
+  if (!stats.recommendedAhaMoment) {
+    return baseSteps;
+  }
+
+  return [
+    {
+      title: "Activación",
+      description: stats.recommendedAhaMoment.description,
+      href: stats.recommendedAhaMoment.href,
+      completed: false,
+    },
+    ...baseSteps,
   ];
 }
 

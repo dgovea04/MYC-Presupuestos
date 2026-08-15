@@ -3,6 +3,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { recordActivityEvent } from "@/lib/data/activity-events";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -73,6 +74,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       detail: formula.name,
       href: activityHref,
     });
+    await safelyTrackFormulaCreated(formula.budgetId, session.user.id, session.user.activeCompanyId ?? session.user.companyId);
     await revalidatePolynomialFormulaCaches(formula.budgetId, session.user.id, formula.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
@@ -109,6 +111,7 @@ export async function PATCH(request: Request) {
       detail: formula.name,
       href: activityHref,
     });
+    await safelyTrackFormulaCreated(formula.budgetId, session.user.id, session.user.activeCompanyId ?? session.user.companyId);
     await revalidatePolynomialFormulaCaches(formula.budgetId, session.user.id, formula.id);
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
@@ -124,6 +127,19 @@ export async function PATCH(request: Request) {
       },
       { status: 400 },
     );
+  }
+}
+
+async function safelyTrackFormulaCreated(budgetId: string, userId: string, companyId?: string | null) {
+  try {
+    await trackServerEvent("formula_created", {
+      userId,
+      companyId,
+      generalBudgetId: budgetId,
+      source: "budget_polynomial_formula",
+    });
+  } catch {
+    // Analytics must not turn a successful formula save into an API failure.
   }
 }
 

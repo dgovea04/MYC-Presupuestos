@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { trackClientEvent } from "@/lib/analytics/client";
 import { GoogleSignInButton } from "@/components/auth/google-signin-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,10 @@ export function RegisterForm() {
   const [error, setError] = useState("");
 
   async function handleSubmit(formData: FormData) {
+    trackClientEvent("signup_started", {
+      cta_location: "register_form",
+      landing_path: document.referrer || window.location.pathname,
+    });
     setLoading(true);
     setError("");
 

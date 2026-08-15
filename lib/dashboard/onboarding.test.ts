@@ -43,6 +43,27 @@ describe("buildDashboardOnboardingSteps", () => {
     expect(steps.find((step) => step.title === "Seguimiento")?.href).toBe("/budgets/budget-1/polynomial-formula?focus=adjustment");
   });
 
+  it("adds the measured activation recommendation before the base flow", () => {
+    const steps = buildDashboardOnboardingSteps({
+      budgetsCount: 0,
+      companiesCount: 1,
+      pendingItems: [],
+      projectsCount: 0,
+      recommendedAhaMoment: {
+        title: "Prioriza importar un presupuesto",
+        description: "La importación puede llevar más rápido a los usuarios al valor técnico del producto.",
+        href: "/imports/mcp",
+      },
+    });
+
+    expect(steps[0]).toEqual({
+      title: "Activación",
+      description: "La importación puede llevar más rápido a los usuarios al valor técnico del producto.",
+      href: "/imports/mcp",
+      completed: false,
+    });
+  });
+
   it("marks the full base flow as completed once the project has budget, formula and follow-up", () => {
     const steps = buildDashboardOnboardingSteps({
       budgetsCount: 1,

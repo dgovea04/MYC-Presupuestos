@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { createBillingErrorResponse } from "@/lib/billing/api";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { parseRw7WorkbookToS10Snapshot } from "@/lib/rw7/excel-import";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
 
@@ -43,6 +44,15 @@ export async function POST(request: Request) {
       sourceSystem: "RW7",
     });
 
+    await safelyTrackImportCompleted({
+      userId: session.user.id,
+      companyId,
+      projectId: result.projectId,
+      generalBudgetId: result.generalBudgetId,
+      import_source: "rw7",
+      format: "xlsx",
+    });
+
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag("dashboard-analytics", "max");
@@ -62,6 +72,21 @@ export async function POST(request: Request) {
       { error: error instanceof Error ? error.message : "No se pudo importar el archivo RW7." },
       { status: 400 },
     );
+  }
+}
+
+async function safelyTrackImportCompleted(payload: {
+  userId: string;
+  companyId: string;
+  projectId: string;
+  generalBudgetId: string;
+  import_source: string;
+  format: string;
+}) {
+  try {
+    await trackServerEvent("budget_imported", payload);
+  } catch {
+    // Analytics must not turn a successful import into an API failure.
   }
 }
 

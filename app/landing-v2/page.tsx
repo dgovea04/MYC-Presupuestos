@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { TrackLandingView } from "@/components/analytics/track-landing-view";
 import { LandingV2Hero } from "@/components/landing-v2/landing-v2-hero";
 import { LandingV2Navbar } from "@/components/landing-v2/landing-v2-navbar";
 import {
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
 export default function LandingV2Page() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#0f0f0f] text-white">
+      <TrackLandingView path="/landing-v2" variant="v2" />
       <LandingV2Navbar />
       <LandingV2Hero />
       <LandingV2FeaturesSection />

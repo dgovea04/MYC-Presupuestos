@@ -46,6 +46,7 @@ import { DashboardAnalyticsSection } from "@/components/dashboard/dashboard-anal
 import { DashboardAnalyticsSectionSkeleton } from "@/components/dashboard/dashboard-analytics-section-skeleton";
 import { getProjectStatusLabel } from "@/lib/project-status";
 import { getUserSettings } from "@/lib/data/settings";
+import { getGlobalOnboardingRecommendation } from "@/lib/data/global-aha-moment";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { KhipuQualityMetrics } from "@/components/dashboard/khipu-quality-metrics";
 import { KhipuQualityMetricsSkeleton } from "@/components/dashboard/khipu-quality-metrics-skeleton";
@@ -63,10 +64,11 @@ export default async function DashboardPage({
 
   const resolvedSearchParams = (await searchParams) ?? {};
   const activeWorkspaceId = await getActiveWorkspaceId(session.user.id);
-  const [stats, settings, license] = await Promise.all([
+  const [stats, settings, license, ahaMomentRecommendation] = await Promise.all([
     getDashboardStats(session.user.id, activeWorkspaceId),
     getUserSettings(session.user.id),
     getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId }),
+    getGlobalOnboardingRecommendation(),
   ]);
   const canUseKhipu = hasFeatureAccess(license, "khipu.agent");
   const canUseTemplates = hasFeatureAccess(license, "templates.budget");
@@ -103,6 +105,7 @@ export default async function DashboardPage({
     companiesCount: stats.companiesCount,
     pendingItems: stats.pendingItems,
     projectsCount: stats.realProjectsCount,
+    recommendedAhaMoment: ahaMomentRecommendation,
   };
   const onboardingSteps = buildDashboardOnboardingSteps(onboardingStats);
   const isDemoOnlyWorkspace = stats.projectsCount > 0 && stats.realProjectsCount === 0;

@@ -104,7 +104,13 @@ describe("central exports route", () => {
       }),
     );
 
-    expect(trackServerEvent).not.toHaveBeenCalled();
+    expect(trackServerEvent).toHaveBeenCalledWith("export_completed", {
+      userId: "user-1",
+      companyId: "company-1",
+      export_target: "budget",
+      format: "xlsx",
+    });
+    expect(trackServerEvent).not.toHaveBeenCalledWith("demo_export_completed", expect.anything());
   });
 
   it("does not look up or track a demo export when the company id is empty", async () => {

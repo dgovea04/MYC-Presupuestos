@@ -2,6 +2,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { createBillingErrorResponse } from "@/lib/billing/api";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
@@ -23,6 +24,15 @@ export async function POST(request: Request) {
     const result = await importS10SnapshotToMyc(session.user.id, snapshot, {
       budgetCode: input.budgetCode,
       companyId: input.companyId,
+    });
+
+    await safelyTrackImportCompleted({
+      userId: session.user.id,
+      companyId: input.companyId,
+      projectId: result.projectId,
+      generalBudgetId: result.generalBudgetId,
+      import_source: "s10",
+      format: "json",
     });
 
     revalidatePath("/dashboard");
@@ -128,6 +138,21 @@ function readRequiredRecordString(record: Record<string, unknown>, key: string) 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+async function safelyTrackImportCompleted(payload: {
+  userId: string;
+  companyId: string;
+  projectId: string;
+  generalBudgetId: string;
+  import_source: string;
+  format: string;
+}) {
+  try {
+    await trackServerEvent("budget_imported", payload);
+  } catch {
+    // Analytics must not turn a successful import into an API failure.
+  }
 }
 
 class ImportRequestError extends Error {

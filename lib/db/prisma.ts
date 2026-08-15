@@ -14,7 +14,8 @@ function hasPolynomialFormulaDelegate(client: PrismaClient | undefined) {
     typeof (client as PrismaClient & { polynomialFormula?: unknown }).polynomialFormula !== "undefined" &&
     typeof (client as PrismaClient & { activityEvent?: unknown }).activityEvent !== "undefined" &&
     typeof (client as PrismaClient & { membershipPlan?: unknown }).membershipPlan !== "undefined" &&
-    typeof (client as PrismaClient & { budgetTemplate?: unknown }).budgetTemplate !== "undefined"
+    typeof (client as PrismaClient & { budgetTemplate?: unknown }).budgetTemplate !== "undefined" &&
+    typeof (client as PrismaClient & { marketingEvent?: unknown }).marketingEvent !== "undefined"
   );
 }
 

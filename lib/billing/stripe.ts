@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { prisma as defaultPrisma } from "@/lib/db/prisma";
+import { trackServerEvent } from "@/lib/analytics/events";
 
 type StripeCheckoutSession = {
   id: string;
@@ -226,6 +227,7 @@ export async function syncStripeSubscription({
     where: { stripeSubscriptionId: subscription.id },
     select: { pastDueStartedAt: true, status: true, stripeCustomerId: true },
   });
+  const isNewSubscription = !existingSubscription;
   const write = mapStripeSubscription(subscription, userId, existingSubscription?.status === "PAST_DUE" ? existingSubscription.pastDueStartedAt ?? null : null);
 
   await prisma.billingSubscription.upsert({
@@ -246,6 +248,15 @@ export async function syncStripeSubscription({
     where: { id: userId },
     data: { membershipPlanId: proPlan.id },
   });
+
+  if (isNewSubscription) {
+    void trackServerEvent("subscription_created", {
+      userId,
+      provider: "stripe",
+      target_plan: "pro",
+      subscription_status: write.status,
+    }).catch(() => undefined);
+  }
 }
 
 function mapStripeSubscription(subscription: StripeSubscriptionRecord, userId: string, existingPastDueStartedAt: Date | null): BillingSubscriptionWrite {

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { GoogleAnalytics } from "@/components/analytics/google-analytics";
+import { IdentifyAnalyticsUser } from "@/components/analytics/identify-user";
 import type { CSSProperties, ReactNode } from "react";
 import { GlobalAiAssistantProvider } from "@/components/ai/global-ai-assistant-provider";
 import { getAuthSession } from "@/lib/auth/session";
@@ -66,6 +68,8 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans" data-theme={initialTheme} suppressHydrationWarning>
+        <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+        <IdentifyAnalyticsUser userId={session?.user?.id ?? null} />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){var w=localStorage.getItem('myc-khipu-agent-chat-panel-width');if(w){document.documentElement.style.setProperty('--chat-width',w+'px');}})()`,

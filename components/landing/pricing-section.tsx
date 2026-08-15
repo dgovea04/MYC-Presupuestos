@@ -1,4 +1,5 @@
 import { Check } from "lucide-react";
+import { TrackPricingView } from "@/components/analytics/track-pricing-view";
 import { pricingPlans } from "@/components/landing/landing-content";
 import { LandingLinkButton } from "@/components/landing/landing-link-button";
 import { SectionHeading } from "@/components/landing/section-heading";
@@ -27,6 +28,7 @@ const planMeta: Record<string, { audience: string; cadence: string; note: string
 export function PricingSection() {
   return (
     <section id="pricing" className="scroll-mt-28 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] py-20 md:py-28">
+      <TrackPricingView />
       <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 xl:px-12">
         <SectionHeading
           badge="Precios"

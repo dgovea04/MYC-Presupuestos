@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { CheckCircle2, Lock, Sparkles } from "lucide-react";
+import { trackClientEvent } from "@/lib/analytics/client";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -49,6 +52,7 @@ export function UpgradeCTA({
         <Link
           className="theme-filter-button-active inline-flex h-10 min-w-[10.75rem] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-bg)]"
           href="/account"
+          onClick={() => trackClientEvent("upgrade_clicked", { source_location: "upgrade_cta", target_plan: "pro" })}
         >
           <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
           <span className="whitespace-nowrap">Actualizar a Pro</span>

@@ -309,8 +309,9 @@ model User {
   companies                     Company[]
   companyMemberships            CompanyMembership[]
   settings                      UserSettings?
-  activityEvents                ActivityEvent[]
-  membershipPlan                MembershipPlan?             @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
+  activityEvents                 ActivityEvent[]
+  marketingEvents                MarketingEvent[]
+  membershipPlan                 MembershipPlan?             @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
   aiUsagePeriods                AiUsagePeriod[]
   aiTokenLedger                 AiTokenLedger[]             @relation("AiTokenLedgerUser")
   aiTokenAdjustments            AiTokenLedger[]             @relation("AiTokenLedgerAdmin")
@@ -442,6 +443,36 @@ model AdminAuditLog {
   @@index([targetUserId, createdAt(sort: Desc)])
   @@index([action, createdAt(sort: Desc)])
   @@map("admin_audit_logs")
+}
+
+model MarketingEvent {
+  id                   String   @id @default(cuid())
+  name                 String
+  userId               String?
+  clientId             String?
+  projectId            String?
+  budgetId             String?
+  eventVersion         String   @default("1")
+  pagePath             String?
+  plan                 String?
+  isDemo               Boolean?
+  utmSource            String?
+  utmMedium            String?
+  utmCampaign          String?
+  utmContent           String?
+  firstTouchUtmSource  String?
+  firstTouchUtmMedium  String?
+  firstTouchUtmCampaign String?
+  firstTouchUtmContent String?
+  parameters           Json?
+  occurredAt           DateTime @default(now())
+  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name, occurredAt(sort: Desc)])
+  @@index([userId, occurredAt(sort: Desc)])
+  @@index([clientId, occurredAt(sort: Desc)])
+  @@index([utmSource, occurredAt(sort: Desc)])
+  @@map("marketing_events")
 }
 
 model MembershipPlan {

@@ -1,11 +1,15 @@
+"use client";
+
 import Link from "next/link";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, MouseEventHandler, ReactNode } from "react";
+import { trackClientEvent } from "@/lib/analytics/client";
 import { cn } from "@/lib/utils";
 
-type LandingLinkButtonProps = Omit<ComponentProps<typeof Link>, "className" | "children"> & {
+type LandingLinkButtonProps = Omit<ComponentProps<typeof Link>, "className" | "children" | "onClick"> & {
   children: ReactNode;
   variant?: "primary" | "secondary" | "ghost";
   className?: string;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
 };
 
 const baseClasses =
@@ -22,11 +26,24 @@ export function LandingLinkButton({
   children,
   variant = "primary",
   className,
+  onClick,
   ...props
 }: LandingLinkButtonProps) {
+  function handleClick(event: Parameters<MouseEventHandler<HTMLAnchorElement>>[0]) {
+    if (typeof props.href === "string" && props.href.startsWith("/register")) {
+      trackClientEvent("signup_started", {
+        cta_location: "landing_link_button",
+        landing_path: window.location.pathname,
+      });
+    }
+
+    onClick?.(event);
+  }
+
   return (
     <Link
       {...props}
+      onClick={handleClick}
       className={cn(
         baseClasses,
         variantClasses[variant],

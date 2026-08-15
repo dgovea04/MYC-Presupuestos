@@ -22,7 +22,9 @@ export async function POST(request: Request) {
     }
 
     const result = await createCentralizedExport(body, session.user.id);
-    await safelyTrackDemoExportCompleted(body, session.user.id, session.user.activeCompanyId ?? session.user.companyId ?? "");
+    const companyId = session.user.activeCompanyId ?? session.user.companyId ?? "";
+    await safelyTrackExportCompleted(body, session.user.id, companyId);
+    await safelyTrackDemoExportCompleted(body, session.user.id, companyId);
     return createExportResponse(result);
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);
@@ -44,6 +46,23 @@ const BUDGET_EXPORT_TARGETS: readonly ExportTarget[] = [
   "polynomial_formula",
   "work_schedule",
 ];
+
+async function safelyTrackExportCompleted(request: ExportRequest, userId: string, companyId: string) {
+  if (!companyId) {
+    return;
+  }
+
+  try {
+    await trackServerEvent("export_completed", {
+      userId,
+      companyId: companyId || null,
+      export_target: request.target,
+      format: request.format,
+    });
+  } catch {
+    // Analytics must not turn a completed export into an API failure.
+  }
+}
 
 async function safelyTrackDemoExportCompleted(request: ExportRequest, userId: string, companyId: string) {
   try {

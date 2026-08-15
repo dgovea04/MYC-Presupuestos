@@ -7,6 +7,12 @@ import { AdminAuditRetentionControl } from "@/components/admin/admin-audit-reten
 import { AdminBulkUserActions } from "@/components/admin/admin-bulk-user-actions";
 import { AdminDeletionApprovals } from "@/components/admin/admin-deletion-approvals";
 import { AdminSecurityOverview } from "@/components/admin/admin-security-overview";
+import { AdminMarketingAnalytics } from "@/components/admin/admin-marketing-analytics";
+import { AdminMarketingReconciliation } from "@/components/admin/admin-marketing-reconciliation";
+import { AdminMarketingHealth } from "@/components/admin/admin-marketing-health";
+import { AdminMarketingAlerts } from "@/components/admin/admin-marketing-alerts";
+import { AdminMarketingMonetization } from "@/components/admin/admin-marketing-monetization";
+import { AdminPageTabs, normalizeAdminTab } from "@/components/admin/admin-page-tabs";
 import { AdminCloudAiSettings } from "@/components/admin/admin-cloud-ai-settings";
 import { AdminMfaSettings } from "@/components/admin/admin-mfa-settings";
 import { AdminUserAccessForm } from "@/components/admin/admin-user-access-form";
@@ -32,6 +38,11 @@ import {
 import { getUserSettings } from "@/lib/data/settings";
 import { listPendingAdminDeletionApprovals, listScheduledAdminDeletions } from "@/lib/data/admin-deletion-approvals";
 import { getAdminSecurityOverview } from "@/lib/data/admin-security";
+import { getAdminMarketingAnalytics, normalizeAdminMarketingDateRange } from "@/lib/data/admin-marketing-analytics";
+import { getAdminMarketingReconciliation } from "@/lib/data/admin-marketing-reconciliation";
+import { getAdminMarketingHealth } from "@/lib/data/admin-marketing-health";
+import { buildMarketingAlerts } from "@/lib/data/admin-marketing-alerts";
+import { getAdminMarketingMonetization } from "@/lib/data/admin-marketing-monetization";
 
 export default async function AdminPage({
   searchParams,
@@ -45,6 +56,9 @@ export default async function AdminPage({
     auditQ?: string;
     auditAction?: string;
     auditPage?: string;
+    marketingFrom?: string;
+    marketingTo?: string;
+    adminTab?: string;
   }>;
 }) {
   const session = await requireAdminSession();
@@ -82,33 +96,73 @@ export default async function AdminPage({
     action: normalizeAdminAuditAction(resolvedSearchParams.auditAction),
     page: normalizeAdminAuditPage(Number(resolvedSearchParams.auditPage ?? "1")),
   };
-  const [settings, stats, auditLogs, deletionApprovals, scheduledDeletions, securityOverview] = await Promise.all([
+  const marketingRange = normalizeAdminMarketingDateRange(resolvedSearchParams.marketingFrom, resolvedSearchParams.marketingTo);
+  const adminTab = normalizeAdminTab(resolvedSearchParams.adminTab);
+  const [settings, stats, auditLogs, deletionApprovals, scheduledDeletions, securityOverview, marketingAnalytics, marketingReconciliation, marketingHealth, marketingMonetization] = await Promise.all([
     getUserSettings(session.user.id),
     getAdminDashboardStats(filters),
     listAdminAuditLogs(auditFilters),
     listPendingAdminDeletionApprovals(),
     listScheduledAdminDeletions(),
     getAdminSecurityOverview(),
+    getAdminMarketingAnalytics(marketingRange),
+    getAdminMarketingReconciliation(marketingRange),
+    getAdminMarketingHealth(marketingRange),
+    getAdminMarketingMonetization(marketingRange),
   ]);
 
   return (
     <AppShell currentUser={session.user} settings={settings}>
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard title="Usuarios" value={String(stats.metrics.totalUsers)} description="Cuentas registradas filtradas." icon={<Users className="h-5 w-5" />} />
-        <AdminStatCard title="Activos" value={String(stats.metrics.activeUsers)} description={`${stats.metrics.suspendedUsers} usuarios suspendidos.`} icon={<ShieldCheck className="h-5 w-5" />} />
-        <AdminStatCard title="Tokens IA del mes" value={formatTokenCount(stats.metrics.monthlyConsumedTokens)} description="Consumo persistente del periodo actual." icon={<Bot className="h-5 w-5" />} />
-        <AdminStatCard title="Solicitudes IA" value={String(stats.actionUsage.reduce((sum, item) => sum + item.requests, 0))} description="Agrupadas por accion IA." icon={<Activity className="h-5 w-5" />} />
-      </section>
+      <div className="space-y-4">
+        <div>
+          <p className="theme-strong-text text-2xl font-semibold tracking-tight">Administración</p>
+          <p className="theme-muted-text mt-1 text-sm">Gestiona adquisición, producto, usuarios, facturación y seguridad desde un solo lugar.</p>
+        </div>
+        <AdminPageTabs
+          activeTab={adminTab}
+          marketingFrom={resolvedSearchParams.marketingFrom}
+          marketingTo={resolvedSearchParams.marketingTo}
+        />
+      </div>
 
-      <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card className="theme-surface-card">
+      {adminTab === "analytics" ? (
+        <>
+          <AdminMarketingAnalytics analytics={marketingAnalytics} range={marketingRange} />
+          <AdminMarketingMonetization monetization={marketingMonetization} />
+          <AdminMarketingReconciliation reconciliation={marketingReconciliation} />
+          <AdminMarketingHealth health={marketingHealth} />
+          <AdminMarketingAlerts alerts={buildMarketingAlerts({ reconciliation: marketingReconciliation, health: marketingHealth })} />
+        </>
+      ) : null}
+
+      {adminTab === "users" || adminTab === "ai" ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {adminTab === "users" ? (
+            <>
+              <AdminStatCard title="Usuarios" value={String(stats.metrics.totalUsers)} description="Cuentas registradas filtradas." icon={<Users className="h-5 w-5" />} />
+              <AdminStatCard title="Activos" value={String(stats.metrics.activeUsers)} description={`${stats.metrics.suspendedUsers} usuarios suspendidos.`} icon={<ShieldCheck className="h-5 w-5" />} />
+            </>
+          ) : null}
+          {adminTab === "ai" ? (
+            <>
+              <AdminStatCard title="Tokens IA del mes" value={formatTokenCount(stats.metrics.monthlyConsumedTokens)} description="Consumo persistente del periodo actual." icon={<Bot className="h-5 w-5" />} />
+              <AdminStatCard title="Solicitudes IA" value={String(stats.actionUsage.reduce((sum, item) => sum + item.requests, 0))} description="Agrupadas por accion IA." icon={<Activity className="h-5 w-5" />} />
+            </>
+          ) : null}
+        </section>
+      ) : null}
+
+      {adminTab === "billing" || adminTab === "ai" ? (
+        <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+          {adminTab === "billing" ? (
+            <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Membresias" description="Distribucion de usuarios y cupos mensuales por plan." />
             <div className="grid gap-3">
               {stats.plans.map((plan) => (
                 <Link
                   key={plan.slug}
-                  href={`/admin?plan=${plan.slug}`}
+                  href={`/admin?adminTab=billing&plan=${plan.slug}`}
                   scroll={false}
                   className="theme-surface-card rounded-2xl border px-4 py-3 transition hover:border-sky-300 hover:bg-[var(--app-primary-muted)]"
                 >
@@ -123,9 +177,11 @@ export default async function AdminPage({
               ))}
             </div>
           </CardContent>
-        </Card>
+            </Card>
+          ) : null}
 
-        <Card className="theme-surface-card">
+          {adminTab === "ai" ? (
+            <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Uso IA por accion" description="Consumo mensual del ledger para chat, APU, revision y JSON." />
             {stats.actionUsage.length === 0 ? (
@@ -145,11 +201,14 @@ export default async function AdminPage({
               </div>
             )}
           </CardContent>
-        </Card>
-      </section>
+            </Card>
+          ) : null}
+        </section>
+      ) : null}
 
-      <section>
-        <Card className="theme-surface-card">
+      {adminTab === "billing" ? (
+        <section>
+          <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader
               title="Solicitudes Yape pendientes"
@@ -157,10 +216,12 @@ export default async function AdminPage({
             />
             <ManualPaymentRequests requests={stats.manualPaymentRequests} />
           </CardContent>
-        </Card>
-      </section>
+          </Card>
+        </section>
+      ) : null}
 
-      <section>
+      {adminTab === "ai" ? (
+        <section>
         {session.user.isSuperAdmin ? (
           <div className="space-y-6">
             <AdminMfaSettings />
@@ -180,40 +241,51 @@ export default async function AdminPage({
           </Card>
         )}
       </section>
+      ) : null}
 
-      <section>
-        <AdminSecurityOverview overview={securityOverview} />
-      </section>
+      {adminTab === "security" ? (
+        <>
+          <section>
+            <AdminSecurityOverview overview={securityOverview} />
+          </section>
 
-      <section>
-        <AdminDeletionApprovals
-          currentUserId={session.user.id}
-          canApprove={canApproveDeletion}
-          canManageGracePeriod={canManageDeletionGracePeriod}
-          approvals={deletionApprovals}
-          scheduledDeletions={scheduledDeletions}
-        />
-      </section>
+          <section>
+            <AdminDeletionApprovals
+              currentUserId={session.user.id}
+              canApprove={canApproveDeletion}
+              canManageGracePeriod={canManageDeletionGracePeriod}
+              approvals={deletionApprovals}
+              scheduledDeletions={scheduledDeletions}
+            />
+          </section>
+        </>
+      ) : null}
 
-      <section>
-        <AdminAuditRetentionControl enabled={canManageAuditRetention} />
-      </section>
+      {adminTab === "audit" ? (
+        <>
+          <section>
+            <AdminAuditRetentionControl enabled={canManageAuditRetention} />
+          </section>
 
-      <section>
-        <AdminAuditLog
-          entries={auditLogs.entries}
-          actions={auditLogs.actions}
-          filters={auditLogs.filters}
-          pagination={auditLogs.pagination}
-          preservedFilters={filters}
-        />
-      </section>
+          <section>
+            <AdminAuditLog
+              entries={auditLogs.entries}
+              actions={auditLogs.actions}
+              filters={auditLogs.filters}
+              pagination={auditLogs.pagination}
+              preservedFilters={filters}
+            />
+          </section>
+        </>
+      ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
+      {adminTab === "users" ? (
+        <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
         <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalPanel title="Usuarios" description="Busca y administra usuarios con filtros server-side, rol, estado, plan y cupo extra mensual." />
             <form action="/admin" method="get" className="flex flex-col gap-2 sm:flex-row">
+              <input type="hidden" name="adminTab" value="users" />
               <input
                 name="q"
                 defaultValue={filters.query}
@@ -324,7 +396,8 @@ export default async function AdminPage({
             />
           </CardContent>
         </Card>
-      </section>
+        </section>
+      ) : null}
     </AppShell>
   );
 }
@@ -338,6 +411,7 @@ function buildAdminUsersHref(filters: {
 }) {
   const params = new URLSearchParams();
 
+  params.set("adminTab", "users");
   if (filters.query) params.set("q", filters.query);
   if (filters.plan) params.set("plan", filters.plan);
   if (filters.role) params.set("role", filters.role);

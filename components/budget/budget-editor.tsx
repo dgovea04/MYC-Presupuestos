@@ -24,6 +24,7 @@ import { buildAiBudgetReviewSummary } from "@/lib/ai/budget-review";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { usePublishBudgetSelection } from "@/hooks/use-publish-budget-selection";
 import { KhipuActionRegistryProvider } from "@/components/ai/khipu-action-registry";
+import { trackClientEvent } from "@/lib/analytics/client";
 import { cn } from "@/lib/utils";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { SaveBudgetTemplateButton } from "@/components/budget/save-budget-template-button";
@@ -1298,6 +1299,10 @@ export function BudgetEditor({
       return;
     }
 
+    trackClientEvent("excel_paste_used", {
+      row_count_bucket: toPasteRowCountBucket(guidedPaste.rows.length + guidedPaste.entries.length),
+      paste_source: "excel_import_panel",
+    });
     setError("");
     setPendingPaste({
       rawText,
@@ -1604,6 +1609,10 @@ export function BudgetEditor({
     );
     if (guidedPaste.rows.length === 0 && guidedPaste.entries.length === 0) return;
 
+    trackClientEvent("excel_paste_used", {
+      row_count_bucket: toPasteRowCountBucket(guidedPaste.rows.length + guidedPaste.entries.length),
+      paste_source: "clipboard",
+    });
     event.preventDefault();
     closeCatalogSelector();
     setPendingPaste({
@@ -5057,6 +5066,12 @@ function formatWorkbookCellValue(value: CellValue | undefined) {
   }
 
   return String(value);
+}
+
+function toPasteRowCountBucket(rowCount: number) {
+  if (rowCount <= 1) return "1";
+  if (rowCount <= 10) return "2-10";
+  return "11+";
 }
 
 function getPasteFeedbackMessage(importedItems: number, importedLevels: number) {

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   getDashboardStats: vi.fn(),
   getEffectiveWorkspaceLicense: vi.fn(),
+  getGlobalOnboardingRecommendation: vi.fn(),
   getUserSettings: vi.fn(),
   hasFeatureAccess: vi.fn(),
 }));
@@ -47,6 +48,10 @@ vi.mock("@/lib/data/settings", () => ({
   getUserSettings: mocks.getUserSettings,
 }));
 
+vi.mock("@/lib/data/global-aha-moment", () => ({
+  getGlobalOnboardingRecommendation: mocks.getGlobalOnboardingRecommendation,
+}));
+
 vi.mock("@/lib/workspace/active-workspace", () => ({
   getActiveWorkspaceId: mocks.getActiveWorkspaceId,
 }));
@@ -66,6 +71,7 @@ describe("DashboardPage", () => {
     mocks.getDashboardStats.mockResolvedValue(createDashboardStats());
     mocks.getUserSettings.mockResolvedValue({ currencyDecimals: 2, dateFormat: "DD/MM/YYYY" });
     mocks.getEffectiveWorkspaceLicense.mockResolvedValue({ availableFeatures: [] });
+    mocks.getGlobalOnboardingRecommendation.mockResolvedValue(null);
     mocks.hasFeatureAccess.mockReturnValue(false);
   });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 import { getAuthSession } from "@/lib/auth/session";
+import { trackServerEvent } from "@/lib/analytics/events";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { parseDelphinDprjToS10Snapshot } from "@/lib/delphin/dprj-import";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
@@ -42,6 +43,15 @@ export async function POST(request: Request) {
       sourceSystem: "DELPHIN",
     });
 
+    await safelyTrackImportCompleted({
+      userId: session.user.id,
+      companyId,
+      projectId: result.projectId,
+      generalBudgetId: result.generalBudgetId,
+      import_source: "delphin",
+      format: "dprj",
+    });
+
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
     revalidateTag("dashboard-analytics", "max");
@@ -58,6 +68,21 @@ export async function POST(request: Request) {
       { error: error instanceof Error ? error.message : "No se pudo importar el archivo Delphin Express." },
       { status: 400 },
     );
+  }
+}
+
+async function safelyTrackImportCompleted(payload: {
+  userId: string;
+  companyId: string;
+  projectId: string;
+  generalBudgetId: string;
+  import_source: string;
+  format: string;
+}) {
+  try {
+    await trackServerEvent("budget_imported", payload);
+  } catch {
+    // Analytics must not turn a successful import into an API failure.
   }
 }
 
