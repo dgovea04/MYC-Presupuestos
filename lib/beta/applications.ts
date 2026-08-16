@@ -4,6 +4,7 @@ import { assignBetaGrant } from "@/lib/beta/assignments";
 import { persistMarketingEvent } from "@/lib/analytics/store";
 import { prisma } from "@/lib/db/prisma";
 import { recordAdminAudit } from "@/lib/data/admin-audit";
+import { notifyBetaApplicationApproved, notifyBetaApplicationReceived } from "@/lib/beta/notifications";
 
 export const FOUNDING_USERS_CAMPAIGN = "founding-users-peru";
 export const FOUNDING_USERS_DURATION_DAYS = 60;
@@ -89,6 +90,11 @@ export async function createBetaApplication(input: unknown) {
       utm_campaign: parsed.metadata?.utm_campaign,
       utm_content: parsed.metadata?.utm_content,
     },
+  }).catch(() => undefined);
+
+  await notifyBetaApplicationReceived({
+    email: application.email,
+    name: application.name,
   }).catch(() => undefined);
 
   return application;
@@ -180,6 +186,11 @@ export async function reviewBetaApplication(options: {
     detail: normalizeNote(options.reviewNote) ?? "Solicitud beta aprobada y acceso Pro temporal asignado.",
     metadata: { applicationId: application.id, campaignId: campaign.id, grantId: grant.grantId },
   });
+
+  await notifyBetaApplicationApproved({
+    email: application.email,
+    name: application.name,
+  }).catch(() => undefined);
 
   return { application: approved, grant };
 }

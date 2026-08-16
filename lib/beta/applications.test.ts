@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   assignBetaGrant: vi.fn(),
   persistMarketingEvent: vi.fn(),
+  notifyBetaApplicationReceived: vi.fn(),
+  notifyBetaApplicationApproved: vi.fn(),
   recordAdminAudit: vi.fn(),
 }));
 
@@ -38,6 +40,10 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/lib/beta/assignments", () => ({ assignBetaGrant: mocks.assignBetaGrant }));
 vi.mock("@/lib/analytics/store", () => ({ persistMarketingEvent: mocks.persistMarketingEvent }));
+vi.mock("@/lib/beta/notifications", () => ({
+  notifyBetaApplicationReceived: mocks.notifyBetaApplicationReceived,
+  notifyBetaApplicationApproved: mocks.notifyBetaApplicationApproved,
+}));
 vi.mock("@/lib/data/admin-audit", () => ({ recordAdminAudit: mocks.recordAdminAudit }));
 
 import {
@@ -52,6 +58,8 @@ describe("beta application service", () => {
   beforeEach(() => {
     for (const mock of Object.values(mocks)) mock.mockReset();
     mocks.persistMarketingEvent.mockResolvedValue(undefined);
+    mocks.notifyBetaApplicationReceived.mockResolvedValue({ configured: true, delivered: true });
+    mocks.notifyBetaApplicationApproved.mockResolvedValue({ configured: true, delivered: true });
     mocks.recordAdminAudit.mockResolvedValue(undefined);
   });
 
@@ -87,6 +95,10 @@ describe("beta application service", () => {
       name: "pilot_application_submitted",
       params: expect.objectContaining({ campaign: FOUNDING_USERS_CAMPAIGN }),
     }));
+    expect(mocks.notifyBetaApplicationReceived).toHaveBeenCalledWith({
+      name: "María Calderón",
+      email: "maria@example.com",
+    });
   });
 
   it("blocks a second pending or approved application for the same campaign and email", async () => {
@@ -101,6 +113,7 @@ describe("beta application service", () => {
   it("rejects a pending application and records administrative audit", async () => {
     const pending = {
       id: "application-1",
+      name: "María Calderón",
       email: "maria@example.com",
       campaign: FOUNDING_USERS_CAMPAIGN,
       status: BetaApplicationStatus.PENDING,
@@ -129,6 +142,7 @@ describe("beta application service", () => {
   it("requires an existing verified account before assigning Pro access", async () => {
     mocks.betaApplicationFindUnique.mockResolvedValue({
       id: "application-1",
+      name: "María Calderón",
       email: "maria@example.com",
       campaign: FOUNDING_USERS_CAMPAIGN,
       status: BetaApplicationStatus.PENDING,
@@ -147,6 +161,7 @@ describe("beta application service", () => {
   it("creates the 60-day founding campaign and assigns a Pro grant on approval", async () => {
     const pending = {
       id: "application-1",
+      name: "María Calderón",
       email: "maria@example.com",
       campaign: FOUNDING_USERS_CAMPAIGN,
       status: BetaApplicationStatus.PENDING,
@@ -192,6 +207,10 @@ describe("beta application service", () => {
       targetUserId: "user-1",
       metadata: expect.objectContaining({ campaignId: "campaign-1", grantId: "grant-1" }),
     }));
+    expect(mocks.notifyBetaApplicationApproved).toHaveBeenCalledWith({
+      name: "María Calderón",
+      email: "maria@example.com",
+    });
   });
 
   it("reactivates an existing paused founding campaign instead of duplicating it", async () => {

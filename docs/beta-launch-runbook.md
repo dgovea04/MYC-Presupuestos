@@ -75,7 +75,7 @@ El índice parcial permite que una solicitud `REJECTED` vuelva a solicitar acces
 2. Se captura la atribución UTM y el contexto del CTA.
 3. Envía nombre y email desde `#piloto`.
 4. `POST /api/beta/applications` valida y aplica rate limiting.
-5. La solicitud queda en `PENDING`.
+5. La solicitud queda en `PENDING` y se envía un correo de recepción al email indicado.
 6. Un Super Admin entra a `/admin?adminTab=beta`.
 7. El equipo confirma que el solicitante creó y verificó una cuenta con el mismo email.
 8. Super Admin aprueba o rechaza la solicitud.
@@ -84,7 +84,8 @@ El índice parcial permite que una solicitud `REJECTED` vuelva a solicitar acces
    - se asigna un `BetaGrant` Pro por 60 días;
    - se registra auditoría;
    - se registra `beta_assigned`.
-10. El usuario puede usar el acceso Pro temporal sin alterar una suscripción Stripe.
+10. Se envía un correo de aprobación con el email asociado y el enlace de login. No se envían contraseñas por correo.
+11. El usuario puede usar el acceso Pro temporal sin alterar una suscripción Stripe.
 
 ## Requisitos para aprobar
 
@@ -121,6 +122,8 @@ Revisar en `/admin`:
 
 - La interfaz pública solo solicita nombre y email.
 - La lista de solicitudes no se expone a visitantes.
+- El correo de recepción confirma la solicitud y explica que el equipo enviará el acceso después de aprobarla.
+- El correo de aprobación incluye el email de acceso y el enlace de login, pero nunca una contraseña.
 - La API administrativa exige sesión con capacidad Beta.
 - Aprobar o rechazar exige Super Admin.
 - No enviar emails, nombres, RUC, montos ni contenido de presupuestos a analytics.
@@ -133,6 +136,8 @@ Revisar en `/admin`:
 - [ ] CTA Starter lleva a `/register`.
 - [ ] Video placeholder se puede reemplazar desde `DEMO_VIDEO_URL`.
 - [ ] Formulario Beta muestra confirmación y maneja duplicados.
+- [ ] Se recibe el correo de solicitud enviada.
+- [ ] Se recibe el correo de aprobación con enlace de login y sin contraseña.
 - [ ] Rate limiting devuelve `429` sin revelar información sensible.
 - [ ] Un administrador no Super Admin puede leer según su capacidad, pero no revisar.
 - [ ] Super Admin puede aprobar y rechazar.
