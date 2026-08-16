@@ -3,6 +3,8 @@ import { persistMarketingEvent } from "@/lib/analytics/store";
 
 export type AnalyticsEventName =
   | "landing_view"
+  | "pilot_application_started"
+  | "pilot_application_submitted"
   | "signup_started"
   | "signup_completed"
   | "project_created"

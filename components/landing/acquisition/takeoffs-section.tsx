@@ -1,0 +1,7 @@
+import { ClipboardList, Ruler, Sigma } from "lucide-react";
+import { SectionHeading } from "@/components/landing/section-heading";
+
+export function TakeoffsSection() {
+  return <section id="metrados" className="scroll-mt-24 bg-white py-20 md:py-28"><div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><SectionHeading badge="Metrados" title="La cantidad deja de ser un número suelto." description="Organiza hojas, fórmulas y vínculos con partidas para que el metrado pueda revisarse y actualizarse sin duplicar trabajo." /><div className="mt-12 grid gap-5 md:grid-cols-3"><TakeoffCard icon={<Ruler className="h-5 w-5" />} title="Ordena por hoja" text="Agrupa concreto, acero, encofrado, arquitectura o fórmulas propias con una estructura entendible." /><TakeoffCard icon={<Sigma className="h-5 w-5" />} title="Calcula con fórmula" text="Conserva entradas, expresión y unidad de resultado para que el cálculo sea auditable." /><TakeoffCard icon={<ClipboardList className="h-5 w-5" />} title="Envía a partida" text="Actualiza cantidades del presupuesto desde el metrado vinculado, con trazabilidad de origen." /></div></div></section>;
+}
+function TakeoffCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) { return <article className="rounded-2xl border border-slate-200 p-6"><span className="inline-flex rounded-xl bg-blue-50 p-2.5 text-blue-700">{icon}</span><h3 className="mt-5 font-semibold text-slate-950">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></article>; }

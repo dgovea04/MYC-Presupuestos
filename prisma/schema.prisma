@@ -210,6 +210,12 @@ enum BetaGrantSource {
   IMPORT
 }
 
+enum BetaApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum RiskVariableType {
   QUANTITY
   UNIT_PRICE
@@ -351,6 +357,7 @@ model User {
   betaGrants                    BetaGrant[]                   @relation("BetaGrantUser")
   betaGrantsAssigned            BetaGrant[]                   @relation("BetaGrantAssignedBy")
   betaGrantsRevoked             BetaGrant[]                   @relation("BetaGrantRevokedBy")
+  betaApplicationsReviewed      BetaApplication[]             @relation("BetaApplicationReviewer")
   noteTasks                     NoteTask[]
   generatedPartidas             GeneratedPartida[]
   metradoSheets                 MetradoSheet[]
@@ -528,6 +535,25 @@ model BetaGrant {
   @@index([expiresAt, status])
   @@index([companyId, status])
   @@map("beta_grants")
+}
+
+model BetaApplication {
+  id           String               @id @default(cuid())
+  name         String
+  email        String
+  campaign     String               @default("founding-users-peru")
+  status       BetaApplicationStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  metadata     Json?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  reviewedBy   User?                @relation("BetaApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([email, createdAt(sort: Desc)])
+  @@map("beta_applications")
 }
 
 model MarketingEvent {

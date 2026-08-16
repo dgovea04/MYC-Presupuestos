@@ -7,7 +7,7 @@ import { getGtag, type GtagEventParams } from "@/lib/analytics/gtag";
 
 export type ClientAnalyticsEventName = Extract<
   AnalyticsEventName,
-  "landing_view" | "signup_started" | "pricing_viewed" | "upgrade_clicked" | "beta_upgrade_clicked" | "excel_paste_used"
+  "landing_view" | "pilot_application_started" | "pilot_application_submitted" | "signup_started" | "pricing_viewed" | "upgrade_clicked" | "beta_upgrade_clicked" | "excel_paste_used"
 >;
 
 export function trackClientEvent(

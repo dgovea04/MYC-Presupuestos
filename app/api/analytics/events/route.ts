@@ -7,6 +7,8 @@ import { z } from "zod";
 
 const clientEventNames = [
   "landing_view",
+  "pilot_application_started",
+  "pilot_application_submitted",
   "signup_started",
   "pricing_viewed",
   "upgrade_clicked",

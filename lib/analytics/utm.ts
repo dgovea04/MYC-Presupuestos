@@ -2,6 +2,7 @@ import type { AnalyticsPrimitive } from "@/lib/analytics/gtag";
 
 export const ATTRIBUTION_COOKIE_NAME = "mc-attribution";
 export const ANALYTICS_CLIENT_ID_COOKIE = "mc-analytics-client-id";
+export const REGISTRATION_CONTEXT_COOKIE_NAME = "mc-registration-context";
 export const ATTRIBUTION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content"] as const;
@@ -12,6 +13,12 @@ type UtmValues = Partial<Record<UtmKey, string>>;
 export type Attribution = {
   firstTouch: UtmValues;
   lastTouch: UtmValues;
+};
+
+export type RegistrationContext = {
+  landing_path?: string;
+  landing_variant?: string;
+  cta_location?: string;
 };
 
 const MAX_UTM_VALUE_LENGTH = 160;
@@ -84,6 +91,39 @@ export function captureUtmAttribution(searchParams?: URLSearchParams): Attributi
   return nextAttribution;
 }
 
+export function captureRegistrationContext(context: RegistrationContext): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const normalized = normalizeRegistrationContext(context);
+  const existingRaw = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${REGISTRATION_CONTEXT_COOKIE_NAME}=`))
+    ?.slice(REGISTRATION_CONTEXT_COOKIE_NAME.length + 1);
+  const existing = parseRegistrationContextCookie(existingRaw);
+  const merged = { ...normalized, ...(existing ?? {}) };
+  if (Object.keys(merged).length === 0) {
+    return;
+  }
+
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${REGISTRATION_CONTEXT_COOKIE_NAME}=${encodeURIComponent(JSON.stringify(merged))}; Max-Age=${ATTRIBUTION_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secure}`;
+}
+
+export function parseRegistrationContextCookie(rawValue: string | undefined): RegistrationContext | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return normalizeRegistrationContext(JSON.parse(decodeURIComponent(rawValue)) as unknown);
+  } catch {
+    return null;
+  }
+}
+
 export function getAttributionEventParams(): Record<string, AnalyticsPrimitive> {
   const attribution = readAttribution();
   if (!attribution) {
@@ -100,6 +140,24 @@ export function getAttributionEventParams(): Record<string, AnalyticsPrimitive> 
     first_touch_utm_campaign: attribution.firstTouch.utm_campaign,
     first_touch_utm_content: attribution.firstTouch.utm_content,
   };
+}
+
+function normalizeRegistrationContext(value: unknown): RegistrationContext {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  const context: RegistrationContext = {};
+  for (const key of ["landing_path", "landing_variant", "cta_location"] as const) {
+    const item = value[key];
+    if (typeof item === "string") {
+      const sanitized = item.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, MAX_UTM_VALUE_LENGTH);
+      if (sanitized) {
+        context[key] = sanitized;
+      }
+    }
+  }
+  return context;
 }
 
 function sanitizeUtmValue(value: string | null): string | undefined {

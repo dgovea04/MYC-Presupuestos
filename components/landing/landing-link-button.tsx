@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ComponentProps, MouseEventHandler, ReactNode } from "react";
 import { trackClientEvent } from "@/lib/analytics/client";
+import { captureRegistrationContext } from "@/lib/analytics/utm";
 import { cn } from "@/lib/utils";
 
 type LandingLinkButtonProps = Omit<ComponentProps<typeof Link>, "className" | "children" | "onClick"> & {
@@ -31,10 +32,12 @@ export function LandingLinkButton({
 }: LandingLinkButtonProps) {
   function handleClick(event: Parameters<MouseEventHandler<HTMLAnchorElement>>[0]) {
     if (typeof props.href === "string" && props.href.startsWith("/register")) {
+      const landingPath = window.location.pathname;
       trackClientEvent("signup_started", {
         cta_location: "landing_link_button",
-        landing_path: window.location.pathname,
+        landing_path: landingPath,
       });
+      captureRegistrationContext({ landing_path: landingPath, landing_variant: "home-v1", cta_location: "landing_link_button" });
     }
 
     onClick?.(event);

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   registerUserWithCompanyAndDemoMock: vi.fn(),
   hashPasswordMock: vi.fn(),
   issueEmailVerificationMock: vi.fn(),
+  trackServerEventMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -25,12 +26,19 @@ vi.mock("@/lib/auth/email-verification", () => ({
   issueEmailVerification: mocks.issueEmailVerificationMock,
 }));
 
+vi.mock("@/lib/analytics/events", () => ({
+  trackServerEvent: mocks.trackServerEventMock,
+}));
+
 import { POST } from "@/app/api/register/route";
 
-function buildRequest(body: Record<string, string>) {
+function buildRequest(body: Record<string, string>, cookie?: string) {
   return new Request("http://localhost/api/register", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -49,6 +57,7 @@ describe("POST /api/register", () => {
     mocks.registerUserWithCompanyAndDemoMock.mockReset();
     mocks.hashPasswordMock.mockReset();
     mocks.issueEmailVerificationMock.mockReset();
+    mocks.trackServerEventMock.mockReset();
   });
 
   it("registers a new user successfully, issues email verification, and returns 201", async () => {
@@ -98,6 +107,38 @@ describe("POST /api/register", () => {
       email: "maria@example.com",
       name: "Maria Calderon",
     });
+  });
+
+  it("carries landing CTA context into signup_completed", async () => {
+    mocks.findUniqueMock.mockResolvedValue(null);
+    mocks.hashPasswordMock.mockResolvedValue("hashed-password");
+    mocks.registerUserWithCompanyAndDemoMock.mockResolvedValue({
+      user: { id: "user-1" },
+      company: { id: "company-1" },
+      demoProject: { status: "created", projectId: "project-demo", generalBudgetId: "budget-demo", warnings: [] },
+    });
+    mocks.issueEmailVerificationMock.mockResolvedValue({ sent: true });
+
+    const context = encodeURIComponent(JSON.stringify({
+      landing_path: "/software-presupuestos-construccion",
+      landing_variant: "acquisition-v1",
+      cta_location: "acquisition_hero",
+    }));
+    const attribution = encodeURIComponent(JSON.stringify({
+      firstTouch: { utm_source: "google" },
+      lastTouch: { utm_source: "linkedin", utm_campaign: "founding-users" },
+    }));
+
+    await POST(buildRequest(validBody, `mc-registration-context=${context}; mc-attribution=${attribution}`));
+
+    expect(mocks.trackServerEventMock).toHaveBeenCalledWith("signup_completed", expect.objectContaining({
+      userId: "user-1",
+      landing_path: "/software-presupuestos-construccion",
+      landing_variant: "acquisition-v1",
+      cta_location: "acquisition_hero",
+      first_touch_utm_source: "google",
+      utm_source: "linkedin",
+    }));
   });
 
   it("returns 409 when the email is already registered with a password", async () => {

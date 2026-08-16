@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { trackClientEvent } from "@/lib/analytics/client";
+import { captureRegistrationContext } from "@/lib/analytics/utm";
 import { Button } from "@/components/ui/button";
 
 function GoogleIcon() {
@@ -46,6 +47,11 @@ export function GoogleSignInButton({ mode = "login" }: GoogleSignInButtonProps) 
       trackClientEvent("signup_started", {
         cta_location: "google_register_button",
         registration_method: "google",
+      });
+      captureRegistrationContext({
+        landing_path: document.referrer || window.location.pathname,
+        landing_variant: "register-v1",
+        cta_location: "google_register_button",
       });
     }
     setLoading(true);

@@ -134,7 +134,17 @@ NEXT_PUBLIC_YAPE_QR_IMAGE_URL=
 
 ## 4. Preparar y aplicar migraciones Prisma
 
-La migración más reciente incluida actualmente es `20260814200349_security_rate`. Prisma debe aplicar todas las migraciones pendientes en orden; no ejecutar `migrate dev`, `db push` ni `migrate reset` contra producción.
+Las migraciones recientes incluyen `20260815190000_add_commercial_beta_access` y `20260816100000_add_beta_applications`. Prisma debe aplicar todas las migraciones pendientes en orden; no ejecutar `migrate dev`, `db push` ni `migrate reset` contra producción.
+
+Antes de aplicar el esquema en staging o producción, ejecutar el preflight sin exponer secretos:
+
+```bash
+npm run check:deployment -- --target=staging
+# antes de promover a producción:
+npm run check:deployment -- --target=production
+```
+
+El comando debe finalizar con `Deployment readiness: READY`. Las advertencias no bloquean técnicamente el proceso, pero deben quedar revisadas por el responsable del release.
 
 ### Antes de migrar
 
@@ -153,6 +163,8 @@ npx prisma migrate deploy
 npx prisma generate
 npx prisma migrate status
 ```
+
+Para la campaña Beta, el smoke test posterior debe confirmar además que `beta_applications` y su índice único parcial existen, que una solicitud queda en `PENDING`, y que la aprobación crea un `BetaGrant` Pro de 60 días sin crear una `BillingSubscription`.
 
 - [ ] `migrate deploy` finaliza sin error.
 - [ ] `migrate status` confirma que no quedan migraciones pendientes.

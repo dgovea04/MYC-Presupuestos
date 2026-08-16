@@ -12,6 +12,7 @@ import { AdminMarketingReconciliation } from "@/components/admin/admin-marketing
 import { AdminMarketingHealth } from "@/components/admin/admin-marketing-health";
 import { AdminMarketingAlerts } from "@/components/admin/admin-marketing-alerts";
 import { AdminMarketingMonetization } from "@/components/admin/admin-marketing-monetization";
+import { AdminBetaApplications } from "@/components/admin/admin-beta-applications";
 import { AdminBetaCampaigns } from "@/components/admin/admin-beta-campaigns";
 import { AdminPageTabs, normalizeAdminTab } from "@/components/admin/admin-page-tabs";
 import { AdminCloudAiSettings } from "@/components/admin/admin-cloud-ai-settings";
@@ -46,6 +47,7 @@ import { buildMarketingAlerts } from "@/lib/data/admin-marketing-alerts";
 import { getAdminMarketingMonetization } from "@/lib/data/admin-marketing-monetization";
 import { getAdminBetaAnalytics } from "@/lib/data/admin-beta-analytics";
 import { listBetaCampaigns } from "@/lib/beta/campaigns";
+import { listBetaApplications } from "@/lib/beta/applications";
 
 export default async function AdminPage({
   searchParams,
@@ -120,7 +122,11 @@ export default async function AdminPage({
     getAdminMarketingMonetization(marketingRange),
   ]);
   const betaData = adminTab === "beta"
-    ? await Promise.all([listBetaCampaigns(), getAdminBetaAnalytics(marketingRange, betaCampaignId, betaDuration)])
+    ? await Promise.all([
+        listBetaCampaigns(),
+        getAdminBetaAnalytics(marketingRange, betaCampaignId, betaDuration),
+        listBetaApplications(),
+      ])
     : null;
   const canManageBeta = hasAdminCapability(session.user, "beta.manage");
   const canExportBeta = hasAdminCapability(session.user, "beta.export");
@@ -150,7 +156,12 @@ export default async function AdminPage({
       ) : null}
 
       {adminTab === "beta" && betaData ? (
-        <AdminBetaCampaigns
+        <>
+          <AdminBetaApplications
+            applications={betaData[2]}
+            canReview={Boolean(session.user.isSuperAdmin || session.user.adminProfile === "SUPER_ADMIN")}
+          />
+          <AdminBetaCampaigns
           campaigns={betaData[0].campaigns}
           analytics={betaData[1]}
           canManage={canManageBeta}
@@ -159,7 +170,8 @@ export default async function AdminPage({
           selectedDuration={betaDuration}
           marketingFrom={resolvedSearchParams.marketingFrom}
           marketingTo={resolvedSearchParams.marketingTo}
-        />
+          />
+        </>
       ) : null}
 
       {adminTab === "users" || adminTab === "ai" ? (

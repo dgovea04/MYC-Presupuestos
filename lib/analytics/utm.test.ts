@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeAttribution, parseUtmParams } from "@/lib/analytics/utm";
+import { captureRegistrationContext, mergeAttribution, parseRegistrationContextCookie, parseUtmParams } from "@/lib/analytics/utm";
 
 describe("analytics UTM attribution", () => {
   it("parses the supported UTM parameters and ignores unrelated query params", () => {
@@ -50,5 +50,24 @@ describe("analytics UTM attribution", () => {
 
   it("does not create attribution from a URL without UTMs", () => {
     expect(mergeAttribution(null, {})).toBeNull();
+  });
+
+  it("parses and sanitizes the registration context used by signup attribution", () => {
+    const raw = encodeURIComponent(JSON.stringify({
+      landing_path: "/software-presupuestos-construccion",
+      landing_variant: "acquisition-v1",
+      cta_location: "acquisition_hero",
+      ignored: "secret",
+    }));
+
+    expect(parseRegistrationContextCookie(raw)).toEqual({
+      landing_path: "/software-presupuestos-construccion",
+      landing_variant: "acquisition-v1",
+      cta_location: "acquisition_hero",
+    });
+  });
+
+  it("does not write registration context during server rendering", () => {
+    expect(() => captureRegistrationContext({ landing_path: "/register" })).not.toThrow();
   });
 });
