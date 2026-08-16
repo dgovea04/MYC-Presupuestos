@@ -35,7 +35,17 @@ describe("email verification helpers", () => {
     expect(hashEmailVerificationToken("token-123")).not.toBe("token-123");
   });
 
-  it("builds a verification URL from NEXTAUTH_URL", () => {
+  it("prefers NEXT_PUBLIC_APP_URL when both app URLs are configured", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://public.myc.test/");
+    vi.stubEnv("NEXTAUTH_URL", "https://auth.myc.test");
+
+    expect(buildEmailVerificationUrl("token-123")).toBe(
+      "https://public.myc.test/api/auth/verify-email?token=token-123",
+    );
+  });
+
+  it("builds a verification URL from NEXTAUTH_URL when the public URL is absent", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", undefined);
     vi.stubEnv("NEXTAUTH_URL", "https://app.myc.test");
 
     expect(buildEmailVerificationUrl("token-123")).toBe(
