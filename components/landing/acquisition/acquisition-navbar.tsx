@@ -8,7 +8,26 @@ import { acquisitionNavItems } from "@/components/landing/acquisition/acquisitio
 import { LandingLogo } from "@/components/landing/landing-logo";
 import { cn } from "@/lib/utils";
 
-export function AcquisitionNavbar() {
+type AcquisitionNavbarItem = {
+  label: string;
+  href: string;
+};
+
+export type AcquisitionNavbarProps = {
+  homeHref?: string;
+  navItems?: readonly AcquisitionNavbarItem[];
+  primaryHref?: string;
+  primaryLabel?: string;
+  primaryLocation?: string;
+};
+
+export function AcquisitionNavbar({
+  homeHref = "/software-presupuestos-construccion",
+  navItems = acquisitionNavItems,
+  primaryHref = "/register",
+  primaryLabel = "Crear cuenta gratis",
+  primaryLocation = "acquisition_navbar",
+}: AcquisitionNavbarProps = {}) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -54,12 +73,12 @@ export function AcquisitionNavbar() {
       )}
     >
       <div className="landing-shell flex items-center justify-between gap-8 py-5">
-        <Link href="/software-presupuestos-construccion" aria-label="MC Presupuestos">
+        <Link href={homeHref} aria-label="MC Presupuestos">
           <LandingLogo />
         </Link>
 
         <nav className="hidden items-center gap-10 md:flex lg:gap-14 xl:gap-16" aria-label="Navegación de adquisición">
-          {acquisitionNavItems.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -74,8 +93,8 @@ export function AcquisitionNavbar() {
           <AcquisitionCta href="/login" location="acquisition_navbar_login" variant="secondary" className="px-4 py-2.5">
             Iniciar sesión
           </AcquisitionCta>
-          <AcquisitionCta href="/register" location="acquisition_navbar" className="px-4 py-2.5">
-            Crear cuenta gratis
+          <AcquisitionCta href={primaryHref} location={primaryLocation} className="px-4 py-2.5">
+            {primaryLabel}
           </AcquisitionCta>
         </div>
 
@@ -114,7 +133,7 @@ export function AcquisitionNavbar() {
           aria-label="Menú de navegación"
         >
           <div className="flex items-center justify-between">
-            <Link href="/software-presupuestos-construccion" onClick={() => setMobileMenuOpen(false)} aria-label="MC Presupuestos">
+            <Link href={homeHref} onClick={() => setMobileMenuOpen(false)} aria-label="MC Presupuestos">
               <LandingLogo />
             </Link>
             <button
@@ -128,7 +147,7 @@ export function AcquisitionNavbar() {
           </div>
 
           <nav className="mt-10 flex flex-col gap-1" aria-label="Navegación móvil">
-            {acquisitionNavItems.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -151,12 +170,12 @@ export function AcquisitionNavbar() {
               Iniciar sesión
             </AcquisitionCta>
             <AcquisitionCta
-              href="/register"
-              location="acquisition_mobile_nav"
+              href={primaryHref}
+              location={primaryLocation}
               className="w-full justify-center"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Crear cuenta gratis
+              {primaryLabel}
             </AcquisitionCta>
           </div>
         </div>

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { AcquisitionCta } from "@/components/landing/acquisition/acquisition-cta";
+import { AcquisitionNavbar } from "@/components/landing/acquisition/acquisition-navbar";
 import { PilotApplicationSection } from "@/components/landing/acquisition/pilot-application-section";
-import { LandingLogo } from "@/components/landing/landing-logo";
 import { BetaFreeBenefitsSection } from "@/components/landing/beta/beta-free-benefits-section";
 import { BetaFreeHeroSection } from "@/components/landing/beta/beta-free-hero-section";
 import { BetaFreeStepsSection } from "@/components/landing/beta/beta-free-steps-section";
@@ -10,22 +10,17 @@ import { BetaFreeStepsSection } from "@/components/landing/beta/beta-free-steps-
 export function BetaFreeLandingPage() {
   return (
     <main className="min-h-screen bg-white text-slate-950">
-      <header className="fixed inset-x-0 top-0 z-30 border-b border-slate-200/80 bg-white/90 shadow-sm shadow-slate-200/40 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-8">
-          <Link href="/beta-pro-gratis" aria-label="MC Presupuestos">
-            <LandingLogo />
-          </Link>
-          <nav className="hidden items-center gap-8 md:flex" aria-label="Navegación beta">
-            <Link href="#beneficios" className="text-sm font-medium text-slate-600 transition hover:text-slate-950">Beneficios</Link>
-            <Link href="#como-funciona" className="text-sm font-medium text-slate-600 transition hover:text-slate-950">Cómo funciona</Link>
-            <Link href="#solicitar" className="text-sm font-medium text-slate-600 transition hover:text-slate-950">Solicitar acceso</Link>
-          </nav>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <AcquisitionCta href="/login" location="beta_free_nav_login" variant="secondary" className="hidden px-3 py-2 sm:inline-flex">Iniciar sesión</AcquisitionCta>
-            <AcquisitionCta href="#solicitar" location="beta_free_nav" className="px-3 py-2 sm:px-4">Pro gratis 60 días</AcquisitionCta>
-          </div>
-        </div>
-      </header>
+      <AcquisitionNavbar
+        homeHref="/beta-pro-gratis"
+        navItems={[
+          { label: "Beneficios", href: "#beneficios" },
+          { label: "Cómo funciona", href: "#como-funciona" },
+          { label: "Solicitar acceso", href: "#solicitar" },
+        ]}
+        primaryHref="#solicitar"
+        primaryLabel="Pro gratis 60 días"
+        primaryLocation="beta_free_nav"
+      />
 
       <BetaFreeHeroSection />
       <BetaFreeBenefitsSection />

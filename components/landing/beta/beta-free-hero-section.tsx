@@ -6,7 +6,7 @@ export function BetaFreeHeroSection() {
     <section className="overflow-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(37,99,235,0.16),transparent_34%),linear-gradient(180deg,#fff_0%,#f8fafc_100%)]">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 pb-20 pt-32 sm:px-6 md:pb-28 md:pt-40 lg:grid-cols-[1.04fr_0.96fr] lg:items-center lg:px-8">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700"><ShieldCheck className="h-3.5 w-3.5" />Cohorte fundadora · Perú</span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700"><ShieldCheck className="h-3.5 w-3.5" />Pro gratis para primeros usuarios en Perú</span>
           <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-[4.15rem] lg:leading-[1.03]">Usa Pro gratis durante 60 días en tu próximo presupuesto de obra.</h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">Estamos invitando a los primeros profesionales peruanos a probar MC Presupuestos con trabajo real. Sin tarjeta, sin cobro automático y con acompañamiento para comenzar.</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">

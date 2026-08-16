@@ -32,7 +32,7 @@ describe("BetaFreeLandingPage", () => {
     render(<BetaFreeLandingPage />);
 
     expect(screen.getByRole("heading", { level: 1, name: /Pro gratis durante 60 días/i })).toBeTruthy();
-    expect(screen.getByText("Cohorte fundadora · Perú")).toBeTruthy();
+    expect(screen.getByText("Pro gratis para primeros usuarios en Perú")).toBeTruthy();
     expect(screen.getByText("Empieza sin complicar tu operación.")).toBeTruthy();
     expect(screen.getByText("Prueba tu próximo presupuesto con una base más clara.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Pro gratis 60 días" }).getAttribute("href")).toBe("#solicitar");
