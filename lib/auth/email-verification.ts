@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
+import { assignAutomaticBetaForUser } from "@/lib/beta/assignments";
 
 const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24;
 const RESEND_API_URL = "https://api.resend.com/emails";
@@ -110,6 +111,8 @@ export async function consumeEmailVerificationToken(token: string) {
       WHERE "userId" = ${match.userId}
     `;
   });
+
+  void assignAutomaticBetaForUser(match.userId).catch(() => undefined);
 
   return { status: "verified" as const };
 }

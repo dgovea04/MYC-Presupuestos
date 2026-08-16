@@ -15,6 +15,7 @@ import {
 import { getUserProfileColumnSupport } from "@/lib/data/user-profile-columns";
 import { loginSchema } from "@/lib/validations/auth";
 import { ensureDemoProjectForCompany } from "@/lib/onboarding/demo-project";
+import { assignAutomaticBetaForUser } from "@/lib/beta/assignments";
 import { trackServerEvent } from "@/lib/analytics/events";
 import { listUserWorkspaces } from "@/lib/workspace/active-workspace";
 
@@ -284,6 +285,7 @@ export const authOptions: NextAuthOptions = {
               companyId,
               enabled: true,
             });
+            await assignAutomaticBetaForUser(existingUser.id).catch(() => null);
           } catch {
             return false;
           }
@@ -298,6 +300,7 @@ export const authOptions: NextAuthOptions = {
             avatarUrl: googleProfile.picture,
             emailVerifiedAt: new Date(),
           });
+          void assignAutomaticBetaForUser(registration.user.id).catch(() => undefined);
           void trackServerEvent("signup_completed", {
             userId: registration.user.id,
             companyId: registration.company.id,

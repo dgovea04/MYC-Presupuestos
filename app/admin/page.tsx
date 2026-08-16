@@ -12,6 +12,7 @@ import { AdminMarketingReconciliation } from "@/components/admin/admin-marketing
 import { AdminMarketingHealth } from "@/components/admin/admin-marketing-health";
 import { AdminMarketingAlerts } from "@/components/admin/admin-marketing-alerts";
 import { AdminMarketingMonetization } from "@/components/admin/admin-marketing-monetization";
+import { AdminBetaCampaigns } from "@/components/admin/admin-beta-campaigns";
 import { AdminPageTabs, normalizeAdminTab } from "@/components/admin/admin-page-tabs";
 import { AdminCloudAiSettings } from "@/components/admin/admin-cloud-ai-settings";
 import { AdminMfaSettings } from "@/components/admin/admin-mfa-settings";
@@ -43,6 +44,8 @@ import { getAdminMarketingReconciliation } from "@/lib/data/admin-marketing-reco
 import { getAdminMarketingHealth } from "@/lib/data/admin-marketing-health";
 import { buildMarketingAlerts } from "@/lib/data/admin-marketing-alerts";
 import { getAdminMarketingMonetization } from "@/lib/data/admin-marketing-monetization";
+import { getAdminBetaAnalytics } from "@/lib/data/admin-beta-analytics";
+import { listBetaCampaigns } from "@/lib/beta/campaigns";
 
 export default async function AdminPage({
   searchParams,
@@ -58,6 +61,8 @@ export default async function AdminPage({
     auditPage?: string;
     marketingFrom?: string;
     marketingTo?: string;
+    betaCampaignId?: string;
+    betaDuration?: string;
     adminTab?: string;
   }>;
 }) {
@@ -98,6 +103,10 @@ export default async function AdminPage({
   };
   const marketingRange = normalizeAdminMarketingDateRange(resolvedSearchParams.marketingFrom, resolvedSearchParams.marketingTo);
   const adminTab = normalizeAdminTab(resolvedSearchParams.adminTab);
+  const betaCampaignId = resolvedSearchParams.betaCampaignId || undefined;
+  const betaDuration: 60 | 90 | undefined = resolvedSearchParams.betaDuration === "60" || resolvedSearchParams.betaDuration === "90"
+    ? Number(resolvedSearchParams.betaDuration) as 60 | 90
+    : undefined;
   const [settings, stats, auditLogs, deletionApprovals, scheduledDeletions, securityOverview, marketingAnalytics, marketingReconciliation, marketingHealth, marketingMonetization] = await Promise.all([
     getUserSettings(session.user.id),
     getAdminDashboardStats(filters),
@@ -110,6 +119,11 @@ export default async function AdminPage({
     getAdminMarketingHealth(marketingRange),
     getAdminMarketingMonetization(marketingRange),
   ]);
+  const betaData = adminTab === "beta"
+    ? await Promise.all([listBetaCampaigns(), getAdminBetaAnalytics(marketingRange, betaCampaignId, betaDuration)])
+    : null;
+  const canManageBeta = hasAdminCapability(session.user, "beta.manage");
+  const canExportBeta = hasAdminCapability(session.user, "beta.export");
 
   return (
     <AppShell currentUser={session.user} settings={settings}>
@@ -133,6 +147,19 @@ export default async function AdminPage({
           <AdminMarketingHealth health={marketingHealth} />
           <AdminMarketingAlerts alerts={buildMarketingAlerts({ reconciliation: marketingReconciliation, health: marketingHealth })} />
         </>
+      ) : null}
+
+      {adminTab === "beta" && betaData ? (
+        <AdminBetaCampaigns
+          campaigns={betaData[0].campaigns}
+          analytics={betaData[1]}
+          canManage={canManageBeta}
+          canExport={canExportBeta}
+          selectedCampaignId={betaCampaignId}
+          selectedDuration={betaDuration}
+          marketingFrom={resolvedSearchParams.marketingFrom}
+          marketingTo={resolvedSearchParams.marketingTo}
+        />
       ) : null}
 
       {adminTab === "users" || adminTab === "ai" ? (

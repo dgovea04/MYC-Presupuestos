@@ -5,6 +5,7 @@ import { createBillingErrorResponse } from "@/lib/billing/api";
 import { prisma } from "@/lib/db/prisma";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
 import { createCentralizedExport, createExportResponse } from "@/lib/exports/centralized";
+import { trackBetaFeatureUsed } from "@/lib/beta/analytics";
 import type { ExportRequest, ExportTarget } from "@/lib/exports/definitions";
 
 export const runtime = "nodejs";
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
     const companyId = session.user.activeCompanyId ?? session.user.companyId ?? "";
     await safelyTrackExportCompleted(body, session.user.id, companyId);
     await safelyTrackDemoExportCompleted(body, session.user.id, companyId);
+    if (body.format === "csv" || body.format === "zip" || body.format === "mcp" || body.target === "work_schedule") {
+      await trackBetaFeatureUsed({ userId: session.user.id, companyId, feature: "exports.advanced" }).catch(() => undefined);
+    }
     return createExportResponse(result);
   } catch (error) {
     const billingResponse = createBillingErrorResponse(error);

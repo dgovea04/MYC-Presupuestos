@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getActiveBetaAccess, isBetaAccessActive } from "@/lib/beta/access";
 import { getAvailableFeatures, type WorkspaceFeatureKey } from "@/lib/workspace/feature-registry";
 import type { WorkspaceRole } from "@/types/workspace";
 
@@ -44,32 +45,59 @@ const _getEffectiveWorkspaceLicense = async (options: {
     return null;
   }
 
-  const [subscription, user] = await Promise.all([
+  const [subscription, user, betaAccess, proPlan] = await Promise.all([
     prisma.companySubscription.findUnique({
       where: { companyId },
-      include: { membershipPlan: { select: { slug: true, name: true } } },
+      include: { membershipPlan: { select: { slug: true, name: true, monthlyTokenLimit: true } } },
     }),
     prisma.user.findUnique({
       where: { id: options.userId },
-      select: { membershipPlan: { select: { slug: true, name: true } } },
+      select: { membershipPlan: { select: { slug: true, name: true, monthlyTokenLimit: true } } },
+    }),
+    getActiveBetaAccess({ userId: options.userId, companyId }),
+    prisma.membershipPlan.findUnique({
+      where: { slug: "pro" },
+      select: { slug: true, name: true, monthlyTokenLimit: true },
     }),
   ]);
 
-  // Prefer the company subscription plan; fall back to the user's personal plan
-  const effectivePlan = subscription?.membershipPlan ?? user?.membershipPlan;
+  // Prefer the company subscription plan; fall back to the user's personal plan.
+  // A beta grant can elevate Starter access to Pro, but never replaces Pro/Empresa.
+  const basePlan = subscription?.membershipPlan ?? user?.membershipPlan;
+  const basePlanSlug = basePlan?.slug ?? "starter";
+  const shouldUseBeta = basePlanSlug !== "pro" && basePlanSlug !== "empresa" && betaAccess !== null;
+  const effectivePlan = shouldUseBeta
+    ? { slug: "pro", name: "Pro Beta", monthlyTokenLimit: proPlan?.monthlyTokenLimit ?? 0 }
+    : basePlan;
   const planSlug = (effectivePlan?.slug as "starter" | "pro" | "empresa") ?? "starter";
+  const accessSource = shouldUseBeta
+    ? "BETA"
+    : subscription?.membershipPlan
+      ? "COMPANY_SUBSCRIPTION"
+      : user?.membershipPlan
+        ? "PLAN"
+        : "PLAN";
 
   return {
     planSlug,
     planName: effectivePlan?.name ?? "Starter",
     role: membership.role as WorkspaceRole,
     availableFeatures: getAvailableFeatures(planSlug),
+    monthlyTokenLimit: effectivePlan?.monthlyTokenLimit ?? 0,
+    accessSource,
+    betaGrantId: shouldUseBeta ? betaAccess.grantId : null,
+    betaCampaignName: shouldUseBeta ? betaAccess.campaignName : null,
+    betaExpiresAt: shouldUseBeta ? betaAccess.expiresAt.toISOString() : null,
   };
 };
 
+export function getWorkspaceLicenseCacheTag(userId: string, companyId: string | null | undefined) {
+  return `effective-license-${userId}-${companyId ?? "null"}`;
+}
+
 export const getEffectiveWorkspaceLicense = cache(
   (options: { userId: string; companyId: string | null | undefined }) => {
-    const key = `effective-license-${options.userId}-${options.companyId ?? "null"}`;
+    const key = getWorkspaceLicenseCacheTag(options.userId, options.companyId);
     return process.env.NODE_ENV === "development"
       ? _getEffectiveWorkspaceLicense(options)
       : unstable_cache(_getEffectiveWorkspaceLicense, [key], {
@@ -80,10 +108,14 @@ export const getEffectiveWorkspaceLicense = cache(
 );
 
 export function hasFeatureAccess(
-  license: { availableFeatures: WorkspaceFeatureKey[] } | null,
+  license: {
+    availableFeatures: WorkspaceFeatureKey[];
+    accessSource?: string;
+    betaExpiresAt?: string | null;
+  } | null,
   feature: WorkspaceFeatureKey,
 ): boolean {
-  if (!license) return false;
+  if (!license || !isBetaAccessActive(license)) return false;
   return license.availableFeatures.includes(feature);
 }
 
@@ -101,7 +133,7 @@ export async function assertWorkspaceFeatureAccess(options: {
     throw new Error("No tienes acceso a este workspace");
   }
 
-  if (!license.availableFeatures.includes(options.feature)) {
+  if (!hasFeatureAccess(license, options.feature)) {
     throw new WorkspaceFeatureAccessError(options.feature);
   }
 }

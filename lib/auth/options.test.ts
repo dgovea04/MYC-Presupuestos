@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock, verifyAdminMfaCodeMock, consumeRateLimitMock, registerUserWithCompanyAndDemoMock, ensureUserHasCompanyMock, ensureDemoProjectForCompanyMock } = vi.hoisted(() => ({
+const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userFindUniqueMock, verifyPasswordMock, verifyAdminMfaCodeMock, consumeRateLimitMock, registerUserWithCompanyAndDemoMock, ensureUserHasCompanyMock, ensureDemoProjectForCompanyMock, assignAutomaticBetaForUserMock } = vi.hoisted(() => ({
   queryRawMock: vi.fn(),
   companyFindFirstMock: vi.fn(),
   companyMembershipFindManyMock: vi.fn(),
@@ -13,6 +13,7 @@ const { queryRawMock, companyFindFirstMock, companyMembershipFindManyMock, userF
   registerUserWithCompanyAndDemoMock: vi.fn(),
   ensureUserHasCompanyMock: vi.fn(),
   ensureDemoProjectForCompanyMock: vi.fn(),
+  assignAutomaticBetaForUserMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -43,6 +44,10 @@ vi.mock("@/lib/auth/registration", () => ({
 
 vi.mock("@/lib/onboarding/demo-project", () => ({
   ensureDemoProjectForCompany: ensureDemoProjectForCompanyMock,
+}));
+
+vi.mock("@/lib/beta/assignments", () => ({
+  assignAutomaticBetaForUser: assignAutomaticBetaForUserMock,
 }));
 
 import { authOptions } from "@/lib/auth/options";
@@ -83,6 +88,7 @@ describe("authOptions callbacks", () => {
     registerUserWithCompanyAndDemoMock.mockReset();
     ensureUserHasCompanyMock.mockReset();
     ensureDemoProjectForCompanyMock.mockReset();
+    assignAutomaticBetaForUserMock.mockReset().mockResolvedValue(null);
     resetUserProfileColumnSupportCacheForTests();
   });
 
@@ -504,6 +510,11 @@ describe("authOptions callbacks", () => {
     });
 
     it("registers a new Google user with a company and demo project", async () => {
+      registerUserWithCompanyAndDemoMock.mockResolvedValue({
+        user: { id: "user-google-new" },
+        company: { id: "company-google-new" },
+        demoProject: { status: "created" },
+      });
       queryRawMock
         .mockResolvedValueOnce([
           { column_name: "avatarUrl" },

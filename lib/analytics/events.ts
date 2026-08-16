@@ -25,7 +25,19 @@ export type AnalyticsEventName =
   | "demo_apu_opened"
   | "demo_formula_opened"
   | "demo_export_completed"
-  | "first_non_demo_project_created";
+  | "first_non_demo_project_created"
+  | "beta_eligible"
+  | "beta_assigned"
+  | "beta_started"
+  | "beta_feature_used"
+  | "beta_expiring_14d"
+  | "beta_expiring_7d"
+  | "beta_expiring_1d"
+  | "beta_expired"
+  | "beta_upgrade_clicked"
+  | "beta_checkout_started"
+  | "beta_converted"
+  | "beta_revoked";
 
 export type AnalyticsEventPayload = {
   userId: string;
@@ -140,4 +152,11 @@ const SAFE_PARAMETER_KEYS = new Set([
   "first_touch_utm_medium",
   "first_touch_utm_campaign",
   "first_touch_utm_content",
+  "campaign",
+  "campaign_type",
+  "duration_days",
+  "grant_source",
+  "days_remaining",
+  "feature",
+  "conversion_window",
 ]);

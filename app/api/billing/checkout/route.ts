@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { trackServerEvent } from "@/lib/analytics/events";
 import { createProCheckoutSession } from "@/lib/billing/stripe";
+import { trackBetaCheckoutStarted } from "@/lib/beta/analytics";
 
 export async function POST() {
   const session = await getAuthSession();
@@ -29,6 +30,15 @@ export async function POST() {
       });
     } catch {
       // Analytics must not turn a valid checkout session into an API failure.
+    }
+
+    try {
+      await trackBetaCheckoutStarted({
+        userId: session.user.id,
+        companyId: session.user.activeCompanyId ?? session.user.companyId,
+      });
+    } catch {
+      // Beta attribution must not turn a valid checkout session into an API failure.
     }
 
     return NextResponse.json({ url: checkoutSession.url });

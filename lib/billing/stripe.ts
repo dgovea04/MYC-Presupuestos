@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { prisma as defaultPrisma } from "@/lib/db/prisma";
 import { trackServerEvent } from "@/lib/analytics/events";
+import { trackBetaConversion } from "@/lib/beta/analytics";
 
 type StripeCheckoutSession = {
   id: string;
@@ -256,6 +257,7 @@ export async function syncStripeSubscription({
       target_plan: "pro",
       subscription_status: write.status,
     }).catch(() => undefined);
+    void trackBetaConversion(userId).catch(() => undefined);
   }
 }
 

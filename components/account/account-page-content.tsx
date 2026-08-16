@@ -115,8 +115,13 @@ function AccountMembershipCard({
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="theme-status-info-strong text-xs font-semibold uppercase tracking-[0.16em]">Plan actual</p>
-              <p className="theme-strong-text mt-2 text-2xl font-semibold">{membership.planName}</p>
+              <p className="theme-strong-text mt-2 text-2xl font-semibold">{membership.accessSource === "BETA" ? "Pro Beta" : membership.planName}</p>
               <p className="theme-muted-text mt-1 text-sm">Acceso efectivo: {formatPlanSlug(membership.effectivePlanSlug)}</p>
+              {membership.accessSource === "BETA" && membership.betaDaysRemaining !== null ? (
+                <p className="theme-status-info-strong mt-2 text-sm font-medium">
+                  {membership.betaDaysRemaining} días restantes · sin cargo durante la beta
+                </p>
+              ) : null}
             </div>
             <span className="theme-surface-card theme-status-info-strong rounded-full px-3 py-1 text-xs font-semibold shadow-sm">
               {membership.planSlug || "sin-plan"}
@@ -131,9 +136,14 @@ function AccountMembershipCard({
         </div>
 
         <div className="theme-surface-card space-y-2 rounded-2xl border px-4 py-3 text-sm">
-          <SummaryRow label="Facturacion" value={membership.billingProvider ?? "Sin proveedor"} />
+          <SummaryRow label="Origen" value={membership.accessSource === "BETA" ? "Beta comercial" : membership.billingProvider ?? "Plan de cuenta"} />
+          <SummaryRow label="Facturacion" value={membership.accessSource === "BETA" ? "Sin cargo durante la beta" : membership.billingProvider ?? "Sin proveedor"} />
           <SummaryRow label="Estado" value={formatBillingStatus(membership.billingStatus)} />
-          <SummaryRow label="Periodo" value={membership.currentPeriodEnd ? formatDate(membership.currentPeriodEnd, "DD_MMM_YYYY") : "No aplica"} />
+          <SummaryRow
+            label={membership.accessSource === "BETA" ? "Beta válida hasta" : "Periodo"}
+            value={membership.betaExpiresAt ? formatDate(membership.betaExpiresAt, "DD_MMM_YYYY") : membership.currentPeriodEnd ? formatDate(membership.currentPeriodEnd, "DD_MMM_YYYY") : "No aplica"}
+          />
+          {membership.betaCampaignName ? <SummaryRow label="Campaña" value={membership.betaCampaignName} /> : null}
           {membership.graceEndsAt ? <SummaryRow label="Gracia Pro" value={formatDate(membership.graceEndsAt, "DD_MMM_YYYY")} /> : null}
         </div>
 

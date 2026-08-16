@@ -37,6 +37,13 @@ const STORED_PARAMETER_KEYS = new Set([
   "first_touch_utm_medium",
   "first_touch_utm_campaign",
   "first_touch_utm_content",
+  "campaign",
+  "campaign_type",
+  "duration_days",
+  "grant_source",
+  "days_remaining",
+  "feature",
+  "conversion_window",
 ]);
 
 export type PersistMarketingEventInput = {

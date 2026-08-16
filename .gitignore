@@ -44,6 +44,9 @@ next-env.d.ts
 # local worktrees
 .worktrees/
 
+# local CLI tools
+.tools/
+
 # large local database fixtures
 presupuesto-ejemplo/**/*.sqlite
 presupuesto-ejemplo/*.S2K

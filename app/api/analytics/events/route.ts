@@ -10,6 +10,7 @@ const clientEventNames = [
   "signup_started",
   "pricing_viewed",
   "upgrade_clicked",
+  "beta_upgrade_clicked",
   "excel_paste_used",
 ] as const satisfies readonly AnalyticsEventName[];
 

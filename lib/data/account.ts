@@ -137,12 +137,12 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
     throw new Error("Usuario no encontrado.");
   }
 
-  const monthlyTokenLimit = user.membershipPlan?.monthlyTokenLimit ?? 0;
+  const license = await getEffectiveWorkspaceLicense({ userId, companyId: activeCompanyId });
+  const monthlyTokenLimit = license?.monthlyTokenLimit ?? user.membershipPlan?.monthlyTokenLimit ?? 0;
   const extraTokens = user.aiTokenExtraMonthly;
   const consumedTokens = user.aiUsagePeriods[0]?.consumedTokens ?? 0;
   const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
   const allowance = Math.max(0, monthlyTokenLimit + extraTokens);
-  const license = await getEffectiveWorkspaceLicense({ userId, companyId: activeCompanyId });
   const effectivePlanSlug = normalizePlanSlug(license?.planSlug ?? user.membershipPlan?.slug);
   const billingSubscription = user.billingSubscriptions[0] ?? null;
   const graceEndsAt =
@@ -151,15 +151,22 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
       : null;
 
   return {
-    planName: user.membershipPlan?.name ?? "Sin membresia",
-    planSlug: user.membershipPlan?.slug ?? "",
+    planName: license?.planName ?? user.membershipPlan?.name ?? "Sin membresia",
+    planSlug: license?.planSlug ?? user.membershipPlan?.slug ?? "",
     effectivePlanSlug,
     billingProvider: billingSubscription?.provider ?? null,
     billingStatus: billingSubscription?.status ?? null,
     currentPeriodEnd: billingSubscription?.currentPeriodEnd ? ensureDate(billingSubscription.currentPeriodEnd).toISOString() : null,
     graceEndsAt,
     canManageBilling: Boolean(billingSubscription?.stripeCustomerId),
-    canUpgrade: effectivePlanSlug === "starter",
+    canUpgrade: effectivePlanSlug === "starter" || license?.accessSource === "BETA",
+    accessSource: normalizeAccessSource(license?.accessSource),
+    betaGrantId: license?.betaGrantId ?? null,
+    betaCampaignName: license?.betaCampaignName ?? null,
+    betaExpiresAt: license?.betaExpiresAt ?? null,
+    betaDaysRemaining: license?.betaExpiresAt
+      ? Math.max(1, Math.ceil((new Date(license.betaExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+      : null,
     monthlyTokenLimit,
     extraTokens,
     consumedTokens,
@@ -167,6 +174,14 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
     allowance,
     availableTokens: Math.max(0, allowance - consumedTokens - reservedTokens),
   };
+}
+
+function normalizeAccessSource(source?: string): "PLAN" | "COMPANY_SUBSCRIPTION" | "BETA" | "STRIPE" {
+  if (source === "BETA" || source === "COMPANY_SUBSCRIPTION" || source === "STRIPE") {
+    return source;
+  }
+
+  return "PLAN";
 }
 
 function normalizePlanSlug(slug?: string | null): "starter" | "pro" | "empresa" {

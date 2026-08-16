@@ -19,6 +19,11 @@ export type AccountMembershipRecord = {
   graceEndsAt: string | null;
   canManageBilling: boolean;
   canUpgrade: boolean;
+  accessSource: "PLAN" | "COMPANY_SUBSCRIPTION" | "BETA" | "STRIPE";
+  betaGrantId: string | null;
+  betaCampaignName: string | null;
+  betaExpiresAt: string | null;
+  betaDaysRemaining: number | null;
   monthlyTokenLimit: number;
   extraTokens: number;
   consumedTokens: number;

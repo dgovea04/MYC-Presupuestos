@@ -182,6 +182,34 @@ enum BillingSubscriptionStatus {
   INCOMPLETE_EXPIRED
 }
 
+enum BetaCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  FINISHED
+}
+
+enum BetaAssignmentMode {
+  AUTOMATIC
+  ADMIN
+  CODE
+  MIXED
+}
+
+enum BetaGrantStatus {
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum BetaGrantSource {
+  AUTOMATIC
+  ADMIN
+  CODE
+  IMPORT
+}
+
 enum RiskVariableType {
   QUANTITY
   UNIT_PRICE
@@ -319,6 +347,10 @@ model User {
   aiSuggestionFeedbackEvents    AiSuggestionFeedbackEvent[]
   aiSessionFeedbackEvents       AiSessionFeedbackEvent[]
   billingSubscriptions          BillingSubscription[]
+  betaCampaignsCreated          BetaCampaign[]               @relation("BetaCampaignCreatedBy")
+  betaGrants                    BetaGrant[]                   @relation("BetaGrantUser")
+  betaGrantsAssigned            BetaGrant[]                   @relation("BetaGrantAssignedBy")
+  betaGrantsRevoked             BetaGrant[]                   @relation("BetaGrantRevokedBy")
   noteTasks                     NoteTask[]
   generatedPartidas             GeneratedPartida[]
   metradoSheets                 MetradoSheet[]
@@ -443,6 +475,59 @@ model AdminAuditLog {
   @@index([targetUserId, createdAt(sort: Desc)])
   @@index([action, createdAt(sort: Desc)])
   @@map("admin_audit_logs")
+}
+
+model BetaCampaign {
+  id                String             @id @default(cuid())
+  name              String
+  code              String?            @unique
+  planSlug          String             @default("pro")
+  durationDays      Int
+  status            BetaCampaignStatus @default(DRAFT)
+  assignmentMode    BetaAssignmentMode @default(ADMIN)
+  startsAt          DateTime
+  endsAt            DateTime?
+  maxAssignments    Int?
+  eligibilityRules  Json
+  createdById       String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  createdBy         User               @relation("BetaCampaignCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  grants            BetaGrant[]
+
+  @@index([status, startsAt])
+  @@index([assignmentMode, status])
+  @@map("beta_campaigns")
+}
+
+model BetaGrant {
+  id           String          @id @default(cuid())
+  campaignId   String
+  userId       String
+  companyId    String?
+  planSlug     String          @default("pro")
+  status       BetaGrantStatus @default(SCHEDULED)
+  source       BetaGrantSource
+  startsAt     DateTime
+  expiresAt    DateTime
+  assignedById String?
+  revokedAt    DateTime?
+  revokedById  String?
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  campaign     BetaCampaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user         User            @relation("BetaGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  company      Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedBy   User?           @relation("BetaGrantAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  revokedBy    User?           @relation("BetaGrantRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, userId])
+  @@index([userId, status, expiresAt])
+  @@index([campaignId, status])
+  @@index([expiresAt, status])
+  @@index([companyId, status])
+  @@map("beta_grants")
 }
 
 model MarketingEvent {
@@ -704,6 +789,7 @@ model Company {
   memberships               CompanyMembership[]
   subscription              CompanySubscription?
   storedProjectPackages     StoredProjectPackage[]
+  betaGrants                BetaGrant[]
 
   @@index([userId])
 }

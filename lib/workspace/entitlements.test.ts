@@ -16,10 +16,19 @@ vi.mock("@/lib/db/prisma", () => ({
     user: {
       findUnique: vi.fn(),
     },
+    membershipPlan: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
+vi.mock("@/lib/beta/access", () => ({
+  getActiveBetaAccess: vi.fn().mockResolvedValue(null),
+  isBetaAccessActive: vi.fn().mockReturnValue(true),
+}));
+
 import { getEffectiveWorkspaceLicense, assertWorkspaceFeatureAccess } from "@/lib/workspace/entitlements";
+import { getActiveBetaAccess, isBetaAccessActive } from "@/lib/beta/access";
 import { prisma } from "@/lib/db/prisma";
 
 const mockPrisma = prisma as unknown as {
@@ -32,11 +41,16 @@ const mockPrisma = prisma as unknown as {
   user: {
     findUnique: ReturnType<typeof vi.fn>;
   };
+  membershipPlan: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
 };
 
 describe("getEffectiveWorkspaceLicense", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(getActiveBetaAccess).mockResolvedValue(null);
+    vi.mocked(isBetaAccessActive).mockReturnValue(true);
   });
 
   it("returns null when membership does not exist", async () => {
@@ -214,6 +228,8 @@ describe("getEffectiveWorkspaceLicense", () => {
 describe("assertWorkspaceFeatureAccess", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(getActiveBetaAccess).mockResolvedValue(null);
+    vi.mocked(isBetaAccessActive).mockReturnValue(true);
   });
 
   it("throws when user has no license", async () => {

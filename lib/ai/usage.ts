@@ -1,5 +1,6 @@
 import { prisma as defaultPrisma } from "@/lib/db/prisma";
 import type { AiAction } from "@/lib/ai/types";
+import { trackBetaFeatureUsed } from "@/lib/beta/analytics";
 
 export type AiUsagePeriodInput = {
   month?: number;
@@ -255,6 +256,8 @@ export async function recordAiUsage({
       },
     });
   });
+
+  void trackBetaFeatureUsed({ userId, feature: "ai.local" }).catch(() => undefined);
 }
 
 export async function recordAiAdjustment({
