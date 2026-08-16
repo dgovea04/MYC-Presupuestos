@@ -3,6 +3,7 @@ import { TrackPricingView } from "@/components/analytics/track-pricing-view";
 import { pricingPlans } from "@/components/landing/landing-content";
 import { LandingLinkButton } from "@/components/landing/landing-link-button";
 import { SectionHeading } from "@/components/landing/section-heading";
+import { PRO_STANDARD_PRICE_DISPLAY } from "@/lib/billing/pricing";
 
 const planMeta: Record<string, { audience: string; cadence: string; note: string; cta: string }> = {
   Starter: {
@@ -13,8 +14,8 @@ const planMeta: Record<string, { audience: string; cadence: string; note: string
   },
   Pro: {
     audience: "Para oficinas técnicas",
-    cadence: "por equipo / mes",
-    note: "Automatización, IA, cronograma y exportes avanzados para mayor volumen.",
+    cadence: "precio fundador anual",
+    note: `Precio fundador para los primeros usuarios Pro. Luego ${PRO_STANDARD_PRICE_DISPLAY}.`,
     cta: "Elegir Pro",
   },
   Empresa: {

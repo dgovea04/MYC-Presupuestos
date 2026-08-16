@@ -94,7 +94,7 @@ GA4_SERVICE_ACCOUNT_PRIVATE_KEY=""
 
 `GA4_PROPERTY_ID`, `GA4_SERVICE_ACCOUNT_EMAIL` y `GA4_SERVICE_ACCOUNT_PRIVATE_KEY` habilitan la lectura server-side de reportes GA4 en `/admin`. El Property ID es numérico y la cuenta de servicio debe tener permiso Viewer sobre la propiedad. La clave privada nunca se envía al navegador.
 
-`STRIPE_PRO_MONTHLY_AMOUNT_PEN_CENTIMOS` es opcional y solo debe configurarse con el importe mensual verificado del plan Pro en centimos de PEN. Si no existe, el panel muestra MRR como no disponible en lugar de estimarlo desde `stripePriceId`.
+`STRIPE_PRO_MONTHLY_AMOUNT_PEN_CENTIMOS` es opcional y, para el precio anual actual, debe configurarse con el equivalente mensual verificado del plan Pro en centimos de PEN (precio anual dividido entre 12). Si no existe, el panel muestra MRR como no disponible en lugar de estimarlo desde `stripePriceId`.
 
 ---
 
@@ -542,7 +542,7 @@ La primera versión del panel interno está disponible en `/admin`, dentro de un
 - recomendación de flujo de onboarding basada en la acción líder;
 - conversión Activated → Pro, suscripciones nuevas, Pro activos, cancelaciones observadas, suscripciones en riesgo y MRR cuando el importe mensual está configurado explícitamente.
 
-La fuente del panel es la tabla interna `marketing_events`, mientras que las suscripciones Pro activas se consultan desde `BillingSubscription`. La sección de monetización usa `BillingSubscription` para conteos y deduplica usuarios nuevos. La cancelación observada usa cambios a `CANCELED` registrados en el rango y no se presenta como churn histórico completo porque el modelo actual no conserva snapshots diarios. MRR solo se calcula con el importe mensual explícito en `STRIPE_PRO_MONTHLY_AMOUNT_PEN_CENTIMOS`; `stripePriceId` por sí solo no contiene un importe confiable. GA4 continúa siendo la fuente externa para adquisición detallada, Realtime, DebugView y Explorations. Las dimensiones UTM se agrupan por la combinación completa de fuente, medio, campaña y contenido para evitar mezclar creatividades distintas. Las cohortes se calculan por semana UTC de registro y solo muestran W1/W4/W8 cuando la ventana de retención ya está madura.
+La fuente del panel es la tabla interna `marketing_events`, mientras que las suscripciones Pro activas se consultan desde `BillingSubscription`. La sección de monetización usa `BillingSubscription` para conteos y deduplica usuarios nuevos. La cancelación observada usa cambios a `CANCELED` registrados en el rango y no se presenta como churn histórico completo porque el modelo actual no conserva snapshots diarios. MRR solo se calcula con el equivalente mensual explícito en `STRIPE_PRO_MONTHLY_AMOUNT_PEN_CENTIMOS`; para Pro anual se debe documentar la conversión desde el precio anual. `stripePriceId` por sí solo no contiene un importe confiable. GA4 continúa siendo la fuente externa para adquisición detallada, Realtime, DebugView y Explorations. Las dimensiones UTM se agrupan por la combinación completa de fuente, medio, campaña y contenido para evitar mezclar creatividades distintas. Las cohortes se calculan por semana UTC de registro y solo muestran W1/W4/W8 cuando la ventana de retención ya está madura.
 
 La migración `20260815100000_add_marketing_events` debe aplicarse en cada entorno antes de usar el panel. Si la migración no está aplicada, las operaciones principales siguen funcionando, pero los eventos internos no podrán persistirse.
 

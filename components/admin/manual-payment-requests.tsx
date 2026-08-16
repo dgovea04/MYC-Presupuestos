@@ -11,6 +11,7 @@ type ManualPaymentRequest = {
   userEmail: string;
   userName: string;
   currentPlanName: string;
+  offerCode: string;
 };
 
 export function ManualPaymentRequests({ requests }: { requests: ManualPaymentRequest[] }) {
@@ -43,7 +44,7 @@ export function ManualPaymentRequests({ requests }: { requests: ManualPaymentReq
           <span>Usuario</span>
           <span>Solicitud</span>
           <span>Fecha</span>
-          <span>Accion</span>
+          <span>Oferta / accion</span>
         </div>
         {requests.map((request) => (
           <div key={request.id} className="grid grid-cols-[1fr_0.9fr_0.9fr_0.8fr] items-center border-t border-[var(--app-border-soft)] px-4 py-3 text-sm text-[var(--app-text)]">
@@ -54,10 +55,13 @@ export function ManualPaymentRequests({ requests }: { requests: ManualPaymentReq
             </div>
             <span className="theme-muted-text truncate font-mono text-xs">{request.id}</span>
             <span>{formatDateLabel(request.createdAt)}</span>
-            <Button className="w-fit gap-2" disabled={isPending} size="sm" type="button" onClick={() => activateRequest(request.id)}>
-              <CheckCircle2 className="h-4 w-4" />
-              Activar Pro
-            </Button>
+            <div>
+              <p className="theme-muted-text font-mono text-xs">{request.offerCode}</p>
+              <Button className="mt-2 w-fit gap-2" disabled={isPending} size="sm" type="button" onClick={() => activateRequest(request.id)}>
+                <CheckCircle2 className="h-4 w-4" />
+                Activar Pro anual
+              </Button>
+            </div>
           </div>
         ))}
       </div>

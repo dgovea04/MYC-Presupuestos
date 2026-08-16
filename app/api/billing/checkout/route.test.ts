@@ -8,9 +8,14 @@ vi.mock("@/lib/billing/stripe", () => ({
   createProCheckoutSession: vi.fn(),
 }));
 
+vi.mock("@/lib/analytics/events", () => ({
+  trackServerEvent: vi.fn(),
+}));
+
 import { POST } from "@/app/api/billing/checkout/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { createProCheckoutSession } from "@/lib/billing/stripe";
+import { trackServerEvent } from "@/lib/analytics/events";
 
 describe("billing checkout route", () => {
   it("requires an authenticated user", async () => {
@@ -33,5 +38,9 @@ describe("billing checkout route", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ url: "https://checkout.stripe.test/session" });
+    expect(trackServerEvent).toHaveBeenCalledWith("checkout_started", expect.objectContaining({
+      target_plan: "pro",
+      billing_period: "annual",
+    }));
   });
 });

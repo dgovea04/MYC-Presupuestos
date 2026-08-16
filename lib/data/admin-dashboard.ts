@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentAiUsagePeriod } from "@/lib/ai/usage";
 import { ensureDate } from "@/lib/utils";
+import { PRO_FOUNDER_OFFER_CODE } from "@/lib/billing/pricing";
 
 export type AdminDashboardFilters = {
   plan?: string;
@@ -243,6 +244,7 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       userEmail: request.user.email,
       currentPlanName: request.user.membershipPlan?.name ?? "Sin plan",
       currentPlanSlug: request.user.membershipPlan?.slug ?? "",
+      offerCode: PRO_FOUNDER_OFFER_CODE,
     })),
   };
 }

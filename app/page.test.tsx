@@ -163,6 +163,9 @@ describe("MC landing page sections", () => {
     expect(container.textContent).toContain("Pro");
     expect(container.textContent).toContain("Empresa");
     expect(container.textContent).toContain("Elegir Pro");
+    expect(container.textContent).toContain("S/ 299/año");
+    expect(container.textContent).toContain("Luego S/ 349/año");
+    expect(container.textContent).toContain("precio fundador anual");
     expect(container.textContent).toContain("Khipu con IA local");
   });
 

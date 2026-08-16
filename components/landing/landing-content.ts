@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { PRO_FOUNDER_PRICE_DISPLAY, PRO_STANDARD_PRICE_DISPLAY } from "@/lib/billing/pricing";
 import {
   BarChart3,
   BotMessageSquare,
@@ -172,8 +173,10 @@ export const pricingPlans: PricingPlan[] = [
   },
   {
     name: "Pro",
-    price: "S/ 189",
+    price: PRO_FOUNDER_PRICE_DISPLAY,
+    originalPrice: `Luego ${PRO_STANDARD_PRICE_DISPLAY}`,
     description: "Para oficinas técnicas que quieren automatización, IA y reportes avanzados sin perder control.",
+    badge: "Precio fundador",
     highlight: true,
     features: [
       "Khipu con IA local y tokens mensuales incluidos",

@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { prisma as defaultPrisma } from "@/lib/db/prisma";
 import { trackServerEvent } from "@/lib/analytics/events";
 import { trackBetaConversion } from "@/lib/beta/analytics";
+import { PRO_FOUNDER_STRIPE_METADATA, PRO_STANDARD_STRIPE_METADATA } from "@/lib/billing/pricing";
 
 type StripeCheckoutSession = {
   id: string;
@@ -137,7 +138,7 @@ export async function createProCheckoutSession({
   stripe?: StripeBillingClient;
   user: { id: string; email?: string | null; name?: string | null };
 }) {
-  const priceId = getRequiredEnv("STRIPE_PRICE_PRO_MONTHLY");
+  const { metadata, priceId } = getProPriceConfig();
   const appUrl = getAppUrl();
   const billingUser = await prisma.user.findUnique({
     where: { id: user.id },
@@ -168,9 +169,9 @@ export async function createProCheckoutSession({
     client_reference_id: user.id,
     ...customerParams,
     line_items: [{ price: priceId, quantity: 1 }],
-    metadata: { userId: user.id, plan: "pro" },
+    metadata: { userId: user.id, ...metadata },
     mode: "subscription",
-    subscription_data: { metadata: { userId: user.id, plan: "pro" } },
+    subscription_data: { metadata: { userId: user.id, ...metadata } },
     success_url: `${appUrl}/account?billing=success`,
     cancel_url: `${appUrl}/account?billing=cancelled`,
   });
@@ -321,6 +322,20 @@ function resolveStripeCustomerId(customer: StripeSubscriptionRecord["customer"])
 
 function timestampToDate(value: number | undefined) {
   return typeof value === "number" ? new Date(value * 1000) : null;
+}
+
+function getProPriceConfig() {
+  const founderPriceId = process.env.STRIPE_PRICE_PRO_ANNUAL_FOUNDER;
+  if (founderPriceId) {
+    return { metadata: PRO_FOUNDER_STRIPE_METADATA, priceId: founderPriceId };
+  }
+
+  const standardPriceId = process.env.STRIPE_PRICE_PRO_ANNUAL;
+  if (standardPriceId) {
+    return { metadata: PRO_STANDARD_STRIPE_METADATA, priceId: standardPriceId };
+  }
+
+  throw new Error("Falta configurar STRIPE_PRICE_PRO_ANNUAL_FOUNDER.");
 }
 
 function getAppUrl() {

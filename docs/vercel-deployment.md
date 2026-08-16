@@ -76,12 +76,12 @@ CONTACT_TO=
 ```env
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_PRO_MONTHLY=
+STRIPE_PRICE_PRO_ANNUAL_FOUNDER=
 ```
 
 - [ ] `STRIPE_SECRET_KEY` corresponde al modo correcto (live en producción, test en Preview).
 - [ ] `STRIPE_WEBHOOK_SECRET` corresponde exactamente al endpoint desplegado.
-- [ ] `STRIPE_PRICE_PRO_MONTHLY` existe en la cuenta Stripe correcta.
+- [ ] `STRIPE_PRICE_PRO_ANNUAL_FOUNDER` es un precio recurrente anual de S/ 299 en la cuenta Stripe correcta.
 - [ ] El webhook está configurado para la URL de producción y sus eventos necesarios.
 
 ### Google OAuth, si está habilitado
@@ -127,7 +127,7 @@ npm run migrate:workflows
 
 ```env
 NEXT_PUBLIC_YAPE_ACCOUNT_NAME=
-NEXT_PUBLIC_YAPE_PRO_AMOUNT=
+NEXT_PUBLIC_YAPE_PRO_AMOUNT=S/ 299.00
 NEXT_PUBLIC_YAPE_PHONE=
 NEXT_PUBLIC_YAPE_QR_IMAGE_URL=
 ```

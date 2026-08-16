@@ -119,6 +119,7 @@ type YapeRequest = {
   yape: {
     accountName: string;
     amount: string;
+    offerCode: string;
     phone: string;
     qrImageUrl: string;
   };
@@ -160,6 +161,9 @@ function YapeRequestPanel({ request }: { request: YapeRequest }) {
               <span className="theme-strong-text font-medium">Monto:</span> {request.yape.amount}
             </p>
           ) : null}
+          <p>
+            <span className="theme-strong-text font-medium">Oferta:</span> {request.yape.offerCode}
+          </p>
           <p>
             <span className="theme-strong-text font-medium">Solicitud:</span> {request.requestId}
           </p>

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { PRO_FOUNDER_PRICE_DISPLAY, PRO_STANDARD_PRICE_DISPLAY } from "@/lib/billing/pricing";
 import { Boxes, Calculator, FileSpreadsheet, GitBranch, HardHat, Import, Layers3, Sparkles } from "lucide-react";
 
 export const ACQUISITION_PATH = "/software-presupuestos-construccion";
@@ -38,8 +39,8 @@ export const acquisitionOffers = [
   },
   {
     name: "Pro",
-    price: "S/ 189/mes",
-    description: "Precio de referencia sujeto a validación durante los primeros 90 días.",
+    price: PRO_FOUNDER_PRICE_DISPLAY,
+    description: `Precio fundador de lanzamiento. Luego ${PRO_STANDARD_PRICE_DISPLAY}.`,
     features: ["Metrados y fórmula polinómica", "Automatización y Khipu", "Exportables avanzados", "Más capacidad para equipos técnicos"],
     cta: "Conocer Pro",
     href: "/register",

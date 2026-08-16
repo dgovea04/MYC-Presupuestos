@@ -300,12 +300,17 @@ export async function activateManualProRequest(requestId: string) {
       },
     });
 
+    const currentPeriodStart = new Date();
+    const currentPeriodEnd = new Date(currentPeriodStart);
+    currentPeriodEnd.setUTCFullYear(currentPeriodEnd.getUTCFullYear() + 1);
+
     await tx.billingSubscription.create({
       data: {
         provider: "MANUAL",
         status: "ACTIVE",
         userId: request.userId,
-        currentPeriodStart: new Date(),
+        currentPeriodStart,
+        currentPeriodEnd,
       },
     });
 

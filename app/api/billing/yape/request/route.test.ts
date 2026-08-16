@@ -8,7 +8,8 @@ vi.mock("@/lib/billing/yape", () => ({
   createYapePaymentRequest: vi.fn(),
   getYapePaymentConfig: vi.fn(() => ({
     accountName: "MC Presupuestos",
-    amount: "S/ 49.00",
+    amount: "S/ 299.00",
+    offerCode: "PRO_ANNUAL_FOUNDER",
     phone: "999999999",
     qrImageUrl: "/yape-qr.png",
   })),
@@ -46,7 +47,8 @@ describe("billing yape request route", () => {
       createdAt: "2026-05-29T12:00:00.000Z",
       yape: {
         accountName: "MC Presupuestos",
-        amount: "S/ 49.00",
+        amount: "S/ 299.00",
+        offerCode: "PRO_ANNUAL_FOUNDER",
         phone: "999999999",
         qrImageUrl: "/yape-qr.png",
       },

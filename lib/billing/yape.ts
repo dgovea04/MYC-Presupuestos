@@ -1,4 +1,5 @@
 import { prisma as defaultPrisma } from "@/lib/db/prisma";
+import { PRO_FOUNDER_OFFER_CODE, PRO_FOUNDER_YAPE_AMOUNT } from "@/lib/billing/pricing";
 
 type YapePrismaClient = {
   billingSubscription: {
@@ -33,7 +34,8 @@ type YapePrismaClient = {
 export function getYapePaymentConfig() {
   return {
     accountName: process.env.NEXT_PUBLIC_YAPE_ACCOUNT_NAME ?? "MC Presupuestos",
-    amount: process.env.NEXT_PUBLIC_YAPE_PRO_AMOUNT ?? "",
+    amount: process.env.NEXT_PUBLIC_YAPE_PRO_AMOUNT ?? PRO_FOUNDER_YAPE_AMOUNT,
+    offerCode: PRO_FOUNDER_OFFER_CODE,
     phone: process.env.NEXT_PUBLIC_YAPE_PHONE ?? "",
     qrImageUrl: process.env.NEXT_PUBLIC_YAPE_QR_IMAGE_URL ?? "",
   };

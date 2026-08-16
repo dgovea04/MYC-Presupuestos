@@ -26,7 +26,7 @@ export async function POST() {
         companyId: session.user.activeCompanyId ?? session.user.companyId,
         provider: "stripe",
         target_plan: "pro",
-        billing_period: "monthly",
+        billing_period: "annual",
       });
     } catch {
       // Analytics must not turn a valid checkout session into an API failure.

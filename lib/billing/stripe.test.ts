@@ -4,7 +4,7 @@ import { createBillingPortalSession, createProCheckoutSession, syncStripeSubscri
 describe("Stripe billing service", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.myc.test");
-    vi.stubEnv("STRIPE_PRICE_PRO_MONTHLY", "price_pro");
+    vi.stubEnv("STRIPE_PRICE_PRO_ANNUAL_FOUNDER", "price_pro_annual_founder");
   });
 
   it("creates a Pro checkout session for the signed-in user", async () => {
@@ -21,8 +21,10 @@ describe("Stripe billing service", () => {
       expect.objectContaining({
         client_reference_id: "user-1",
         customer_email: "user@example.com",
-        line_items: [{ price: "price_pro", quantity: 1 }],
+        line_items: [{ price: "price_pro_annual_founder", quantity: 1 }],
+        metadata: { userId: "user-1", offer: "founder", plan: "pro", price_amount: "299" },
         mode: "subscription",
+        subscription_data: { metadata: { userId: "user-1", offer: "founder", plan: "pro", price_amount: "299" } },
         success_url: "https://app.myc.test/account?billing=success",
         cancel_url: "https://app.myc.test/account?billing=cancelled",
       }),
@@ -103,7 +105,7 @@ function createStripeMock() {
         current_period_end: 1_780_876_800,
         cancel_at_period_end: false,
         metadata: { userId: "user-1" },
-        items: { data: [{ price: { id: "price_pro" } }] },
+        items: { data: [{ price: { id: "price_pro_annual_founder" } }] },
       }),
     },
   };
