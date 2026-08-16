@@ -197,7 +197,7 @@ export function AdminMfaSettings() {
               {verifiedUntil ? <span className="theme-status-success theme-status-success-strong rounded-full px-3 py-1 text-xs">Verificado hasta {verifiedUntil}</span> : null}
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -205,11 +205,23 @@ export function AdminMfaSettings() {
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
                 maxLength={20}
+                className="min-w-0 flex-1"
               />
-              <Button type="button" onClick={() => void verifyForCriticalActions()} disabled={busy || code.trim().length < 6}>
+              <Button
+                type="button"
+                onClick={() => void verifyForCriticalActions()}
+                disabled={busy || code.trim().length < 6}
+                className="w-full shrink-0 whitespace-nowrap sm:w-auto"
+              >
                 Verificar para acciones críticas
               </Button>
-              <Button type="button" variant="outline" onClick={() => void disable()} disabled={busy || code.trim().length < 6} className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void disable()}
+                disabled={busy || code.trim().length < 6}
+                className="w-full shrink-0 gap-2 whitespace-nowrap sm:w-auto"
+              >
                 <ShieldOff className="h-4 w-4" />
                 Desactivar
               </Button>

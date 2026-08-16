@@ -1,8 +1,9 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, LifeBuoy, LogOut, MailCheck, Save, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, KeyRound, LifeBuoy, Loader2, LogOut, MailCheck, Save, ShieldOff, ShieldCheck, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +67,10 @@ export function AdminUserAccessForm({
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [verifiedUserIds, setVerifiedUserIds] = useState<ReadonlySet<string>>(new Set());
+  const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
+  const [deletionReason, setDeletionReason] = useState("");
+  const [permanentDeleteError, setPermanentDeleteError] = useState<string | null>(null);
 
   if (!selectedUser) {
     return <p className="theme-dashed-panel theme-muted-text rounded-2xl border px-4 py-6 text-sm">No hay usuarios para administrar.</p>;
@@ -193,35 +198,49 @@ export function AdminUserAccessForm({
     });
   }
 
+  function openPermanentDeleteDialog() {
+    setConfirmationEmail("");
+    setDeletionReason("");
+    setPermanentDeleteError(null);
+    setPermanentDeleteOpen(true);
+  }
+
   function handlePermanentDelete() {
-    const confirmationEmail = window.prompt(`Escribe ${selectedUser.email} para confirmar la eliminacion permanente.`);
+    const normalizedEmail = confirmationEmail.trim();
+    const normalizedReason = deletionReason.trim();
 
-    if (confirmationEmail === null) {
+    if (normalizedEmail.toLowerCase() !== selectedUser.email.toLowerCase()) {
+      setPermanentDeleteError("Escribe exactamente el correo del usuario seleccionado para continuar.");
       return;
     }
 
-    const reason = window.prompt("Indica el motivo de la eliminacion permanente (minimo 10 caracteres).");
-
-    if (reason === null) {
+    if (normalizedReason.length < 10) {
+      setPermanentDeleteError("El motivo debe tener al menos 10 caracteres.");
       return;
     }
 
+    setPermanentDeleteError(null);
     setMessage(null);
 
     startTransition(async () => {
       const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmationEmail, reason }),
+        body: JSON.stringify({ confirmationEmail: normalizedEmail, reason: normalizedReason }),
       });
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as { error?: string; expiresAt?: string } | null;
 
       if (!response.ok) {
-        setMessage(payload?.error ?? "No se pudo eliminar el usuario.");
+        setPermanentDeleteError(payload?.error ?? "No se pudo crear la solicitud de eliminación.");
         return;
       }
 
-      setMessage("Solicitud de eliminación creada. Otro administrador activo debe aprobarla.");
+      setPermanentDeleteOpen(false);
+      setMessage(
+        payload?.expiresAt
+          ? `Solicitud creada. Otro administrador activo debe aprobarla antes del ${formatDateTime(payload.expiresAt)}. Después comenzará un periodo de restauración de 30 días.`
+          : "Solicitud creada. Otro administrador activo debe aprobarla y luego comenzará un periodo de restauración de 30 días.",
+      );
       router.refresh();
     });
   }
@@ -384,7 +403,7 @@ export function AdminUserAccessForm({
             {selectedUser.status === "ACTIVE" ? "Desactivar usuario" : "Reactivar usuario"}
           </Button>
           {isSuperAdmin && selectedUser.id !== protectedUserId ? (
-            <Button type="button" variant="destructive" disabled={isPending} onClick={handlePermanentDelete} className="gap-2 sm:col-span-2">
+            <Button type="button" variant="destructive" disabled={isPending} onClick={openPermanentDeleteDialog} className="gap-2 sm:col-span-2">
               <Trash2 className="h-4 w-4" />
               Solicitar eliminación permanente
             </Button>
@@ -398,8 +417,95 @@ export function AdminUserAccessForm({
       </Button>
 
       {message ? <p className="theme-muted-panel theme-muted-text rounded-xl px-3 py-2 text-sm">{message}</p> : null}
+
+      <Dialog.Root open={permanentDeleteOpen} onOpenChange={setPermanentDeleteOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.42)] outline-none">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title className="text-base font-semibold text-[var(--app-text-strong)]">
+                  Solicitar eliminación permanente
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--app-text-muted)]">
+                  Confirma que deseas solicitar la eliminación de <span className="font-medium text-[var(--app-text)]">{selectedUser.email}</span>.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  aria-label="Cerrar"
+                  disabled={isPending}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="theme-status-warning mt-4 flex items-start gap-2 rounded-xl border px-3 py-3 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                Esta acción no elimina la cuenta inmediatamente: requiere MFA verificado, aprobación de otro administrador activo y luego mantiene la cuenta suspendida durante 30 días antes de poder ejecutar la eliminación definitiva.
+              </p>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="permanent-delete-email">Correo del usuario</Label>
+                <Input
+                  id="permanent-delete-email"
+                  type="email"
+                  value={confirmationEmail}
+                  onChange={(event) => setConfirmationEmail(event.target.value)}
+                  placeholder={selectedUser.email}
+                  autoComplete="off"
+                  disabled={isPending}
+                />
+                <p className="theme-subtle-text text-xs">Escribe {selectedUser.email} para confirmar.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="permanent-delete-reason">Motivo</Label>
+                <textarea
+                  id="permanent-delete-reason"
+                  value={deletionReason}
+                  onChange={(event) => setDeletionReason(event.target.value)}
+                  placeholder="Describe el motivo de la eliminación (mínimo 10 caracteres)."
+                  minLength={10}
+                  maxLength={500}
+                  rows={3}
+                  disabled={isPending}
+                  className="theme-surface-card theme-strong-text w-full rounded-xl border px-3 py-2 text-sm outline-none transition placeholder:text-[var(--app-text-muted)] focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                />
+                <p className="theme-subtle-text text-right text-xs">{deletionReason.length}/500</p>
+              </div>
+            </div>
+
+            {permanentDeleteError ? <p className="theme-status-error mt-4 rounded-xl border px-3 py-2 text-sm">{permanentDeleteError}</p> : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline" disabled={isPending}>
+                  Cancelar
+                </Button>
+              </Dialog.Close>
+              <Button type="button" variant="destructive" onClick={handlePermanentDelete} disabled={isPending}>
+                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                {isPending ? "Enviando solicitud..." : "Confirmar solicitud"}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </form>
   );
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function formatDateLabel(value: string) {

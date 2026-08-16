@@ -335,6 +335,7 @@ model User {
   sessionVersion                Int                         @default(0)
   deletionScheduledAt           DateTime?
   deletionReason                String?
+  deletionPreviousStatus        UserStatus?
   membershipPlanId              String?
   aiTokenExtraMonthly           Int                         @default(0)
   passwordHash                  String?

@@ -91,4 +91,35 @@ describe("AdminUserAccessForm", () => {
       }));
     });
   });
+
+  it("uses the in-app dialog to request deletion of a suspended user", async () => {
+    const suspendedUser = { ...pendingUser, status: "SUSPENDED" as const };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, expiresAt: "2026-08-16T12:00:00.000Z" }), { status: 202 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AdminUserAccessForm isSuperAdmin plans={plans} users={[suspendedUser]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Solicitar eliminación permanente" }));
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByText(/Escribe exactamente el correo/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Correo del usuario"), { target: { value: suspendedUser.email } });
+    fireEvent.change(screen.getByLabelText("Motivo"), { target: { value: "Cuenta de prueba suspendida" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar solicitud" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/users/user-1", expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({
+          confirmationEmail: suspendedUser.email,
+          reason: "Cuenta de prueba suspendida",
+        }),
+      }));
+    });
+
+    expect(await screen.findByText(/Solicitud creada/)).toBeTruthy();
+  });
 });

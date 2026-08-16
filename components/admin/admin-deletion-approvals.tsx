@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Check, RotateCcw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -39,7 +39,13 @@ export function AdminDeletionApprovals({
   const [items, setItems] = useState(approvals);
   const [scheduledItems, setScheduledItems] = useState(scheduledDeletions);
   const [message, setMessage] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   if (items.length === 0 && scheduledItems.length === 0) {
     return null;
@@ -133,6 +139,10 @@ export function AdminDeletionApprovals({
           </div>
           <div className="grid gap-3">
             {scheduledItems.map((deletion) => {
+              const gracePeriodElapsed = new Date(deletion.deletionScheduledAt).getTime() <= currentTime;
+              const canRestore = canManageGracePeriod && !isPending && !gracePeriodElapsed;
+              const canExecute = canManageGracePeriod && !isPending && gracePeriodElapsed;
+
               return (
                 <div key={deletion.id} className="theme-surface-card rounded-xl border p-3 text-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -144,11 +154,25 @@ export function AdminDeletionApprovals({
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      <Button type="button" variant="outline" disabled={isPending || !canManageGracePeriod} onClick={() => handleScheduledAction(deletion.id, "restore")} className="gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!canRestore}
+                        onClick={() => handleScheduledAction(deletion.id, "restore")}
+                        className="gap-1"
+                        title={gracePeriodElapsed ? "El periodo de gracia ya venció; la cuenta ya no puede restaurarse." : undefined}
+                      >
                         <RotateCcw className="h-4 w-4" />
                         Restaurar
                       </Button>
-                      <Button type="button" variant="destructive" disabled={isPending || !canManageGracePeriod} onClick={() => handleScheduledAction(deletion.id, "execute")} className="gap-1">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={!canExecute}
+                        onClick={() => handleScheduledAction(deletion.id, "execute")}
+                        className="gap-1"
+                        title={!gracePeriodElapsed ? `Disponible desde ${formatDateTime(deletion.deletionScheduledAt)}` : undefined}
+                      >
                         <Trash2 className="h-4 w-4" />
                         Eliminar definitivamente
                       </Button>

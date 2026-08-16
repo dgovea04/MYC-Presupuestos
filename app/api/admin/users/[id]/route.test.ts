@@ -43,6 +43,27 @@ describe("admin user route", () => {
     expect(updateUserAdminAccess).not.toHaveBeenCalled();
   });
 
+  it("explains that MFA verification is required for permanent deletion", async () => {
+    vi.mocked(requireAdminSession).mockResolvedValue(null);
+
+    const response = await DELETE(
+      new Request("http://localhost/api/admin/users/user-1", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmationEmail: "test@example.com",
+          reason: "Limpieza de usuario de pruebas local",
+        }),
+      }),
+      { params: Promise.resolve({ id: "user-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Forbidden: esta operación requiere una sesión de Super Admin activa con MFA verificado. Activa MFA y verifica el código para acciones críticas antes de continuar.",
+    });
+  });
+
   it("requires a reason for permanent deletion", async () => {
     vi.mocked(requireAdminSession).mockResolvedValue({ user: { id: "admin-1", email: "admin@example.com" } });
 

@@ -40,7 +40,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const session = await requireAdminSession("users.delete_permanently", request);
 
   if (!session) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Forbidden: esta operación requiere una sesión de Super Admin activa con MFA verificado. Activa MFA y verifica el código para acciones críticas antes de continuar." },
+      { status: 403 },
+    );
   }
 
   try {

@@ -200,7 +200,8 @@ export async function approveAdminUserDeletion(approvalId: string, approverUserI
   await prisma.$transaction(async (tx) => {
     const scheduledUsers = await tx.$executeRaw`
       UPDATE "User"
-      SET "status" = 'SUSPENDED',
+      SET "deletionPreviousStatus" = "status",
+          "status" = 'SUSPENDED',
           "sessionVersion" = "sessionVersion" + 1,
           "deletionScheduledAt" = ${deletionScheduledAt},
           "deletionReason" = ${approval.reason},
@@ -274,7 +275,12 @@ export async function restoreAdminUserDeletion(approvalId: string, actorUserId: 
   await prisma.$transaction(async (tx) => {
     const restoredUsers = await tx.$executeRaw`
       UPDATE "User"
-      SET "status" = 'ACTIVE', "sessionVersion" = "sessionVersion" + 1, "deletionScheduledAt" = NULL, "deletionReason" = NULL, "updatedAt" = NOW()
+      SET "status" = COALESCE("deletionPreviousStatus", 'ACTIVE'),
+          "deletionPreviousStatus" = NULL,
+          "sessionVersion" = "sessionVersion" + 1,
+          "deletionScheduledAt" = NULL,
+          "deletionReason" = NULL,
+          "updatedAt" = NOW()
       WHERE "id" = ${approval.targetUserId}
         AND "deletionScheduledAt" > NOW()
     `;

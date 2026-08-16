@@ -130,6 +130,7 @@ describe("admin deletion approvals", () => {
 
     expect(result).toEqual({ targetEmail: "user@example.com" });
     expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.executeRaw.mock.calls.some(([query]) => Array.isArray(query) && query.join("").includes('"deletionPreviousStatus"'))).toBe(true);
   });
 
   it("does not restore an account after the grace period expires", async () => {

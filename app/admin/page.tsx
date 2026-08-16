@@ -262,10 +262,7 @@ export default async function AdminPage({
       {adminTab === "ai" ? (
         <section>
         {session.user.isSuperAdmin ? (
-          <div className="space-y-6">
-            <AdminMfaSettings />
-            <AdminCloudAiSettings />
-          </div>
+          <AdminCloudAiSettings />
         ) : (
           <Card className="theme-surface-card">
             <CardContent className="space-y-2 p-6">
@@ -284,6 +281,11 @@ export default async function AdminPage({
 
       {adminTab === "security" ? (
         <>
+          {session.user.isSuperAdmin ? (
+            <section>
+              <AdminMfaSettings />
+            </section>
+          ) : null}
           <section>
             <AdminSecurityOverview overview={securityOverview} />
           </section>
