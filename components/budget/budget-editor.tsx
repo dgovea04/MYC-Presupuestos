@@ -5016,7 +5016,7 @@ const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
             <QualityStatCard label="Resueltas por sugerencia" value={qualitySummary.itemsResolvedFromSuggestion} tone="info" />
           </div>
           <SummaryRow label="Costo directo" value={totals.totalDirectCost} currency={currency} compact={isExcelMode} />
-          <SummaryRow label="Gastos generales" rate={generalExpensesRate} value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
+          <SummaryRow label="GG" rate={generalExpensesRate} value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
           <SummaryRow label="Utilidad" rate={utilityRate} value={totals.totalUtility} currency={currency} compact={isExcelMode} />
           <SummaryRow label="IGV" rate={igvRate} value={totals.totalTax} currency={currency} compact={isExcelMode} />
           <div className={cn("theme-budget-summary-total", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
