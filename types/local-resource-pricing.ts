@@ -60,6 +60,8 @@ export type LocalResourcePriceHistoryRecord = {
   id: string;
   resourceId: string;
   batchId: string;
+  versionLabel: string;
+  batchStatus: LocalResourcePriceBatchStatus;
   oldPrice: string;
   newPrice: string;
   changedById: string;

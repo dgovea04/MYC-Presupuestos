@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     if (!entry.name.toLowerCase().endsWith(".xlsx")) return NextResponse.json({ error: "Solo se admite Excel .xlsx en esta fase." }, { status: 400 });
     const parsed = await parseLocalResourcePriceWorkbook(await entry.arrayBuffer());
     const batch = await createLocalResourcePriceBatch({ actorUserId: session.user.id, source: "EXCEL", rows: parsed.rows, fileName: entry.name, fileHash: parsed.fileHash, notes: `Hoja importada: ${parsed.worksheetName}` });
-    return NextResponse.json(batch, { status: 201 });
+    return NextResponse.json(batch, { status: "reused" in batch && batch.reused ? 200 : 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo importar el Excel." }, { status: 400 });
   }

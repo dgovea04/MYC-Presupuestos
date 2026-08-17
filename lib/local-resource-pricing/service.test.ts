@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchLocalPriceRow, normalizeMatchText, parseLocalPrice } from "@/lib/local-resource-pricing/service";
+import { isPrismaUniqueConstraintError, matchLocalPriceRow, normalizeMatchText, parseLocalPrice } from "@/lib/local-resource-pricing/service";
 import { Prisma } from "@prisma/client";
 
 describe("local resource pricing domain", () => {
@@ -16,6 +16,12 @@ describe("local resource pricing domain", () => {
     expect(parseLocalPrice("25,4500").toFixed(4)).toBe("25.4500");
     expect(() => parseLocalPrice("-1")).toThrow();
     expect(() => parseLocalPrice("1.12345")).toThrow();
+  });
+
+  it("recognizes Prisma uniqueness collisions for retry handling", () => {
+    expect(isPrismaUniqueConstraintError({ code: "P2002" })).toBe(true);
+    expect(isPrismaUniqueConstraintError({ code: "P2025" })).toBe(false);
+    expect(isPrismaUniqueConstraintError(null)).toBe(false);
   });
 
   it("normalizes accents and whitespace only for matching fallback", () => {

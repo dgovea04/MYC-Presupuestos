@@ -196,7 +196,7 @@ export default async function AdminPage({
 
       {adminTab === "prices" ? (
         <section className="space-y-6">
-          <LocalResourcePriceAdminPanel canManage={Boolean(session.user.isSuperAdmin)} />
+          <LocalResourcePriceAdminPanel canManage={Boolean(session.user.isSuperAdmin)} mfaEnabled={Boolean(session.user.mfaEnabled)} />
           <ResourcePriceProviderAdminPanel canManage={canManageResourcePrices} />
         </section>
       ) : null}

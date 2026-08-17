@@ -56,8 +56,13 @@ export async function createLocalResourcePriceBatch(input: {
   fileName?: string | null;
   fileHash?: string | null;
   notes?: string | null;
+  attempt?: number;
 }) {
   if (input.rows.length === 0 || input.rows.length > 5000) throw new Error("El lote debe contener entre 1 y 5000 filas.");
+  if (input.source === "EXCEL" && input.fileHash) {
+    const existingBatch = await findExistingExcelBatch(input.fileHash);
+    if (existingBatch) return { ...existingBatch, reused: true };
+  }
   const resources = await prisma.resource.findMany({
     where: { companyId: null },
     select: { id: true, code: true, description: true, unit: true, currency: true, unitPrice: true },
@@ -69,7 +74,9 @@ export async function createLocalResourcePriceBatch(input: {
   const changedRows = prepared.filter((item) => item.status === "UPDATED").length;
   const invalidRows = prepared.length - validRows;
 
-  const batch = await prisma.$transaction(async (tx) => {
+  const attempt = input.attempt ?? 0;
+  try {
+    const batch = await prisma.$transaction(async (tx) => {
     const latest = await tx.localResourcePriceBatch.findFirst({ orderBy: { versionNumber: "desc" }, select: { versionNumber: true } });
     const versionNumber = (latest?.versionNumber ?? 0) + 1;
     const versionLabel = buildVersionLabel(new Date(), versionNumber);
@@ -118,9 +125,19 @@ export async function createLocalResourcePriceBatch(input: {
       metadata: { batchId: created.id, versionLabel, source: input.source, totalRows: prepared.length, changedRows, invalidRows },
     }, tx);
     return created;
-  });
+    });
 
-  return serializeBatchWithItems(batch);
+    return serializeBatchWithItems(batch);
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      if (input.source === "EXCEL" && input.fileHash) {
+        const existingBatch = await findExistingExcelBatch(input.fileHash);
+        if (existingBatch) return { ...existingBatch, reused: true };
+      }
+      if (attempt < 3) return createLocalResourcePriceBatch({ ...input, attempt: attempt + 1 });
+    }
+    throw error;
+  }
 }
 
 export async function listLocalResourcePriceBatches(input: { status?: string; limit?: number } = {}) {
@@ -138,6 +155,26 @@ export async function getLocalResourcePriceBatch(id: string) {
     include: { items: { include: { resource: { select: { description: true } } }, orderBy: { rowNumber: "asc" } }, historyEntries: true },
   });
   return batch ? serializeBatchWithItems(batch) : null;
+}
+
+export async function getLocalResourcePriceHistory(resourceId: string) {
+  const entries = await prisma.localResourcePriceHistory.findMany({
+    where: { resourceId },
+    orderBy: { changedAt: "desc" },
+    take: 100,
+    include: { batch: { select: { versionLabel: true, status: true } } },
+  });
+  return entries.map((entry) => ({
+    id: entry.id,
+    resourceId: entry.resourceId,
+    batchId: entry.batchId,
+    versionLabel: entry.batch.versionLabel,
+    batchStatus: entry.batch.status as LocalResourcePriceBatchSummary["status"],
+    oldPrice: entry.oldPrice.toString(),
+    newPrice: entry.newPrice.toString(),
+    changedById: entry.changedById,
+    changedAt: entry.changedAt.toISOString(),
+  }));
 }
 
 export async function publishLocalResourcePriceBatch(input: { batchId: string; actorUserId: string; confirmVersion: string }) {
@@ -245,6 +282,15 @@ function prepareLocalItem(row: LocalResourcePriceRowInput, rowNumber: number, re
   if (resource.currency !== row.currency) return { ...base, resourceId: resource.id, proposedPrice: price, oldPrice: resource.unitPrice, status: "INVALID", reason: `Moneda incompatible: catálogo ${resource.currency}, archivo ${row.currency}.` };
   const unchanged = new Decimal(resource.unitPrice.toString()).comparedTo(price) === 0;
   return { ...base, resourceId: resource.id, proposedPrice: price, oldPrice: resource.unitPrice, status: unchanged ? "UNCHANGED" : "UPDATED", reason: unchanged ? "El precio coincide con el catálogo actual." : null };
+}
+
+async function findExistingExcelBatch(fileHash: string) {
+  const existing = await prisma.localResourcePriceBatch.findFirst({ where: { source: "EXCEL", fileHash }, select: { id: true } });
+  return existing ? getLocalResourcePriceBatch(existing.id) : null;
+}
+
+export function isPrismaUniqueConstraintError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
 
 function toDate(value?: string) {

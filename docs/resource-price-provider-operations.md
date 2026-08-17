@@ -120,6 +120,20 @@ Rollback mediante nueva versión
 
 ### Importación Excel
 
+Descarga el catálogo actual para editarlo desde el botón **Exportar catálogo actual** o directamente en:
+
+```text
+GET /api/admin/resource-prices/local/export
+```
+
+También puedes descargar una estructura vacía desde **Descargar plantilla**:
+
+```text
+GET /api/admin/resource-prices/local/template
+```
+
+La exportación actual conserva `resourceId`, precio vigente, fecha observada y fuente. Ambos archivos son privados y requieren `SUPER_ADMIN` con MFA. El archivo de plantilla contiene las hojas `Precios` e `Instrucciones`.
+
 El archivo `.xlsx` debe incluir, como mínimo, estos encabezados:
 
 | Encabezado | Obligatorio | Descripción |
@@ -132,9 +146,8 @@ El archivo `.xlsx` debe incluir, como mínimo, estos encabezados:
 | `resourceId` | Recomendado | ID interno estable; evita ambigüedades |
 | `observedAt` o `fecha` | No | Fecha de observación del precio |
 | `source` o `fuente` | No | Evidencia/origen del precio |
-| `notes` o `notas` | No | Observaciones del administrador |
-
-El sistema calcula un hash SHA-256 del archivo, conserva el nombre y no publica ninguna fila durante la importación. El matching usa `resourceId`, luego código y finalmente descripción+unidad únicamente si el resultado es único.
+| `notes` o `notas` | No | Observaciones del administrador |El sistema calcula un hash SHA-256 del archivo, conserva el nombre y no publica ninguna fila durante la importación. Si el mismo archivo ya fue procesado como `EXCEL`, la importación es idempotente: devuelve el preview existente y no crea una nueva versión. Si dos administradores importan simultáneamente, una colisión de unicidad se recupera consultando el lote ganador; para lotes distintos se reintenta la asignación de versión hasta tres veces.
+ El matching usa `resourceId`, luego código y finalmente descripción+unidad únicamente si el resultado es único. El flujo recomendado es `exportar catálogo → editar solo precios/metadatos autorizados → importar → revisar preview → publicar`.
 
 ### Edición manual
 
@@ -148,7 +161,7 @@ Las filas inválidas no bloquean la revisión del resto, pero nunca se publican.
 
 ### Historial y rollback
 
-Cada precio publicado crea una entrada en `local_resource_price_history` con valor anterior, nuevo valor, lote y actor. El rollback solo está permitido sobre una versión publicada cuyo precio actual todavía coincida con el valor que esa versión publicó. El sistema crea una nueva versión `ROLLBACK`, aplica los valores anteriores y marca la versión original como `ROLLED_BACK`.
+Cada precio publicado crea una entrada en `local_resource_price_history` con valor anterior, nuevo valor, lote y actor. La tabla administrativa ofrece **Ver historial** por insumo y permite revisar la línea de tiempo de las últimas 100 modificaciones. El rollback solo está permitido sobre una versión publicada cuyo precio actual todavía coincida con el valor que esa versión publicó. El sistema crea una nueva versión `ROLLBACK`, aplica los valores anteriores y marca la versión original como `ROLLED_BACK`.
 
 ### Permisos
 
@@ -156,9 +169,40 @@ Todas las rutas locales requieren `requireSuperAdminSession(request)`, por lo qu
 
 - `GET/POST /api/admin/resource-prices/local`
 - `POST /api/admin/resource-prices/local/import`
+- `GET /api/admin/resource-prices/local/export`
+- `GET /api/admin/resource-prices/local/template`
+- `GET /api/admin/resource-prices/local/history/[resourceId]`
 - `GET /api/admin/resource-prices/local/[id]`
 - `POST /api/admin/resource-prices/local/[id]/publish`
 - `POST /api/admin/resource-prices/local/[id]/reject`
 - `POST /api/admin/resource-prices/local/[id]/rollback`
 
 El proveedor externo y este catálogo local son caminos separados: posponer o deshabilitar `mc-presupuestos-price-api` no impide usar la actualización local.
+
+## Aplicación de la migración local
+
+La migración de este flujo es:
+
+```text
+prisma/migrations/20260818090000_add_local_resource_price_versions/
+```
+
+En una base local o staging revisada:
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+Antes de producción:
+
+1. ejecutar backup de PostgreSQL;
+2. revisar que las tablas `local_resource_price_batches`, `local_resource_price_batch_items` y `local_resource_price_history` estén creadas;
+3. confirmar que no se modificaron `BudgetItem`, `ApuResource` ni tablas de cálculo;
+4. importar un Excel pequeño en staging;
+5. revisar el preview sin publicar;
+6. publicar una sola fila de prueba;
+7. comprobar historial y rollback;
+8. recién después cargar el catálogo operativo.
+
+La aplicación no ejecuta migraciones automáticamente durante el build ni durante el arranque.
