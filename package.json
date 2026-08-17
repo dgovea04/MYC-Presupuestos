@@ -33,6 +33,9 @@
     "s10:draft": "node ./node_modules/tsx/dist/cli.mjs scripts/create-s10-import-draft.ts",
     "s10:snapshot": "node ./node_modules/tsx/dist/cli.mjs scripts/validate-s10-snapshot.ts",
     "migrate:workflows": "node ./node_modules/tsx/dist/cli.mjs scripts/migrate-agent-workflows.ts",
+    "price-api:dev": "node ./node_modules/tsx/dist/cli.mjs services/mc-presupuestos-price-api/src/server.ts",
+    "price-api:typecheck": "node ./node_modules/typescript/bin/tsc --project services/mc-presupuestos-price-api/tsconfig.json --noEmit",
+    "test:price-api": "node ./node_modules/vitest/vitest.mjs run services/mc-presupuestos-price-api/src/handler.test.ts",
     "test": "node ./node_modules/vitest/vitest.mjs run"
   },
   "dependencies": {

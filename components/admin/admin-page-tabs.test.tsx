@@ -20,6 +20,7 @@ describe("AdminPageTabs", () => {
     expect(markup).toContain("IA");
     expect(markup).toContain("Usuarios");
     expect(markup).toContain("Facturación");
+    expect(markup).toContain("Precios");
     expect(markup).toContain("Seguridad");
     expect(markup).toContain("Auditoría");
     expect(markup).toContain("adminTab=billing");

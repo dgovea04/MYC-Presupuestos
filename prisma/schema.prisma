@@ -63,6 +63,69 @@ enum ResourceCategory {
   SUBCONTRACT
 }
 
+enum ResourcePriceProviderStatus {
+  DISABLED
+  HEALTHY
+  DEGRADED
+  SUSPENDED
+}
+
+enum ResourcePriceRequestMode {
+  ON_DEMAND
+  SCHEDULED
+  WEBHOOK
+}
+
+enum ResourcePriceRequestStatus {
+  QUEUED
+  RUNNING
+  PREVIEW_READY
+  APPLIED
+  PARTIALLY_APPLIED
+  REJECTED
+  FAILED
+  CANCELED
+}
+
+enum ResourcePriceUpdateItemStatus {
+  MATCHED
+  UPDATED
+  UNCHANGED
+  UNMATCHED
+  UNIT_MISMATCH
+  CURRENCY_MISMATCH
+  INVALID_PRICE
+  STALE
+  CONFLICT
+  APPLIED
+  REJECTED
+  ERROR
+}
+
+enum LocalResourcePriceBatchStatus {
+  DRAFT
+  PREVIEW_READY
+  PUBLISHED
+  REJECTED
+  ROLLED_BACK
+}
+
+enum LocalResourcePriceBatchSource {
+  EXCEL
+  MANUAL
+  ROLLBACK
+}
+
+enum LocalResourcePriceItemStatus {
+  VALID
+  INVALID
+  UNCHANGED
+  UPDATED
+  CONFLICT
+  APPLIED
+  REJECTED
+}
+
 enum GeneralExpenseType {
   PERCENTAGE
   FIXED
@@ -379,6 +442,13 @@ model User {
   versionSnapshots              BudgetVersionSnapshot[]
   invitedMemberships            CompanyMembership[]         @relation("MembershipInviter")
   agentExecutions               AgentExecution[]
+  resourcePriceRequests         ResourcePriceUpdateRequest[] @relation("ResourcePriceRequestCreator")
+  resourcePriceAppliedItems     ResourcePriceUpdateItem[]    @relation("ResourcePriceItemApplier")
+  resourcePriceConfigUpdates    ResourcePriceProviderConfig[] @relation("ResourcePriceConfigUpdater")
+  localPriceBatchesCreated      LocalResourcePriceBatch[]     @relation("LocalPriceBatchCreatedBy")
+  localPriceBatchesPublished    LocalResourcePriceBatch[]     @relation("LocalPriceBatchPublishedBy")
+  localPriceBatchesRolledBack   LocalResourcePriceBatch[]     @relation("LocalPriceBatchRolledBackBy")
+  localPriceHistoryEntries      LocalResourcePriceHistory[]   @relation("LocalPriceHistoryChangedBy")
   agentDecidedApprovals         AgentApproval[]             @relation("AgentApprovalDecidedBy")
   agentRollbacks                AgentRollback[]             @relation("AgentRollbackCreatedBy")
   storedProjectPackages         StoredProjectPackage[]
@@ -1583,14 +1653,225 @@ model Resource {
   unitPrice               Decimal                  @default(0) @db.Decimal(18, 4)
   currency                String                   @default("PEN")
   source                  String?
+  priceUpdatedAt          DateTime?
+  priceObservedAt         DateTime?
+  priceSource             String?
+  priceSyncStatus         String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   company                 Company?                 @relation(fields: [companyId], references: [id], onDelete: SetNull)
   apuResources            ApuResource[]
   partidaRows             PartidaApuRow[]
   generatedPartidaInsumos GeneratedPartidaInsumo[]
+  priceBindings           ResourcePriceBinding[]
+  priceSnapshots          ResourcePriceSnapshot[]
+  priceUpdateItems        ResourcePriceUpdateItem[]
+  localPriceBatchItems     LocalResourcePriceBatchItem[]
+  localPriceHistory        LocalResourcePriceHistory[]
 
   @@index([companyId])
+  @@index([priceSyncStatus, priceObservedAt])
+}
+
+model ResourcePriceProviderConfig {
+  id                    String                       @id @default(cuid())
+  singletonKey          String                       @unique @default("primary")
+  provider              String
+  status                ResourcePriceProviderStatus  @default(DISABLED)
+  baseUrl               String?
+  apiVersion            String                       @default("v1")
+  credentialEncrypted   String?
+  timeoutMs             Int                          @default(8000)
+  maxBatchSize          Int                          @default(50)
+  defaultTtlHours       Int                          @default(24)
+  allowFallback         Boolean                      @default(false)
+  lastHealthCheckAt     DateTime?
+  lastHealthStatus      String?
+  lastUpdatedById       String?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  lastUpdatedBy         User?                        @relation("ResourcePriceConfigUpdater", fields: [lastUpdatedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([provider, status])
+  @@map("resource_price_provider_configs")
+}
+
+model ResourcePriceBinding {
+  id                 String   @id @default(cuid())
+  resourceId         String
+  provider           String
+  externalResourceId String
+  externalCode       String?
+  externalUnit       String?
+  active             Boolean  @default(true)
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  resource           Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalResourceId])
+  @@unique([resourceId, provider])
+  @@index([resourceId, active])
+  @@index([provider, active])
+  @@map("resource_price_bindings")
+}
+
+model ResourcePriceSnapshot {
+  id                 String                    @id @default(cuid())
+  resourceId         String?
+  requestId          String?
+  provider           String
+  externalResourceId String?
+  price              Decimal                   @db.Decimal(18, 4)
+  currency           String
+  unit               String
+  observedAt         DateTime
+  receivedAt         DateTime                  @default(now())
+  rawHash            String
+  rawPayload         Json?
+  status             ResourcePriceUpdateItemStatus @default(MATCHED)
+  createdAt          DateTime                  @default(now())
+  resource           Resource?                 @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  request            ResourcePriceUpdateRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([resourceId, observedAt(sort: Desc)])
+  @@index([requestId])
+  @@index([provider, externalResourceId])
+  @@index([observedAt(sort: Desc)])
+  @@map("resource_price_snapshots")
+}
+
+model ResourcePriceUpdateRequest {
+  id              String                    @id @default(cuid())
+  requestedById   String?
+  mode            ResourcePriceRequestMode
+  provider        String
+  status          ResourcePriceRequestStatus @default(QUEUED)
+  resourceCount   Int                       @default(0)
+  matchedCount    Int                       @default(0)
+  changedCount    Int                       @default(0)
+  errorCount      Int                       @default(0)
+  idempotencyKey  String                    @unique
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  requestedBy     User?                     @relation("ResourcePriceRequestCreator", fields: [requestedById], references: [id], onDelete: SetNull)
+  items           ResourcePriceUpdateItem[]
+  snapshots       ResourcePriceSnapshot[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([requestedById, createdAt(sort: Desc)])
+  @@index([provider, createdAt(sort: Desc)])
+  @@map("resource_price_update_requests")
+}
+
+model LocalResourcePriceBatch {
+  id             String                       @id @default(cuid())
+  versionNumber  Int                          @unique
+  versionLabel   String                       @unique
+  source         LocalResourcePriceBatchSource
+  status         LocalResourcePriceBatchStatus @default(DRAFT)
+  fileName       String?
+  fileHash       String?
+  notes          String?
+  totalRows      Int                          @default(0)
+  validRows      Int                          @default(0)
+  changedRows    Int                          @default(0)
+  invalidRows    Int                          @default(0)
+  createdById    String
+  publishedById  String?
+  rolledBackById String?
+  previewedAt    DateTime?
+  publishedAt    DateTime?
+  rolledBackAt   DateTime?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  createdBy      User                         @relation("LocalPriceBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  publishedBy    User?                        @relation("LocalPriceBatchPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  rolledBackBy   User?                        @relation("LocalPriceBatchRolledBackBy", fields: [rolledBackById], references: [id], onDelete: SetNull)
+  items          LocalResourcePriceBatchItem[]
+  historyEntries LocalResourcePriceHistory[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([source, createdAt(sort: Desc)])
+  @@map("local_resource_price_batches")
+}
+
+model LocalResourcePriceBatchItem {
+  id              String                       @id @default(cuid())
+  batchId         String
+  resourceId      String?
+  rowNumber       Int
+  resourceCode    String
+  resourceDescription String
+  unit            String
+  currency        String
+  proposedPrice   Decimal?                     @db.Decimal(18, 4)
+  oldPrice        Decimal?                     @db.Decimal(18, 4)
+  observedAt      DateTime?
+  sourceLabel     String?
+  notes           String?
+  status          LocalResourcePriceItemStatus
+  reason          String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  batch           LocalResourcePriceBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  resource        Resource?                    @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId, status])
+  @@index([resourceId, createdAt(sort: Desc)])
+  @@map("local_resource_price_batch_items")
+}
+
+model LocalResourcePriceHistory {
+  id            String                 @id @default(cuid())
+  resourceId    String
+  batchId       String
+  oldPrice      Decimal                @db.Decimal(18, 4)
+  newPrice      Decimal                @db.Decimal(18, 4)
+  changedById   String
+  changedAt     DateTime               @default(now())
+  resource      Resource               @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  batch         LocalResourcePriceBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  changedBy     User                   @relation("LocalPriceHistoryChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([resourceId, changedAt(sort: Desc)])
+  @@index([batchId])
+  @@map("local_resource_price_history")
+}
+
+model ResourcePriceUpdateItem {
+  id                 String                     @id @default(cuid())
+  requestId          String
+  resourceId         String?
+  externalResourceId String?
+  status             ResourcePriceUpdateItemStatus
+  oldPrice           Decimal?                   @db.Decimal(18, 4)
+  newPrice           Decimal?                   @db.Decimal(18, 4)
+  oldCurrency        String?
+  newCurrency        String?
+  oldUnit            String?
+  newUnit            String?
+  priceDelta         Decimal?                   @db.Decimal(18, 4)
+  priceDeltaPercent  Decimal?                   @db.Decimal(10, 4)
+  matchConfidence    Decimal?                   @db.Decimal(5, 4)
+  reason             String?
+  appliedAt          DateTime?
+  appliedById        String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  request            ResourcePriceUpdateRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  resource           Resource?                  @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  appliedBy          User?                      @relation("ResourcePriceItemApplier", fields: [appliedById], references: [id], onDelete: SetNull)
+
+  @@index([requestId, status])
+  @@index([resourceId, createdAt(sort: Desc)])
+  @@index([externalResourceId])
+  @@map("resource_price_update_items")
 }
 
 model BudgetItemGenerationSource {

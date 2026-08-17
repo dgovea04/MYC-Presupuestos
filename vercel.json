@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/reconcile-beta-grants",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/sync-resource-prices",
+      "schedule": "30 8 * * *"
     }
   ]
 }

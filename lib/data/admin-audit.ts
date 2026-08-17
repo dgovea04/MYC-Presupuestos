@@ -33,7 +33,10 @@ export type AdminAuditLogEntry = {
   createdAt: string;
 };
 
-export async function recordAdminAudit(input: AdminAuditInput, client: typeof prisma = prisma) {
+export async function recordAdminAudit(
+  input: AdminAuditInput,
+  client: typeof prisma | Prisma.TransactionClient = prisma,
+) {
   await client.$executeRaw`
     INSERT INTO "admin_audit_logs" (
       "id", "actorUserId", "targetUserId", "targetEmail", "action", "detail", "metadata", "ipAddress", "userAgent"

@@ -54,6 +54,8 @@ La aplicacion esta orientada a ingenieros, contratistas, oficinas tecnicas y emp
 ### APU y catalogos
 
 - Catalogo de insumos con busqueda, filtros, creacion, edicion y eliminacion via API/UI disponible.
+- Catálogo global de insumos con actualización local versionada desde Excel o tabla administrativa: preview obligatorio, publicación exclusiva de SUPER_ADMIN, auditoría e historial con rollback.
+- Solicitudes de actualización de precios del catálogo global vía proveedor administrado por MC Presupuestos, con preview, auditoría y aplicación exclusiva de administrador; la integración externa permanece opcional y deshabilitada.
 - Catalogo de partidas con rendimiento, unidad, precio y filas APU.
 - Editor APU por partida.
 - Aplicacion de partidas desde catalogo hacia presupuestos.
@@ -168,6 +170,16 @@ OPENAI_API_KEY="sk-..."
 GEMINI_API_KEY="AIza..."
 OPENROUTER_API_KEY="sk-or-..."
 OPENROUTER_MODEL="deepseek/deepseek-chat-v3-0324:free"
+
+# Proveedor de precios de la WebApp: queda deshabilitado hasta que un administrador de MC Presupuestos
+# configure mc-presupuestos-price-api desde la administración. El servicio propio se ejecuta aparte.
+RESOURCE_PRICE_PROVIDER="disabled"
+RESOURCE_PRICE_API_BASE_URL=""
+RESOURCE_PRICE_API_VERSION="v1"
+RESOURCE_PRICE_REQUEST_TIMEOUT_MS="8000"
+RESOURCE_PRICE_MAX_BATCH_SIZE="50"
+RESOURCE_PRICE_DEFAULT_TTL_HOURS="24"
+RESOURCE_PRICE_ALLOW_FALLBACK="false"
 
 # Opcional: habilita la sincronización automática de workflows de agentes en producción.
 # Los workflows se sincronizan automáticamente en desarrollo sin esta variable.
@@ -392,9 +404,15 @@ Tambien puedes crear una cuenta desde `/register`.
 - `/api/settings/ai-provider`: GET/PUT de configuracion de proveedores cloud IA.
 - `/api/settings/ai-provider/test`: POST para validar API keys (con rate limiting).
 - `/api/ai/chat/stream`: streaming SSE para chat IA.
+- `POST /api/resources/price-updates`: solicitar preview de precios del catálogo global.
+- `POST /api/resources/price-updates/[id]/apply`: aplicar cambios de precios; requiere administrador MC.
+- `GET /api/admin/resource-price-provider-config`: configuración protegida del proveedor principal.
+- `GET /api/cron/sync-resource-prices`: sincronización programada protegida por `CRON_SECRET`.
+- `GET /v1/health` y `POST /v1/resource-prices:lookup`: servicio propio `mc-presupuestos-price-api` ejecutable con `npm run price-api:dev`.
 - `/settings`: configuracion.
 - `/account`: cuenta y membresia.
 - `/admin`: administracion.
+- `/admin?adminTab=prices`: catálogo local versionado, importación Excel, publicación/rollback y configuración/health check del proveedor principal.
 - `POST /api/admin/ai/workflows/sync`: sincronización bajo demanda de workflows de agentes (admin).
 
 ## Flujo recomendado de prueba
@@ -525,4 +543,7 @@ npm.cmd run test -- lib/calculations/budget.test.ts lib/calculations/apu.test.ts
 - `prd/prd_ai_local_myc_presupuestos_codex.md`: PRD de IA local.
 - `docs/importador-delphin.md`: reglas de jerarquia, APU y porcentajes para importaciones Delphin Express.
 - `docs/superpowers/plans`: planes de implementacion historicos.
+- `docs/resource-price-provider-operations.md`: operación local versionada y del proveedor principal de precios.
+- `docs/mc-presupuestos-price-api-provider.md`: contrato del proveedor propio `mc-presupuestos-price-api`.
+- `services/mc-presupuestos-price-api/README.md`: ejecución y versionado del dataset curado.
 - `presupuesto-ejemplo`: archivos Excel y referencias de formulas.

@@ -21,6 +21,7 @@ import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles"
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { cn } from "@/lib/utils";
 import type { UnifiedIndexDictionaryRow, UnifiedIndexRelationRow } from "@/types/unified-index";
+import { ResourcePriceStatus } from "@/components/resources/resource-price-status";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type EditableColumn = "code" | "description" | "unit" | "unitPrice" | "category" | "iu" | "iuCurrent" | "source";
@@ -862,13 +863,16 @@ const ResourceTableRow = memo(function ResourceTableRow({
           </div>
       </TD>
       <TD className="align-middle">
-        <Input
-          value={resource.source ?? ""}
-          disabled={!resource.isEditing || !canEditCatalogFields}
-          onPaste={(event) => onPaste(event, resource.id, "source")}
-          onChange={(event) => onUpdateDraft(resource.id, { source: event.target.value })}
-          className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
-        />
+        <div className="space-y-1">
+          <Input
+            value={resource.source ?? ""}
+            disabled={!resource.isEditing || !canEditCatalogFields}
+            onPaste={(event) => onPaste(event, resource.id, "source")}
+            onChange={(event) => onUpdateDraft(resource.id, { source: event.target.value })}
+            className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+          />
+          {!isOwned ? <ResourcePriceStatus resource={resource} compact /> : null}
+        </div>
       </TD>
       <TD className="align-middle">
         <div className="flex flex-nowrap justify-end gap-1">

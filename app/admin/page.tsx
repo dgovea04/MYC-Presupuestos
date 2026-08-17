@@ -17,6 +17,8 @@ import { AdminBetaCampaigns } from "@/components/admin/admin-beta-campaigns";
 import { AdminPageTabs, normalizeAdminTab } from "@/components/admin/admin-page-tabs";
 import { AdminCloudAiSettings } from "@/components/admin/admin-cloud-ai-settings";
 import { AdminMfaSettings } from "@/components/admin/admin-mfa-settings";
+import { ResourcePriceProviderAdminPanel } from "@/components/admin/resource-price-provider-admin-panel";
+import { LocalResourcePriceAdminPanel } from "@/components/admin/local-resource-price-admin-panel";
 import { AdminUserAccessForm } from "@/components/admin/admin-user-access-form";
 import { ManualPaymentRequests } from "@/components/admin/manual-payment-requests";
 import { AppShell } from "@/components/layout/app-shell";
@@ -81,6 +83,7 @@ export default async function AdminPage({
   const canManageDeletionGracePeriod = hasAdminCapability(session.user, "users.delete_permanently");
   const canRevokeSessions = hasAdminCapability(session.user, "users.revoke_sessions");
   const canVerifyEmail = hasAdminCapability(session.user, "users.verify_email");
+  const canManageResourcePrices = hasAdminCapability(session.user, "resource_prices.manage");
   const canManageAuditRetention = hasAdminCapability(session.user, "audit.manage_retention");
   const resolvedSearchParams = (await searchParams) ?? {};
   const roleFilter: "ADMIN" | "USER" | undefined =
@@ -188,6 +191,13 @@ export default async function AdminPage({
               <AdminStatCard title="Solicitudes IA" value={String(stats.actionUsage.reduce((sum, item) => sum + item.requests, 0))} description="Agrupadas por accion IA." icon={<Activity className="h-5 w-5" />} />
             </>
           ) : null}
+        </section>
+      ) : null}
+
+      {adminTab === "prices" ? (
+        <section className="space-y-6">
+          <LocalResourcePriceAdminPanel canManage={Boolean(session.user.isSuperAdmin)} />
+          <ResourcePriceProviderAdminPanel canManage={canManageResourcePrices} />
         </section>
       ) : null}
 

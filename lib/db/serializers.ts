@@ -300,6 +300,10 @@ export function serializeResource(resource: {
   unitPrice: Prisma.Decimal;
   currency: string;
   source: string | null;
+  priceUpdatedAt?: Date | string | null;
+  priceObservedAt?: Date | string | null;
+  priceSource?: string | null;
+  priceSyncStatus?: string | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }): ResourceRecord {
@@ -317,6 +321,10 @@ export function serializeResource(resource: {
     unitPrice: decimalToNumber(resource.unitPrice),
     currency: resource.currency,
     source: resource.source ?? undefined,
+    priceUpdatedAt: serializeDate(resource.priceUpdatedAt),
+    priceObservedAt: serializeDate(resource.priceObservedAt),
+    priceSource: resource.priceSource ?? undefined,
+    priceSyncStatus: resource.priceSyncStatus ?? undefined,
     createdAt: serializeDate(resource.createdAt),
     updatedAt: serializeDate(resource.updatedAt),
   };

@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { BarChart3, Bot, CreditCard, FlaskConical, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, Bot, CreditCard, DollarSign, FlaskConical, ScrollText, ShieldCheck, Users } from "lucide-react";
 
 export const ADMIN_TABS = [
   { id: "analytics", label: "Analytics", description: "Adquisición y monetización", icon: BarChart3 },
   { id: "ai", label: "IA", description: "Consumo y proveedores", icon: Bot },
   { id: "users", label: "Usuarios", description: "Cuentas y acceso", icon: Users },
   { id: "billing", label: "Facturación", description: "Planes y pagos", icon: CreditCard },
+  { id: "prices", label: "Precios", description: "Proveedor y catálogo", icon: DollarSign },
   { id: "beta", label: "Beta comercial", description: "Campañas Pro temporales", icon: FlaskConical },
   { id: "security", label: "Seguridad", description: "Protección y ciclo de vida", icon: ShieldCheck },
   { id: "audit", label: "Auditoría", description: "Registro administrativo", icon: ScrollText },

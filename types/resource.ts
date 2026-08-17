@@ -14,6 +14,10 @@ export type ResourceRecord = {
   unitPrice: number;
   currency: string;
   source?: string | null;
+  priceUpdatedAt?: string | null;
+  priceObservedAt?: string | null;
+  priceSource?: string | null;
+  priceSyncStatus?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

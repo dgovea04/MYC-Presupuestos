@@ -14,6 +14,8 @@ Los jobs están definidos en `vercel.json` y se ejecutan diariamente a las `08:0
 3. Confirmar en el panel de Vercel que aparecen ambos jobs y su próximo horario.
 4. Revisar los Runtime Logs después de la primera ejecución.
 
+| `GET /api/cron/sync-resource-prices` | Crear previews de sincronización para insumos globales cuyo precio superó el TTL. No aplica cambios automáticamente. |
+
 Vercel envía el header:
 
 ```text
@@ -32,6 +34,9 @@ curl -i -H "Authorization: Bearer $CRON_SECRET" \
 
 curl -i -H "Authorization: Bearer $CRON_SECRET" \
   https://<dominio-canonico>/api/cron/notify-deletion-reminders
+
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<dominio-canonico>/api/cron/sync-resource-prices
 ```
 
 Resultados esperados:
@@ -67,6 +72,12 @@ El cron es una capa de defensa adicional. La lista de miembros y las comprobacio
 - No ejecuta eliminaciones permanentes.
 - La eliminación definitiva continúa requiriendo autorización del administrador principal y MFA.
 - Revisar los logs de Resend y la auditoría administrativa si un envío falla.
+
+## Sincronización de precios
+
+`/api/cron/sync-resource-prices` resuelve el proveedor principal configurado por el administrador de MC Presupuestos. Selecciona únicamente `Resource` con `companyId = null` y precio observado ausente o vencido. Crea un preview `SCHEDULED`; la aplicación requiere revisión y permiso administrativo.
+
+Si el proveedor está `DISABLED` o `SUSPENDED`, el cron responde con `skipped: true` y el catálogo manual continúa operativo.
 
 ## Seguridad y operación
 
