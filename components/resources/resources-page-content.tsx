@@ -3,20 +3,17 @@
 import { useMemo, useState } from "react";
 
 import { ResourceCreateSheet } from "@/components/resources/resource-create-sheet";
-import { ResourcePriceSyncPanel } from "@/components/resources/resource-price-sync-panel";
 import { ResourcesTable } from "@/components/resources/resources-table";
 import type { ResourceCategory, ResourceRecord } from "@/types/resource";
 import type { UnifiedIndexDictionaryRow, UnifiedIndexRelationRow } from "@/types/unified-index";
 
 export function ResourcesPageContent({
   companyId,
-  canApplyResourcePriceUpdates,
   resources,
   unifiedIndexDictionaryRows,
   unifiedIndexRows,
 }: {
   companyId?: string;
-  canApplyResourcePriceUpdates: boolean;
   resources: ResourceRecord[];
   unifiedIndexDictionaryRows: UnifiedIndexDictionaryRow[];
   unifiedIndexRows: UnifiedIndexRelationRow[];
@@ -61,8 +58,6 @@ export function ResourcesPageContent({
         onClose={() => setIsCreateFormOpen(false)}
         onCreated={handleResourceCreated}
       />
-
-      <ResourcePriceSyncPanel resources={localResources} canApply={canApplyResourcePriceUpdates} />
 
       <ResourcesTable
         key={resourcesTableKey}

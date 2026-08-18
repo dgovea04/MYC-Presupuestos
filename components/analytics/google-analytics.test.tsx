@@ -21,17 +21,23 @@ afterEach(() => {
 });
 
 describe("GoogleAnalytics consent banner", () => {
-  it("shows the banner for first-time visitors", () => {
-    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} />);
+  it("shows the banner for first-time authenticated visitors", () => {
+    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} isAuthenticated />);
 
     expect(screen.getByRole("dialog", { name: "Preferencias de analytics" })).toBeTruthy();
     expect(screen.getByText("Ayúdanos a mejorar MC Presupuestos")).toBeTruthy();
   });
 
+  it("does not show the banner for anonymous visitors", () => {
+    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} isAuthenticated={false} />);
+
+    expect(screen.queryByRole("dialog", { name: "Preferencias de analytics" })).toBeNull();
+  });
+
   it("does not show the banner when consent was already granted", () => {
     setConsentCookie("granted");
 
-    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} />);
+    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} isAuthenticated />);
 
     expect(screen.queryByRole("dialog", { name: "Preferencias de analytics" })).toBeNull();
   });
@@ -39,7 +45,7 @@ describe("GoogleAnalytics consent banner", () => {
   it("does not show the banner when consent was already denied", () => {
     setConsentCookie("denied");
 
-    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} />);
+    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} isAuthenticated />);
 
     expect(screen.queryByRole("dialog", { name: "Preferencias de analytics" })).toBeNull();
   });
@@ -47,7 +53,7 @@ describe("GoogleAnalytics consent banner", () => {
   it("accepting analytics hides the banner, persists the cookie and initializes gtag", () => {
     const gtag = vi.fn();
     vi.stubGlobal("gtag", gtag);
-    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} />);
+    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} isAuthenticated />);
 
     fireEvent.click(screen.getByRole("button", { name: "Aceptar analytics" }));
 
@@ -61,7 +67,7 @@ describe("GoogleAnalytics consent banner", () => {
   });
 
   it("declining analytics hides the banner and persists the denial", () => {
-    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} />);
+    render(<GoogleAnalytics measurementId={MEASUREMENT_ID} isAuthenticated />);
 
     fireEvent.click(screen.getByRole("button", { name: "No gracias" }));
 
@@ -70,7 +76,7 @@ describe("GoogleAnalytics consent banner", () => {
   });
 
   it("never includes the banner in server-rendered HTML (no flash on refresh)", () => {
-    const html = renderToString(<GoogleAnalytics measurementId={MEASUREMENT_ID} />);
+    const html = renderToString(<GoogleAnalytics measurementId={MEASUREMENT_ID} isAuthenticated={false} />);
 
     expect(html).not.toContain("Ayúdanos a mejorar MC Presupuestos");
   });

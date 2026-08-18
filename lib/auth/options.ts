@@ -232,7 +232,11 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (user.isSuperAdmin && user.mfaEnabled) {
-          if (!parsed.data.mfaCode || !(await verifyAdminMfaCode(user.id, parsed.data.mfaCode))) {
+          if (!parsed.data.mfaCode) {
+            throw new Error("MFA_REQUIRED");
+          }
+
+          if (!(await verifyAdminMfaCode(user.id, parsed.data.mfaCode))) {
             return null;
           }
         }

@@ -31,22 +31,32 @@ export function LoginForm() {
   const verificationReason = searchParams.get("reason");
   const canResend = email.trim().length > 0 && (verifyEmail || verified === "0");
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit() {
     setLoading(true);
     setError("");
 
-    const result = await signIn("credentials", {
-      email: String(formData.get("email") ?? ""),
-      password: String(formData.get("password") ?? ""),
-      mfaCode: String(formData.get("mfaCode") ?? "").trim() || undefined,
+    const credentials = {
+      email,
+      password,
       redirect: false,
-    });
+      ...(showMfaCode && mfaCode.trim() ? { mfaCode: mfaCode.trim() } : {}),
+    };
+    const result = await signIn("credentials", credentials);
 
     setLoading(false);
 
-    if (result?.error) {
+    if (result?.error === "MFA_REQUIRED") {
       setShowMfaCode(true);
-      setError("Credenciales invalidas, correo pendiente de verificacion o código MFA requerido");
+      setMfaCode("");
+      return;
+    }
+
+    if (result?.error) {
+      setError(
+        showMfaCode
+          ? "El código MFA no es válido o ya venció. Intenta nuevamente."
+          : "Credenciales inválidas, correo pendiente de verificación o cuenta suspendida.",
+      );
       return;
     }
 
@@ -104,65 +114,90 @@ export function LoginForm() {
           {getVerificationErrorMessage(verificationReason)}
         </div>
       ) : null}
-      <div className="space-y-2">
-        <Label htmlFor="email">Correo</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          placeholder="tu@empresa.com"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Contrasena</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          placeholder="........"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-      </div>
+      {!showMfaCode ? (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="email">Correo</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="tu@empresa.com"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Contrasena</Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="........"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
+        </>
+      ) : null}
       {showMfaCode ? (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-          <Label htmlFor="mfaCode">Código MFA o código de recuperación</Label>
-          <Input
-            id="mfaCode"
-            name="mfaCode"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="123456"
-            value={mfaCode}
-            onChange={(event) => setMfaCode(event.target.value)}
-            className="mt-2 bg-white"
-          />
-          <p className="mt-1 text-xs text-sky-800">Si tu cuenta administrativa tiene MFA activado, ingresa el código de tu aplicación autenticadora.</p>
-        </div>
+        <>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Paso 2 de 2</p>
+            <p className="mt-1 text-sm font-semibold text-sky-950">Confirma tu identidad</p>
+            <p className="mt-1 text-sm text-sky-800">Ingresa el código de tu aplicación autenticadora o un código de recuperación.</p>
+            <Label htmlFor="mfaCode" className="mt-3 block">Código MFA o código de recuperación</Label>
+            <Input
+              id="mfaCode"
+              name="mfaCode"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              placeholder="123456"
+              value={mfaCode}
+              onChange={(event) => setMfaCode(event.target.value)}
+              className="mt-2 bg-white"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => {
+              setShowMfaCode(false);
+              setMfaCode("");
+              setError("");
+            }}
+          >
+            Volver a credenciales
+          </Button>
+        </>
       ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       <Button className="w-full" type="submit" disabled={loading}>
-        {loading ? "Ingresando..." : "Iniciar sesion"}
+        {loading ? (showMfaCode ? "Verificando..." : "Ingresando...") : showMfaCode ? "Verificar código" : "Iniciar sesion"}
       </Button>
-      {canResend ? (
+      {!showMfaCode && canResend ? (
         <Button type="button" variant="outline" className="w-full" disabled={resending} onClick={handleResend}>
           {resending ? "Reenviando..." : "Reenviar verificacion"}
         </Button>
       ) : null}
       {resendMessage ? <p className="text-sm text-slate-600">{resendMessage}</p> : null}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-slate-200" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-slate-500">o continua con</span>
-        </div>
-      </div>
-      <GoogleSignInButton mode="login" />
+      {!showMfaCode ? (
+        <>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-slate-500">o continua con</span>
+            </div>
+          </div>
+          <GoogleSignInButton mode="login" />
+        </>
+      ) : null}
     </form>
   );
 }

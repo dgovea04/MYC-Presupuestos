@@ -12,7 +12,13 @@ import { getGtag } from "@/lib/analytics/gtag";
 
 const emptySubscribe = () => () => {};
 
-export function GoogleAnalytics({ measurementId }: { measurementId?: string }): React.ReactNode {
+export function GoogleAnalytics({
+  measurementId,
+  isAuthenticated,
+}: {
+  measurementId?: string;
+  isAuthenticated: boolean;
+}): React.ReactNode {
   // Server snapshot is false so the banner is never part of the server-rendered HTML;
   // once hydrated on the client the real consent value is read before deciding to show it.
   const isHydrated = useSyncExternalStore(emptySubscribe, () => true, () => false);
@@ -58,7 +64,7 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }): 
         src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`}
         strategy="afterInteractive"
       />
-      {isHydrated && consent === null ? <AnalyticsConsentBanner /> : null}
+      {isAuthenticated && isHydrated && consent === null ? <AnalyticsConsentBanner /> : null}
     </>
   );
 }

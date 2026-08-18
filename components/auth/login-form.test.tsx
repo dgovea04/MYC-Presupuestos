@@ -41,9 +41,9 @@ describe("LoginForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("reveals the MFA step after a failed login and submits the code on retry", async () => {
+  it("opens a separate MFA step after valid credentials and submits the code without repeating them", async () => {
     mocks.signIn
-      .mockResolvedValueOnce({ error: "CredentialsSignin" })
+      .mockResolvedValueOnce({ error: "MFA_REQUIRED" })
       .mockResolvedValueOnce({ ok: true, error: null });
 
     render(<LoginForm />);
@@ -54,6 +54,13 @@ describe("LoginForm", () => {
     fireEvent.submit(form!);
 
     await waitFor(() => expect(screen.getByLabelText("Código MFA o código de recuperación")).toBeTruthy());
+    expect(mocks.signIn).toHaveBeenNthCalledWith(1, "credentials", {
+      email: "maria@example.com",
+      password: "password123",
+      redirect: false,
+    });
+    expect(screen.queryByLabelText("Correo")).toBeNull();
+    expect(screen.queryByLabelText("Contrasena")).toBeNull();
     const mfaInput = screen.getByLabelText("Código MFA o código de recuperación");
     fireEvent.change(mfaInput, { target: { value: "123456" } });
     expect((mfaInput as HTMLInputElement).value).toBe("123456");
@@ -68,6 +75,20 @@ describe("LoginForm", () => {
         redirect: false,
       });
     });
+  });
+
+  it("keeps the credential step for ordinary login errors", async () => {
+    mocks.signIn.mockResolvedValueOnce({ error: "CredentialsSignin" });
+
+    render(<LoginForm />);
+
+    const form = screen.getByRole("button", { name: "Iniciar sesion" }).closest("form");
+    fireEvent.submit(form!);
+
+    await waitFor(() => expect(screen.getByText(/Credenciales inválidas/i)).toBeTruthy());
+    expect(screen.getByLabelText("Correo")).toBeTruthy();
+    expect(screen.getByLabelText("Contrasena")).toBeTruthy();
+    expect(screen.queryByLabelText("Código MFA o código de recuperación")).toBeNull();
   });
 
   it("shows the verification notice and can resend the verification email", async () => {

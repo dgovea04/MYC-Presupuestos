@@ -11,12 +11,10 @@ import { getUserCompanies } from "@/lib/data/projects";
 import { getUnifiedIndexDictionaryRows, getUnifiedIndexRelationRows } from "@/lib/data/unified-indices";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getExportDefinition } from "@/lib/exports/definitions";
-import { hasAdminCapability } from "@/lib/auth/admin-permissions";
 
 export default async function ResourcesPage() {
   const session = await getAuthSession();
   const activeWorkspaceId = await getActiveWorkspaceId(session!.user.id);
-  const canApplyResourcePriceUpdates = hasAdminCapability(session!.user, "resource_prices.manage");
   const [resources, companies, unifiedIndexDictionaryRows, unifiedIndexRows] = await Promise.all([
     getResourcesByUser(session!.user.id, activeWorkspaceId),
     getUserCompanies(session!.user.id),
@@ -53,7 +51,6 @@ export default async function ResourcesPage() {
             companyId={companies[0]?.id}
             unifiedIndexDictionaryRows={unifiedIndexDictionaryRows}
             unifiedIndexRows={unifiedIndexRows}
-            canApplyResourcePriceUpdates={canApplyResourcePriceUpdates}
             resources={resources.map((resource) => ({
               id: resource.id,
               companyId: resource.companyId,

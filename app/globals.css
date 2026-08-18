@@ -291,31 +291,6 @@ body,
   color: var(--app-text);
 }
 
-/* Neutral border utilities use a stable semantic default even outside transition windows. */
-.theme-app :where(
-  [class~="border"],
-  [class~="border-slate-100"],
-  [class~="border-slate-200"],
-  [class~="border-slate-300"]
-):not(
-  [class*="border-sky-"],
-  [class*="border-blue-"],
-  [class*="border-amber-"],
-  [class*="border-emerald-"],
-  [class*="border-green-"],
-  [class*="border-rose-"],
-  [class*="border-red-"],
-  [class*="border-violet-"],
-  [class*="border-transparent"]
-) {
-  border-color: var(--app-border-soft);
-}
-
-/* Cards always use a semantic border; never fall back to the `border` utility's currentColor. */
-.ui-card {
-  border-color: var(--app-border-soft);
-}
-
 .ui-card-header {
   border-bottom-color: var(--app-border-soft);
 }

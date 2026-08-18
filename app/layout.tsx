@@ -68,7 +68,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans" data-theme={initialTheme} suppressHydrationWarning>
-        <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+        <GoogleAnalytics
+          measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}
+          isAuthenticated={Boolean(session?.user?.id)}
+        />
         <IdentifyAnalyticsUser userId={session?.user?.id ?? null} />
         <script
           dangerouslySetInnerHTML={{

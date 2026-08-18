@@ -200,7 +200,7 @@ describe("authOptions callbacks", () => {
     }
     const authorize = (credentialsProvider.options as { authorize: (credentials: Record<string, unknown>, request: never) => Promise<unknown> }).authorize;
 
-    expect(await authorize({ email: "admin@example.com", password: "password123" }, {} as never)).toBeNull();
+    await expect(authorize({ email: "admin@example.com", password: "password123" }, {} as never)).rejects.toThrow("MFA_REQUIRED");
     expect(verifyAdminMfaCodeMock).not.toHaveBeenCalled();
 
     queryRawMock.mockResolvedValueOnce([

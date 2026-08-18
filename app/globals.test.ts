@@ -68,7 +68,8 @@ describe("excel field border styles", () => {
     expect(globalsCss).toContain(".dashboard-surface-card-soft {");
     expect(globalsCss).toContain("border-color: var(--app-section-border-soft) !important;");
     expect(globalsCss).toContain("[data-theme=\"dark\"] .dashboard-surface-card-soft");
-    expect(globalsCss).toContain(".ui-card {\n  border-color: var(--app-border-soft);\n}");
+    expect(globalsCss).not.toContain(".theme-app :where(");
+    expect(globalsCss).not.toContain(".ui-card {\n  border-color: var(--app-border-soft);\n}");
     expect(globalsCss).toContain(".dashboard-section-surface {\n  border-color: var(--app-section-border-soft);\n}");
     expect(dashboardPage).toContain("dashboard-section-surface dashboard-surface-card dashboard-surface-card-primary");
     expect(dashboardPage).toContain("dashboard-section-surface dashboard-surface-card dashboard-surface-card-soft");
