@@ -412,7 +412,7 @@ Tambien puedes crear una cuenta desde `/register`.
 - `/settings`: configuracion.
 - `/account`: cuenta y membresia.
 - `/admin`: administracion.
-- `/admin?adminTab=prices`: catálogo local versionado, exportación/plantilla/importación Excel, publicación/rollback y configuración/health check del proveedor principal.
+- `/admin?adminTab=prices`: catálogo local versionado, plantilla/importación Excel, publicación/rollback y configuración/health check del proveedor principal.
 - `POST /api/admin/ai/workflows/sync`: sincronización bajo demanda de workflows de agentes (admin).
 
 ## Flujo recomendado de prueba

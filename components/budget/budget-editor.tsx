@@ -201,6 +201,7 @@ const BUDGET_ROW_OVERSCAN = 10;
 const BUDGET_TABLE_COLUMN_COUNT = 7;
 const BUDGET_TABLE_CODE_COLUMN_BASE_WIDTH = 70;
 const BUDGET_TABLE_CODE_CHARACTER_WIDTH = 6.75;
+const BUDGET_TABLE_CODE_INPUT_SAFETY_WIDTH = 5;
 const BUDGET_TABLE_CODE_INPUT_HORIZONTAL_PADDING_WIDTH = 16;
 const BUDGET_TABLE_CODE_PARENT_ICON_WIDTH = 16;
 const BUDGET_TABLE_CODE_PARENT_GAP_WIDTH = 8;
@@ -5859,7 +5860,11 @@ function getCodeInputStyle(code: string): React.CSSProperties {
 function calculateCodeInputWidth(code: string): number {
   const characterCount = Math.max(code.length, 2);
 
-  return characterCount * BUDGET_TABLE_CODE_CHARACTER_WIDTH + BUDGET_TABLE_CODE_INPUT_HORIZONTAL_PADDING_WIDTH;
+  return (
+    characterCount * BUDGET_TABLE_CODE_CHARACTER_WIDTH +
+    BUDGET_TABLE_CODE_INPUT_HORIZONTAL_PADDING_WIDTH +
+    BUDGET_TABLE_CODE_INPUT_SAFETY_WIDTH
+  );
 }
 
 function calculateCodeParentWidth(code: string): number {

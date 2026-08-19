@@ -17,7 +17,7 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
   return (
     <div
       className={cn(
-        "ui-card-header border-b border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] px-6 py-4",
+        "ui-card-header rounded-t-2xl border-b border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] px-6 py-4",
         className,
       )}
       {...props}
