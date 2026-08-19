@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { Analytics } from "@vercel/analytics/next";
 import { GoogleAnalytics } from "@/components/analytics/google-analytics";
 import { IdentifyAnalyticsUser } from "@/components/analytics/identify-user";
 import type { CSSProperties, ReactNode } from "react";
@@ -76,6 +77,7 @@ export default async function RootLayout({
           }}
         />
         <GlobalAiAssistantProvider canUseKhipu={canUseKhipu}>{children}</GlobalAiAssistantProvider>
+        <Analytics />
       </body>
     </html>
   );
