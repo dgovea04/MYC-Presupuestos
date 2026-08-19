@@ -96,10 +96,10 @@ describe("GeneratePartidaPage", () => {
     });
     mocks.getActiveWorkspaceId.mockResolvedValue("ws-1");
     mocks.getEffectiveWorkspaceLicense.mockResolvedValue({
-      planSlug: "pro",
-      planName: "Pro",
+      planSlug: "starter",
+      planName: "Starter",
       role: "OWNER",
-      availableFeatures: ["partidas.similarity", "exports.advanced"],
+      availableFeatures: ["partidas.similarity", "exports.basic"],
     });
     mocks.hasFeatureAccess.mockImplementation(
       (_license: unknown, feature: string) => feature === "partidas.similarity",
@@ -144,7 +144,7 @@ describe("GeneratePartidaPage", () => {
       companyId: "ws-1",
     });
     expect(mocks.hasFeatureAccess).toHaveBeenCalledWith(
-      expect.objectContaining({ planSlug: "pro" }),
+      expect.objectContaining({ planSlug: "starter" }),
       "partidas.similarity",
     );
   });

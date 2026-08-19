@@ -112,6 +112,7 @@ describe("getEffectiveWorkspaceLicense", () => {
     // Starter features
     expect(result!.availableFeatures).toContain("exports.basic");
     expect(result!.availableFeatures).toContain("polynomial_formula");
+    expect(result!.availableFeatures).toContain("partidas.similarity");
     // Pro features should NOT be available
     expect(result!.availableFeatures).not.toContain("risk_analysis");
     expect(result!.availableFeatures).not.toContain("ai.local");

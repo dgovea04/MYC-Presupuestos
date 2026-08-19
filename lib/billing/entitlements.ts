@@ -3,7 +3,6 @@ import { prisma as defaultPrisma } from "@/lib/db/prisma";
 export const PRO_FEATURES = [
   "ai.local",
   "khipu.agent",
-  "partidas.similarity",
   "metrados.advanced",
   "templates.budget",
   "work_schedule.intelligent",
@@ -12,7 +11,7 @@ export const PRO_FEATURES = [
   "exports.advanced",
 ] as const;
 
-export const BASIC_FEATURES = ["exports.basic", "polynomial_formula"] as const;
+export const BASIC_FEATURES = ["exports.basic", "polynomial_formula", "partidas.similarity"] as const;
 
 export type ProFeatureKey = (typeof PRO_FEATURES)[number];
 export type BasicFeatureKey = (typeof BASIC_FEATURES)[number];

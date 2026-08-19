@@ -10,7 +10,15 @@ import { AppViewModeProvider } from "@/components/view-mode/app-view-mode-provid
 import { FormattingSettingsProvider } from "@/components/providers/formatting-settings-provider";
 import type { BudgetItemRecord } from "@/types/budget";
 import type { CatalogPartidaRecord } from "@/types/partida";
+import type { ResourceRecord } from "@/types/resource";
 import type { UserSettingsRecord } from "@/types/settings";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
 
 let activeContainer: HTMLDivElement | null = null;
 
@@ -53,7 +61,7 @@ describe("ApuEditorSheet", () => {
 
   it("renders category subtotal cards and colors row grips by category", async () => {
     const item = createBudgetItem();
-    const { getByTestId, getButtonByText, getGripForRow, getLinkByText } = await renderSheet(item);
+    const { getByTestId, getButtonByText, getGripForRow, getLinkByText, getTextByExactMatch } = await renderSheet(item);
 
     expect(getByTestId("apu-summary-card-LABOR").textContent).toContain("S/ 30.00");
     expect(getByTestId("apu-summary-card-MATERIAL").textContent).toContain("S/ 31.00");
@@ -68,16 +76,15 @@ describe("ApuEditorSheet", () => {
     expect(getByTestId("apu-add-resource-search").getAttribute("data-excel-field-border-opt-out")).toBe("true");
     const explainHref = getLinkByText("Explicar partida").getAttribute("href") ?? "";
     const khipuHref = getLinkByText("Abrir en Khipu").getAttribute("href") ?? "";
-    const generatorHref = getLinkByText("Generador de partidas").getAttribute("href") ?? "";
     expect(explainHref).toContain("/ai?action=chat");
     expect(explainHref).toContain("selectedItem=Partida+demo");
     expect(explainHref).toContain("description=Partida+demo");
     expect(explainHref).toContain("module=Editor+APU+de+sub+presupuesto");
     expect(getButtonByText("Generar con IA")).toBeTruthy();
-    expect(generatorHref).toContain("/partidas/generar?");
-    expect(generatorHref).toContain("sourceText=Partida+demo");
-    expect(generatorHref).toContain("generatedName=Partida+demo");
-    expect(generatorHref).toContain("unit=m2");
+    await act(async () => {
+      getButtonByText("Generador de partidas").click();
+    });
+    expect(getTextByExactMatch("Generar partida por similitud")).toBeTruthy();
     expect(khipuHref).toContain("/ai?action=apu");
     expect(khipuHref).toContain("selectedItem=Partida+demo");
     expect(khipuHref).toContain("description=Partida+demo");
@@ -147,6 +154,87 @@ describe("ApuEditorSheet", () => {
             expect.objectContaining({ resourceType: "LABOR", quantity: 1.5, unitPrice: 0 }),
             expect.objectContaining({ resourceType: "EQUIPMENT", quantity: 0.2, unitPrice: 0 }),
           ]),
+        }),
+      }),
+    );
+  });
+
+  it("applies an embedded similarity-generated partida after confirming replacement", async () => {
+    const onUpdate = vi.fn();
+    const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const generatedResource = createCatalogResource();
+    const generatedPartida = createCatalogPartidaWithResource(generatedResource);
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(createJsonResponse({
+          candidates: [{ partida: createCatalogPartida(), score: 0.9, compositionSimilarity: 0.8, breakdown: {}, variables: {} }],
+          sourceVariables: {},
+        }))
+        .mockResolvedValueOnce(createJsonResponse([
+          {
+            key: "resource-generated",
+            resourceId: generatedResource.id,
+            description: generatedResource.description,
+            unit: generatedResource.unit,
+            resourceType: generatedResource.category,
+            frequency: 1,
+            confidenceLevel: "auto",
+            suggestedCrew: null,
+            suggestedQuantity: 2,
+            unitPrice: generatedResource.unitPrice,
+            priceSource: "catalog",
+            calculationMethod: "weighted_median",
+            statistics: { average: 2, median: 2, minimum: 2, maximum: 2, standardDeviation: 0 },
+            sourcePartidaIds: ["catalog-subpartida-1"],
+          },
+        ]))
+        .mockResolvedValueOnce(createJsonResponse({ generatedPartidaId: "generated-partida-1", catalogPartida: generatedPartida })),
+    );
+
+    const { getButtonByText } = await renderSheet(createBudgetItem(), {
+      onUpdate,
+      catalogPartidas: [createCatalogPartida()],
+      resourcesCatalog: [generatedResource],
+    });
+
+    await act(async () => {
+      getButtonByText("Generador de partidas").click();
+    });
+    await act(async () => {
+      getButtonByText("Siguiente").click();
+    });
+    await waitFor(() => expect(getButtonByText("Siguiente")).toBeTruthy());
+    await act(async () => {
+      getButtonByText("Siguiente").click();
+    });
+    await waitFor(() => expect(getButtonByText("Siguiente")).toBeTruthy());
+    await act(async () => {
+      getButtonByText("Siguiente").click();
+    });
+    await waitFor(() => expect(getButtonByText("Guardar partida")).toBeTruthy());
+    await act(async () => {
+      getButtonByText("Guardar partida").click();
+    });
+
+    expect(confirmMock).toHaveBeenCalledWith("Esta partida ya tiene un APU. ¿Quieres reemplazarlo con la partida generada?");
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: generatedPartida.description,
+        unit: generatedPartida.unit,
+        unitPrice: generatedPartida.unitPrice,
+        apu: expect.objectContaining({
+          name: generatedPartida.description,
+          performance: generatedPartida.performance,
+          totalUnitCost: generatedPartida.unitPrice,
+          resources: [
+            expect.objectContaining({
+              resourceId: generatedResource.id,
+              quantity: 2,
+              unitPrice: generatedResource.unitPrice,
+            }),
+          ],
         }),
       }),
     );
@@ -263,6 +351,7 @@ async function renderSheet(
   overrides?: {
     onUpdate?: (item: BudgetItemRecord) => void;
     catalogPartidas?: CatalogPartidaRecord[];
+    resourcesCatalog?: ResourceRecord[];
     canUseKhipu?: boolean;
     canUsePartidaGenerator?: boolean;
     canUseCollaboration?: boolean;
@@ -284,7 +373,7 @@ async function renderSheet(
             open
             onClose={() => undefined}
             onUpdate={overrides?.onUpdate ?? (() => undefined)}
-            resourcesCatalog={[]}
+            resourcesCatalog={overrides?.resourcesCatalog ?? []}
             catalogPartidas={overrides?.catalogPartidas ?? []}
             canUseKhipu={overrides?.canUseKhipu}
             canUsePartidaGenerator={overrides?.canUsePartidaGenerator}
@@ -455,5 +544,55 @@ function createCatalogPartida(): CatalogPartidaRecord {
         sortOrder: 1,
       },
     ],
+  };
+}
+
+function createCatalogResource(): ResourceRecord {
+  return {
+    id: "resource-generated",
+    code: "MAT-001",
+    description: "Cemento Portland",
+    category: "MATERIAL",
+    unit: "bol",
+    unitPrice: 32,
+    currency: "PEN",
+    source: "Catalogo",
+  };
+}
+
+function createCatalogPartidaWithResource(resource: ResourceRecord): CatalogPartidaRecord {
+  return {
+    id: "generated-catalog-partida",
+    description: "Partida generada por similitud",
+    unit: "m2",
+    unitPrice: 64,
+    currency: "PEN",
+    source: "Generada por similitud V1",
+    performance: 4,
+    performanceUnit: "m2",
+    performanceRate: "4.0000 m2/DIA",
+    apuRows: [
+      {
+        id: "generated-row-1",
+        catalogPartidaId: "generated-catalog-partida",
+        resourceId: resource.id,
+        description: resource.description,
+        unit: resource.unit,
+        crew: null,
+        quantity: 2,
+        unitPrice: resource.unitPrice,
+        subtotal: 64,
+        resourceType: resource.category,
+        groupLabel: "Materiales",
+        sortOrder: 0,
+      },
+    ],
+  };
+}
+
+function createJsonResponse(payload: unknown) {
+  return {
+    ok: true,
+    json: async () => payload,
   };
 }

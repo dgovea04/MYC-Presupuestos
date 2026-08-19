@@ -31,9 +31,12 @@ import type { ApuResourceRecord } from "@/types/apu";
 import type { CatalogPartidaRecord, PartidaApuRowRecord } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
 import { PreviewDebugPanel } from "@/components/ai/debug-panel";
+import { PartidaSimilarityGeneratorPageContent } from "@/components/partidas/partida-similarity-generator-page-content";
+import { applyCatalogPartidaToDraftItem } from "@/lib/budgets/catalog-partida-application";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useEditSession } from "@/hooks/use-edit-session";
 import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
+import type { PartidaGenerationSaveResult } from "@/types/partida-generation";
 
 type ApuEditorSheetProps = {
   item: BudgetItemRecord | null;
@@ -91,6 +94,7 @@ export function ApuEditorSheet({
   const [resourceHighlightedIndex, setResourceHighlightedIndex] = useState(0);
   const [resourceMenu, setResourceMenu] = useState<ResourceMenuState | null>(null);
   const [addSubpartidaOpen, setAddSubpartidaOpen] = useState(false);
+  const [partidaGeneratorOpen, setPartidaGeneratorOpen] = useState(false);
   const [subpartidaApuPreview, setSubpartidaApuPreview] = useState<{
     resourceIndex: number;
     title: string;
@@ -134,6 +138,16 @@ export function ApuEditorSheet({
     [resourcesCatalog],
   );
   const resourcesById = useMemo(() => new Map(resourcesCatalog.map((resource) => [resource.id, resource])), [resourcesCatalog]);
+  const resourcesByDescriptionUnit = useMemo(
+    () =>
+      new Map(
+        resourcesCatalog.map((resource) => [
+          `${normalizeResourceSearchText(resource.description)}|${normalizeResourceSearchText(resource.unit)}`,
+          resource,
+        ]),
+      ),
+    [resourcesCatalog],
+  );
   const addResourceSuggestions = useMemo(() => {
     const query = normalizeResourceSearchText(deferredAddResourceQuery);
     return indexedResourcesCatalog
@@ -499,6 +513,27 @@ export function ApuEditorSheet({
     );
   }
 
+  function applyGeneratedPartida(result: PartidaGenerationSaveResult) {
+    const hasExistingRows = currentApuRecord.resources.length > 0;
+    if (hasExistingRows && !window.confirm("Esta partida ya tiene un APU. ¿Quieres reemplazarlo con la partida generada?")) {
+      setPartidaGeneratorOpen(false);
+      return;
+    }
+
+    onUpdate(
+      applyCatalogPartidaToDraftItem({
+        item: currentItemRecord,
+        partida: result.catalogPartida,
+        catalogPartidas: [...catalogPartidas, result.catalogPartida],
+        resourcesById,
+        resourcesByDescriptionUnit,
+      }),
+    );
+    setAiApuResult(null);
+    setAiApuError("");
+    setPartidaGeneratorOpen(false);
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
@@ -579,12 +614,15 @@ export function ApuEditorSheet({
                   {!canUseKhipu ? <ProLockBadge /> : null}
                 </Button>
                 {canUsePartidaGenerator ? (
-                  <Link href={buildPartidaGeneratorHref(currentItemRecord.description, currentItemRecord.unit)}>
-                    <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
-                      <GitCompareArrows className="h-4 w-4" />
-                      Generador de partidas
-                    </Button>
-                  </Link>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setPartidaGeneratorOpen(true)}
+                    className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}
+                  >
+                    <GitCompareArrows className="h-4 w-4" />
+                    Generador de partidas
+                  </Button>
                 ) : (
                   <Button
                     type="button"
@@ -625,6 +663,15 @@ export function ApuEditorSheet({
                 </Dialog.Close>
               </div>
             </div>
+
+            <PartidaGeneratorDialog
+              open={partidaGeneratorOpen}
+              currentItem={currentItemRecord}
+              catalogPartidas={catalogPartidas}
+              resourcesCatalog={resourcesCatalog}
+              onSaved={applyGeneratedPartida}
+              onClose={() => setPartidaGeneratorOpen(false)}
+            />
 
             {aiApuError ? (
               <div className={cn("theme-status-error border", isExcelMode ? "rounded-md px-3 py-2 text-xs" : "rounded-2xl px-4 py-3 text-sm")}>
@@ -1702,6 +1749,56 @@ function EditableSubpartidaApuDialog({
 
 type AiApuPreviewResult = AiEndpointResult | AiApuCatalogGenerationResult;
 
+function PartidaGeneratorDialog({
+  open,
+  currentItem,
+  catalogPartidas,
+  resourcesCatalog,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  currentItem: BudgetItemRecord;
+  catalogPartidas: CatalogPartidaRecord[];
+  resourcesCatalog: ResourceRecord[];
+  onClose: () => void;
+  onSaved: (result: PartidaGenerationSaveResult) => void;
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[70] bg-slate-950/40 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[71] flex max-h-[92vh] w-[min(1180px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-2xl outline-none">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--app-border)] px-5 py-4">
+            <div>
+              <Dialog.Title className="text-lg font-semibold text-[var(--app-text-strong)]">Generar partida por similitud</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-[var(--app-text-muted)]">
+                Crea una partida desde referencias similares y aplícala al APU actual sin salir del subpresupuesto.
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <Button type="button" variant="outline" className="h-8 px-3 text-xs">
+                Cerrar
+              </Button>
+            </Dialog.Close>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-0 pt-4">
+            <PartidaSimilarityGeneratorPageContent
+              mode="embedded"
+              partidas={catalogPartidas}
+              resourcesCatalog={resourcesCatalog}
+              initialSourceText={currentItem.description}
+              initialGeneratedName={currentItem.description}
+              initialUnit={currentItem.unit}
+              onSaved={onSaved}
+            />
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function ProLockBadge() {
   return (
     <span className="inline-flex shrink-0 items-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5 text-[10px] font-semibold leading-none text-[var(--app-text-muted)]">
@@ -2067,17 +2164,6 @@ function buildAiHref(action: "chat" | "apu" | "autocomplete" | "review", descrip
   if (message) params.set("message", message);
 
   return `/ai?${params.toString()}`;
-}
-
-function buildPartidaGeneratorHref(description: string, unit?: string) {
-  const params = new URLSearchParams({
-    sourceText: description,
-    generatedName: description,
-  });
-
-  if (unit) params.set("unit", unit);
-
-  return `/partidas/generar?${params.toString()}`;
 }
 
 function buildResourceSearchText(resource: ResourceRecord) {

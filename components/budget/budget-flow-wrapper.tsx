@@ -17,7 +17,11 @@ const templateTraceabilityCache = new Map<string, Promise<BudgetTemplateCreation
 const EDITOR_CATALOGS_LOAD_DELAY_MS = 600;
 const TEMPLATE_TRACEABILITY_LOAD_DELAY_MS = 4_000;
 
-async function fetchEditorCatalogs(budgetId: string): Promise<EditorCatalogsPayload> {
+async function fetchEditorCatalogs(budgetId: string, options?: { force?: boolean }): Promise<EditorCatalogsPayload> {
+  if (options?.force) {
+    editorCatalogsCache.delete(budgetId);
+  }
+
   const cached = editorCatalogsCache.get(budgetId);
   if (cached) return cached;
 
@@ -110,9 +114,9 @@ export function BudgetFlowWrapper({
     let active = true;
     let timeoutId: number | null = null;
 
-    async function loadCatalogs() {
+    async function loadCatalogs(options?: { force?: boolean }) {
       try {
-        const payload = await fetchEditorCatalogs(catalogBudgetId!);
+        const payload = await fetchEditorCatalogs(catalogBudgetId!, options);
         if (active) {
           setCatalogs(payload);
         }
@@ -126,8 +130,18 @@ export function BudgetFlowWrapper({
       void loadCatalogs();
     }, EDITOR_CATALOGS_LOAD_DELAY_MS);
 
+    function reloadCatalogsOnReturn() {
+      if (document.visibilityState === "hidden") return;
+      void loadCatalogs({ force: true });
+    }
+
+    window.addEventListener("focus", reloadCatalogsOnReturn);
+    document.addEventListener("visibilitychange", reloadCatalogsOnReturn);
+
     return () => {
       active = false;
+      window.removeEventListener("focus", reloadCatalogsOnReturn);
+      document.removeEventListener("visibilitychange", reloadCatalogsOnReturn);
       if (timeoutId !== null) {
         window.clearTimeout(timeoutId);
       }

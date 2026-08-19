@@ -25,7 +25,7 @@ describe("billing entitlements", () => {
     expect(hasFeatureAccess(license, "polynomial_formula")).toBe(true);
     expect(hasFeatureAccess(license, "polynomial_formula.adjustments")).toBe(false);
     expect(hasFeatureAccess(license, "khipu.agent")).toBe(false);
-    expect(hasFeatureAccess(license, "partidas.similarity")).toBe(false);
+    expect(hasFeatureAccess(license, "partidas.similarity")).toBe(true);
     expect(hasFeatureAccess(license, "metrados.advanced")).toBe(false);
     expect(hasFeatureAccess(license, "templates.budget")).toBe(false);
     expect(hasFeatureAccess(license, "risk_analysis")).toBe(false);
