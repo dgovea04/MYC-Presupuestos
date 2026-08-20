@@ -1,11 +1,17 @@
 import { z } from "zod";
 
+const optionalTrimmedString = z
+  .string()
+  .trim()
+  .transform((value) => value || undefined)
+  .optional();
+
 export const registerSchema = z.object({
-  name: z.string().min(3, "Ingresa tu nombre"),
-  email: z.email("Email invalido"),
+  name: z.string().trim().min(3, "Ingresa tu nombre"),
+  email: z.email("Email invalido").transform((value) => value.trim().toLowerCase()),
   password: z.string().min(8, "La contrasena debe tener al menos 8 caracteres"),
-  companyName: z.string().min(2, "Ingresa el nombre de tu empresa o perfil"),
-  ruc: z.string().optional(),
+  companyName: optionalTrimmedString,
+  ruc: optionalTrimmedString,
 });
 
 export const loginSchema = z.object({

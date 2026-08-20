@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       email: data.email,
       passwordHash: await hashPassword(data.password),
       companyName: data.companyName,
-      ruc: data.ruc || undefined,
+      ruc: data.ruc,
     });
 
     try {

@@ -198,6 +198,29 @@ describe("POST /api/register", () => {
     );
   });
 
+  it("registers with the Google-style default company when company name is empty", async () => {
+    mocks.findUniqueMock.mockResolvedValue(null);
+    mocks.hashPasswordMock.mockResolvedValue("hashed-password");
+    mocks.registerUserWithCompanyAndDemoMock.mockResolvedValue({
+      user: { id: "user-1" },
+      company: { id: "company-1" },
+      demoProject: {
+        status: "created",
+        projectId: "project-demo",
+        generalBudgetId: "budget-demo",
+        warnings: [],
+      },
+    });
+    mocks.issueEmailVerificationMock.mockResolvedValue({ sent: true });
+
+    const response = await POST(buildRequest({ ...validBody, companyName: "   " }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.registerUserWithCompanyAndDemoMock).toHaveBeenCalledWith(
+      expect.objectContaining({ companyName: undefined }),
+    );
+  });
+
   it("returns 400 when the request body fails validation", async () => {
     const response = await POST(
       buildRequest({ ...validBody, password: "12" }),

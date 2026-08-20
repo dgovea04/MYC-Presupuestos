@@ -38,7 +38,7 @@ describe("RegisterForm", () => {
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Maria Calderon" } });
     fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "maria@example.com" } });
     fireEvent.change(screen.getByLabelText("Contrasena"), { target: { value: "password123" } });
-    fireEvent.change(screen.getByLabelText("Empresa o perfil profesional"), {
+    fireEvent.change(screen.getByLabelText(/Empresa o perfil profesional/), {
       target: { value: "Constructora Andina SAC" },
     });
 
@@ -47,5 +47,12 @@ describe("RegisterForm", () => {
     await waitFor(() => {
       expect(mocks.push).toHaveBeenCalledWith("/login?verifyEmail=1&email=maria%40example.com&sent=1");
     });
+  });
+
+  it("keeps company optional and removes the RUC field from the form", () => {
+    render(<RegisterForm />);
+
+    expect(screen.getByLabelText(/Empresa o perfil profesional/).hasAttribute("required")).toBe(false);
+    expect(screen.queryByLabelText("RUC")).toBeNull();
   });
 });

@@ -61,12 +61,8 @@ export function RegisterForm() {
         <Input id="password" name="password" type="password" placeholder="Minimo 8 caracteres" required />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="companyName">Empresa o perfil profesional</Label>
-        <Input id="companyName" name="companyName" placeholder="Constructora Andina SAC" required />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="ruc">RUC</Label>
-        <Input id="ruc" name="ruc" placeholder="20123456789" />
+        <Label htmlFor="companyName">Empresa o perfil profesional <span className="text-slate-500">(opcional)</span></Label>
+        <Input id="companyName" name="companyName" placeholder="Constructora Andina SAC" />
       </div>
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       <Button className="w-full" type="submit" disabled={loading}>
