@@ -5,6 +5,7 @@ import { IdentifyAnalyticsUser } from "@/components/analytics/identify-user";
 import type { CSSProperties, ReactNode } from "react";
 import { GlobalAiAssistantProvider } from "@/components/ai/global-ai-assistant-provider";
 import { getAuthSession } from "@/lib/auth/session";
+import { isExternalAnalyticsEnabled } from "@/lib/analytics/environment";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode } from "@/lib/budget/view-mode";
@@ -69,7 +70,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans" data-theme={initialTheme} suppressHydrationWarning>
         <GoogleAnalytics
-          measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}
+          measurementId={isExternalAnalyticsEnabled() ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined}
           isAuthenticated={Boolean(session?.user?.id)}
         />
         <IdentifyAnalyticsUser userId={session?.user?.id ?? null} />

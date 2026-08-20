@@ -1,4 +1,5 @@
 import type { AnalyticsPrimitive } from "@/lib/analytics/gtag";
+import { isExternalAnalyticsEnabled } from "@/lib/analytics/environment";
 import { persistMarketingEvent } from "@/lib/analytics/store";
 
 export type AnalyticsEventName =
@@ -83,7 +84,7 @@ export async function trackServerEvent(
   const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
   const apiSecret = process.env.GA_API_SECRET;
 
-  if (!measurementId || !apiSecret) {
+  if (!measurementId || !apiSecret || !isExternalAnalyticsEnabled()) {
     return;
   }
 

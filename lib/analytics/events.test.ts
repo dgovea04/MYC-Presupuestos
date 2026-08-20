@@ -31,6 +31,8 @@ describe("server analytics events", () => {
 
   it("sends scalar event parameters to the Measurement Protocol endpoint", async () => {
     vi.stubEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", "G-TEST123");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.myc-presupuestos.com");
+    vi.stubEnv("DEPLOYMENT_TARGET", "production");
     vi.stubEnv("GA_API_SECRET", "secret");
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -71,6 +73,8 @@ describe("server analytics events", () => {
 
   it("throws on a rejected Measurement Protocol request so callers can handle it safely", async () => {
     vi.stubEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", "G-TEST123");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.myc-presupuestos.com");
+    vi.stubEnv("DEPLOYMENT_TARGET", "production");
     vi.stubEnv("GA_API_SECRET", "secret");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 400 })));
 
