@@ -148,6 +148,7 @@ describe("AppSidebarClient", () => {
       "/imports/rw7",
       "/imports/delphin",
       "/imports/mcp",
+      "/imports/pdf",
       "/ai",
       "/resources",
       "/partidas",

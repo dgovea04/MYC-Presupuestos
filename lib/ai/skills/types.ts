@@ -10,6 +10,7 @@ export type KhipuSkillId =
   | "skill-metrados"
   | "skill-formula-polinomica"
   | "skill-risk"
+  | "skill-pdf-import"
   | "skill-catalog"
   | "skill-chat"
   | "skill-autocomplete";

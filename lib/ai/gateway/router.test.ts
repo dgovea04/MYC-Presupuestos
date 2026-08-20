@@ -14,6 +14,7 @@ describe("AI gateway router", () => {
     expect(resolveAiProvider({ provider: "auto", task: "review_budget" })).toBe("openai");
     expect(resolveAiProvider({ provider: "auto", task: "review_apu" })).toBe("openai");
     expect(resolveAiProvider({ provider: "auto", task: "montecarlo_risk_analysis" })).toBe("gemini");
+    expect(resolveAiProvider({ provider: "auto", task: "pdf_import_structure" })).toBe("openai");
   });
 
   it("keeps explicit provider selections exact", () => {

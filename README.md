@@ -167,6 +167,7 @@ ENCRYPTION_KEY="una-clave-dedicada-de-32-bytes"
 
 # Opcional: API keys de entorno para OpenAI, Gemini y OpenRouter (fallback si el usuario no configura las suyas).
 OPENAI_API_KEY="sk-..."
+OPENAI_PDF_OCR_MODEL="gpt-5-mini"
 GEMINI_API_KEY="AIza..."
 OPENROUTER_API_KEY="sk-or-..."
 OPENROUTER_MODEL="deepseek/deepseek-chat-v3-0324:free"
@@ -372,6 +373,14 @@ Si SQL Server no usa seguridad integrada:
 npm.cmd run s10:sqlserver -- --list-databases --user sa --password TU_CLAVE
 ```
 
+## Importacion PDF asistida por IA
+
+El importador `/imports/pdf` permite subir PDFs de presupuesto, APUs y subpartidas de un mismo proyecto para generar un draft revisable antes de crear el proyecto definitivo.
+
+La V1 es asistida y auditable: valida JSON con Zod, recalcula montos con `decimal.js`, muestra observaciones de revision y bloquea importaciones con errores criticos pendientes.
+
+Para PDFs escaneados, configura `OPENAI_API_KEY`; opcionalmente puedes fijar `OPENAI_PDF_OCR_MODEL`. La guia operativa esta en `docs/pdf-ai-import-operations.md`.
+
 ## Acceso demo
 
 ```text
@@ -542,6 +551,7 @@ npm.cmd run test -- lib/calculations/budget.test.ts lib/calculations/apu.test.ts
 - `prd/PRD_MYC_MonteCarlo_Risk_Analysis.md`: PRD de riesgo.
 - `prd/prd_ai_local_myc_presupuestos_codex.md`: PRD de IA local.
 - `docs/importador-delphin.md`: reglas de jerarquia, APU y porcentajes para importaciones Delphin Express.
+- `docs/pdf-ai-import-operations.md`: configuracion, limites y troubleshooting del importador PDF asistido por IA.
 - `docs/superpowers/plans`: planes de implementacion historicos.
 - `docs/resource-price-provider-operations.md`: operación local versionada y del proveedor principal de precios.
 - `docs/mc-presupuestos-price-api-provider.md`: contrato del proveedor propio `mc-presupuestos-price-api`.

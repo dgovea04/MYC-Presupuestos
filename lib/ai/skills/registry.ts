@@ -7,6 +7,7 @@ import {
   REVIEW_OUTPUT_JSON_SHAPE,
 } from "@/lib/ai/prompts";
 import { aiApuStructuredSchema, aiReviewStructuredSchema } from "@/lib/ai/structured-output";
+import { PDF_IMPORT_OUTPUT_JSON_SHAPE } from "@/lib/pdf-import/prompts";
 import { buildKhipuTaskPayload } from "@/lib/ai/task-payloads";
 import type { KhipuAiTask } from "@/lib/ai/gateway/types";
 import type { AiOutputSchemaName } from "@/lib/ai/task-payloads";
@@ -52,6 +53,13 @@ const SKILLS: KhipuSkill[] = [
     schema: aiReviewStructuredSchema,
     instruction:
       "skill-risk: En V2 entrega analisis asesor y datos faltantes; no inventes P50, P80, P90 ni histogramas sin simulacion backend.",
+  }),
+  createSkill({
+    id: "skill-pdf-import",
+    tasks: ["pdf_import_structure"],
+    schemaName: "pdf_import_structure_v1",
+    instruction:
+      "skill-pdf-import: Estructura presupuestos, APUs y subpartidas desde texto OCR/PDF. Devuelve solo JSON valido, sin inventar valores faltantes.",
   }),
   createSkill({
     id: "skill-catalog",
@@ -145,6 +153,8 @@ function getOutputShapeBlock(schemaName: AiOutputSchemaName): string {
     case "montecarlo_risk_analysis_v1":
     case "apu_review_v1":
       return buildOutputJsonShapeBlock(REVIEW_OUTPUT_JSON_SHAPE);
+    case "pdf_import_structure_v1":
+      return buildOutputJsonShapeBlock(PDF_IMPORT_OUTPUT_JSON_SHAPE);
     case "apu_generation_v1":
       return buildOutputJsonShapeBlock(APU_OUTPUT_JSON_SHAPE);
     default:

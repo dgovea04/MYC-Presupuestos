@@ -19,6 +19,7 @@ export type AiOutputSchemaName =
   | "formula_polinomica_review_v1"
   | "quantity_takeoff_review_v1"
   | "montecarlo_risk_analysis_v1"
+  | "pdf_import_structure_v1"
   | "catalog_insumo_suggestions_v1"
   | "partida_generation_v1";
 
@@ -173,6 +174,10 @@ function readKhipuOutput(task: KhipuAiTask): AiTaskPayload["output"] {
     return { format: "json_only", schema: "montecarlo_risk_analysis_v1" };
   }
 
+  if (task === "pdf_import_structure") {
+    return { format: "json_only", schema: "pdf_import_structure_v1" };
+  }
+
   if (task === "suggest_insumos") {
     return { format: "json_only", schema: "catalog_insumo_suggestions_v1" };
   }
@@ -222,6 +227,12 @@ function readKhipuInput(task: KhipuAiTask, payload: Record<string, unknown>): Re
       description: readRequiredString(payload.description, "description"),
       unit: readOptionalString(payload.unit),
     });
+  }
+
+  if (task === "pdf_import_structure") {
+    return {
+      prompt: readRequiredString(payload.prompt, "prompt"),
+    };
   }
 
   return omitEmptyStrings({

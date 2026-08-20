@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  FileText,
   FileSpreadsheet,
   FolderKanban,
   Import,
@@ -65,6 +66,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
       { href: "/imports/rw7", label: "RW7", icon: FileSpreadsheet },
       { href: "/imports/delphin", label: "Delphin Express", icon: FileSpreadsheet },
       { href: "/imports/mcp", label: "MCP", icon: PackageOpen },
+      { href: "/imports/pdf", label: "PDF IA", icon: FileText },
     ],
   },
   {

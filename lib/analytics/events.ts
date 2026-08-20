@@ -10,6 +10,10 @@ export type AnalyticsEventName =
   | "project_created"
   | "budget_created"
   | "budget_imported"
+  | "pdf_import_analyzed"
+  | "pdf_import_draft_created"
+  | "pdf_import_failed"
+  | "pdf_import_imported"
   | "excel_paste_used"
   | "apu_created"
   | "formula_created"
@@ -138,6 +142,17 @@ const SAFE_PARAMETER_KEYS = new Set([
   "target_plan",
   "import_source",
   "format",
+  "fileCount",
+  "pageCount",
+  "ocrPageCount",
+  "itemCount",
+  "apuCount",
+  "subpartidaCount",
+  "warningCount",
+  "usedAi",
+  "stage",
+  "budgetCount",
+  "resourceCount",
   "row_count_bucket",
   "creation_source",
   "budget_kind",

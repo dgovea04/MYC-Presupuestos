@@ -12,6 +12,7 @@ export type KhipuAiTask =
   | "review_formula_polinomica"
   | "review_quantity_takeoff"
   | "montecarlo_risk_analysis"
+  | "pdf_import_structure"
   | "chat"
   | "autocomplete";
 
