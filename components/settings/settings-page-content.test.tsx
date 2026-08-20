@@ -20,6 +20,10 @@ vi.mock("@/components/settings/cloud-ai-settings-card", () => ({
   CloudAiSettingsCard: () => <div>Cloud AI Settings Card</div>,
 }));
 
+vi.mock("@/components/settings/pdf-import-ai-settings-card", () => ({
+  PdfImportAiSettingsCard: () => <div>PDF Import AI Settings Card</div>,
+}));
+
 vi.mock("@/components/settings/floating-khipu-settings-card", () => ({
   FloatingKhipuSettingsCard: () => <div>Floating Khipu Settings Card</div>,
 }));
@@ -194,6 +198,7 @@ describe("SettingsPageContent", () => {
     expect(aiPanel?.getAttribute("aria-hidden")).toBe("false");
     expect(aiPanel?.textContent).toContain("Local AI Settings Card");
     expect(aiPanel?.textContent).toContain("Cloud AI Settings Card");
+    expect(aiPanel?.textContent).toContain("PDF Import AI Settings Card");
     expect(aiPanel?.textContent).toContain("Floating Khipu Settings Card");
   });
 });

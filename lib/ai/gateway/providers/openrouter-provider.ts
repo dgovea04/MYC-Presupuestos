@@ -12,9 +12,10 @@ export async function executeOpenRouterProvider({
   messages,
   apiKey: requestApiKey,
   modelPreference,
+  allowEnvironmentFallback = true,
 }: AiProviderRequest): Promise<AiProviderResult> {
-  const apiKey = requestApiKey || process.env.OPENROUTER_API_KEY;
-  const requestedModel = modelPreference || process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
+  const apiKey = requestApiKey || (allowEnvironmentFallback ? process.env.OPENROUTER_API_KEY : undefined);
+  const requestedModel = modelPreference || (allowEnvironmentFallback ? process.env.OPENROUTER_MODEL : undefined) || DEFAULT_OPENROUTER_MODEL;
 
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY no configurado");

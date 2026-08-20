@@ -35,6 +35,43 @@ describe("pdf import OCR provider", () => {
     );
   });
 
+  it("uses Gemini when selected in the user's PDF provider settings", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: "Gemini OCR" }] } }] }),
+    });
+    const { createPdfImportOcrProvider } = await import("./ocr");
+    const provider = createPdfImportOcrProvider({ provider: "gemini", apiKey: "gemini-test", fetchImpl, model: "gemini-test" });
+
+    const result = await provider.extractText({ fileName: "scan.pdf", pageNumber: 1, pdfBytes: new Uint8Array([1, 2, 3]) });
+
+    expect(result.text).toBe("Gemini OCR");
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining("generativelanguage.googleapis.com/v1beta/models/gemini-test"),
+      expect.objectContaining({ body: expect.stringContaining('"inline_data"') }),
+    );
+  });
+
+  it("uses OpenRouter when selected in the user's PDF provider settings", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "OpenRouter OCR" } }] }),
+    });
+    const { createPdfImportOcrProvider } = await import("./ocr");
+    const provider = createPdfImportOcrProvider({ provider: "openrouter", apiKey: "router-test", fetchImpl, model: "vision-model" });
+
+    const result = await provider.extractText({ fileName: "scan.pdf", pageNumber: 1, pdfBytes: new Uint8Array([1, 2, 3]) });
+
+    expect(result.text).toBe("OpenRouter OCR");
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer router-test" }),
+        body: expect.stringContaining('"type":"file"'),
+      }),
+    );
+  });
+
   it("throws a clear error when no OCR provider is configured", async () => {
     await expect(requireConfiguredPdfImportOcrProvider(undefined)).rejects.toBeInstanceOf(PdfImportOcrUnavailableError);
   });

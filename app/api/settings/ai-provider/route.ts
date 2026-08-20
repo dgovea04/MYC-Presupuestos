@@ -4,6 +4,7 @@ import { getAiProviderSettings, updateAiProviderSettings, type AiProviderSetting
 import { AGENT_MODELS } from "@/lib/ai/agent/models";
 import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 import { getFeatureAccessResponse } from "@/lib/billing/route-access";
+import { PDF_IMPORT_PROVIDER_OPTIONS, type PdfImportProvider } from "@/types/settings";
 
 const VALID_AGENT_MODEL_IDS = new Set(AGENT_MODELS.map((model) => model.id));
 const AI_PROVIDER_PREFERENCE_OPTIONS = [
@@ -15,6 +16,7 @@ const AI_PROVIDER_PREFERENCE_OPTIONS = [
   "openrouter",
 ] as const satisfies readonly AiProviderSettingsInput["aiProviderPreference"][];
 const VALID_AI_PROVIDER_PREFERENCES = new Set<string>(AI_PROVIDER_PREFERENCE_OPTIONS);
+const VALID_PDF_IMPORT_PROVIDERS = new Set<string>(PDF_IMPORT_PROVIDER_OPTIONS);
 
 export async function GET() {
   const session = await getAuthSession();
@@ -88,6 +90,24 @@ export async function PUT(request: Request) {
     // that only touched provider-specific fields (e.g. openrouterModel).
     const includeAiProviderPreference = Object.prototype.hasOwnProperty.call(body, "aiProviderPreference");
     let candidateAiProviderPreference: AiProviderSettingsInput["aiProviderPreference"] | undefined;
+    const includePdfImportProvider = Object.prototype.hasOwnProperty.call(body, "pdfImportProvider");
+    let candidatePdfImportProvider: PdfImportProvider | undefined;
+
+    if (includePdfImportProvider) {
+      const validation = validatePdfImportProvider(body.pdfImportProvider);
+      if (!validation.ok) {
+        return NextResponse.json(
+          {
+            error: validation.message,
+            field: "pdfImportProvider",
+            invalidValue: validation.invalidValue,
+            validOptions: [...PDF_IMPORT_PROVIDER_OPTIONS],
+          },
+          { status: 400 },
+        );
+      }
+      candidatePdfImportProvider = validation.value;
+    }
 
     if (includeAiProviderPreference) {
       const validation = validateAiProviderPreference(body.aiProviderPreference);
@@ -128,6 +148,10 @@ export async function PUT(request: Request) {
       // so the data layer's `supportsAiProviderPreference` branch keeps the
       // existing DB value rather than silently overwriting it with "auto".
       input.aiProviderPreference = candidateAiProviderPreference;
+    }
+
+    if (includePdfImportProvider) {
+      input.pdfImportProvider = candidatePdfImportProvider;
     }
 
     const settings = await updateAiProviderSettings(session.user.id, input);
@@ -222,6 +246,32 @@ type AiProviderPreferenceValidation =
  * function runs — `undefined` is therefore treated as a programming error
  * here and would hit the non-string branch.
  */
+type PdfImportProviderValidation =
+  | { ok: true; value: PdfImportProvider }
+  | { ok: false; message: string; invalidValue: string };
+
+function validatePdfImportProvider(raw: unknown): PdfImportProviderValidation {
+  if (typeof raw !== "string") {
+    const received = raw === null ? "null" : typeof raw === "object" ? JSON.stringify(raw) : String(raw);
+    return {
+      ok: false,
+      invalidValue: received,
+      message: `pdfImportProvider debe ser uno de: ${PDF_IMPORT_PROVIDER_OPTIONS.join(", ")}. Recibido: ${received}.`,
+    };
+  }
+
+  const trimmed = raw.trim();
+  if (!VALID_PDF_IMPORT_PROVIDERS.has(trimmed)) {
+    return {
+      ok: false,
+      invalidValue: trimmed,
+      message: `Proveedor de importación PDF desconocido: "${trimmed}". Valores válidos: ${PDF_IMPORT_PROVIDER_OPTIONS.join(", ")}.`,
+    };
+  }
+
+  return { ok: true, value: trimmed as PdfImportProvider };
+}
+
 function validateAiProviderPreference(raw: unknown): AiProviderPreferenceValidation {
   if (raw === null) {
     return {

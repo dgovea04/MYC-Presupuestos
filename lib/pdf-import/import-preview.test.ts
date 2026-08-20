@@ -47,6 +47,6 @@ describe("pdf import preview", () => {
       ],
     });
 
-    expect(draft.warnings).toContain("scan.pdf parece escaneado y no tuvo OCR automatico disponible.");
+    expect(draft.warnings).toContain("scan.pdf parece escaneado y no tuvo OCR automatico disponible. Configura una API key cloud en Configuracion > IA > Proveedores Cloud IA.");
   });
 });

@@ -167,7 +167,6 @@ ENCRYPTION_KEY="una-clave-dedicada-de-32-bytes"
 
 # Opcional: API keys de entorno para OpenAI, Gemini y OpenRouter (fallback si el usuario no configura las suyas).
 OPENAI_API_KEY="sk-..."
-OPENAI_PDF_OCR_MODEL="gpt-5-mini"
 GEMINI_API_KEY="AIza..."
 OPENROUTER_API_KEY="sk-or-..."
 OPENROUTER_MODEL="deepseek/deepseek-chat-v3-0324:free"
@@ -379,7 +378,7 @@ El importador `/imports/pdf` permite subir PDFs de presupuesto, APUs y subpartid
 
 La V1 es asistida y auditable: valida JSON con Zod, recalcula montos con `decimal.js`, muestra observaciones de revision y bloquea importaciones con errores criticos pendientes.
 
-Para PDFs escaneados, configura `OPENAI_API_KEY`; opcionalmente puedes fijar `OPENAI_PDF_OCR_MODEL`. La guia operativa esta en `docs/pdf-ai-import-operations.md`.
+La IA del importador PDF se configura desde `/settings` → `IA` → `Proveedores Cloud IA`. Allí se guardan las API keys y, en la sección `Importador PDF IA`, el usuario elige independientemente OpenAI, Gemini u OpenRouter. La guía operativa está en `docs/pdf-ai-import-operations.md`.
 
 ## Acceso demo
 

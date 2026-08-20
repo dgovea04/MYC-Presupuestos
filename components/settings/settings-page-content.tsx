@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CompanyProfileCard } from "@/components/settings/company-profile-card";
 import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
 import { CloudAiSettingsCard } from "@/components/settings/cloud-ai-settings-card";
+import { PdfImportAiSettingsCard } from "@/components/settings/pdf-import-ai-settings-card";
 import { FloatingKhipuSettingsCard } from "@/components/settings/floating-khipu-settings-card";
 import { KhipuAgentSettingsCard } from "@/components/settings/khipu-agent-settings-card";
 import { UserSettingsForm } from "@/components/settings/user-settings-form";
@@ -309,6 +310,7 @@ export function SettingsPageContent({
 
               <div className="space-y-6">
                 <CloudAiSettingsCard />
+                <PdfImportAiSettingsCard />
               </div>
             </div>
           ) : (

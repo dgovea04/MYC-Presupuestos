@@ -850,6 +850,7 @@ model UserSettings {
   geminiApiKey               String?
   openrouterApiKey           String?
   aiProviderPreference       String   @default("auto")
+  pdfImportProvider          String   @default("openai")
   openaiModel                String?
   geminiModel                String?
   openrouterModel            String?

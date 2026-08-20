@@ -36,6 +36,7 @@ export type AiProviderRequest = {
   fetchImpl?: typeof fetch;
   apiKey?: string;
   modelPreference?: string;
+  allowEnvironmentFallback?: boolean;
 };
 
 export type AiProviderResult = AiEndpointResult & {

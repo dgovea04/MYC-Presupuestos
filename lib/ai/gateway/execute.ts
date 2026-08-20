@@ -241,5 +241,6 @@ function buildProviderRequest({
       userId,
     }),
     projectId,
+    allowEnvironmentFallback: task !== "pdf_import_structure",
   };
 }

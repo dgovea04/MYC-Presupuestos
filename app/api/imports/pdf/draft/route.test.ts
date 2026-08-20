@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   assertWorkspaceMembership: vi.fn(),
   structurePdfImportWithAi: vi.fn(),
   extractPdfImportFile: vi.fn(),
+  createPdfImportOcrProvider: vi.fn(),
+  getPdfImportAiConfiguration: vi.fn(),
   trackServerEvent: vi.fn(),
 }));
 
@@ -30,6 +32,14 @@ vi.mock("@/lib/pdf-import/extraction", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/pdf-import/ocr", () => ({
+  createPdfImportOcrProvider: mocks.createPdfImportOcrProvider,
+}));
+
+vi.mock("@/lib/pdf-import/provider", () => ({
+  getPdfImportAiConfiguration: mocks.getPdfImportAiConfiguration,
+}));
+
 vi.mock("@/lib/analytics/events", () => ({
   trackServerEvent: mocks.trackServerEvent,
 }));
@@ -40,6 +50,10 @@ describe("POST /api/imports/pdf/draft", () => {
     mocks.assertWorkspaceMembership.mockReset();
     mocks.structurePdfImportWithAi.mockReset();
     mocks.extractPdfImportFile.mockReset();
+    mocks.createPdfImportOcrProvider.mockReset();
+    mocks.getPdfImportAiConfiguration.mockReset();
+    mocks.getPdfImportAiConfiguration.mockResolvedValue({ provider: "openai", apiKey: "sk-test", model: "gpt-test" });
+    mocks.createPdfImportOcrProvider.mockReturnValue({ extractText: vi.fn() });
     mocks.trackServerEvent.mockReset();
     mocks.extractPdfImportFile.mockImplementation(async (file: File, role: string) => ({
       id: `file-${file.name}`,
@@ -142,6 +156,7 @@ describe("POST /api/imports/pdf/draft", () => {
       expect.objectContaining({
         userId: "user-1",
         companyId: "company-1",
+        provider: "openai",
       }),
     );
     expect(mocks.trackServerEvent).toHaveBeenCalledWith(

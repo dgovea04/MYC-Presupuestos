@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { trackServerEvent } from "@/lib/analytics/events";
 import { getAuthSession } from "@/lib/auth/session";
 import { extractPdfImportFile } from "@/lib/pdf-import/extraction";
-import { createOpenAiPdfImportOcrProviderFromEnv } from "@/lib/pdf-import/ocr";
+import { createPdfImportOcrProvider } from "@/lib/pdf-import/ocr";
+import { getPdfImportAiConfiguration } from "@/lib/pdf-import/provider";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { PdfImportRequestError, assertPdfImportPageLimit, readPdfImportMultipartInput } from "../request";
 
@@ -20,7 +21,10 @@ export async function POST(request: Request) {
     const input = await readPdfImportMultipartInput(request);
     companyIdForTracking = input.companyId;
     await assertWorkspaceMembership({ userId: session.user.id, companyId: input.companyId, minimumRole: "EDITOR" });
-    const ocrProvider = createOpenAiPdfImportOcrProviderFromEnv();
+    const aiConfiguration = await getPdfImportAiConfiguration(session.user.id);
+    const ocrProvider = aiConfiguration.apiKey
+      ? createPdfImportOcrProvider(aiConfiguration)
+      : undefined;
     const files = await Promise.all(input.files.map(({ file, role }) => extractPdfImportFile(file, role, { ocrProvider })));
     assertPdfImportPageLimit(files);
     await safelyTrackPdfImportAnalyzed({
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
       })),
       warnings: files
         .filter((file) => file.requiresOcr && !file.ocrApplied)
-        .map((file) => `${file.fileName} parece escaneado y requerira OCR/vision. Configura OPENAI_API_KEY para extraer texto automaticamente.`),
+        .map((file) => `${file.fileName} parece escaneado y requerira OCR/vision. Configura una API key cloud en Configuracion > IA > Proveedores Cloud IA y selecciona el proveedor del importador PDF.`),
     });
   } catch (error) {
     if (error instanceof PdfImportRequestError) {

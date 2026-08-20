@@ -230,9 +230,10 @@ export async function executeGeminiProvider({
   apiKey: requestApiKey,
   modelPreference,
   task,
+  allowEnvironmentFallback = true,
 }: AiProviderRequest): Promise<AiProviderResult> {
-  const apiKey = requestApiKey || process.env.GEMINI_API_KEY;
-  const rawModel = modelPreference || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  const apiKey = requestApiKey || (allowEnvironmentFallback ? process.env.GEMINI_API_KEY : undefined);
+  const rawModel = modelPreference || (allowEnvironmentFallback ? process.env.GEMINI_MODEL : undefined) || DEFAULT_GEMINI_MODEL;
   const resolved = resolveEffectiveGeminiModel(rawModel, task);
   const resolvedModel = resolved.model;
   const warnings: string[] = resolved.warning ? [resolved.warning] : [];

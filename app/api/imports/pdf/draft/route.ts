@@ -5,7 +5,8 @@ import { getAuthSession } from "@/lib/auth/session";
 import { structurePdfImportWithAi } from "@/lib/pdf-import/ai-structure";
 import { extractPdfImportFile } from "@/lib/pdf-import/extraction";
 import { createPdfAiImportDraftFromText } from "@/lib/pdf-import/import-preview";
-import { createOpenAiPdfImportOcrProviderFromEnv } from "@/lib/pdf-import/ocr";
+import { createPdfImportOcrProvider } from "@/lib/pdf-import/ocr";
+import { getPdfImportAiConfiguration } from "@/lib/pdf-import/provider";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { PdfImportRequestError, assertPdfImportPageLimit, readPdfImportMultipartInput } from "../request";
 
@@ -22,7 +23,10 @@ export async function POST(request: Request) {
     const input = await readPdfImportMultipartInput(request);
     companyIdForTracking = input.companyId;
     await assertWorkspaceMembership({ userId: session.user.id, companyId: input.companyId, minimumRole: "EDITOR" });
-    const ocrProvider = createOpenAiPdfImportOcrProviderFromEnv();
+    const aiConfiguration = await getPdfImportAiConfiguration(session.user.id);
+    const ocrProvider = aiConfiguration.apiKey
+      ? createPdfImportOcrProvider(aiConfiguration)
+      : undefined;
     const extractedFiles = await Promise.all(input.files.map(({ file, role }) => extractPdfImportFile(file, role, { ocrProvider })));
     assertPdfImportPageLimit(extractedFiles);
     const deterministicDraft = createPdfAiImportDraftFromText({
@@ -41,6 +45,7 @@ export async function POST(request: Request) {
           currency: input.currency,
           priceTolerance: input.priceTolerance,
           extractedFiles,
+          provider: aiConfiguration.provider,
           fallbackDraft: deterministicDraft,
         })
       : deterministicDraft;
@@ -113,12 +118,14 @@ async function createAiStructuredDraftOrFallback(input: {
   currency: string;
   priceTolerance: string;
   extractedFiles: Awaited<ReturnType<typeof extractPdfImportFile>>[];
+  provider: Awaited<ReturnType<typeof getPdfImportAiConfiguration>>["provider"];
   fallbackDraft: ReturnType<typeof createPdfAiImportDraftFromText>;
 }) {
   try {
     const result = await structurePdfImportWithAi({
       userId: input.userId,
       companyId: input.companyId,
+      provider: input.provider,
       projectName: input.projectName,
       currency: input.currency,
       priceTolerance: input.priceTolerance,

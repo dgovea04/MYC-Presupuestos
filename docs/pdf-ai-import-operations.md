@@ -9,17 +9,18 @@ Guia operativa para configurar y operar el importador de presupuesto, APUs y sub
 - Draft revisable: `POST /api/imports/pdf/draft`
 - Importacion final: `POST /api/imports/pdf/import`
 
-## Variables de entorno
+## Configuracion del proveedor
 
-```env
-# Requerida para OCR/vision de PDFs escaneados cuando no hay texto embebido suficiente.
-OPENAI_API_KEY="sk-..."
+El importador PDF no requiere variables de entorno para la IA.
 
-# Opcional. Si no se configura, usa OPENAI_MODEL o el modelo por defecto del adaptador.
-OPENAI_PDF_OCR_MODEL="gpt-5-mini"
-```
+1. Ve a `/settings`.
+2. Abre la pestaña **IA**.
+3. En **Proveedores Cloud IA**, configura y prueba la API key de OpenAI, Gemini u OpenRouter.
+4. En **Importador PDF IA**, selecciona el proveedor específico para PDF y guarda.
 
-El flujo tambien puede estructurar datos con el gateway IA existente mediante la tarea `pdf_import_structure`. La seleccion de proveedor sigue la configuracion del gateway y puede usar `auto`.
+La selección del importador PDF es independiente del proveedor predeterminado de Khipu Agente. El proveedor elegido se usa tanto para OCR/visión de PDFs escaneados como para la estructuración `pdf_import_structure`.
+
+Las API keys se guardan cifradas en la base de datos. En producción se debe configurar una `ENCRYPTION_KEY` estable para poder descifrarlas.
 
 ## Limites V1
 
@@ -60,16 +61,18 @@ Los prompts y parsers deben pedir y aceptar solo valores observados en el docume
 
 El extractor intenta primero usar texto embebido. Si la pagina tiene texto insuficiente, baja densidad numerica o pocas palabras clave, se marca como candidata a OCR/vision.
 
-Con `OPENAI_API_KEY` configurado, el adaptador de OCR envia el PDF al endpoint de Responses de OpenAI y espera texto normalizado por pagina. Sin proveedor disponible, el draft conserva warnings accionables en lugar de inventar datos.
+El adaptador de OCR usa el proveedor seleccionado por el usuario: OpenAI Responses, Gemini `generateContent` u OpenRouter Chat Completions. Si falta la API key del proveedor seleccionado, el draft conserva warnings accionables en lugar de inventar datos.
 
 ## Troubleshooting
 
 ### El PDF aparece como escaneado pero no extrae datos
 
-1. Verifica que `OPENAI_API_KEY` exista en el entorno del servidor.
-2. Revisa que el archivo no exceda limites de tamano/paginas.
-3. Prueba clasificar manualmente el PDF como `Presupuesto`, `APU` o `Subpartidas`.
-4. Si la calidad visual es baja, pide un PDF digital o una exportacion desde el sistema origen.
+1. Verifica que la API key del proveedor seleccionado aparezca como configurada en `Configuracion > IA > Proveedores Cloud IA`.
+2. Confirma que el proveedor seleccionado en `Importador PDF IA` coincida con la key disponible.
+3. En OpenRouter, verifica que el modelo elegido soporte entrada PDF/vision.
+4. Revisa que el archivo no exceda limites de tamano/paginas.
+5. Prueba clasificar manualmente el PDF como `Presupuesto`, `APU` o `Subpartidas`.
+6. Si la calidad visual es baja, pide un PDF digital o una exportacion desde el sistema origen.
 
 ### Hay muchas partidas sin APU
 

@@ -37,7 +37,7 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
       warnings.push(`No se pudo clasificar ${file.fileName} como presupuesto, APU o subpartidas.`);
     }
     if ("requiresOcr" in file && file.requiresOcr && !("ocrApplied" in file && file.ocrApplied)) {
-      warnings.push(`${file.fileName} parece escaneado y no tuvo OCR automatico disponible.`);
+      warnings.push(`${file.fileName} parece escaneado y no tuvo OCR automatico disponible. Configura una API key cloud en Configuracion > IA > Proveedores Cloud IA.`);
     }
     if ("requiresOcr" in file && file.requiresOcr && "ocrApplied" in file && file.ocrApplied) {
       warnings.push(`${file.fileName} fue procesado con OCR/vision; revisa las filas de baja confianza.`);

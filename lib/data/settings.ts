@@ -7,6 +7,9 @@ import { encryptApiKey, decryptApiKey, maskApiKey } from "@/lib/ai/encryption";
 import {
   DEFAULT_APP_THEME,
   DEFAULT_DATE_FORMAT,
+  DEFAULT_PDF_IMPORT_PROVIDER,
+  PDF_IMPORT_PROVIDER_OPTIONS,
+  type PdfImportProvider,
   DEFAULT_EXCEL_ROW_HEIGHT,
   DEFAULT_EXCEL_SHOW_FIELD_BORDERS,
   DEFAULT_INITIAL_SUB_BUDGET_NAMES,
@@ -82,6 +85,7 @@ export type AiProviderSettingsInput = {
   geminiModel?: string | null;
   openrouterModel?: string | null;
   agentModel?: string | null;
+  pdfImportProvider?: PdfImportProvider;
 };
 
 export type AiProviderSettings = {
@@ -93,6 +97,7 @@ export type AiProviderSettings = {
   geminiModel: string;
   openrouterModel: string;
   agentModel: string;
+  pdfImportProvider: PdfImportProvider;
   openaiConfigured: boolean;
   geminiConfigured: boolean;
   openrouterConfigured: boolean;
@@ -123,6 +128,12 @@ function normalizeUserSettingsRateFields(row: Record<string, unknown>): Record<s
     defaultUtilityRate: normalizeRateValue(row.defaultUtilityRate),
     defaultSubBudgetNames: row.defaultSubBudgetNames,
   };
+}
+
+function readPdfImportProvider(value: unknown): PdfImportProvider {
+  return typeof value === "string" && PDF_IMPORT_PROVIDER_OPTIONS.includes(value as PdfImportProvider)
+    ? (value as PdfImportProvider)
+    : DEFAULT_PDF_IMPORT_PROVIDER;
 }
 
 function readAiProviderPreference(value: unknown): AiProviderPreference {
@@ -342,6 +353,7 @@ const aiProviderColumns = [
   "openrouterModel",
   "agentModel",
   "aiProviderPreference",
+  "pdfImportProvider",
 ] as const;
 
 export async function getAiProviderSettings(userId: string): Promise<AiProviderSettings> {
@@ -357,6 +369,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
     supportsOpenrouterModel,
     supportsAgentModel,
     supportsAiProviderPreference,
+    supportsPdfImportProvider,
   ] = columnFlags;
 
   const hasAnyAiColumn = columnFlags.some(Boolean);
@@ -371,6 +384,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
       geminiModel: "",
       openrouterModel: "",
       agentModel: "",
+      pdfImportProvider: DEFAULT_PDF_IMPORT_PROVIDER,
       openaiConfigured: false,
       geminiConfigured: false,
       openrouterConfigured: false,
@@ -388,6 +402,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
       ...(supportsGeminiModel ? { geminiModel: true } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: true } : {}),
       ...(supportsAgentModel ? { agentModel: true } : {}),
+      ...(supportsPdfImportProvider ? { pdfImportProvider: true } : {}),
     },
   });
 
@@ -401,6 +416,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
       geminiModel: "",
       openrouterModel: "",
       agentModel: "",
+      pdfImportProvider: DEFAULT_PDF_IMPORT_PROVIDER,
       openaiConfigured: false,
       geminiConfigured: false,
       openrouterConfigured: false,
@@ -418,6 +434,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
   const geminiModel = supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : "";
   const openrouterModel = supportsOpenrouterModel && typeof row.openrouterModel === "string" ? row.openrouterModel : "";
   const agentModel = supportsAgentModel && typeof row.agentModel === "string" ? row.agentModel : "";
+  const pdfImportProvider = readPdfImportProvider(supportsPdfImportProvider ? row.pdfImportProvider : undefined);
 
   return {
     aiProviderPreference: readAiProviderPreference(supportsAiProviderPreference ? row.aiProviderPreference : undefined),
@@ -428,6 +445,7 @@ export async function getAiProviderSettings(userId: string): Promise<AiProviderS
     geminiModel,
     openrouterModel,
     agentModel,
+    pdfImportProvider,
     openaiConfigured: decryptedOpenaiKey.length > 0,
     geminiConfigured: decryptedGeminiKey.length > 0,
     openrouterConfigured: decryptedOpenrouterKey.length > 0,
@@ -495,6 +513,7 @@ export async function updateAiProviderSettings(
     supportsOpenrouterModel,
     supportsAgentModel,
     supportsAiProviderPreference,
+    supportsPdfImportProvider,
   ] = columnFlags;
 
   const encryptedOpenaiKey = input.openaiApiKey && input.openaiApiKey.trim().length > 0
@@ -533,6 +552,12 @@ export async function updateAiProviderSettings(
     );
   }
 
+  if (input.pdfImportProvider !== undefined && !supportsPdfImportProvider) {
+    throw new Error(
+      "pdfImportProvider aún no puede guardarse en esta base de datos. Ejecuta la migración pendiente `20260820120000_add_pdf_import_provider` usando `npx prisma migrate deploy` para agregar la columna pdfImportProvider a UserSettings.",
+    );
+  }
+
   const settings = await prisma.userSettings.upsert({
     where: { userId },
     create: {
@@ -550,6 +575,7 @@ export async function updateAiProviderSettings(
       ...(supportsGeminiModel ? { geminiModel: input.geminiModel ?? null } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: input.openrouterModel ?? null } : {}),
       ...(supportsAgentModel && input.agentModel !== undefined ? { agentModel: input.agentModel ?? null } : {}),
+      ...(supportsPdfImportProvider && input.pdfImportProvider !== undefined ? { pdfImportProvider: input.pdfImportProvider } : {}),
     },
     update: {
       ...(supportsAiProviderPreference && input.aiProviderPreference !== undefined ? { aiProviderPreference: input.aiProviderPreference } : {}),
@@ -560,6 +586,7 @@ export async function updateAiProviderSettings(
       ...(supportsGeminiModel ? { geminiModel: input.geminiModel ?? null } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: input.openrouterModel ?? null } : {}),
       ...(supportsAgentModel && input.agentModel !== undefined ? { agentModel: input.agentModel ?? null } : {}),
+      ...(supportsPdfImportProvider && input.pdfImportProvider !== undefined ? { pdfImportProvider: input.pdfImportProvider } : {}),
     },
     select: {
       ...(supportsAiProviderPreference ? { aiProviderPreference: true } : {}),
@@ -570,6 +597,7 @@ export async function updateAiProviderSettings(
       ...(supportsGeminiModel ? { geminiModel: true } : {}),
       ...(supportsOpenrouterModel ? { openrouterModel: true } : {}),
       ...(supportsAgentModel ? { agentModel: true } : {}),
+      ...(supportsPdfImportProvider ? { pdfImportProvider: true } : {}),
     },
   });
 
@@ -590,6 +618,7 @@ export async function updateAiProviderSettings(
     geminiModel: supportsGeminiModel && typeof row.geminiModel === "string" ? row.geminiModel : input.geminiModel ?? "",
     openrouterModel: supportsOpenrouterModel && typeof row.openrouterModel === "string" ? row.openrouterModel : input.openrouterModel ?? "",
     agentModel: supportsAgentModel && typeof row.agentModel === "string" ? row.agentModel : input.agentModel ?? "",
+    pdfImportProvider: readPdfImportProvider(supportsPdfImportProvider ? row.pdfImportProvider : input.pdfImportProvider),
     openaiConfigured: storedDecryptedOpenai.length > 0,
     geminiConfigured: storedDecryptedGemini.length > 0,
     openrouterConfigured: storedDecryptedOpenrouter.length > 0,

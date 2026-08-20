@@ -8,9 +8,10 @@ export async function executeOpenAIProvider({
   messages,
   apiKey: requestApiKey,
   modelPreference,
+  allowEnvironmentFallback = true,
 }: AiProviderRequest): Promise<AiProviderResult> {
-  const apiKey = requestApiKey || process.env.OPENAI_API_KEY;
-  const requestedModel = modelPreference || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+  const apiKey = requestApiKey || (allowEnvironmentFallback ? process.env.OPENAI_API_KEY : undefined);
+  const requestedModel = modelPreference || (allowEnvironmentFallback ? process.env.OPENAI_MODEL : undefined) || DEFAULT_OPENAI_MODEL;
 
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY no configurado");

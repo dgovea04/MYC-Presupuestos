@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   assertWorkspaceMembership: vi.fn(),
   extractPdfImportFile: vi.fn(),
-  createOpenAiPdfImportOcrProviderFromEnv: vi.fn(),
+  createPdfImportOcrProvider: vi.fn(),
+  getPdfImportAiConfiguration: vi.fn(),
   trackServerEvent: vi.fn(),
 }));
 
@@ -23,7 +24,11 @@ vi.mock("@/lib/pdf-import/extraction", () => ({
 }));
 
 vi.mock("@/lib/pdf-import/ocr", () => ({
-  createOpenAiPdfImportOcrProviderFromEnv: mocks.createOpenAiPdfImportOcrProviderFromEnv,
+  createPdfImportOcrProvider: mocks.createPdfImportOcrProvider,
+}));
+
+vi.mock("@/lib/pdf-import/provider", () => ({
+  getPdfImportAiConfiguration: mocks.getPdfImportAiConfiguration,
 }));
 
 vi.mock("@/lib/analytics/events", () => ({
@@ -35,7 +40,10 @@ describe("POST /api/imports/pdf/analyze", () => {
     mocks.getAuthSession.mockReset();
     mocks.assertWorkspaceMembership.mockReset();
     mocks.extractPdfImportFile.mockReset();
-    mocks.createOpenAiPdfImportOcrProviderFromEnv.mockReset();
+    mocks.createPdfImportOcrProvider.mockReset();
+    mocks.getPdfImportAiConfiguration.mockReset();
+    mocks.getPdfImportAiConfiguration.mockResolvedValue({ provider: "openai", apiKey: "sk-test", model: "gpt-test" });
+    mocks.createPdfImportOcrProvider.mockReturnValue({ extractText: vi.fn() });
     mocks.trackServerEvent.mockReset();
   });
 
@@ -43,7 +51,7 @@ describe("POST /api/imports/pdf/analyze", () => {
     const ocrProvider = { extractText: vi.fn() };
     mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
-    mocks.createOpenAiPdfImportOcrProviderFromEnv.mockReturnValue(ocrProvider);
+    mocks.createPdfImportOcrProvider.mockReturnValue(ocrProvider);
     mocks.extractPdfImportFile.mockResolvedValue({
       id: "file-scan-pdf",
       fileName: "scan.pdf",

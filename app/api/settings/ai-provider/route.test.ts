@@ -42,6 +42,7 @@ function makeAiSettingsPayload(overrides?: {
   openaiModel?: string;
   geminiModel?: string;
   openrouterModel?: string;
+  pdfImportProvider?: string;
 }) {
   return {
     aiProviderPreference: "auto",
@@ -52,6 +53,7 @@ function makeAiSettingsPayload(overrides?: {
     geminiModel: overrides?.geminiModel ?? "",
     openrouterModel: overrides?.openrouterModel ?? "",
     agentModel: overrides?.agentModel ?? "",
+    pdfImportProvider: overrides?.pdfImportProvider ?? "openai",
     openaiConfigured: overrides?.openaiConfigured ?? false,
     geminiConfigured: overrides?.geminiConfigured ?? false,
     openrouterConfigured: overrides?.openrouterConfigured ?? false,
@@ -225,6 +227,33 @@ describe("/api/settings/ai-provider — agentModel whitelist", () => {
     expect("agentModel" in secondCallArg).toBe(false); // <-- el bug original
     expect(secondCallArg.openrouterModel).toBe("openrouter/free");
     expect(secondCallArg.aiProviderPreference).toBe("openrouter");
+  });
+});
+
+describe("/api/settings/ai-provider — pdfImportProvider whitelist", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getFeatureAccessResponse).mockResolvedValue(null);
+    mockAuthSession();
+    updateAiProviderSettingsMock.mockResolvedValue(makeAiSettingsPayload());
+  });
+
+  it.each(["openai", "gemini", "openrouter"])("accepts %s as PDF importer provider", async (provider) => {
+    const response = await put({ pdfImportProvider: provider });
+    expect(response.status).toBe(200);
+    expect(updateAiProviderSettingsMock).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ pdfImportProvider: provider }),
+    );
+  });
+
+  it("rejects an unsupported PDF importer provider", async () => {
+    const response = await put({ pdfImportProvider: "ollama" });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { field: string; validOptions: string[] };
+    expect(body.field).toBe("pdfImportProvider");
+    expect(body.validOptions).toEqual(["openai", "gemini", "openrouter"]);
+    expect(updateAiProviderSettingsMock).not.toHaveBeenCalled();
   });
 });
 
