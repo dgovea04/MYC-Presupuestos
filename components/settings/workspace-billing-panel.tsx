@@ -31,6 +31,7 @@ type UsagePayload = {
     projects: { count: number };
     budgets: { count: number };
   };
+  canManageBilling?: boolean;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,6 +48,8 @@ export function WorkspaceBillingPanel({ workspaceId }: { workspaceId: string }) 
   const [usage, setUsage] = useState<UsagePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionPending, setActionPending] = useState<"checkout" | "portal" | null>(null);
+  const [actionError, setActionError] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -66,6 +69,19 @@ export function WorkspaceBillingPanel({ workspaceId }: { workspaceId: string }) 
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  function openBillingAction(kind: "checkout" | "portal") {
+    setActionPending(kind);
+    setActionError("");
+    void fetch(`/api/workspaces/${workspaceId}/billing/${kind}`, { method: "POST" })
+      .then(async (response) => {
+        const payload: unknown = await response.json();
+        if (!response.ok || !isUrlPayload(payload)) throw new Error(readError(payload, "No se pudo iniciar la acción de facturación"));
+        window.location.href = payload.url;
+      })
+      .catch((reason: unknown) => setActionError(reason instanceof Error ? reason.message : "No se pudo iniciar la acción de facturación"))
+      .finally(() => setActionPending(null));
+  }
+
   return (
     <Card className="border-[var(--app-border)] bg-[var(--app-surface)]">
       <CardHeader>
@@ -75,7 +91,7 @@ export function WorkspaceBillingPanel({ workspaceId }: { workspaceId: string }) 
               <CreditCard className="h-5 w-5" />
               Facturación y uso
             </CardTitle>
-            <CardDescription>Plan, suscripción y consumo del workspace. Solo lectura.</CardDescription>
+            <CardDescription>Plan, suscripción y consumo del workspace.</CardDescription>
           </div>
           <Button type="button" variant="outline" className="gap-2" onClick={load} disabled={loading}>
             <RefreshCw className="h-4 w-4" />
@@ -95,6 +111,22 @@ export function WorkspaceBillingPanel({ workspaceId }: { workspaceId: string }) 
               <Metric label="Asientos" value={`${usage.seats.used} / ${usage.seats.limit === null ? "∞" : usage.seats.limit}`} />
               <Metric label="Suscripción" value={usage.subscription ? (STATUS_LABELS[usage.subscription.status] ?? usage.subscription.status) : "Sin suscripción"} />
             </div>
+
+            {usage.canManageBilling ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" className="gap-2" onClick={() => openBillingAction("checkout")} disabled={actionPending !== null}>
+                  {actionPending === "checkout" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                  Actualizar plan
+                </Button>
+                {usage.subscription?.provider === "STRIPE" ? (
+                  <Button type="button" variant="outline" onClick={() => openBillingAction("portal")} disabled={actionPending !== null}>
+                    {actionPending === "portal" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Gestionar suscripción
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {actionError ? <p className="text-sm text-rose-700">{actionError}</p> : null}
 
             {usage.subscription?.needsSync ? (
               <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -171,6 +203,10 @@ function formatPeriod(start: string | null, end: string | null) {
 
 function readError(value: unknown, fallback: string) {
   return typeof value === "object" && value !== null && "error" in value && typeof value.error === "string" ? value.error : fallback;
+}
+
+function isUrlPayload(value: unknown): value is { url: string } {
+  return typeof value === "object" && value !== null && "url" in value && typeof (value as { url?: unknown }).url === "string";
 }
 
 function isUsagePayload(value: unknown): value is UsagePayload {

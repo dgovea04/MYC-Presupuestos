@@ -104,6 +104,17 @@ type BillingPrismaClient = {
       update: Omit<BillingSubscriptionWrite, "userId" | "provider" | "stripeSubscriptionId">;
     }) => Promise<unknown>;
   };
+  companySubscription: {
+    findUnique: (args: {
+      where: { companyId: string };
+      select: { externalCustomerId?: true; pastDueStartedAt?: true; status?: true };
+    }) => Promise<{ externalCustomerId: string | null; pastDueStartedAt?: Date | null; status?: string } | null>;
+    upsert: (args: {
+      where: { companyId: string };
+      create: CompanySubscriptionWrite;
+      update: Omit<CompanySubscriptionWrite, "companyId" | "provider" | "externalSubscriptionId">;
+    }) => Promise<unknown>;
+  };
 };
 
 type BillingSubscriptionWrite = {
@@ -117,6 +128,18 @@ type BillingSubscriptionWrite = {
   stripePriceId: string | null;
   stripeSubscriptionId: string;
   userId: string;
+};
+
+type CompanySubscriptionWrite = {
+  companyId: string;
+  membershipPlanId: string;
+  provider: "STRIPE";
+  status: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED" | "UNPAID" | "INCOMPLETE" | "INCOMPLETE_EXPIRED";
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
+  pastDueStartedAt: Date | null;
+  externalCustomerId: string | null;
+  externalSubscriptionId: string;
 };
 
 export function getStripeClient() {
@@ -183,6 +206,52 @@ export async function createProCheckoutSession({
   return session;
 }
 
+export async function createWorkspaceProCheckoutSession({
+  prisma = defaultPrisma as unknown as BillingPrismaClient,
+  stripe = getStripeClient(),
+  companyId,
+  user,
+}: {
+  prisma?: BillingPrismaClient;
+  stripe?: StripeBillingClient;
+  companyId: string;
+  user: { email?: string | null };
+}) {
+  const { metadata, priceId } = getProPriceConfig();
+  const appUrl = getAppUrl();
+  const companySubscription = await prisma.companySubscription.findUnique({
+    where: { companyId },
+    select: { externalCustomerId: true },
+  });
+  const stripeCustomerId = companySubscription?.externalCustomerId ?? null;
+  const customerEmail = user.email ?? null;
+
+  if (!stripeCustomerId && !customerEmail) {
+    throw new Error("El workspace necesita un correo para iniciar checkout.");
+  }
+
+  const customerParams: { customer: string } | { customer_email: string } = stripeCustomerId
+    ? { customer: stripeCustomerId }
+    : { customer_email: customerEmail ?? "" };
+
+  const session = await stripe.checkout.sessions.create({
+    client_reference_id: companyId,
+    ...customerParams,
+    line_items: [{ price: priceId, quantity: 1 }],
+    metadata: { companyId, ...metadata },
+    mode: "subscription",
+    subscription_data: { metadata: { companyId, ...metadata } },
+    success_url: `${appUrl}/settings?tab=billing&billing=success`,
+    cancel_url: `${appUrl}/settings?tab=billing&billing=cancelled`,
+  });
+
+  if (!session.url) {
+    throw new Error("Stripe no devolvio una URL de checkout.");
+  }
+
+  return session;
+}
+
 export async function createBillingPortalSession({
   prisma = defaultPrisma as unknown as BillingPrismaClient,
   stripe = getStripeClient(),
@@ -208,6 +277,30 @@ export async function createBillingPortalSession({
   });
 }
 
+export async function createWorkspaceBillingPortalSession({
+  prisma = defaultPrisma as unknown as BillingPrismaClient,
+  stripe = getStripeClient(),
+  companyId,
+}: {
+  prisma?: BillingPrismaClient;
+  stripe?: StripeBillingClient;
+  companyId: string;
+}) {
+  const subscription = await prisma.companySubscription.findUnique({
+    where: { companyId },
+    select: { externalCustomerId: true },
+  });
+
+  if (!subscription?.externalCustomerId) {
+    throw new Error("No hay una suscripcion de Stripe para gestionar.");
+  }
+
+  return stripe.billingPortal.sessions.create({
+    customer: subscription.externalCustomerId,
+    return_url: `${getAppUrl()}/settings?tab=billing`,
+  });
+}
+
 export async function syncStripeSubscription({
   prisma = defaultPrisma as unknown as BillingPrismaClient,
   stripe = getStripeClient(),
@@ -218,6 +311,13 @@ export async function syncStripeSubscription({
   subscriptionId: string;
 }) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const companyId = subscription.metadata?.companyId;
+
+  if (companyId) {
+    await syncCompanySubscription(prisma, subscription, companyId);
+    return;
+  }
+
   const userId = await resolveSubscriptionUserId(prisma, subscription);
   const proPlan = await prisma.membershipPlan.findUnique({ where: { slug: "pro" } });
 
@@ -260,6 +360,59 @@ export async function syncStripeSubscription({
     }).catch(() => undefined);
     void trackBetaConversion(userId).catch(() => undefined);
   }
+}
+
+async function syncCompanySubscription(prisma: BillingPrismaClient, subscription: StripeSubscriptionRecord, companyId: string) {
+  const proPlan = await prisma.membershipPlan.findUnique({ where: { slug: "pro" } });
+
+  if (!proPlan) {
+    throw new Error("Plan Pro no encontrado.");
+  }
+
+  const existing = await prisma.companySubscription.findUnique({
+    where: { companyId },
+    select: { pastDueStartedAt: true, status: true },
+  });
+  const write = mapCompanySubscription(
+    subscription,
+    companyId,
+    proPlan.id,
+    existing?.status === "PAST_DUE" ? existing.pastDueStartedAt ?? null : null,
+  );
+
+  await prisma.companySubscription.upsert({
+    where: { companyId },
+    create: write,
+    update: {
+      membershipPlanId: write.membershipPlanId,
+      currentPeriodEnd: write.currentPeriodEnd,
+      currentPeriodStart: write.currentPeriodStart,
+      pastDueStartedAt: write.pastDueStartedAt,
+      status: write.status,
+      externalCustomerId: write.externalCustomerId,
+    },
+  });
+}
+
+function mapCompanySubscription(
+  subscription: StripeSubscriptionRecord,
+  companyId: string,
+  membershipPlanId: string,
+  existingPastDueStartedAt: Date | null,
+): CompanySubscriptionWrite {
+  const status = mapStripeStatus(subscription.status);
+
+  return {
+    companyId,
+    membershipPlanId,
+    provider: "STRIPE",
+    status,
+    currentPeriodStart: timestampToDate(subscription.current_period_start),
+    currentPeriodEnd: timestampToDate(subscription.current_period_end),
+    pastDueStartedAt: status === "PAST_DUE" ? existingPastDueStartedAt ?? new Date() : null,
+    externalCustomerId: resolveStripeCustomerId(subscription.customer),
+    externalSubscriptionId: subscription.id,
+  };
 }
 
 function mapStripeSubscription(subscription: StripeSubscriptionRecord, userId: string, existingPastDueStartedAt: Date | null): BillingSubscriptionWrite {

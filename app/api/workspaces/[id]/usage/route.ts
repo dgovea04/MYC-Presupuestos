@@ -10,8 +10,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id: companyId } = await params;
   try {
     await assertWorkspaceFeatureAccess({ userId: session.user.id, companyId, feature: "workspace.management" });
-    await requireWorkspaceRole({ userId: session.user.id, companyId, minimumRole: "ADMIN" });
-    return NextResponse.json(await getWorkspaceUsage(companyId));
+    const { role } = await requireWorkspaceRole({ userId: session.user.id, companyId, minimumRole: "ADMIN" });
+    return NextResponse.json({ ...(await getWorkspaceUsage(companyId)), canManageBilling: role === "OWNER" });
   } catch (error) {
     return NextResponse.json({ error: error instanceof WorkspaceAuthorizationError ? error.message : "No se pudo cargar el uso del workspace" }, { status: 403 });
   }

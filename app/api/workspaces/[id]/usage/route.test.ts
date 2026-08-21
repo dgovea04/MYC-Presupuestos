@@ -29,12 +29,21 @@ describe("GET /api/workspaces/[id]/usage", () => {
     expect(response.status).toBe(403);
   });
 
-  it("delegates to the usage service scoped to the workspace", async () => {
+  it("delegates to the usage service scoped to the workspace and flags OWNER billing actions", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    vi.mocked(requireWorkspaceRole).mockResolvedValue({ companyId: "ws-1", userId: "user-1", role: "OWNER" });
     vi.mocked(getWorkspaceUsage).mockResolvedValue({ seats: { used: 1, limit: 3 } } as never);
     const response = await GET(new Request("http://localhost/api/workspaces/ws-1/usage"), { params: Promise.resolve({ id: "ws-1" }) });
     expect(response.status).toBe(200);
     expect(getWorkspaceUsage).toHaveBeenCalledWith("ws-1");
-    await expect(response.json()).resolves.toMatchObject({ seats: { used: 1, limit: 3 } });
+    await expect(response.json()).resolves.toMatchObject({ seats: { used: 1, limit: 3 }, canManageBilling: true });
+  });
+
+  it("returns canManageBilling false for ADMIN", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
+    vi.mocked(requireWorkspaceRole).mockResolvedValue({ companyId: "ws-1", userId: "user-1", role: "ADMIN" });
+    vi.mocked(getWorkspaceUsage).mockResolvedValue({ seats: { used: 1, limit: 3 } } as never);
+    const response = await GET(new Request("http://localhost/api/workspaces/ws-1/usage"), { params: Promise.resolve({ id: "ws-1" }) });
+    await expect(response.json()).resolves.toMatchObject({ canManageBilling: false });
   });
 });
