@@ -7,6 +7,7 @@ import { GlobalAiAssistantProvider } from "@/components/ai/global-ai-assistant-p
 import { getAuthSession } from "@/lib/auth/session";
 import { isExternalAnalyticsEnabled } from "@/lib/analytics/environment";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
+import { touchWorkspaceMembershipActivity } from "@/lib/workspace/activity";
 import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
 import { APP_VIEW_MODE_COOKIE_NAME, coerceViewMode } from "@/lib/budget/view-mode";
 import {
@@ -38,6 +39,9 @@ export default async function RootLayout({
 }>) {
   const [cookieStore, session] = await Promise.all([cookies(), getAuthSession()]);
   const activeWorkspaceId = session?.user?.id ? await getActiveWorkspaceId(session.user.id) : null;
+  if (session?.user?.id && activeWorkspaceId) {
+    await touchWorkspaceMembershipActivity({ userId: session.user.id, companyId: activeWorkspaceId }).catch(() => undefined);
+  }
   const license = session?.user?.id
     ? await getEffectiveWorkspaceLicense({ userId: session.user.id, companyId: activeWorkspaceId })
     : null;

@@ -9,7 +9,8 @@ import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { getTemplateLibraryItem } from "@/lib/templates/template-library";
 import { ensureDate } from "@/lib/utils";
 import { serializeBudgetForClientForm } from "@/lib/data/serializers";
-import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { requireWorkspaceCapability } from "@/lib/workspace/authorization";
+import { projectAccessWhere, requireProjectCapability } from "@/lib/workspace/project-access";
 import { measureAsync } from "@/lib/platform/performance";
 
 export const PROJECTS_LIST_CACHE_TAG = "projects-list";
@@ -161,7 +162,7 @@ function getFallbackSubBudgetNames(defaultSubBudgetNames: readonly string[]) {
 
 const _getUserCompanies = async (userId: string) => {
   const memberships = await prisma.companyMembership.findMany({
-    where: { userId, status: "ACTIVE" },
+    where: { userId, status: "ACTIVE", company: { deletedAt: null } },
     include: { company: true },
     orderBy: { joinedAt: "asc" },
   });
@@ -192,14 +193,7 @@ export async function getProjectsByUser(userId: string, activeCompanyId?: string
     const projects = await tx.project.findMany({
       where: {
         companyId: activeCompanyId ?? undefined,
-        company: {
-          memberships: {
-            some: {
-              userId,
-              status: "ACTIVE",
-            },
-          },
-        },
+        ...projectAccessWhere(userId),
       },
       include: {
         company: true,
@@ -274,14 +268,7 @@ const _getProjectsListByUser = async (userId: string, activeCompanyId?: string |
   return prisma.project.findMany({
     where: {
       companyId: activeCompanyId ?? undefined,
-      company: {
-        memberships: {
-          some: {
-            userId,
-            status: "ACTIVE",
-          },
-        },
-      },
+      ...projectAccessWhere(userId),
     },
     select: {
       id: true,
@@ -370,14 +357,7 @@ export async function getProjectById(id: string, userId: string) {
     const project = await tx.project.findFirst({
       where: {
         id,
-        company: {
-          memberships: {
-            some: {
-              userId,
-              status: "ACTIVE",
-            },
-          },
-        },
+        ...projectAccessWhere(userId),
       },
       include: {
         company: true,
@@ -448,14 +428,7 @@ const _getProjectOverviewById = async (id: string, userId: string) => {
   return measureAsync("data.projects.overview.query", () => prisma.project.findFirst({
     where: {
       id,
-      company: {
-        memberships: {
-          some: {
-            userId,
-            status: "ACTIVE",
-          },
-        },
-      },
+      ...projectAccessWhere(userId),
     },
     select: {
       id: true,
@@ -549,14 +522,7 @@ const _getProjectBudgetOverviewById = async (id: string, userId: string) => {
   return measureAsync("data.projects.budgetOverview.query", () => prisma.project.findFirst({
     where: {
       id,
-      company: {
-        memberships: {
-          some: {
-            userId,
-            status: "ACTIVE",
-          },
-        },
-      },
+      ...projectAccessWhere(userId),
     },
     select: {
       id: true,
@@ -707,14 +673,7 @@ export async function getProjectHeaderById(id: string, userId: string) {
   return prisma.project.findFirst({
     where: {
       id,
-      company: {
-        memberships: {
-          some: {
-            userId,
-            status: "ACTIVE",
-          },
-        },
-      },
+      ...projectAccessWhere(userId),
     },
     select: {
       id: true,
@@ -751,7 +710,7 @@ export async function createProject(userId: string, input: ProjectInput) {
   const data = projectSchema.parse(input);
   await assertWithinPlanLimit({ userId, resource: "projects" });
 
-  await assertWorkspaceMembership({ userId, companyId: data.companyId, minimumRole: "EDITOR" });
+  await requireWorkspaceCapability({ userId, companyId: data.companyId, capability: "projects.create" });
 
   const settings = await getUserSettings(userId);
   const template = data.templateId ? getTemplateLibraryItem(data.templateId) : null;
@@ -838,7 +797,7 @@ export async function updateProject(id: string, userId: string, input: Partial<P
       },
     },
   });
-  await assertWorkspaceMembership({ userId, companyId: current.companyId, minimumRole: "EDITOR" });
+  await requireProjectCapability({ userId, companyId: current.companyId, projectId: current.id, capability: "projects.update", minimumProjectRole: "EDITOR" });
   const merged = {
     companyId: input.companyId ?? current.companyId,
     name: input.name ?? current.name,
@@ -931,7 +890,7 @@ export async function deleteProject(id: string, userId: string) {
     throw new Error("El proyecto no existe");
   }
 
-  await assertWorkspaceMembership({ userId, companyId: project.companyId, minimumRole: "ADMIN" });
+  await requireProjectCapability({ userId, companyId: project.companyId, projectId: project.id, capability: "projects.delete", minimumProjectRole: "ADMIN" });
 
   await prisma.project.delete({
     where: { id },
@@ -948,7 +907,7 @@ export async function duplicateProject(sourceProjectId: string, userId: string) 
     throw new Error("No tienes permisos para duplicar este proyecto");
   }
 
-  await assertWorkspaceMembership({ userId, companyId: preview.companyId, minimumRole: "EDITOR" });
+  await requireWorkspaceCapability({ userId, companyId: preview.companyId, capability: "projects.create" });
 
   return prisma.$transaction(async (tx) => {
     const sourceProject = await tx.project.findFirst({
@@ -1467,14 +1426,7 @@ export async function getProjectForPackageExport(projectId: string, userId: stri
   return prisma.project.findFirst({
     where: {
       id: projectId,
-      company: {
-        memberships: {
-          some: {
-            userId,
-            status: "ACTIVE",
-          },
-        },
-      },
+      ...projectAccessWhere(userId),
     },
     include: {
       budgets: {

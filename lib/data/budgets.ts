@@ -34,6 +34,7 @@ import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
 import { Prisma } from "@prisma/client";
 import type { BudgetLiveUpdateSummary } from "@/lib/client/live-updates";
 import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
+import { requireProjectCapability } from "@/lib/workspace/project-access";
 import { getUserSettings } from "@/lib/data/settings";
 import { measureAsync } from "@/lib/platform/performance";
 
@@ -461,6 +462,7 @@ export async function saveBudgetFooterStructure(
   currencyDecimals = 2,
 ): Promise<BudgetFooterStructure> {
   await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
   const parsed = budgetFooterStructureSaveSchema.parse(input);
 
   await prisma.$transaction(async (tx) => {
@@ -534,6 +536,7 @@ export async function saveBudgetGeneralExpensesStructure(
   input: GeneralExpenseStructureSaveInput,
 ): Promise<GeneralExpenseStructure> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
   const parsed = generalExpenseStructureSaveSchema.parse(input);
   const currentDirectCost = decimalToNumber(budget.totalDirectCost);
 
@@ -643,6 +646,7 @@ export async function createBudgetGeneralExpenseTitle(
   input: GeneralExpenseTitleInput,
 ): Promise<GeneralExpenseStructure> {
   await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
   const parsed = generalExpenseTitleSchema.parse(input);
 
   const group = await prisma.generalExpenseGroup.findFirst({
@@ -699,6 +703,7 @@ export async function updateBudgetGeneralExpenseTitle(
   input: GeneralExpenseTitleInput,
 ): Promise<GeneralExpenseStructure> {
   await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
   const parsed = generalExpenseTitleSchema.parse(input);
 
   const existing = await prisma.generalExpenseTitle.findFirst({
@@ -753,6 +758,7 @@ export async function deleteBudgetGeneralExpenseTitle(
   userId: string,
 ): Promise<GeneralExpenseStructure> {
   await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
 
   const existing = await prisma.generalExpenseTitle.findFirst({
     where: {
@@ -794,6 +800,7 @@ export async function createBudgetGeneralExpenseItem(
   input: GeneralExpenseItemInput,
 ): Promise<GeneralExpenseStructure> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
   const parsed = generalExpenseItemSchema.parse(input);
   const currentDirectCost = decimalToNumber(budget.totalDirectCost);
 
@@ -853,6 +860,7 @@ export async function updateBudgetGeneralExpenseItem(
   input: GeneralExpenseItemInput,
 ): Promise<GeneralExpenseStructure> {
   const budget = await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
   const parsed = generalExpenseItemSchema.parse(input);
   const currentDirectCost = decimalToNumber(budget.totalDirectCost);
 
@@ -906,6 +914,7 @@ export async function deleteBudgetGeneralExpenseItem(
   userId: string,
 ): Promise<GeneralExpenseStructure> {
   await getAccessibleGeneralBudget(budgetId, userId);
+  await requireBudgetMutationCapability({ budgetId, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
 
   const existing = await prisma.generalExpenseItem.findFirst({
     where: {
@@ -1032,12 +1041,14 @@ export async function createBudget(userIdOrInput: string | BudgetInput, input?: 
           },
         },
       },
-      select: { id: true },
+      select: { id: true, companyId: true },
     });
 
     if (!project) {
       throw new Error("No puedes crear presupuestos en un proyecto que no te pertenece");
     }
+
+    await requireProjectCapability({ userId, companyId: project.companyId, projectId: project.id, capability: "budgets.create", minimumProjectRole: "EDITOR" });
   }
 
   if (data.parentBudgetId) {
@@ -1082,12 +1093,14 @@ export async function deleteBudget(id: string, userId: string) {
         },
       },
     },
-    select: { id: true, parentBudgetId: true },
+    select: { id: true, parentBudgetId: true, projectId: true, project: { select: { companyId: true } } },
   });
 
   if (!budget) {
     throw new Error("No tienes permisos para eliminar este presupuesto");
   }
+
+  await requireProjectCapability({ userId, companyId: budget.project.companyId, projectId: budget.projectId, capability: "budgets.delete", minimumProjectRole: "EDITOR" });
 
   await prisma.$transaction(async (tx) => {
     await tx.budget.delete({
@@ -1129,6 +1142,7 @@ async function applyBudgetSettingsDefaults(input: BudgetInput, userId: string | 
 
 export async function saveBudgetState(id: string, userId: string, budget: BudgetRecord) {
   const normalized = calculateBudgetRecord(budget);
+  await requireBudgetMutationCapability({ budgetId: id, userId, capability: "budgets.update", minimumProjectRole: "EDITOR" });
 
   return prisma.$transaction(async (tx) => {
     const existingBudget = await tx.budget.findFirst({
@@ -1770,6 +1784,45 @@ async function resolvePersistableApuResourceId(
   throw new Error(
     `El insumo "${resourceLabel}" ya no existe o no est\u00e1 disponible. Vuelve a seleccionarlo antes de guardar el APU.`,
   );
+}
+
+async function requireBudgetMutationCapability(options: {
+  budgetId: string;
+  userId: string;
+  capability: "budgets.create" | "budgets.update" | "budgets.delete";
+  minimumProjectRole: "VIEWER" | "EDITOR" | "ADMIN";
+}) {
+  const budget = await prisma.budget.findFirst({
+    where: {
+      id: options.budgetId,
+      project: {
+        company: {
+          memberships: {
+            some: {
+              userId: options.userId,
+              status: "ACTIVE",
+            },
+          },
+        },
+      },
+    },
+    select: {
+      projectId: true,
+      project: { select: { companyId: true } },
+    },
+  });
+
+  if (!budget) {
+    throw new Error("No tienes permisos para modificar este presupuesto");
+  }
+
+  await requireProjectCapability({
+    userId: options.userId,
+    companyId: budget.project.companyId,
+    projectId: budget.projectId,
+    capability: options.capability,
+    minimumProjectRole: options.minimumProjectRole,
+  });
 }
 
 async function getAccessibleGeneralBudget(budgetId: string, userId: string) {

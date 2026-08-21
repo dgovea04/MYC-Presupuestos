@@ -21,6 +21,10 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/workspace/project-access", () => ({
+  requireProjectCapability: vi.fn(),
+}));
+
 import { deleteBudget } from "@/lib/data/budgets";
 
 describe("deleteBudget", () => {
@@ -47,6 +51,8 @@ describe("deleteBudget", () => {
       id: "sub-1",
       kind: "SUB_BUDGET",
       parentBudgetId: "general-1",
+      projectId: "project-1",
+      project: { companyId: "company-1" },
     });
     mocks.budgetFindUnique.mockResolvedValue({
       id: "general-1",

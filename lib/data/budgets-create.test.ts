@@ -34,6 +34,10 @@ vi.mock("@/lib/billing/entitlements", () => ({
   assertWithinPlanLimit: mocks.assertWithinPlanLimit,
 }));
 
+vi.mock("@/lib/workspace/project-access", () => ({
+  requireProjectCapability: vi.fn(),
+}));
+
 import { createBudget } from "@/lib/data/budgets";
 
 describe("createBudget", () => {

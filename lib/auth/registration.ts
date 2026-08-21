@@ -50,6 +50,7 @@ export async function registerUserWithCompany(params: {
               name: "Starter",
               slug: "starter",
               monthlyTokenLimit: 100000,
+              seatLimit: 3,
             },
           },
         },

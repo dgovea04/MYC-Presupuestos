@@ -41,7 +41,7 @@ describe("getActiveWorkspaceId", () => {
 
     expect(result).toBe("company-42");
     expect(mockPrisma.companyMembership.findUnique).toHaveBeenCalledWith({
-      where: { companyId_userId: { companyId: "company-42", userId: "user-1" } },
+      where: { companyId_userId: { companyId: "company-42", userId: "user-1" }, company: { deletedAt: null } },
       select: { status: true },
     });
   });
@@ -76,7 +76,7 @@ describe("getActiveWorkspaceId", () => {
         userId: "user-1",
         status: "ACTIVE",
         role: "OWNER",
-        company: { userId: "user-1" },
+        company: { userId: "user-1", deletedAt: null },
       },
       orderBy: { joinedAt: "asc" },
       select: { companyId: true },
@@ -93,7 +93,7 @@ describe("getActiveWorkspaceId", () => {
 
     expect(result).toBe("company-collaboration");
     expect(mockPrisma.companyMembership.findFirst).toHaveBeenNthCalledWith(2, {
-      where: { userId: "user-1", status: "ACTIVE" },
+      where: { userId: "user-1", status: "ACTIVE", company: { deletedAt: null } },
       orderBy: { joinedAt: "asc" },
       select: { companyId: true },
     });
@@ -189,7 +189,7 @@ describe("listUserWorkspaces", () => {
 
     expect(result).toEqual([]);
     expect(mockPrisma.companyMembership.findMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", status: "ACTIVE" },
+      where: { userId: "user-1", status: "ACTIVE", company: { deletedAt: null } },
       include: { company: { select: { name: true, logoUrl: true, userId: true } } },
       orderBy: { joinedAt: "asc" },
     });

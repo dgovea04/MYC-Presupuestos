@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import type { WorkspaceSummary } from "@/types/workspace";
 import type { WorkspaceRole } from "@/types/workspace";
+import { formatRelativeLastActive } from "@/lib/workspace/activity-format";
 
 // Simple in-memory request deduplication for client-side API calls
 const fetchCache = new Map<string, { data: unknown; timestamp: number }>();
@@ -41,10 +42,13 @@ interface MemberInfo {
   userEmail: string;
   userAvatarUrl: string | null;
   role: WorkspaceRole;
+  customRoleId: string | null;
+  customRoleName: string | null;
   status: "ACTIVE" | "INVITED" | "SUSPENDED";
   invitedByName: string | null;
   joinedAt: string;
   suspendedUntil: string | null;
+  lastActiveAt: string | null;
 }
 
 interface PendingInvitation {
@@ -82,6 +86,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
   const [showPanel, setShowPanel] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [members, setMembers] = useState<MemberInfo[]>([]);
+  const [customRoles, setCustomRoles] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
   const [error, setError] = useState("");
@@ -225,6 +230,41 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
     [activeWorkspaceId],
   );
 
+  const handleAssignCustomRole = useCallback(
+    async (userId: string, customRoleId: string | null) => {
+      setSubmenuAnchor(null);
+      setChangingRoleId(userId);
+      setMemberActionError("");
+      try {
+        const res = await fetch(`/api/workspaces/${activeWorkspaceId}/members`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, customRoleId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMembers((prev) =>
+            prev.map((m) =>
+              m.userId === userId
+                ? { ...m, customRoleId: data.member.customRoleId ?? null, customRoleName: data.member.customRoleName ?? null }
+                : m,
+            ),
+          );
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setMemberActionError(data.error || "Error al asignar rol personalizado");
+          setTimeout(() => setMemberActionError(""), 4000);
+        }
+      } catch {
+        setMemberActionError("Error de conexión");
+        setTimeout(() => setMemberActionError(""), 4000);
+      } finally {
+        setChangingRoleId(null);
+      }
+    },
+    [activeWorkspaceId],
+  );
+
   const handleRemoveMember = useCallback(
     async (userId: string) => {
       setSubmenuAnchor(null);
@@ -327,6 +367,12 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
       } catch {
         setLoadError("Error de conexión al cargar miembros");
       }
+    }
+
+    // Load custom roles for the member submenu
+    const rolesData = await cachedFetch(`/api/workspaces/${activeWorkspaceId}/roles`);
+    if (rolesData && typeof rolesData === "object" && "roles" in rolesData) {
+      setCustomRoles((rolesData as { roles: { id: string; name: string }[] }).roles);
     }
     setIsLoading(false);
   }, [activeWorkspaceId]);
@@ -668,10 +714,12 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
               removingId,
               confirmRemoveUserId,
               suspendUntil,
+              customRoles,
               setSubmenuAnchor,
               setConfirmRemoveUserId,
               setSuspendUntil,
               handleChangeRole,
+              handleAssignCustomRole,
               handleToggleStatus,
               handleRemoveMember,
             })}
@@ -731,8 +779,19 @@ function renderMemberRow(ctx: MemberRowContext) {
         <div className="flex items-center gap-1.5">
           <span className="truncate text-xs font-medium text-[#0F172A]">{member.userName}</span>
           <span className="shrink-0 text-[10px] text-[var(--app-text-subtle)]">{ROLE_LABEL[member.role]}</span>
+          {member.customRoleName ? (
+            <span className="shrink-0 rounded-full bg-sky-50 px-1.5 py-0.5 text-[9px] text-sky-700">{member.customRoleName}</span>
+          ) : null}
         </div>
         <p className="truncate text-[10px] text-[var(--app-text-muted)]">{member.userEmail}</p>
+        {(() => {
+          const lastActive = formatRelativeLastActive(member.lastActiveAt);
+          return (
+            <time dateTime={member.lastActiveAt ?? undefined} title={lastActive.absolute ?? undefined} className="block truncate text-[9px] text-[var(--app-text-subtle)]">
+              {lastActive.relative}
+            </time>
+          );
+        })()}
       </div>
 
       {/* Controls (3-dot menu) */}
@@ -775,10 +834,12 @@ function renderFloatingSubmenu(ctx: {
   removingId: string | null;
   confirmRemoveUserId: string | null;
   suspendUntil: string;
+  customRoles: { id: string; name: string }[];
   setSubmenuAnchor: React.Dispatch<React.SetStateAction<{ offsetY: number; memberId: string } | null>>;
   setConfirmRemoveUserId: (id: string | null) => void;
   setSuspendUntil: (value: string) => void;
   handleChangeRole: (userId: string, role: WorkspaceRole) => void;
+  handleAssignCustomRole: (userId: string, customRoleId: string | null) => void;
   handleToggleStatus: (userId: string, status: "ACTIVE" | "SUSPENDED", suspendedUntil?: string) => void;
   handleRemoveMember: (userId: string) => void;
 }) {
@@ -790,10 +851,12 @@ function renderFloatingSubmenu(ctx: {
     removingId,
     confirmRemoveUserId,
     suspendUntil,
+    customRoles,
     setSubmenuAnchor,
     setConfirmRemoveUserId,
     setSuspendUntil,
     handleChangeRole,
+    handleAssignCustomRole,
     handleToggleStatus,
     handleRemoveMember,
   } = ctx;
@@ -845,6 +908,62 @@ function renderFloatingSubmenu(ctx: {
           </span>
         </button>
       ))}
+
+      {member.role !== "OWNER" && member.role !== "ADMIN" && (customRoles.length > 0 || member.customRoleId != null) && (
+        <>
+          <div className="border-t border-[var(--app-border)] my-1" />
+          <p className="px-3 py-1 text-[10px] font-semibold text-[var(--app-text-muted)] uppercase tracking-wide">
+            Rol personalizado
+          </p>
+          <button
+            type="button"
+            disabled={isBusy || member.customRoleId == null}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAssignCustomRole(member.userId, null);
+            }}
+            className={`w-full text-left px-3 py-1 text-[11px] transition-colors ${
+              member.customRoleId == null
+                ? "text-[#2563EB] font-medium bg-[#EFF6FF]"
+                : "text-[#0F172A] hover:bg-[var(--app-bg-hover)]"
+            } disabled:opacity-50`}
+          >
+            <span className="flex items-center gap-2">
+              {member.customRoleId == null && (
+                <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              Sin rol personalizado
+            </span>
+          </button>
+          {customRoles.map((role) => (
+            <button
+              key={role.id}
+              type="button"
+              disabled={isBusy || member.customRoleId === role.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAssignCustomRole(member.userId, role.id);
+              }}
+              className={`w-full text-left px-3 py-1 text-[11px] transition-colors ${
+                member.customRoleId === role.id
+                  ? "text-[#2563EB] font-medium bg-[#EFF6FF]"
+                  : "text-[#0F172A] hover:bg-[var(--app-bg-hover)]"
+              } disabled:opacity-50`}
+            >
+              <span className="flex items-center gap-2">
+                {member.customRoleId === role.id && (
+                  <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                {role.name}
+              </span>
+            </button>
+          ))}
+        </>
+      )}
 
       <div className="border-t border-[var(--app-border)] my-1" />
 

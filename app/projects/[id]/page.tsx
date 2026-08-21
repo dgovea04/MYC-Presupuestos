@@ -18,6 +18,7 @@ import { getProjectOverviewById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
 import { decimalToNumber } from "@/lib/db/serializers";
 import { ProjectActivityHistory } from "@/components/projects/project-activity-history";
+import { ProjectSharePanel } from "@/components/projects/project-share-panel";
 import { ProjectBudgetSections } from "@/components/projects/project-budget-sections";
 import { DemoProjectGuide } from "@/components/onboarding/demo-project-guide";
 import { resolveProjectGeneralBudget } from "@/lib/projects/general-budget";
@@ -271,6 +272,10 @@ export default async function ProjectDetailPage({
               />
             </CardContent>
           </Card>
+        </section>
+
+        <section id="compartir">
+          <ProjectSharePanel projectId={project.id} companyId={project.companyId} />
         </section>
 
         <ProjectActivityHistory events={activityEvents} dateFormat={settings.dateFormat} />

@@ -14,7 +14,7 @@ export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(us
   // Validate the stored workspace still belongs to the user
   if (stored) {
     const membership = await prisma.companyMembership.findUnique({
-      where: { companyId_userId: { companyId: stored, userId } },
+      where: { companyId_userId: { companyId: stored, userId }, company: { deletedAt: null } },
       select: { status: true },
     });
 
@@ -28,7 +28,7 @@ export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(us
       userId,
       status: "ACTIVE",
       role: "OWNER",
-      company: { userId },
+      company: { userId, deletedAt: null },
     },
     orderBy: { joinedAt: "asc" },
     select: { companyId: true },
@@ -40,7 +40,7 @@ export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(us
 
   // Fallback: pick the first active membership
   const first = await prisma.companyMembership.findFirst({
-    where: { userId, status: "ACTIVE" },
+    where: { userId, status: "ACTIVE", company: { deletedAt: null } },
     orderBy: { joinedAt: "asc" },
     select: { companyId: true },
   });
@@ -50,7 +50,7 @@ export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(us
 
 export async function setActiveWorkspaceId(userId: string, companyId: string): Promise<void> {
   const membership = await prisma.companyMembership.findUnique({
-    where: { companyId_userId: { companyId, userId } },
+    where: { companyId_userId: { companyId, userId }, company: { deletedAt: null } },
     select: { status: true },
   });
 
@@ -71,7 +71,7 @@ type WorkspaceListEntry = { id: string; name: string; role: WorkspaceRole; logoU
 
 async function _listUserWorkspaces(userId: string) {
   const memberships = await prisma.companyMembership.findMany({
-    where: { userId, status: "ACTIVE" },
+    where: { userId, status: "ACTIVE", company: { deletedAt: null } },
     include: {
       company: {
         select: { name: true, logoUrl: true, userId: true },

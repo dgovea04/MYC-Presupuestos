@@ -12,7 +12,7 @@
  *
  * Round 7 task surface. Mock layer adicional: @/lib/workspace/access se
  * stubbea via vi.mock (no via spy en el import real) para que los tests puedan
- * controlar la respuesta de assertWorkspaceMembership sin tocar Postgres real.
+ * controlar la respuesta de requireWorkspaceCapability sin tocar Postgres real.
  * El bundle de in-memory prisma sigue siendo Pattern C (vi.hoisted shell +
  * vi.mock factory populate via await import).
  *
@@ -21,7 +21,7 @@
  *     resuelve solo por `where.id` (la empresa membership-query no se modela).
  *     En test, esto significa que CUALQUIER resource con id matching en mockDb
  *     pasa el workspace-check via query. La capa workspace.mock cubre la ruta
- *     directa (companyId input + assertWorkspaceMembership).
+ *     directa (companyId input + requireWorkspaceCapability).
  *   - generateNextResourceCode llama findMany(select:code) filtrando por
  *     companyId + category. Mock respeta los 2 filtros principales.
  *   - findFirst con `include: { apuResources: <objeto> }` se considera truthy
@@ -49,15 +49,16 @@ vi.mock("@/lib/db/prisma", async () => {
 });
 
 // =============================================================================
-// Workspace access: stub assertWorkspaceMembership as a separate layer.
+// Workspace authorization: stub requireWorkspaceCapability as a separate layer.
 // by default: mockResolvedValue({ companyId: "company-mock", role: "ADMIN" })
 // se mantiene entre tests a menos que un test override con mockRejectedValueOnce
 // o mockImplementationOnce. mockClear en afterEach resetea call history.
 // =============================================================================
 
-vi.mock("@/lib/workspace/access", () => ({
-  assertWorkspaceMembership: vi.fn().mockResolvedValue({
+vi.mock("@/lib/workspace/authorization", () => ({
+  requireWorkspaceCapability: vi.fn().mockResolvedValue({
     companyId: "company-mock",
+    userId: "user-author-001",
     role: "ADMIN",
   }),
 }));
@@ -73,7 +74,7 @@ import {
   deleteResource,
   saveResourcesPatch,
 } from "@/lib/data/resources";
-import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { requireWorkspaceCapability } from "@/lib/workspace/authorization";
 
 function requireBundle(): InMemoryPrisma {
   if (!bundleRef.current) {
@@ -104,7 +105,7 @@ describe("resources.ts mutating functions + in-memory prisma + workspace stub", 
   afterEach(() => {
     requireBundle().reset();
     // Clear workspace mock call history entre tests.
-    vi.mocked(assertWorkspaceMembership).mockClear();
+    vi.mocked(requireWorkspaceCapability).mockClear();
   });
 
   // ---------------------------------------------------------------------------
@@ -175,7 +176,7 @@ describe("resources.ts mutating functions + in-memory prisma + workspace stub", 
   // createResourceForUser \u2014 workspace check IS triggered when companyId set
   // ---------------------------------------------------------------------------
 
-  it("createResourceForUser con companyId \u2192 invoca assertWorkspaceMembership(EDITOR)", async () => {
+  it("createResourceForUser con companyId \u2192 invoca requireWorkspaceCapability(resources.create)", async () => {
     const { mockDb } = requireBundle();
     await createResourceForUser(USER_ID, {
       companyId: COMPANY_ID,
@@ -186,11 +187,11 @@ describe("resources.ts mutating functions + in-memory prisma + workspace stub", 
       currency: "PEN",
     });
 
-    expect(assertWorkspaceMembership).toHaveBeenCalledWith(
+    expect(requireWorkspaceCapability).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER_ID,
         companyId: COMPANY_ID,
-        minimumRole: "EDITOR",
+        capability: "resources.create",
       }),
     );
 
@@ -214,17 +215,16 @@ describe("resources.ts mutating functions + in-memory prisma + workspace stub", 
       currency: "PEN",
     });
 
-    expect(assertWorkspaceMembership).not.toHaveBeenCalled();
+    expect(requireWorkspaceCapability).not.toHaveBeenCalled();
     expect(created.companyId).toBeUndefined();
     expect(created.code).toBe("EQ-001");
     expect(created.category).toBe("EQUIPMENT");
   });
 
   it("createResourceForUser con companyId + workspace rejection \u2192 propagates the rejection", async () => {
-    // createResourceForUser llama `assertWorkspaceMembership` DIRECTAMENTE
-    // (sin el wrapper `assertCompanyOwnership` que re-throw).
+    // createResourceForUser llama `requireWorkspaceCapability` DIRECTAMENTE.
     // El error que llega al caller es el mismo que el mock throw.
-    vi.mocked(assertWorkspaceMembership).mockRejectedValueOnce(
+    vi.mocked(requireWorkspaceCapability).mockRejectedValueOnce(
       new Error("Forbidden: user is not a member of company"),
     );
 
@@ -273,8 +273,8 @@ describe("resources.ts mutating functions + in-memory prisma + workspace stub", 
     // Persisted in mockDb
     expect(mockDb.resources.get("res-pre-exist-001")?.unitPrice).toBe(75);
     // Workspace check called (input has companyId)
-    expect(assertWorkspaceMembership).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER_ID, companyId: COMPANY_ID }),
+    expect(requireWorkspaceCapability).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_ID, companyId: COMPANY_ID, capability: "resources.update" }),
     );
   });
 
@@ -329,7 +329,7 @@ describe("resources.ts mutating functions + in-memory prisma + workspace stub", 
       currency: "PEN",
     });
 
-    expect(assertWorkspaceMembership).not.toHaveBeenCalled();
+    expect(requireWorkspaceCapability).not.toHaveBeenCalled();
   });
 
   it("updateResource \u2192 resource no existe en mock \u2192 throw 'permisos'", async () => {

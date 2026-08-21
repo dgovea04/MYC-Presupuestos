@@ -36,6 +36,7 @@ export default async function SettingsPage() {
         initialSettings={settings}
         initialWorkCalendars={workCalendars}
         canUseKhipu={canUseKhipu}
+        activeWorkspaceId={activeWorkspaceId}
       />
     </AppShell>
   );

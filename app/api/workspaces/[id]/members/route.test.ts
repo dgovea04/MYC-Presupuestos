@@ -22,6 +22,9 @@ vi.mock("@/lib/db/prisma", () => ({
     user: {
       findUnique: vi.fn(),
     },
+    workspaceRole: {
+      findFirst: vi.fn(),
+    },
   },
 }));
 
@@ -41,6 +44,9 @@ const mockPrisma = prisma as unknown as {
   };
   user: {
     findUnique: ReturnType<typeof vi.fn>;
+  };
+  workspaceRole: {
+    findFirst: ReturnType<typeof vi.fn>;
   };
 };
 
@@ -916,6 +922,134 @@ describe("PATCH /api/workspaces/[id]/members", () => {
       data: expect.objectContaining({ status: "ACTIVE" }),
       include: expect.any(Object),
     });
+  });
+
+  it("assigns a custom role to an EDITOR member", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "EDITOR", status: "ACTIVE" }); // target
+
+    mockPrisma.workspaceRole.findFirst.mockResolvedValueOnce({ id: "role-1", name: "Contador" });
+
+    mockPrisma.companyMembership.update.mockResolvedValueOnce({
+      id: "mem-2",
+      userId: "user-2",
+      role: "EDITOR",
+      customRoleId: "role-1",
+      customRole: { id: "role-1", name: "Contador" },
+      status: "ACTIVE",
+      invitedById: "user-1",
+      joinedAt: new Date("2026-07-07"),
+      user: { id: "user-2", name: "User 2", email: "user2@test.com", avatarUrl: null },
+      invitedBy: { id: "user-1", name: "Owner" },
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", customRoleId: "role-1" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.member.customRoleId).toBe("role-1");
+    expect(body.member.customRoleName).toBe("Contador");
+    expect(mockPrisma.workspaceRole.findFirst).toHaveBeenCalledWith({
+      where: { id: "role-1", companyId: "ws-1" },
+      select: { id: true, name: true },
+    });
+    expect(mockPrisma.companyMembership.update).toHaveBeenCalledWith({
+      where: { id: "mem-2" },
+      data: { customRoleId: "role-1" },
+      include: expect.any(Object),
+    });
+  });
+
+  it("clears the custom role when customRoleId is null", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "EDITOR", status: "ACTIVE" }); // target
+
+    mockPrisma.companyMembership.update.mockResolvedValueOnce({
+      id: "mem-2",
+      userId: "user-2",
+      role: "EDITOR",
+      customRoleId: null,
+      customRole: null,
+      status: "ACTIVE",
+      invitedById: "user-1",
+      joinedAt: new Date("2026-07-07"),
+      user: { id: "user-2", name: "User 2", email: "user2@test.com", avatarUrl: null },
+      invitedBy: { id: "user-1", name: "Owner" },
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", customRoleId: null }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.workspaceRole.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.companyMembership.update).toHaveBeenCalledWith({
+      where: { id: "mem-2" },
+      data: { customRoleId: null },
+      include: expect.any(Object),
+    });
+  });
+
+  it("returns 403 when assigning a custom role to an ADMIN member", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "ADMIN", status: "ACTIVE" }); // target
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", customRoleId: "role-1" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("no usan roles personalizados");
+  });
+
+  it("returns 404 when the custom role does not belong to the workspace", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+
+    mockPrisma.companyMembership.findUnique
+      .mockResolvedValueOnce({ role: "OWNER", status: "ACTIVE" }) // assert
+      .mockResolvedValueOnce({ id: "mem-2", role: "EDITOR", status: "ACTIVE" }); // target
+
+    mockPrisma.workspaceRole.findFirst.mockResolvedValueOnce(null);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/ws-1/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "user-2", customRoleId: "role-unknown" }),
+      }),
+      { params: Promise.resolve({ id: "ws-1" }) },
+    );
+
+    expect(response.status).toBe(404);
+    const body = await response.json();
+    expect(body.error).toContain("Rol personalizado no encontrado");
   });
 });
 

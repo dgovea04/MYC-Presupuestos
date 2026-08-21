@@ -29,6 +29,7 @@ async function main() {
       name: "Empresa",
       slug: "empresa",
       monthlyTokenLimit: 1000000,
+      seatLimit: null,
       billingMode: "MANUAL",
       projectLimit: null,
       budgetLimit: null,

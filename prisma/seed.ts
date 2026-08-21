@@ -15,6 +15,7 @@ import { normalizeExcelCellText } from "@/lib/seed/excel-cell-text";
 import { isSubpartidaResourceType, SUBPARTIDA_RESOURCE_TYPE } from "@/lib/apu/subpartidas";
 import { seedAgentWorkflows } from "@/lib/data/seed-agent-workflows";
 import { generatePolynomialFormulaFromBudget } from "@/lib/data/polynomial-formulas";
+import { WORKSPACE_CAPABILITIES } from "@/lib/workspace/capabilities";
 
 const prisma = createPrismaClient(["warn", "error"]);
 const DATA_FOR_SEED_DIR = path.resolve(process.cwd(), "data-for-seed");
@@ -69,6 +70,7 @@ async function seedUnifiedIndicesFromWorkbook() {
 async function main() {
   const shouldSeedDemoData = process.env.SEED_DEMO_DATA !== "false";
   await seedMembershipPlans();
+  await seedWorkspacePermissions();
   await seedUnifiedIndicesFromWorkbook();
   await seedGeneralResourcesCatalog();
   await seedGeneralPartidasCatalog();
@@ -505,6 +507,16 @@ async function seedWorkflowTemplates() {
   }
 }
 
+async function seedWorkspacePermissions() {
+  for (const capability of WORKSPACE_CAPABILITIES) {
+    await prisma.workspacePermission.upsert({
+      where: { key: capability.key },
+      update: { module: capability.module, description: capability.description },
+      create: { key: capability.key, module: capability.module, description: capability.description },
+    });
+  }
+}
+
 async function seedMembershipPlans() {
   const proEntitlements = [
     "ai.local",
@@ -524,6 +536,7 @@ async function seedMembershipPlans() {
       name: "Starter",
       slug: "starter",
       monthlyTokenLimit: 100000,
+      seatLimit: 3,
       billingMode: "FREE" as const,
       projectLimit: 3,
       budgetLimit: 5,
@@ -533,6 +546,7 @@ async function seedMembershipPlans() {
       name: "Pro",
       slug: "pro",
       monthlyTokenLimit: 500000,
+      seatLimit: 10,
       billingMode: "STRIPE" as const,
       projectLimit: null,
       budgetLimit: null,
@@ -542,6 +556,7 @@ async function seedMembershipPlans() {
       name: "Empresa",
       slug: "empresa",
       monthlyTokenLimit: 2000000,
+      seatLimit: null,
       billingMode: "MANUAL" as const,
       projectLimit: null,
       budgetLimit: null,
@@ -555,6 +570,7 @@ async function seedMembershipPlans() {
       update: {
         name: plan.name,
         monthlyTokenLimit: plan.monthlyTokenLimit,
+        seatLimit: plan.seatLimit,
         billingMode: plan.billingMode,
         projectLimit: plan.projectLimit,
         budgetLimit: plan.budgetLimit,

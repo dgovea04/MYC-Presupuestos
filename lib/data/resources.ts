@@ -5,7 +5,7 @@ import { serializeResource } from "@/lib/db/serializers";
 import { ensureDate } from "@/lib/utils";
 import { normalizeResourceIuCode } from "@/lib/resources/iu";
 import { resourceSchema, resourceStatePatchSchema, type ResourceInput } from "@/lib/validations/resource";
-import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { requireWorkspaceCapability } from "@/lib/workspace/authorization";
 import { measureAsync } from "@/lib/platform/performance";
 import type {
   ResourceCategory,
@@ -248,7 +248,7 @@ export async function createResourceForUser(userId: string, input: ResourceInput
   const normalized = normalizeResourceFields(parsed);
 
   if (normalized.companyId) {
-    await assertWorkspaceMembership({ userId, companyId: normalized.companyId, minimumRole: "EDITOR" });
+    await requireWorkspaceCapability({ userId, companyId: normalized.companyId, capability: "resources.create" });
   }
 
   const code = await generateNextResourceCode(prisma, normalized.companyId ?? null, normalized.category);
@@ -281,7 +281,7 @@ export async function updateResource(id: string, userId: string, input: Resource
 
   const normalized = normalizeResourceFields(parsed);
   if (normalized.companyId) {
-    await assertCompanyOwnership(prisma, userId, normalized.companyId);
+    await requireWorkspaceCapability({ userId, companyId: normalized.companyId, capability: "resources.update" });
   }
 
   const shouldRegenerateCode =
@@ -326,6 +326,10 @@ export async function deleteResource(id: string, userId: string) {
     throw new Error("No tienes permisos para eliminar este insumo");
   }
 
+  if (resource.companyId) {
+    await requireWorkspaceCapability({ userId, companyId: resource.companyId, capability: "resources.delete" });
+  }
+
   if (resource.apuResources.length) {
     throw new Error("No puedes eliminar un insumo que ya esta usado en un APU");
   }
@@ -346,7 +350,7 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
       const normalized = normalizeResourceFields(entry.data);
 
       if (normalized.companyId) {
-        await assertCompanyOwnership(tx, userId, normalized.companyId);
+        await requireWorkspaceCapability({ userId, companyId: normalized.companyId, capability: "resources.create" });
       }
 
       const resource = await tx.resource.create({
@@ -404,7 +408,7 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
       const nextCategory = allowedUpdateChanges.category ?? existing.category;
 
       if (nextCompanyId) {
-        await assertCompanyOwnership(tx, userId, nextCompanyId);
+        await requireWorkspaceCapability({ userId, companyId: nextCompanyId, capability: "resources.update" });
       }
 
       const shouldRegenerateCode =
@@ -452,6 +456,10 @@ export async function saveResourcesPatch(userId: string, patchInput: ResourceSta
 
       if (!resource) {
         throw new Error("No tienes permisos para eliminar este insumo");
+      }
+
+      if (resource.companyId) {
+        await requireWorkspaceCapability({ userId, companyId: resource.companyId, capability: "resources.delete" });
       }
 
       if (resource.apuResources.length) {
@@ -614,14 +622,3 @@ async function generateNextResourceCode(
   return `${prefix}-${String(maxSequence + 1).padStart(3, "0")}`;
 }
 
-async function assertCompanyOwnership(
-  tx: Prisma.TransactionClient | typeof prisma,
-  userId: string,
-  companyId: string,
-) {
-  try {
-    await assertWorkspaceMembership({ userId, companyId, minimumRole: "EDITOR" });
-  } catch {
-    throw new Error("No puedes crear o mover insumos a una empresa que no te pertenece");
-  }
-}

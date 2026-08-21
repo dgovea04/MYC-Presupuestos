@@ -4,6 +4,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { WORKSPACE_LIST_CACHE_TAG } from "@/lib/workspace/active-workspace";
 import { assertWorkspaceFeatureAccess } from "@/lib/workspace/entitlements";
+import { assertWorkspaceHasSeat, WorkspaceSeatLimitError } from "@/lib/workspace/seats";
 
 export async function POST(
   _request: Request,
@@ -56,6 +57,15 @@ export async function POST(
       },
       { status: 409 },
     );
+  }
+
+  try {
+    await assertWorkspaceHasSeat(companyId);
+  } catch (error) {
+    if (error instanceof WorkspaceSeatLimitError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    }
+    throw error;
   }
 
   const updated = await prisma.companyMembership.update({

@@ -66,6 +66,7 @@ describe("project data cache behavior", () => {
     unstableCacheMock.mockImplementation((fn: (...args: unknown[]) => unknown) => fn);
 
     const { getProjectsListByUser } = await import("@/lib/data/projects");
+    const { projectAccessWhere } = await import("@/lib/workspace/project-access");
 
     const projects = await getProjectsListByUser("user-1");
 
@@ -73,14 +74,7 @@ describe("project data cache behavior", () => {
     expect(projectFindManyMock).toHaveBeenCalledWith({
       where: {
         companyId: undefined,
-        company: {
-          memberships: {
-            some: {
-              userId: "user-1",
-              status: "ACTIVE",
-            },
-          },
-        },
+        ...projectAccessWhere("user-1"),
       },
       select: expect.objectContaining({
         id: true,

@@ -40,6 +40,10 @@ vi.mock("@/components/projects/project-budget-sections", () => ({
   ProjectBudgetSections: () => null,
 }));
 
+vi.mock("@/components/projects/project-share-panel", () => ({
+  ProjectSharePanel: () => null,
+}));
+
 vi.mock("@/components/ui/action-button", () => ({
   ActionButton: () => null,
 }));

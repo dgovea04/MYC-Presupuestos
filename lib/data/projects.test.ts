@@ -393,6 +393,24 @@ describe("project data", () => {
     );
   });
 
+  it("rejects project creation for a read-only member without projects.create", async () => {
+    mocks.companyMembershipFindUnique.mockResolvedValue({ role: "VIEWER", status: "ACTIVE" });
+
+    await expect(
+      createProject("user-1", {
+        companyId: "company-1",
+        name: "Proyecto 1",
+        clientName: "",
+        location: "",
+        projectType: "",
+        startDate: "",
+        endDate: "",
+        status: "PLANNING",
+      }),
+    ).rejects.toThrow(/projects.create/);
+    expect(mocks.projectCreate).not.toHaveBeenCalled();
+  });
+
   it("uses the user's default currency for the general and default sub budgets", async () => {
     mocks.getUserSettings.mockResolvedValue({
       defaultCurrency: "USD",

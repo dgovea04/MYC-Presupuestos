@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { recordWorkspaceAudit } from "@/lib/workspace/audit";
+import { inviteWorkspaceMember } from "@/lib/workspace/invitations";
+import { assertWorkspaceHasSeat, WorkspaceSeatLimitError } from "@/lib/workspace/seats";
 import { assertWorkspaceFeatureAccess } from "@/lib/workspace/entitlements";
-import { inviteWorkspaceMemberSchema, changeRoleSchema, removeMemberSchema, toggleStatusSchema } from "@/lib/validations/workspace";
+import { inviteWorkspaceMemberSchema, changeRoleSchema, assignCustomRoleSchema, removeMemberSchema, toggleStatusSchema } from "@/lib/validations/workspace";
 
 export async function GET(
   _request: Request,
@@ -40,6 +43,7 @@ export async function GET(
     include: {
       user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       invitedBy: { select: { id: true, name: true } },
+      customRole: { select: { id: true, name: true } },
     },
     orderBy: { joinedAt: "asc" },
   });
@@ -52,10 +56,13 @@ export async function GET(
       userEmail: m.user.email,
       userAvatarUrl: m.user.avatarUrl,
       role: m.role,
+      customRoleId: m.customRoleId,
+      customRoleName: m.customRole?.name ?? null,
       status: m.status,
       invitedByName: m.invitedBy?.name ?? null,
       joinedAt: m.joinedAt.toISOString(),
       suspendedUntil: m.suspendedUntil?.toISOString() ?? null,
+      lastActiveAt: m.lastActiveAt?.toISOString() ?? null,
     })),
   });
 }
@@ -102,87 +109,50 @@ export async function POST(
     );
   }
 
-  const normalizedEmail = parsed.email.toLowerCase();
+  try {
+    const result = await inviteWorkspaceMember({
+      companyId,
+      actorUserId: session.user.id,
+      email: parsed.email,
+    });
 
-  // Find the user by email
-  const invitee = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-    select: { id: true, name: true, email: true },
-  });
+    if (result.ok) {
+      return NextResponse.json({ member: result.member }, { status: 201 });
+    }
 
-  if (!invitee) {
-    return NextResponse.json(
-      { error: "No se encontró un usuario con ese email" },
-      { status: 404 },
-    );
-  }
+    if (result.code === "NOT_FOUND") {
+      return NextResponse.json(
+        { error: "No se encontró un usuario con ese email" },
+        { status: 404 },
+      );
+    }
 
-  // Cannot invite yourself
-  if (invitee.id === session.user.id) {
-    return NextResponse.json(
-      { error: "No puedes invitarte a ti mismo" },
-      { status: 400 },
-    );
-  }
+    if (result.code === "SELF") {
+      return NextResponse.json(
+        { error: "No puedes invitarte a ti mismo" },
+        { status: 400 },
+      );
+    }
 
-  // Check if user is already a member
-  const existingMembership = await prisma.companyMembership.findUnique({
-    where: {
-      companyId_userId: {
-        companyId,
-        userId: invitee.id,
-      },
-    },
-    select: { status: true, role: true },
-  });
-
-  if (existingMembership) {
     const statusLabel =
-      existingMembership.status === "ACTIVE"
+      result.existingStatus === "ACTIVE"
         ? "ya es miembro activo"
-        : existingMembership.status === "INVITED"
+        : result.existingStatus === "INVITED"
           ? "ya tiene una invitación pendiente"
           : "está suspendido";
     return NextResponse.json(
       {
         error: `El usuario ${statusLabel} de este workspace`,
-        existingStatus: existingMembership.status,
+        existingStatus: result.existingStatus,
       },
       { status: 409 },
     );
+  } catch (error) {
+    if (error instanceof WorkspaceSeatLimitError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    }
+    throw error;
   }
-
-  // Create the membership with INVITED status
-  const membership = await prisma.companyMembership.create({
-    data: {
-      companyId,
-      userId: invitee.id,
-      role: "EDITOR",
-      status: "INVITED",
-      invitedById: session.user.id,
-    },
-    include: {
-      user: { select: { id: true, name: true, email: true, avatarUrl: true } },
-      invitedBy: { select: { id: true, name: true } },
-    },
-  });
-
-  return NextResponse.json(
-    {
-      member: {
-        id: membership.id,
-        userId: membership.userId,
-        userName: membership.user.name,
-        userEmail: membership.user.email,
-        userAvatarUrl: membership.user.avatarUrl,
-        role: membership.role,
-        status: membership.status,
-        invitedByName: membership.invitedBy?.name ?? null,
-        joinedAt: membership.joinedAt.toISOString(),
-      },
-    },
-    { status: 201 },
-  );
 }
 
 export async function PATCH(
@@ -225,20 +195,28 @@ export async function PATCH(
     );
   }
 
-  // Try role change first, then status toggle
+  // Try role change, custom role assignment, then status toggle
   const roleResult = changeRoleSchema.safeParse(body);
   const statusResult = toggleStatusSchema.safeParse(body);
+  const customRoleResult = assignCustomRoleSchema.safeParse(body);
 
-  if (!roleResult.success && !statusResult.success) {
+  const isRoleChange = roleResult.success;
+  const isCustomRoleChange = customRoleResult.success;
+  const isStatusChange = statusResult.success && !isRoleChange && !isCustomRoleChange;
+
+  if (!isRoleChange && !isCustomRoleChange && !isStatusChange) {
     return NextResponse.json(
-      { error: "Se requiere userId con role o status válidos" },
+      { error: "Se requiere userId con role, customRoleId o status válidos" },
       { status: 400 },
     );
   }
 
   // Determine what to update
-  const targetUserId = roleResult.success ? roleResult.data.userId : statusResult.data!.userId;
-  const isRoleChange = roleResult.success;
+  const targetUserId = isRoleChange
+    ? roleResult.data.userId
+    : isCustomRoleChange
+      ? customRoleResult.data.userId
+      : statusResult.data!.userId;
 
   // Resolve the current membership of the target user
   const targetMembership = await prisma.companyMembership.findUnique({
@@ -276,38 +254,77 @@ export async function PATCH(
     }
   }
 
-  // Cannot change your own role or status
+  // Custom roles only apply to EDITOR/VIEWER members
+  if (isCustomRoleChange && (targetMembership.role === "OWNER" || targetMembership.role === "ADMIN")) {
+    return NextResponse.json(
+      { error: "Los miembros Owner y Admin no usan roles personalizados" },
+      { status: 403 },
+    );
+  }
+
+  // Cannot change your own role, custom role, or status
   if (targetUserId === session.user.id) {
     return NextResponse.json(
-      { error: isRoleChange ? "No puedes cambiar tu propio rol" : "No puedes cambiar tu propio estado" },
+      {
+        error: isRoleChange
+          ? "No puedes cambiar tu propio rol"
+          : isCustomRoleChange
+            ? "No puedes asignarte un rol personalizado"
+            : "No puedes cambiar tu propio estado",
+      },
       { status: 400 },
     );
   }
 
   // Cannot toggle status on an OWNER (role change handles OWNER demotion separately)
-  if (!isRoleChange && targetMembership.role === "OWNER") {
+  if (isStatusChange && targetMembership.role === "OWNER") {
     return NextResponse.json(
       { error: "No puedes suspender al Owner del workspace" },
       { status: 403 },
     );
   }
 
+  if (isStatusChange && statusResult.data!.status === "ACTIVE" && targetMembership.status === "SUSPENDED") {
+    try {
+      await assertWorkspaceHasSeat(companyId);
+    } catch (error) {
+      if (error instanceof WorkspaceSeatLimitError) {
+        return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+      }
+      throw error;
+    }
+  }
+
   // Cannot suspend a member with INVITED status
-  if (!isRoleChange && targetMembership.status === "INVITED") {
+  if (isStatusChange && targetMembership.status === "INVITED") {
     return NextResponse.json(
       { error: "No puedes suspender a un miembro con invitación pendiente" },
       { status: 400 },
     );
   }
 
+  let customRoleName: string | null = null;
+  if (isCustomRoleChange && customRoleResult.data!.customRoleId) {
+    const customRole = await prisma.workspaceRole.findFirst({
+      where: { id: customRoleResult.data!.customRoleId, companyId },
+      select: { id: true, name: true },
+    });
+    if (!customRole) {
+      return NextResponse.json({ error: "Rol personalizado no encontrado" }, { status: 404 });
+    }
+    customRoleName = customRole.name;
+  }
+
   const updateData = isRoleChange
     ? { role: roleResult.data!.role }
-    : {
-        status: statusResult.data!.status,
-        suspendedUntil: statusResult.data!.status === "SUSPENDED"
-          ? (statusResult.data!.suspendedUntil ? new Date(statusResult.data!.suspendedUntil) : null)
-          : null,
-      };
+    : isCustomRoleChange
+      ? { customRoleId: customRoleResult.data!.customRoleId }
+      : {
+          status: statusResult.data!.status,
+          suspendedUntil: statusResult.data!.status === "SUSPENDED"
+            ? (statusResult.data!.suspendedUntil ? new Date(statusResult.data!.suspendedUntil) : null)
+            : null,
+        };
 
   const updated = await prisma.companyMembership.update({
     where: { id: targetMembership.id },
@@ -315,7 +332,24 @@ export async function PATCH(
     include: {
       user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       invitedBy: { select: { id: true, name: true } },
+      customRole: { select: { id: true, name: true } },
     },
+  });
+
+  await recordWorkspaceAudit({
+    companyId,
+    actorUserId: session.user.id,
+    action: isStatusChange
+      ? (statusResult.data!.status === "SUSPENDED" ? "MEMBER_SUSPENDED" : "MEMBER_REACTIVATED")
+      : "MEMBER_ROLE_CHANGED",
+    targetType: "MEMBER",
+    targetId: updated.userId,
+    targetLabel: updated.user.name ?? updated.user.email,
+    metadata: isRoleChange
+      ? { role: updated.role }
+      : isCustomRoleChange
+        ? { customRoleId: updated.customRoleId, customRoleName }
+        : { status: updated.status, suspendedUntil: updated.suspendedUntil?.toISOString() ?? null },
   });
 
   return NextResponse.json({
@@ -326,6 +360,8 @@ export async function PATCH(
       userEmail: updated.user.email,
       userAvatarUrl: updated.user.avatarUrl,
       role: updated.role,
+      customRoleId: updated.customRoleId,
+      customRoleName: updated.customRole?.name ?? null,
       status: updated.status,
       invitedByName: updated.invitedBy?.name ?? null,
       joinedAt: updated.joinedAt.toISOString(),
@@ -421,6 +457,15 @@ export async function DELETE(
 
   await prisma.companyMembership.delete({
     where: { id: targetMembership.id },
+  });
+
+  await recordWorkspaceAudit({
+    companyId,
+    actorUserId: session.user.id,
+    action: "MEMBER_REMOVED",
+    targetType: "MEMBER",
+    targetId: parsed.userId,
+    metadata: { previousRole: targetMembership.role },
   });
 
   return NextResponse.json({ ok: true });

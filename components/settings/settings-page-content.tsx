@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Loader2, Save, Settings2 } from "lucide-react";
+import { Loader2, Save, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CompanyProfileCard } from "@/components/settings/company-profile-card";
 import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
@@ -16,6 +16,12 @@ import { InfoCard } from "@/components/ui/info-cards";
 import { UpgradeCTA } from "@/components/billing/upgrade-cta";
 import { APP_SETTINGS_UPDATED_EVENT } from "@/lib/settings/events";
 import { WorkCalendarsSettings } from "@/components/settings/work-calendars-settings";
+import { WorkspaceAuditPanel } from "@/components/settings/workspace-audit-panel";
+import { WorkspaceSeatUsageCard } from "@/components/settings/workspace-seat-usage-card";
+import { WorkspaceInviteLinksPanel } from "@/components/settings/workspace-invite-links-panel";
+import { WorkspaceBulkInvitePanel } from "@/components/settings/workspace-bulk-invite-panel";
+import { WorkspaceBillingPanel } from "@/components/settings/workspace-billing-panel";
+import { WorkspaceRolesPanel } from "@/components/settings/workspace-roles-panel";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { isLocalClientRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
@@ -49,6 +55,26 @@ const SETTINGS_TABS = [
     label: "Calendarios",
     description: "Calendarios laborales personalizados con dias y horas por proyecto.",
   },
+  {
+    id: "audit",
+    label: "Auditoría",
+    description: "Historial de cambios administrativos del workspace.",
+  },
+  {
+    id: "invites",
+    label: "Invitaciones",
+    description: "Enlaces reutilizables e invitación masiva para incorporar miembros.",
+  },
+  {
+    id: "billing",
+    label: "Facturación",
+    description: "Plan, suscripción y uso del workspace.",
+  },
+  {
+    id: "roles",
+    label: "Roles",
+    description: "Roles personalizados por módulo del workspace.",
+  },
 ] as const;
 
 const FORMAT_FORM_ID = "format-settings-form";
@@ -61,6 +87,7 @@ export function SettingsPageContent({
   initialSettings,
   initialWorkCalendars,
   canUseKhipu = true,
+  activeWorkspaceId,
 }: {
   company?: {
     name?: string | null;
@@ -71,6 +98,7 @@ export function SettingsPageContent({
   initialSettings: UserSettingsRecord;
   initialWorkCalendars?: { id: string; name: string; workDays: number; workHoursPerDay: number }[];
   canUseKhipu?: boolean;
+  activeWorkspaceId?: string;
 }) {
   const [companyState, setCompanyState] = useState(company);
   const [settings, setSettings] = useState(initialSettings);
@@ -130,6 +158,8 @@ export function SettingsPageContent({
         <div className="grid items-start gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
             <CompanyProfileCard company={companyState} onSaved={setCompanyState} />
+            {activeWorkspaceId ? <WorkspaceSeatUsageCard workspaceId={activeWorkspaceId} /> : null}
+            {activeWorkspaceId ? <WorkspaceDangerZone workspaceId={activeWorkspaceId} workspaceName={companyState?.name ?? ""} /> : null}
 
             <Card className="theme-surface-card-gradient">
               <CardHeader>
@@ -290,6 +320,43 @@ export function SettingsPageContent({
       </section>
 
       <section
+        id="settings-tab-panel-audit"
+        aria-hidden={activeTab !== "audit"}
+        className={cn(activeTab === "audit" ? "block" : "hidden")}
+      >
+        {activeWorkspaceId ? <WorkspaceAuditPanel workspaceId={activeWorkspaceId} /> : null}
+      </section>
+
+      <section
+        id="settings-tab-panel-invites"
+        aria-hidden={activeTab !== "invites"}
+        className={cn(activeTab === "invites" ? "block" : "hidden")}
+      >
+        {activeWorkspaceId ? (
+          <div className="space-y-6">
+            <WorkspaceBulkInvitePanel workspaceId={activeWorkspaceId} />
+            <WorkspaceInviteLinksPanel workspaceId={activeWorkspaceId} />
+          </div>
+        ) : null}
+      </section>
+
+      <section
+        id="settings-tab-panel-billing"
+        aria-hidden={activeTab !== "billing"}
+        className={cn(activeTab === "billing" ? "block" : "hidden")}
+      >
+        {activeWorkspaceId ? <WorkspaceBillingPanel workspaceId={activeWorkspaceId} /> : null}
+      </section>
+
+      <section
+        id="settings-tab-panel-roles"
+        aria-hidden={activeTab !== "roles"}
+        className={cn(activeTab === "roles" ? "block" : "hidden")}
+      >
+        {activeWorkspaceId ? <WorkspaceRolesPanel workspaceId={activeWorkspaceId} /> : null}
+      </section>
+
+      <section
         id="settings-tab-panel-ai"
         aria-hidden={activeTab !== "ai"}
         className={cn(activeTab === "ai" ? "block" : "hidden")}
@@ -329,6 +396,58 @@ export function SettingsPageContent({
         </div>
       </section>
     </div>
+  );
+}
+
+function WorkspaceDangerZone({ workspaceId, workspaceName }: { workspaceId: string; workspaceName: string }) {
+  const [confirmationName, setConfirmationName] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function handleDelete() {
+    setPending(true);
+    setError("");
+    setSuccess("");
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmationName }),
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok) {
+        const message = typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "No se pudo eliminar el workspace";
+        throw new Error(message);
+      }
+      setSuccess("Workspace eliminado. Podrás restaurarlo dentro de 30 días; actualiza la sesión para continuar.");
+      setConfirmationName("");
+    } catch (deletionError) {
+      setError(deletionError instanceof Error ? deletionError.message : "No se pudo eliminar el workspace");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Card className="border-rose-200 bg-rose-50/40">
+      <CardHeader>
+        <CardTitle className="text-rose-900">Zona de peligro</CardTitle>
+        <CardDescription>Eliminar un workspace lo oculta de forma reversible durante 30 días. Después de ese período se borrará permanentemente con sus proyectos, presupuestos y miembros.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <label htmlFor="workspace-delete-confirmation" className="text-sm font-medium text-rose-950">Escribe exactamente: {workspaceName}</label>
+          <input id="workspace-delete-confirmation" className="flex h-10 w-full rounded-xl border border-rose-200 bg-white px-3 text-sm" value={confirmationName} onChange={(event) => setConfirmationName(event.target.value)} />
+        </div>
+        <Button type="button" variant="destructive" className="gap-2" disabled={pending || confirmationName !== workspaceName} onClick={() => void handleDelete()}>
+          <Trash2 className="h-4 w-4" />
+          {pending ? "Eliminando..." : "Eliminar workspace"}
+        </Button>
+        {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+        {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
+      </CardContent>
+    </Card>
   );
 }
 

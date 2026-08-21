@@ -12,6 +12,7 @@ export async function assertWorkspaceMembership(options: {
         companyId: options.companyId,
         userId: options.userId,
       },
+      company: { deletedAt: null },
     },
     select: { role: true, status: true, suspendedUntil: true },
   });

@@ -186,6 +186,32 @@ enum ActivityEventType {
   ADJUSTMENT_REGISTERED
 }
 
+enum WorkspaceAuditAction {
+  WORKSPACE_UPDATED
+  WORKSPACE_DELETED
+  OWNERSHIP_TRANSFERRED
+  MEMBER_INVITED
+  MEMBER_ROLE_CHANGED
+  MEMBER_SUSPENDED
+  MEMBER_REACTIVATED
+  MEMBER_REMOVED
+  INVITE_LINK_CREATED
+  INVITE_LINK_REVOKED
+  WORKSPACE_ROLE_CREATED
+  WORKSPACE_ROLE_UPDATED
+  WORKSPACE_ROLE_DELETED
+  PROJECT_SHARED
+  PROJECT_UNSHARED
+  WORKSPACE_RESTORED
+}
+
+enum WorkspaceAuditTargetType {
+  WORKSPACE
+  MEMBER
+  WORKSPACE_ROLE
+  PROJECT
+}
+
 enum UserRole {
   ADMIN
   USER
@@ -379,6 +405,12 @@ enum CompanyMembershipStatus {
   SUSPENDED
 }
 
+enum ProjectAccessRole {
+  VIEWER
+  EDITOR
+  ADMIN
+}
+
 model User {
   id                            String                      @id @default(cuid())
   name                          String
@@ -454,7 +486,11 @@ model User {
   storedProjectPackages         StoredProjectPackage[]
   projectAttachments            ProjectAttachment[]
   riskScenarios                 RiskScenario[]
+  workspaceAuditEvents          WorkspaceAuditEvent[] @relation("WorkspaceAuditActor")
+  workspaceInviteLinksCreated   WorkspaceInviteLink[] @relation("WorkspaceInviteLinkCreator")
+  workspaceInviteLinkUses       WorkspaceInviteLinkUse[] @relation("WorkspaceInviteLinkUser")
   riskSimulationRuns            RiskSimulationRun[]
+  projectMemberships            ProjectMembership[]
 
   @@index([role])
   @@index([status])
@@ -662,6 +698,7 @@ model MembershipPlan {
   name                 String
   slug                 String                @unique
   monthlyTokenLimit    Int
+  seatLimit            Int?
   billingMode          BillingMode           @default(FREE)
   stripePriceId        String?
   projectLimit         Int?
@@ -816,6 +853,25 @@ model ActivityEvent {
   @@index([type, createdAt(sort: Desc)])
 }
 
+model WorkspaceAuditEvent {
+  id          String                    @id @default(cuid())
+  companyId   String
+  actorUserId String?
+  action      WorkspaceAuditAction
+  targetType  WorkspaceAuditTargetType
+  targetId    String?
+  targetLabel String?
+  metadata    Json                      @default("{}")
+  createdAt   DateTime                  @default(now())
+  company     Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actorUser   User?                     @relation("WorkspaceAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([companyId, action, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("workspace_audit_events")
+}
+
 model SystemSettings {
   id               String   @id @default(cuid())
   singletonKey     String   @unique @default("system")
@@ -868,6 +924,103 @@ model UserSettings {
   @@index([userId])
 }
 
+model WorkspaceInviteLink {
+  id          String                  @id @default(cuid())
+  companyId   String
+  createdById String
+  tokenHash   String                  @unique
+  role        CompanyMembershipRole   @default(VIEWER)
+  expiresAt   DateTime
+  maxUses     Int?
+  useCount    Int                     @default(0)
+  revokedAt   DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User                    @relation("WorkspaceInviteLinkCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  uses        WorkspaceInviteLinkUse[]
+
+  @@index([companyId, revokedAt, expiresAt])
+  @@index([createdById])
+  @@map("workspace_invite_links")
+}
+
+model WorkspaceInviteLinkUse {
+  id           String             @id @default(cuid())
+  inviteLinkId String
+  userId       String?
+  email        String
+  membershipId String?
+  createdAt    DateTime           @default(now())
+  inviteLink   WorkspaceInviteLink @relation(fields: [inviteLinkId], references: [id], onDelete: Cascade)
+  user         User?              @relation("WorkspaceInviteLinkUser", fields: [userId], references: [id], onDelete: SetNull)
+
+
+  @@unique([inviteLinkId, email])
+  @@index([inviteLinkId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@map("workspace_invite_link_uses")
+}
+
+model WorkspacePermission {
+  key         String                    @id
+  module      String
+  description String
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  roleLinks   WorkspaceRolePermission[]
+
+  @@map("workspace_permissions")
+}
+
+model WorkspaceRole {
+  id          String                    @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  version     Int                       @default(1)
+  isSystem    Boolean                   @default(false)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  company     Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions WorkspaceRolePermission[]
+  memberships CompanyMembership[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("workspace_roles")
+}
+
+model WorkspaceRolePermission {
+  workspaceRoleId String
+  permissionKey   String
+  role            WorkspaceRole       @relation(fields: [workspaceRoleId], references: [id], onDelete: Cascade)
+  permission      WorkspacePermission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([workspaceRoleId, permissionKey])
+  @@index([permissionKey])
+  @@map("workspace_role_permissions")
+}
+
+model ProjectMembership {
+  id        String            @id @default(cuid())
+  projectId String
+  companyId String
+  userId    String
+  role      ProjectAccessRole @default(VIEWER)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([companyId, userId])
+  @@index([projectId])
+  @@map("project_memberships")
+}
+
 model Company {
   id                        String                     @id @default(cuid())
   userId                    String
@@ -876,6 +1029,7 @@ model Company {
   logoUrl                   String?
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
+  deletedAt                 DateTime?
   user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects                  Project[]
   resources                 Resource[]
@@ -888,6 +1042,10 @@ model Company {
   subscription              CompanySubscription?
   storedProjectPackages     StoredProjectPackage[]
   betaGrants                BetaGrant[]
+  workspaceAuditEvents      WorkspaceAuditEvent[]
+  inviteLinks               WorkspaceInviteLink[]
+  workspaceRoles            WorkspaceRole[]
+  projectMemberships        ProjectMembership[]
 
   @@index([userId])
 }
@@ -985,6 +1143,7 @@ model Project {
   agentExecutions            AgentExecution[]
   storedProjectPackages      StoredProjectPackage[]
   attachments                ProjectAttachment[]
+  projectMemberships         ProjectMembership[]
 
   @@index([companyId])
   @@index([companyId, isDemo])
@@ -1400,15 +1559,18 @@ model CompanyMembership {
   companyId      String
   userId         String
   role           CompanyMembershipRole
+  customRoleId   String?
   status         CompanyMembershipStatus @default(ACTIVE)
   invitedById    String?
   suspendedUntil DateTime?
+  lastActiveAt   DateTime?
   joinedAt       DateTime                @default(now())
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt
   company        Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   invitedBy      User?                   @relation("MembershipInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  customRole     WorkspaceRole?          @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, userId])
   @@index([userId])
