@@ -104,6 +104,7 @@ export function ResourcesTable({
   const [persistedRowsById, setPersistedRowsById] = useState(() => new Map(resources.map((resource) => [resource.id, resource])));
   const deferredFilter = useDeferredValue(filter);
   const [measuredRowHeight, setMeasuredRowHeight] = useState<number | null>(null);
+  const measuredRowFrameRef = useRef<number | null>(null);
   const activeRowHeight = isExcelMode ? excelRowHeight : measuredRowHeight ?? RESOURCE_ROW_HEIGHT;
 
   const filtered = useMemo(
@@ -177,31 +178,49 @@ export function ResourcesTable({
   const measureVisibleRow = useCallback((node: HTMLTableRowElement | null) => {
     measuredRowObserverRef.current?.disconnect();
     measuredRowObserverRef.current = null;
+    if (measuredRowFrameRef.current !== null) {
+      window.cancelAnimationFrame(measuredRowFrameRef.current);
+      measuredRowFrameRef.current = null;
+    }
 
     if (!node || isExcelMode) {
       return;
     }
 
     const commitHeight = () => {
+      measuredRowFrameRef.current = null;
       const nextHeight = Math.round(node.getBoundingClientRect().height);
       if (nextHeight > 0) {
         setMeasuredRowHeight((current) => (current === nextHeight ? current : nextHeight));
       }
     };
 
-    commitHeight();
+    measuredRowFrameRef.current = window.requestAnimationFrame(commitHeight);
 
     const ResizeObserverConstructor = globalThis.ResizeObserver;
     if (!ResizeObserverConstructor) {
       return;
     }
 
-    const observer = new ResizeObserverConstructor(() => commitHeight());
+    const observer = new ResizeObserverConstructor(() => {
+      if (measuredRowFrameRef.current !== null) {
+        return;
+      }
+      measuredRowFrameRef.current = window.requestAnimationFrame(commitHeight);
+    });
     observer.observe(node);
     measuredRowObserverRef.current = observer;
   }, [isExcelMode]);
 
-  useEffect(() => () => measuredRowObserverRef.current?.disconnect(), []);
+  useEffect(
+    () => () => {
+      measuredRowObserverRef.current?.disconnect();
+      if (measuredRowFrameRef.current !== null) {
+        window.cancelAnimationFrame(measuredRowFrameRef.current);
+      }
+    },
+    [],
+  );
 
   const updateDraft = useCallback((id: string, patch: Partial<EditableResource>) => {
     setRows((current) =>

@@ -38,6 +38,8 @@ type McpApuModule = {
   }>;
 };
 
+type McpApuResource = McpApuModule["apus"][number]["resources"][number];
+
 type McpFooterModule = {
   footers: Array<{
     budgetId: string;
@@ -234,7 +236,7 @@ export async function importProjectPackageToMyc(
       (apusData?.apus ?? []).map((apu) => [apu.budgetItemId, apu] as const),
     );
 
-    await persistProjectResources(ctx, options.companyId, warnings);
+    await persistProjectResources(ctx, options.companyId, apusData?.apus ?? [], warnings);
 
     // Build items-by-budget lookup
     const itemsByBudgetId = new Map<string, McpBudgetItemsModule["budgets"][number]>();
@@ -511,7 +513,9 @@ async function persistBudgetStructure(
         const createdResource = await tx.apuResource.create({
           data: {
             apuId: createdApu.id,
-            resourceId: resource.resourceId ? resourceIdMap.get(resource.resourceId) ?? null : null,
+            resourceId: resource.resourceId
+              ? resourceIdMap.get(resource.resourceId) ?? null
+              : resourceIdMap.get(resource.id) ?? null,
             resourceType: resource.resourceType,
             crew: resource.crew ?? null,
             quantity: resource.quantity,
@@ -533,6 +537,7 @@ async function persistBudgetStructure(
 async function persistProjectResources(
   ctx: PersistenceContext,
   companyId: string,
+  apus: McpApuModule["apus"],
   warnings: string[],
 ) {
   let projectResourcesData: McpProjectResourcesModule | null = null;
@@ -540,6 +545,7 @@ async function persistProjectResources(
   try {
     projectResourcesData = ctx.readModule("budgets/project-resources.json") as McpProjectResourcesModule;
   } catch {
+    await persistFallbackProjectResourcesFromApus(ctx, companyId, apus);
     return;
   }
 
@@ -565,6 +571,109 @@ async function persistProjectResources(
   if (projectResourcesData.resources?.length === 0) {
     warnings.push("El paquete .mcp no contiene recursos de proyecto para vincular los APU.");
   }
+}
+
+async function persistFallbackProjectResourcesFromApus(
+  ctx: PersistenceContext,
+  companyId: string,
+  apus: McpApuModule["apus"],
+) {
+  const fallbackResources = collectFallbackProjectResourcesFromApus(apus);
+
+  for (const fallbackResource of fallbackResources) {
+    const createdResource = await ctx.tx.resource.create({
+      data: {
+        companyId,
+        code: fallbackResource.code,
+        description: fallbackResource.description,
+        category: fallbackResource.category as never,
+        unit: fallbackResource.unit,
+        unitPrice: fallbackResource.unitPrice,
+        currency: fallbackResource.currency,
+        iu: null,
+        iuCurrent: null,
+        source: "mcp-import",
+      },
+    });
+
+    for (const sourceResourceId of fallbackResource.sourceResourceIds) {
+      ctx.resourceIdMap.set(sourceResourceId, createdResource.id);
+    }
+  }
+}
+
+function collectFallbackProjectResourcesFromApus(apus: McpApuModule["apus"]) {
+  const resourcesByKey = new Map<
+    string,
+    {
+      code: string;
+      description: string;
+      category: string;
+      unit: string;
+      unitPrice: string | number;
+      currency: string;
+      sourceResourceIds: string[];
+    }
+  >();
+
+  for (const apu of apus) {
+    for (const resource of apu.resources) {
+      const description = resource.resourceDescription?.trim();
+      if (!description) continue;
+
+      const key = buildFallbackResourceKey(resource);
+      const existing = resourcesByKey.get(key);
+
+      if (existing) {
+        existing.sourceResourceIds.push(...fallbackSourceIds(resource));
+        continue;
+      }
+
+      resourcesByKey.set(key, {
+        code: `IMP-${String(resourcesByKey.size + 1).padStart(4, "0")}`,
+        description,
+        category: normalizeFallbackResourceCategory(resource.resourceType),
+        unit: "und",
+        unitPrice: resource.unitPrice,
+        currency: "PEN",
+        sourceResourceIds: fallbackSourceIds(resource),
+      });
+    }
+  }
+
+  return [...resourcesByKey.values()];
+}
+
+function fallbackSourceIds(resource: McpApuResource) {
+  const ids = [resource.resourceId?.trim(), resource.id.trim()].filter(
+    (value, index, values): value is string =>
+      typeof value === "string" && value.length > 0 && values.indexOf(value) === index,
+  );
+
+  return ids;
+}
+
+function buildFallbackResourceKey(resource: McpApuResource) {
+  return [
+    resource.resourceDescription?.trim().toUpperCase() ?? "",
+    normalizeFallbackResourceCategory(resource.resourceType),
+    String(resource.unitPrice),
+  ].join("|");
+}
+
+function normalizeFallbackResourceCategory(resourceType: string) {
+  const normalized = resourceType.trim().toUpperCase();
+  if (normalized === "MO") return "LABOR";
+  if (
+    normalized === "MATERIAL" ||
+    normalized === "LABOR" ||
+    normalized === "EQUIPMENT" ||
+    normalized === "TOOLS" ||
+    normalized === "SUBCONTRACT"
+  ) {
+    return normalized;
+  }
+  return "MATERIAL";
 }
 
 async function persistFooterRows(

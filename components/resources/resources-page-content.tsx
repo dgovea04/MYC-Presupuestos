@@ -31,17 +31,6 @@ export function ResourcesPageContent({
     return sortResourcesForCatalog([...resourcesById.values()]);
   }, [createdResources, resources]);
 
-  const resourcesTableKey = useMemo(
-    () =>
-      localResources
-        .map(
-          (resource) =>
-            `${resource.id}:${resource.code}:${resource.description}:${resource.category}:${resource.unit}:${resource.iu ?? ""}:${resource.iuCurrent ?? ""}:${resource.iuCurrentReviewStatus ?? ""}:${resource.unitPrice}:${resource.priceSyncStatus ?? ""}:${resource.priceObservedAt ?? ""}`,
-        )
-        .join("|"),
-    [localResources],
-  );
-
   function handleResourceCreated(resource: ResourceRecord) {
     setCreatedResources((current) => {
       const nextResources = current.filter((entry) => entry.id !== resource.id);
@@ -60,7 +49,6 @@ export function ResourcesPageContent({
       />
 
       <ResourcesTable
-        key={resourcesTableKey}
         companyId={companyId}
         resources={localResources}
         unifiedIndexDictionaryRows={unifiedIndexDictionaryRows}

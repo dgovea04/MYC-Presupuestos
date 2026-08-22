@@ -404,7 +404,7 @@ describe("importProjectPackageToMyc", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           apuId: "apu-created",
-          resourceId: null,
+          resourceId: "resource-created",
           resourceType: "MATERIAL",
           quantity: "1.0500",
           unitPrice: "280.0000",
@@ -510,6 +510,60 @@ describe("importProjectPackageToMyc", () => {
     });
     expect(mocks.apuResourceCreate).toHaveBeenNthCalledWith(
       1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          resourceId: "resource-created",
+        }),
+      }),
+    );
+  });
+
+  it("creates project resources from APU resource descriptions when project resources are missing", async () => {
+    await importProjectPackageToMyc("user-1", makeManifest(), makeModuleReader(fixtureModules), {
+      companyId: "company-1",
+      mode: "restore_as_new_project",
+    });
+
+    expect(mocks.resourceCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          companyId: "company-1",
+          code: "IMP-0001",
+          description: "Cemento Portland Tipo I",
+          category: "MATERIAL",
+          unit: "und",
+          currency: "PEN",
+          unitPrice: "280.0000",
+          source: "mcp-import",
+        }),
+      }),
+    );
+    expect(mocks.resourceCreate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          companyId: "company-1",
+          code: "IMP-0002",
+          description: "Operario",
+          category: "LABOR",
+          unit: "und",
+          currency: "PEN",
+          unitPrice: "120.0000",
+          source: "mcp-import",
+        }),
+      }),
+    );
+    expect(mocks.apuResourceCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          resourceId: "resource-created",
+        }),
+      }),
+    );
+    expect(mocks.apuResourceCreate).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         data: expect.objectContaining({
           resourceId: "resource-created",
