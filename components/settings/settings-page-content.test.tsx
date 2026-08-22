@@ -32,6 +32,30 @@ vi.mock("@/components/settings/user-settings-form", () => ({
   UserSettingsForm: () => <div>User Settings Form</div>,
 }));
 
+vi.mock("@/components/settings/workspace-audit-panel", () => ({
+  WorkspaceAuditPanel: () => <div>Workspace Audit Panel</div>,
+}));
+
+vi.mock("@/components/settings/workspace-seat-usage-card", () => ({
+  WorkspaceSeatUsageCard: () => <div>Workspace Seat Usage Card</div>,
+}));
+
+vi.mock("@/components/settings/workspace-invite-links-panel", () => ({
+  WorkspaceInviteLinksPanel: () => <div>Workspace Invite Links Panel</div>,
+}));
+
+vi.mock("@/components/settings/workspace-bulk-invite-panel", () => ({
+  WorkspaceBulkInvitePanel: () => <div>Workspace Bulk Invite Panel</div>,
+}));
+
+vi.mock("@/components/settings/workspace-billing-panel", () => ({
+  WorkspaceBillingPanel: () => <div>Workspace Billing Panel</div>,
+}));
+
+vi.mock("@/components/settings/workspace-roles-panel", () => ({
+  WorkspaceRolesPanel: () => <div>Workspace Roles Panel</div>,
+}));
+
 import { SettingsPageContent } from "@/components/settings/settings-page-content";
 import { DEFAULT_APP_THEME, DEFAULT_EXCEL_ROW_HEIGHT, DEFAULT_INITIAL_SUB_BUDGET_NAMES, DEFAULT_VIEW_MODE, FLOATING_KHIPU_DEFAULTS } from "@/types/settings";
 
@@ -137,10 +161,11 @@ describe("SettingsPageContent", () => {
     expect(aiPanel?.textContent).not.toContain("Cloud AI Settings Card");
   });
 
-  it("shows general by default and switches between the three tabs", async () => {
+  it("shows general by default and switches between the settings tabs", async () => {
     await act(async () => {
       root.render(
         <SettingsPageContent
+          activeWorkspaceId="workspace-1"
           account={{ email: "maria@example.com", id: "user-1", jobTitle: "Ingeniera", name: "Maria Lopez", phone: "999999999" }}
           company={{ logoUrl: null, name: "MYC", ruc: "123" }}
           initialSettings={{
@@ -168,16 +193,32 @@ describe("SettingsPageContent", () => {
     });
 
     const generalPanel = container.querySelector("#settings-tab-panel-general");
+    const workspacePanel = container.querySelector("#settings-tab-panel-workspace");
     const formatsPanel = container.querySelector("#settings-tab-panel-formats");
     const aiPanel = container.querySelector("#settings-tab-panel-ai");
 
     expect(generalPanel?.getAttribute("aria-hidden")).toBe("false");
+    expect(workspacePanel?.getAttribute("aria-hidden")).toBe("true");
     expect(formatsPanel?.getAttribute("aria-hidden")).toBe("true");
     expect(aiPanel?.getAttribute("aria-hidden")).toBe("true");
     expect(generalPanel?.textContent).toContain("Resumen rapido");
     expect(generalPanel?.textContent).toContain("Company Profile Card");
+    expect(workspacePanel?.textContent).not.toContain("Company Profile Card");
+    expect(workspacePanel?.textContent).toContain("Workspace Billing Panel");
+    expect(workspacePanel?.textContent).toContain("Workspace Roles Panel");
+    expect(workspacePanel?.querySelector(".lg\\:grid-cols-2")).not.toBeNull();
     expect(formatsPanel?.textContent).toContain("User Settings Form");
     expect(aiPanel?.textContent).toContain("Local AI Settings Card");
+
+    const workspaceTab = [...container.querySelectorAll("button")].find((element) => element.textContent?.includes("Workspace"));
+    await act(async () => {
+      workspaceTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(generalPanel?.getAttribute("aria-hidden")).toBe("true");
+    expect(workspacePanel?.getAttribute("aria-hidden")).toBe("false");
+    expect(formatsPanel?.getAttribute("aria-hidden")).toBe("true");
+    expect(aiPanel?.getAttribute("aria-hidden")).toBe("true");
 
     const formatsTab = [...container.querySelectorAll("button")].find((element) => element.textContent?.includes("Formatos y visualizacion"));
     await act(async () => {
@@ -185,6 +226,7 @@ describe("SettingsPageContent", () => {
     });
 
     expect(generalPanel?.getAttribute("aria-hidden")).toBe("true");
+    expect(workspacePanel?.getAttribute("aria-hidden")).toBe("true");
     expect(formatsPanel?.getAttribute("aria-hidden")).toBe("false");
     expect(aiPanel?.getAttribute("aria-hidden")).toBe("true");
 

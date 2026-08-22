@@ -51,29 +51,14 @@ const SETTINGS_TABS = [
     description: "Proveedores cloud, capacidades locales y configuracion de Khipu.",
   },
   {
+    id: "workspace",
+    label: "Workspace",
+    description: "Empresa, miembros, permisos, invitaciones, facturación y auditoría.",
+  },
+  {
     id: "calendars",
     label: "Calendarios",
     description: "Calendarios laborales personalizados con dias y horas por proyecto.",
-  },
-  {
-    id: "audit",
-    label: "Auditoría",
-    description: "Historial de cambios administrativos del workspace.",
-  },
-  {
-    id: "invites",
-    label: "Invitaciones",
-    description: "Enlaces reutilizables e invitación masiva para incorporar miembros.",
-  },
-  {
-    id: "billing",
-    label: "Facturación",
-    description: "Plan, suscripción y uso del workspace.",
-  },
-  {
-    id: "roles",
-    label: "Roles",
-    description: "Roles personalizados por módulo del workspace.",
   },
 ] as const;
 
@@ -158,8 +143,6 @@ export function SettingsPageContent({
         <div className="grid items-start gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
             <CompanyProfileCard company={companyState} onSaved={setCompanyState} />
-            {activeWorkspaceId ? <WorkspaceSeatUsageCard workspaceId={activeWorkspaceId} /> : null}
-            {activeWorkspaceId ? <WorkspaceDangerZone workspaceId={activeWorkspaceId} workspaceName={companyState?.name ?? ""} /> : null}
 
             <Card className="theme-surface-card-gradient">
               <CardHeader>
@@ -223,6 +206,36 @@ export function SettingsPageContent({
                 <InfoCard label="Sub Presupuestos" value={`${settings.defaultSubBudgetNames.length} base`} layout="inline" />
               </CardContent>
             </Card>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="settings-tab-panel-workspace"
+        aria-hidden={activeTab !== "workspace"}
+        className={cn(activeTab === "workspace" ? "block" : "hidden")}
+      >
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--app-text-strong)]">Workspace</h2>
+            <p className="mt-1 text-sm text-[var(--app-text-muted)]">
+              Administra la identidad, el acceso y la operación del workspace desde un solo lugar.
+            </p>
+          </div>
+
+          <div className="grid items-start gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              {activeWorkspaceId ? <WorkspaceSeatUsageCard workspaceId={activeWorkspaceId} /> : null}
+              {activeWorkspaceId ? <WorkspaceBulkInvitePanel workspaceId={activeWorkspaceId} /> : null}
+              {activeWorkspaceId ? <WorkspaceInviteLinksPanel workspaceId={activeWorkspaceId} /> : null}
+              {activeWorkspaceId ? <WorkspaceAuditPanel workspaceId={activeWorkspaceId} /> : null}
+            </div>
+
+            <div className="space-y-6">
+              {activeWorkspaceId ? <WorkspaceBillingPanel workspaceId={activeWorkspaceId} /> : null}
+              {activeWorkspaceId ? <WorkspaceRolesPanel workspaceId={activeWorkspaceId} /> : null}
+              {activeWorkspaceId ? <WorkspaceDangerZone workspaceId={activeWorkspaceId} workspaceName={companyState?.name ?? ""} /> : null}
+            </div>
           </div>
         </div>
       </section>
@@ -317,43 +330,6 @@ export function SettingsPageContent({
         className={cn(activeTab === "calendars" ? "block" : "hidden")}
       >
         <WorkCalendarsSettings initialCalendars={initialWorkCalendars} />
-      </section>
-
-      <section
-        id="settings-tab-panel-audit"
-        aria-hidden={activeTab !== "audit"}
-        className={cn(activeTab === "audit" ? "block" : "hidden")}
-      >
-        {activeWorkspaceId ? <WorkspaceAuditPanel workspaceId={activeWorkspaceId} /> : null}
-      </section>
-
-      <section
-        id="settings-tab-panel-invites"
-        aria-hidden={activeTab !== "invites"}
-        className={cn(activeTab === "invites" ? "block" : "hidden")}
-      >
-        {activeWorkspaceId ? (
-          <div className="space-y-6">
-            <WorkspaceBulkInvitePanel workspaceId={activeWorkspaceId} />
-            <WorkspaceInviteLinksPanel workspaceId={activeWorkspaceId} />
-          </div>
-        ) : null}
-      </section>
-
-      <section
-        id="settings-tab-panel-billing"
-        aria-hidden={activeTab !== "billing"}
-        className={cn(activeTab === "billing" ? "block" : "hidden")}
-      >
-        {activeWorkspaceId ? <WorkspaceBillingPanel workspaceId={activeWorkspaceId} /> : null}
-      </section>
-
-      <section
-        id="settings-tab-panel-roles"
-        aria-hidden={activeTab !== "roles"}
-        className={cn(activeTab === "roles" ? "block" : "hidden")}
-      >
-        {activeWorkspaceId ? <WorkspaceRolesPanel workspaceId={activeWorkspaceId} /> : null}
       </section>
 
       <section
