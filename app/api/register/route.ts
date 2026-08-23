@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     }
 
     const data = parsed.data;
+    const nextPath = data.plan === "pro" ? "/billing/activate?plan=pro" : undefined;
 
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
         userId: registration.user.id,
         email: data.email,
         name: data.name,
+        ...(nextPath ? { nextPath } : {}),
       });
     } catch {
       verificationEmailSent = false;

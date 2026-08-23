@@ -30,7 +30,16 @@ describe("POST /api/auth/resend-verification", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true, sent: true });
-    expect(mocks.resendEmailVerificationMock).toHaveBeenCalledWith("maria@example.com");
+    expect(mocks.resendEmailVerificationMock).toHaveBeenCalledWith("maria@example.com", undefined);
+  });
+
+  it("preserves the Pro activation path", async () => {
+    mocks.resendEmailVerificationMock.mockResolvedValue({ sent: true });
+
+    const response = await POST(buildRequest({ email: "maria@example.com", nextPath: "/billing/activate?plan=pro" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.resendEmailVerificationMock).toHaveBeenCalledWith("maria@example.com", "/billing/activate?plan=pro");
   });
 
   it("returns 400 for an invalid email payload", async () => {

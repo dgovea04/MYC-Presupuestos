@@ -30,6 +30,7 @@ export function LoginForm() {
   const verified = searchParams.get("verified");
   const verificationReason = searchParams.get("reason");
   const canResend = email.trim().length > 0 && (verifyEmail || verified === "0");
+  const nextPath = getSafeNextPath(searchParams.get("next"));
 
   async function handleSubmit() {
     setLoading(true);
@@ -60,7 +61,7 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(nextPath);
     router.refresh();
   }
 
@@ -76,7 +77,7 @@ export function LoginForm() {
     const response = await fetch("/api/auth/resend-verification", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, nextPath }),
     });
 
     const data = (await response.json().catch(() => null)) as ResendResponse | null;
@@ -195,11 +196,16 @@ export function LoginForm() {
               <span className="bg-white px-2 text-slate-500">o continua con</span>
             </div>
           </div>
-          <GoogleSignInButton mode="login" />
+          <GoogleSignInButton mode="login" callbackUrl={nextPath} />
         </>
       ) : null}
     </form>
   );
+}
+
+function getSafeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  return value;
 }
 
 function getVerificationErrorMessage(reason: string | null) {

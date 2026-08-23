@@ -1,30 +1,29 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
-import { createWorkspaceProCheckoutSession } from "@/lib/billing/stripe";
 import { requireWorkspaceOwner, WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
+import { createWorkspaceYapePaymentRequest, getYapePaymentConfig } from "@/lib/billing/yape";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id: companyId } = await params;
-  try {
-    await requireWorkspaceOwner({ userId: session.user.id, companyId });
-  } catch (error) {
-    const message = error instanceof WorkspaceAuthorizationError ? error.message : "No tienes permisos para gestionar la facturación";
-    return NextResponse.json({ error: message }, { status: 403 });
-  }
 
   try {
-    const checkoutSession = await createWorkspaceProCheckoutSession({
-      companyId,
-      user: { email: session.user.email },
+    await requireWorkspaceOwner({ userId: session.user.id, companyId });
+    const paymentRequest = await createWorkspaceYapePaymentRequest({ companyId });
+
+    return NextResponse.json({
+      requestId: paymentRequest.id,
+      status: paymentRequest.status,
+      createdAt: paymentRequest.createdAt.toISOString(),
+      yape: getYapePaymentConfig(),
     });
-    return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
+    const status = error instanceof WorkspaceAuthorizationError ? 403 : 400;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo crear checkout" },
-      { status: 400 },
+      { error: error instanceof Error ? error.message : "No se pudo registrar la solicitud Yape" },
+      { status },
     );
   }
 }

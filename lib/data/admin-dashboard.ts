@@ -44,7 +44,7 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
   const totalUsers = await prisma.user.count({ where: userWhere });
   const totalPages = Math.max(1, Math.ceil(totalUsers / ADMIN_USERS_PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
-  const [users, activeUsers, suspendedUsers, adminUsers, plans, currentUsage, actionUsage, manualPaymentRequests] = await Promise.all([
+  const [users, activeUsers, suspendedUsers, adminUsers, plans, currentUsage, actionUsage, manualPaymentRequests, workspacePaymentRequests] = await Promise.all([
     prisma.user.findMany({
       where: userWhere,
       select: {
@@ -158,6 +158,35 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
+    prisma.companySubscription.findMany({
+      where: {
+        provider: "MANUAL",
+        status: "INCOMPLETE",
+      },
+      select: {
+        id: true,
+        companyId: true,
+        createdAt: true,
+        receiptUrl: true,
+        company: {
+          select: {
+            name: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                membershipPlan: {
+                  select: { name: true, slug: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
   ]);
 
   const userRows = users.map((user) => {
@@ -236,15 +265,31 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       totalPages,
       query: query ?? "",
     },
-    manualPaymentRequests: manualPaymentRequests.map((request) => ({
-      id: request.id,
-      createdAt: ensureDate(request.createdAt).toISOString(),
-      userId: request.user.id,
-      userName: request.user.name,
-      userEmail: request.user.email,
-      currentPlanName: request.user.membershipPlan?.name ?? "Sin plan",
-      currentPlanSlug: request.user.membershipPlan?.slug ?? "",
-      offerCode: PRO_FOUNDER_OFFER_CODE,
-    })),
+    manualPaymentRequests: [
+      ...manualPaymentRequests.map((request) => ({
+        id: request.id,
+        createdAt: ensureDate(request.createdAt).toISOString(),
+        userId: request.user.id,
+        userName: request.user.name,
+        userEmail: request.user.email,
+        currentPlanName: request.user.membershipPlan?.name ?? "Sin plan",
+        currentPlanSlug: request.user.membershipPlan?.slug ?? "",
+        workspaceName: null,
+        receiptUrl: null,
+        offerCode: PRO_FOUNDER_OFFER_CODE,
+      })),
+      ...workspacePaymentRequests.map((request) => ({
+        id: request.id,
+        createdAt: ensureDate(request.createdAt).toISOString(),
+        userId: request.company.user.id,
+        userName: request.company.user.name,
+        userEmail: request.company.user.email,
+        currentPlanName: request.company.user.membershipPlan?.name ?? "Sin plan",
+        currentPlanSlug: request.company.user.membershipPlan?.slug ?? "",
+        workspaceName: request.company.name,
+        receiptUrl: request.receiptUrl ?? null,
+        offerCode: PRO_FOUNDER_OFFER_CODE,
+      })),
+    ].sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 20),
   };
 }

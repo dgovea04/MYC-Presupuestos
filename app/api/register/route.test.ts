@@ -109,6 +109,25 @@ describe("POST /api/register", () => {
     });
   });
 
+  it("preserves the Pro activation path through email verification", async () => {
+    mocks.findUniqueMock.mockResolvedValue(null);
+    mocks.hashPasswordMock.mockResolvedValue("hashed-password");
+    mocks.registerUserWithCompanyAndDemoMock.mockResolvedValue({
+      user: { id: "user-1" },
+      company: { id: "company-1" },
+      demoProject: { status: "created", projectId: "project-demo", generalBudgetId: "budget-demo", warnings: [] },
+    });
+    mocks.issueEmailVerificationMock.mockResolvedValue({ sent: true });
+
+    const response = await POST(buildRequest({ ...validBody, plan: "pro" }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.issueEmailVerificationMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "user-1",
+      nextPath: "/billing/activate?plan=pro",
+    }));
+  });
+
   it("carries landing CTA context into signup_completed", async () => {
     mocks.findUniqueMock.mockResolvedValue(null);
     mocks.hashPasswordMock.mockResolvedValue("hashed-password");

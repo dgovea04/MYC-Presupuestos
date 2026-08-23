@@ -151,6 +151,7 @@ describe("getEffectiveWorkspaceLicense", () => {
     });
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce({
       membershipPlan: { slug: "pro", name: "Pro" },
+      status: "ACTIVE",
     });
     mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
@@ -183,6 +184,7 @@ describe("getEffectiveWorkspaceLicense", () => {
     });
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce({
       membershipPlan: { slug: "empresa", name: "Empresa" },
+      status: "ACTIVE",
     });
     mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
@@ -269,6 +271,7 @@ describe("assertWorkspaceFeatureAccess", () => {
     });
     mockPrisma.companySubscription.findUnique.mockResolvedValueOnce({
       membershipPlan: { slug: "pro", name: "Pro" },
+      status: "ACTIVE",
     });
     mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 

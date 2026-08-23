@@ -25,6 +25,14 @@ describe("GET /api/auth/verify-email", () => {
     expect(mocks.consumeEmailVerificationTokenMock).toHaveBeenCalledWith("valid-token");
   });
 
+  it("preserves the Pro activation path after verification", async () => {
+    mocks.consumeEmailVerificationTokenMock.mockResolvedValue({ status: "verified" });
+
+    const response = await GET(new Request("http://localhost/api/auth/verify-email?token=valid-token&next=%2Fbilling%2Factivate%3Fplan%3Dpro"));
+
+    expect(response.headers.get("location")).toBe("http://localhost/login?verified=1&next=%2Fbilling%2Factivate%3Fplan%3Dpro");
+  });
+
   it("redirects to login with invalid state when the token is missing", async () => {
     const response = await GET(new Request("http://localhost/api/auth/verify-email"));
 

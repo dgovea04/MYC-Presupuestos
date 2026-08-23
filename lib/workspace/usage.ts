@@ -67,7 +67,9 @@ export async function getWorkspaceUsage(companyId: string, client: UsageClient =
     include: { membershipPlan: true },
   });
 
-  let plan = subscription?.membershipPlan ?? null;
+  let plan = subscription && (subscription.status === "ACTIVE" || subscription.status === "TRIALING")
+    ? subscription.membershipPlan
+    : null;
 
   // Fallback: plan personal del Owner cuando el workspace aún no tiene suscripción.
   if (!plan) {

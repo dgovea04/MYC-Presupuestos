@@ -25,16 +25,21 @@ export function hashEmailVerificationToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export function buildEmailVerificationUrl(token: string) {
+export function buildEmailVerificationUrl(token: string, nextPath?: string) {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
     process.env.NEXTAUTH_URL?.replace(/\/$/, "") ??
     "http://localhost:3000";
 
-  return `${baseUrl}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+  const query = new URLSearchParams({ token });
+  if (nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")) {
+    query.set("next", nextPath);
+  }
+
+  return `${baseUrl}/api/auth/verify-email?${query.toString()}`;
 }
 
-export async function issueEmailVerification(params: { userId: string; email: string; name: string }) {
+export async function issueEmailVerification(params: { userId: string; email: string; name: string; nextPath?: string }) {
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashEmailVerificationToken(token);
   const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
@@ -51,7 +56,7 @@ export async function issueEmailVerification(params: { userId: string; email: st
     `;
   });
 
-  const verificationUrl = buildEmailVerificationUrl(token);
+  const verificationUrl = buildEmailVerificationUrl(token, params.nextPath);
   await sendVerificationEmail({
     email: params.email,
     name: params.name,
@@ -117,7 +122,7 @@ export async function consumeEmailVerificationToken(token: string) {
   return { status: "verified" as const };
 }
 
-export async function resendEmailVerification(email: string) {
+export async function resendEmailVerification(email: string, nextPath?: string) {
   const rows = await prisma.$queryRaw<Array<ResendLookupRow>>`
     SELECT "id", "name", "email", "passwordHash", "emailVerifiedAt"
     FROM "User"
@@ -135,6 +140,7 @@ export async function resendEmailVerification(email: string) {
     userId: user.id,
     email: user.email,
     name: user.name,
+    ...(isSafeNextPath(nextPath) ? { nextPath } : {}),
   });
 
   return { sent: true as const };
@@ -170,6 +176,10 @@ async function sendVerificationEmail(params: { email: string; name: string; veri
   if (!response.ok) {
     throw new Error("No se pudo enviar el correo de verificacion.");
   }
+}
+
+function isSafeNextPath(value: string | undefined): value is string {
+  return Boolean(value && value.startsWith("/") && !value.startsWith("//"));
 }
 
 function escapeHtml(value: string) {

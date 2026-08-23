@@ -37,9 +37,10 @@ function GoogleIcon() {
 export interface GoogleSignInButtonProps {
   /** Whether the button is in a register context (labels and errors differ) */
   mode?: "login" | "register";
+  callbackUrl?: string;
 }
 
-export function GoogleSignInButton({ mode = "login" }: GoogleSignInButtonProps) {
+export function GoogleSignInButton({ mode = "login", callbackUrl = "/dashboard" }: GoogleSignInButtonProps) {
   const [loading, setLoading] = useState(false);
 
   function handleGoogleSignIn() {
@@ -55,7 +56,7 @@ export function GoogleSignInButton({ mode = "login" }: GoogleSignInButtonProps) 
       });
     }
     setLoading(true);
-    signIn("google", { callbackUrl: "/dashboard" });
+    signIn("google", { callbackUrl });
   }
 
   const label = mode === "register" ? "Registrarse con Google" : "Continuar con Google";

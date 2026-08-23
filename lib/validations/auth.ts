@@ -12,6 +12,7 @@ export const registerSchema = z.object({
   password: z.string().min(8, "La contrasena debe tener al menos 8 caracteres"),
   companyName: optionalTrimmedString,
   ruc: optionalTrimmedString,
+  plan: z.literal("pro").optional(),
 });
 
 export const loginSchema = z.object({
@@ -22,6 +23,7 @@ export const loginSchema = z.object({
 
 export const resendVerificationSchema = z.object({
   email: z.email("Email invalido"),
+  nextPath: z.string().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

@@ -250,6 +250,10 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      if (isSafeCallbackUrl(url)) return url;
+      return `${baseUrl}/dashboard`;
+    },
     async signIn({ account, profile }) {
       if (account?.provider === "google") {
         const googleProfile = profile as {
@@ -417,3 +421,13 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+function isSafeCallbackUrl(url: string) {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000")
+    .replace(/\/$/, "");
+  const allowedPrefixes = [
+    `${appUrl}/`,
+    "/",
+  ];
+  return allowedPrefixes.some((prefix) => url.startsWith(prefix)) && !url.startsWith("//");
+}

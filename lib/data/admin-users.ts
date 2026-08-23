@@ -276,6 +276,27 @@ export async function activateManualProRequest(requestId: string) {
   }
 
   await prisma.$transaction(async (tx) => {
+    const workspaceRequest = await tx.companySubscription.findUnique({
+      where: { id: requestId },
+      select: { id: true, companyId: true, provider: true, status: true, membershipPlanId: true },
+    });
+
+    if (workspaceRequest?.provider === "MANUAL" && workspaceRequest.status === "INCOMPLETE") {
+      const currentPeriodStart = new Date();
+      const currentPeriodEnd = new Date(currentPeriodStart);
+      currentPeriodEnd.setUTCFullYear(currentPeriodEnd.getUTCFullYear() + 1);
+
+      await tx.companySubscription.update({
+        where: { companyId: workspaceRequest.companyId },
+        data: {
+          status: "ACTIVE",
+          currentPeriodStart,
+          currentPeriodEnd,
+        },
+      });
+      return;
+    }
+
     const request = await tx.billingSubscription.findFirst({
       where: {
         id: requestId,

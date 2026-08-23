@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
-import { assertWorkspaceFeatureAccess } from "@/lib/workspace/entitlements";
 import { requireWorkspaceRole, WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
 import { getWorkspaceUsage } from "@/lib/workspace/usage";
 
@@ -9,7 +8,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id: companyId } = await params;
   try {
-    await assertWorkspaceFeatureAccess({ userId: session.user.id, companyId, feature: "workspace.management" });
     const { role } = await requireWorkspaceRole({ userId: session.user.id, companyId, minimumRole: "ADMIN" });
     return NextResponse.json({ ...(await getWorkspaceUsage(companyId)), canManageBilling: role === "OWNER" });
   } catch (error) {

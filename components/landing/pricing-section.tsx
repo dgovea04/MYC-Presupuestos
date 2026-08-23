@@ -120,7 +120,7 @@ export function PricingSection() {
                 </div>
                 <div className={`relative mt-8 h-px ${plan.highlight ? "bg-white/10" : "bg-slate-200"}`} />
                 <LandingLinkButton
-                  href="/register"
+                  href={plan.name === "Pro" ? "/register?plan=pro" : "/register"}
                   variant={plan.highlight ? "primary" : "secondary"}
                   className={`relative mt-8 w-full ${plan.highlight ? "shadow-none hover:shadow-none" : ""}`}
                 >

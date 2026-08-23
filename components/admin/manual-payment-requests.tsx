@@ -12,6 +12,8 @@ type ManualPaymentRequest = {
   userName: string;
   currentPlanName: string;
   offerCode: string;
+  workspaceName: string | null;
+  receiptUrl: string | null;
 };
 
 export function ManualPaymentRequests({ requests }: { requests: ManualPaymentRequest[] }) {
@@ -51,12 +53,15 @@ export function ManualPaymentRequests({ requests }: { requests: ManualPaymentReq
             <div className="min-w-0">
               <p className="theme-strong-text truncate font-medium">{request.userName}</p>
               <p className="theme-muted-text truncate text-xs">{request.userEmail}</p>
-              <p className="theme-subtle-text truncate text-xs">Plan actual: {request.currentPlanName}</p>
+              <p className="theme-subtle-text truncate text-xs">{request.workspaceName ? `Espacio de trabajo: ${request.workspaceName}` : `Plan actual: ${request.currentPlanName}`}</p>
             </div>
             <span className="theme-muted-text truncate font-mono text-xs">{request.id}</span>
             <span>{formatDateLabel(request.createdAt)}</span>
             <div>
               <p className="theme-muted-text font-mono text-xs">{request.offerCode}</p>
+              {request.receiptUrl ? (
+                <a href={request.receiptUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs font-medium text-blue-600 underline">Ver comprobante</a>
+              ) : null}
               <Button className="mt-2 w-fit gap-2" disabled={isPending} size="sm" type="button" onClick={() => activateRequest(request.id)}>
                 <CheckCircle2 className="h-4 w-4" />
                 Activar Pro anual

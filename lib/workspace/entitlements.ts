@@ -61,9 +61,15 @@ const _getEffectiveWorkspaceLicense = async (options: {
     }),
   ]);
 
-  // Prefer the company subscription plan; fall back to the user's personal plan.
+  // Only confirmed subscriptions grant the company plan. A pending manual request
+  // must remain visible to billing without unlocking Pro features.
+  const activeCompanySubscription = subscription && (subscription.status === "ACTIVE" || subscription.status === "TRIALING")
+    ? subscription
+    : null;
+
+  // Prefer the active company subscription plan; fall back to the user's personal plan.
   // A beta grant can elevate Starter access to Pro, but never replaces Pro/Empresa.
-  const basePlan = subscription?.membershipPlan ?? user?.membershipPlan;
+  const basePlan = activeCompanySubscription?.membershipPlan ?? user?.membershipPlan;
   const basePlanSlug = basePlan?.slug ?? "starter";
   const shouldUseBeta = basePlanSlug !== "pro" && basePlanSlug !== "empresa" && betaAccess !== null;
   const effectivePlan = shouldUseBeta
@@ -72,7 +78,7 @@ const _getEffectiveWorkspaceLicense = async (options: {
   const planSlug = (effectivePlan?.slug as "starter" | "pro" | "empresa") ?? "starter";
   const accessSource = shouldUseBeta
     ? "BETA"
-    : subscription?.membershipPlan
+    : activeCompanySubscription?.membershipPlan
       ? "COMPANY_SUBSCRIPTION"
       : user?.membershipPlan
         ? "PLAN"

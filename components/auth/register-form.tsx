@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { trackClientEvent } from "@/lib/analytics/client";
 import { GoogleSignInButton } from "@/components/auth/google-signin-button";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,9 @@ type RegisterResponse = {
 
 export function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const plan = searchParams.get("plan") === "pro" ? "pro" : null;
+  const nextPath = plan ? "/billing/activate?plan=pro" : "/dashboard";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,11 +46,23 @@ export function RegisterForm() {
 
     const email = String(formData.get("email") ?? "");
     const sent = data?.verificationEmailSent === false ? "0" : "1";
-    router.push(`/login?verifyEmail=1&email=${encodeURIComponent(email)}&sent=${sent}`);
+    const loginParams = new URLSearchParams({
+      verifyEmail: "1",
+      email,
+      sent,
+      ...(plan ? { plan, next: nextPath } : {}),
+    });
+    router.push(`/login?${loginParams.toString()}`);
   }
 
   return (
     <form action={handleSubmit} className="space-y-4">
+      {plan ? <input type="hidden" name="plan" value={plan} /> : null}
+      {plan ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Estás creando tu cuenta para activar Pro en tu espacio de trabajo.
+        </div>
+      ) : null}
       <div className="space-y-2">
         <Label htmlFor="name">Nombre</Label>
         <Input id="name" name="name" placeholder="Ing. Maria Calderon" required />
@@ -76,7 +91,7 @@ export function RegisterForm() {
           <span className="bg-white px-2 text-slate-500">o continua con</span>
         </div>
       </div>
-      <GoogleSignInButton mode="register" />
+      <GoogleSignInButton mode="register" callbackUrl={nextPath} />
     </form>
   );
 }

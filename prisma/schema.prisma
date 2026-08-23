@@ -1589,6 +1589,8 @@ model CompanySubscription {
   pastDueStartedAt       DateTime?
   externalCustomerId     String?
   externalSubscriptionId String?
+  receiptUrl             String?
+  receiptUploadedAt      DateTime?
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
   company                Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
