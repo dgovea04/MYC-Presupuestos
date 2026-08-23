@@ -21,7 +21,7 @@ type DelphinWorkbookInput = {
   fileName?: string;
 };
 
-type DelphinDecodedProject = {
+export type DelphinDecodedProject = {
   project: {
     id?: string | null;
     name?: string | null;
@@ -30,13 +30,13 @@ type DelphinDecodedProject = {
   budgets: DelphinBudget[];
 };
 
-type DelphinUnit = {
+export type DelphinUnit = {
   id?: string | null;
   description?: string | null;
   abbreviation?: string | null;
 };
 
-type DelphinBudget = {
+export type DelphinBudget = {
   id?: string | null;
   name?: string | null;
   directCost?: number | null;
@@ -51,7 +51,7 @@ type DelphinBudget = {
   costs: DelphinCost[];
 };
 
-type DelphinCost = {
+export type DelphinCost = {
   id?: string | null;
   description?: string | null;
   unitId?: string | null;
@@ -66,18 +66,18 @@ type DelphinCost = {
   children: DelphinCost[];
 };
 
-type DelphinAnalysis = {
+export type DelphinAnalysis = {
   productivity?: number | null;
   subtotals: DelphinSubtotal[];
 };
 
-type DelphinSubtotal = {
+export type DelphinSubtotal = {
   typeId?: string | null;
   subtotal?: number | null;
   compositions: DelphinComposition[];
 };
 
-type DelphinComposition = {
+export type DelphinComposition = {
   id?: string | null;
   description?: string | null;
   unitId?: string | null;
@@ -109,8 +109,12 @@ const rateDecimals = 4;
 
 export function parseDelphinDprjToS10Snapshot(input: DelphinWorkbookInput): S10ExportSnapshot {
   const decoded = decodeDelphinDprj(input.buffer);
+  return convertDelphinProjectToS10Snapshot(decoded, input.fileName);
+}
+
+export function convertDelphinProjectToS10Snapshot(decoded: DelphinDecodedProject, fileName?: string): S10ExportSnapshot {
   const unitById = new Map(decoded.units.map((unit) => [cleanText(unit.id), unit]));
-  const projectName = cleanOptionalText(decoded.project.name) ?? cleanFileName(input.fileName) ?? "Proyecto Delphin Express";
+  const projectName = cleanOptionalText(decoded.project.name) ?? cleanFileName(fileName) ?? "Proyecto Delphin Express";
   const accumulators = decoded.budgets.flatMap((budget, budgetIndex) =>
     createBudgetAccumulators({
       budget,

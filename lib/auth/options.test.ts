@@ -454,6 +454,69 @@ describe("authOptions callbacks", () => {
     });
   });
 
+  describe("redirect callback", () => {
+    it("allows an app-relative URL starting with /", async () => {
+      const callback = authOptions.callbacks?.redirect;
+      if (!callback) throw new Error("No redirect callback");
+      const result = await callback({ url: "/billing/activate?plan=pro", baseUrl: "http://localhost:3000" });
+      expect(result).toBe("/billing/activate?plan=pro");
+    });
+
+    it("allows an absolute URL matching NEXT_PUBLIC_APP_URL", async () => {
+      const callback = authOptions.callbacks?.redirect;
+      if (!callback) throw new Error("No redirect callback");
+      const result = await callback({ url: "http://localhost:3000/billing/activate?plan=pro", baseUrl: "http://localhost:3000" });
+      expect(result).toBe("http://localhost:3000/billing/activate?plan=pro");
+    });
+
+    it("redirects to /dashboard for a URL with a different origin", async () => {
+      const callback = authOptions.callbacks?.redirect;
+      if (!callback) throw new Error("No redirect callback");
+      const result = await callback({ url: "https://evil.example.com/dashboard", baseUrl: "http://localhost:3000" });
+      expect(result).toBe("http://localhost:3000/dashboard");
+    });
+
+    it("redirects to /dashboard for a double-slash protocol-relative URL", async () => {
+      const callback = authOptions.callbacks?.redirect;
+      if (!callback) throw new Error("No redirect callback");
+      const result = await callback({ url: "//evil.example.com", baseUrl: "http://localhost:3000" });
+      expect(result).toBe("http://localhost:3000/dashboard");
+    });
+
+    it("redirects to /dashboard for an absolute URL matching NEXTAUTH_URL when NEXT_PUBLIC_APP_URL is unset", async () => {
+      const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+      const originalAuthUrl = process.env.NEXTAUTH_URL;
+      delete process.env.NEXT_PUBLIC_APP_URL;
+      process.env.NEXTAUTH_URL = "https://myc.app";
+
+      try {
+        // Re-import to pick up new env; the redirect callback reads them at call time
+        const callback = authOptions.callbacks?.redirect;
+        if (!callback) throw new Error("No redirect callback");
+        const result = await callback({ url: "https://myc.app/billing/activate?plan=pro", baseUrl: "https://myc.app" });
+        expect(result).toBe("https://myc.app/billing/activate?plan=pro");
+      } finally {
+        if (originalAppUrl) {
+          process.env.NEXT_PUBLIC_APP_URL = originalAppUrl;
+        } else {
+          delete process.env.NEXT_PUBLIC_APP_URL;
+        }
+        if (originalAuthUrl) {
+          process.env.NEXTAUTH_URL = originalAuthUrl;
+        } else {
+          delete process.env.NEXTAUTH_URL;
+        }
+      }
+    });
+
+    it("preserves the Pro activation path from Google OAuth", async () => {
+      const callback = authOptions.callbacks?.redirect;
+      if (!callback) throw new Error("No redirect callback");
+      const result = await callback({ url: "http://localhost:3000/billing/activate?plan=pro", baseUrl: "http://localhost:3000" });
+      expect(result).toBe("http://localhost:3000/billing/activate?plan=pro");
+    });
+  });
+
   describe("Google OAuth signIn callback", () => {
     it("denies sign-in when Google profile has no email", async () => {
       const result = await runSignInCallback({

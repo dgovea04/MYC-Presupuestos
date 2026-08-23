@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  serverExternalPackages: ["pdfkit"],
+  serverExternalPackages: ["pdfkit", "better-sqlite3"],
   webpack: (config, { isServer }) => {
 
     const webpack = require("webpack");

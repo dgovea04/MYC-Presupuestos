@@ -1,10 +1,17 @@
 # Importador Delphin Express
 
-Esta guia documenta las reglas usadas para importar archivos `.dprj` de Delphin Express a MC Presupuestos. Debe usarse como referencia para revisar nuevos archivos Delphin y para evitar regresiones en jerarquia, APUs y advertencias de precio unitario.
+Esta guia documenta las reglas usadas para importar proyectos de Delphin Express a MC Presupuestos. Cubre dos modos de importación:
+
+1. **Archivo `.dprj`** — contenedor BinaryFormatter de .NET exportado desde Delphin.
+2. **Base de datos SQLite** — lectura directa de `SQLDelphin_maestro.sqlite` (solo en entorno local).
+
+Debe usarse como referencia para revisar nuevos archivos Delphin y para evitar regresiones en jerarquia, APUs y advertencias de precio unitario.
 
 ## Formato de origen
 
-Los archivos `.dprj` de Delphin Express no son SQLite directo. El archivo analizado esta serializado con BinaryFormatter de .NET y contiene objetos Delphin como proyecto, presupuestos, costos unitarios, subcostos, subtotales y composiciones.
+### Archivo .dprj (BinaryFormatter)
+
+Los archivos `.dprj` de Delphin Express no son SQLite directo. El archivo esta serializado con BinaryFormatter de .NET y contiene objetos Delphin como proyecto, presupuestos, costos unitarios, subcostos, subtotales y composiciones.
 
 El decoder actual esta en:
 
@@ -16,6 +23,56 @@ El flujo es:
 2. Ejecutar un decoder PowerShell/.NET temporal.
 3. Extraer JSON flexible con `project`, `units` y `budgets`.
 4. Convertir ese JSON a un snapshot compatible con el mapper S10/MYC.
+
+### Base de datos SQLite (modo local)
+
+Delphin Express BIM 360 almacena sus datos en dos bases SQLite dentro de `App64/Database/`:
+
+| Archivo | Uso |
+|---------|-----|
+| `SQLDelphin_maestro.sqlite` | Proyectos, presupuestos, costos unitarios, análisis de precios |
+| `SQLDelphin_basica.sqlite` | Librerías, catálogos, insumos de referencia |
+
+La importación desde SQLite lee directamente `SQLDelphin_maestro.sqlite` usando `better-sqlite3` en modo solo lectura. El schema mapeado es:
+
+```
+proyecto           → id_proyecto, nombre_proyecto
+presupuesto        → id_presupuesto, nombre_presupuesto, id_proyecto,
+                     costo_directo, porcentaje_gasto, porcentaje_utilidad,
+                     porcentaje_igv, total_presupuesto
+costo_unitario     → id_costounitario, id_presupuesto, numeracion_costo,
+                     descripcion_costo, id_unidad, productividad,
+                     costo_unitario, cantidad, parcial_costo,
+                     id_analisiscosto, id_costopadre
+subtotal_costounitario → id_subtotal, id_costounitario, id_tipocosto, subtotal
+composicion_costounitario → id_composicion, id_subtotal, descripcion_composicion,
+                     cantidad_composicion, costo_composicion, parcial_composicion,
+                     id_unidad, id_listaprecio
+unidad             → id_unidad, descripcion_unidad, abreviatura_unidad
+tipo_costo         → id_tipocosto, descripcion_tipocosto
+lista_precio       → id_listaprecio, codigo_crepco, descripcion_listaprecio
+titulo             → id_titulo, descripcion_titulo, numeracion_titulo,
+                     nivel_titulo, id_titulopadre, id_presupuesto
+titulo_pie         → id_titulo, descripcion_titulo, tipo_titulo,
+                     porcentaje_titulo, costo_titulo, clave, id_presupuesto
+```
+
+El lector esta en:
+
+- `lib/delphin/sqlite-reader.ts`
+
+El flujo es:
+
+1. Usuario apunta al archivo `.sqlite` en su máquina local.
+2. `GET /api/imports/delphin/sqlite/projects?path=...` lista los proyectos.
+3. `POST /api/imports/delphin/sqlite/export` con `{path, projectId}` exporta a snapshot.
+4. El snapshot se procesa con el mismo pipeline de draft e import que el `.dprj`.
+
+**Requisito:** la funcionalidad solo esta disponible en desarrollo local (`NODE_ENV=development`) o con `MYC_ENABLE_LOCAL_SERVICES=true`. Delphin Express debe estar cerrado durante la lectura para evitar bloqueos de SQLite.
+
+### Pipeline unificado
+
+Ambos modos convergen en `convertDelphinProjectToS10Snapshot()` en `lib/delphin/dprj-import.ts`, que convierte un `DelphinDecodedProject` al formato `S10ExportSnapshot`. Esto garantiza que las reglas de jerarquia, APU, porcentajes y pie de presupuesto sean idénticas para ambos orígenes.
 
 ## Jerarquia de presupuesto
 
@@ -214,6 +271,57 @@ Comando util para pruebas enfocadas:
 ```powershell
 npm.cmd run test -- lib/calculations/apu.test.ts lib/delphin/dprj-import.test.ts lib/s10/import-mapper.test.ts
 ```
+
+## Pruebas de importación desde SQLite
+
+### Requisitos
+
+- `NODE_ENV=development` o `MYC_ENABLE_LOCAL_SERVICES=true`.
+- Delphin Express instalado localmente.
+- Delphin Express **cerrado** durante la lectura (SQLite bloquea escrituras concurrentes).
+
+### Prueba rápida con la CLI
+
+```bash
+npx tsx -e "
+const { listDelphinSqliteProjects, exportDelphinSqliteProject } = require('./lib/delphin/sqlite-reader');
+const PATH = 'C:/Program Files/Delphin Express BIM 360 r106/App64/Database/SQLDelphin_maestro.sqlite';
+console.log(listDelphinSqliteProjects(PATH));
+"
+```
+
+### Prueba desde la UI
+
+1. Abrir `http://localhost:3000/imports/delphin`.
+2. Seleccionar solapa **Base de datos SQLite**.
+3. Ingresar la ruta: `C:\Program Files\Delphin Express BIM 360 r106\App64\Database\SQLDelphin_maestro.sqlite`.
+4. Click **Buscar proyectos**.
+5. Seleccionar proyecto y empresa destino.
+6. Click **Exportar y previsualizar**.
+7. Revisar draft: partidas, APUs, pie de presupuesto.
+8. Click **Importar a MC**.
+
+### Pruebas automatizadas
+
+```powershell
+# Tests del lector SQLite (base en memoria)
+npm.cmd run test -- lib/delphin/sqlite-reader.test.ts
+
+# Tests de API routes
+npm.cmd run test -- app/api/imports/delphin/sqlite
+
+# Suite completa de Delphin
+npm.cmd run test -- app/api/imports/delphin lib/delphin
+```
+
+### Verificación de paridad DPRJ vs SQLite
+
+Para confirmar que ambos modos producen el mismo resultado para un mismo proyecto:
+
+1. Exportar el proyecto como `.dprj` desde Delphin Express.
+2. Importar el `.dprj` en MC y anotar: cantidad de subpresupuestos, partidas, APUs.
+3. Importar el mismo proyecto desde SQLite.
+4. Comparar que las cifras coincidan.
 
 Validacion completa antes de cerrar cambios:
 

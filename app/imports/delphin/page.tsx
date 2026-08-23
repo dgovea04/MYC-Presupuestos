@@ -1,14 +1,17 @@
 import { FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { DelphinTabbedImporter } from "@/components/imports/delphin-tabbed-importer";
 import { Rw7ImporterPageContent } from "@/components/imports/rw7-importer-page-content";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeaderCard } from "@/components/ui/page-header-card";
 import { getAuthSession } from "@/lib/auth/session";
 import { getUserCompanies } from "@/lib/data/projects";
+import { isLocalServerRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
 export default async function DelphinImportsPage() {
   const session = await getAuthSession();
   const companies = session?.user?.id ? await getUserCompanies(session.user.id) : [];
+  const localEnabled = isLocalServerRuntimeEnabled();
 
   return (
     <AppShell>
@@ -16,27 +19,42 @@ export default async function DelphinImportsPage() {
         <PageHeaderCard
           icon={<FileSpreadsheet className="h-5 w-5" />}
           title="Importador Delphin Express"
-          description="Convierte archivos .dprj de Delphin Express en proyectos MC con presupuesto, partidas, APUs e insumos."
+          description={
+            !localEnabled
+              ? "Convierte archivos .dprj de Delphin Express en proyectos MC con presupuesto, partidas, APUs e insumos."
+              : "Convierte archivos .dprj o lee directamente la base SQLite de Delphin Express para importar proyectos a MC."
+          }
         />
-        <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
-          <CardHeader />
-          <CardContent>
-            <Rw7ImporterPageContent
-              companies={companies.map((company) => ({ id: company.id, name: company.name }))}
-              copy={{
-                accept: ".dprj",
-                draftEndpoint: "/api/imports/delphin/draft",
-                importEndpoint: "/api/imports/delphin/import",
-                fileLabel: "Proyecto Delphin Express",
-                missingFileMessage: "Selecciona el archivo .dprj exportado desde Delphin Express.",
-                noCompaniesMessage: "Crea una empresa antes de importar proyectos Delphin.",
-                projectLabel: "Delphin Express",
-                sourceCodeLabel: "Presupuesto Delphin",
-                uploadDescription: "Lee el contenedor DPRJ serializado de Delphin para generar el draft MC.",
-              }}
-            />
-          </CardContent>
-        </Card>
+        {localEnabled ? (
+          <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+            <CardHeader />
+            <CardContent>
+              <DelphinTabbedImporter
+                companies={companies.map((company) => ({ id: company.id, name: company.name }))}
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+            <CardHeader />
+            <CardContent>
+              <Rw7ImporterPageContent
+                companies={companies.map((company) => ({ id: company.id, name: company.name }))}
+                copy={{
+                  accept: ".dprj",
+                  draftEndpoint: "/api/imports/delphin/draft",
+                  importEndpoint: "/api/imports/delphin/import",
+                  fileLabel: "Proyecto Delphin Express",
+                  missingFileMessage: "Selecciona el archivo .dprj exportado desde Delphin Express.",
+                  noCompaniesMessage: "Crea una empresa antes de importar proyectos Delphin.",
+                  projectLabel: "Delphin Express",
+                  sourceCodeLabel: "Presupuesto Delphin",
+                  uploadDescription: "Lee el contenedor DPRJ serializado de Delphin para generar el draft MC.",
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppShell>
   );
