@@ -3,16 +3,16 @@ import { PRO_FOUNDER_PRICE_DISPLAY, PRO_STANDARD_PRICE_DISPLAY } from "@/lib/bil
 import {
   BarChart3,
   BotMessageSquare,
-  CheckCircle2,
   ClipboardList,
   FileArchive,
   FileSpreadsheet,
   FolderKanban,
   GitCompareArrows,
-  HardHat,
-  Search,
+  ShieldCheck,
+  Sparkles,
   StickyNote,
   TableProperties,
+  UsersRound,
 } from "lucide-react";
 
 export type FeatureItem = {
@@ -53,59 +53,59 @@ export type PricingPlan = {
 
 export const featureItems: FeatureItem[] = [
   {
-    title: "Presupuesto conectado",
-    description: "La estructura tecnica no se rompe al pasar de partidas a revision, exportacion o seguimiento.",
-    icon: FileSpreadsheet,
-  },
-  {
-    title: "APU con trazabilidad",
-    description: "Relaciona analisis unitarios, insumos y decisiones sin perder contexto entre vistas.",
-    icon: Search,
-  },
-  {
-    title: "Formula y cronograma dentro del flujo",
-    description: "No cierres el presupuesto en una herramienta para terminar la operacion en otra.",
-    icon: FolderKanban,
-  },
-  {
-    title: "Exportables listos para oficina tecnica",
-    description: "Prepara PDF, Excel, CSV o ZIP desde una base consistente y revisable.",
-    icon: FileArchive,
+    title: "Espacio de trabajo colaborativo",
+    description: "Invita a tu equipo, administra roles y trabaja sobre una base compartida de presupuestos, APUs y catálogos.",
+    icon: UsersRound,
   },
   {
     title: "Khipu IA con contexto visible",
-    description: "Acelera revision tecnica, observaciones y analisis sin convertir la IA en una caja negra.",
+    description: "Revisa partidas, explica costos y detecta inconsistencias antes del cierre, sin convertir la IA en una caja negra.",
     icon: BotMessageSquare,
   },
   {
-    title: "Operacion preparada para crecer",
-    description: "Trabaja con una base moderna para equipos que necesitan menos friccion y mas continuidad.",
-    icon: HardHat,
+    title: "Khipu modo agente",
+    description: "Crea presupuestos, propone APUs y completa estructuras con acciones guiadas, siempre con revisión humana antes de aplicar cambios.",
+    icon: Sparkles,
+  },
+  {
+    title: "Importación y migración",
+    description: "Parte desde Excel, S10, Delphin, RW7 o PDF cuando corresponda, sin rehacer todo desde cero.",
+    icon: FileSpreadsheet,
+  },
+  {
+    title: "Fórmula polinómica y cronograma",
+    description: "Conecta presupuesto, reajustes, valorización, recursos y Curva S en el mismo flujo técnico.",
+    icon: FolderKanban,
+  },
+  {
+    title: "Exportables para oficina técnica",
+    description: "Genera PDF, Excel, CSV o ZIP desde una base consistente y revisable.",
+    icon: FileArchive,
   },
 ];
 
 export const smartFlowItems: SmartFlowItem[] = [
   {
-    title: "Importa o construye",
-    description: "Empieza desde carga existente o arma el presupuesto en una base moderna desde el primer dia.",
+    title: "Importa o crea el presupuesto",
+    description: "Parte desde Excel, S10, Delphin, RW7 o PDF cuando corresponda, o crea una base nueva.",
     steps: ["Importar datos", "Normalizar estructura", "Abrir presupuesto activo"],
     icon: GitCompareArrows,
   },
   {
-    title: "Estructura y conecta",
-    description: "Relaciona partidas, APU, metrados y entregables sin cortar el flujo entre modulos.",
-    steps: ["Conectar partidas", "Revisar APU", "Preparar resumen tecnico"],
+    title: "Estructura partidas, APUs y metrados",
+    description: "Relaciona la información técnica y mantenla conectada mientras el presupuesto evoluciona.",
+    steps: ["Conectar partidas", "Revisar APU", "Completar metrados"],
     icon: BarChart3,
   },
   {
-    title: "Revisa con Khipu",
-    description: "Usa IA contextual para detectar alertas visibles y acelerar el analisis antes del cierre.",
-    steps: ["Detectar inconsistencias", "Registrar observacion", "Tomar decision tecnica"],
+    title: "Revisa con Khipu IA",
+    description: "Detecta alertas visibles y acelera el análisis antes del cierre con contexto del proyecto.",
+    steps: ["Detectar inconsistencias", "Registrar observación", "Tomar decisión técnica"],
     icon: StickyNote,
   },
   {
-    title: "Prepara entregables",
-    description: "Cierra el flujo con exportables, cronograma y paquetes tecnicos listos para compartir.",
+    title: "Exporta entregables técnicos",
+    description: "Cierra el flujo con PDF, Excel, CSV, ZIP, cronograma y paquetes listos para compartir.",
     steps: ["Elegir preset", "Validar salida", "Exportar paquete"],
     icon: FileArchive,
   },
@@ -113,24 +113,24 @@ export const smartFlowItems: SmartFlowItem[] = [
 
 export const benefitItems: BenefitItem[] = [
   {
-    title: "Menos saltos entre hojas",
-    description: "Presupuesto, APU, catálogo, programación, notas y reportes comparten contexto para reducir retrabajo manual.",
+    title: "Jefe de oficina técnica",
+    description: "Obtén más trazabilidad sobre cambios, revisiones y entregables sin perseguir versiones dispersas.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Presupuestador",
+    description: "Reduce el retrabajo entre hojas, APUs, metrados y exportaciones con una base técnica conectada.",
     icon: TableProperties,
   },
   {
-    title: "Automatización revisable",
-    description: "Las sugerencias de IA, partidas similares y cronogramas se aplican solo después de revisión humana.",
-    icon: CheckCircle2,
-  },
-  {
-    title: "Entregables listos para obra",
-    description: "Exporta presupuestos, APU, fórmula polinómica, gastos, recursos y cronograma con formatos consistentes.",
+    title: "Gerencia",
+    description: "Gana visibilidad sobre avance, costos y estándares del equipo para revisar con mejor contexto.",
     icon: ClipboardList,
   },
   {
-    title: "Control técnico para crecer",
-    description: "Planes, tokens IA, administración y estándares dejan una base ordenada para oficinas técnicas y constructoras.",
-    icon: HardHat,
+    title: "Equipo",
+    description: "Trabaja en un espacio de trabajo común con permisos, invitaciones y una operación más ordenada.",
+    icon: UsersRound,
   },
 ];
 
@@ -159,16 +159,15 @@ export const pricingPlans: PricingPlan[] = [
   {
     name: "Starter",
     price: "Gratis",
-    originalPrice: "S/ 89",
     description: "Para profesionales que necesitan presupuestar y revisar APU sin empezar desde una demo limitada.",
-    badge: "Gratis útil",
+    badge: "Gratis",
     features: [
-      "Presupuestos y subpresupuestos básicos con límites",
-      "APU manual y catálogo de insumos básico",
+      "Presupuestos, subpresupuestos y APU manual con límites operativos",
+      "Catálogo básico de insumos y búsqueda simple",
+      "Partidas similares para acelerar la estructura",
+      "Fórmula polinómica base",
       "Modo moderno y modo Excel",
-      "Notas básicas para seguimiento",
       "Exportación básica a PDF y Excel",
-      "Búsqueda simple en catálogos",
     ],
   },
   {
@@ -176,28 +175,29 @@ export const pricingPlans: PricingPlan[] = [
     price: PRO_FOUNDER_PRICE_DISPLAY,
     originalPrice: `Luego ${PRO_STANDARD_PRICE_DISPLAY}`,
     description: "Para oficinas técnicas que quieren automatización, IA y reportes avanzados sin perder control.",
-    badge: "Precio fundador",
+    badge: "Para oficina técnica",
     highlight: true,
     features: [
-      "Khipu con IA local y tokens mensuales incluidos",
-      "Generador de partidas por similitud",
-      "Búsqueda, sugerencias y pegado avanzado",
+      "Límites ampliados para presupuestos y uso técnico",
+      "Khipu IA y Khipu modo agente con revisión humana",
+      "Metrados avanzados, plantillas y análisis de riesgo",
       "Cronograma inteligente con valorización, recursos y Curva S",
-      "Fórmula polinómica y reajustes",
+      "Fórmula polinómica, reajustes y automatizaciones revisables",
       "Exportaciones avanzadas PDF, Excel, CSV y ZIP",
-      "Notas contextuales por proyecto, presupuesto o partida",
+      "Colaboración en tiempo real para el equipo",
     ],
   },
   {
     name: "Empresa",
     price: "A medida",
-    description: "Para constructoras que necesitan administración, límites altos y estandarización interna.",
+    description: "Para equipos y constructoras que necesitan administración avanzada y estandarización interna.",
+    badge: "Para equipos y constructoras",
     features: [
-      "Todo Pro con tokens IA ampliados",
-      "Administración de usuarios, roles, estado y planes",
-      "Ajustes manuales de cupos y control operativo",
-      "Reportes ejecutivos y paquetes ZIP avanzados",
-      "Configuración de estándares, plantillas y datos maestros",
+      "Todo Pro con límites y tokens IA ampliados",
+      "Administración avanzada del espacio de trabajo",
+      "Roles, auditoría, invitaciones y control de uso del equipo",
+      "Estándares, plantillas y datos maestros para la organización",
+      "Integración de escritorio y operación multiárea",
       "Soporte prioritario, onboarding y acompañamiento técnico",
     ],
   },
@@ -240,6 +240,21 @@ export const faqItems: FaqItem[] = [
       "Actualmente MC es una plataforma web que requiere conexión. Sin embargo, el modo Excel permite operar con fluidez incluso en conexiones lentas, y las exportaciones a PDF/Excel/ZIP te permiten llevar la información a obra sin depender de la nube. Estamos explorando capacidades offline para el futuro.",
   },
   {
+    question: "¿Qué es un espacio de trabajo en MC Presupuestos?",
+    answer:
+      "Un espacio de trabajo es el espacio compartido donde tu equipo administra presupuestos, proyectos, catálogos, miembros y permisos. Permite ordenar la operación de la oficina técnica sin separar la gestión del equipo del trabajo presupuestal.",
+  },
+  {
+    question: "¿Cuál es la diferencia entre Khipu IA y Khipu modo agente?",
+    answer:
+      "Khipu IA es el asistente técnico de MC Presupuestos. Dentro de Khipu IA, el modo agente está orientado a crear o completar trabajo: puede ayudar a generar partidas, proponer APUs, preparar estructuras y guiar acciones dentro del presupuesto. Los cambios deben revisarse antes de aplicarse.",
+  },
+  {
+    question: "¿Qué cambia entre el plan gratis y Pro?",
+    answer:
+      "El plan gratis permite trabajar con funciones base y límites operativos. Pro amplía esos límites y habilita capacidades avanzadas como Khipu IA, Khipu modo agente, automatizaciones, importaciones o exportaciones avanzadas según la configuración vigente del plan.",
+  },
+  {
     question: "¿Qué tipo de soporte ofrecen?",
     answer:
       "Todos los planes incluyen documentación y guías de inicio. El plan Pro incluye soporte por chat técnico. El plan Empresa suma soporte prioritario, onboarding personalizado y acompañamiento para estandarizar procesos internos. También ofrecemos demo guiada para equipos que quieren evaluar antes de decidir.",
@@ -253,6 +268,6 @@ export const faqItems: FaqItem[] = [
 
 export const footerLinks = {
   producto: ["Presupuesto y APU", "IA local", "Cronograma", "Exportaciones"],
-  empresa: ["Nosotros", "Clientes", "Seguridad", "Contacto"],
+  empresa: ["Espacio de trabajo", "Seguridad", "Soporte", "Contacto"],
   recursos: ["Demo", "Guía de inicio", "Casos de uso", "Soporte"],
 };

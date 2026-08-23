@@ -8,6 +8,7 @@ import { ComparisonSection } from "@/components/landing/comparison-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { FinalCTASection } from "@/components/landing/final-cta-section";
 import { HeroSection } from "@/components/landing/hero-section";
+import { KhipuIASection } from "@/components/landing/khipu-ia-section";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingLinkButton } from "@/components/landing/landing-link-button";
 import { LandingNavbar } from "@/components/landing/landing-navbar";
@@ -131,6 +132,14 @@ describe("landing primitives", () => {
     expect(heroChip?.className).toContain("landing-chip");
   });
 
+  it("keeps Khipu modo agente inside the Khipu IA section", async () => {
+    const container = await renderNode(<KhipuIASection />);
+
+    expect(container.querySelector("#khipu")).not.toBeNull();
+    expect(container.querySelector("[data-testid='khipu-agent-capability']")).not.toBeNull();
+    expect(container.textContent).toContain("Khipu modo agente");
+  });
+
   it("uses the shared elevated product surface across hero, preview, and comparison", async () => {
     const container = await renderNode(
       <div>
@@ -147,7 +156,7 @@ describe("landing primitives", () => {
     expect(heroSurface).not.toBeNull();
     expect(previewSurface).not.toBeNull();
     expect(comparisonSurface).not.toBeNull();
-    expect(container.textContent).toContain("La forma antigua de presupuestar obra ya no alcanza.");
+    expect(container.textContent).toContain("Presupuestos de obra, APU y control técnico en un solo espacio de trabajo.");
     expect(container.textContent).toContain("Presupuesto de estructuras");
     expect(container.textContent).toContain("Comparativo de experiencia operativa");
   });
@@ -216,7 +225,8 @@ describe("landing primitives", () => {
         expect.objectContaining({ text: "Khipu IA", href: "#khipu" }),
         expect.objectContaining({ text: "Flujo conectado", href: "#flows" }),
         expect.objectContaining({ text: "Vista del producto", href: "#preview" }),
-        expect.objectContaining({ text: "Comparacion", href: "#comparison" }),
+        expect.objectContaining({ text: "Comparación", href: "#comparison" }),
+        expect.objectContaining({ text: "Espacio de trabajo", href: "#workspace" }),
         expect.objectContaining({ text: "Beneficios", href: "#benefits" }),
         expect.objectContaining({ text: "Testimonios", href: "#testimonios" }),
         expect.objectContaining({ text: "Preguntas frecuentes", href: "#faq" }),

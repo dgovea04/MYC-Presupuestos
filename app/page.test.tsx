@@ -9,10 +9,12 @@ import { FaqSection } from "@/components/landing/faq-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { FinalCTASection } from "@/components/landing/final-cta-section";
 import { HeroSection } from "@/components/landing/hero-section";
+import { KhipuIASection } from "@/components/landing/khipu-ia-section";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { ProductPreviewSection } from "@/components/landing/product-preview-section";
 import { SmartFlowsSection } from "@/components/landing/smart-flows-section";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
+import { WorkspaceSection } from "@/components/landing/workspace-section";
 
 type RedirectError = Error & {
   digest: string;
@@ -77,13 +79,21 @@ describe("MC landing page sections", () => {
 
     expect(container.textContent).toContain("Diferenciales");
     expect(container.textContent).toContain("Una plataforma conectada rinde mejor que un flujo fragmentado.");
-    expect(container.textContent).toContain("Presupuesto conectado");
-    expect(container.textContent).toContain("APU con trazabilidad");
-    expect(container.textContent).toContain("Formula y cronograma dentro del flujo");
-    expect(container.textContent).toContain("Exportables listos para oficina tecnica");
+    expect(container.textContent).toContain("Espacio de trabajo colaborativo");
     expect(container.textContent).toContain("Khipu IA con contexto visible");
-    expect(container.textContent).toContain("Operacion preparada para crecer");
+    expect(container.textContent).toContain("Khipu modo agente");
+    expect(container.textContent).toContain("Importación y migración");
+    expect(container.textContent).toContain("Fórmula polinómica y cronograma");
+    expect(container.textContent).toContain("Exportables para oficina técnica");
     expect(container.textContent).not.toContain("Presupuesto y APU conectado");
+  });
+
+  it("keeps Khipu modo agente inside the Khipu IA section", async () => {
+    const container = await renderNode(<KhipuIASection />);
+
+    expect(container.textContent).toContain("Khipu IA para revisar, explicar y avanzar con contexto técnico.");
+    expect(container.querySelector("[data-testid='khipu-agent-capability']")).not.toBeNull();
+    expect(container.textContent).toContain("Khipu modo agente");
   });
 
   it("renders ProductPreviewSection with table, notes sidebar, and export formats", async () => {
@@ -113,10 +123,10 @@ describe("MC landing page sections", () => {
     const cards = container.querySelectorAll(".landing-surface-contrast");
     expect(cards.length).toBeGreaterThanOrEqual(4);
 
-    expect(container.textContent).toContain("Menos saltos entre hojas");
-    expect(container.textContent).toContain("Automatización revisable");
-    expect(container.textContent).toContain("Entregables listos para obra");
-    expect(container.textContent).toContain("Control técnico para crecer");
+    expect(container.textContent).toContain("Jefe de oficina técnica");
+    expect(container.textContent).toContain("Presupuestador");
+    expect(container.textContent).toContain("Gerencia");
+    expect(container.textContent).toContain("Equipo");
   });
 
   it("renders TestimonialsSection with 3 testimonials and star ratings", async () => {
@@ -144,6 +154,7 @@ describe("MC landing page sections", () => {
     expect(container.textContent).toContain("Técnicas");
     expect(container.textContent).toContain("¿Qué norma peruana usan para la fórmula polinómica?");
     expect(container.textContent).toContain("Abrir formulario");
+    expect(container.textContent).not.toContain("Mantuvimos las respuestas en una sola columna");
   });
 
   it("renders PricingSection with 3 plan cards including highlighted Pro tier", async () => {
@@ -166,7 +177,8 @@ describe("MC landing page sections", () => {
     expect(container.textContent).toContain("S/ 299/año");
     expect(container.textContent).toContain("Luego S/ 349/año");
     expect(container.textContent).toContain("precio fundador anual");
-    expect(container.textContent).toContain("Khipu con IA local");
+    expect(container.textContent).toContain("Khipu IA y Khipu modo agente");
+    expect(container.textContent).toContain("Roles, auditoría, invitaciones y control de uso del equipo");
   });
 
   it("renders FinalCTASection with contrast surface and CTAs", async () => {
@@ -200,26 +212,31 @@ describe("MC landing page sections", () => {
     const heroContainer = await renderNode(<HeroSection />);
     const smartFlowsContainer = await renderNode(<SmartFlowsSection />);
     const comparisonContainer = await renderNode(<ComparisonSection />);
+    const workspaceContainer = await renderNode(<WorkspaceSection />);
     const featuresText = featuresContainer.textContent ?? "";
     const comparisonSection = comparisonContainer.querySelector("#comparison");
     const comparisonText = comparisonSection?.textContent ?? "";
 
-    expect(heroContainer.textContent).toContain("La forma antigua de presupuestar obra ya no alcanza.");
+    expect(heroContainer.textContent).toContain("Presupuestos de obra, APU y control técnico en un solo espacio de trabajo.");
     expect(heroContainer.textContent).toContain(
-      "MC Presupuestos conecta presupuesto, APU, metrados, formula polinomica, cronograma y exportables",
+      "MC Presupuestos conecta costos, metrados, fórmula polinómica, cronograma, exportables y Khipu IA",
     );
     expect(heroContainer.textContent).toContain("Khipu IA integrada");
 
     expect(featuresText).toContain("Diferenciales");
-    expect(featuresText).toContain("Presupuesto conectado");
-    expect(featuresText).toContain("APU con trazabilidad");
-    expect(featuresText).toContain("Formula y cronograma dentro del flujo");
+    expect(featuresText).toContain("Espacio de trabajo colaborativo");
+    expect(featuresText).toContain("Khipu modo agente");
+    expect(featuresText).toContain("Fórmula polinómica y cronograma");
 
     expect(smartFlowsContainer.textContent).toContain("Flujo conectado");
-    expect(smartFlowsContainer.textContent).toContain("Importa o construye");
-    expect(smartFlowsContainer.textContent).toContain("Estructura y conecta");
+    expect(smartFlowsContainer.textContent).toContain("Importa o crea el presupuesto");
+    expect(smartFlowsContainer.textContent).toContain("Estructura partidas, APUs y metrados");
     expect(smartFlowsContainer.textContent).toContain("Revisa con Khipu");
-    expect(smartFlowsContainer.textContent).toContain("Prepara entregables");
+    expect(smartFlowsContainer.querySelectorAll("article")).toHaveLength(4);
+    expect(smartFlowsContainer.textContent).not.toContain("Crea con modo agente y coordina");
+    expect(workspaceContainer.textContent).toContain("Espacio de trabajo colaborativo");
+    expect(workspaceContainer.textContent).toContain("Roles y permisos");
+    expect(workspaceContainer.textContent).toContain("Auditoría del espacio de trabajo");
 
     expect(comparisonText).toContain("Flujo fragmentado");
     expect(comparisonText).toContain("Flujo conectado");
@@ -233,14 +250,14 @@ describe("MC landing page sections", () => {
     const sections = Array.from(main?.querySelectorAll("section") ?? []);
     const sectionText = sections.map((section) => section.textContent ?? "");
 
-    const heroIndex = sectionText.findIndex((text) => text.includes("La forma antigua de presupuestar obra ya no alcanza."));
+    const heroIndex = sectionText.findIndex((text) => text.includes("Presupuestos de obra, APU y control técnico en un solo espacio de trabajo."));
     const legacyPainIndex = sectionText.findIndex((text) =>
       text.includes("El problema no es calcular menos. Es coordinar mejor."),
     );
     const khipuIndex = sectionText.findIndex((text) =>
-      text.includes("Khipu IA revisa el presupuesto con contexto visible."),
+      text.includes("Khipu IA para revisar, explicar y avanzar con contexto técnico."),
     );
-    const smartFlowsIndex = sectionText.findIndex((text) => text.includes("Importa o construye"));
+    const smartFlowsIndex = sectionText.findIndex((text) => text.includes("Importa o crea el presupuesto"));
     const comparisonIndex = sectionText.findIndex(
       (text) => text.includes("Flujo fragmentado") && text.includes("Flujo conectado"),
     );

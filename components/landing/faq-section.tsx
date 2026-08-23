@@ -88,10 +88,10 @@ export function FaqSection() {
             <MessageSquareMore className="h-5 w-5" />
           </div>
           <h3 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">
-            Una vista más clara para resolver dudas antes de agendar una demo.
+            Respuestas para evaluar tu próximo flujo técnico.
           </h3>
           <p className="mt-3 text-sm leading-7 text-slate-600">
-            Mantuvimos las respuestas en una sola columna porque se leen mejor cuando tienen distinto largo. La mejora está en ampliar el bloque, ordenar mejor la navegación y dejar el contacto a un clic.
+            Encuentra respuestas sobre planes, migración, seguridad, IA y soporte. Si tu caso requiere una revisión más específica, puedes contactarnos y coordinamos una demo guiada.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">

@@ -7,21 +7,21 @@ import { PRO_STANDARD_PRICE_DISPLAY } from "@/lib/billing/pricing";
 
 const planMeta: Record<string, { audience: string; cadence: string; note: string; cta: string }> = {
   Starter: {
-    audience: "Para independientes y equipos pequeños",
-    cadence: "gratis con límites operativos",
-    note: "Trabaja presupuestos y APU básicos sin quedar en modo demo.",
+    audience: "Gratis para empezar",
+    cadence: "con límites operativos claros",
+    note: "Trabaja presupuestos, APU manual y fórmula base sin quedar en modo demo.",
     cta: "Crear gratis",
   },
   Pro: {
-    audience: "Para oficinas técnicas",
+    audience: "Para oficina técnica",
     cadence: "precio fundador anual",
-    note: `Precio fundador para los primeros usuarios Pro. Luego ${PRO_STANDARD_PRICE_DISPLAY}.`,
+    note: `Automatización, Khipu IA y colaboración para el trabajo diario. Luego ${PRO_STANDARD_PRICE_DISPLAY}.`,
     cta: "Elegir Pro",
   },
   Empresa: {
-    audience: "Para constructoras y equipos multiárea",
-    cadence: "Cotización personalizada",
-    note: "Administración, límites altos, estándares internos y acompañamiento.",
+    audience: "Para equipos y constructoras",
+    cadence: "cotización personalizada",
+    note: "Administración avanzada, estándares internos y acompañamiento técnico.",
     cta: "Solicitar acceso",
   },
 };
@@ -34,13 +34,13 @@ export function PricingSection() {
         <SectionHeading
           badge="Precios"
           title="Elige el plan según el nivel de control que necesita tu equipo."
-          description="La estrategia Starter permite trabajar de verdad; Pro monetiza automatización y entregables avanzados; Empresa suma administración, soporte y control operativo."
+          description="Starter cubre el trabajo base; Pro suma Khipu IA, modo agente, colaboración y entregables avanzados; Empresa agrega gobierno y estandarización para equipos."
           align="center"
         />
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-500">
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Starter útil</span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Pro para automatización</span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Empresa para estandarización</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Starter: Gratis</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Pro: Para oficina técnica</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Empresa: Para equipos y constructoras</span>
         </div>
         <div className="mt-14 grid gap-6 xl:grid-cols-[0.96fr_1.08fr_0.96fr]">
           {pricingPlans.map((plan, index) => {

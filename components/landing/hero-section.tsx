@@ -9,14 +9,14 @@ import { Badge } from "@/components/ui/badge";
 
 const trustSignals = [
   "Khipu IA integrada",
+  "Espacio de trabajo colaborativo",
   "Trazabilidad entre presupuesto y APU",
-  "Exportables listos para oficina tecnica",
 ];
 
 const socialProof = [
-  "Presupuesto, formula y cronograma en un solo flujo",
-  "Revision asistida sin perder criterio tecnico",
-  "Disenado para oficinas tecnicas que necesitan mas control",
+  "Presupuesto, fórmula y cronograma en un solo flujo",
+  "Khipu modo agente para crear con revisión humana",
+  "Diseñado para oficinas técnicas que necesitan más control",
 ];
 
 export function HeroSection() {
@@ -31,18 +31,18 @@ export function HeroSection() {
             Plataforma conectada para presupuestos de obra
           </Badge>
           <h1 className="font-display mt-6 max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-[3.6rem]">
-            La forma antigua de presupuestar obra ya no alcanza.
+            Presupuestos de obra, APU y control técnico en un solo espacio de trabajo.
           </h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
-            MC Presupuestos conecta presupuesto, APU, metrados, formula polinomica, cronograma y exportables en un solo flujo tecnico. Khipu IA revisa, detecta y acelera decisiones con contexto real.
+            MC Presupuestos conecta costos, metrados, fórmula polinómica, cronograma, exportables y Khipu IA para que tu equipo trabaje con menos hojas sueltas y más trazabilidad.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <LandingLinkButton href="/register" className="gap-2">
               Crear cuenta gratis
               <ArrowRight className="h-4 w-4" />
             </LandingLinkButton>
-            <LandingLinkButton href="#preview" variant="secondary">
-              Ver plataforma
+            <LandingLinkButton href="#pricing" variant="secondary">
+              Ver planes
             </LandingLinkButton>
           </div>
           <div className="mt-8 flex flex-wrap justify-center gap-3 text-sm">

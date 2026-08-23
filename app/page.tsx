@@ -15,16 +15,17 @@ import { PricingSection } from "@/components/landing/pricing-section";
 import { ProductPreviewSection } from "@/components/landing/product-preview-section";
 import { SmartFlowsSection } from "@/components/landing/smart-flows-section";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
+import { WorkspaceSection } from "@/components/landing/workspace-section";
 import { getAuthSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "MC Presupuestos | Plataforma moderna de costos y presupuestos de obra",
   description:
-    "MC Presupuestos conecta presupuesto, APU, metrados, formula polinomica, cronograma y exportables en un flujo tecnico moderno. Khipu IA revisa y acelera decisiones con contexto real.",
+    "MC Presupuestos conecta presupuesto, APU, metrados, fórmula polinómica, cronograma, exportables, workspace y Khipu IA en un flujo técnico moderno.",
   openGraph: {
     title: "MC Presupuestos | Plataforma moderna de costos y presupuestos de obra",
     description:
-      "Presupuestos, APU, cronograma, exportables y Khipu IA integrados en una sola plataforma para oficinas tecnicas y constructoras.",
+      "Presupuestos, APU, workspace, cronograma, exportables y Khipu IA integrados para oficinas técnicas y constructoras.",
     siteName: "MC Presupuestos",
     locale: "es_PE",
     type: "website",
@@ -48,6 +49,7 @@ export default async function Home() {
       <FeaturesSection />
       <KhipuIASection />
       <ProductPreviewSection />
+      <WorkspaceSection />
       <SmartFlowsSection />
       <ComparisonSection />
       <BenefitsSection />

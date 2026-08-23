@@ -6,11 +6,12 @@ const footerColumns = {
   producto: [
     { label: "Diferenciales", href: "#features" },
     { label: "Khipu IA", href: "#khipu" },
+    { label: "Espacio de trabajo", href: "#workspace" },
     { label: "Flujo conectado", href: "#flows" },
     { label: "Vista del producto", href: "#preview" },
   ],
   empresa: [
-    { label: "Comparacion", href: "#comparison" },
+    { label: "Comparación", href: "#comparison" },
     { label: "Beneficios", href: "#benefits" },
     { label: "Testimonios", href: "#testimonios" },
     { label: "Contacto", href: "#contacto" },

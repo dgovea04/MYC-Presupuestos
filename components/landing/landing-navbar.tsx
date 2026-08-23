@@ -10,8 +10,9 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "Diferenciales", href: "#features" },
   { label: "Khipu IA", href: "#khipu" },
+  { label: "Espacio de trabajo", href: "#workspace" },
   { label: "Vista", href: "#preview" },
-  { label: "Comparacion", href: "#comparison" },
+  { label: "Comparación", href: "#comparison" },
   { label: "Precios", href: "#pricing" },
 ] as const;
 
