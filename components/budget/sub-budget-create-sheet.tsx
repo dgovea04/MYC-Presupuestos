@@ -146,6 +146,7 @@ export function SubBudgetCreateSheet({
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Ej. Instalaciones Mecanicas"
+                    className="border-[var(--table-border-soft)]"
                     required
                     minLength={3}
                   />

@@ -1239,7 +1239,7 @@ function getSubpartidaPreviewHeaderCellClass(isExcelMode: boolean, className?: s
 }
 
 function getInputDensityClass(mode: "compact" | "comfortable", isExcelMode = false) {
-  if (isExcelMode) return "h-8 rounded-sm border-[var(--app-border-strong)] px-2 text-xs shadow-none";
+  if (isExcelMode) return "h-8 rounded-sm border-[var(--app-border-soft)] px-2 text-xs shadow-none";
   return mode === "compact" ? "h-8 rounded-lg px-2 text-xs" : "h-9 rounded-xl px-3 text-sm";
 }
 
