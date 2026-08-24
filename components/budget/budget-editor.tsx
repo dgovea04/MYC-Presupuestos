@@ -344,8 +344,15 @@ export function BudgetEditor({
   const [error, setError] = useState("");
   const [manualOverrideItemId, setManualOverrideItemId] = useState<string | null>(null);
   const [manualOverrideValue, setManualOverrideValue] = useState<number | null>(null);
-  const [manualOverrideEditingItemId, setManualOverrideEditingItemId] = useState<string | null>(null);
-  const activeMetradoSheetsByItemId = useMemo(() => new Map(activeMetradoSheets.map((sheet) => [sheet.itemId, sheet.sheetId])), [activeMetradoSheets]);
+  const [manualMetradoOverrideItemIds, setManualMetradoOverrideItemIds] = useState<Record<string, boolean>>({});
+  const effectiveActiveMetradoSheets = useMemo(
+    () => activeMetradoSheets.filter((sheet) => !manualMetradoOverrideItemIds[sheet.itemId]),
+    [activeMetradoSheets, manualMetradoOverrideItemIds],
+  );
+  const activeMetradoSheetsByItemId = useMemo(
+    () => new Map(effectiveActiveMetradoSheets.map((sheet) => [sheet.itemId, sheet.sheetId])),
+    [effectiveActiveMetradoSheets],
+  );
   const [pasteFeedback, setPasteFeedback] = useState("");
   const [pendingPaste, setPendingPaste] = useState<PendingPaste | null>(null);
   const [itemQualityStateById, setItemQualityStateById] = useState<Record<string, BudgetItemQualityState | undefined>>({});
@@ -2288,7 +2295,11 @@ export function BudgetEditor({
           onRemoveItem={removeItem}
           onActivateSpreadsheetCell={handleActivateSpreadsheetCell}
           spreadsheetSelectionKey={spreadsheetSelectionKey}
-          activeMetradoSheets={activeMetradoSheets}
+          activeMetradoSheets={effectiveActiveMetradoSheets}
+          onRequestManualMetrado={async (itemId, value) => {
+            setManualOverrideItemId(itemId);
+            setManualOverrideValue(value);
+          }}
         />
       </Card>
 
@@ -2309,7 +2320,7 @@ export function BudgetEditor({
             void (async () => {
               await setMetradoSheetActive(sheetId, false);
               updateItem(itemId, { quantity: value });
-              setManualOverrideEditingItemId(itemId);
+              setManualMetradoOverrideItemIds((current) => ({ ...current, [itemId]: true }));
               setError("");
               window.setTimeout(() => cellRefs.current.get(getBudgetCellKey(itemId, "quantity"))?.focus(), 0);
             })().catch(() => setError("No se pudo desvincular el metrado avanzado."));
@@ -4623,6 +4634,15 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
           onPaste={(event) => onPasteRows(event, row, "quantity")}            onFocus={() => onCellFocus(row.item.id, "quantity")}
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "quantity" })}
             />
+            {isMetradoAdvanced ? (
+              <span
+                className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700"
+                title="El valor proviene de una hoja de metrado avanzado"
+                aria-label="Metrado avanzado"
+              >
+                ADV
+              </span>
+            ) : null}
             <Link
               href={`/metrados-avanzados?projectId=${encodeURIComponent(projectId)}&budgetId=${encodeURIComponent(budgetId)}&itemId=${encodeURIComponent(row.item.id)}`}
               className={cn("inline-flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-[var(--app-surface-hover)]", isMetradoAdvanced ? "text-sky-600" : "text-[var(--app-text-muted)]")}

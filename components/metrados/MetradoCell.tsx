@@ -17,6 +17,7 @@ export function MetradoCell({
   hasAdvancedSheet,
   onSave,
   onOpenAdvanced,
+  onRequestManualOverride,
   showAdvancedAction = true,
 }: {
   itemId: string;
@@ -29,28 +30,37 @@ export function MetradoCell({
   showAdvancedAction?: boolean;
   onSave: (value: string) => Promise<void>;
   onOpenAdvanced?: () => void;
+  onRequestManualOverride?: (value: string) => void;
 }) {
+  const displayedQuantity = formatNumber(quantity, 2);
+
   return (
     <div className="flex items-center justify-end gap-2">
-      <Input
-        aria-label={`Metrado de ${description}`}
-        className={cn(
-          "h-8 w-28 text-right text-sm",
-          hasAdvancedSheet && "cursor-not-allowed border-sky-300 bg-sky-50 text-sky-800",
-        )}
-        defaultValue={formatNumber(quantity, 2)}
-        readOnly={hasAdvancedSheet}
-        title={hasAdvancedSheet ? "Este valor proviene del metrado avanzado. Abre la hoja para editarlo." : "Metrado manual editable"}
-        onBlur={(event) => {
-          if (!hasAdvancedSheet) void onSave(event.currentTarget.value);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            if (!hasAdvancedSheet) void onSave(event.currentTarget.value);
-          }
-        }}
-      />
+      {hasAdvancedSheet ? (
+        <button
+          type="button"
+          aria-label={`Metrado de ${description}`}
+          className="ui-input h-8 w-28 cursor-pointer rounded-xl border border-sky-300 bg-sky-50 px-3 py-2 text-right text-sm text-sky-800 outline-none transition hover:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500/70"
+          title="Haz clic para cambiar a metrado manual"
+          onClick={() => onRequestManualOverride?.(displayedQuantity)}
+        >
+          {displayedQuantity}
+        </button>
+      ) : (
+        <Input
+          aria-label={`Metrado de ${description}`}
+          className="h-8 w-28 text-right text-sm"
+          defaultValue={displayedQuantity}
+          title="Metrado manual editable"
+          onBlur={(event) => void onSave(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void onSave(event.currentTarget.value);
+            }
+          }}
+        />
+      )}
       {showAdvancedAction ? (onOpenAdvanced ? (
         <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={onOpenAdvanced} aria-label="Abrir metrados avanzados">
           <Ruler className={cn("h-3.5 w-3.5", hasAdvancedSheet ? "text-sky-600" : "text-[var(--app-text-muted)]")} />

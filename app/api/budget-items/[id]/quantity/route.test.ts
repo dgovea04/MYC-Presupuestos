@@ -34,7 +34,12 @@ describe("PATCH /api/budget-items/[id]/quantity", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.updateBudgetItemQuantityFromMetrados).toHaveBeenCalledWith({ itemId: "item-1", userId: "user-1", quantity: 12.501 });
+    expect(mocks.updateBudgetItemQuantityFromMetrados).toHaveBeenCalledWith({
+      itemId: "item-1",
+      userId: "user-1",
+      quantity: 12.501,
+      deactivateAdvancedSheets: true,
+    });
   });
 
   it("rejects negative quantities", async () => {

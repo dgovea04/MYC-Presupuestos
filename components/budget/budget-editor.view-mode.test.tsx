@@ -103,6 +103,34 @@ describe("BudgetEditor view mode integration", () => {
     expect(() => getInputByValue("0.18")).toThrow();
   });
 
+  it("marks an advanced metrado and opens the manual override confirmation on click", async () => {
+    const { getButtonByText, getByText, getInputByValue, queryByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+      activeMetradoSheets: [{ itemId: "item-1", sheetId: "sheet-1" }],
+    });
+
+    expect(getByText("ADV")).toBeTruthy();
+
+    await act(async () => {
+      getInputByValue("5").click();
+    });
+
+    expect(getByText("Cambiar a metrado manual")).toBeTruthy();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ sheet: { id: "sheet-1", isActive: false } }),
+    } as Response);
+
+    await act(async () => {
+      getButtonByText("Cambiar a manual").click();
+      await Promise.resolve();
+    });
+
+    expect(queryByText("ADV")).toBeNull();
+    expect(getInputByValue("5").readOnly).toBe(false);
+  });
+
   it("tightens the table in excel mode while keeping the Ctrl+Enter path available for APU editing", async () => {
     const { getButtonByText, getHeaderByText, getInputByValue, getTableSurface } = await renderEditor({
       budget: createBudgetWithItem(),
@@ -1585,6 +1613,7 @@ async function renderEditor(options?: {
   canUseKhipu?: boolean;
   partidasCatalog?: CatalogPartidaRecord[];
   resourcesCatalog?: ResourceRecord[];
+  activeMetradoSheets?: Array<{ itemId: string; sheetId: string }>;
 }) {
   const nextContainer = document.createElement("div");
   document.body.appendChild(nextContainer);
@@ -1601,6 +1630,7 @@ async function renderEditor(options?: {
             partidasCatalog={options?.partidasCatalog ?? []}
             projectName="Proyecto Demo"
             resourcesCatalog={options?.resourcesCatalog ?? []}
+            activeMetradoSheets={options?.activeMetradoSheets ?? []}
           />
         <TestViewModeControls />
       </BudgetViewModeProvider>,

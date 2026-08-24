@@ -79,7 +79,7 @@ describe("GeneralBudgetOverview", () => {
 
     expect(getByText("Movimiento de tierras")).toBeTruthy();
     expect(getByText("Acero fy=4200")).toBeTruthy();
-    expect(document.querySelector('input[aria-label="Metrado de Movimiento de tierras"]')).toBeTruthy();
+    expect(document.querySelector('[aria-label="Metrado de Movimiento de tierras"]')).toBeTruthy();
     expect(document.querySelector('a[href*="/metrados-avanzados"]')).toBeTruthy();
     expect(getLinkByText("Revisar con IA").getAttribute("href")).toContain("/ai?action=review");
     const generalTableText = getByTestId("general-budget-tab-table").textContent ?? "";
@@ -153,6 +153,55 @@ describe("GeneralBudgetOverview", () => {
     expect(loadingRegion?.getAttribute("aria-busy")).toBe("true");
     expect(document.querySelector('table[aria-label="Cargando detalle consolidado"]')).toBeTruthy();
     expect(document.body.textContent).not.toContain("Cargando detalle consolidado...");
+  });
+
+  it("marks advanced metrados in sub budget detail and asks confirmation before manual override", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ quantity: 18, budgetId: "sub-1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { clickButton } = await renderOverview();
+
+    await act(async () => {
+      clickButton("Estructuras");
+    });
+
+    const input = document.querySelector('[aria-label="Metrado de Movimiento de tierras"]');
+    expect(input).toBeInstanceOf(HTMLButtonElement);
+    expect(document.body.textContent).toContain("ADV");
+
+    await act(async () => {
+      input?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain("Cambiar a metrado manual");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/budget-items/item-1/quantity",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+  });
+
+  it("asks confirmation from the initial sub budget overview", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { clickButton } = await renderOverview();
+
+    await act(async () => {
+      clickButton("Mostrar detalle consolidado");
+    });
+
+    const input = document.querySelector('[aria-label="Metrado de Movimiento de tierras"]');
+    expect(input).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => {
+      input?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain("Cambiar a metrado manual");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

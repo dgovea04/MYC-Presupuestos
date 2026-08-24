@@ -1012,6 +1012,7 @@ export async function updateBudgetItemQuantityFromMetrados(input: {
   itemId: string;
   userId: string;
   quantity: number;
+  deactivateAdvancedSheets?: boolean;
 }): Promise<{ itemId: string; budgetId: string; projectId: string; quantity: number }> {
   const quantity = new Decimal(input.quantity).toDecimalPlaces(3, Decimal.ROUND_HALF_UP);
   if (quantity.isNegative() || !quantity.isFinite()) {
@@ -1050,6 +1051,22 @@ export async function updateBudgetItemQuantityFromMetrados(input: {
   await requireBudgetItemMetradoMutation(input.userId, item.budget.projectId, item.budget.project.companyId);
 
   await prisma.$transaction(async (tx) => {
+    if (input.deactivateAdvancedSheets) {
+      await tx.metradoSheet.updateMany({
+        where: {
+          userId: input.userId,
+          isActive: true,
+          partidaLinks: {
+            some: {
+              budgetItemId: item.id,
+              budgetId: item.budgetId,
+            },
+          },
+        },
+        data: { isActive: false },
+      });
+    }
+
     await tx.budgetItem.update({
       where: { id: item.id },
       data: { quantity: quantity.toNumber(), partial: quantity.times(item.unitPrice).toNumber() },

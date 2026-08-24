@@ -102,9 +102,10 @@ export function GeneralBudgetOverview({
   const [quantityError, setQuantityError] = useState("");
   const [liveMetrados, setLiveMetrados] = useState<Record<string, MetradoLiveUpdateSummary>>({});
   const [pendingManualOverride, setPendingManualOverride] = useState<{ itemId: string; value: string } | null>(null);
+  const [manualMetradoOverrides, setManualMetradoOverrides] = useState<Record<string, boolean>>({});
 
   async function updateItemQuantity(itemId: string, value: string) {
-    const advancedSheet = metradoItems.find((entry) => entry.itemId === itemId && entry.isActive !== false);
+    const advancedSheet = getActiveAdvancedMetrado(itemId);
     if (advancedSheet) {
       setPendingManualOverride({ itemId, value });
       return;
@@ -137,6 +138,7 @@ export function GeneralBudgetOverview({
           isAdvanced: false,
         },
       }));
+      setManualMetradoOverrides((current) => ({ ...current, [itemId]: true }));
       router.refresh();
     } catch (error) {
       setQuantityError(error instanceof Error ? error.message : "No se pudo guardar el metrado.");
@@ -148,6 +150,13 @@ export function GeneralBudgetOverview({
     const pending = pendingManualOverride;
     setPendingManualOverride(null);
     await persistManualQuantity(pending.itemId, pending.value);
+  }
+
+  function getActiveAdvancedMetrado(itemId: string) {
+    if (manualMetradoOverrides[itemId]) return undefined;
+    const live = liveMetrados[itemId];
+    if (live?.isAdvanced === false) return undefined;
+    return metradoItems.find((entry) => entry.itemId === itemId && entry.isActive !== false);
   }
 
   useEffect(() => {
@@ -778,18 +787,26 @@ export function GeneralBudgetOverview({
                               </TD>
                               <TD className="text-center">{row.item.unit}</TD>
                               <TD className="text-right tabular-nums">
-                              <MetradoCell
-                                itemId={row.item.id}
-                                description={row.item.description}
-                                projectId={projectId}
-                                budgetId={budgetDetail.id}
-                                quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
-                                onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}
-                              />
+                              {(() => {
+                                const activeAdvancedMetrado = getActiveAdvancedMetrado(row.item.id);
+                                return (
+                                  <MetradoCell
+                                    itemId={row.item.id}
+                                    description={row.item.description}
+                                    projectId={projectId}
+                                    budgetId={budgetDetail.id}
+                                    quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
+                                    advancedQuantity={activeAdvancedMetrado?.totalQuantity}
+                                    hasAdvancedSheet={Boolean(activeAdvancedMetrado)}
+                                    onRequestManualOverride={(value) => setPendingManualOverride({ itemId: row.item.id, value })}
+                                    onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}
+                                  />
+                                );
+                              })()}
                             </TD>
                               <TD className="text-right tabular-nums">
                                 {(() => {
-                                  const metrado = metradoItems.find((entry) => entry.itemId === row.item.id);
+                                  const metrado = getActiveAdvancedMetrado(row.item.id);
                                   return metrado ? (
                                     <Link href={`/metrados-avanzados?projectId=${projectId}&budgetId=${metrado.budgetId}&itemId=${metrado.itemId}`} className="inline-flex items-center gap-1 text-[var(--app-primary)] hover:underline">
                                       <Ruler className="h-3.5 w-3.5" />
@@ -947,18 +964,26 @@ export function GeneralBudgetOverview({
                             </TD>
                             <TD className="text-center">{row.item.unit}</TD>
                             <TD className="text-right tabular-nums">
-                              <MetradoCell
-                                itemId={row.item.id}
-                                description={row.item.description}
-                                projectId={projectId}
-                                budgetId={activeBudget.id}
-                                quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
-                                onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}
-                              />
+                              {(() => {
+                                const activeAdvancedMetrado = getActiveAdvancedMetrado(row.item.id);
+                                return (
+                                  <MetradoCell
+                                    itemId={row.item.id}
+                                    description={row.item.description}
+                                    projectId={projectId}
+                                    budgetId={activeBudget.id}
+                                    quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
+                                    advancedQuantity={activeAdvancedMetrado?.totalQuantity}
+                                    hasAdvancedSheet={Boolean(activeAdvancedMetrado)}
+                                    onRequestManualOverride={(value) => setPendingManualOverride({ itemId: row.item.id, value })}
+                                    onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}
+                                  />
+                                );
+                              })()}
                             </TD>
                               <TD className="text-right tabular-nums">
                                 {(() => {
-                                  const metrado = metradoItems.find((entry) => entry.itemId === row.item.id);
+                                  const metrado = getActiveAdvancedMetrado(row.item.id);
                                   return metrado ? (
                                     <Link href={`/metrados-avanzados?projectId=${projectId}&budgetId=${metrado.budgetId}&itemId=${metrado.itemId}`} className="inline-flex items-center gap-1 text-[var(--app-primary)] hover:underline">
                                       <Ruler className="h-3.5 w-3.5" />

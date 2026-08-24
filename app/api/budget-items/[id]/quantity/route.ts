@@ -36,6 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       itemId: id,
       userId: session.user.id,
       quantity: body.quantity,
+      deactivateAdvancedSheets: true,
     });
     return NextResponse.json(result);
   } catch (error) {
