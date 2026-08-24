@@ -17,10 +17,14 @@ import {
   listMetradoTemplates,
 } from "@/lib/data/metrados";
 
+function readSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
 export default async function MetradosAvanzadosPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ template?: string | string[] }>;
+  searchParams?: Promise<{ template?: string | string[]; projectId?: string | string[]; budgetId?: string | string[]; itemId?: string | string[] }>;
 }) {
   const session = await getAuthSession();
 
@@ -58,9 +62,14 @@ export default async function MetradosAvanzadosPage({
     ? resolvedSearchParams?.template[0]
     : resolvedSearchParams?.template;
   const initialTemplateType = parseMetradoTemplateTypeParam(templateParam);
+  const initialContext = {
+    projectId: readSearchParam(resolvedSearchParams?.projectId),
+    budgetId: readSearchParam(resolvedSearchParams?.budgetId),
+    itemId: readSearchParam(resolvedSearchParams?.itemId),
+  };
 
   const [initialSheets, creationOptions, customFormulas, templates] = await Promise.all([
-    listMetradoSheetsByUser(session.user.id),
+    listMetradoSheetsByUser(session.user.id, { includeInactive: true }),
     listMetradoCreationOptions(session.user.id),
     listCustomMetradoFormulas(session.user.id),
     listMetradoTemplates(),
@@ -86,6 +95,7 @@ export default async function MetradosAvanzadosPage({
             customFormulas={customFormulas}
             initialTemplateType={initialTemplateType}
             templates={templates}
+            initialContext={initialContext}
           />
         </CardContent>
       </Card>

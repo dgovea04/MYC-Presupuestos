@@ -1450,7 +1450,7 @@ function applyBudgetPatch(budget: BudgetRecord, patch: BudgetStatePatch) {
   });
 }
 
-async function refreshGeneralBudgetTotals(
+export async function refreshGeneralBudgetTotals(
   tx: Prisma.TransactionClient,
   generalBudgetId: string,
 ) {

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getProjectSubBudgetSummaries: vi.fn(),
   getResourcesByUser: vi.fn(),
   getUserSettings: vi.fn(),
+  listMetradoSheetsByUser: vi.fn(),
   notFound: vi.fn(),
 }));
 
@@ -129,6 +130,10 @@ vi.mock("@/lib/data/settings", () => ({
   getUserSettings: mocks.getUserSettings,
 }));
 
+vi.mock("@/lib/data/metrados", () => ({
+  listMetradoSheetsByUser: mocks.listMetradoSheetsByUser,
+}));
+
 vi.mock("@/lib/db/serializers", () => ({
   decimalToNumber: mocks.decimalToNumber,
   stripBudgetProjectForClient: <T extends { project?: unknown }>(budget: T) => {
@@ -202,6 +207,7 @@ describe("BudgetDetailPage", () => {
     mocks.getProjectSubBudgetSummaries.mockResolvedValue([]);
     mocks.getProjectSubBudgetDetails.mockResolvedValue([]);
     mocks.getBudgetTemplateCreationTraceability.mockResolvedValue(null);
+    mocks.listMetradoSheetsByUser.mockResolvedValue([]);
   });
 
   it("routes the sub-budget branch through BudgetFlow", async () => {

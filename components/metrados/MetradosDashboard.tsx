@@ -1,10 +1,10 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CellValue, Worksheet } from "exceljs";
-import { BarChart3, Calculator, ChevronRight, Copy, FileSpreadsheet, PenLine, Plus, Redo, Trash2, Undo2 } from "lucide-react";
+import { BarChart3, Calculator, ChevronRight, Copy, FileSpreadsheet, PenLine, Plus, Redo, Search, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -28,16 +28,26 @@ import { type MetradoActiveCell, MetradoSheetTable } from "@/components/metrados
 import { MetradoSummaryPanel } from "@/components/metrados/MetradoSummaryPanel";
 import { MetradoTemplateSelector } from "@/components/metrados/MetradoTemplateSelector";
 import { MetradoValidationPanel } from "@/components/metrados/MetradoValidationPanel";
+import { MetradoCell } from "@/components/metrados/MetradoCell";
+import { MetradoHistory } from "@/components/metrados/MetradoHistory";
+import { MetradoSheetDrawer } from "@/components/metrados/MetradoSheetDrawer";
+import { MetradoSheetEditor } from "@/components/metrados/MetradoSheetEditor";
+import { selectActiveSheetByPartidaId } from "@/components/metrados/active-sheet-selection";
+import { selectLatestActiveSheet } from "@/lib/metrados/active-sheet-selection";
+import { mergeMetradoSheet } from "@/components/metrados/metrado-sheet-controller";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { calculateMetradoSheet } from "@/lib/calculations/metrados";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { customMetradoFormulaSuggestions } from "@/lib/metrados/custom-formula-suggestions";
 import { useEditSession } from "@/hooks/use-edit-session";
 import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
+import { useMetradoSheetEditor } from "@/hooks/use-metrado-sheet-editor";
 import { validateMetradoSheet } from "@/lib/metrados/validation";
 import { cn } from "@/lib/utils";
+import { broadcastAppDataChange } from "@/lib/client/live-updates";
+import { saveMetradoSheet, setMetradoSheetActive } from "@/lib/client/metrado-sheet-api";
 import type {
   CustomMetradoFormulaRecord,
   MetradoFormulaInputKey,
@@ -67,6 +77,7 @@ export type MetradoPartidaOption = {
   code: string;
   description: string;
   unit: string;
+  quantity: number;
 };
 
 type ActionState = "idle" | "saving" | "saved" | "error";
@@ -80,6 +91,7 @@ type MetradosDashboardProps = {
   customFormulas: CustomMetradoFormulaRecord[];
   initialTemplateType?: MetradoTemplateType | null;
   templates: MetradoTemplateRecord[];
+  initialContext?: { projectId?: string; budgetId?: string; itemId?: string };
 };
 
 type ImportPreviewResponse = {
@@ -105,19 +117,26 @@ export function MetradosDashboard({
   customFormulas: initialCustomFormulas,
   initialTemplateType = null,
   templates,
+  initialContext,
 }: MetradosDashboardProps) {
   const [sheets, setSheets] = useState<MetradoSheetRecord[]>(initialSheets);
   const [customFormulas, setCustomFormulas] = useState<CustomMetradoFormulaRecord[]>(initialCustomFormulas);
   const initialTemplate = templates.find((entry) => entry.type === initialTemplateType) ?? null;
   const shouldStartFromTemplate = Boolean(initialTemplate);
-  const [selectedSheetId, setSelectedSheetId] = useState(shouldStartFromTemplate ? "" : initialSheets[0]?.id ?? "");
+  const [selectedSheetId, setSelectedSheetId] = useState(shouldStartFromTemplate ? "" : "");
+  const [partidaSearch, setPartidaSearch] = useState("");
+  const [partidaFilter, setPartidaFilter] = useState<"all" | "advanced" | "manual" | "empty">("all");
+  const [openedPartidaId, setOpenedPartidaId] = useState<string | null>(initialContext?.itemId ?? null);
+  const [configurationOpen, setConfigurationOpen] = useState(false);
+  const [advancedQuantityOverrides, setAdvancedQuantityOverrides] = useState<Record<string, number>>({});
+  const [historyOpen, setHistoryOpen] = useState(false);
   const selectedSheet = sheets.find((sheet) => sheet.id === selectedSheetId) ?? null;
-  const initialProjectId = selectedSheet?.projectId ?? projects[0]?.id ?? "";
+  const initialProjectId = selectedSheet?.projectId ?? initialContext?.projectId ?? projects[0]?.id ?? "";
   const initialBudgetId =
-    selectedSheet?.budgetId ?? budgets.find((budget) => budget.projectId === initialProjectId)?.id ?? "";
+    selectedSheet?.budgetId ?? initialContext?.budgetId ?? budgets.find((budget) => budget.projectId === initialProjectId)?.id ?? "";
   const initialPartidaId =
     selectedSheet?.partidaLink?.budgetItemId ??
-    partidas.find((partida) => partida.budgetId === initialBudgetId)?.id ??
+    initialContext?.itemId ?? partidas.find((partida) => partida.budgetId === initialBudgetId)?.id ??
     "";
   const [projectId, setProjectId] = useState(initialProjectId);
   const [budgetId, setBudgetId] = useState(initialBudgetId);
@@ -172,10 +191,14 @@ export function MetradosDashboard({
     () => collectFormulaInputColumns(availableFormulas, rows, preferredFormulaKey),
     [availableFormulas, preferredFormulaKey, rows],
   );
-  const calculated = useMemo(
-    () => calculateMetradoSheet({ unit: sheetUnit, rows, formulas: availableFormulas }),
-    [availableFormulas, rows, sheetUnit],
-  );
+  const editorModel = useMetradoSheetEditor({
+    sheet: selectedSheet,
+    rows,
+    unit: sheetUnit,
+    formulas: availableFormulas,
+    linkedPartidaUnit: selectedSheet?.partidaLink?.budgetItemUnit ?? null,
+  });
+  const calculated = editorModel.calculation;
   const selectedPartida = partidas.find((partida) => partida.id === partidaId) ?? null;
   const isCreatingSheet = !selectedSheet;
   const validationIssues = useMemo(
@@ -196,8 +219,8 @@ export function MetradosDashboard({
     ],
   );
   const issues = useMemo(
-    () => mergeIssues([...calculated.issues, ...validationIssues]),
-    [calculated.issues, validationIssues],
+    () => mergeIssues([...calculated.issues, ...validationIssues, ...editorModel.issues]),
+    [calculated.issues, editorModel.issues, validationIssues],
   );
   const hasBlockingIssues = issues.some((issue) => issue.severity === "error");
 
@@ -226,18 +249,20 @@ export function MetradosDashboard({
 
   const filteredBudgets = budgets.filter((budget) => budget.projectId === projectId);
   const filteredPartidas = partidas.filter((partida) => partida.budgetId === budgetId);
-  const activeSheetByPartidaId = useMemo(() => {
-    const links = new Map<string, MetradoSheetRecord>();
-
-    for (const sheet of sheets) {
-      const linkedPartidaId = sheet.partidaLink?.budgetItemId;
-      if (linkedPartidaId && !links.has(linkedPartidaId)) {
-        links.set(linkedPartidaId, sheet);
-      }
-    }
-
-    return links;
-  }, [sheets]);
+  const activeSheetByPartidaId = useMemo(() => selectActiveSheetByPartidaId(sheets), [sheets]);
+  const visiblePartidas = useMemo(() => {
+    const normalizedSearch = partidaSearch.trim().toLowerCase();
+    return filteredPartidas.filter((partida) => {
+      const activeSheet = activeSheetByPartidaId.get(partida.id);
+      const matchesSearch = !normalizedSearch || `${partida.code} ${partida.description}`.toLowerCase().includes(normalizedSearch);
+      const matchesFilter =
+        partidaFilter === "all" ||
+        (partidaFilter === "advanced" && Boolean(activeSheet)) ||
+        (partidaFilter === "manual" && !activeSheet && partida.quantity > 0) ||
+        (partidaFilter === "empty" && partida.quantity <= 0);
+      return matchesSearch && matchesFilter;
+    });
+  }, [activeSheetByPartidaId, filteredPartidas, partidaFilter, partidaSearch]);
   const filteredSheets = useMemo(() => {
     if (!dateFrom && !dateTo) return sheets;
     return sheets.filter((sheet) => {
@@ -329,6 +354,33 @@ export function MetradosDashboard({
     return () => window.clearInterval(interval);
   }, [lastSavedAt]);
 
+  function openPartidaSheet(partida: MetradoPartidaOption) {
+    const existingSheet = selectLatestActiveSheet(sheets, partida.id);
+    setPartidaId(partida.id);
+    if (existingSheet) {
+      setOpenedPartidaId(partida.id);
+      setConfigurationOpen(false);
+      loadSheetIntoEditor(existingSheet);
+    } else {
+      startNewSheet();
+      setPartidaId(partida.id);
+      setConfigurationOpen(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!initialContext?.itemId || selectedSheetId) return;
+    const partida = partidas.find((candidate) => candidate.id === initialContext.itemId);
+    if (!partida) return;
+
+    const existingSheet = activeSheetByPartidaId.get(partida.id);
+    if (existingSheet) {
+      window.setTimeout(() => {
+        openPartidaSheet(partida);
+      }, 0);
+    }
+  }, [activeSheetByPartidaId, initialContext?.itemId, partidas, selectedSheetId]);
+
   function selectSheet(sheetId: string) {
     if (!sheetId) {
       startNewSheet();
@@ -337,6 +389,8 @@ export function MetradosDashboard({
 
     const nextSheet = sheets.find((sheet) => sheet.id === sheetId) ?? null;
     setSelectedSheetId(sheetId);
+    setOpenedPartidaId(nextSheet?.partidaLink?.budgetItemId ?? null);
+    setConfigurationOpen(!nextSheet);
     if (!nextSheet) {
       resetRows([]);
       setSelectedRowIds(new Set());
@@ -363,8 +417,9 @@ export function MetradosDashboard({
     setError("");
   }
 
-  function loadSheetIntoEditor(sheet: MetradoSheetRecord) {
+  const loadSheetIntoEditor = useCallback((sheet: MetradoSheetRecord) => {
     setSelectedSheetId(sheet.id);
+    setOpenedPartidaId(sheet.partidaLink?.budgetItemId ?? null);
     setProjectId(sheet.projectId);
     setBudgetId(sheet.budgetId);
     setPartidaId(sheet.partidaLink?.budgetItemId ?? "");
@@ -379,9 +434,9 @@ export function MetradosDashboard({
     setLastSavedAt(null);
     setFeedback("");
     setError("");
-  }
+  }, [resetRows]);
 
-  function startNewSheet() {
+  const startNewSheet = useCallback(() => {
     const nextTemplate = templates[0];
     const draft = buildNewMetradoSheetDraft({
       budgets,
@@ -394,6 +449,7 @@ export function MetradosDashboard({
     });
 
     setSelectedSheetId("");
+    setOpenedPartidaId(null);
     setProjectId(draft.projectId);
     setBudgetId(draft.budgetId);
     setPartidaId(draft.partidaId);
@@ -408,7 +464,7 @@ export function MetradosDashboard({
     setLastSavedAt(null);
     setFeedback("Configura la hoja y presiona Crear hoja.");
     setError("");
-  }
+  }, [budgetId, budgets, projectId, projects, resetRows, templates]);
 
   function requestDeleteSelectedSheet() {
     if (!selectedSheet) {
@@ -466,7 +522,7 @@ export function MetradosDashboard({
         body: JSON.stringify({ name: `${sheetName.trim() || selectedSheet.name} copia` }),
       });
       const payload = await readJson<SheetResponse>(response);
-      setSheets((current) => [payload.sheet, ...current.filter((sheet) => sheet.id !== payload.sheet.id)]);
+      setSheets((current) => mergeMetradoSheet(current, payload.sheet));
       loadSheetIntoEditor(payload.sheet);
       setFeedback("Hoja duplicada como base reutilizable.");
     }, "No se pudo duplicar la hoja.");
@@ -516,12 +572,26 @@ export function MetradosDashboard({
     }
 
     await runAction(async () => {
-      await persistDraft(selectedSheet.id, calculated.rows, isAutosave);
+      const savedSheet = await persistDraft(selectedSheet.id, calculated.rows, isAutosave);
+      if (savedSheet?.partidaLink) {
+        setAdvancedQuantityOverrides((current) => ({ ...current, [savedSheet.partidaLink!.budgetItemId]: savedSheet.totalQuantity }));
+        broadcastAppDataChange(["/metrados-avanzados", "/budgets"], undefined, { metrados: [{ itemId: savedSheet.partidaLink.budgetItemId, projectId: savedSheet.projectId, budgetId: savedSheet.budgetId, quantity: savedSheet.totalQuantity, isAdvanced: true }] });
+      }
       if (!isAutosave) {
         setFeedback("Borrador guardado.");
       }
     }, "No se pudo guardar el borrador.");
     return true;
+  }
+
+  function closeSheetDrawer() {
+    setOpenedPartidaId(null);
+    if (selectedSheet?.partidaLink) {
+      const itemId = selectedSheet.partidaLink.budgetItemId;
+      broadcastAppDataChange(["/metrados-avanzados", "/budgets"], undefined, {
+        metrados: [{ itemId, projectId: selectedSheet.projectId, budgetId: selectedSheet.budgetId, quantity: selectedSheet.totalQuantity, isAdvanced: true }],
+      });
+    }
   }
 
   async function sendToPartida() {
@@ -538,7 +608,13 @@ export function MetradosDashboard({
       await readJson<{ quantity: number }>(response);
       const refreshed = await fetch(`/api/metrados-avanzados/${selectedSheet.id}`);
       const payload = await readJson<SheetResponse>(refreshed);
-      setSheets((current) => current.map((sheet) => (sheet.id === payload.sheet.id ? payload.sheet : sheet)));
+      setSheets((current) => mergeMetradoSheet(current, payload.sheet));
+      if (payload.sheet.partidaLink) {
+        setAdvancedQuantityOverrides((current) => ({
+          ...current,
+          [payload.sheet.partidaLink!.budgetItemId]: payload.sheet.totalQuantity,
+        }));
+      }
       setFeedback("Total enviado a la partida.");
     }, "No se pudo enviar el total.");
   }
@@ -737,23 +813,19 @@ export function MetradosDashboard({
     }
   }
 
-  async function persistDraft(sheetId: string, draftRows: MetradoRowRecord[], isAutosave = false) {
+  async function persistDraft(sheetId: string, draftRows: MetradoRowRecord[], isAutosave = false): Promise<MetradoSheetRecord> {
     setSaveState("saving");
 
-    const metadataResponse = await fetch(`/api/metrados-avanzados/${sheetId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: sheetName, unit: sheetUnit }),
-    });
-    await readJson<SheetResponse>(metadataResponse);
-
-    const rowsResponse = await fetch(`/api/metrados-avanzados/${sheetId}/rows`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: draftRows }),
-    });
-    const payload = await readJson<SheetResponse>(rowsResponse);
-    setSheets((current) => current.map((sheet) => (sheet.id === payload.sheet.id ? payload.sheet : sheet)));
+    const savedSheet = await saveMetradoSheet({ sheetId, name: sheetName, unit: sheetUnit, rows: draftRows });
+    const payload = { sheet: savedSheet };
+    setSheets((current) => mergeMetradoSheet(current, payload.sheet));
+    if (payload.sheet.partidaLink) {
+      const itemId = payload.sheet.partidaLink.budgetItemId;
+      setAdvancedQuantityOverrides((current) => ({ ...current, [itemId]: payload.sheet.totalQuantity }));
+      broadcastAppDataChange(["/metrados-avanzados", "/budgets"], undefined, {
+        metrados: [{ itemId, projectId: payload.sheet.projectId, budgetId: payload.sheet.budgetId, quantity: payload.sheet.totalQuantity, isAdvanced: true }],
+      });
+    }
     resetRows(payload.sheet.rows);
     setSheetUnit(payload.sheet.unit);
     lastSavedPayload.current = JSON.stringify(
@@ -765,6 +837,7 @@ export function MetradosDashboard({
     if (isAutosave) {
       setFeedback("");
     }
+    return payload.sheet;
   }
 
   return (
@@ -846,7 +919,76 @@ export function MetradosDashboard({
         </div>
       </div>
 
-      <details className="group overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm shadow-slate-100/60" open>
+      {projectId && budgetId ? (
+        <>
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={() => setHistoryOpen((open) => !open)}>
+              {historyOpen ? "Ocultar histórico" : "Ver hojas históricas"}
+            </Button>
+          </div>
+          {historyOpen ? (
+            <MetradoHistory
+              sheets={sheets.filter((sheet) => !sheet.isActive)}
+              onReactivate={async (sheet) => {
+                const response = await fetch(`/api/metrados-avanzados/${sheet.id}/active`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ isActive: true }),
+                });
+                if (!response.ok) {
+                  setError("No se pudo reactivar la hoja.");
+                  return;
+                }
+                const payload = await response.json() as SheetResponse;
+                setSheets((current) => [payload.sheet, ...current.filter((candidate) => candidate.id !== payload.sheet.id)]);
+                setFeedback("Hoja avanzada reactivada.");
+              }}
+            />
+          ) : null}
+          <PartidaOverview
+          partidas={visiblePartidas}
+          activeSheetByPartidaId={activeSheetByPartidaId}
+          advancedQuantityOverrides={advancedQuantityOverrides}
+          search={partidaSearch}
+          filter={partidaFilter}
+          onSearchChange={setPartidaSearch}
+          onFilterChange={setPartidaFilter}
+          onOpenPartida={openPartidaSheet}
+          onStartNewSheet={() => {
+            startNewSheet();
+            setConfigurationOpen(true);
+          }}
+          onUpdateQuantity={async (partida, quantity) => {
+            const activeSheet = activeSheetByPartidaId.get(partida.id);
+            if (activeSheet) {
+              const confirmed = window.confirm("Esta partida tiene una hoja avanzada. ¿Deseas reemplazarla por un metrado manual y desactivar la hoja avanzada? La hoja se conservará como histórico.");
+              if (!confirmed) return false;
+              try {
+                await setMetradoSheetActive(activeSheet.id, false);
+              } catch {
+                setError("No se pudo desactivar la hoja avanzada.");
+                return false;
+              }
+              setSheets((current) => current.filter((sheet) => sheet.id !== activeSheet.id));
+            }
+            const response = await fetch(`/api/budget-items/${partida.id}/quantity`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantity: quantity.trim().replace(",", ".") }) });
+            if (!response.ok) { setError("No se pudo guardar el metrado manual."); return false; }
+            const payload = await response.json() as { quantity: number; projectId: string; budgetId: string; itemId: string };
+            broadcastAppDataChange(["/metrados-avanzados", "/budgets"], undefined, {
+              metrados: [{ itemId: payload.itemId, projectId: payload.projectId, budgetId: payload.budgetId, quantity: payload.quantity, isAdvanced: false }],
+            });
+            setFeedback("Metrado manual guardado.");
+            return true;
+          }}
+        />
+        </>
+      ) : null}
+
+      <details
+        className="group overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm shadow-slate-100/60"
+        open={configurationOpen}
+        onToggle={(event) => setConfigurationOpen(event.currentTarget.open)}
+      >
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <Calculator className="h-4 w-4 shrink-0 text-sky-600" />
@@ -860,11 +1002,11 @@ export function MetradosDashboard({
           <div className="flex shrink-0 items-center gap-2">
             <Button
               size="sm"
-              variant="outline"
-              onClick={(event) => {
+              variant="outline"                onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 startNewSheet();
+                setConfigurationOpen(true);
               }}
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -1171,8 +1313,10 @@ export function MetradosDashboard({
       />
 
       {selectedSheet ? (
-        <>
-          <MetradoFormulaBar
+        <MetradoSheetDrawer sheet={selectedSheet} open={Boolean(openedPartidaId)} onClose={closeSheetDrawer}>
+          <MetradoSheetEditor
+            sheet={selectedSheet}
+            formulaBar={<MetradoFormulaBar
             activeRow={activeRow}
             formula={activeFormula}
             onExpressionChange={async (rowId, expression) => {
@@ -1200,15 +1344,8 @@ export function MetradosDashboard({
                 setError("No se pudo guardar la formula editada.");
               }
             }}
-          />
-
-          <div
-            className={cn(
-              "grid gap-6",
-              summaryCollapsed ? "xl:grid-cols-[minmax(0,1fr)_64px]" : "xl:grid-cols-[minmax(0,1fr)_360px]",
-            )}
-          >
-            <MetradoSheetTable
+            />}
+            table={<MetradoSheetTable
               rows={calculated.rows}
               formulas={availableFormulas}
               inputColumns={inputColumns}
@@ -1217,12 +1354,7 @@ export function MetradosDashboard({
               onActiveCellChange={setActiveCell}
               onAddRow={() =>
                 setRows((current) =>
-                  addMetradoRow(
-                    current,
-                    selectedSheet.id,
-                    sheetUnit,
-                    preferredFormulaKey || availableFormulas[0]?.key || "manual",
-                  ),
+                  addMetradoRow(current, selectedSheet.id, sheetUnit, preferredFormulaKey || availableFormulas[0]?.key || "manual"),
                 )
               }
               onAddGroupRow={addGroupRow}
@@ -1240,10 +1372,7 @@ export function MetradosDashboard({
                 if (patch.formulaKey) {
                   const selectedFormula = availableFormulas.find((formula) => formula.key === patch.formulaKey);
                   setPreferredFormulaKey(patch.formulaKey);
-                  patchRow(rowId, {
-                    ...patch,
-                    unit: selectedFormula?.resultUnit ?? patch.unit,
-                  });
+                  patchRow(rowId, { ...patch, unit: selectedFormula?.resultUnit ?? patch.unit });
                   return;
                 }
                 patchRow(rowId, patch);
@@ -1251,8 +1380,8 @@ export function MetradosDashboard({
               onInputChange={updateInput}
               onSelectionChange={(ids) => setSelectedRowIds(ids)}
               onBatchAction={handleBatchAction}
-            />
-            <aside className="space-y-4">
+            />}
+            summary={<>
               <MetradoSummaryPanel
                 calculation={calculated}
                 linkedPartida={selectedSheet.partidaLink}
@@ -1260,15 +1389,14 @@ export function MetradosDashboard({
                 collapsed={summaryCollapsed}
                 onToggleCollapsed={() => setSummaryCollapsed((current) => !current)}
               />
-              {!summaryCollapsed ? (
-                <>
-                  <MetradoValidationPanel issues={issues} />
-                  <StatusMessage state={actionState} feedback={feedback} error={error} />
-                </>
-              ) : null}
-            </aside>
-          </div>
-        </>
+              {!summaryCollapsed ? <>
+                <MetradoValidationPanel issues={issues} />
+                <StatusMessage state={actionState} feedback={feedback} error={error} />
+              </> : null}
+            </>}
+            collapsed={summaryCollapsed}
+          />
+        </MetradoSheetDrawer>
       ) : (
         <StatusMessage state={actionState} feedback={feedback} error={error} />
       )}
@@ -1303,12 +1431,14 @@ export function MetradosDashboard({
       }),
     });
     const payload = await readJson<SheetResponse>(response);
-    setSheets((current) => [payload.sheet, ...current.filter((sheet) => sheet.id !== payload.sheet.id)]);
+    setSheets((current) => mergeMetradoSheet(current, payload.sheet));
     return payload.sheet;
   }
 
   function selectCreatedSheet(sheet: MetradoSheetRecord, nextRows: MetradoRowRecord[]) {
     setSelectedSheetId(sheet.id);
+    setOpenedPartidaId(sheet.partidaLink?.budgetItemId ?? null);
+    setConfigurationOpen(false);
     setTemplateType(sheet.templateType);
     setSheetUnit(sheet.unit);
     resetRows(nextRows);
@@ -1317,6 +1447,80 @@ export function MetradosDashboard({
     setSaveState("idle");
     setLastSavedAt(null);
   }
+}
+
+export function PartidaOverview({
+  partidas,
+  activeSheetByPartidaId,
+  advancedQuantityOverrides,
+  search,
+  filter,
+  onSearchChange,
+  onFilterChange,
+  onOpenPartida,
+  onStartNewSheet,
+  onUpdateQuantity,
+}: {
+  partidas: MetradoPartidaOption[];
+  activeSheetByPartidaId: ReadonlyMap<string, MetradoSheetRecord>;
+  advancedQuantityOverrides: Readonly<Record<string, number>>;
+  search: string;
+  filter: "all" | "advanced" | "manual" | "empty";
+  onSearchChange: (value: string) => void;
+  onFilterChange: (value: "all" | "advanced" | "manual" | "empty") => void;
+  onOpenPartida: (partida: MetradoPartidaOption) => void;
+  onStartNewSheet: () => void;
+  onUpdateQuantity: (partida: MetradoPartidaOption, quantity: string) => Promise<boolean>;
+}) {
+  const [quantityByPartidaId, setQuantityByPartidaId] = useState<Record<string, string>>({});
+  const [manualOverrideIds, setManualOverrideIds] = useState<Set<string>>(new Set());
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--app-text-strong)]">Partidas del subpresupuesto</h2>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">Selecciona una partida para abrir su hoja de metrados.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button type="button" size="sm" onClick={onStartNewSheet}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva hoja
+          </Button>
+          <label className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[var(--app-text-subtle)]" />
+            <Input aria-label="Buscar partida" className="h-9 pl-9 text-sm" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Buscar partida" />
+          </label>
+          <Select aria-label="Filtrar partidas" className="h-9 text-sm" value={filter} onChange={(event) => onFilterChange(event.target.value as typeof filter)}>
+            <option value="all">Todas</option>
+            <option value="advanced">Con hoja avanzada</option>
+            <option value="manual">Manuales</option>
+            <option value="empty">Sin metrado</option>
+          </Select>
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-[var(--app-border-soft)]">
+        <Table>
+          <THead><TR><TH>Código</TH><TH>Partida</TH><TH>Unidad</TH><TH className="text-right">Metrado</TH><TH>Tipo</TH><TH className="text-right">Acción</TH></TR></THead>
+          <TBody>
+            {partidas.map((partida) => {
+              const sheet = activeSheetByPartidaId.get(partida.id);
+              const isManualOverride = manualOverrideIds.has(partida.id);
+              const displayedQuantity = quantityByPartidaId[partida.id] ?? (isManualOverride ? partida.quantity : advancedQuantityOverrides[partida.id] ?? sheet?.totalQuantity ?? partida.quantity);
+              const saveQuantity = async (value: string) => {
+                const saved = await onUpdateQuantity(partida, value);
+                if (saved) {
+                  setQuantityByPartidaId((current) => ({ ...current, [partida.id]: value }));
+                  setManualOverrideIds((current) => new Set(current).add(partida.id));
+                }
+              };
+              return <TR key={partida.id}><TD>{partida.code}</TD><TD className="font-medium text-[var(--app-text-strong)]">{partida.description}</TD><TD>{partida.unit}</TD><TD className="text-right"><MetradoCell itemId={partida.id} description={partida.description} projectId={partida.projectId} budgetId={partida.budgetId} quantity={Number(displayedQuantity) || 0} hasAdvancedSheet={Boolean(sheet && !isManualOverride)} advancedQuantity={sheet?.totalQuantity} onSave={saveQuantity} onOpenAdvanced={() => onOpenPartida(partida)} /></TD><TD>{sheet && !isManualOverride ? "Avanzado" : partida.quantity > 0 || isManualOverride ? "Manual" : "Sin metrado"}</TD><TD><div className="flex justify-end"><Button type="button" size="sm" variant="outline" onClick={() => onOpenPartida(partida)}>Abrir hoja</Button></div></TD></TR>;
+            })}
+            {partidas.length === 0 ? <TR><TD colSpan={6} className="py-8 text-center text-sm text-[var(--app-text-muted)]">No hay partidas que coincidan con el filtro.</TD></TR> : null}
+          </TBody>
+        </Table>
+      </div>
+    </section>
+  );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

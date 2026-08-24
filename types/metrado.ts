@@ -110,6 +110,7 @@ export type MetradoSheetRecord = {
   templateType: MetradoTemplateType;
   name: string;
   status: MetradoSheetStatus;
+  isActive: boolean;
   unit: MetradoUnit;
   totalQuantity: number;
   rows: MetradoRowRecord[];

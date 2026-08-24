@@ -88,6 +88,7 @@ export function BudgetFlowWrapper({
   canUseTemplates = true,
   canUseRiskAnalysis = true,
   canUseCollaboration = true,
+  activeMetradoSheets = [],
 }: {
   budget: BudgetRecord;
   projectName?: string;
@@ -101,6 +102,7 @@ export function BudgetFlowWrapper({
   canUseTemplates?: boolean;
   canUseRiskAnalysis?: boolean;
   canUseCollaboration?: boolean;
+  activeMetradoSheets?: Array<{ itemId: string; sheetId: string }>;
 }) {
   const [catalogs, setCatalogs] = useState({
     partidasCatalog,
@@ -189,6 +191,7 @@ export function BudgetFlowWrapper({
       canUseTemplates={canUseTemplates}
       canUseRiskAnalysis={canUseRiskAnalysis}
       canUseCollaboration={canUseCollaboration}
+      activeMetradoSheets={activeMetradoSheets}
     />
   );
 }

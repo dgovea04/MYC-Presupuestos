@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BookOpenCheck, BotMessageSquare, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
+import { Activity, BookOpenCheck, BotMessageSquare, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Ruler, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -41,6 +41,8 @@ import { openNoteDraft } from "@/components/notes/notes-drawer";
 import { Input } from "@/components/ui/input";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/loading";
 import { SaveStateBadge } from "@/components/ui/save-state-badge";
+import { AlertDialog } from "@/components/ui/alert-dialog";
+import { setMetradoSheetActive } from "@/lib/client/metrado-sheet-api";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getTableFrameClassName } from "@/components/view-mode/view-mode-styles";
@@ -320,6 +322,7 @@ export function BudgetEditor({
   canUseTemplates = true,
   canUseRiskAnalysis = true,
   canUseCollaboration = true,
+  activeMetradoSheets = [],
 }: {
   budget: BudgetRecord;
   resourcesCatalog: ResourceRecord[];
@@ -331,6 +334,7 @@ export function BudgetEditor({
   canUseTemplates?: boolean;
   canUseRiskAnalysis?: boolean;
   canUseCollaboration?: boolean;
+  activeMetradoSheets?: Array<{ itemId: string; sheetId: string }>;
 }) {
   const router = useRouter();
   const { currencyDecimals, excelRowHeight } = useFormattingSettings();
@@ -338,6 +342,10 @@ export function BudgetEditor({
   const [state, setState] = useState(() => calculateBudgetRecord(budget));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [manualOverrideItemId, setManualOverrideItemId] = useState<string | null>(null);
+  const [manualOverrideValue, setManualOverrideValue] = useState<number | null>(null);
+  const [manualOverrideEditingItemId, setManualOverrideEditingItemId] = useState<string | null>(null);
+  const activeMetradoSheetsByItemId = useMemo(() => new Map(activeMetradoSheets.map((sheet) => [sheet.itemId, sheet.sheetId])), [activeMetradoSheets]);
   const [pasteFeedback, setPasteFeedback] = useState("");
   const [pendingPaste, setPendingPaste] = useState<PendingPaste | null>(null);
   const [itemQualityStateById, setItemQualityStateById] = useState<Record<string, BudgetItemQualityState | undefined>>({});
@@ -1911,9 +1919,16 @@ export function BudgetEditor({
       if (cell.columnId === "code") updateItem(row.item.id, { code: value });
       else if (cell.columnId === "description") updateItem(row.item.id, { description: value });
       else if (cell.columnId === "unit") updateItem(row.item.id, { unit: value });
-      else if (cell.columnId === "quantity") updateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) });
+      else if (cell.columnId === "quantity") {
+        if (activeMetradoSheetsByItemId.has(row.item.id)) {
+          setManualOverrideItemId(row.item.id);
+          setManualOverrideValue(parseSpreadsheetNumber(value));
+          return;
+        }
+        updateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) });
+      }
     },
-    [rows, updateItem, updateLevel],
+    [activeMetradoSheetsByItemId, rows, updateItem, updateLevel],
   );
 
   const applyBudgetFillDown = useCallback(() => {
@@ -2273,8 +2288,34 @@ export function BudgetEditor({
           onRemoveItem={removeItem}
           onActivateSpreadsheetCell={handleActivateSpreadsheetCell}
           spreadsheetSelectionKey={spreadsheetSelectionKey}
+          activeMetradoSheets={activeMetradoSheets}
         />
       </Card>
+
+      {manualOverrideItemId ? (
+        <AlertDialog
+          open
+          title="Cambiar a metrado manual"
+          description="Esta partida usa metrados avanzados. Si continúas, el valor dependerá del metrado manual y la hoja avanzada dejará de ser la fuente principal."
+          confirmLabel="Cambiar a manual"
+          onCancel={() => setManualOverrideItemId(null)}
+          onConfirm={() => {
+            const itemId = manualOverrideItemId;
+            const value = manualOverrideValue;
+            const sheetId = itemId ? activeMetradoSheetsByItemId.get(itemId) : undefined;
+            setManualOverrideItemId(null);
+            setManualOverrideValue(null);
+            if (!itemId || value === null || !sheetId) return;
+            void (async () => {
+              await setMetradoSheetActive(sheetId, false);
+              updateItem(itemId, { quantity: value });
+              setManualOverrideEditingItemId(itemId);
+              setError("");
+              window.setTimeout(() => cellRefs.current.get(getBudgetCellKey(itemId, "quantity"))?.focus(), 0);
+            })().catch(() => setError("No se pudo desvincular el metrado avanzado."));
+          }}
+        />
+      ) : null}
 
       <BudgetSummaryPanel
         budgetId={budget.id}
@@ -4219,6 +4260,8 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
 });
 
 type BudgetItemTableRowProps = {
+  isMetradoAdvanced?: boolean;
+  onRequestManualMetrado?: (itemId: string, value: number) => Promise<void>;
   projectId: string;
   budgetId: string;
   row: Extract<BudgetDisplayRow, { kind: "item" }>;
@@ -4254,10 +4297,10 @@ type BudgetItemTableRowProps = {
   spreadsheetActiveCell?: SpreadsheetCellAddress | null;
   spreadsheetSelectedKeys?: ReadonlySet<string>;
   onDuplicateItem?: (itemId: string) => void;
-  onRemoveItem?: (itemId: string) => void;
-  onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
+  onRemoveItem?: (itemId: string) => void;  onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
   spreadsheetSelectionKey?: string;
 };
+
 
 type ItemNotePreviewState = {
   loading: boolean;
@@ -4396,6 +4439,8 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onRowFocus,
   onCellFocus,
   onUpdateItem,
+  isMetradoAdvanced = false,
+  onRequestManualMetrado,
   onSetCellRef,
   onNavigate,
   onPasteRows,
@@ -4415,6 +4460,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onActivateSpreadsheetCell,
 }: BudgetItemTableRowProps) {
   const isEditingField = activeRowId === row.item.id && isEditableActiveColumn(activeColumn);
+  const metradoInputClass = isMetradoAdvanced ? "cursor-pointer border-sky-300 bg-sky-50 text-sky-800" : "";
   const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;
   const hasNoApu = !row.item.apu;
   const requiresCatalogReview = qualityState?.requiresCatalogReview ?? !row.item.apu;
@@ -4551,19 +4597,41 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
           onPaste={(event) => onPasteRows(event, row, "unit")}            onFocus={() => onCellFocus(row.item.id, "unit")}
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "unit" })}
         />
-      </TD>                      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-                        <BufferedInput
-                          {...buildSpreadsheetCellDataAttrs(row.item.id, "quantity", spreadsheetActiveCell, spreadsheetSelectedKeys)}
+      </TD>                      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", densityMode, isExcelMode)}>          <div className="flex items-center justify-end gap-1">
+            <BufferedInput
+                            {...buildSpreadsheetCellDataAttrs(row.item.id, "quantity", spreadsheetActiveCell, spreadsheetSelectedKeys)}
                           type="text"
           inputMode="decimal"
           value={row.item.quantity}
-          onCommit={(value) => onUpdateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) })}
-          className={cn(getInputDensityClass(densityMode, isExcelMode), "text-right tabular-nums")}
+          onCommit={(value) => {
+            if (isMetradoAdvanced) return;
+            onUpdateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) });
+          }}
+          readOnly={isMetradoAdvanced}
+          onClick={() => {
+            if (isMetradoAdvanced) {
+              void onRequestManualMetrado?.(row.item.id, parseSpreadsheetNumber(String(row.item.quantity)));
+            }
+          }}
+          onMouseDown={(event) => {
+            if (isMetradoAdvanced) event.preventDefault();
+          }}
+          title={isMetradoAdvanced ? "Haz clic para cambiar a metrado manual" : "Metrado manual editable"}
+          className={cn(getInputDensityClass(densityMode, isExcelMode), "text-right tabular-nums", metradoInputClass)}
           ref={(element) => onSetCellRef(row.item.id, "quantity", element)}
           onKeyDown={(event) => onNavigate(event, row.item.id, "quantity")}
           onPaste={(event) => onPasteRows(event, row, "quantity")}            onFocus={() => onCellFocus(row.item.id, "quantity")}
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "quantity" })}
-        />
+            />
+            <Link
+              href={`/metrados-avanzados?projectId=${encodeURIComponent(projectId)}&budgetId=${encodeURIComponent(budgetId)}&itemId=${encodeURIComponent(row.item.id)}`}
+              className={cn("inline-flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-[var(--app-surface-hover)]", isMetradoAdvanced ? "text-sky-600" : "text-[var(--app-text-muted)]")}
+              aria-label={`Abrir metrados avanzados de ${row.item.description}`}
+              title="Abrir metrados avanzados"
+            >
+              <Ruler className={cn("h-3.5 w-3.5", isMetradoAdvanced ? "text-sky-600" : "text-[var(--app-text-muted)]")} />
+            </Link>
+          </div>
       </TD>
       <TD
         className={getBodyCellClass(
@@ -4675,7 +4743,9 @@ function areBudgetItemRowPropsEqual(
     previous.spreadsheetSelectionKey === current.spreadsheetSelectionKey &&
     previous.onDuplicateItem === current.onDuplicateItem &&
     previous.onRemoveItem === current.onRemoveItem &&
-    previous.onActivateSpreadsheetCell === current.onActivateSpreadsheetCell
+    previous.onActivateSpreadsheetCell === current.onActivateSpreadsheetCell &&
+    previous.isMetradoAdvanced === current.isMetradoAdvanced &&
+    previous.onRequestManualMetrado === current.onRequestManualMetrado
   );
 }
 
@@ -4734,6 +4804,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onCellFocus,
   onUpdateLevel,
   onUpdateItem,
+  onRequestManualMetrado,
   onSetCellRef,
   onNavigate,
   onPasteRows,
@@ -4753,6 +4824,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onRemoveItem,
   onActivateSpreadsheetCell,
   spreadsheetSelectionKey,
+  activeMetradoSheets = [],
 }: {
   projectId: string;
   budgetId: string;
@@ -4805,6 +4877,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onRemoveItem?: (itemId: string) => void;
   onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
   spreadsheetSelectionKey?: string;
+  activeMetradoSheets?: Array<{ itemId: string; sheetId: string }>;
+  onRequestManualMetrado?: (itemId: string, value: number) => Promise<void>;
 }) {
   return (
     <CardContent className={cn("space-y-4", isExcelMode && "space-y-3")}>
@@ -4925,6 +4999,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onRemoveItem={onRemoveItem}
                   onActivateSpreadsheetCell={onActivateSpreadsheetCell}
                   spreadsheetSelectionKey={spreadsheetSelectionKey}
+                  isMetradoAdvanced={Boolean(activeMetradoSheets.find((sheet) => sheet.itemId === row.item.id))}
+                  onRequestManualMetrado={onRequestManualMetrado}
                 />
               ),
             )}

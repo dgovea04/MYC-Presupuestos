@@ -21,6 +21,7 @@ import { BudgetCollaborationWrapper } from "@/components/budget/budget-collabora
 import { DemoProjectTour } from "@/components/onboarding/demo-project-tour";
 import { getProjectBudgetOverviewById } from "@/lib/data/projects";
 import { getUserSettings } from "@/lib/data/settings";
+import { listMetradoSheetsByUser } from "@/lib/data/metrados";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import { decimalToNumber, stripBudgetProjectForClient } from "@/lib/db/serializers";
 import { measureAsync } from "@/lib/platform/performance";
@@ -91,6 +92,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       : null;
     const subBudgets = orderSubBudgetsBySpecialty(project.budgets.filter((item) => item.kind === "SUB_BUDGET"));
     const structuresBudget = subBudgets.find((item) => item.name === "Estructuras") ?? null;
+    const metradoSheets = await listMetradoSheetsByUser(session.user.id, { includeInactive: true });
 
     return (
       <AppShell
@@ -269,6 +271,15 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
           <GeneralBudgetOverview
             projectId={project.id}
             generalBudgetId={budget.id}
+            metradoItems={metradoSheets
+              .filter((sheet) => sheet.projectId === project.id && sheet.partidaLink)
+              .map((sheet) => ({
+                itemId: sheet.partidaLink!.budgetItemId,
+                projectId: sheet.projectId,
+                budgetId: sheet.budgetId,
+                totalQuantity: sheet.totalQuantity,
+                isActive: sheet.isActive,
+              }))}
             subBudgets={subBudgets.map((subBudget) => ({
               id: subBudget.id,
               projectId: subBudget.projectId,
@@ -328,6 +339,7 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
       <BudgetCollaborationWrapper budgetId={budget.id} projectId={project.id} budgetName={budget.name} userId={session.user.id} canUseCollaboration={canUseCollaboration}>
       <BudgetFlowWrapper
         budget={budgetForClient}
+        activeMetradoSheets={(await listMetradoSheetsByUser(session.user.id)).filter((sheet) => sheet.projectId === project.id && sheet.budgetId === budget.id && sheet.isActive && sheet.partidaLink).map((sheet) => ({ itemId: sheet.partidaLink!.budgetItemId, sheetId: sheet.id }))}
         projectName={project.name}
         templateTraceability={null}
         templateTraceabilityBudgetId={budget.id}

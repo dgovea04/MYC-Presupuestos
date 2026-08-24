@@ -15,6 +15,7 @@ const sheet: MetradoSheetRecord = {
   templateType: "CONCRETE",
   name: "Metrado de concreto",
   status: "DRAFT",
+  isActive: true,
   unit: "m3",
   totalQuantity: 6,
   partidaLink: null,

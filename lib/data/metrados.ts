@@ -3,6 +3,8 @@ import Decimal from "decimal.js";
 
 import { calculateMetradoSheet } from "@/lib/calculations/metrados";
 import { prisma } from "@/lib/db/prisma";
+import { requireProjectCapability } from "@/lib/workspace/project-access";
+import { refreshGeneralBudgetTotals } from "@/lib/data/budgets";
 import {
   hasBlockingMetradoIssues,
   validateMetradoSheet,
@@ -98,6 +100,7 @@ type MetradoCreationOptions = {
     code: string;
     description: string;
     unit: string;
+    quantity: number;
   }>;
 };
 
@@ -331,10 +334,13 @@ export async function ensureMetradoTemplates(): Promise<void> {
   });
 }
 
-export async function listMetradoSheetsByUser(userId: string): Promise<MetradoSheetRecord[]> {
+export async function listMetradoSheetsByUser(
+  userId: string,
+  options?: { includeInactive?: boolean },
+): Promise<MetradoSheetRecord[]> {
   await ensureMetradoTemplates();
   const sheets = await prisma.metradoSheet.findMany({
-    where: { userId },
+    where: options?.includeInactive ? { userId } : { userId, isActive: true },
     include: metradoSheetInclude,
     orderBy: { updatedAt: "desc" },
   });
@@ -364,6 +370,7 @@ export async function listMetradoCreationOptions(userId: string): Promise<Metrad
               code: true,
               description: true,
               unit: true,
+              quantity: true,
             },
           },
         },
@@ -394,6 +401,7 @@ export async function listMetradoCreationOptions(userId: string): Promise<Metrad
           code: item.code,
           description: item.description,
           unit: item.unit,
+          quantity: Number(item.quantity),
         })),
       ),
     ),
@@ -573,6 +581,26 @@ export async function updateMetradoSheetMetadata(
   return getMetradoSheetById(sheetId, userId);
 }
 
+export async function setMetradoSheetActiveState(input: {
+  sheetId: string;
+  userId: string;
+  isActive: boolean;
+}): Promise<MetradoSheetRecord | null> {
+  const existing = await prisma.metradoSheet.findFirst({
+    where: { id: input.sheetId, userId: input.userId },
+    select: { id: true },
+  });
+
+  if (!existing) return null;
+
+  await prisma.metradoSheet.update({
+    where: { id: existing.id },
+    data: { isActive: input.isActive },
+  });
+
+  return getMetradoSheetById(input.sheetId, input.userId);
+}
+
 export async function deleteMetradoSheet(sheetId: string, userId: string): Promise<boolean> {
   const existing = await prisma.metradoSheet.findFirst({
     where: { id: sheetId, userId },
@@ -624,6 +652,8 @@ export async function replaceMetradoRows(
           budgetItem: {
             select: {
               unit: true,
+              budgetId: true,
+              unitPrice: true,
             },
           },
         },
@@ -685,6 +715,22 @@ export async function replaceMetradoRows(
         status: "DRAFT",
       },
     });
+
+    const link = existing.partidaLinks[0];
+    if (link) {
+      const quantity = new Decimal(calculated.primaryTotal).toDecimalPlaces(3, Decimal.ROUND_HALF_UP);
+      const partial = quantity.times(link.budgetItem.unitPrice).toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
+      await tx.budgetItem.update({ where: { id: link.budgetItemId }, data: { quantity: quantity.toNumber(), partial: partial.toNumber() } });
+
+      const budget = await tx.budget.findUniqueOrThrow({ where: { id: link.budgetItem.budgetId }, select: { id: true, parentBudgetId: true, igvRate: true, generalExpensesRate: true, utilityRate: true } });
+      const items = await tx.budgetItem.findMany({ where: { budgetId: budget.id }, select: { quantity: true, unitPrice: true } });
+      const directCost = items.reduce((sum, item) => sum.plus(new Decimal(item.quantity).times(item.unitPrice)), new Decimal(0));
+      const generalExpenses = directCost.times(budget.generalExpensesRate);
+      const utility = directCost.times(budget.utilityRate);
+      const tax = directCost.plus(generalExpenses).plus(utility).times(budget.igvRate);
+      await tx.budget.update({ where: { id: budget.id }, data: { totalDirectCost: directCost.toDecimalPlaces(4).toNumber(), totalGeneralExpenses: generalExpenses.toDecimalPlaces(4).toNumber(), totalUtility: utility.toDecimalPlaces(4).toNumber(), totalTax: tax.toDecimalPlaces(4).toNumber(), totalAmount: directCost.plus(generalExpenses).plus(utility).plus(tax).toDecimalPlaces(4).toNumber() } });
+      if (budget.parentBudgetId) await refreshGeneralBudgetTotals(tx, budget.parentBudgetId);
+    }
   });
 
   return getMetradoSheetById(sheetId, userId);
@@ -859,6 +905,7 @@ function mapMetradoSheetRecord(sheet: MetradoSheetWithRelations): MetradoSheetRe
     templateType: toMetradoTemplateType(sheet.template.type),
     name: sheet.name,
     status: toMetradoSheetStatus(sheet.status),
+    isActive: sheet.isActive,
     unit: toMetradoUnit(sheet.unit),
     totalQuantity: Number(sheet.totalQuantity),
     rows: sheet.rows.map(mapMetradoRowRecord),
@@ -960,6 +1007,86 @@ export type ProjectMetradoSummary = {
     partidaUnit: string;
   }>;
 };
+
+export async function updateBudgetItemQuantityFromMetrados(input: {
+  itemId: string;
+  userId: string;
+  quantity: number;
+}): Promise<{ itemId: string; budgetId: string; projectId: string; quantity: number }> {
+  const quantity = new Decimal(input.quantity).toDecimalPlaces(3, Decimal.ROUND_HALF_UP);
+  if (quantity.isNegative() || !quantity.isFinite()) {
+    throw new Error("El metrado debe ser un número mayor o igual a cero.");
+  }
+
+  const item = await prisma.budgetItem.findFirst({
+    where: {
+      id: input.itemId,
+      budget: {
+        project: {
+          company: {
+            memberships: { some: { userId: input.userId, status: "ACTIVE" } },
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      budgetId: true,
+      budget: {
+        select: {
+          projectId: true,
+          parentBudgetId: true,
+          project: { select: { companyId: true } },
+          igvRate: true,
+          generalExpensesRate: true,
+          utilityRate: true,
+        },
+      },
+      unitPrice: true,
+    },
+  });
+
+  if (!item) throw new Error("La partida no existe o no pertenece a tu workspace.");
+  await requireBudgetItemMetradoMutation(input.userId, item.budget.projectId, item.budget.project.companyId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.budgetItem.update({
+      where: { id: item.id },
+      data: { quantity: quantity.toNumber(), partial: quantity.times(item.unitPrice).toNumber() },
+    });
+
+    const items = await tx.budgetItem.findMany({ where: { budgetId: item.budgetId }, select: { quantity: true, unitPrice: true } });
+    const directCost = items.reduce((total, current) => total.plus(new Decimal(current.quantity).times(current.unitPrice)), new Decimal(0));
+    const generalExpenses = directCost.times(item.budget.generalExpensesRate);
+    const utility = directCost.times(item.budget.utilityRate);
+    const tax = directCost.plus(generalExpenses).plus(utility).times(item.budget.igvRate);
+
+    await tx.budget.update({
+      where: { id: item.budgetId },
+      data: {
+        totalDirectCost: directCost.toDecimalPlaces(4).toNumber(),
+        totalGeneralExpenses: generalExpenses.toDecimalPlaces(4).toNumber(),
+        totalUtility: utility.toDecimalPlaces(4).toNumber(),
+        totalTax: tax.toDecimalPlaces(4).toNumber(),
+        totalAmount: directCost.plus(generalExpenses).plus(utility).plus(tax).toDecimalPlaces(4).toNumber(),
+      },
+    });
+
+    if (item.budget.parentBudgetId) await refreshGeneralBudgetTotals(tx, item.budget.parentBudgetId);
+  });
+
+  return { itemId: item.id, budgetId: item.budgetId, projectId: item.budget.projectId, quantity: quantity.toNumber() };
+}
+
+async function requireBudgetItemMetradoMutation(userId: string, projectId: string, companyId: string) {
+  await requireProjectCapability({
+    userId,
+    projectId,
+    companyId,
+    capability: "budgets.update",
+    minimumProjectRole: "EDITOR",
+  });
+}
 
 export async function getMetradoProjectSummary(
   projectId: string,

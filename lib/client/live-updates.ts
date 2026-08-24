@@ -14,8 +14,17 @@ export type BudgetLiveUpdateSummary = {
   updatedAt: string;
 };
 
+export type MetradoLiveUpdateSummary = {
+  itemId: string;
+  projectId: string;
+  budgetId: string;
+  quantity: number;
+  isAdvanced: boolean;
+};
+
 export type AppDataChangePayload = {
   paths: string[];
+  metrados?: MetradoLiveUpdateSummary[];
   occurredAt: number;
   budgets?: BudgetLiveUpdateSummary[];
   locallyHandledPaths?: string[];
@@ -24,12 +33,13 @@ export type AppDataChangePayload = {
 export function broadcastAppDataChange(
   paths: string[],
   budgets?: BudgetLiveUpdateSummary[],
-  options?: { locallyHandledPaths?: string[] },
+  options?: { locallyHandledPaths?: string[]; metrados?: MetradoLiveUpdateSummary[] },
 ) {
   const payload: AppDataChangePayload = {
     paths,
     occurredAt: Date.now(),
     budgets,
+    metrados: options?.metrados,
     locallyHandledPaths: options?.locallyHandledPaths,
   };
 

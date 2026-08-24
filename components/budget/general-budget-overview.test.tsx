@@ -79,6 +79,8 @@ describe("GeneralBudgetOverview", () => {
 
     expect(getByText("Movimiento de tierras")).toBeTruthy();
     expect(getByText("Acero fy=4200")).toBeTruthy();
+    expect(document.querySelector('input[aria-label="Metrado de Movimiento de tierras"]')).toBeTruthy();
+    expect(document.querySelector('a[href*="/metrados-avanzados"]')).toBeTruthy();
     expect(getLinkByText("Revisar con IA").getAttribute("href")).toContain("/ai?action=review");
     const generalTableText = getByTestId("general-budget-tab-table").textContent ?? "";
     expect(generalTableText).not.toContain("Sub presupuesto");
@@ -171,6 +173,9 @@ async function renderOverview({ subBudgetDetails = createSubBudgetDetails() }: {
             generalBudgetId="general-1"
             subBudgets={createSubBudgetOverview()}
             subBudgetDetails={subBudgetDetails}
+            metradoItems={[
+              { itemId: "item-1", projectId: "project-1", budgetId: "sub-1", totalQuantity: 12.5 },
+            ]}
           />
         </AppViewModeProvider>
       </FormattingSettingsProvider>,
@@ -240,6 +245,12 @@ function createSettings(): UserSettingsRecord {
     defaultGeneralExpensesRate: 0.1,
     defaultUtilityRate: 0.08,
     defaultSubBudgetNames: ["Estructuras", "Arquitectura"],
+    floatingKhipuProvider: "openai",
+    floatingKhipuWidth: 420,
+    floatingKhipuHeight: 620,
+    floatingKhipuFontSize: "normal",
+    floatingKhipuPosition: "bottom-right",
+    floatingKhipuTheme: "light",
   };
 }
 

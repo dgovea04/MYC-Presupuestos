@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { AlertDialog } from "@/components/ui/alert-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
@@ -24,12 +25,15 @@ import {
   getAppDataChangeEventName,
   getAppDataChangeStorageKey,
   type AppDataChangePayload,
+  type MetradoLiveUpdateSummary,
 } from "@/lib/client/live-updates";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
 import { orderSubBudgetsBySpecialty } from "@/lib/budgets/sub-budget-order";
 import type { BudgetRecord } from "@/types/budget";
 import type { CatalogPartidaRecord } from "@/types/partida";
+import { MetradoCell } from "@/components/metrados/MetradoCell";
+import { Ruler } from "lucide-react";
 
 type SubBudgetOverview = {
   id: string;
@@ -45,6 +49,14 @@ type SubBudgetOverview = {
   updatedAt: string;
   levelsCount: number;
   itemsCount: number;
+};
+
+type MetradoItemSummary = {
+  itemId: string;
+  projectId: string;
+  budgetId: string;
+  totalQuantity: number;
+  isActive?: boolean;
 };
 
 const QUANTITY_DECIMALS = 2;
@@ -66,11 +78,13 @@ export function GeneralBudgetOverview({
   generalBudgetId,
   subBudgets,
   subBudgetDetails: initialSubBudgetDetails = [],
+  metradoItems = [],
 }: {
   projectId: string;
   generalBudgetId: string;
   subBudgets: SubBudgetOverview[];
   subBudgetDetails?: BudgetRecord[];
+  metradoItems?: MetradoItemSummary[];
 }) {
   const { currencyDecimals, dateFormat } = useFormattingSettings();
   const { isExcelMode } = useAppViewMode();
@@ -85,9 +99,66 @@ export function GeneralBudgetOverview({
   const [createdSubpartidasByResourceId, setCreatedSubpartidasByResourceId] = useState<Record<string, CatalogPartidaRecord>>({});
   const [creatingSubpartidaKey, setCreatingSubpartidaKey] = useState<string | null>(null);
   const [subpartidaCreationError, setSubpartidaCreationError] = useState("");
+  const [quantityError, setQuantityError] = useState("");
+  const [liveMetrados, setLiveMetrados] = useState<Record<string, MetradoLiveUpdateSummary>>({});
+  const [pendingManualOverride, setPendingManualOverride] = useState<{ itemId: string; value: string } | null>(null);
+
+  async function updateItemQuantity(itemId: string, value: string) {
+    const advancedSheet = metradoItems.find((entry) => entry.itemId === itemId && entry.isActive !== false);
+    if (advancedSheet) {
+      setPendingManualOverride({ itemId, value });
+      return;
+    }
+    void persistManualQuantity(itemId, value);
+  }
+
+  async function persistManualQuantity(itemId: string, value: string) {
+    const normalized = value.trim().replace(",", ".");
+    setQuantityError("");
+
+    try {
+      const response = await fetch(`/api/budget-items/${itemId}/quantity`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: normalized }),
+      });
+      const payload = (await response.json()) as { quantity?: number; budgetId?: string; error?: string };
+      if (!response.ok || typeof payload.quantity !== "number") {
+        throw new Error(payload.error ?? "No se pudo guardar el metrado.");
+      }
+
+      setLiveMetrados((current) => ({
+        ...current,
+        [itemId]: {
+          itemId,
+          projectId,
+          budgetId: payload.budgetId ?? "",
+          quantity: payload.quantity ?? 0,
+          isAdvanced: false,
+        },
+      }));
+      router.refresh();
+    } catch (error) {
+      setQuantityError(error instanceof Error ? error.message : "No se pudo guardar el metrado.");
+    }
+  }
+
+  async function confirmManualOverride() {
+    if (!pendingManualOverride) return;
+    const pending = pendingManualOverride;
+    setPendingManualOverride(null);
+    await persistManualQuantity(pending.itemId, pending.value);
+  }
 
   useEffect(() => {
     function applyPayload(payload: AppDataChangePayload | null) {
+      const metrados = payload?.metrados;
+      if (metrados && metrados.length > 0) {
+        setLiveMetrados((current) => ({
+          ...current,
+          ...Object.fromEntries(metrados.map((metrado) => [metrado.itemId, metrado])),
+        }));
+      }
       if (!payload?.budgets?.length) return;
 
       const matchingBudgets = payload.budgets.filter(
@@ -306,7 +377,16 @@ export function GeneralBudgetOverview({
     }
   }
   return (
-    <div className="space-y-5">
+    <>
+      <AlertDialog
+        open={Boolean(pendingManualOverride)}
+        title="Cambiar a metrado manual"
+        description="Esta partida usa metrados avanzados. Si continúas, el valor dependerá del metrado manual y la hoja avanzada dejará de ser la fuente principal."
+        confirmLabel="Cambiar a manual"
+        onConfirm={() => void confirmManualOverride()}
+        onCancel={() => setPendingManualOverride(null)}
+      />
+      <div className="space-y-5">
       <Card className="theme-surface-card rounded-2xl">
         <CardContent className="space-y-4 p-6">
           <OperationalPanel
@@ -353,6 +433,7 @@ export function GeneralBudgetOverview({
           {subBudgetDetailsError ? (
             <p className="theme-status-error rounded-xl border px-3 py-2 text-sm">{subBudgetDetailsError}</p>
           ) : null}
+          {quantityError ? <p className="theme-status-error rounded-xl border px-3 py-2 text-sm">{quantityError}</p> : null}
 
           {isComparisonOpen ? (
             <BudgetComparisonPanel
@@ -652,20 +733,21 @@ export function GeneralBudgetOverview({
                         <TH>Descripción</TH>
                         <TH className="text-center">Unidad</TH>
                         <TH className="text-right">Metrado</TH>
+                        <TH className="text-right">Metrado avanzado</TH>
                         <TH className="text-right">P. unitario</TH>
                         <TH className="text-right">Parcial</TH>
                       </TR>
                     </THead>
                     <TBody>
                       {generalDetailBudgets.map((budgetDetail) => (
-                        [
+                        <Fragment key={budgetDetail.id}>
                           <TR key={`${budgetDetail.id}-group`} className="bg-[var(--app-surface-strong)]/80 hover:bg-[var(--app-surface-strong)]/80">
                             <TD colSpan={6} className="font-semibold text-[var(--app-text-strong)]">
                               {budgetDetail.name}
                             </TD>
-                          </TR>,
-                          ...budgetDetail.displayRows.map((row) =>
-                          row.kind === "level" ? (
+                          </TR>
+                          {budgetDetail.displayRows.map((row) =>
+                            row.kind === "level" ? (
                             <TR key={row.level.id} className={getLevelRowClass(row.level.type)}>
                               <TD className="font-medium text-[var(--app-text)]">{row.level.code}</TD>
                               <TD>
@@ -696,7 +778,25 @@ export function GeneralBudgetOverview({
                               </TD>
                               <TD className="text-center">{row.item.unit}</TD>
                               <TD className="text-right tabular-nums">
-                                {formatNumber(row.item.quantity, QUANTITY_DECIMALS)}
+                              <MetradoCell
+                                itemId={row.item.id}
+                                description={row.item.description}
+                                projectId={projectId}
+                                budgetId={budgetDetail.id}
+                                quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
+                                onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}
+                              />
+                            </TD>
+                              <TD className="text-right tabular-nums">
+                                {(() => {
+                                  const metrado = metradoItems.find((entry) => entry.itemId === row.item.id);
+                                  return metrado ? (
+                                    <Link href={`/metrados-avanzados?projectId=${projectId}&budgetId=${metrado.budgetId}&itemId=${metrado.itemId}`} className="inline-flex items-center gap-1 text-[var(--app-primary)] hover:underline">
+                                      <Ruler className="h-3.5 w-3.5" />
+                                      {formatNumber(liveMetrados[metrado.itemId]?.quantity ?? metrado.totalQuantity, QUANTITY_DECIMALS)}
+                                    </Link>
+                                  ) : "—";
+                                })()}
                               </TD>
                               <TD className="text-right tabular-nums">
                                 {formatCurrencyCell(row.item.unitPrice, budgetDetail.currency, currencyDecimals)}
@@ -709,9 +809,8 @@ export function GeneralBudgetOverview({
                                 />
                               </TD>
                             </TR>
-                          ),
-                          ),
-                        ]
+                          ))}
+                        </Fragment>
                       ))}
                     </TBody>
                   </Table>
@@ -810,6 +909,7 @@ export function GeneralBudgetOverview({
                         <TH>Descripción</TH>
                         <TH className="text-center">Unidad</TH>
                         <TH className="text-right">Metrado</TH>
+                        <TH className="text-right">Metrado avanzado</TH>
                         <TH className="text-right">P. unitario</TH>
                         <TH className="text-right">Parcial</TH>
                       </TR>
@@ -847,11 +947,29 @@ export function GeneralBudgetOverview({
                             </TD>
                             <TD className="text-center">{row.item.unit}</TD>
                             <TD className="text-right tabular-nums">
-                              {formatNumber(row.item.quantity, QUANTITY_DECIMALS)}
+                              <MetradoCell
+                                itemId={row.item.id}
+                                description={row.item.description}
+                                projectId={projectId}
+                                budgetId={activeBudget.id}
+                                quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
+                                onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}
+                              />
                             </TD>
-                            <TD className="text-right tabular-nums">
-                              {formatCurrencyCell(row.item.unitPrice, activeBudget.currency, currencyDecimals)}
-                            </TD>
+                              <TD className="text-right tabular-nums">
+                                {(() => {
+                                  const metrado = metradoItems.find((entry) => entry.itemId === row.item.id);
+                                  return metrado ? (
+                                    <Link href={`/metrados-avanzados?projectId=${projectId}&budgetId=${metrado.budgetId}&itemId=${metrado.itemId}`} className="inline-flex items-center gap-1 text-[var(--app-primary)] hover:underline">
+                                      <Ruler className="h-3.5 w-3.5" />
+                                      {formatNumber(liveMetrados[metrado.itemId]?.quantity ?? metrado.totalQuantity, QUANTITY_DECIMALS)}
+                                    </Link>
+                                  ) : "—";
+                                })()}
+                              </TD>
+                              <TD className="text-right tabular-nums">
+                                {formatCurrencyCell(row.item.unitPrice, activeBudget.currency, currencyDecimals)}
+                              </TD>
                             <TD className="text-right">
                               <AnimatedCurrencyValue
                                 value={row.item.partial}
@@ -990,7 +1108,8 @@ export function GeneralBudgetOverview({
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </>
   );
 }
 
