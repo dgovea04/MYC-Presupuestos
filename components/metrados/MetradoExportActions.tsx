@@ -20,6 +20,7 @@ type MetradoExportActionsProps = {
   saveState?: SaveStateBadgeStatus;
   lastSavedLabel?: string | null;
   saveLabel?: string;
+  sendLabel?: string;
 };
 
 export function MetradoExportActions({
@@ -34,6 +35,7 @@ export function MetradoExportActions({
   saveState,
   lastSavedLabel = null,
   saveLabel = "Guardar",
+  sendLabel = "Enviar",
 }: MetradoExportActionsProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const busy = actionState === "saving";
@@ -52,7 +54,7 @@ export function MetradoExportActions({
       <Button
         size="sm"
         variant="secondary"
-        onClick={onSaveDraft}
+        onClick={() => onSaveDraft()}
         disabled={!canSave || busy}
         className="h-8 rounded-full px-4 text-[11px] font-semibold tracking-[0.08em] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]"
       >
@@ -91,12 +93,12 @@ export function MetradoExportActions({
         )}
         <button
           type="button"
-          onClick={onSendToPartida}
+          onClick={() => onSendToPartida()}
           disabled={!canSend || busy}
           className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-primary-soft)] transition hover:bg-[var(--app-primary-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:pointer-events-none disabled:opacity-50"
         >
           <SendHorizontal className="h-4 w-4" />
-          Enviar
+          {sendLabel}
         </button>
       </div>
       <input

@@ -13,6 +13,9 @@ export function MetradoSheetDrawer({
   title = "Hoja de metrados",
   description,
   className,
+  headerActionLabel,
+  onHeaderAction,
+  headerActionDisabled = false,
 }: {
   sheet: MetradoSheetRecord | null;
   open: boolean;
@@ -21,6 +24,9 @@ export function MetradoSheetDrawer({
   title?: string;
   description?: string;
   className?: string;
+  headerActionLabel?: string;
+  onHeaderAction?: () => void;
+  headerActionDisabled?: boolean;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
@@ -31,7 +37,13 @@ export function MetradoSheetDrawer({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div><Dialog.Title className="text-lg font-semibold text-[var(--app-text-strong)]">{title}</Dialog.Title><Dialog.Description className="text-sm text-[var(--app-text-muted)]">{description ?? sheet?.partidaLink?.budgetItemDescription ?? sheet?.name ?? ""}</Dialog.Description>
               </div>
-              <Dialog.Close asChild><Button type="button" variant="outline">Cerrar</Button></Dialog.Close>
+              {headerActionLabel && onHeaderAction ? (
+                <Button type="button" onClick={() => onHeaderAction()} disabled={headerActionDisabled}>
+                  {headerActionLabel}
+                </Button>
+              ) : (
+                <Dialog.Close asChild><Button type="button" variant="outline">Cerrar</Button></Dialog.Close>
+              )}
             </div>
             {children}
           </div>

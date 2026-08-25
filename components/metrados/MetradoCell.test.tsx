@@ -27,7 +27,7 @@ describe("MetradoCell", () => {
     const input = screen.getByLabelText("Metrado de Excavación");
     fireEvent.change(input, { target: { value: "12,5" } });
     fireEvent.blur(input);
-    fireEvent.click(screen.getByRole("button", { name: "Abrir metrados avanzados" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crear metrado avanzado" }));
 
     expect(onSave).toHaveBeenCalledWith("12,5");
     expect(onOpenAdvanced).toHaveBeenCalled();
@@ -42,7 +42,6 @@ describe("MetradoCell", () => {
         projectId="project-1"
         budgetId="budget-1"
         quantity={10}
-        advancedQuantity={10}
         hasAdvancedSheet
         onSave={vi.fn().mockResolvedValue(undefined)}
         onRequestManualOverride={onRequestManualOverride}

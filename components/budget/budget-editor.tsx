@@ -4634,20 +4634,11 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
           onPaste={(event) => onPasteRows(event, row, "quantity")}            onFocus={() => onCellFocus(row.item.id, "quantity")}
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "quantity" })}
             />
-            {isMetradoAdvanced ? (
-              <span
-                className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700"
-                title="El valor proviene de una hoja de metrado avanzado"
-                aria-label="Metrado avanzado"
-              >
-                ADV
-              </span>
-            ) : null}
             <Link
               href={`/metrados-avanzados?projectId=${encodeURIComponent(projectId)}&budgetId=${encodeURIComponent(budgetId)}&itemId=${encodeURIComponent(row.item.id)}`}
               className={cn("inline-flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-[var(--app-surface-hover)]", isMetradoAdvanced ? "text-sky-600" : "text-[var(--app-text-muted)]")}
-              aria-label={`Abrir metrados avanzados de ${row.item.description}`}
-              title="Abrir metrados avanzados"
+              aria-label={`${isMetradoAdvanced ? "Abrir metrados avanzados" : "Crear metrado avanzado"} de ${row.item.description}`}
+              title={isMetradoAdvanced ? "Abrir metrados avanzados" : "Crear metrado avanzado"}
             >
               <Ruler className={cn("h-3.5 w-3.5", isMetradoAdvanced ? "text-sky-600" : "text-[var(--app-text-muted)]")} />
             </Link>

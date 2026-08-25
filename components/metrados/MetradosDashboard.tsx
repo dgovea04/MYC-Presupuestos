@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { CellValue, Worksheet } from "exceljs";
 import { BarChart3, Calculator, ChevronRight, Copy, FileSpreadsheet, PenLine, Plus, Redo, Search, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   addMetradoRow,
@@ -119,6 +120,7 @@ export function MetradosDashboard({
   templates,
   initialContext,
 }: MetradosDashboardProps) {
+  const router = useRouter();
   const [sheets, setSheets] = useState<MetradoSheetRecord[]>(initialSheets);
   const [customFormulas, setCustomFormulas] = useState<CustomMetradoFormulaRecord[]>(initialCustomFormulas);
   const initialTemplate = templates.find((entry) => entry.type === initialTemplateType) ?? null;
@@ -373,12 +375,9 @@ export function MetradosDashboard({
     const partida = partidas.find((candidate) => candidate.id === initialContext.itemId);
     if (!partida) return;
 
-    const existingSheet = activeSheetByPartidaId.get(partida.id);
-    if (existingSheet) {
-      window.setTimeout(() => {
-        openPartidaSheet(partida);
-      }, 0);
-    }
+    window.setTimeout(() => {
+      openPartidaSheet(partida);
+    }, 0);
   }, [activeSheetByPartidaId, initialContext?.itemId, partidas, selectedSheetId]);
 
   function selectSheet(sheetId: string) {
@@ -616,6 +615,9 @@ export function MetradosDashboard({
         }));
       }
       setFeedback("Total enviado a la partida.");
+      if (initialContext?.itemId && initialContext.budgetId) {
+        router.push(`/budgets/${initialContext.budgetId}`);
+      }
     }, "No se pudo enviar el total.");
   }
 
@@ -909,17 +911,18 @@ export function MetradosDashboard({
             canSave={Boolean(selectedSheet) && (!hasBlockingIssues || rows.length === 0)}
             canSend={Boolean(selectedSheet) && !hasBlockingIssues}
             canImport={Boolean(selectedSheet)}
-            onSaveDraft={saveDraft}
+            onSaveDraft={() => void saveDraft()}
             onImportFile={importRows}
             onSendToPartida={sendToPartida}
             saveState={selectedSheet ? saveState : undefined}
             lastSavedLabel={lastSavedAt ? formatLastSavedLabel(lastSavedAt, saveClock) : null}
             saveLabel="Guardar"
+            sendLabel={initialContext?.itemId ? "Enviar y volver" : "Enviar"}
           />
         </div>
       </div>
 
-      {projectId && budgetId ? (
+      {projectId && budgetId && !initialContext?.itemId ? (
         <>
           <div className="flex justify-end">
             <Button type="button" variant="outline" size="sm" onClick={() => setHistoryOpen((open) => !open)}>
@@ -1000,6 +1003,20 @@ export function MetradosDashboard({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {selectedSheet && !openedPartidaId ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setOpenedPartidaId(selectedSheet.partidaLink?.budgetItemId ?? partidaId);
+                }}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Abrir hoja
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="outline"                onClick={(event) => {
@@ -1313,7 +1330,14 @@ export function MetradosDashboard({
       />
 
       {selectedSheet ? (
-        <MetradoSheetDrawer sheet={selectedSheet} open={Boolean(openedPartidaId)} onClose={closeSheetDrawer}>
+        <MetradoSheetDrawer
+          sheet={selectedSheet}
+          open={Boolean(openedPartidaId)}
+          onClose={closeSheetDrawer}
+          headerActionLabel={initialContext?.itemId ? (actionState === "saving" ? "Enviando" : "Enviar y volver") : undefined}
+          onHeaderAction={initialContext?.itemId ? () => void sendToPartida() : undefined}
+          headerActionDisabled={actionState === "saving" || !selectedSheet || hasBlockingIssues}
+        >
           <MetradoSheetEditor
             sheet={selectedSheet}
             formulaBar={<MetradoFormulaBar
@@ -1513,7 +1537,7 @@ export function PartidaOverview({
                   setManualOverrideIds((current) => new Set(current).add(partida.id));
                 }
               };
-              return <TR key={partida.id}><TD>{partida.code}</TD><TD className="font-medium text-[var(--app-text-strong)]">{partida.description}</TD><TD>{partida.unit}</TD><TD className="text-right"><MetradoCell itemId={partida.id} description={partida.description} projectId={partida.projectId} budgetId={partida.budgetId} quantity={Number(displayedQuantity) || 0} hasAdvancedSheet={Boolean(sheet && !isManualOverride)} advancedQuantity={sheet?.totalQuantity} onSave={saveQuantity} onOpenAdvanced={() => onOpenPartida(partida)} /></TD><TD>{sheet && !isManualOverride ? "Avanzado" : partida.quantity > 0 || isManualOverride ? "Manual" : "Sin metrado"}</TD><TD><div className="flex justify-end"><Button type="button" size="sm" variant="outline" onClick={() => onOpenPartida(partida)}>Abrir hoja</Button></div></TD></TR>;
+              return <TR key={partida.id}><TD>{partida.code}</TD><TD className="font-medium text-[var(--app-text-strong)]">{partida.description}</TD><TD>{partida.unit}</TD><TD className="text-right"><MetradoCell itemId={partida.id} description={partida.description} projectId={partida.projectId} budgetId={partida.budgetId} quantity={Number(displayedQuantity) || 0} hasAdvancedSheet={Boolean(sheet && !isManualOverride)} onSave={saveQuantity} onOpenAdvanced={() => onOpenPartida(partida)} /></TD><TD>{sheet && !isManualOverride ? "Avanzado" : partida.quantity > 0 || isManualOverride ? "Manual" : "Sin metrado"}</TD><TD><div className="flex justify-end"><Button type="button" size="sm" variant="outline" onClick={() => onOpenPartida(partida)}>Abrir hoja</Button></div></TD></TR>;
             })}
             {partidas.length === 0 ? <TR><TD colSpan={6} className="py-8 text-center text-sm text-[var(--app-text-muted)]">No hay partidas que coincidan con el filtro.</TD></TR> : null}
           </TBody>

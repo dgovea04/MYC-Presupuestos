@@ -13,7 +13,6 @@ export function MetradoCell({
   projectId,
   budgetId,
   quantity,
-  advancedQuantity,
   hasAdvancedSheet,
   onSave,
   onOpenAdvanced,
@@ -25,7 +24,6 @@ export function MetradoCell({
   projectId: string;
   budgetId: string;
   quantity: number;
-  advancedQuantity?: number;
   hasAdvancedSheet?: boolean;
   showAdvancedAction?: boolean;
   onSave: (value: string) => Promise<void>;
@@ -62,15 +60,27 @@ export function MetradoCell({
         />
       )}
       {showAdvancedAction ? (onOpenAdvanced ? (
-        <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={onOpenAdvanced} aria-label="Abrir metrados avanzados">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2"
+          onClick={onOpenAdvanced}
+          aria-label={hasAdvancedSheet ? "Abrir metrados avanzados" : "Crear metrado avanzado"}
+          title={hasAdvancedSheet ? "Abrir metrados avanzados" : "Crear metrado avanzado"}
+        >
           <Ruler className={cn("h-3.5 w-3.5", hasAdvancedSheet ? "text-sky-600" : "text-[var(--app-text-muted)]")} />
         </Button>
       ) : (
-        <Link href={`/metrados-avanzados?projectId=${projectId}&budgetId=${budgetId}&itemId=${itemId}`} className="text-[var(--app-primary)]" aria-label="Abrir metrados avanzados">
+        <Link
+          href={`/metrados-avanzados?projectId=${projectId}&budgetId=${budgetId}&itemId=${itemId}`}
+          className="text-[var(--app-primary)]"
+          aria-label={hasAdvancedSheet ? "Abrir metrados avanzados" : "Crear metrado avanzado"}
+          title={hasAdvancedSheet ? "Abrir metrados avanzados" : "Crear metrado avanzado"}
+        >
           <Ruler className={cn("h-3.5 w-3.5", hasAdvancedSheet ? "text-sky-600" : "text-[var(--app-text-muted)]")} />
         </Link>
       )) : null}
-      {hasAdvancedSheet && advancedQuantity !== undefined ? <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-700" title="El valor proviene de la hoja avanzada" aria-label="Metrado avanzado">ADV</span> : null}
     </div>
   );
 }

@@ -796,7 +796,6 @@ export function GeneralBudgetOverview({
                                     projectId={projectId}
                                     budgetId={budgetDetail.id}
                                     quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
-                                    advancedQuantity={activeAdvancedMetrado?.totalQuantity}
                                     hasAdvancedSheet={Boolean(activeAdvancedMetrado)}
                                     onRequestManualOverride={(value) => setPendingManualOverride({ itemId: row.item.id, value })}
                                     onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}
@@ -973,7 +972,6 @@ export function GeneralBudgetOverview({
                                     projectId={projectId}
                                     budgetId={activeBudget.id}
                                     quantity={liveMetrados[row.item.id]?.quantity ?? row.item.quantity}
-                                    advancedQuantity={activeAdvancedMetrado?.totalQuantity}
                                     hasAdvancedSheet={Boolean(activeAdvancedMetrado)}
                                     onRequestManualOverride={(value) => setPendingManualOverride({ itemId: row.item.id, value })}
                                     onSave={(value) => updateItemQuantity(row.item.id, value).then(() => undefined)}

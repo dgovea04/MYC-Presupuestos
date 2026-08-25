@@ -75,7 +75,9 @@ describe("PartidaOverview", () => {
       />,
     );
 
-    expect((screen.getByLabelText("Metrado de Concreto armado") as HTMLInputElement).value).toBe("27.75");
+    const advancedQuantity = screen.getByLabelText("Metrado de Concreto armado");
+    expect(advancedQuantity).toBeInstanceOf(HTMLButtonElement);
+    expect(advancedQuantity.textContent).toBe("27.75");
     expect(screen.getByText("Avanzado")).toBeTruthy();
   });
 

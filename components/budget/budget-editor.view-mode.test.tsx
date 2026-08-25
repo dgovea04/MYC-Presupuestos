@@ -104,12 +104,13 @@ describe("BudgetEditor view mode integration", () => {
   });
 
   it("marks an advanced metrado and opens the manual override confirmation on click", async () => {
-    const { getButtonByText, getByText, getInputByValue, queryByText } = await renderEditor({
+    const { getButtonByText, getByText, getInputByValue } = await renderEditor({
       budget: createBudgetWithItem(),
       activeMetradoSheets: [{ itemId: "item-1", sheetId: "sheet-1" }],
     });
 
-    expect(getByText("ADV")).toBeTruthy();
+    expect(document.querySelector('a[aria-label="Abrir metrados avanzados de Partida demo"]')).toBeTruthy();
+    expect(document.body.textContent).not.toContain("ADV");
 
     await act(async () => {
       getInputByValue("5").click();
@@ -127,8 +128,17 @@ describe("BudgetEditor view mode integration", () => {
       await Promise.resolve();
     });
 
-    expect(queryByText("ADV")).toBeNull();
+    expect(document.querySelector('a[aria-label="Crear metrado avanzado de Partida demo"]')).toBeTruthy();
     expect(getInputByValue("5").readOnly).toBe(false);
+  });
+
+  it("offers creating an advanced metrado for a manual partida", async () => {
+    await renderEditor({ budget: createBudgetWithItem() });
+
+    const link = document.querySelector('a[aria-label="Crear metrado avanzado de Partida demo"]');
+    expect(link).toBeInstanceOf(HTMLAnchorElement);
+    expect(link?.getAttribute("title")).toBe("Crear metrado avanzado");
+    expect(link?.getAttribute("href")).toContain("itemId=item-1");
   });
 
   it("tightens the table in excel mode while keeping the Ctrl+Enter path available for APU editing", async () => {

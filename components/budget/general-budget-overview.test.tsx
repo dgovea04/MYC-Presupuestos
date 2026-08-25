@@ -170,7 +170,8 @@ describe("GeneralBudgetOverview", () => {
 
     const input = document.querySelector('[aria-label="Metrado de Movimiento de tierras"]');
     expect(input).toBeInstanceOf(HTMLButtonElement);
-    expect(document.body.textContent).toContain("ADV");
+    expect(input?.getAttribute("title")).toBe("Haz clic para cambiar a metrado manual");
+    expect(document.body.textContent).not.toContain("ADV");
 
     await act(async () => {
       input?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
