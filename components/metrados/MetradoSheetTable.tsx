@@ -401,6 +401,7 @@ export function MetradoSheetTable({
               ) : (
                 <NormalRow
                   key={row.id}
+                  isExcelMode={isExcelMode}
                   row={row}
                   formulas={formulas}
                   inputColumns={inputColumns}
@@ -460,6 +461,7 @@ function TextCell({
   onFocus,
   onChange,
   onDragFillStart,
+  isExcelMode,
 }: {
   ariaLabel: string;
   value: string;
@@ -470,6 +472,7 @@ function TextCell({
   onFocus: () => void;
   onChange: (value: string) => void;
   onDragFillStart?: (event: React.PointerEvent) => void;
+  isExcelMode: boolean;
 }) {
   const [rowId, columnId] = cellKey.split("::");
   return (
@@ -486,7 +489,11 @@ function TextCell({
         value={value}
         onFocus={onFocus}
         onChange={(event) => onChange(event.currentTarget.value)}
-        className={cn("h-8 rounded-md border-transparent px-2 text-xs", active && "border-sky-500 bg-sky-50")}
+        className={cn(
+          "h-8 rounded-md px-2 text-xs",
+          isExcelMode ? "border-transparent" : "border-[var(--app-border-soft)]",
+          active && !isExcelMode && "border-sky-500 bg-sky-50",
+        )}
       />
       {active && onDragFillStart ? (
         <DragHandle onPointerDown={(e) => onDragFillStart(e)} />
@@ -509,6 +516,7 @@ function NumericCell({
   onFocus,
   onChange,
   onDragFillStart,
+  isExcelMode,
 }: {
   ariaLabel: string;
   value: number | undefined;
@@ -519,6 +527,7 @@ function NumericCell({
   onFocus: () => void;
   onChange: (value: string) => void;
   onDragFillStart?: (event: React.PointerEvent) => void;
+  isExcelMode: boolean;
 }) {
   const [rowId, columnId] = cellKey.split("::");
   return (
@@ -539,8 +548,9 @@ function NumericCell({
         onFocus={onFocus}
         onChange={(event) => onChange(event.currentTarget.value)}
         className={cn(
-          "h-8 rounded-md border-transparent px-2 text-right text-xs tabular-nums",
-          active && "border-sky-500 bg-sky-50",
+          "h-8 rounded-md px-2 text-right text-xs tabular-nums",
+          isExcelMode ? "border-transparent" : "border-[var(--app-border-soft)]",
+          active && !isExcelMode && "border-sky-500 bg-sky-50",
         )}
       />
       {active && onDragFillStart ? (
@@ -656,6 +666,7 @@ function GroupRow({
 /* ------------------------------------------------------------------ */
 
 function NormalRow({
+  isExcelMode,
   row,
   formulas,
   inputColumns,
@@ -674,6 +685,7 @@ function NormalRow({
   onDeleteRow,
   onDragFillStart,
 }: {
+  isExcelMode: boolean;
   row: MetradoRowRecord;
   formulas: readonly MetradoFormulaRecord[];
   inputColumns: readonly MetradoFormulaInputKey[];
@@ -738,6 +750,7 @@ function NormalRow({
       </TD>
       <TD className="px-2 py-1 text-center text-xs text-slate-400">{row.sortOrder}</TD>
       <TextCell
+        isExcelMode={isExcelMode}
         ariaLabel={`Sector fila ${row.sortOrder}`}
         value={row.sector}
         active={isActive(activeCell, row.id, "sector")}
@@ -749,6 +762,7 @@ function NormalRow({
         onDragFillStart={(e) => onDragFillStart("sector", row.sector, false, e)}
       />
       <TextCell
+        isExcelMode={isExcelMode}
         ariaLabel={`Eje fila ${row.sortOrder}`}
         value={row.eje}
         active={isActive(activeCell, row.id, "eje")}
@@ -760,6 +774,7 @@ function NormalRow({
         onDragFillStart={(e) => onDragFillStart("eje", row.eje, false, e)}
       />
       <TextCell
+        isExcelMode={isExcelMode}
         ariaLabel={`Nivel fila ${row.sortOrder}`}
         value={row.nivel}
         active={isActive(activeCell, row.id, "nivel")}
@@ -771,6 +786,7 @@ function NormalRow({
         onDragFillStart={(e) => onDragFillStart("nivel", row.nivel, false, e)}
       />
       <TextCell
+        isExcelMode={isExcelMode}
         ariaLabel={`Descripcion fila ${row.sortOrder}`}
         value={row.description}
         active={isActive(activeCell, row.id, "description")}
@@ -817,6 +833,7 @@ function NormalRow({
         const attrs = spreadsheetAttrs(key);
         return (
           <NumericCell
+            isExcelMode={isExcelMode}
             key={key}
             ariaLabel={`${key} fila ${row.sortOrder}`}
             value={row.inputs[key]}

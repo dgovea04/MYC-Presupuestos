@@ -68,6 +68,7 @@ describe("MetradoSheetTable in Excel mode", () => {
 
     const sectorInput = container.querySelector<HTMLInputElement>('input[aria-label="Sector fila 1"]');
     expect(sectorInput).not.toBeNull();
+    expect(sectorInput!.className).toContain("border-transparent");
 
     await act(async () => {
       sectorInput!.focus();
@@ -80,6 +81,46 @@ describe("MetradoSheetTable in Excel mode", () => {
     expect(cell!.getAttribute("data-spreadsheet-col")).toBe("sector");
     expect(cell!.getAttribute("data-spreadsheet-active")).toBe("true");
     expect(cell!.getAttribute("data-spreadsheet-selected")).toBe("true");
+    expect(sectorInput!.className).not.toContain("bg-sky-50");
+  });
+
+  it("uses soft input borders in modern mode", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const root = createRoot(container);
+    (container as HTMLDivElement & { __root?: typeof root }).__root = root;
+
+    await act(async () => {
+      root.render(
+        <FormattingSettingsProvider settings={createSettings()}>
+          <AppViewModeProvider initialViewMode="modern">
+            <MetradoSheetTable
+              rows={[createNormalRow()]}
+              formulas={createFormulas()}
+              inputColumns={["largo"]}
+              activeCell={null}
+              selectedRowIds={new Set()}
+              onActiveCellChange={vi.fn()}
+              onAddRow={vi.fn()}
+              onDuplicateRow={vi.fn()}
+              onDeleteRow={vi.fn()}
+              onPatchRow={vi.fn()}
+              onInputChange={vi.fn()}
+              onAddGroupRow={vi.fn()}
+              onSelectionChange={vi.fn()}
+              onBatchAction={vi.fn()}
+            />
+          </AppViewModeProvider>
+        </FormattingSettingsProvider>,
+      );
+    });
+
+    const sectorInput = container.querySelector<HTMLInputElement>('input[aria-label="Sector fila 1"]');
+    const numericInput = container.querySelector<HTMLInputElement>('input[aria-label="largo fila 1"]');
+    expect(sectorInput!.className).toContain("border-[var(--app-border-soft)]");
+    expect(numericInput!.className).toContain("border-[var(--app-border-soft)]");
+    expect(sectorInput!.className).not.toContain("border-transparent");
   });
 });
 
