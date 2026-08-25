@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
-  CustomMetradoFormulaRecord,
+  MetradoFormulaRecord,
   MetradoTemplateRecord,
   MetradoTemplateType,
 } from "@/types/metrado";
@@ -15,10 +15,10 @@ type MetradoTemplateSelectorProps = {
   templates: MetradoTemplateRecord[];
   value: MetradoTemplateType;
   customFormulaValue?: string | null;
-  customFormulaSuggestions?: CustomMetradoFormulaRecord[];
+  customFormulaSuggestions?: MetradoFormulaRecord[];
   disabled?: boolean;
   onChange: (value: MetradoTemplateType) => void;
-  onCustomFormulaChange?: (formula: CustomMetradoFormulaRecord) => void;
+  onCustomFormulaChange?: (formula: MetradoFormulaRecord) => void;
 };
 
 export function MetradoTemplateSelector({

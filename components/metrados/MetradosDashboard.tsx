@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CellValue, Worksheet } from "exceljs";
-import { BarChart3, Calculator, ChevronRight, Copy, FileSpreadsheet, PenLine, Plus, Redo, Search, Trash2, Undo2 } from "lucide-react";
+import { BarChart3, Calculator, Copy, FileSpreadsheet, PenLine, Plus, Redo, Search, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -110,6 +110,37 @@ type FormulaResponse = {
 
 const units = ["m", "m2", "m3", "kg", "und", "glb", "p2", "ml", "pza", "bol", "gal", "ton", "mes", "día", "viaje", "pto", "jgo", "pln", "mll"] as const satisfies MetradoUnit[];
 
+function resolvePartidaUnit(value: string, fallback: MetradoUnit): MetradoUnit {
+  const normalized = value.trim().toLowerCase().replace("m²", "m2").replace("m³", "m3");
+  return units.find((unit) => unit === normalized) ?? fallback;
+}
+
+const templateKeywords: Partial<Record<MetradoTemplateType, string[]>> = {
+  CONCRETE: ["concreto", "hormigon"],
+  REBAR: ["acero", "fierro", "armadura"],
+  FORMWORK: ["encofrado", "desencofrado", "formaleta"],
+  MASONRY: ["albanileria", "mamposteria", "muro", "tabique"],
+  PLASTER: ["tarrajeo", "revoque", "enlucido"],
+  PAINT: ["pintura", "pintado"],
+  EXCAVATION: ["excavacion", "zanja"],
+  FLOORING: ["piso", "contrapiso", "vereda"],
+  ROOFING: ["cobertura", "techo", "techado"],
+};
+
+function normalizeMatchingText(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function findMatchingTemplate(description: string, unit: MetradoUnit, templates: MetradoTemplateRecord[]) {
+  const normalizedDescription = normalizeMatchingText(description);
+  return templates.find((candidate) => {
+    if (!candidate.formulas.some((formula) => formula.resultUnit === unit)) return false;
+    const normalizedName = normalizeMatchingText(candidate.name);
+    const keywords = templateKeywords[candidate.type] ?? [normalizedName];
+    return normalizedDescription.includes(normalizedName) || keywords.some((keyword) => normalizedDescription.includes(keyword));
+  });
+}
+
 export function MetradosDashboard({
   initialSheets,
   projects,
@@ -182,7 +213,7 @@ export function MetradosDashboard({
     [templateType, templates],
   );
   const availableFormulas = useMemo(
-    () => (templateType === "CUSTOM" ? [...template.formulas, ...customFormulas] : template.formulas),
+    () => (templateType === "CUSTOM" ? [...template.formulas, ...customFormulas, ...customMetradoFormulaSuggestions] : template.formulas),
     [customFormulas, template.formulas, templateType],
   );
   const pinnedCustomFormulas = useMemo(
@@ -356,6 +387,37 @@ export function MetradosDashboard({
     return () => window.clearInterval(interval);
   }, [lastSavedAt]);
 
+  function applyPartidaDefaults(partida: MetradoPartidaOption) {
+    const partidaUnit = resolvePartidaUnit(partida.unit, template.defaultUnit);
+    const matchingTemplate = findMatchingTemplate(partida.description, partidaUnit, templates);
+    const matchingFormula = matchingTemplate?.formulas.find((formula) => formula.resultUnit === partidaUnit);
+    const matchingCustomFormula = customFormulas.find((formula) => formula.resultUnit === partidaUnit);
+
+    setSheetUnit(partidaUnit);
+    if (matchingTemplate && matchingFormula) {
+      setTemplateType(matchingTemplate.type);
+      setPreferredFormulaKey(matchingFormula.key);
+      setSheetName(buildDefaultMetradoSheetName({ templateName: matchingTemplate.name, partidaCode: partida.code }));
+      return;
+    }
+    if (matchingCustomFormula) {
+      setTemplateType("CUSTOM");
+      setPreferredFormulaKey(matchingCustomFormula.key);
+      setSheetName(buildDefaultMetradoSheetName({ templateName: matchingCustomFormula.label, partidaCode: partida.code }));
+      return;
+    }
+    const genericFormula = customMetradoFormulaSuggestions.find(
+      (formula) => formula.category === "Generico" && formula.resultUnit === partidaUnit,
+    );
+    if (genericFormula) {
+      setTemplateType("CUSTOM");
+      setPreferredFormulaKey(genericFormula.key);
+      setSheetName(buildDefaultMetradoSheetName({ templateName: genericFormula.label, partidaCode: partida.code }));
+      return;
+    }
+    setSheetName(buildDefaultMetradoSheetName({ templateName: template.name, partidaCode: partida.code }));
+  }
+
   function openPartidaSheet(partida: MetradoPartidaOption) {
     const existingSheet = selectLatestActiveSheet(sheets, partida.id);
     setPartidaId(partida.id);
@@ -366,6 +428,7 @@ export function MetradosDashboard({
     } else {
       startNewSheet();
       setPartidaId(partida.id);
+      applyPartidaDefaults(partida);
       setConfigurationOpen(true);
     }
   }
@@ -922,6 +985,63 @@ export function MetradosDashboard({
         </div>
       </div>
 
+      <section className="border-y border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] px-4 py-4" aria-label="Contexto de metrados">
+          <div className="grid items-end gap-3 lg:grid-cols-[minmax(180px,0.8fr)_minmax(220px,1fr)_minmax(260px,1.2fr)_auto]">
+            <Field label="Proyecto">
+              <Select
+                id="metrado-project-select"
+                value={projectId}
+                disabled={persistedSheetSelected}
+                onChange={(event) => {
+                  const nextProjectId = event.currentTarget.value;
+                  const nextBudgetId = budgets.find((budget) => budget.projectId === nextProjectId)?.id ?? "";
+                  setProjectId(nextProjectId);
+                  setBudgetId(nextBudgetId);
+                  setPartidaId("");
+                  if (isCreatingSheet) setSheetName(buildDefaultMetradoSheetName({ templateName: template.name }));
+                }}
+              >
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Subpresupuesto">
+              <Select
+                id="metrado-budget-select"
+                value={budgetId}
+                disabled={persistedSheetSelected}
+                onChange={(event) => {
+                  setBudgetId(event.currentTarget.value);
+                  setPartidaId("");
+                  if (isCreatingSheet) setSheetName(buildDefaultMetradoSheetName({ templateName: template.name }));
+                }}
+              >
+                {filteredBudgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Hoja existente">
+              <Select id="metrado-sheet-select" value={selectedSheetId} onChange={(event) => selectSheet(event.currentTarget.value)}>
+                <option value="" disabled>{buildMetradoSheetSelectPlaceholder({ hasSheets: sheets.length > 0, isCreatingSheet })}</option>
+                {filteredSheets.map((sheet) => <option key={sheet.id} value={sheet.id}>{sheet.name}</option>)}
+              </Select>
+            </Field>
+            <div className="flex items-center justify-end gap-2">
+              {selectedSheet && !openedPartidaId ? (
+                <Button size="sm" variant="outline" onClick={() => setOpenedPartidaId(selectedSheet.partidaLink?.budgetItemId ?? partidaId)}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />Abrir hoja
+                </Button>
+              ) : null}
+              {selectedSheet ? (
+                <Button size="sm" variant="outline" onClick={() => setConfigurationOpen(true)}>
+                  <Calculator className="mr-2 h-4 w-4" />Configurar
+                </Button>
+              ) : null}
+              <Button size="sm" onClick={() => { startNewSheet(); setConfigurationOpen(true); }}>
+                <Plus className="mr-2 h-4 w-4" />Nueva hoja
+              </Button>
+            </div>
+          </div>
+      </section>
+
       {projectId && budgetId && !initialContext?.itemId ? (
         <>
           <div className="flex justify-end">
@@ -987,81 +1107,31 @@ export function MetradosDashboard({
         </>
       ) : null}
 
-      <details
-        className="group overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm shadow-slate-100/60"
-        open={configurationOpen}
-        onToggle={(event) => setConfigurationOpen(event.currentTarget.open)}
-      >
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 transition hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 marker:hidden">
-          <div className="flex min-w-0 items-center gap-2">
-            <Calculator className="h-4 w-4 shrink-0 text-sky-600" />
-            <div className="min-w-0">
-              <span className="block text-sm font-semibold text-[var(--app-text-strong)]">Configuracion</span>
-              <span className="block truncate text-xs text-[var(--app-text-muted)]">
-                Proyecto, presupuesto, partida y formula de la hoja.
-              </span>
+      <Dialog.Root open={configurationOpen} onOpenChange={setConfigurationOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-6xl overflow-y-auto border-l border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-2xl outline-none">
+            <div className="mb-5 flex items-start justify-between gap-3 border-b border-[var(--app-border-soft)] pb-4">
+              <div>
+                <Dialog.Title className="flex items-center gap-2 text-lg font-semibold text-[var(--app-text-strong)]">
+                  <Calculator className="h-5 w-5 text-sky-600" />Configuración de hoja
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-[var(--app-text-muted)]">
+                  Define la partida, fórmula, unidad y nombre del metrado.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild><Button type="button" variant="outline" size="sm">Cerrar</Button></Dialog.Close>
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {selectedSheet && !openedPartidaId ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setOpenedPartidaId(selectedSheet.partidaLink?.budgetItemId ?? partidaId);
-                }}
-              >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                Abrir hoja
-              </Button>
-            ) : null}
-            <Button
-              size="sm"
-              variant="outline"                onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                startNewSheet();
-                setConfigurationOpen(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva hoja
-            </Button>
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--app-text-muted)] transition group-hover:bg-[var(--app-surface-hover-strong)] group-open:rotate-90 group-open:bg-[var(--app-surface-hover-strong)]">
-              <ChevronRight className="h-4 w-4" />
-            </span>
-          </div>
-        </summary>
-        <div className="space-y-4 border-t border-[var(--app-border-soft)] px-4 py-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.2fr)_minmax(180px,0.9fr)_minmax(180px,0.9fr)]">
-            <div className="space-y-2">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-                <Field label="Hoja existente">
-                  <Select
-                    id="metrado-sheet-select"
-                    value={selectedSheetId}
-                    onChange={(event) => selectSheet(event.currentTarget.value)}
-                  >
-                    <option value="" disabled>
-                      {buildMetradoSheetSelectPlaceholder({
-                        hasSheets: sheets.length > 0,
-                        isCreatingSheet,
-                      })}
-                    </option>
-                    {filteredSheets.map((sheet) => (
-                      <option key={sheet.id} value={sheet.id}>
-                        {sheet.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+            <div className="space-y-4">
+          <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3">
+            <div className="space-y-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1">
+                <p className="text-xs font-medium text-[var(--app-text-muted)]">Administración de la hoja seleccionada</p>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-10 w-10 px-0"
+                  className="h-9 w-9 px-0"
                   disabled={!selectedSheet || actionState === "saving" || hasBlockingIssues}
                   aria-label="Duplicar hoja seleccionada"
                   title="Duplicar hoja seleccionada"
@@ -1073,7 +1143,7 @@ export function MetradosDashboard({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-10 w-10 px-0 text-rose-600 hover:bg-rose-50"
+                  className="h-9 w-9 px-0 text-rose-600 hover:bg-rose-50"
                   disabled={!selectedSheet || actionState === "saving"}
                   aria-label="Eliminar hoja seleccionada"
                   title="Eliminar hoja seleccionada"
@@ -1120,50 +1190,6 @@ export function MetradosDashboard({
                 ) : null}
               </div>
             </div>
-            <Field label="Proyecto">
-              <Select
-                id="metrado-project-select"
-                value={projectId}
-                disabled={persistedSheetSelected}
-                onChange={(event) => {
-                  const nextProjectId = event.currentTarget.value;
-                  const nextBudgetId = budgets.find((budget) => budget.projectId === nextProjectId)?.id ?? "";
-                  setProjectId(nextProjectId);
-                  setBudgetId(nextBudgetId);
-                  setPartidaId("");
-                  if (isCreatingSheet) {
-                    setSheetName(buildDefaultMetradoSheetName({ templateName: template.name }));
-                  }
-                }}
-              >
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Presupuesto">
-              <Select
-                id="metrado-budget-select"
-                value={budgetId}
-                disabled={persistedSheetSelected}
-                onChange={(event) => {
-                  const nextBudgetId = event.currentTarget.value;
-                  setBudgetId(nextBudgetId);
-                  setPartidaId("");
-                  if (isCreatingSheet) {
-                    setSheetName(buildDefaultMetradoSheetName({ templateName: template.name }));
-                  }
-                }}
-              >
-                {filteredBudgets.map((budget) => (
-                  <option key={budget.id} value={budget.id}>
-                    {budget.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px]">
@@ -1182,8 +1208,8 @@ export function MetradosDashboard({
                     const nextPartidaId = event.currentTarget.value;
                     const nextPartida = partidas.find((partida) => partida.id === nextPartidaId) ?? null;
                     setPartidaId(nextPartidaId);
-                    if (isCreatingSheet) {
-                      setSheetName(buildDefaultMetradoSheetName({ templateName: template.name, partidaCode: nextPartida?.code }));
+                    if (isCreatingSheet && nextPartida) {
+                      applyPartidaDefaults(nextPartida);
                     }
                   }}
                 >
@@ -1247,7 +1273,12 @@ export function MetradosDashboard({
             templates={templates}
             value={templateType}
             customFormulaValue={templateType === "CUSTOM" ? preferredFormulaKey : null}
-            customFormulaSuggestions={pinnedCustomFormulas}
+            customFormulaSuggestions={[
+              ...pinnedCustomFormulas,
+              ...customMetradoFormulaSuggestions.filter(
+                (formula) => templateType === "CUSTOM" && formula.key === preferredFormulaKey,
+              ),
+            ]}
             disabled={Boolean(selectedSheet)}
             onChange={(nextTemplateType) => {
               setTemplateType(nextTemplateType);
@@ -1299,8 +1330,10 @@ export function MetradosDashboard({
               </Button>
             </div>
           ) : null}
-        </div>
-      </details>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <DeleteMetradoSheetDialog
         open={deleteDialogOpen}

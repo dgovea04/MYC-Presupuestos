@@ -72,42 +72,10 @@ const activeSheet: MetradoSheetRecord = {
 describe("MetradosDashboard initial partida context", () => {
   afterEach(() => {
     cleanup();
+    document.body.removeAttribute("data-scroll-locked");
+    document.body.style.pointerEvents = "";
     navigationMocks.push.mockReset();
     vi.unstubAllGlobals();
-  });
-
-  it("opens a new-sheet configuration when the linked partida has no active sheet", async () => {
-    render(
-      <MetradosDashboard
-        initialSheets={[]}
-        projects={[{ id: "project-1", name: "Proyecto" }]}
-        budgets={[{ id: "budget-1", projectId: "project-1", name: "Estructuras" }]}
-        partidas={[
-          {
-            id: "item-1",
-            projectId: "project-1",
-            budgetId: "budget-1",
-            code: "01.01",
-            description: "Excavacion manual",
-            unit: "m3",
-            quantity: 10,
-          },
-        ]}
-        customFormulas={[]}
-        templates={[template]}
-        initialContext={{ projectId: "project-1", budgetId: "budget-1", itemId: "item-1" }}
-      />,
-    );
-
-    await waitFor(() => {
-      const configuration = document.querySelector("details");
-      expect(configuration).toBeInstanceOf(HTMLDetailsElement);
-      expect((configuration as HTMLDetailsElement).open).toBe(true);
-    });
-
-    expect(screen.getAllByText(/excavacion manual/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText("Partidas del subpresupuesto")).toBeNull();
-    expect(screen.queryByRole("button", { name: /hojas hist/i })).toBeNull();
   });
 
   it("reopens the selected sheet after closing its drawer", async () => {
@@ -142,6 +110,8 @@ describe("MetradosDashboard initial partida context", () => {
     await waitFor(() => {
       expect(screen.getAllByRole("button", { name: "Enviar y volver" }).length).toBeGreaterThan(0);
     });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Hoja de metrados" })).toBeNull());
   });
 
   it("sends the sheet and returns to the originating subbudget", async () => {

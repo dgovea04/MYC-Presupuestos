@@ -2240,17 +2240,16 @@ body,
 [data-view-mode="excel"] [data-excel-field-border-scope="apu-editor"] :is(.ui-input, .ui-select-trigger, [data-excel-field-trigger="true"]):not([data-excel-field-border-opt-out="true"]) {
   height: var(--excel-control-height);
   border-radius: 0 !important;
-  border-color: var(--app-border-soft) !important;
+  border-color: var(--excel-field-border-color) !important;
   padding: 0.125rem 0.5rem;
   box-shadow: none !important;
   font-size: 0.75rem;
   transition: none;
 }
 
-/* Keep spreadsheet inputs on the soft application border in every theme. */
-[data-view-mode="excel"] .ui-table .ui-table-cell .ui-input,
-[data-view-mode="excel"] [data-excel-field-border-scope="apu-editor"] .ui-input {
-  border-color: var(--app-border-soft) !important;
+/* Override all input borders inside tables to transparent */
+[data-theme="dark"] .ui-table .ui-table-cell .ui-input {
+  border-color: transparent !important;
   background: transparent;
 }
 
