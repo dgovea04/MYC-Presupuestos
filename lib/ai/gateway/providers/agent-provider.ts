@@ -83,7 +83,7 @@ export async function executeAgentProvider(
     registry.register(tool);
   }
 
-  const policyEngine = createPolicyEngine();
+  const policyEngine = createPolicyEngine({ allowAgentWrites: request.allowAgentWrites });
   const toolExecutor = createToolExecutor(registry, policyEngine);
   const adapter = createVercelSdkAdapter();
 
@@ -448,7 +448,7 @@ export async function* streamAgentChat(
     registry.register(tool);
   }
 
-  const policyEngine = createPolicyEngine();
+  const policyEngine = createPolicyEngine({ allowAgentWrites: request.allowAgentWrites });
   const toolExecutor = createToolExecutor(registry, policyEngine);
   const adapter = createVercelSdkAdapter();
 

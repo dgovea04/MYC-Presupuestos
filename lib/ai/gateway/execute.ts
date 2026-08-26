@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { buildKhipuAssembledContext } from "@/lib/ai/context/assembled-context";
 import { stableHash } from "@/lib/ai/gateway/hash";
 import { getProviderFallbackChain, resolveAiProvider } from "@/lib/ai/gateway/router";
@@ -10,8 +11,12 @@ import { executeOllamaProvider } from "@/lib/ai/gateway/providers/ollama-provide
 import { executeOpenAIProvider } from "@/lib/ai/gateway/providers/openai-provider";
 import { executeOpenRouterProvider } from "@/lib/ai/gateway/providers/openrouter-provider";
 import { buildSkillProviderRequest } from "@/lib/ai/skills/registry";
-import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import { resolveAiCredential } from "@/lib/ai/credentials/resolver";
+import { buildAiExecutionAttribution } from "@/lib/ai/credentials/usage-attribution";
+import { getDecryptedGeminiApiKey, getDecryptedOpenaiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
+import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage } from "@/lib/ai/usage-scope";
+import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
 
 type ExecutableProviderId = Exclude<AiProviderId, "auto">;
 
@@ -42,33 +47,58 @@ export async function executeAiTask({
   provider,
   task,
   userId,
+  workspaceId,
+  requestId = crypto.randomUUID(),
+  modelPreference,
 }: ExecuteAiTaskWithDepsInput): Promise<AiProviderResult> {
   const resolvedDeps = resolveDeps(deps);
-  const assembledContext = await resolvedDeps.buildKhipuAssembledContext({
-    projectId,
-    userId,
-    task,
-    payload,
-  });
-  const baseRequest = buildProviderRequest({
-    assembledContext,
-    payload,
-    task,
-    userId,
-    projectId,
-  });
-
-  // Inject user API keys and model preferences when targeting cloud providers
+  const assembledContext = await resolvedDeps.buildKhipuAssembledContext({ projectId, userId, task, payload });
+  const baseRequest = buildProviderRequest({ assembledContext, payload, task, userId, projectId });
   const resolvedProvider = resolveAiProvider({ provider, task });
-  const request = await enrichProviderRequest(baseRequest, resolvedProvider, userId);
+  const credential = workspaceId !== undefined && isScopedAiResolverEnabled()
+    ? await resolveAiCredential({ userId, workspaceId, provider: resolvedProvider, task, modelPreference })
+    : await resolveLegacyCredential({ userId, provider: resolvedProvider, modelPreference });
+  const attribution = buildAiExecutionAttribution(credential, requestId);
+  const request: AiProviderRequest = {
+    ...baseRequest,
+    workspaceId: credential.workspaceId ?? undefined,
+    apiKey: credential.apiKey ?? undefined,
+    modelPreference: credential.model,
+    allowEnvironmentFallback: credential.credentialSource === "ENVIRONMENT",
+    credentialSource: attribution.credentialSource,
+    credentialId: attribution.credentialId,
+    billingScope: attribution.billingScope,
+    allowAgentWrites: credential.allowAgentWrites,
+    requestId: attribution.requestId,
+  };
 
   const providers = getProviderFallbackChain({ provider, task });
   const promptHash = stableHash(request.messages);
   let lastError: unknown;
+  const estimatedTokens = Math.max(1, Math.ceil(request.messages.reduce((total, message) => total + message.content.length, 0) / 4));
+  const hasScopedWorkspace = credential.workspaceId !== null && workspaceId !== undefined;
+  let scopedReservation: Awaited<ReturnType<typeof reserveAiUsage>> | null = null;
+  if (hasScopedWorkspace) {
+    scopedReservation = await reserveAiUsage({
+      userId,
+      workspaceId: credential.workspaceId,
+      billingScope: credential.billingScope,
+      estimatedTokens,
+      allowance: credential.tokenLimit,
+      budgetMinor: credential.budgetLimitMinor,
+      provider: credential.provider,
+      model: credential.model,
+      action: task,
+      credentialSource: credential.credentialSource,
+      credentialId: credential.credentialId,
+      requestId,
+      hardLimit: credential.hardLimit,
+      alertThresholds: credential.alertThresholds,
+    });
+  }
 
   for (const providerId of providers) {
     const executor = resolvedDeps.providers[providerId];
-
     if (!executor) {
       lastError = new Error(`Proveedor ${providerId} no disponible`);
       continue;
@@ -83,20 +113,33 @@ export async function executeAiTask({
         rawAnswer: result.answer,
         context: request.messages.find((m) => m.role === "system")?.content ?? undefined,
         messages: request.messages,
-        ai: {
-          answer: result.answer,
-          rawAnswer: result.answer,
-          structuredParseStatus: "not_requested",
-        },
+        ai: { answer: result.answer, rawAnswer: result.answer, structuredParseStatus: "not_requested" },
         fallback: {
           used: fallbackUsed,
-          reason: fallbackUsed
-            ? `Se uso ${providerId} como fallback tras intentar con ${providers.slice(0, currentProviderIndex).join(", ")}`
-            : undefined,
+          reason: fallbackUsed ? `Se uso ${providerId} como fallback tras intentar con ${providers.slice(0, currentProviderIndex).join(", ")}` : undefined,
         },
         validationWarnings: result.warnings,
         requestBody: result.requestBody,
       };
+
+      if (hasScopedWorkspace) {
+        await recordScopedAiUsage({
+          userId,
+          workspaceId: credential.workspaceId,
+          billingScope: credential.billingScope,
+          credentialSource: credential.credentialSource,
+          credentialId: credential.credentialId,
+          requestId,
+          provider: result.provider ?? providerId,
+          model: result.model,
+          action: task,
+          estimatedTokens,
+          actualTokens: Math.max(1, Math.ceil((request.messages.reduce((total, message) => total + message.content.length, 0) + result.answer.length) / 4)),
+          reservedCostMinor: scopedReservation?.estimatedCostMinor,
+          periodStart: scopedReservation?.periodStart,
+          fallbackUsed,
+        });
+      }
 
       return {
         ...result,
@@ -104,6 +147,11 @@ export async function executeAiTask({
         task,
         promptHash,
         responseHash: stableHash(result.answer),
+        workspaceId: credential.workspaceId,
+        credentialSource: credential.credentialSource,
+        credentialId: credential.credentialId,
+        billingScope: credential.billingScope,
+        requestId,
         debug: enrichedDebug,
       };
     } catch (error) {
@@ -111,136 +159,79 @@ export async function executeAiTask({
     }
   }
 
+  if (hasScopedWorkspace) {
+    await releaseAiUsage({
+      userId,
+      workspaceId: credential.workspaceId,
+      billingScope: credential.billingScope,
+      estimatedTokens,
+      provider: credential.provider,
+      model: credential.model,
+      action: task,
+      credentialSource: credential.credentialSource,
+      credentialId: credential.credentialId,
+      requestId,
+      estimatedCostMinor: scopedReservation?.estimatedCostMinor,
+      periodStart: scopedReservation?.periodStart,
+    }).catch(() => undefined);
+  }
+
   throw lastError instanceof Error ? lastError : new Error("No se pudo ejecutar la tarea de IA.");
 }
 
-async function enrichProviderRequest(
-  request: AiProviderRequest,
-  resolvedProvider: Exclude<AiProviderId, "auto">,
-  userId?: string,
-): Promise<AiProviderRequest> {
-  if (resolvedProvider === "openai") {
-    // 1. Try user key first
-    if (userId) {
-      const [apiKey, settings] = await Promise.all([
-        getDecryptedOpenaiApiKey(userId),
-        getAiProviderSettings(userId),
-      ]);
-      if (apiKey) {
-        return { ...request, apiKey, modelPreference: settings.openaiModel || undefined };
-      }
-    }
+async function resolveLegacyCredential({
+  userId,
+  provider,
+  modelPreference,
+}: {
+  userId: string;
+  provider: ExecutableProviderId;
+  modelPreference?: string;
+}) {
+  const settings = await getAiProviderSettings(userId);
+  const system = await getSystemSettings();
+  const apiKey = provider === "openai"
+    ? await getDecryptedOpenaiApiKey(userId) || system.openaiApiKey || process.env.OPENAI_API_KEY || null
+    : provider === "gemini"
+      ? await getDecryptedGeminiApiKey(userId) || system.geminiApiKey || process.env.GEMINI_API_KEY || null
+      : provider === "openrouter" || provider === "agent"
+        ? await getDecryptedOpenrouterApiKey(userId) || system.openrouterApiKey || process.env.OPENROUTER_API_KEY || null
+        : null;
+  const model = modelPreference || (provider === "openai" ? settings.openaiModel || system.openaiModel : provider === "gemini" ? settings.geminiModel || system.geminiModel : settings.openrouterModel || system.openrouterModel) || defaultModelForProvider(provider);
+  return {
+    provider,
+    credentialSource: apiKey ? "PLATFORM" as const : "ENVIRONMENT" as const,
+    credentialId: null,
+    apiKey,
+    model,
+    billingScope: "PLATFORM" as const,
+    hardLimit: true,
+    alertThresholds: [],
+    allowAgentWrites: true,
+    fallbackAllowed: true,
+    workspaceId: null,
+    task: "chat" as const,
+  };
+}
 
-    // 2. Fall back to system settings (single DB call returns key + model)
-    const systemSettings = await getSystemSettings();
-    if (systemSettings.openaiApiKey) {
-      return {
-        ...request,
-        apiKey: systemSettings.openaiApiKey,
-        modelPreference: systemSettings.openaiModel || request.modelPreference,
-      };
-    }
-  }
-
-  if (resolvedProvider === "gemini") {
-    // 1. Try user key first
-    if (userId) {
-      const [apiKey, settings] = await Promise.all([
-        getDecryptedGeminiApiKey(userId),
-        getAiProviderSettings(userId),
-      ]);
-      if (apiKey) {
-        return { ...request, apiKey, modelPreference: settings.geminiModel || undefined };
-      }
-    }
-
-    // 2. Fall back to system settings (single DB call returns key + model)
-    const systemSettings = await getSystemSettings();
-    if (systemSettings.geminiApiKey) {
-      return {
-        ...request,
-        apiKey: systemSettings.geminiApiKey,
-        modelPreference: systemSettings.geminiModel || request.modelPreference,
-      };
-    }
-  }
-
-  if (resolvedProvider === "openrouter") {
-    if (userId) {
-      const [apiKey, settings] = await Promise.all([
-        getDecryptedOpenrouterApiKey(userId),
-        getAiProviderSettings(userId),
-      ]);
-      if (apiKey) {
-        return { ...request, apiKey, modelPreference: settings.openrouterModel || undefined };
-      }
-    }
-
-    const systemSettings = await getSystemSettings();
-    if (systemSettings.openrouterApiKey) {
-      return {
-        ...request,
-        apiKey: systemSettings.openrouterApiKey,
-        modelPreference: systemSettings.openrouterModel || request.modelPreference,
-      };
-    }
-  }
-
-  if (resolvedProvider === "agent") {
-    // Agent usa OpenRouter como backend, pero prefiere el agentModel guardado
-    // por el Khipu Agente tanto a nivel usuario como de sistema; si no existe,
-    // cae al openrouterModel de Proveedores Cloud IA (legacy safety).
-    if (userId) {
-      const [apiKey, settings] = await Promise.all([
-        getDecryptedOpenrouterApiKey(userId),
-        getAiProviderSettings(userId),
-      ]);
-      if (apiKey) {
-        const agentModelPreference = settings.agentModel || settings.openrouterModel || undefined;
-        return { ...request, apiKey, modelPreference: agentModelPreference };
-      }
-    }
-
-    const systemSettings = await getSystemSettings();
-    if (systemSettings.openrouterApiKey) {
-      return {
-        ...request,
-        apiKey: systemSettings.openrouterApiKey,
-        modelPreference:
-          systemSettings.agentModel || systemSettings.openrouterModel || request.modelPreference,
-      };
-    }
-  }
-
-  return request;
+function defaultModelForProvider(provider: ExecutableProviderId): string {
+  if (provider === "openai") return process.env.OPENAI_MODEL ?? "gpt-5-mini";
+  if (provider === "gemini") return process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
+  if (provider === "openrouter" || provider === "agent") return process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-chat-v3-0324:free";
+  return "llama3.1";
 }
 
 function resolveDeps(deps: Partial<ExecuteAiTaskDeps> | undefined): ExecuteAiTaskDeps {
   return {
     buildKhipuAssembledContext,
-    providers: {
-      ...DEFAULT_PROVIDERS,
-      ...deps?.providers,
-    },
+    providers: { ...DEFAULT_PROVIDERS, ...deps?.providers },
     ...deps,
   };
 }
 
-function buildProviderRequest({
-  assembledContext,
-  payload,
-  task,
-  userId,
-  projectId,
-}: Parameters<typeof buildSkillProviderRequest>[0] & { projectId?: string }): AiProviderRequest {
+function buildProviderRequest({ assembledContext, payload, task, userId, projectId }: Parameters<typeof buildSkillProviderRequest>[0] & { projectId?: string }): AiProviderRequest {
   return {
-    ...buildSkillProviderRequest({
-      assembledContext,
-      task,
-      payload,
-      userId,
-    }),
+    ...buildSkillProviderRequest({ assembledContext, task, payload, userId }),
     projectId,
-    allowEnvironmentFallback: task !== "pdf_import_structure",
   };
 }

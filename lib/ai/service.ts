@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { z } from "zod";
 import { AiRuntimeError } from "@/lib/ai/errors";
 import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
@@ -15,6 +16,7 @@ import { recordAiActionMetric } from "@/lib/ai/runtime";
 import { parseStructuredAiOutput } from "@/lib/ai/structured-output";
 import type { AiAction, AiEndpointResult, AiMessage } from "@/lib/ai/types";
 import { assertCanUseAi, recordAiUsage } from "@/lib/ai/usage";
+import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage } from "@/lib/ai/usage-scope";
 import { OPENAI_RESPONSES_URL, DEFAULT_OPENAI_MODEL } from "@/lib/ai/gateway/providers/openai-provider";
 import { buildGeminiRequestBody, DEFAULT_GEMINI_MODEL, isGemmaModel, resolveEffectiveGeminiModel, simplifyMessagesForGemma } from "@/lib/ai/gateway/providers/gemini-provider";
 import { DEFAULT_OPENROUTER_MODEL, streamOpenRouterChat } from "@/lib/ai/gateway/providers/openrouter-provider";
@@ -38,9 +40,20 @@ type StreamChatAiResponseInput = {
   messages: AiMessage[];
   fetchImpl?: FetchLike;
   userId?: string;
-  provider?: string;
-  apiKey?: string;
+  projectId?: string;
+  workspaceId?: string;
+  requestId?: string;
   modelPreference?: string;
+  credentialSource?: "PLATFORM" | "WORKSPACE" | "USER" | "ENVIRONMENT";
+  credentialId?: string | null;
+  billingScope?: "PLATFORM" | "WORKSPACE" | "USER";
+  provider?: "ollama" | "openai" | "gemini" | "openrouter" | "agent" | "chatgpt_bridge";
+  apiKey?: string;
+  tokenLimit?: number | null;
+  budgetLimitMinor?: number | null;
+  hardLimit?: boolean;
+  alertThresholds?: number[];
+  allowAgentWrites?: boolean;
 };
 
 export type StreamChatAiResponseEvent =
@@ -227,9 +240,20 @@ export async function* streamChatAiResponse({
   messages,
   fetchImpl,
   userId,
+  projectId,
+  workspaceId,
   provider,
   apiKey,
   modelPreference,
+  credentialSource,
+  credentialId,
+  billingScope,
+  requestId: requestedRequestId,
+  tokenLimit: inputTokenLimit,
+  budgetLimitMinor: inputBudgetLimitMinor,
+  hardLimit: inputHardLimit = true,
+  alertThresholds: inputAlertThresholds = [],
+  allowAgentWrites: inputAllowAgentWrites = true,
 }: StreamChatAiResponseInput): AsyncIterable<StreamChatAiResponseEvent> {
   const action: AiAction = "chat";
   const startedAt = Date.now();
@@ -241,47 +265,69 @@ export async function* streamChatAiResponse({
   let fallbackUsed = false;
   const warnings: string[] = [];
   const requestBodyRef: RequestBodyRef = {};
+  const requestId = requestedRequestId ?? crypto.randomUUID();
   const effectiveProvider = resolveStreamingProvider(provider);
+  const resolvedApiKey = apiKey;
+  const resolvedModelPreference = modelPreference;
+  const scopedAccounting = Boolean(userId && workspaceId && billingScope && billingScope !== "PLATFORM");
+  let scopedReservation: { estimatedTokens: number; estimatedCostMinor?: number; periodStart: Date } | null = null;
 
   try {
-    if (userId) {
+    if (userId && scopedAccounting) {
+      scopedReservation = await reserveAiUsage({
+        userId,
+        workspaceId,
+        billingScope: billingScope ?? "WORKSPACE",
+        estimatedTokens,
+        allowance: inputTokenLimit,
+        budgetMinor: inputBudgetLimitMinor,
+        provider: provider ?? "ollama",
+        model: resolvedModelPreference ?? "auto",
+        action,
+        credentialSource,
+        credentialId,
+        requestId,
+        hardLimit: inputHardLimit,
+        alertThresholds: inputAlertThresholds,
+      });
+    } else if (userId) {
       await assertCanUseAi({ userId, estimatedTokens });
     }
 
     // Route streaming to the appropriate provider
     if (effectiveProvider === "openai") {
-      if (!apiKey) {
+      if (!resolvedApiKey) {
         throw new AiRuntimeError("connection", "OPENAI_API_KEY no configurado. Agrega tu API key en Configuracion.");
       }
-      const model = modelPreference || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+      const model = resolvedModelPreference || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
       resolvedModel = model;
       requestedModel = model;
 
-      for await (const text of streamOpenAIChat({ messages, apiKey, modelPreference, fetchImpl, requestBodyRef })) {
+      for await (const text of streamOpenAIChat({ messages, apiKey: resolvedApiKey, modelPreference: resolvedModelPreference, fetchImpl, requestBodyRef })) {
         answer += text;
         yield { type: "delta", text };
       }
     } else if (effectiveProvider === "gemini") {
-      if (!apiKey) {
+      if (!resolvedApiKey) {
         throw new AiRuntimeError("connection", "GEMINI_API_KEY no configurado. Agrega tu API key en Configuracion.");
       }
-      const rawModel = modelPreference || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+      const rawModel = resolvedModelPreference || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
       // Streaming is only used for chat; Gemma models fall back to default for non-autocomplete tasks
       const resolved = resolveEffectiveGeminiModel(rawModel, "chat");
       requestedModel = rawModel;
       resolvedModel = resolved.model;
       if (resolved.warning) warnings.push(resolved.warning);
 
-      for await (const text of streamGeminiChat({ messages, apiKey, modelPreference: resolved.model, fetchImpl, requestBodyRef })) {
+      for await (const text of streamGeminiChat({ messages, apiKey: resolvedApiKey, modelPreference: resolved.model, fetchImpl, requestBodyRef })) {
         answer += text;
         yield { type: "delta", text };
       }
     } else if (effectiveProvider === "openrouter") {
-      const openRouterApiKey = apiKey || process.env.OPENROUTER_API_KEY;
+      const openRouterApiKey = resolvedApiKey || process.env.OPENROUTER_API_KEY;
       if (!openRouterApiKey) {
         throw new AiRuntimeError("connection", "OPENROUTER_API_KEY no configurado. Agrega tu API key en .env.");
       }
-      const model = modelPreference || process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
+      const model = resolvedModelPreference || process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
       resolvedModel = model;
       requestedModel = model;
 
@@ -290,14 +336,14 @@ export async function* streamChatAiResponse({
         yield { type: "delta", text };
       }
     } else if (effectiveProvider === "agent") {
-      if (!apiKey) {
+      if (!resolvedApiKey) {
         throw new AiRuntimeError(
           "connection",
           "No hay API key configurada para el agente. " +
           "Ve a Configuración > IA > Proveedores Cloud IA y agrega tu API key de OpenRouter.",
         );
       }
-      const model = modelPreference || DEFAULT_AGENT_MODEL;
+      const model = resolvedModelPreference || DEFAULT_AGENT_MODEL;
       resolvedModel = model;
       requestedModel = model;
 
@@ -310,9 +356,13 @@ export async function* streamChatAiResponse({
       for await (const event of streamAgentChat({
         task: "chat",
         messages: agentMessages,
-        apiKey,
+        apiKey: resolvedApiKey,
         modelPreference: model,
         userId: userId ?? "anonymous",
+        projectId,
+        workspaceId,
+        allowAgentWrites: inputAllowAgentWrites,
+        requestId,
       })) {
         if (event.type === "delta") {
           yield { type: "delta", text: event.text };
@@ -367,19 +417,40 @@ export async function* streamChatAiResponse({
       requestBody: requestBodyRef.current,
     };
 
-    const result: AiEndpointResult = {
+      const result: AiEndpointResult = {
       answer: answer.trim(),
       model: resolvedModel,
       requestedModel,
       fallbackUsed,
       warnings,
       latencyMs,
+      workspaceId,
+      credentialSource,
+      credentialId,
+      billingScope,
+      requestId,
       debug: enrichedDebug,
     };
 
     recordAiActionMetric(action, { latencyMs, lastError: result.warnings[0] ?? null });
 
-    if (userId) {
+    if (userId && scopedAccounting && scopedReservation) {
+      await recordScopedAiUsage({
+        userId,
+        workspaceId,
+        billingScope: billingScope ?? "WORKSPACE",
+        credentialSource,
+        credentialId,
+        requestId,
+        provider: provider ?? "ollama",
+        model: resolvedModel,
+        action,
+        estimatedTokens: scopedReservation.estimatedTokens,
+        actualTokens: estimateAiTokens(`${promptText}\n${result.answer}`),
+        reservedCostMinor: scopedReservation.estimatedCostMinor,
+        periodStart: scopedReservation.periodStart,
+      });
+    } else if (userId) {
       await recordAiUsage({
         userId,
         action,
@@ -392,6 +463,23 @@ export async function* streamChatAiResponse({
 
     yield { type: "final", result };
   } catch (error) {
+    if (userId && scopedAccounting && scopedReservation) {
+      await releaseAiUsage({
+        userId,
+        workspaceId,
+        billingScope: billingScope ?? "WORKSPACE",
+        estimatedTokens: scopedReservation.estimatedTokens,
+        provider: provider ?? "ollama",
+        model: resolvedModel || resolvedModelPreference || "auto",
+        action,
+        credentialSource,
+        credentialId,
+        requestId,
+        estimatedCostMinor: scopedReservation.estimatedCostMinor,
+        periodStart: scopedReservation.periodStart,
+      }).catch(() => undefined);
+    }
+
     const latencyMs = Date.now() - startedAt;
     recordAiActionMetric(action, {
       latencyMs,
@@ -422,11 +510,12 @@ export async function* streamChatAiResponse({
   }
 }
 
-function resolveStreamingProvider(provider?: string): "ollama" | "openai" | "gemini" | "openrouter" | "agent" {
+function resolveStreamingProvider(provider?: string): "ollama" | "openai" | "gemini" | "openrouter" | "agent" | "chatgpt_bridge" {
   if (provider === "openai") return "openai";
   if (provider === "gemini") return "gemini";
   if (provider === "openrouter") return "openrouter";
   if (provider === "agent") return "agent";
+  if (provider === "chatgpt_bridge") return "chatgpt_bridge";
   return "ollama";
 }
 

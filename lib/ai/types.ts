@@ -39,6 +39,11 @@ export type AiEndpointResult = {
   task?: KhipuAiTask;
   promptHash?: string;
   responseHash?: string;
+  workspaceId?: string | null;
+  credentialSource?: "PLATFORM" | "WORKSPACE" | "USER" | "ENVIRONMENT";
+  credentialId?: string | null;
+  billingScope?: "PLATFORM" | "WORKSPACE" | "USER";
+  requestId?: string;
   debug?: AiEndpointDebug;
 };
 

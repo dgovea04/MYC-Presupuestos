@@ -3,11 +3,14 @@ import { trackServerEvent } from "@/lib/analytics/events";
 import { executeAiTask } from "@/lib/ai/gateway/execute";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
 import { withAiRoute } from "@/lib/ai/route-handler";
+import { assertAiCapabilityAccess } from "@/lib/ai/route-access-matrix";
 import { aiChatRequestSchema } from "@/lib/ai/validation";
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiChatRequestSchema.parse(await request.json());
+    const workspaceId = data.workspaceId ?? session.user.activeCompanyId ?? session.user.companyId ?? null;
+    if (workspaceId) await assertAiCapabilityAccess({ userId: session.user.id, workspaceId, capability: "chat" });
     const result = await executeAiTask({
       provider: data.provider,
       task: "chat",
@@ -17,6 +20,8 @@ export async function POST(request: Request) {
       },
       projectId: data.projectId,
       userId: session.user.id,
+      ...(workspaceId ? { workspaceId } : {}),
+      ...(data.requestId ? { requestId: data.requestId } : {}),
     });
     void trackServerEvent("khipu_used", {
       userId: session.user.id,
@@ -35,5 +40,5 @@ export async function POST(request: Request) {
         userId: session.user.id,
       }),
     );
-  });
+  }, { capability: "chat" });
 }

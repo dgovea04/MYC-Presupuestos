@@ -27,6 +27,7 @@ export default async function SettingsPage() {
   ]);
   const company = companies.find((candidate) => candidate.id === activeWorkspaceId) ?? companies[0];
   const canUseKhipu = hasFeatureAccess(license, "khipu.agent");
+  const canManageWorkspaceAi = license?.role === "OWNER" || license?.role === "ADMIN";
 
   return (
     <AppShell currentUser={{ ...session!.user, activeCompanyId: activeWorkspaceId }} settings={settings}>
@@ -37,6 +38,7 @@ export default async function SettingsPage() {
         initialWorkCalendars={workCalendars}
         canUseKhipu={canUseKhipu}
         activeWorkspaceId={activeWorkspaceId}
+        canManageWorkspaceAi={canManageWorkspaceAi}
       />
     </AppShell>
   );

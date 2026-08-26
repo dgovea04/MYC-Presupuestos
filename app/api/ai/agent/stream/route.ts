@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { trackServerEvent } from "@/lib/analytics/events";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import type { AiMessage } from "@/lib/ai/types";
@@ -17,6 +18,12 @@ import { detectAgentIntent, type AgentPendingAction } from "@/lib/ai/agent/inten
 import { buildAgentSystemPrompt } from "@/lib/ai/agent/prompt-builder";
 import { AiRuntimeError } from "@/lib/ai/errors";
 import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
+import { assertAiCapabilityAccess } from "@/lib/ai/route-access-matrix";
+import { assertFeatureAccess } from "@/lib/billing/entitlements";
+import { resolveAiCredential } from "@/lib/ai/credentials/resolver";
+import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
+import { estimateAiTokens } from "@/lib/ai/service";
+import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage } from "@/lib/ai/usage-scope";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -41,13 +48,43 @@ const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiAgentRequestSchema.parse(await request.json());
+    const workspaceId = data.workspaceId ?? session.user.activeCompanyId ?? session.user.companyId ?? null;
+
+    // El workspace enviado por el cliente nunca se considera autorizado por sí
+    // mismo. Se valida exactamente el contexto que usará el agente y sus tools.
+    if (workspaceId) {
+      await assertAiCapabilityAccess({
+        userId: session.user.id,
+        workspaceId,
+        capability: "agent",
+      });
+    } else {
+      await assertFeatureAccess({ userId: session.user.id, feature: "khipu.agent" });
+    }
+
+    if (data.projectId && workspaceId) {
+      const project = await prisma.project.findFirst({
+        where: {
+          id: data.projectId,
+          companyId: workspaceId,
+          company: { memberships: { some: { userId: session.user.id, status: "ACTIVE" } } },
+        },
+        select: { id: true },
+      });
+      if (!project) {
+        return new Response(JSON.stringify({ error: "El proyecto no pertenece al workspace autorizado." }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // ── Resolver contexto del workspace ────────────────────────────────────
     let workspaceName: string | null = null;
-    if (data.workspaceId) {
+    if (workspaceId) {
       try {
         const company = await prisma.company.findUnique({
-          where: { id: data.workspaceId },
+          where: { id: workspaceId },
           select: { name: true },
         });
         workspaceName = company?.name ?? null;
@@ -63,11 +100,11 @@ export async function POST(request: Request) {
       clientName?: string | null;
       location?: string | null;
     }> = [];
-    if (data.workspaceId) {
+    if (workspaceId) {
       try {
         const projects = await prisma.project.findMany({
           where: {
-            companyId: data.workspaceId,
+            companyId: workspaceId,
             company: {
               memberships: {
                 some: {
@@ -156,7 +193,7 @@ export async function POST(request: Request) {
       mode: data.mode ?? "chat",
       workflowId: data.workflowId,
       projectId: data.projectId,
-      workspaceId: data.workspaceId,
+      workspaceId: workspaceId ?? undefined,
       pendingAction,
     });
 
@@ -175,8 +212,8 @@ export async function POST(request: Request) {
     // ── Construir prompt modular ──────────────────────────────────────────
     const systemPrompt = buildAgentSystemPrompt({
       intent,
-      workspace: workspaceName && data.workspaceId
-        ? { id: data.workspaceId, name: workspaceName }
+      workspace: workspaceName && workspaceId
+        ? { id: workspaceId, name: workspaceName }
         : null,
       recentProjects: recentProjectRecords,
       workflow: workflowContext,
@@ -187,10 +224,27 @@ export async function POST(request: Request) {
     });
 
     // ── Resolver API key según provider ────────────────────────────────────
+    // En producción, el resolver scoped es la única fuente autorizada para
+    // Workspace/USER credentials; el fallback legacy solo se conserva durante
+    // la migración controlada.
+    const credentialProvider = provider === "google" ? "gemini" : provider === "ollama" ? "ollama" : "agent";
+    const scopedCredential = workspaceId && isScopedAiResolverEnabled()
+      ? await resolveAiCredential({
+          userId: session.user.id,
+          workspaceId,
+          provider: credentialProvider,
+          task: "chat",
+          modelPreference,
+        })
+      : null;
+    const effectiveModelPreference = scopedCredential?.model || modelPreference;
     let apiKey: string | undefined;
     let geminiApiKey: string | undefined;
 
-    if (provider === "google") {
+    if (scopedCredential) {
+      if (provider === "google") geminiApiKey = scopedCredential.apiKey ?? undefined;
+      else apiKey = scopedCredential.apiKey ?? undefined;
+    } else if (provider === "google") {
       geminiApiKey = await getDecryptedGeminiApiKey(session.user.id);
     } else if (provider !== "ollama") {
       apiKey = await getDecryptedOpenrouterApiKey(session.user.id);
@@ -203,17 +257,17 @@ export async function POST(request: Request) {
 
     let prebuiltModel: unknown = undefined;
 
-    if (provider === "google" && modelPreference && geminiApiKey) {
+    if (provider === "google" && effectiveModelPreference && geminiApiKey) {
       const googleProvider = createGoogleGenerativeAI({ apiKey: geminiApiKey });
-      const googleModelName = modelPreference.split("/").slice(1).join("/");
+      const googleModelName = effectiveModelPreference.split("/").slice(1).join("/");
       prebuiltModel = googleProvider(googleModelName);
-    } else if (provider === "ollama" && modelPreference) {
+    } else if (provider === "ollama" && effectiveModelPreference) {
       const ollamaConfig: { baseURL?: string } = {};
       if (process.env.OLLAMA_BASE_URL) {
         ollamaConfig.baseURL = `${process.env.OLLAMA_BASE_URL.replace(/\/$/, "")}/api`;
       }
       const ollamaProvider = createOllama(ollamaConfig);
-      const ollamaModelName = modelPreference.split("/").slice(1).join("/");
+      const ollamaModelName = effectiveModelPreference.split("/").slice(1).join("/");
       prebuiltModel = ollamaProvider(ollamaModelName);
     }
 
@@ -236,7 +290,7 @@ export async function POST(request: Request) {
           // El frontend puede usar esto para mostrar/ocultar banners de confirmación
           writeEvent(controller, "pending_action", pendingAction);
 
-          // Usar el historial completo si se provee (mantiene contexto entre turnos).
+          const requestId = data.requestId ?? crypto.randomUUID();
           const conversationMessages: AiMessage[] = data.messages && data.messages.length > 0
             ? [
                 { role: "system" as const, content: systemPrompt },
@@ -249,15 +303,40 @@ export async function POST(request: Request) {
                 { role: "system" as const, content: systemPrompt },
                 { role: "user" as const, content: data.message },
               ];
+          const estimatedTokens = estimateAiTokens(conversationMessages.map((message) => message.content).join("\n"));
+          const scopedAccounting = Boolean(scopedCredential && scopedCredential.billingScope !== "PLATFORM");
+          let reservation: { estimatedTokens: number; estimatedCostMinor?: number; periodStart: Date } | null = null;
+          let accountingSettled = false;
 
-          for await (const event of streamAgentChat({
+          if (scopedAccounting && scopedCredential) {
+            reservation = await reserveAiUsage({
+              userId: session.user.id,
+              workspaceId,
+              billingScope: scopedCredential.billingScope,
+              estimatedTokens,
+              allowance: scopedCredential.tokenLimit,
+              budgetMinor: scopedCredential.budgetLimitMinor,
+              provider: scopedCredential.provider,
+              model: scopedCredential.model,
+              action: "chat",
+              credentialSource: scopedCredential.credentialSource,
+              credentialId: scopedCredential.credentialId,
+              requestId,
+              hardLimit: scopedCredential.hardLimit,
+              alertThresholds: scopedCredential.alertThresholds,
+            });
+          }
+
+          try {
+            for await (const event of streamAgentChat({
             task: "chat",
             messages: conversationMessages,
             userId: session.user.id,
-            projectId: data.projectId,
-            workspaceId: data.workspaceId,
-            apiKey,
-            modelPreference: modelPreference,
+            projectId: data.projectId,              workspaceId: workspaceId ?? undefined,
+              apiKey,
+            modelPreference: effectiveModelPreference ?? undefined,
+            allowAgentWrites: scopedCredential?.allowAgentWrites ?? true,
+            requestId,
           }, prebuiltModel)) {
             if (event.type === "tool_start") {
               writeEvent(controller, "tool_start", { toolName: event.toolName });
@@ -291,11 +370,47 @@ export async function POST(request: Request) {
                 action_type: "agent_stream",
                 provider: "agent",
               }).catch(() => undefined);
-              writeEvent(controller, "final", {
-                answer: event.result.answer,
-                warnings: event.result.warnings ?? [],
-                latencyMs: event.result.latencyMs,
-              });
+                if (reservation && scopedCredential) {
+                  await recordScopedAiUsage({
+                    userId: session.user.id,
+                    workspaceId,
+                    billingScope: scopedCredential.billingScope,
+                    credentialSource: scopedCredential.credentialSource,
+                    credentialId: scopedCredential.credentialId,
+                    requestId,
+                    provider: scopedCredential.provider,
+                    model: effectiveModelPreference || scopedCredential.model,
+                    action: "chat",
+                    estimatedTokens: reservation.estimatedTokens,
+                    actualTokens: estimateAiTokens(`${conversationMessages.map((message) => message.content).join("\n")}\n${event.result.answer}`),
+                    reservedCostMinor: reservation.estimatedCostMinor ?? null,
+                    periodStart: reservation.periodStart,
+                  });
+                  accountingSettled = true;
+                }
+                writeEvent(controller, "final", {
+                  answer: event.result.answer,
+                  warnings: event.result.warnings ?? [],
+                  latencyMs: event.result.latencyMs,
+                });
+            }
+            }
+          } finally {
+            if (reservation && scopedCredential && !accountingSettled) {
+              await releaseAiUsage({
+                userId: session.user.id,
+                workspaceId,
+                billingScope: scopedCredential.billingScope,
+                estimatedTokens: reservation.estimatedTokens,
+                provider: scopedCredential.provider,
+                model: effectiveModelPreference || scopedCredential.model,
+                action: "chat",
+                credentialSource: scopedCredential.credentialSource,
+                credentialId: scopedCredential.credentialId,
+                requestId,
+                estimatedCostMinor: reservation.estimatedCostMinor ?? null,
+                periodStart: reservation.periodStart,
+              }).catch(() => undefined);
             }
           }
         } catch (error) {

@@ -22,6 +22,9 @@ export type ExecuteAiTaskInput = {
   payload: Record<string, unknown>;
   projectId?: string;
   userId: string;
+  workspaceId?: string | null;
+  requestId?: string;
+  modelPreference?: string;
   stream?: boolean;
 };
 
@@ -37,12 +40,16 @@ export type AiProviderRequest = {
   apiKey?: string;
   modelPreference?: string;
   allowEnvironmentFallback?: boolean;
+  credentialSource?: "PLATFORM" | "WORKSPACE" | "USER" | "ENVIRONMENT";
+  credentialId?: string | null;
+  billingScope?: "PLATFORM" | "WORKSPACE" | "USER";
+  allowAgentWrites?: boolean;
+  requestId?: string;
 };
 
 export type AiProviderResult = AiEndpointResult & {
   provider: Exclude<AiProviderId, "auto">;
   promptHash?: string;
   responseHash?: string;
-  /** The raw request body sent to the provider API (for debugging) */
   requestBody?: Record<string, unknown>;
 };

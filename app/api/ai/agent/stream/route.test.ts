@@ -19,6 +19,14 @@ vi.mock("@/lib/data/system-settings", () => ({
   getSystemSettings: mocks.getSystemSettings,
 }));
 
+vi.mock("@/lib/billing/entitlements", () => ({
+  assertFeatureAccess: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/ai/route-access-matrix", () => ({
+  assertAiCapabilityAccess: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Default empty system-settings response, mirrors getSystemSettings() return shape
 // when no row exists in the DB. Used by beforeEach to keep tests deterministic.
 const EMPTY_SYSTEM_SETTINGS = {

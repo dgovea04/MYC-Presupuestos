@@ -2,6 +2,11 @@ import { prisma as defaultPrisma } from "@/lib/db/prisma";
 
 export const PRO_FEATURES = [
   "ai.local",
+  "ai.chat",
+  "ai.apu",
+  "ai.review",
+  "ai.autocomplete",
+  "ai.pdf",
   "khipu.agent",
   "metrados.advanced",
   "templates.budget",

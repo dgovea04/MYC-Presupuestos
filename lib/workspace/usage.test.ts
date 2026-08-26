@@ -7,6 +7,8 @@ function makePlan(overrides: Record<string, unknown> = {}) {
     name: "Pro",
     slug: "pro",
     monthlyTokenLimit: 500000,
+    workspaceAiTokenLimit: 400000,
+    monthlyBudgetMinor: 15000,
     seatLimit: 10,
     billingMode: "STRIPE",
     projectLimit: null,
@@ -26,6 +28,7 @@ function createClient() {
     user: { findUnique: vi.fn() },
     project: { count: vi.fn() },
     budget: { count: vi.fn() },
+    aiTokenLedger: { aggregate: vi.fn() },
   };
 }
 
@@ -46,6 +49,10 @@ describe("getWorkspaceUsage", () => {
     client.companyMembership.count.mockResolvedValue(2);
     client.project.count.mockResolvedValue(5);
     client.budget.count.mockResolvedValue(9);
+    client.aiTokenLedger.aggregate.mockResolvedValue({
+      _count: { _all: 4 },
+      _sum: { tokens: 1200, actualCostMinor: 45, estimatedCostMinor: 50 },
+    });
 
     const result = await getWorkspaceUsage("ws-1", client);
 
@@ -57,6 +64,15 @@ describe("getWorkspaceUsage", () => {
     expect(result.metrics.projects.count).toBe(5);
     expect(result.metrics.budgets.count).toBe(9);
     expect(result.metrics.members).toMatchObject({ count: 2, window: "actual", source: "company_memberships" });
+    expect(result.aiUsage).toEqual({
+      periodStart: "2026-08-01T00:00:00.000Z",
+      requests: 4,
+      consumedTokens: 1200,
+      actualCostMinor: 45,
+      estimatedCostMinor: 50,
+      limit: 400000,
+      availableTokens: 398800,
+    });
   });
 
   it("falls back to the owner plan when there is no subscription", async () => {
@@ -73,6 +89,7 @@ describe("getWorkspaceUsage", () => {
     expect(result.subscription).toBeNull();
     expect(result.plan?.slug).toBe("starter");
     expect(result.seats.limit).toBe(3);
+    expect(result.aiUsage.consumedTokens).toBe(0);
   });
 
   it("marks STRIPE subscriptions without external id as needing sync", async () => {

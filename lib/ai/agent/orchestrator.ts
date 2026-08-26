@@ -168,6 +168,7 @@ export class AgentOrchestratorImpl implements AgentOrchestrator {
             const result = await this.toolExecutor.execute({
               toolCall,
               userId: request.userId,
+              ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
               projectId: request.projectId,
               executionId,
               stepId: step.id,

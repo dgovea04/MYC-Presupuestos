@@ -34,6 +34,16 @@ Checklist operativo para validar la integracion local con Ollama antes de entreg
 - Ejecutar `Revisar presupuesto con IA` desde acciones globales.
 - Confirmar hallazgos estructurados con severidad, tipo, impacto y accion recomendada.
 
+## Credenciales, Workspace y límites
+
+- En Configuración > Workspace, confirmar que la política muestra modo, proveedor y fallback.
+- Confirmar que un miembro Viewer puede consultar, pero no crear, rotar ni revocar credenciales.
+- Confirmar que las API keys se muestran únicamente enmascaradas.
+- Verificar que una credencial Workspace atribuye el consumo al Workspace y no al cupo global del usuario.
+- Verificar que BYOK atribuye el consumo al usuario y muestra el copy obligatorio de costos.
+- Verificar que el límite mensual bloquea solicitudes sin permitir reservas negativas.
+- Confirmar que el endpoint administrativo de uso no devuelve prompts, RUC, emails ni secretos.
+
 ## Regresion
 
 - Confirmar que endpoints IA sin sesion siguen devolviendo `401`.

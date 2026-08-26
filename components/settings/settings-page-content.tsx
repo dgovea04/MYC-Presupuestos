@@ -22,6 +22,8 @@ import { WorkspaceInviteLinksPanel } from "@/components/settings/workspace-invit
 import { WorkspaceBulkInvitePanel } from "@/components/settings/workspace-bulk-invite-panel";
 import { WorkspaceBillingPanel } from "@/components/settings/workspace-billing-panel";
 import { WorkspaceRolesPanel } from "@/components/settings/workspace-roles-panel";
+import { WorkspaceAiPolicyCard } from "@/components/settings/workspace-ai-policy-card";
+import { WorkspaceAiCredentialsCard } from "@/components/settings/workspace-ai-credentials-card";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { isLocalClientRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
@@ -73,6 +75,7 @@ export function SettingsPageContent({
   initialWorkCalendars,
   canUseKhipu = true,
   activeWorkspaceId,
+  canManageWorkspaceAi = false,
 }: {
   company?: {
     name?: string | null;
@@ -84,6 +87,7 @@ export function SettingsPageContent({
   initialWorkCalendars?: { id: string; name: string; workDays: number; workHoursPerDay: number }[];
   canUseKhipu?: boolean;
   activeWorkspaceId?: string;
+  canManageWorkspaceAi?: boolean;
 }) {
   const [companyState, setCompanyState] = useState(company);
   const [settings, setSettings] = useState(initialSettings);
@@ -232,6 +236,8 @@ export function SettingsPageContent({
             </div>
 
             <div className="space-y-6">
+              {activeWorkspaceId ? <WorkspaceAiPolicyCard workspaceId={activeWorkspaceId} canManage={canManageWorkspaceAi === true} /> : null}
+              {activeWorkspaceId ? <WorkspaceAiCredentialsCard workspaceId={activeWorkspaceId} canManage={canManageWorkspaceAi === true} /> : null}
               {activeWorkspaceId ? <WorkspaceBillingPanel workspaceId={activeWorkspaceId} /> : null}
               {activeWorkspaceId ? <WorkspaceRolesPanel workspaceId={activeWorkspaceId} /> : null}
               {activeWorkspaceId ? <WorkspaceDangerZone workspaceId={activeWorkspaceId} workspaceName={companyState?.name ?? ""} /> : null}

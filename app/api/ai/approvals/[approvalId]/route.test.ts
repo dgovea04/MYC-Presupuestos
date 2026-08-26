@@ -69,6 +69,7 @@ describe("GET /api/ai/approvals/[approvalId]", () => {
     const response = await get("approval-1");
 
     expect(response.status).toBe(200);
+    expect(mockGetStatus).toHaveBeenCalledWith({ approvalId: "approval-1", userId: "user-1" });
     const body = await response.json();
     expect(body.approval.id).toBe("approval-1");
     expect(body.approval.executionId).toBe("exec-1");

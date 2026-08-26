@@ -37,6 +37,15 @@ describe("PolicyEngine", () => {
   });
 
   describe("risk: write", () => {
+    it("deniega escritura cuando el workspace bloquea las escrituras del agente", () => {
+      const engine = new PolicyEngine(false);
+      const result = engine.evaluate(
+        makePolicyInput({ toolRisk: "write", executionMode: "chat" }),
+      );
+      expect(result.allowed).toBe(false);
+      expect(result.approvalRequirement).toBe("none");
+    });
+
     it("permitido sin aprobación en modo chat", () => {
       const engine = new PolicyEngine();
       const result = engine.evaluate(

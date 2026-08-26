@@ -4,12 +4,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     agentApproval: {
-      findUnique: vi.fn(),
-      findUniqueOrThrow: vi.fn(),
-      update: vi.fn(),
+      findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      updateMany: vi.fn(),
     },
     agentExecution: {
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -23,12 +23,12 @@ import {
 
 const mockPrisma = prisma as unknown as {
   agentApproval: {
-    findUnique: ReturnType<typeof vi.fn>;
-    findUniqueOrThrow: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    findFirstOrThrow: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
   };
   agentExecution: {
-    update: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
   };
   $transaction: ReturnType<typeof vi.fn>;
 };
@@ -64,11 +64,11 @@ function mockTransaction() {
   mockPrisma.$transaction.mockImplementation(async (fn: Function) => {
     return fn({
       agentApproval: {
-        findUnique: mockPrisma.agentApproval.findUnique,
-        update: mockPrisma.agentApproval.update,
+        findFirst: mockPrisma.agentApproval.findFirst,
+        updateMany: mockPrisma.agentApproval.updateMany,
       },
       agentExecution: {
-        update: mockPrisma.agentExecution.update,
+        updateMany: mockPrisma.agentExecution.updateMany,
       },
     });
   });
@@ -80,6 +80,8 @@ describe("AgentApprovalServiceImpl", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     service = new AgentApprovalServiceImpl();
+    mockPrisma.agentApproval.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.agentExecution.updateMany.mockResolvedValue({ count: 1 });
     mockTransaction();
   });
 
@@ -97,8 +99,8 @@ describe("AgentApprovalServiceImpl", () => {
   describe("approve", () => {
     it("approves successfully and transitions to EXECUTING", async () => {
       const approval = makeApproval();
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(approval);
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(approval);
 
       const result = await service.approve({
         approvalId: "approval-1",
@@ -111,8 +113,9 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("updates approval with decision and metadata", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(makeApproval());
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.updateMany.mockResolvedValue({ count: 1 });
 
       await service.approve({
         approvalId: "approval-1",
@@ -120,8 +123,12 @@ describe("AgentApprovalServiceImpl", () => {
         reason: "Apruebo el costo estimado.",
       });
 
-      expect(mockPrisma.agentApproval.update).toHaveBeenCalledWith({
-        where: { id: "approval-1" },
+      expect(mockPrisma.agentApproval.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "approval-1",
+          decision: null,
+          execution: { userId: "user-1" },
+        },
         data: {
           decision: "approve",
           reason: "Apruebo el costo estimado.",
@@ -135,16 +142,16 @@ describe("AgentApprovalServiceImpl", () => {
       const approval = makeApproval({
         execution: { id: "exec-1", state: "PENDING_APPROVAL" },
       });
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(approval);
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(approval);
 
       await service.approve({
         approvalId: "approval-1",
         userId: "user-1",
       });
 
-      expect(mockPrisma.agentExecution.update).toHaveBeenCalledWith({
-        where: { id: "exec-1" },
+      expect(mockPrisma.agentExecution.updateMany).toHaveBeenCalledWith({
+        where: { id: "exec-1", userId: "user-1" },
         data: { state: "EXECUTING", updatedAt: expect.any(Date) },
       });
     });
@@ -153,8 +160,8 @@ describe("AgentApprovalServiceImpl", () => {
       const approval = makeApproval({
         execution: { id: "exec-1", state: "EXECUTING" },
       });
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(approval);
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(approval);
 
       await service.approve({
         approvalId: "approval-1",
@@ -162,11 +169,11 @@ describe("AgentApprovalServiceImpl", () => {
       });
 
       // agentExecution.update should not be called because state is not in validTransitions
-      expect(mockPrisma.agentExecution.update).not.toHaveBeenCalled();
+      expect(mockPrisma.agentExecution.updateMany).not.toHaveBeenCalled();
     });
 
     it("throws when approval is not found", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(null);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(null);
 
       await expect(
         service.approve({ approvalId: "no-exist", userId: "user-1" }),
@@ -179,7 +186,7 @@ describe("AgentApprovalServiceImpl", () => {
         decidedAt: new Date(),
         decidedByUserId: "user-2",
       });
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(decided);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(decided);
 
       await expect(
         service.approve({ approvalId: "approval-1", userId: "user-1" }),
@@ -192,7 +199,7 @@ describe("AgentApprovalServiceImpl", () => {
         decidedAt: new Date(),
         decidedByUserId: "user-2",
       });
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(rejected);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(rejected);
 
       await expect(
         service.approve({ approvalId: "approval-1", userId: "user-1" }),
@@ -205,8 +212,8 @@ describe("AgentApprovalServiceImpl", () => {
   describe("reject", () => {
     it("rejects successfully and transitions to FAILED", async () => {
       const approval = makeApproval();
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(approval);
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(approval);
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(approval);
 
       const result = await service.reject({
         approvalId: "approval-1",
@@ -219,8 +226,9 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("updates approval with reject decision", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(makeApproval());
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.updateMany.mockResolvedValue({ count: 1 });
 
       await service.reject({
         approvalId: "approval-1",
@@ -228,8 +236,12 @@ describe("AgentApprovalServiceImpl", () => {
         reason: "Costo demasiado alto.",
       });
 
-      expect(mockPrisma.agentApproval.update).toHaveBeenCalledWith({
-        where: { id: "approval-1" },
+      expect(mockPrisma.agentApproval.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "approval-1",
+          decision: null,
+          execution: { userId: "user-1" },
+        },
         data: {
           decision: "reject",
           reason: "Costo demasiado alto.",
@@ -240,15 +252,16 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("uses default reason when no reason provided", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(makeApproval());
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.updateMany.mockResolvedValue({ count: 1 });
 
       await service.reject({
         approvalId: "approval-1",
         userId: "user-1",
       });
 
-      expect(mockPrisma.agentApproval.update).toHaveBeenCalledWith(
+      expect(mockPrisma.agentApproval.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             reason: "Rechazado por el usuario.",
@@ -258,8 +271,9 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("sets execution to FAILED with summary", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(makeApproval());
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.updateMany.mockResolvedValue({ count: 1 });
 
       await service.reject({
         approvalId: "approval-1",
@@ -267,8 +281,8 @@ describe("AgentApprovalServiceImpl", () => {
         reason: "No autorizado.",
       });
 
-      expect(mockPrisma.agentExecution.update).toHaveBeenCalledWith({
-        where: { id: "exec-1" },
+      expect(mockPrisma.agentExecution.updateMany).toHaveBeenCalledWith({
+        where: { id: "exec-1", userId: "user-1" },
         data: {
           state: "FAILED",
           summary: "Ejecución rechazada: No autorizado.",
@@ -279,16 +293,18 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("sets default summary when no reason given", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(makeApproval());
-      mockPrisma.agentApproval.findUniqueOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.findFirstOrThrow.mockResolvedValue(makeApproval());
+      mockPrisma.agentApproval.updateMany.mockResolvedValue({ count: 1 });
 
       await service.reject({
         approvalId: "approval-1",
         userId: "user-1",
       });
 
-      expect(mockPrisma.agentExecution.update).toHaveBeenCalledWith(
+      expect(mockPrisma.agentExecution.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: { id: "exec-1", userId: "user-1" },
           data: expect.objectContaining({
             summary: "Ejecución rechazada: Sin motivo especificado.",
           }),
@@ -297,7 +313,7 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("throws when approval is not found", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(null);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(null);
 
       await expect(
         service.reject({ approvalId: "no-exist", userId: "user-1" }),
@@ -305,7 +321,7 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("throws when approval was already decided", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(
         makeApproval({ decision: "approve", decidedAt: new Date() }),
       );
 
@@ -319,11 +335,11 @@ describe("AgentApprovalServiceImpl", () => {
 
   describe("getStatus", () => {
     it("returns pending status for undecided approval", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(
         makeApproval({ decision: null }),
       );
 
-      const status = await service.getStatus("approval-1");
+      const status = await service.getStatus({ approvalId: "approval-1", userId: "user-1" });
 
       expect(status.approvalId).toBe("approval-1");
       expect(status.executionId).toBe("exec-1");
@@ -335,7 +351,7 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("returns approve decision for approved approval", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(
         makeApproval({
           decision: "approve",
           reason: "Autorizado.",
@@ -344,7 +360,7 @@ describe("AgentApprovalServiceImpl", () => {
         }),
       );
 
-      const status = await service.getStatus("approval-1");
+      const status = await service.getStatus({ approvalId: "approval-1", userId: "user-1" });
 
       expect(status.decision).toBe("approve");
       expect(status.reason).toBe("Autorizado.");
@@ -353,7 +369,7 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("returns reject decision for rejected approval", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(
         makeApproval({
           decision: "reject",
           reason: "Costo elevado.",
@@ -362,7 +378,7 @@ describe("AgentApprovalServiceImpl", () => {
         }),
       );
 
-      const status = await service.getStatus("approval-1");
+      const status = await service.getStatus({ approvalId: "approval-1", userId: "user-1" });
 
       expect(status.decision).toBe("reject");
       expect(status.reason).toBe("Costo elevado.");
@@ -370,10 +386,10 @@ describe("AgentApprovalServiceImpl", () => {
     });
 
     it("throws when approval is not found", async () => {
-      mockPrisma.agentApproval.findUnique.mockResolvedValue(null);
+      mockPrisma.agentApproval.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.getStatus("no-exist"),
+        service.getStatus({ approvalId: "no-exist", userId: "user-1" }),
       ).rejects.toThrow("Aprobación \"no-exist\" no encontrada.");
     });
   });

@@ -110,14 +110,19 @@ export interface AgentApprovalService {
   approve(params: ApprovalActionParams): Promise<ApprovalActionResult>;
   /** Rechaza una ejecución pendiente con motivo. */
   reject(params: ApprovalActionParams): Promise<ApprovalActionResult>;
-  /** Obtiene el estado de una aprobación. */
-  getStatus(approvalId: string): Promise<ApprovalStatusResult>;
+  /** Obtiene el estado de una aprobación perteneciente al usuario autenticado. */
+  getStatus(params: ApprovalStatusParams): Promise<ApprovalStatusResult>;
 }
 
 export type ApprovalActionParams = {
   approvalId: string;
   userId: string;
   reason?: string;
+};
+
+export type ApprovalStatusParams = {
+  approvalId: string;
+  userId: string;
 };
 
 export type ApprovalActionResult = {

@@ -9,7 +9,15 @@ const FALLBACK_DEV_KEY = "myc-presupuestos-dev-fallback-key";
 let startupWarningLogged = false;
 
 function getEncryptionKey(): Buffer {
-  const secret = process.env.ENCRYPTION_KEY || process.env.AUTH_SECRET || FALLBACK_DEV_KEY;
+  const source = getEncryptionKeySource();
+  if (process.env.NODE_ENV === "production" && source !== "env") {
+    throw new Error("ENCRYPTION_KEY dedicada es obligatoria en producción para cifrar credenciales IA.");
+  }
+  const secret = source === "env"
+    ? process.env.ENCRYPTION_KEY!
+    : source === "auth-secret"
+      ? process.env.AUTH_SECRET!
+      : FALLBACK_DEV_KEY;
   return scryptSync(secret, SALT, 32, { N: 16384, r: 8, p: 1 });
 }
 

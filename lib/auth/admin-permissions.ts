@@ -20,7 +20,8 @@ export type AdminCapability =
   | "audit.read"
   | "audit.manage_retention"
   | "security.manage"
-  | "resource_prices.manage";
+  | "resource_prices.manage"
+  | "ai_usage.read";
 
 export type AdminProfile = "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR";
 
@@ -48,13 +49,14 @@ const administratorCapabilities = new Set<AdminCapability>([
   "system_settings.read",
   "audit.read",
   "resource_prices.manage",
+  "ai_usage.read",
 ]);
 
 const profileCapabilities: Record<Exclude<AdminProfile, "SUPER_ADMIN">, ReadonlySet<AdminCapability>> = {
   ADMIN: administratorCapabilities,
   SUPPORT: new Set(["users.read", "users.manage_lifecycle", "users.revoke_sessions", "users.impersonate", "users.verify_email", "audit.read"]),
-  BILLING_ADMIN: new Set(["users.read", "billing.manage", "beta.read", "beta.manage", "beta.assign", "beta.revoke", "beta.export", "audit.read"]),
-  AUDITOR: new Set(["users.read", "beta.read", "beta.export", "audit.read"]),
+  BILLING_ADMIN: new Set(["users.read", "billing.manage", "beta.read", "beta.manage", "beta.assign", "beta.revoke", "beta.export", "audit.read", "ai_usage.read"]),
+  AUDITOR: new Set(["users.read", "beta.read", "beta.export", "audit.read", "ai_usage.read"]),
 };
 
 const mfaProtectedCapabilities = new Set<AdminCapability>([

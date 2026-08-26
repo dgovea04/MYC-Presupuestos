@@ -18,6 +18,8 @@ export async function POST(request: Request) {
       },
       projectId: data.projectId,
       userId: session.user.id,
+      ...(session.user.activeCompanyId ?? session.user.companyId ? { workspaceId: session.user.activeCompanyId ?? session.user.companyId } : {}),
+      ...(data.requestId ? { requestId: data.requestId } : {}),
     });
     void trackServerEvent("khipu_used", {
       userId: session.user.id,
@@ -36,5 +38,5 @@ export async function POST(request: Request) {
         userId: session.user.id,
       }),
     );
-  });
+  }, { capability: "apu" });
 }

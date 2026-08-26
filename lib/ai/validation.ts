@@ -38,6 +38,8 @@ export const aiChatRequestSchema = z.object({
   modelPreference: z.string().optional(),
   context: aiContextSchema.optional(),
   projectId: projectIdSchema,
+  workspaceId: z.string().trim().min(1).optional(),
+  requestId: z.string().trim().min(1).max(200).optional(),
 });
 
 export const aiApuRequestSchema = z.object({
@@ -46,6 +48,7 @@ export const aiApuRequestSchema = z.object({
   unit: z.string().trim().min(1).optional(),
   context: aiContextSchema.optional(),
   projectId: projectIdSchema,
+  requestId: z.string().trim().min(1).max(200).optional(),
 });
 
 export const aiApuCatalogGenerateRequestSchema = z.object({
@@ -55,6 +58,7 @@ export const aiApuCatalogGenerateRequestSchema = z.object({
   project_type: z.string().trim().min(1).optional(),
   context: aiContextSchema.optional(),
   projectId: projectIdSchema,
+  requestId: z.string().trim().min(1).max(200).optional(),
 });
 
 export const aiReviewRequestSchema = z.object({
@@ -62,6 +66,7 @@ export const aiReviewRequestSchema = z.object({
   provider: aiProviderSchema.default("auto"),
   context: aiContextSchema.optional(),
   projectId: projectIdSchema,
+  requestId: z.string().trim().min(1).max(200).optional(),
 });
 
 const aiEndpointResultSchema = z.object({
@@ -90,6 +95,7 @@ export const aiAutocompleteRequestSchema = z.object({
   provider: aiProviderSchema.default("auto"),
   context: aiContextSchema.optional(),
   projectId: projectIdSchema,
+  requestId: z.string().trim().min(1).max(200).optional(),
 });
 
 export const aiExecuteRequestSchema = z.object({
@@ -97,4 +103,5 @@ export const aiExecuteRequestSchema = z.object({
   task: khipuAiTaskSchema,
   payload: z.record(z.string(), z.unknown()).default({}),
   projectId: projectIdSchema,
+  requestId: z.string().trim().min(1).max(200).optional(),
 });

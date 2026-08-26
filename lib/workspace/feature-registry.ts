@@ -1,6 +1,11 @@
 export const WORKSPACE_FEATURES = [
   { key: "workspace.management", minimumPlan: "pro" as const },
   { key: "ai.local", minimumPlan: "pro" as const },
+  { key: "ai.chat", minimumPlan: "pro" as const },
+  { key: "ai.apu", minimumPlan: "pro" as const },
+  { key: "ai.review", minimumPlan: "pro" as const },
+  { key: "ai.autocomplete", minimumPlan: "pro" as const },
+  { key: "ai.pdf", minimumPlan: "pro" as const },
   { key: "khipu.agent", minimumPlan: "pro" as const },
   { key: "partidas.similarity", minimumPlan: "starter" as const },
   { key: "metrados.advanced", minimumPlan: "pro" as const },

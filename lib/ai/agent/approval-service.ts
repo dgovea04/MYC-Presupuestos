@@ -3,6 +3,7 @@ import type {
   AgentApprovalService,
   ApprovalActionParams,
   ApprovalActionResult,
+  ApprovalStatusParams,
   ApprovalStatusResult,
 } from "./contracts";
 import type { AgentExecutionState } from "./types";
@@ -10,16 +11,19 @@ import type { AgentExecutionState } from "./types";
 /**
  * Implementación concreta del Approval Service.
  *
- * Persiste aprobaciones en Prisma (modelo AgentApproval) y actualiza
- * el estado de la ejecución según la decisión del usuario.
+ * Todas las lecturas y mutaciones de aprobación se acotan a la ejecución
+ * propiedad del usuario actor para evitar acceso horizontal por ID.
  */
 export class AgentApprovalServiceImpl implements AgentApprovalService {
   async approve(params: ApprovalActionParams): Promise<ApprovalActionResult> {
     const now = new Date();
 
     await prisma.$transaction(async (tx) => {
-      const approval = await tx.agentApproval.findUnique({
-        where: { id: params.approvalId },
+      const approval = await tx.agentApproval.findFirst({
+        where: {
+          id: params.approvalId,
+          execution: { userId: params.userId },
+        },
         include: { execution: true },
       });
 
@@ -33,8 +37,12 @@ export class AgentApprovalServiceImpl implements AgentApprovalService {
         );
       }
 
-      await tx.agentApproval.update({
-        where: { id: params.approvalId },
+      const updated = await tx.agentApproval.updateMany({
+        where: {
+          id: params.approvalId,
+          decision: null,
+          execution: { userId: params.userId },
+        },
         data: {
           decision: "approve",
           reason: params.reason ?? null,
@@ -43,21 +51,25 @@ export class AgentApprovalServiceImpl implements AgentApprovalService {
         },
       });
 
-      // Transicionar ejecución a EXECUTING para continuar
-      const validTransitions: AgentExecutionState[] = [
-        "PENDING_APPROVAL",
-      ];
+      if (updated.count !== 1) {
+        throw new Error(`Aprobación "${params.approvalId}" ya fue decidida.`);
+      }
 
+      const validTransitions: AgentExecutionState[] = ["PENDING_APPROVAL"];
       if (validTransitions.includes(approval.execution.state as AgentExecutionState)) {
-        await tx.agentExecution.update({
-          where: { id: approval.executionId },
+        await tx.agentExecution.updateMany({
+          where: { id: approval.executionId, userId: params.userId },
           data: { state: "EXECUTING", updatedAt: now },
         });
       }
     });
 
-    const approval = await prisma.agentApproval.findUniqueOrThrow({
-      where: { id: params.approvalId },
+    const approval = await prisma.agentApproval.findFirstOrThrow({
+      where: {
+        id: params.approvalId,
+        execution: { userId: params.userId },
+      },
+      select: { executionId: true },
     });
 
     return {
@@ -71,8 +83,11 @@ export class AgentApprovalServiceImpl implements AgentApprovalService {
     const now = new Date();
 
     await prisma.$transaction(async (tx) => {
-      const approval = await tx.agentApproval.findUnique({
-        where: { id: params.approvalId },
+      const approval = await tx.agentApproval.findFirst({
+        where: {
+          id: params.approvalId,
+          execution: { userId: params.userId },
+        },
         include: { execution: true },
       });
 
@@ -86,8 +101,12 @@ export class AgentApprovalServiceImpl implements AgentApprovalService {
         );
       }
 
-      await tx.agentApproval.update({
-        where: { id: params.approvalId },
+      const updated = await tx.agentApproval.updateMany({
+        where: {
+          id: params.approvalId,
+          decision: null,
+          execution: { userId: params.userId },
+        },
         data: {
           decision: "reject",
           reason: params.reason ?? "Rechazado por el usuario.",
@@ -96,8 +115,12 @@ export class AgentApprovalServiceImpl implements AgentApprovalService {
         },
       });
 
-      await tx.agentExecution.update({
-        where: { id: approval.executionId },
+      if (updated.count !== 1) {
+        throw new Error(`Aprobación "${params.approvalId}" ya fue decidida.`);
+      }
+
+      await tx.agentExecution.updateMany({
+        where: { id: approval.executionId, userId: params.userId },
         data: {
           state: "FAILED",
           summary: `Ejecución rechazada: ${params.reason ?? "Sin motivo especificado."}`,
@@ -107,8 +130,12 @@ export class AgentApprovalServiceImpl implements AgentApprovalService {
       });
     });
 
-    const approval = await prisma.agentApproval.findUniqueOrThrow({
-      where: { id: params.approvalId },
+    const approval = await prisma.agentApproval.findFirstOrThrow({
+      where: {
+        id: params.approvalId,
+        execution: { userId: params.userId },
+      },
+      select: { executionId: true },
     });
 
     return {
@@ -118,13 +145,16 @@ export class AgentApprovalServiceImpl implements AgentApprovalService {
     };
   }
 
-  async getStatus(approvalId: string): Promise<ApprovalStatusResult> {
-    const approval = await prisma.agentApproval.findUnique({
-      where: { id: approvalId },
+  async getStatus(params: ApprovalStatusParams): Promise<ApprovalStatusResult> {
+    const approval = await prisma.agentApproval.findFirst({
+      where: {
+        id: params.approvalId,
+        execution: { userId: params.userId },
+      },
     });
 
     if (!approval) {
-      throw new Error(`Aprobación "${approvalId}" no encontrada.`);
+      throw new Error(`Aprobación "${params.approvalId}" no encontrada.`);
     }
 
     return {

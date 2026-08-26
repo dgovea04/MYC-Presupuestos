@@ -150,7 +150,10 @@ describe("MetradosDashboard initial partida context", () => {
     );
 
     const sendButtons = await screen.findAllByRole("button", { name: "Enviar y volver" });
-    fireEvent.click(sendButtons.at(-1)!);
+    const sendButton = sendButtons.at(-1);
+    expect(sendButton).toBeTruthy();
+    await waitFor(() => expect(sendButton?.disabled).toBe(false));
+    fireEvent.click(sendButton!);
 
     await waitFor(() => {
       const metradoRequests = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/metrados-avanzados/"));

@@ -100,9 +100,9 @@ export function getDeploymentReadiness(
     addCheck(
       checks,
       "encryption_key",
-      strict ? "warning" : "ok",
+      strict ? "error" : "ok",
       strict
-        ? "ENCRYPTION_KEY no está configurada; se usará AUTH_SECRET como fallback de cifrado"
+        ? "ENCRYPTION_KEY dedicada es obligatoria; no se permite fallback de cifrado en entornos de despliegue"
         : "ENCRYPTION_KEY opcional en desarrollo",
     );
   } else if (encryptionKey.length < MIN_SECRET_LENGTH) {

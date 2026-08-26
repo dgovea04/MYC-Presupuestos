@@ -1,16 +1,19 @@
 import type { MembershipPlan, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { getScopedUsagePeriod } from "@/lib/ai/usage-scope";
 
 type UsageClient = Pick<
   PrismaClient,
   "companySubscription" | "membershipPlan" | "user" | "companyMembership" | "project" | "budget"
->;
+> & Partial<Pick<PrismaClient, "aiTokenLedger">>;
 
 export type WorkspacePlanSummary = {
   slug: string;
   name: string;
   billingMode: string;
   monthlyTokenLimit: number;
+  workspaceAiTokenLimit: number | null;
+  monthlyBudgetMinor: number | null;
   seatLimit: number | null;
   projectLimit: number | null;
   budgetLimit: number | null;
@@ -23,8 +26,19 @@ export type WorkspaceUsageMetric = {
   source: "company_memberships" | "projects" | "budgets";
 };
 
+export type WorkspaceAiUsage = {
+  periodStart: string;
+  requests: number;
+  consumedTokens: number;
+  actualCostMinor: number;
+  estimatedCostMinor: number;
+  limit: number | null;
+  availableTokens: number | null;
+};
+
 export type WorkspaceUsage = {
   plan: WorkspacePlanSummary | null;
+  aiUsage: WorkspaceAiUsage;
   subscription: {
     provider: string;
     status: string;
@@ -50,6 +64,8 @@ function toPlanSummary(plan: MembershipPlan): WorkspacePlanSummary {
     name: plan.name,
     billingMode: plan.billingMode,
     monthlyTokenLimit: plan.monthlyTokenLimit,
+    workspaceAiTokenLimit: plan.workspaceAiTokenLimit,
+    monthlyBudgetMinor: plan.monthlyBudgetMinor,
     seatLimit: plan.seatLimit,
     projectLimit: plan.projectLimit,
     budgetLimit: plan.budgetLimit,
@@ -86,15 +102,35 @@ export async function getWorkspaceUsage(companyId: string, client: UsageClient =
     plan = ownerUser?.membershipPlan ?? null;
   }
 
-  const [usedSeats, projectCount, budgetCount] = await Promise.all([
+  const periodStart = getScopedUsagePeriod();
+  const [usedSeats, projectCount, budgetCount, aiUsageAggregate] = await Promise.all([
     client.companyMembership.count({ where: { companyId, status: { in: ["ACTIVE", "INVITED"] } } }),
     client.project.count({ where: { companyId } }),
     client.budget.count({ where: { project: { companyId } } }),
+    client.aiTokenLedger
+      ? client.aiTokenLedger.aggregate({
+          where: { workspaceId: companyId, type: "CONSUME", createdAt: { gte: periodStart } },
+          _count: { _all: true },
+          _sum: { tokens: true, actualCostMinor: true, estimatedCostMinor: true },
+        })
+      : null,
   ]);
   const seats = { used: usedSeats, limit: plan?.seatLimit ?? 3 };
 
+  const aiLimit = plan?.workspaceAiTokenLimit ?? plan?.monthlyTokenLimit ?? null;
+  const consumedAiTokens = aiUsageAggregate?._sum.tokens ?? 0;
+
   return {
     plan: plan ? toPlanSummary(plan) : null,
+    aiUsage: {
+      periodStart: periodStart.toISOString(),
+      requests: aiUsageAggregate?._count._all ?? 0,
+      consumedTokens: consumedAiTokens,
+      actualCostMinor: aiUsageAggregate?._sum.actualCostMinor ?? 0,
+      estimatedCostMinor: aiUsageAggregate?._sum.estimatedCostMinor ?? 0,
+      limit: aiLimit,
+      availableTokens: aiLimit === null ? null : Math.max(0, aiLimit - consumedAiTokens),
+    },
     subscription: subscription
       ? {
           provider: subscription.provider,

@@ -14,6 +14,7 @@ export const aiAgentRequestSchema = z.object({
   mode: z.enum(["chat", "goal", "workflow"]).optional().default("chat"),
   workflowId: z.string().optional(),
   executionId: z.string().optional(),
+  requestId: z.string().trim().min(1).max(200).optional(),
 });
 
 export type AgentStreamMessage = z.infer<typeof agentStreamMessageSchema>;

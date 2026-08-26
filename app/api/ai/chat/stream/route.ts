@@ -4,9 +4,13 @@ import { buildChatMessages } from "@/lib/ai/prompts";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { streamChatAiResponse } from "@/lib/ai/service";
 import { aiChatRequestSchema } from "@/lib/ai/validation";
-import { getDecryptedOpenaiApiKey, getDecryptedGeminiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
+import { resolveAiCredential } from "@/lib/ai/credentials/resolver";
+import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
+import { getAiProviderSettings, getDecryptedGeminiApiKey, getDecryptedOpenrouterApiKey, getDecryptedOpenaiApiKey } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
+import type { AiProviderId } from "@/lib/ai/gateway/types";
 import { isLocalRuntimeEnabled } from "@/lib/runtime/local-capabilities";
+import { assertAiCapabilityAccess } from "@/lib/ai/route-access-matrix";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -14,7 +18,9 @@ const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiChatRequestSchema.parse(await request.json());
-    const effectiveProvider = data.provider === "auto" ? (isLocalRuntimeEnabled() ? "ollama" : "openai") : data.provider;
+    const effectiveProvider: Exclude<AiProviderId, "auto"> = data.provider === "auto"
+      ? (isLocalRuntimeEnabled() ? "ollama" : "openai")
+      : data.provider as Exclude<AiProviderId, "auto">;
     if (effectiveProvider === "ollama" && !isLocalRuntimeEnabled()) {
       return new Response(JSON.stringify({ error: "Ollama solo esta disponible en la app local." }), {
         status: 403,
@@ -24,51 +30,43 @@ export async function POST(request: Request) {
 
     const messages = buildChatMessages(data);
 
-    // Inject user API keys for cloud provider streaming
+    const settings = await getAiProviderSettings(session.user.id);
+    const systemSettings = !settings.agentModel && !settings.openrouterModel ? await getSystemSettings() : null;
+    const requestedModelPreference = settings.agentModel || settings.openrouterModel || systemSettings?.agentModel || systemSettings?.openrouterModel;
+    const modelPreference = data.modelPreference ?? requestedModelPreference;
+    const workspaceId = data.workspaceId ?? session.user.activeCompanyId ?? session.user.companyId ?? null;
+    if (workspaceId) await assertAiCapabilityAccess({ userId: session.user.id, workspaceId, capability: "chat" });
+    const resolvedCredential = isScopedAiResolverEnabled()
+      ? await resolveAiCredential({
+          userId: session.user.id,
+          workspaceId,
+          provider: effectiveProvider,
+          task: "chat",
+          modelPreference,
+        })
+      : await resolveLegacyStreamCredential({
+          userId: session.user.id,
+          provider: effectiveProvider,
+          modelPreference,
+        });
     const streamInput: Parameters<typeof streamChatAiResponse>[0] = {
       messages,
       userId: session.user.id,
-      provider: effectiveProvider,
+      projectId: data.projectId,
+      workspaceId: resolvedCredential.workspaceId ?? undefined,
+      provider: resolvedCredential.provider,
+      apiKey: resolvedCredential.apiKey ?? undefined,
+      modelPreference: resolvedCredential.model || undefined,
+      credentialSource: resolvedCredential.credentialSource,
+      credentialId: resolvedCredential.credentialId,
+      billingScope: resolvedCredential.billingScope,
+      requestId: data.requestId,
+      tokenLimit: resolvedCredential.tokenLimit,
+      budgetLimitMinor: resolvedCredential.budgetLimitMinor,
+      hardLimit: resolvedCredential.hardLimit,
+      alertThresholds: resolvedCredential.alertThresholds,
+      allowAgentWrites: resolvedCredential.allowAgentWrites,
     };
-
-    if (effectiveProvider === "openai") {
-      const [apiKey, settings, systemSettings] = await Promise.all([
-        getDecryptedOpenaiApiKey(session.user.id),
-        getAiProviderSettings(session.user.id),
-        getSystemSettings(),
-      ]);
-      streamInput.apiKey = apiKey || systemSettings.openaiApiKey || undefined;
-      streamInput.modelPreference = settings.openaiModel || systemSettings.openaiModel || undefined;
-    } else if (effectiveProvider === "gemini") {
-      const [apiKey, settings, systemSettings] = await Promise.all([
-        getDecryptedGeminiApiKey(session.user.id),
-        getAiProviderSettings(session.user.id),
-        getSystemSettings(),
-      ]);
-      streamInput.apiKey = apiKey || systemSettings.geminiApiKey || undefined;
-      streamInput.modelPreference = settings.geminiModel || systemSettings.geminiModel || undefined;
-    } else if (effectiveProvider === "openrouter") {
-      const [apiKey, settings, systemSettings] = await Promise.all([
-        getDecryptedOpenrouterApiKey(session.user.id),
-        getAiProviderSettings(session.user.id),
-        getSystemSettings(),
-      ]);
-      streamInput.apiKey = apiKey || systemSettings.openrouterApiKey || undefined;
-      streamInput.modelPreference = settings.openrouterModel || systemSettings.openrouterModel || undefined;
-    } else if (effectiveProvider === "agent") {
-      const [apiKey, systemSettings] = await Promise.all([
-        getDecryptedOpenrouterApiKey(session.user.id),
-        getSystemSettings(),
-      ]);
-      streamInput.apiKey = apiKey || systemSettings.openrouterApiKey || undefined;
-      // Preferir modelo seleccionado por el usuario, luego el agentModel del
-      // sistema (paridad con usuarios), luego openrouterModel del sistema.
-      streamInput.modelPreference =
-        data.modelPreference ||
-        systemSettings.agentModel ||
-        systemSettings.openrouterModel ||
-        undefined;
-    }
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -116,7 +114,44 @@ export async function POST(request: Request) {
         "X-Content-Type-Options": "nosniff",
       },
     });
-  });
+  }, { capability: "chat" });
+}
+
+async function resolveLegacyStreamCredential({
+  userId,
+  provider,
+  modelPreference,
+}: {
+  userId: string;
+  provider: "ollama" | "openai" | "gemini" | "openrouter" | "agent" | "chatgpt_bridge";
+  modelPreference?: string;
+}) {
+  const settings = await getAiProviderSettings(userId);
+  const system = await getSystemSettings();
+  const apiKey = provider === "openai"
+    ? await getDecryptedOpenaiApiKey(userId) || system.openaiApiKey || process.env.OPENAI_API_KEY || null
+    : provider === "gemini"
+      ? await getDecryptedGeminiApiKey(userId) || system.geminiApiKey || process.env.GEMINI_API_KEY || null
+      : provider === "openrouter" || provider === "agent"
+        ? await getDecryptedOpenrouterApiKey(userId) || system.openrouterApiKey || process.env.OPENROUTER_API_KEY || null
+        : null;
+  const selectedModel = modelPreference || (provider === "openai" ? settings.openaiModel || system.openaiModel : provider === "gemini" ? settings.geminiModel || system.geminiModel : settings.openrouterModel || system.openrouterModel);
+  return {
+    provider,
+    credentialSource: apiKey ? "PLATFORM" as const : "ENVIRONMENT" as const,
+    credentialId: null,
+    apiKey,
+    model: selectedModel,
+    billingScope: "PLATFORM" as const,
+    tokenLimit: null,
+    budgetLimitMinor: null,
+    hardLimit: true,
+    alertThresholds: [],
+    allowAgentWrites: true,
+    fallbackAllowed: true,
+    workspaceId: null,
+    task: "chat" as const,
+  };
 }
 
 function writePreamble(controller: ReadableStreamDefaultController<Uint8Array>) {

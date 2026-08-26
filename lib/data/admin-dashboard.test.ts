@@ -18,6 +18,9 @@ const { prismaMock } = vi.hoisted(() => ({
     billingSubscription: {
       findMany: vi.fn(),
     },
+    companySubscription: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -77,6 +80,7 @@ describe("admin dashboard user filters", () => {
     prismaMock.aiUsagePeriod.aggregate.mockResolvedValue({ _sum: { consumedTokens: null, reservedTokens: null } });
     prismaMock.aiTokenLedger.groupBy.mockResolvedValue([]);
     prismaMock.billingSubscription.findMany.mockResolvedValue([]);
+    prismaMock.companySubscription.findMany.mockResolvedValue([]);
   });
 
   it("normalizes whitespace and limits the search query", () => {

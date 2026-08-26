@@ -2,7 +2,7 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { waitFor } from "@testing-library/react";
+import { fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApuEditorSheet } from "@/components/apu/apu-editor-sheet";
 import { BudgetViewModeProvider } from "@/components/budget/view-mode-provider";
@@ -254,28 +254,19 @@ describe("ApuEditorSheet", () => {
 
     const searchInput = getByTestId("apu-add-subpartida-search") as HTMLInputElement;
     await act(async () => {
-      searchInput.value = "excavacion";
-      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      fireEvent.focus(searchInput);
+      fireEvent.change(searchInput, { target: { value: "excavacion" } });
     });
 
-    // Flush React's concurrent scheduler so useDeferredValue settles
-    // (useDeferredValue relies on React's scheduler, which uses setTimeout in jsdom)
-    vi.useFakeTimers();
-    try {
-      await act(async () => {
-        vi.runAllTimers();
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-
-    await waitFor(() => {
-      const option = document.querySelector("[data-testid='apu-add-subpartida-option-catalog-subpartida-1']");
-      expect(option).toBeInstanceOf(HTMLElement);
-    }, { timeout: 3000 });
+    const option = await waitFor(() => {
+      const currentOption = document.querySelector("[data-testid='apu-add-subpartida-option-catalog-subpartida-1']");
+      expect(currentOption).toBeInstanceOf(HTMLElement);
+      return currentOption as HTMLElement;
+    });
+    expect(option).toBeInstanceOf(HTMLElement);
 
     await act(async () => {
-      getByTestId("apu-add-subpartida-option-catalog-subpartida-1").click();
+      option.click();
     });
 
     expect(getTextByExactMatch("EXCAVACION MANUAL")).toBeTruthy();

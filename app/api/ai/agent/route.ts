@@ -9,8 +9,15 @@ import { allTools } from "@/lib/ai/agent/tools";
 import { createPolicyEngine } from "@/lib/ai/agent/policy-engine";
 import { createToolExecutor } from "@/lib/ai/agent/tool-executor";
 import { createVercelSdkAdapter } from "@/lib/ai/agent/vercel-sdk-adapter";
-import type { AgentExecutionState } from "@/lib/ai/agent/types";
+import type { AgentExecutionState, AgentOrchestratorOutput } from "@/lib/ai/agent/types";
 import { assertFeatureAccess } from "@/lib/billing/entitlements";
+import { assertAiCapabilityAccess } from "@/lib/ai/route-access-matrix";
+import crypto from "node:crypto";
+import { resolveAiCredential } from "@/lib/ai/credentials/resolver";
+import { getEffectiveAiPolicy } from "@/lib/ai/credentials/policy-service";
+import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
+import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage } from "@/lib/ai/usage-scope";
+import { estimateAiTokens } from "@/lib/ai/service";
 
 /**
  * POST /api/ai/agent
@@ -29,6 +36,21 @@ export async function POST(request: Request) {
     const data = aiAgentRequestSchema.parse(await request.json());
     const userId = session.user.id;
     await assertFeatureAccess({ userId, feature: "khipu.agent" });
+    const workspaceId = data.workspaceId ?? session.user.activeCompanyId ?? session.user.companyId ?? null;
+    if (workspaceId) {
+      await assertAiCapabilityAccess({ userId, workspaceId, capability: "agent" });
+      if (data.projectId) {
+        const project = await prisma.project.findFirst({
+          where: {
+            id: data.projectId,
+            companyId: workspaceId,
+            company: { memberships: { some: { userId, status: "ACTIVE" } } },
+          },
+          select: { id: true },
+        });
+        if (!project) return Response.json({ error: "El proyecto no pertenece al workspace autorizado." }, { status: 404 });
+      }
+    }
 
     // Si es una reanudación, continuar desde el executionId
     if (data.executionId) {
@@ -60,8 +82,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // Inicializar machinery compartida
-    const policyEngine = createPolicyEngine();
+    // Inicializar machinery compartida. La política scoped también gobierna
+    // las tools de escritura, no solo la resolución de la API key.
+    const effectivePolicy = workspaceId && isScopedAiResolverEnabled()
+      ? await getEffectiveAiPolicy({ userId, workspaceId })
+      : null;
+    const policyEngine = createPolicyEngine({ allowAgentWrites: effectivePolicy?.allowAgentWrites ?? true });
     const adapter = createVercelSdkAdapter();
     const planner = createPlanner();
 
@@ -106,13 +132,20 @@ export async function POST(request: Request) {
           undefined,
         );
 
-        const result = await restrictedOrchestrator.run({
+        const result = await runAgentWithScopedUsage({
           userId,
-          projectId: data.projectId,
+          workspaceId,
           message,
-          mode,
-          workflowId: data.workflowId,
-          executionId: data.executionId,
+          requestId: data.requestId,
+          run: () => restrictedOrchestrator.run({
+            userId,
+            ...(workspaceId ? { workspaceId } : {}),
+            projectId: data.projectId,
+            message,
+            mode,
+            workflowId: data.workflowId,
+            executionId: data.executionId,
+          }),
         });
 
         return Response.json(result, { status: 200 });
@@ -135,15 +168,98 @@ export async function POST(request: Request) {
       undefined,
     );
 
-    const result = await orchestrator.run({
+    const result = await runAgentWithScopedUsage({
       userId,
-      projectId: data.projectId,
+      workspaceId,
       message,
-      mode,
-      workflowId: data.workflowId,
-      executionId: data.executionId,
+      requestId: data.requestId,
+      run: () => orchestrator.run({
+        userId,
+        ...(workspaceId ? { workspaceId } : {}),
+        projectId: data.projectId,
+        message,
+        mode,
+        workflowId: data.workflowId,
+        executionId: data.executionId,
+      }),
     });
 
     return Response.json(result, { status: 200 });
+  }, { capability: "agent" });
+}
+
+async function runAgentWithScopedUsage(input: {
+  userId: string;
+  workspaceId: string | null;
+  message: string;
+  requestId?: string;
+  run: () => Promise<AgentOrchestratorOutput>;
+}): Promise<AgentOrchestratorOutput> {
+  if (!input.workspaceId || !isScopedAiResolverEnabled()) return input.run();
+
+  const requestId = input.requestId ?? crypto.randomUUID();
+  const credential = await resolveAiCredential({
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    provider: "agent",
+    task: "chat",
   });
+  if (credential.billingScope === "PLATFORM") return input.run();
+
+  const estimatedTokens = estimateAiTokens(input.message);
+  const reservation = await reserveAiUsage({
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    billingScope: credential.billingScope,
+    estimatedTokens,
+    allowance: credential.tokenLimit,
+    budgetMinor: credential.budgetLimitMinor,
+    provider: credential.provider,
+    model: credential.model,
+    action: "agent",
+    credentialSource: credential.credentialSource,
+    credentialId: credential.credentialId,
+    requestId,
+    hardLimit: credential.hardLimit,
+    alertThresholds: credential.alertThresholds,
+  });
+
+  let settled = false;
+  try {
+    const result = await input.run();
+    await recordScopedAiUsage({
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      billingScope: credential.billingScope,
+      credentialSource: credential.credentialSource,
+      credentialId: credential.credentialId,
+      requestId,
+      provider: credential.provider,
+      model: credential.model,
+      action: "agent",
+      estimatedTokens: reservation.estimatedTokens,
+      actualTokens: estimateAiTokens(`${input.message}\n${result.summary}`),
+      reservedCostMinor: reservation.estimatedCostMinor,
+      periodStart: reservation.periodStart,
+    });
+    settled = true;
+    return result;
+  } finally {
+    if (!settled) {
+      await releaseAiUsage({
+        userId: input.userId,
+        workspaceId: input.workspaceId,
+        billingScope: credential.billingScope,
+        estimatedTokens: reservation.estimatedTokens,
+        provider: credential.provider,
+        model: credential.model,
+        action: "agent",
+        credentialSource: credential.credentialSource,
+        credentialId: credential.credentialId,
+        requestId,
+        estimatedCostMinor: reservation.estimatedCostMinor,
+        periodStart: reservation.periodStart,
+      }).catch(() => undefined);
+    }
+  }
 }

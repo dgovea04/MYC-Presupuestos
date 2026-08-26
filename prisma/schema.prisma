@@ -237,6 +237,39 @@ enum AiTokenLedgerType {
   ADJUSTMENT
 }
 
+enum AiCredentialScope {
+  PLATFORM
+  WORKSPACE
+  USER
+}
+
+enum AiCredentialStatus {
+  ACTIVE
+  INVALID
+  REVOKED
+}
+
+enum AiPolicyMode {
+  PLATFORM
+  WORKSPACE
+  BYOK_ALLOWED
+  BYOK_ONLY
+}
+
+enum AiCredentialProvider {
+  OPENAI
+  GEMINI
+  OPENROUTER
+}
+
+enum AiCredentialAuditOperation {
+  CREATED
+  ROTATED
+  TESTED
+  REVOKED
+  POLICY_UPDATED
+}
+
 enum AiSuggestionFeedbackType {
   APPLIED
   EDITED
@@ -432,7 +465,8 @@ model User {
   deletionReason                String?
   deletionPreviousStatus        UserStatus?
   membershipPlanId              String?
-  aiTokenExtraMonthly           Int                         @default(0)
+  aiTokenExtraMonthly            Int                         @default(0)
+
   passwordHash                  String?
   createdAt                     DateTime                    @default(now())
   updatedAt                     DateTime                    @updatedAt
@@ -443,8 +477,12 @@ model User {
   marketingEvents                MarketingEvent[]
   membershipPlan                 MembershipPlan?             @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
   aiUsagePeriods                AiUsagePeriod[]
+  aiUserWorkspaceUsagePeriods   AiUserWorkspaceUsagePeriod[]
   aiTokenLedger                 AiTokenLedger[]             @relation("AiTokenLedgerUser")
   aiTokenAdjustments            AiTokenLedger[]             @relation("AiTokenLedgerAdmin")
+  aiCredentials                 AiCredential[]              @relation("AiCredentialUser")
+  aiCredentialsCreated          AiCredential[]              @relation("AiCredentialCreator")
+  aiCredentialAuditEvents       AiCredentialAuditEvent[]    @relation("AiCredentialAuditActor")
   aiProjectHistoryEntries       AiProjectHistoryEntry[]
   aiSuggestionFeedbackEvents    AiSuggestionFeedbackEvent[]
   aiSessionFeedbackEvents       AiSessionFeedbackEvent[]
@@ -704,6 +742,16 @@ model MembershipPlan {
   projectLimit         Int?
   budgetLimit          Int?
   entitlements         String[]              @default([])
+  allowKhipuChat       Boolean               @default(false)
+  allowKhipuAgent      Boolean               @default(false)
+  allowByok            Boolean               @default(false)
+  allowWorkspaceKey    Boolean               @default(false)
+  allowedAiProviders   String[]              @default([])
+  allowedAiModels      String[]              @default([])
+  userAiTokenLimit     Int?
+  workspaceAiTokenLimit Int?
+  monthlyBudgetMinor   Int?
+  allowAgentWrites     Boolean               @default(false)
   isActive             Boolean               @default(true)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
@@ -747,39 +795,176 @@ model BillingWebhookEvent {
 }
 
 model AiUsagePeriod {
-  id             String   @id @default(cuid())
-  userId         String
-  periodStart    DateTime
-  consumedTokens Int      @default(0)
-  reservedTokens Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  userId           String
+  workspaceId      String?
+  periodStart      DateTime
+  consumedTokens   Int      @default(0)
+  reservedTokens   Int      @default(0)
+  reservedCostMinor Int?
+  estimatedCostMinor Int?
+  actualCostMinor  Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace        Company? @relation("AiUsagePeriodWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, periodStart])
+  @@index([workspaceId, periodStart])
   @@index([periodStart])
 }
 
+model AiWorkspaceUsagePeriod {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  periodStart       DateTime
+  consumedTokens    Int      @default(0)
+  reservedTokens    Int      @default(0)
+  reservedCostMinor Int?
+  estimatedCostMinor Int?
+  actualCostMinor   Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Company  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, periodStart])
+  @@index([periodStart])
+  @@map("ai_workspace_usage_periods")
+}
+
+model AiUserWorkspaceUsagePeriod {
+  id                 String   @id @default(cuid())
+  userId             String
+  workspaceId        String
+  periodStart        DateTime
+  consumedTokens     Int      @default(0)
+  reservedTokens     Int      @default(0)
+  reservedCostMinor Int?
+  estimatedCostMinor Int?
+  actualCostMinor    Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace          Company  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, periodStart])
+  @@index([workspaceId, periodStart])
+  @@index([periodStart])
+  @@map("ai_user_workspace_usage_periods")
+}
+
 model AiTokenLedger {
-  id              String            @id @default(cuid())
-  userId          String
-  adminUserId     String?
-  periodStart     DateTime
-  type            AiTokenLedgerType
-  tokens          Int
-  estimatedTokens Int?
-  actualTokens    Int?
-  provider        String
-  model           String
-  action          String
-  notes           String?
-  createdAt       DateTime          @default(now())
-  user            User              @relation("AiTokenLedgerUser", fields: [userId], references: [id], onDelete: Cascade)
-  adminUser       User?             @relation("AiTokenLedgerAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
+  id                String            @id @default(cuid())
+  userId            String
+  workspaceId       String?
+  adminUserId       String?
+  periodStart       DateTime
+  type              AiTokenLedgerType
+  tokens            Int
+  estimatedTokens   Int?
+  actualTokens      Int?
+  inputTokens       Int?
+  outputTokens      Int?
+  reservedCostMinor Int?
+  estimatedCostMinor Int?
+  actualCostMinor   Int?
+  provider          String
+  model             String
+  action            String
+  credentialSource  String?
+  credentialId      String?
+  billingScope      String?
+  idempotencyKey     String?           @unique
+  requestId         String?
+  failureCode       String?
+  fallbackUsed      Boolean           @default(false)
+  notes             String?
+  createdAt         DateTime          @default(now())
+  user              User              @relation("AiTokenLedgerUser", fields: [userId], references: [id], onDelete: Cascade)
+  workspace         Company?          @relation("AiTokenLedgerWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  adminUser         User?             @relation("AiTokenLedgerAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
+  credential        AiCredential?     @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
   @@index([userId, periodStart])
+  @@index([workspaceId, periodStart])
+  @@index([credentialId])
   @@index([adminUserId])
   @@index([action, createdAt(sort: Desc)])
+  @@index([credentialSource, createdAt(sort: Desc)])
+}
+
+model AiCredential {
+  id               String                @id @default(cuid())
+  scope            AiCredentialScope
+  workspaceId      String?
+  userId           String?
+  provider         AiCredentialProvider
+  secretReference  String?
+  encryptedSecret  String?
+  maskedValue      String
+  status           AiCredentialStatus    @default(ACTIVE)
+  isFallback       Boolean               @default(false)
+  lastValidatedAt  DateTime?
+  lastError        String?
+  createdByUserId  String?
+  rotatedAt        DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  workspace        Company?              @relation("AiCredentialWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  user             User?                 @relation("AiCredentialUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy        User?                 @relation("AiCredentialCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  ledgerEntries    AiTokenLedger[]
+  auditEvents      AiCredentialAuditEvent[]
+
+  @@index([scope, provider, status])
+  @@index([workspaceId, provider, status])
+  @@index([userId, provider, status])
+  @@index([createdByUserId])
+  @@map("ai_credentials")
+}
+
+model AiPolicy {
+  id                    String       @id @default(cuid())
+  workspaceId           String       @unique
+  mode                  AiPolicyMode @default(PLATFORM)
+  defaultProvider       AiCredentialProvider @default(OPENAI)
+  allowedProviders      String[]     @default([])
+  allowedModels         String[]     @default([])
+  allowUserKeys         Boolean      @default(false)
+  allowWorkspaceKey     Boolean      @default(false)
+  fallbackEnabled       Boolean      @default(true)
+  monthlyTokenLimit     Int?
+  monthlyBudgetMinor    Int?
+  hardLimit             Boolean      @default(true)
+  alertThresholds       Int[]        @default([80, 90, 100])
+  allowAgentWrites      Boolean      @default(false)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  workspace             Company      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([mode])
+  @@map("ai_policies")
+}
+
+model AiCredentialAuditEvent {
+  id          String                    @id @default(cuid())
+  workspaceId String?
+  credentialId String?
+  actorUserId String?
+  operation   AiCredentialAuditOperation
+  provider    AiCredentialProvider?
+  success     Boolean                   @default(true)
+  errorCode   String?
+  metadata    Json                      @default("{}")
+  createdAt   DateTime                  @default(now())
+  workspace   Company?                 @relation("AiCredentialAuditWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  credential  AiCredential?             @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  actorUser   User?                     @relation("AiCredentialAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([credentialId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("ai_credential_audit_events")
 }
 
 model AiProjectHistoryEntry {
@@ -1046,6 +1231,13 @@ model Company {
   inviteLinks               WorkspaceInviteLink[]
   workspaceRoles            WorkspaceRole[]
   projectMemberships        ProjectMembership[]
+  aiPolicies                AiPolicy[]
+  aiCredentials             AiCredential[]              @relation("AiCredentialWorkspace")
+  aiUsagePeriods            AiUsagePeriod[]             @relation("AiUsagePeriodWorkspace")
+  aiWorkspaceUsagePeriods   AiWorkspaceUsagePeriod[]
+  aiUserWorkspaceUsagePeriods AiUserWorkspaceUsagePeriod[]
+  aiTokenLedgerEntries      AiTokenLedger[]             @relation("AiTokenLedgerWorkspace")
+  aiCredentialAudits        AiCredentialAuditEvent[]    @relation("AiCredentialAuditWorkspace")
 
   @@index([userId])
 }

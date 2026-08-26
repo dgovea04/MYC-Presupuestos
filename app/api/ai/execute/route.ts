@@ -5,17 +5,22 @@ import type { KhipuAiTask } from "@/lib/ai/gateway/types";
 import { attachProjectHistoryEntry } from "@/lib/ai/project-history-route";
 import { withAiRoute } from "@/lib/ai/route-handler";
 import { aiExecuteRequestSchema } from "@/lib/ai/validation";
+import { assertAiCapabilityAccess, getAiCapabilityForTask } from "@/lib/ai/route-access-matrix";
 import type { AiAction } from "@/lib/ai/types";
 
 export async function POST(request: Request) {
   return withAiRoute(async (session) => {
     const data = aiExecuteRequestSchema.parse(await request.json());
+    const workspaceId = session.user.activeCompanyId ?? session.user.companyId;
+    if (workspaceId) await assertAiCapabilityAccess({ userId: session.user.id, workspaceId, capability: getAiCapabilityForTask(data.task) });
     const result = await executeAiTask({
       provider: data.provider,
       task: data.task,
       payload: data.payload,
       projectId: data.projectId,
       userId: session.user.id,
+      ...(workspaceId ? { workspaceId } : {}),
+      ...(data.requestId ? { requestId: data.requestId } : {}),
     });
 
     return NextResponse.json(

@@ -29,7 +29,8 @@ No continuar si aparece `Deployment readiness: NOT READY`. Las advertencias debe
 
 - [ ] Confirmar que `DATABASE_URL` apunta al entorno correcto.
 - [ ] Aplicar la migración `20260816100000_add_beta_applications`.
-- [ ] Verificar que existen `security_rate_limit_buckets`, `admin_audit_logs`, `marketing_events`, `beta_campaigns` y `beta_grants`.
+- [ ] Verificar que existen `security_rate_limit_buckets`, `admin_audit_logs`, `marketing_events`, `beta_campaigns`, `beta_grants`, `ai_credentials`, `ai_policies` y `ai_user_workspace_usage_periods`.
+- [ ] Verificar `ENCRYPTION_KEY`, `AI_SCOPED_RESOLVER_ENABLED` y `AI_LEGACY_CREDENTIAL_FALLBACK` según `docs/ai-credentials-runbook.md`.
 - [ ] Ejecutar `npm run prisma:generate` en el entorno de despliegue.
 - [ ] Confirmar que existe al menos un usuario con perfil `SUPER_ADMIN` y MFA operativo.
 - [ ] Confirmar que el dominio público y `NEXT_PUBLIC_APP_URL` son correctos.
@@ -44,10 +45,11 @@ No continuar si aparece `Deployment readiness: NOT READY`. Las advertencias debe
 3. Ejecutar los gates locales/CI: `npm run lint`, `npm run typecheck`, pruebas relevantes y `npm run build`.
 4. Desplegar el commit aprobado a staging.
 5. Aplicar la migración con `npx prisma migrate deploy`; no usar `migrate dev`, `db push` ni `migrate reset`.
-6. Ejecutar `npx prisma generate` y `npx prisma migrate status`.
-7. Confirmar que `/software-presupuestos-construccion` y `/api/beta/applications` responden correctamente.
-8. Ejecutar el smoke test controlado: solicitud, revisión Super Admin, grant Pro de 60 días, ausencia de `BillingSubscription`, auditoría y analytics.
-9. Repetir el preflight con `--target=production` antes de promover el deployment.
+6. Ejecutar el backfill idempotente de credenciales legacy antes de activar el resolver scoped.
+7. Ejecutar `npx prisma generate` y `npx prisma migrate status`.
+8. Confirmar que `/software-presupuestos-construccion` y `/api/beta/applications` responden correctamente.
+9. Ejecutar el smoke test controlado: solicitud, revisión Super Admin, grant Pro de 60 días, ausencia de `BillingSubscription`, auditoría y analytics.
+10. Repetir el preflight con `--target=production` antes de promover el deployment.
 
 ## Aplicar la base de datos
 

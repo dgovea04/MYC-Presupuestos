@@ -21,12 +21,15 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ approvalId: string }> },
 ) {
-  return withAiRoute(async () => {
+  return withAiRoute(async (session) => {
     const { approvalId } = await params;
 
     try {
       const approvalService = createApprovalService();
-      const status = await approvalService.getStatus(approvalId);
+      const status = await approvalService.getStatus({
+        approvalId,
+        userId: session.user.id,
+      });
 
       return Response.json(
         {

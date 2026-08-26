@@ -134,6 +134,7 @@ export type PlannedStep = {
 /** Request de entrada al Agent Orchestrator. */
 export type RunAgentRequest = {
   userId: string;
+  workspaceId?: string;
   projectId?: string;
   message: string;
   mode: AgentExecutionMode;

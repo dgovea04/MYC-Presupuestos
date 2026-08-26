@@ -11,9 +11,15 @@ import type { AgentPolicyEngine, PolicyInput, PolicyOutput } from "./contracts";
  *   con aprobación pre_execute en modo goal/workflow
  */
 export class PolicyEngine implements AgentPolicyEngine {
+  constructor(private readonly allowAgentWrites = true) {}
+
   evaluate(params: PolicyInput): PolicyOutput {
     const { toolName, toolRisk, executionMode } = params;
     const isChatMode = executionMode === "chat";
+
+    if (!this.allowAgentWrites && toolRisk !== "read") {
+      return this.deny(toolName, "Las escrituras y exportaciones del agente están bloqueadas por la política del workspace.");
+    }
 
     switch (toolRisk) {
       case "read":
@@ -81,6 +87,6 @@ export class PolicyEngine implements AgentPolicyEngine {
 /**
  * Factory function.
  */
-export function createPolicyEngine(): PolicyEngine {
-  return new PolicyEngine();
+export function createPolicyEngine(options: { allowAgentWrites?: boolean } = {}): PolicyEngine {
+  return new PolicyEngine(options.allowAgentWrites ?? true);
 }
