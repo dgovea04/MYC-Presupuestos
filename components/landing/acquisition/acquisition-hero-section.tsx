@@ -1,6 +1,5 @@
 import { ArrowRight, CheckCircle2, PlayCircle } from "lucide-react";
 import { AcquisitionCta } from "@/components/landing/acquisition/acquisition-cta";
-import { DEMO_VIDEO_URL } from "@/components/landing/acquisition/acquisition-landing-content";
 
 export function AcquisitionHeroSection() {
   return (
@@ -8,14 +7,14 @@ export function AcquisitionHeroSection() {
       <div className="landing-shell grid gap-12 pb-20 pt-28 md:pt-32 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pb-28">
         <div>
           <span className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Presupuestos para construcción en Perú</span>
-          <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-[4.2rem] lg:leading-[1.02]">Presupuestos de obra, sin depender de archivos dispersos.</h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">Presupuesto + APU + Metrados + Fórmula polinómica en un flujo técnico conectado para preparar, revisar y entregar tu trabajo con más control.</p>
+          <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-[4.2rem] lg:leading-[1.02]">Crea tu primer presupuesto de obra gratis.</h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">Presupuesto, metrados, APU, fórmula polinómica y cronograma en un flujo simple para comenzar a trabajar con más orden y claridad.</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <AcquisitionCta href="/register" location="acquisition_hero" className="gap-2">Crear mi primer presupuesto gratis <ArrowRight className="h-4 w-4" /></AcquisitionCta>
-            <AcquisitionCta href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer" location="acquisition_hero_demo" variant="secondary" className="gap-2"><PlayCircle className="h-4 w-4" />Ver demo de 3 minutos</AcquisitionCta>
+            <AcquisitionCta href="#flujo" location="acquisition_hero_flow" variant="secondary" className="gap-2"><PlayCircle className="h-4 w-4" />Ver cómo funciona</AcquisitionCta>
           </div>
           <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600">
-            {['Starter útil desde el primer día', 'Importa desde Excel', 'Sin cobro automático en la Beta'].map((item) => <span key={item} className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" />{item}</span>)}
+            {['Plan gratis para comenzar', 'Presupuestos y APU manual', 'Sin tarjeta ni cobro automático'].map((item) => <span key={item} className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" />{item}</span>)}
           </div>
         </div>
         <div className="relative rounded-[2rem] border border-slate-200 bg-slate-950 p-3 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.7)]">

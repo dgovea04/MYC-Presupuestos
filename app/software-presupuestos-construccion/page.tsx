@@ -11,23 +11,24 @@ import { KhipuSupportSection } from "@/components/landing/acquisition/khipu-supp
 import { AcquisitionOffersSection } from "@/components/landing/acquisition/acquisition-offers-section";
 import { DemoSection } from "@/components/landing/acquisition/demo-section";
 import { PilotApplicationSection } from "@/components/landing/acquisition/pilot-application-section";
+import { ScheduleSection } from "@/components/landing/acquisition/schedule-section";
 import { AcquisitionFinalCtaSection } from "@/components/landing/acquisition/acquisition-final-cta-section";
 
 export const metadata: Metadata = {
-  title: "Software de presupuestos de construcción | MC Presupuestos",
-  description: "Presupuesto, APU, metrados y fórmula polinómica conectados para profesionales y equipos de construcción en Perú.",
+  title: "Presupuestos de obra gratis | MC Presupuestos",
+  description: "Crea tu primer presupuesto de obra gratis con partidas, metrados, APU, fórmula polinómica y cronograma en un flujo simple.",
   alternates: { canonical: "/software-presupuestos-construccion" },
   openGraph: {
-    title: "Presupuestos de obra, sin depender de archivos dispersos",
-    description: "Crea tu primer presupuesto con APU, metrados y fórmula polinómica en un flujo técnico conectado.",
+    title: "Crea tu primer presupuesto de obra gratis",
+    description: "Presupuesto, metrados, APU, fórmula polinómica y cronograma en un flujo simple.",
     url: "/software-presupuestos-construccion",
     siteName: "MC Presupuestos",
     locale: "es_PE",
     type: "website",
   },
-  twitter: { card: "summary_large_image", title: "Software de presupuestos de construcción | MC Presupuestos", description: "Presupuesto + APU + Metrados + Fórmula polinómica en un solo flujo." },
+  twitter: { card: "summary_large_image", title: "Presupuestos de obra gratis | MC Presupuestos", description: "Crea tu primer presupuesto con partidas, metrados, APU, fórmula polinómica y cronograma." },
 };
 
 export default function ConstructionBudgetingLanding() {
-  return <main className="min-h-screen bg-white text-slate-950"><TrackLandingView path="/software-presupuestos-construccion" variant="acquisition-v1" /><AcquisitionNavbar /><AcquisitionHeroSection /><ExcelWorkflowSection /><ConnectedApuSection /><TakeoffsSection /><PolynomialFormulaSection /><ImportMigrationSection /><KhipuSupportSection /><AcquisitionOffersSection /><DemoSection /><PilotApplicationSection /><AcquisitionFinalCtaSection /><footer className="border-t border-slate-200 bg-white py-8"><div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 text-sm text-slate-500 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8"><span>© {new Date().getFullYear()} MC Presupuestos</span><span>Plataforma moderna de costos y presupuestos de obra.</span></div></footer></main>;
+  return <main className="min-h-screen bg-white text-slate-950"><TrackLandingView path="/software-presupuestos-construccion" variant="acquisition-v1" /><AcquisitionNavbar /><AcquisitionHeroSection /><ExcelWorkflowSection /><ConnectedApuSection /><TakeoffsSection /><PolynomialFormulaSection /><ScheduleSection /><ImportMigrationSection /><KhipuSupportSection /><AcquisitionOffersSection /><DemoSection /><PilotApplicationSection /><AcquisitionFinalCtaSection /><footer className="border-t border-slate-200 bg-white py-8"><div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 text-sm text-slate-500 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8"><span>© {new Date().getFullYear()} MC Presupuestos</span><span>Plataforma moderna de costos y presupuestos de obra.</span></div></footer></main>;
 }

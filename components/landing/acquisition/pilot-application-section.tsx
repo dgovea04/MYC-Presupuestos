@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
 import { captureUtmAttribution, getAttributionEventParams } from "@/lib/analytics/utm";
 import { trackClientEvent } from "@/lib/analytics/client";
 import { Button } from "@/components/ui/button";
@@ -24,15 +24,47 @@ export function PilotApplicationSection({
   sectionId = "piloto",
   landingVariant = "acquisition-v1",
   ctaLocation = "acquisition_pilot_form",
-  eyebrow = "Usuarios Fundadores Perú",
-  title = "Solicita acceso piloto y ayúdanos a validar el flujo.",
-  description = "La campaña dura 60 días y concede acceso Pro sin cargo. La solicitud solo pide nombre y email; la aprobación es manual y está a cargo del Super Admin.",
-  formTitle = "Solicitar acceso piloto",
+  eyebrow = "Para equipos y constructoras",
+  title = "¿Quieres evaluar MC Presupuestos para tu equipo?",
+  description = "Cuéntanos brevemente sobre tu operación y el equipo podrá orientarte sobre una evaluación acompañada del producto.",
+  formTitle = "Cuéntanos sobre tu equipo",
   formSubtitle = "Solo nombre y email",
-  submitLabel = "Solicitar acceso piloto",
+  submitLabel = "Cuéntanos sobre tu equipo",
 }: PilotApplicationSectionProps = {}) {
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const closeDialog = useCallback(() => {
+    setOpen(false);
+    if (window.location.hash === `#${sectionId}`) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [sectionId]);
+
+  useEffect(() => {
+    const openFromHashChange = () => {
+      if (window.location.hash === `#${sectionId}`) setOpen(true);
+    };
+    const openFromCta = () => setOpen(true);
+    window.addEventListener("hashchange", openFromHashChange);
+    window.addEventListener("open-pilot-dialog", openFromCta);
+    return () => {
+      window.removeEventListener("hashchange", openFromHashChange);
+      window.removeEventListener("open-pilot-dialog", openFromCta);
+    };
+  }, [sectionId]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeDialog();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [closeDialog, open]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,15 +110,20 @@ export function PilotApplicationSection({
   }
 
   return (
-    <section id={sectionId} className="scroll-mt-24 bg-blue-50/70 py-20 md:py-28">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_0.8fr] lg:items-center lg:px-8">
+    <>
+      <section id={sectionId} className="hidden" aria-hidden="true" />
+      {open ? <section className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/45 px-4 py-8 backdrop-blur-sm sm:px-6 md:py-12" role="dialog" aria-modal="true" aria-labelledby={`${sectionId}-title`}>
+        <button type="button" className="absolute inset-0 h-full w-full cursor-default" aria-label="Cerrar formulario de evaluación" onClick={closeDialog} />
+        <div className="relative mx-auto max-w-5xl rounded-[2rem] bg-blue-50/95 shadow-2xl">
+          <button type="button" onClick={closeDialog} className="absolute right-4 top-4 z-10 rounded-full border border-slate-200 bg-white p-2 text-slate-500 hover:text-slate-950" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+          <div className="grid gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_0.8fr] lg:items-center lg:px-8">
         <div>
           <span className="inline-flex rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">{eyebrow}</span>
-          <h2 className="mt-5 max-w-2xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{title}</h2>
+          <h2 id={`${sectionId}-title`} className="mt-5 max-w-2xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{title}</h2>
           <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">{description}</p>
           <div className="mt-7 grid gap-3 sm:grid-cols-2">
-            <Benefit text="Beta Pro temporal por 60 días" />
-            <Benefit text="Sin suscripción Stripe ni cobro automático" />
+            <Benefit text="Evaluación guiada del producto" />
+            <Benefit text="Conversación sobre tus necesidades" />
             <Benefit text="Revisión individual de cada solicitud" />
             <Benefit text="Tu información no se publica" />
           </div>
@@ -116,8 +153,10 @@ export function PilotApplicationSection({
             <p className="text-xs leading-5 text-slate-500">Al enviar aceptas que usemos estos datos únicamente para revisar y coordinar el acceso piloto.</p>
           </form>
         </div>
-      </div>
-    </section>
+          </div>
+        </div>
+      </section> : null}
+    </>
   );
 }
 

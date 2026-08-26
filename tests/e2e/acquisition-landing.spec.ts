@@ -7,15 +7,21 @@ test.describe("construction budgeting acquisition landing", () => {
     });
   });
 
-  test("renders the Starter CTA, connected workflow sections, and centralized demo placeholder", async ({ page }) => {
+  test("renders the free registration journey and core construction workflow", async ({ page }) => {
     await page.goto("/software-presupuestos-construccion");
 
-    await expect(page.getByRole("heading", { level: 1, name: /presupuestos de obra, sin depender de archivos dispersos/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /crea tu primer presupuesto de obra gratis/i })).toBeVisible();
     await expect(page.getByRole("img", { name: "MC Presupuestos" }).first()).toHaveAttribute("src", /nuevo-logo-300-v3/);
     await expect(page.getByRole("link", { name: "Crear mi primer presupuesto gratis" }).first()).toHaveAttribute("href", "/register");
+    await expect(page.getByText(/presupuesto.*metrados.*apu.*fórmula polinómica.*cronograma/i).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /todo lo necesario para comenzar a presupuestar/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /cada costo unitario conserva su contexto técnico/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /la cantidad deja de ser un número suelto/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /reajustes con una base técnica que se puede explicar/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /organiza tu obra de principio a fin/i })).toBeVisible();
+    await expect(page.getByText(/K = 0\.250Jr\/Jo \+ 0\.300Mr\/Mo \+ 0\.150Er\/Eo \+ 0\.200Gg\/Go \+ 0\.200Cq\/Cq/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Usuarios Fundadores Perú" })).toHaveCount(0);
+    await expect(page.getByText(/cuando necesites más automatización.*podrás ampliar tu plan/i)).toBeVisible();
     await expect(page.getByText("https://www.youtube.com/watch?v=VIDEO_ID").first()).toBeVisible();
     await expect(page.getByRole("link", { name: /abrir placeholder de demo/i })).toHaveAttribute("href", "https://www.youtube.com/watch?v=VIDEO_ID");
   });
@@ -31,25 +37,17 @@ test.describe("construction budgeting acquisition landing", () => {
     let submittedBody: Record<string, unknown> | null = null;
     await page.route("**/api/beta/applications", async (route) => {
       submittedBody = JSON.parse(route.request().postData() ?? "null") as Record<string, unknown>;
-      await route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify({ ok: true, applicationId: "application-e2e" }),
-      });
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ ok: true, applicationId: "application-e2e" }) });
     });
-
     await page.goto("/software-presupuestos-construccion?utm_source=playwright&utm_campaign=qa");
+    await page.getByRole("link", { name: "Conocer opción para equipos" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByLabel("Nombre").last().fill("Usuario QA");
     await page.getByLabel("Email").last().fill("qa@example.com");
-    await page.getByRole("button", { name: "Solicitar acceso piloto" }).last().click();
-
+    await page.getByRole("button", { name: "Cuéntanos sobre tu equipo" }).last().click();
     await expect(page.getByText(/recibimos tu solicitud/i)).toBeVisible();
     expect(submittedBody).toMatchObject({ name: "Usuario QA", email: "qa@example.com" });
-    expect(submittedBody?.metadata).toEqual(expect.objectContaining({
-      landing_path: "/software-presupuestos-construccion",
-      landing_variant: "acquisition-v1",
-      cta_location: "acquisition_pilot_form",
-    }));
+    expect(submittedBody?.metadata).toEqual(expect.objectContaining({ landing_path: "/software-presupuestos-construccion", landing_variant: "acquisition-v1", cta_location: "acquisition_pilot_form" }));
   });
 
   test("keeps the acquisition navigation usable on mobile", async ({ page }) => {
