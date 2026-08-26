@@ -56,7 +56,7 @@
 - [ ] Preserve existing encryption format and only decrypt inside server-side migration code.
 - [ ] Make new writes target `AiCredential` while retaining legacy reads temporarily.
 - [ ] Return masked status only from settings APIs.
-- [ ] Test repeat execution, empty keys, invalid encrypted values, and duplicate providers.
+- [x] Test repeat execution, empty keys, invalid encrypted values, and duplicate providers.
 - [ ] Document the deployment order: schema migration, backfill, resolver rollout, legacy write removal.
 
 ### Task 3: Implement Workspace AI policies
@@ -77,7 +77,7 @@
 - [ ] Authorize reads/writes by Workspace membership and role.
 - [ ] Restrict policy updates to Owner/Admin or the existing billing administrator role.
 - [ ] Invalidate Workspace policy/license caches after updates.
-- [ ] Test missing membership, suspended membership, plan restrictions, and each mode.
+- [x] Test missing membership, suspended membership, plan restrictions, and each mode.
 
 ### Task 4: Implement the central credential resolver
 
@@ -96,7 +96,7 @@
 - [ ] Implement Workspace-only mode with controlled platform fallback.
 - [ ] Replace duplicated key selection in execute and streaming chat with the resolver.
 - [ ] Preserve model preferences while separating provider selection from credential selection.
-- [ ] Test all provider sources, fallback-disabled behavior, missing keys, invalid policies, and active Workspace changes.
+- [x] Test all provider sources, fallback-disabled behavior, missing keys, invalid policies, and active Workspace changes.
 
 ### Task 5: Make usage accounting scope-aware
 
@@ -131,7 +131,7 @@
 - [ ] Add create, rotate, revoke, and status operations without returning secrets.
 - [ ] Record actor, Workspace, provider, operation, result, and timestamp in audit events.
 - [ ] Add rate limiting and prevent secrets from entering structured logs.
-- [ ] Test authorization, masking, invalid credentials, rotation, revocation, and audit output.
+- [x] Test authorization, masking, invalid credentials, rotation, revocation, and audit output.
 
 ### Task 7: Build admin and Workspace management UI
 
@@ -149,7 +149,7 @@
 - [ ] Provide separate controls for platform, Workspace, and user credentials.
 - [ ] Show masked keys only and require explicit confirmation before rotation/revocation.
 - [ ] Hide Workspace controls for users without the required role.
-- [ ] Test keyboard access, loading/error states, policy restrictions, and no-secret rendering.
+- [x] Test keyboard access, loading/error states, policy restrictions, and no-secret rendering.
 
 ### Task 8: Align feature authorization and route behavior
 
@@ -192,9 +192,9 @@
 - [ ] Add feature flag for resolver rollout and a temporary legacy fallback switch.
 - [ ] Run schema migration and idempotent credential backfill in staging.
 - [ ] Verify `ENCRYPTION_KEY` is configured and key rotation procedure is documented.
-- [ ] Run `npm run lint`.
-- [ ] Run `npm run test`.
-- [ ] Run `node ./node_modules/next/dist/bin/next build`.
+- [x] Run `npm run lint`.
+- [x] Run `npm run test`.
+- [x] Run `node ./node_modules/next/dist/bin/next build`.
 - [ ] Execute manual checks for platform, Workspace, BYOK, fallback, streaming, agent, limits, and revocation.
 - [ ] Remove legacy writes only after all production reads use the scoped resolver.
 
