@@ -24,6 +24,8 @@ import { WorkspaceBillingPanel } from "@/components/settings/workspace-billing-p
 import { WorkspaceRolesPanel } from "@/components/settings/workspace-roles-panel";
 import { WorkspaceAiPolicyCard } from "@/components/settings/workspace-ai-policy-card";
 import { WorkspaceAiCredentialsCard } from "@/components/settings/workspace-ai-credentials-card";
+import { WorkspaceAiContextCard } from "@/components/settings/workspace-ai-context-card";
+import { WorkspaceAiUsageDashboard } from "@/components/settings/workspace-ai-usage-dashboard";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import { isLocalClientRuntimeEnabled } from "@/lib/runtime/local-capabilities";
 
@@ -233,13 +235,15 @@ export function SettingsPageContent({
               {activeWorkspaceId ? <WorkspaceBulkInvitePanel workspaceId={activeWorkspaceId} /> : null}
               {activeWorkspaceId ? <WorkspaceInviteLinksPanel workspaceId={activeWorkspaceId} /> : null}
               {activeWorkspaceId ? <WorkspaceAuditPanel workspaceId={activeWorkspaceId} /> : null}
+              {activeWorkspaceId ? <WorkspaceRolesPanel workspaceId={activeWorkspaceId} /> : null}
             </div>
 
             <div className="space-y-6">
               {activeWorkspaceId ? <WorkspaceAiPolicyCard workspaceId={activeWorkspaceId} canManage={canManageWorkspaceAi === true} /> : null}
+              {activeWorkspaceId ? <WorkspaceAiContextCard workspaceId={activeWorkspaceId} /> : null}
+              {activeWorkspaceId && canManageWorkspaceAi ? <WorkspaceAiUsageDashboard workspaceId={activeWorkspaceId} /> : null}
               {activeWorkspaceId ? <WorkspaceAiCredentialsCard workspaceId={activeWorkspaceId} canManage={canManageWorkspaceAi === true} /> : null}
               {activeWorkspaceId ? <WorkspaceBillingPanel workspaceId={activeWorkspaceId} /> : null}
-              {activeWorkspaceId ? <WorkspaceRolesPanel workspaceId={activeWorkspaceId} /> : null}
               {activeWorkspaceId ? <WorkspaceDangerZone workspaceId={activeWorkspaceId} workspaceName={companyState?.name ?? ""} /> : null}
             </div>
           </div>
