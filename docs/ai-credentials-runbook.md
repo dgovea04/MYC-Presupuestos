@@ -1,32 +1,33 @@
-# Runbook de credenciales IA scoped
+# Runbook de credenciales IA
 
-## Estado de implementación
+## Políticas jerárquicas P2
 
-La resolución de credenciales, políticas por Workspace, contabilidad scoped, auditoría, rotación, revocación y controles de autorización están implementados. El backfill legacy es idempotente mediante `migrateLegacyAiCredentials()`.
+Las políticas se evalúan en contexto Workspace, equipo y proyecto. Un nivel inferior solo puede restringir la política superior: nunca puede ampliar proveedores, modelos, límites, fallback, BYOK ni escrituras del agente.
 
-## Orden de despliegue
+### Endpoints
 
-1. Aplicar la migración Prisma.
-2. Configurar `ENCRYPTION_KEY` dedicada en staging/producción.
-3. Ejecutar el backfill legacy en staging y revisar `scanned`, `migrated`, `skipped` e `invalid`.
-4. Activar el resolver scoped y mantener temporalmente el fallback legacy.
-5. Verificar rutas streaming, no-streaming, Workspace, BYOK, límites y revocación.
-6. Eliminar escrituras legacy únicamente cuando las lecturas scoped estén confirmadas en producción.
+- `GET /api/workspaces/:workspaceId/ai-policy`: política efectiva del workspace.
+- `PUT /api/workspaces/:workspaceId/ai-policy`: actualiza la política del workspace; requiere `OWNER` o `ADMIN`.
+- `GET /api/workspaces/:workspaceId/ai-policy/contextual?scope=TEAM|PROJECT&entityId=...`: consulta una política contextual sin exponer secretos.
+- `PUT /api/workspaces/:workspaceId/ai-policy/contextual`: actualiza una política de equipo o proyecto; requiere `OWNER` o `ADMIN` y valida ownership contra el workspace.
 
-## Seguridad operativa
+El servidor vuelve a validar la pertenencia de equipo/proyecto y la membresía del actor. Nunca se confía en un `workspaceId` enviado por el cliente para autorizar otro workspace.
 
-- No registrar API keys, ciphertext, prompts ni referencias de secretos.
-- Validar credenciales desde servidor con timeout y errores normalizados.
-- Rotar con una clave dedicada y conservar auditoría del actor, Workspace y proveedor.
-- `ENCRYPTION_KEY` es obligatoria fuera de desarrollo; el build puede advertir si el entorno local no la define.
+## Operación
 
-## Validación ejecutada
+Las credenciales se almacenan cifradas, se muestran únicamente enmascaradas y sus operaciones se auditan. Rotación y revocación requieren autorización administrativa y rate limiting. Las respuestas de API no incluyen `encryptedSecret`, API keys ni referencias internas de secretos.
+
+## Despliegue
+
+1. Ejecutar la migración Prisma en staging con backup.
+2. Configurar `ENCRYPTION_KEY` mediante Secret Manager.
+3. Verificar aislamiento entre workspaces y políticas no expansivas.
+4. Activar el scheduler de salud de credenciales.
+5. Retirar escrituras legacy solo después de observar el resolver scoped en producción.
+
+## Validación local
 
 - `npm run typecheck`
-- `npm run lint -- --no-cache`
-- Suite focalizada de credenciales/políticas/resolver/UI
-- `node ./node_modules/next/dist/bin/next build`
-
-## Pendiente de entorno
-
-La ejecución real del backfill y las comprobaciones manuales contra proveedores deben realizarse en staging con base de datos y secretos configurados. No se ejecutan automáticamente desde CI local para evitar modificar datos externos.
+- `npm run test`
+- `npm run lint`
+- `git diff --check`

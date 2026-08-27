@@ -272,7 +272,7 @@ describe("AgentWorkspace", () => {
       await clickBundleCard("Presupuestos");
 
       // Type and send a message
-      const textareas = screen.getAllByRole("textbox");
+      const textareas = [screen.getByTestId("ui-textarea")];
       await userEvent.type(textareas[0], "Crear presupuesto");
 
       const sendButtons = screen.getAllByRole("button", { name: "Enviar objetivo" });
@@ -298,7 +298,7 @@ describe("AgentWorkspace", () => {
       render(<AgentWorkspace />);
 
       // Type and send a message without selecting a bundle
-      const textareas = screen.getAllByRole("textbox");
+      const textareas = [screen.getByTestId("ui-textarea")];
       await userEvent.type(textareas[0], "Crear presupuesto");
 
       const sendButtons = screen.getAllByRole("button", { name: "Enviar objetivo" });
@@ -335,7 +335,7 @@ describe("AgentWorkspace", () => {
 
       render(<AgentWorkspace />);
 
-      const textareas = screen.getAllByRole("textbox");
+      const textareas = [screen.getByTestId("ui-textarea")];
       await userEvent.type(textareas[0], "Crear presupuesto para hospital");
 
       const sendButtons = screen.getAllByRole("button", { name: "Enviar objetivo" });
@@ -388,7 +388,7 @@ describe("AgentWorkspace", () => {
 
       // Without a bundle, suggestion buttons aren't shown.
       // Test that typing + clicking send doesn't call connect when loading.
-      const textareas = screen.getAllByRole("textbox");
+      const textareas = [screen.getByTestId("ui-textarea")];
       await userEvent.type(textareas[0], "Crear presupuesto");
 
       const sendButtons = screen.getAllByRole("button", { name: "Enviar objetivo" });
@@ -408,7 +408,7 @@ describe("AgentWorkspace", () => {
       render(<AgentWorkspace />);
 
       // Test that send button doesn't call connect when streaming
-      const textareas = screen.getAllByRole("textbox");
+      const textareas = [screen.getByTestId("ui-textarea")];
       await userEvent.type(textareas[0], "Crear presupuesto");
 
       const sendButtons = screen.getAllByRole("button", { name: "Enviar objetivo" });
@@ -662,7 +662,7 @@ describe("AgentWorkspace", () => {
       render(<AgentWorkspace projectId="project-99" />);
 
       // Type in textarea and send
-      const textareas = screen.getAllByRole("textbox");
+      const textareas = [screen.getByTestId("ui-textarea")];
       await userEvent.type(textareas[0], "Crear presupuesto para hospital");
 
       const sendButtons = screen.getAllByRole("button", { name: "Enviar objetivo" });

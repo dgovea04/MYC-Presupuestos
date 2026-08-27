@@ -48,6 +48,7 @@ export async function executeAiTask({
   task,
   userId,
   workspaceId,
+  teamId,
   requestId = crypto.randomUUID(),
   modelPreference,
 }: ExecuteAiTaskWithDepsInput): Promise<AiProviderResult> {
@@ -56,7 +57,7 @@ export async function executeAiTask({
   const baseRequest = buildProviderRequest({ assembledContext, payload, task, userId, projectId });
   const resolvedProvider = resolveAiProvider({ provider, task });
   const credential = workspaceId !== undefined && isScopedAiResolverEnabled()
-    ? await resolveAiCredential({ userId, workspaceId, provider: resolvedProvider, task, modelPreference })
+    ? await resolveAiCredential({ userId, workspaceId, teamId, projectId, provider: resolvedProvider, task, modelPreference })
     : await resolveLegacyCredential({ userId, provider: resolvedProvider, modelPreference });
   const attribution = buildAiExecutionAttribution(credential, requestId);
   const request: AiProviderRequest = {

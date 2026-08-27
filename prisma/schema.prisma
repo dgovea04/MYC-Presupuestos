@@ -240,6 +240,8 @@ enum AiTokenLedgerType {
 enum AiCredentialScope {
   PLATFORM
   WORKSPACE
+  TEAM
+  PROJECT
   USER
 }
 
@@ -268,6 +270,12 @@ enum AiCredentialAuditOperation {
   TESTED
   REVOKED
   POLICY_UPDATED
+}
+
+enum AgentDelegationStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
 }
 
 enum AiSuggestionFeedbackType {
@@ -445,49 +453,49 @@ enum ProjectAccessRole {
 }
 
 model User {
-  id                            String                      @id @default(cuid())
-  name                          String
-  email                         String                      @unique
-  emailVerifiedAt               DateTime?
-  avatarUrl                     String?
-  phone                         String?
-  jobTitle                      String?
-  bio                           String?
-  role                          UserRole                    @default(USER)
-  adminProfile                  AdminProfile?
-  status                        UserStatus                  @default(ACTIVE)
-  isSuperAdmin                  Boolean                     @default(false)
-  mfaEnabled                    Boolean                     @default(false)
-  mfaSecretEncrypted            String?
-  passwordChangedAt             DateTime?
-  sessionVersion                Int                         @default(0)
-  deletionScheduledAt           DateTime?
-  deletionReason                String?
-  deletionPreviousStatus        UserStatus?
-  membershipPlanId              String?
-  aiTokenExtraMonthly            Int                         @default(0)
+  id                     String        @id @default(cuid())
+  name                   String
+  email                  String        @unique
+  emailVerifiedAt        DateTime?
+  avatarUrl              String?
+  phone                  String?
+  jobTitle               String?
+  bio                    String?
+  role                   UserRole      @default(USER)
+  adminProfile           AdminProfile?
+  status                 UserStatus    @default(ACTIVE)
+  isSuperAdmin           Boolean       @default(false)
+  mfaEnabled             Boolean       @default(false)
+  mfaSecretEncrypted     String?
+  passwordChangedAt      DateTime?
+  sessionVersion         Int           @default(0)
+  deletionScheduledAt    DateTime?
+  deletionReason         String?
+  deletionPreviousStatus UserStatus?
+  membershipPlanId       String?
+  aiTokenExtraMonthly    Int           @default(0)
 
   passwordHash                  String?
-  createdAt                     DateTime                    @default(now())
-  updatedAt                     DateTime                    @updatedAt
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
   companies                     Company[]
   companyMemberships            CompanyMembership[]
   settings                      UserSettings?
-  activityEvents                 ActivityEvent[]
-  marketingEvents                MarketingEvent[]
-  membershipPlan                 MembershipPlan?             @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
+  activityEvents                ActivityEvent[]
+  marketingEvents               MarketingEvent[]
+  membershipPlan                MembershipPlan?               @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
   aiUsagePeriods                AiUsagePeriod[]
   aiUserWorkspaceUsagePeriods   AiUserWorkspaceUsagePeriod[]
-  aiTokenLedger                 AiTokenLedger[]             @relation("AiTokenLedgerUser")
-  aiTokenAdjustments            AiTokenLedger[]             @relation("AiTokenLedgerAdmin")
-  aiCredentials                 AiCredential[]              @relation("AiCredentialUser")
-  aiCredentialsCreated          AiCredential[]              @relation("AiCredentialCreator")
-  aiCredentialAuditEvents       AiCredentialAuditEvent[]    @relation("AiCredentialAuditActor")
+  aiTokenLedger                 AiTokenLedger[]               @relation("AiTokenLedgerUser")
+  aiTokenAdjustments            AiTokenLedger[]               @relation("AiTokenLedgerAdmin")
+  aiCredentials                 AiCredential[]                @relation("AiCredentialUser")
+  aiCredentialsCreated          AiCredential[]                @relation("AiCredentialCreator")
+  aiCredentialAuditEvents       AiCredentialAuditEvent[]      @relation("AiCredentialAuditActor")
   aiProjectHistoryEntries       AiProjectHistoryEntry[]
   aiSuggestionFeedbackEvents    AiSuggestionFeedbackEvent[]
   aiSessionFeedbackEvents       AiSessionFeedbackEvent[]
   billingSubscriptions          BillingSubscription[]
-  betaCampaignsCreated          BetaCampaign[]               @relation("BetaCampaignCreatedBy")
+  betaCampaignsCreated          BetaCampaign[]                @relation("BetaCampaignCreatedBy")
   betaGrants                    BetaGrant[]                   @relation("BetaGrantUser")
   betaGrantsAssigned            BetaGrant[]                   @relation("BetaGrantAssignedBy")
   betaGrantsRevoked             BetaGrant[]                   @relation("BetaGrantRevokedBy")
@@ -498,37 +506,41 @@ model User {
   customMetradoFormulas         CustomMetradoFormula[]
   budgetTemplates               BudgetTemplate[]
   emailVerificationTokens       EmailVerificationToken[]
-  passwordResetTokens            PasswordResetToken[]
-  adminMfaRecoveryCodes           AdminMfaRecoveryCode[]
-  adminAuditLogs                 AdminAuditLog[]            @relation("AdminAuditActor")
-  deletionApprovalsRequested     AdminDeletionApproval[]    @relation("DeletionApprovalRequester")
-  deletionApprovalsApproved      AdminDeletionApproval[]    @relation("DeletionApprovalApprover")
-  deletionApprovalTargets        AdminDeletionApproval[]    @relation("DeletionApprovalTarget")
+  passwordResetTokens           PasswordResetToken[]
+  adminMfaRecoveryCodes         AdminMfaRecoveryCode[]
+  adminAuditLogs                AdminAuditLog[]               @relation("AdminAuditActor")
+  deletionApprovalsRequested    AdminDeletionApproval[]       @relation("DeletionApprovalRequester")
+  deletionApprovalsApproved     AdminDeletionApproval[]       @relation("DeletionApprovalApprover")
+  deletionApprovalTargets       AdminDeletionApproval[]       @relation("DeletionApprovalTarget")
   collaborationPresences        CollaborationPresence[]
   collaborationEditSessions     CollaborationEditSession[]
-  collaborationCommentsCreated  CollaborationComment[]      @relation("CommentCreatedBy")
-  collaborationCommentsResolved CollaborationComment[]      @relation("CommentResolvedBy")
+  collaborationCommentsCreated  CollaborationComment[]        @relation("CommentCreatedBy")
+  collaborationCommentsResolved CollaborationComment[]        @relation("CommentResolvedBy")
   changeEvents                  BudgetChangeEvent[]
   versionSnapshots              BudgetVersionSnapshot[]
-  invitedMemberships            CompanyMembership[]         @relation("MembershipInviter")
+  invitedMemberships            CompanyMembership[]           @relation("MembershipInviter")
   agentExecutions               AgentExecution[]
-  resourcePriceRequests         ResourcePriceUpdateRequest[] @relation("ResourcePriceRequestCreator")
-  resourcePriceAppliedItems     ResourcePriceUpdateItem[]    @relation("ResourcePriceItemApplier")
+  delegationsGiven              AgentDelegation[]             @relation("AgentDelegationDelegator")
+  delegationsReceived           AgentDelegation[]             @relation("AgentDelegationDelegatee")
+  delegationsRevoked            AgentDelegation[]             @relation("AgentDelegationRevoker")
+  resourcePriceRequests         ResourcePriceUpdateRequest[]  @relation("ResourcePriceRequestCreator")
+  resourcePriceAppliedItems     ResourcePriceUpdateItem[]     @relation("ResourcePriceItemApplier")
   resourcePriceConfigUpdates    ResourcePriceProviderConfig[] @relation("ResourcePriceConfigUpdater")
   localPriceBatchesCreated      LocalResourcePriceBatch[]     @relation("LocalPriceBatchCreatedBy")
   localPriceBatchesPublished    LocalResourcePriceBatch[]     @relation("LocalPriceBatchPublishedBy")
   localPriceBatchesRolledBack   LocalResourcePriceBatch[]     @relation("LocalPriceBatchRolledBackBy")
   localPriceHistoryEntries      LocalResourcePriceHistory[]   @relation("LocalPriceHistoryChangedBy")
-  agentDecidedApprovals         AgentApproval[]             @relation("AgentApprovalDecidedBy")
-  agentRollbacks                AgentRollback[]             @relation("AgentRollbackCreatedBy")
+  agentDecidedApprovals         AgentApproval[]               @relation("AgentApprovalDecidedBy")
+  agentRollbacks                AgentRollback[]               @relation("AgentRollbackCreatedBy")
   storedProjectPackages         StoredProjectPackage[]
   projectAttachments            ProjectAttachment[]
   riskScenarios                 RiskScenario[]
-  workspaceAuditEvents          WorkspaceAuditEvent[] @relation("WorkspaceAuditActor")
-  workspaceInviteLinksCreated   WorkspaceInviteLink[] @relation("WorkspaceInviteLinkCreator")
-  workspaceInviteLinkUses       WorkspaceInviteLinkUse[] @relation("WorkspaceInviteLinkUser")
+  workspaceAuditEvents          WorkspaceAuditEvent[]         @relation("WorkspaceAuditActor")
+  workspaceInviteLinksCreated   WorkspaceInviteLink[]         @relation("WorkspaceInviteLinkCreator")
+  workspaceInviteLinkUses       WorkspaceInviteLinkUse[]      @relation("WorkspaceInviteLinkUser")
   riskSimulationRuns            RiskSimulationRun[]
   projectMemberships            ProjectMembership[]
+  teamMemberships               WorkspaceTeamMember[]
 
   @@index([role])
   @@index([status])
@@ -549,13 +561,13 @@ model EmailVerificationToken {
 }
 
 model PasswordResetToken {
-  id        String   @id
+  id        String    @id
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -575,34 +587,34 @@ model SecurityRateLimitBucket {
 }
 
 model AdminMfaRecoveryCode {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  codeHash  String   @unique
+  codeHash  String    @unique
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, usedAt])
   @@map("admin_mfa_recovery_codes")
 }
 
 model AdminDeletionApproval {
-  id               String   @id @default(cuid())
-  targetUserId     String?
-  targetEmail      String
-  requestedById    String?
-  approvedById     String?
-  confirmationEmail String
-  reason           String
-  status           String   @default("PENDING")
-  expiresAt        DateTime
-  createdAt        DateTime @default(now())
-  decidedAt        DateTime?
-  executedAt       DateTime?
+  id                     String    @id @default(cuid())
+  targetUserId           String?
+  targetEmail            String
+  requestedById          String?
+  approvedById           String?
+  confirmationEmail      String
+  reason                 String
+  status                 String    @default("PENDING")
+  expiresAt              DateTime
+  createdAt              DateTime  @default(now())
+  decidedAt              DateTime?
+  executedAt             DateTime?
   deletionReminderSentAt DateTime?
-  targetUser       User?    @relation("DeletionApprovalTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
-  requestedBy      User?    @relation("DeletionApprovalRequester", fields: [requestedById], references: [id], onDelete: SetNull)
-  approvedBy       User?    @relation("DeletionApprovalApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  targetUser             User?     @relation("DeletionApprovalTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  requestedBy            User?     @relation("DeletionApprovalRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  approvedBy             User?     @relation("DeletionApprovalApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([status, expiresAt])
   @@index([targetUserId])
@@ -630,22 +642,22 @@ model AdminAuditLog {
 }
 
 model BetaCampaign {
-  id                String             @id @default(cuid())
-  name              String
-  code              String?            @unique
-  planSlug          String             @default("pro")
-  durationDays      Int
-  status            BetaCampaignStatus @default(DRAFT)
-  assignmentMode    BetaAssignmentMode @default(ADMIN)
-  startsAt          DateTime
-  endsAt            DateTime?
-  maxAssignments    Int?
-  eligibilityRules  Json
-  createdById       String
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  createdBy         User               @relation("BetaCampaignCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  grants            BetaGrant[]
+  id               String             @id @default(cuid())
+  name             String
+  code             String?            @unique
+  planSlug         String             @default("pro")
+  durationDays     Int
+  status           BetaCampaignStatus @default(DRAFT)
+  assignmentMode   BetaAssignmentMode @default(ADMIN)
+  startsAt         DateTime
+  endsAt           DateTime?
+  maxAssignments   Int?
+  eligibilityRules Json
+  createdById      String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  createdBy        User               @relation("BetaCampaignCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  grants           BetaGrant[]
 
   @@index([status, startsAt])
   @@index([assignmentMode, status])
@@ -683,18 +695,18 @@ model BetaGrant {
 }
 
 model BetaApplication {
-  id           String               @id @default(cuid())
+  id           String                @id @default(cuid())
   name         String
   email        String
-  campaign     String               @default("founding-users-peru")
+  campaign     String                @default("founding-users-peru")
   status       BetaApplicationStatus @default(PENDING)
   reviewedById String?
   reviewedAt   DateTime?
   reviewNote   String?
   metadata     Json?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  reviewedBy   User?                @relation("BetaApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  reviewedBy   User?                 @relation("BetaApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt(sort: Desc)])
   @@index([email, createdAt(sort: Desc)])
@@ -702,27 +714,27 @@ model BetaApplication {
 }
 
 model MarketingEvent {
-  id                   String   @id @default(cuid())
-  name                 String
-  userId               String?
-  clientId             String?
-  projectId            String?
-  budgetId             String?
-  eventVersion         String   @default("1")
-  pagePath             String?
-  plan                 String?
-  isDemo               Boolean?
-  utmSource            String?
-  utmMedium            String?
-  utmCampaign          String?
-  utmContent           String?
-  firstTouchUtmSource  String?
-  firstTouchUtmMedium  String?
+  id                    String   @id @default(cuid())
+  name                  String
+  userId                String?
+  clientId              String?
+  projectId             String?
+  budgetId              String?
+  eventVersion          String   @default("1")
+  pagePath              String?
+  plan                  String?
+  isDemo                Boolean?
+  utmSource             String?
+  utmMedium             String?
+  utmCampaign           String?
+  utmContent            String?
+  firstTouchUtmSource   String?
+  firstTouchUtmMedium   String?
   firstTouchUtmCampaign String?
-  firstTouchUtmContent String?
-  parameters           Json?
-  occurredAt           DateTime @default(now())
-  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  firstTouchUtmContent  String?
+  parameters            Json?
+  occurredAt            DateTime @default(now())
+  user                  User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([name, occurredAt(sort: Desc)])
   @@index([userId, occurredAt(sort: Desc)])
@@ -732,31 +744,31 @@ model MarketingEvent {
 }
 
 model MembershipPlan {
-  id                   String                @id @default(cuid())
-  name                 String
-  slug                 String                @unique
-  monthlyTokenLimit    Int
-  seatLimit            Int?
-  billingMode          BillingMode           @default(FREE)
-  stripePriceId        String?
-  projectLimit         Int?
-  budgetLimit          Int?
-  entitlements         String[]              @default([])
-  allowKhipuChat       Boolean               @default(false)
-  allowKhipuAgent      Boolean               @default(false)
-  allowByok            Boolean               @default(false)
-  allowWorkspaceKey    Boolean               @default(false)
-  allowedAiProviders   String[]              @default([])
-  allowedAiModels      String[]              @default([])
-  userAiTokenLimit     Int?
+  id                    String                @id @default(cuid())
+  name                  String
+  slug                  String                @unique
+  monthlyTokenLimit     Int
+  seatLimit             Int?
+  billingMode           BillingMode           @default(FREE)
+  stripePriceId         String?
+  projectLimit          Int?
+  budgetLimit           Int?
+  entitlements          String[]              @default([])
+  allowKhipuChat        Boolean               @default(false)
+  allowKhipuAgent       Boolean               @default(false)
+  allowByok             Boolean               @default(false)
+  allowWorkspaceKey     Boolean               @default(false)
+  allowedAiProviders    String[]              @default([])
+  allowedAiModels       String[]              @default([])
+  userAiTokenLimit      Int?
   workspaceAiTokenLimit Int?
-  monthlyBudgetMinor   Int?
-  allowAgentWrites     Boolean               @default(false)
-  isActive             Boolean               @default(true)
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  users                User[]
-  companySubscriptions CompanySubscription[]
+  monthlyBudgetMinor    Int?
+  allowAgentWrites      Boolean               @default(false)
+  isActive              Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  users                 User[]
+  companySubscriptions  CompanySubscription[]
 
   @@index([isActive])
   @@index([billingMode])
@@ -795,19 +807,19 @@ model BillingWebhookEvent {
 }
 
 model AiUsagePeriod {
-  id               String   @id @default(cuid())
-  userId           String
-  workspaceId      String?
-  periodStart      DateTime
-  consumedTokens   Int      @default(0)
-  reservedTokens   Int      @default(0)
-  reservedCostMinor Int?
+  id                 String   @id @default(cuid())
+  userId             String
+  workspaceId        String?
+  periodStart        DateTime
+  consumedTokens     Int      @default(0)
+  reservedTokens     Int      @default(0)
+  reservedCostMinor  Int?
   estimatedCostMinor Int?
-  actualCostMinor  Int?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace        Company? @relation("AiUsagePeriodWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  actualCostMinor    Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace          Company? @relation("AiUsagePeriodWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, periodStart])
   @@index([workspaceId, periodStart])
@@ -815,17 +827,17 @@ model AiUsagePeriod {
 }
 
 model AiWorkspaceUsagePeriod {
-  id                String   @id @default(cuid())
-  workspaceId       String
-  periodStart       DateTime
-  consumedTokens    Int      @default(0)
-  reservedTokens    Int      @default(0)
-  reservedCostMinor Int?
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  periodStart        DateTime
+  consumedTokens     Int      @default(0)
+  reservedTokens     Int      @default(0)
+  reservedCostMinor  Int?
   estimatedCostMinor Int?
-  actualCostMinor   Int?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  workspace         Company  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actualCostMinor    Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  workspace          Company  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, periodStart])
   @@index([periodStart])
@@ -839,7 +851,7 @@ model AiUserWorkspaceUsagePeriod {
   periodStart        DateTime
   consumedTokens     Int      @default(0)
   reservedTokens     Int      @default(0)
-  reservedCostMinor Int?
+  reservedCostMinor  Int?
   estimatedCostMinor Int?
   actualCostMinor    Int?
   createdAt          DateTime @default(now())
@@ -854,36 +866,36 @@ model AiUserWorkspaceUsagePeriod {
 }
 
 model AiTokenLedger {
-  id                String            @id @default(cuid())
-  userId            String
-  workspaceId       String?
-  adminUserId       String?
-  periodStart       DateTime
-  type              AiTokenLedgerType
-  tokens            Int
-  estimatedTokens   Int?
-  actualTokens      Int?
-  inputTokens       Int?
-  outputTokens      Int?
-  reservedCostMinor Int?
+  id                 String            @id @default(cuid())
+  userId             String
+  workspaceId        String?
+  adminUserId        String?
+  periodStart        DateTime
+  type               AiTokenLedgerType
+  tokens             Int
+  estimatedTokens    Int?
+  actualTokens       Int?
+  inputTokens        Int?
+  outputTokens       Int?
+  reservedCostMinor  Int?
   estimatedCostMinor Int?
-  actualCostMinor   Int?
-  provider          String
-  model             String
-  action            String
-  credentialSource  String?
-  credentialId      String?
-  billingScope      String?
+  actualCostMinor    Int?
+  provider           String
+  model              String
+  action             String
+  credentialSource   String?
+  credentialId       String?
+  billingScope       String?
   idempotencyKey     String?           @unique
-  requestId         String?
-  failureCode       String?
-  fallbackUsed      Boolean           @default(false)
-  notes             String?
-  createdAt         DateTime          @default(now())
-  user              User              @relation("AiTokenLedgerUser", fields: [userId], references: [id], onDelete: Cascade)
-  workspace         Company?          @relation("AiTokenLedgerWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
-  adminUser         User?             @relation("AiTokenLedgerAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
-  credential        AiCredential?     @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  requestId          String?
+  failureCode        String?
+  fallbackUsed       Boolean           @default(false)
+  notes              String?
+  createdAt          DateTime          @default(now())
+  user               User              @relation("AiTokenLedgerUser", fields: [userId], references: [id], onDelete: Cascade)
+  workspace          Company?          @relation("AiTokenLedgerWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  adminUser          User?             @relation("AiTokenLedgerAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
+  credential         AiCredential?     @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
   @@index([userId, periodStart])
   @@index([workspaceId, periodStart])
@@ -894,72 +906,109 @@ model AiTokenLedger {
 }
 
 model AiCredential {
-  id               String                @id @default(cuid())
-  scope            AiCredentialScope
-  workspaceId      String?
-  userId           String?
-  provider         AiCredentialProvider
-  secretReference  String?
-  encryptedSecret  String?
-  maskedValue      String
-  status           AiCredentialStatus    @default(ACTIVE)
-  isFallback       Boolean               @default(false)
-  lastValidatedAt  DateTime?
-  lastError        String?
-  createdByUserId  String?
-  rotatedAt        DateTime?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  workspace        Company?              @relation("AiCredentialWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
-  user             User?                 @relation("AiCredentialUser", fields: [userId], references: [id], onDelete: Cascade)
-  createdBy        User?                 @relation("AiCredentialCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  ledgerEntries    AiTokenLedger[]
-  auditEvents      AiCredentialAuditEvent[]
+  id              String                   @id @default(cuid())
+  scope           AiCredentialScope
+  workspaceId     String?
+  teamId          String?
+  projectId       String?
+  userId          String?
+  provider        AiCredentialProvider
+  secretReference String?
+  encryptedSecret String?
+  maskedValue     String
+  status          AiCredentialStatus       @default(ACTIVE)
+  isFallback      Boolean                  @default(false)
+  lastValidatedAt DateTime?
+  lastError       String?
+  createdByUserId String?
+  rotatedAt       DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  workspace       Company?                 @relation("AiCredentialWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  team            WorkspaceTeam?           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project         Project?                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User?                    @relation("AiCredentialUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy       User?                    @relation("AiCredentialCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  ledgerEntries   AiTokenLedger[]
+  auditEvents     AiCredentialAuditEvent[]
 
   @@index([scope, provider, status])
   @@index([workspaceId, provider, status])
+  @@index([teamId, provider, status])
+  @@index([projectId, provider, status])
   @@index([userId, provider, status])
   @@index([createdByUserId])
   @@map("ai_credentials")
 }
 
 model AiPolicy {
-  id                    String       @id @default(cuid())
-  workspaceId           String       @unique
-  mode                  AiPolicyMode @default(PLATFORM)
-  defaultProvider       AiCredentialProvider @default(OPENAI)
-  allowedProviders      String[]     @default([])
-  allowedModels         String[]     @default([])
-  allowUserKeys         Boolean      @default(false)
-  allowWorkspaceKey     Boolean      @default(false)
-  fallbackEnabled       Boolean      @default(true)
-  monthlyTokenLimit     Int?
-  monthlyBudgetMinor    Int?
-  hardLimit             Boolean      @default(true)
-  alertThresholds       Int[]        @default([80, 90, 100])
-  allowAgentWrites      Boolean      @default(false)
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
-  workspace             Company      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                 String               @id @default(cuid())
+  workspaceId        String?              @unique
+  teamId             String?              @unique
+  projectId          String?              @unique
+  workspace          Company?             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team               WorkspaceTeam?       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project            Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mode               AiPolicyMode         @default(PLATFORM)
+  defaultProvider    AiCredentialProvider @default(OPENAI)
+  allowedProviders   String[]             @default([])
+  allowedModels      String[]             @default([])
+  allowUserKeys      Boolean              @default(false)
+  allowWorkspaceKey  Boolean              @default(false)
+  fallbackEnabled    Boolean              @default(true)
+  monthlyTokenLimit  Int?
+  monthlyBudgetMinor Int?
+  hardLimit          Boolean              @default(true)
+  alertThresholds    Int[]                @default([80, 90, 100])
+  allowAgentWrites   Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   @@index([mode])
   @@map("ai_policies")
 }
 
+model AgentDelegation {
+  id          String                @id @default(cuid())
+  workspaceId String
+  delegatorId String
+  delegateeId String
+  projectId   String?
+  teamId      String?
+  toolNames   String[]              @default([])
+  expiresAt   DateTime
+  status      AgentDelegationStatus @default(ACTIVE)
+  revokedAt   DateTime?
+  revokedById String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  workspace   Company               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  delegator   User                  @relation("AgentDelegationDelegator", fields: [delegatorId], references: [id], onDelete: Cascade)
+  delegatee   User                  @relation("AgentDelegationDelegatee", fields: [delegateeId], references: [id], onDelete: Cascade)
+  revokedBy   User?                 @relation("AgentDelegationRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  project     Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team        WorkspaceTeam?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, delegateeId, status, expiresAt])
+  @@index([workspaceId, delegatorId, createdAt(sort: Desc)])
+  @@index([projectId, teamId])
+  @@map("agent_delegations")
+}
+
 model AiCredentialAuditEvent {
-  id          String                    @id @default(cuid())
-  workspaceId String?
+  id           String                     @id @default(cuid())
+  workspaceId  String?
   credentialId String?
-  actorUserId String?
-  operation   AiCredentialAuditOperation
-  provider    AiCredentialProvider?
-  success     Boolean                   @default(true)
-  errorCode   String?
-  metadata    Json                      @default("{}")
-  createdAt   DateTime                  @default(now())
-  workspace   Company?                 @relation("AiCredentialAuditWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
-  credential  AiCredential?             @relation(fields: [credentialId], references: [id], onDelete: SetNull)
-  actorUser   User?                     @relation("AiCredentialAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorUserId  String?
+  operation    AiCredentialAuditOperation
+  provider     AiCredentialProvider?
+  success      Boolean                    @default(true)
+  errorCode    String?
+  metadata     Json                       @default("{}")
+  createdAt    DateTime                   @default(now())
+  workspace    Company?                   @relation("AiCredentialAuditWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  credential   AiCredential?              @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  actorUser    User?                      @relation("AiCredentialAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([credentialId, createdAt(sort: Desc)])
@@ -1039,17 +1088,17 @@ model ActivityEvent {
 }
 
 model WorkspaceAuditEvent {
-  id          String                    @id @default(cuid())
+  id          String                   @id @default(cuid())
   companyId   String
   actorUserId String?
   action      WorkspaceAuditAction
   targetType  WorkspaceAuditTargetType
   targetId    String?
   targetLabel String?
-  metadata    Json                      @default("{}")
-  createdAt   DateTime                  @default(now())
-  company     Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  actorUser   User?                     @relation("WorkspaceAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  metadata    Json                     @default("{}")
+  createdAt   DateTime                 @default(now())
+  company     Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actorUser   User?                    @relation("WorkspaceAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([companyId, createdAt(sort: Desc)])
   @@index([companyId, action, createdAt(sort: Desc)])
@@ -1110,21 +1159,21 @@ model UserSettings {
 }
 
 model WorkspaceInviteLink {
-  id          String                  @id @default(cuid())
+  id          String                @id @default(cuid())
   companyId   String
   createdById String
-  tokenHash   String                  @unique
-  role        CompanyMembershipRole   @default(VIEWER)
+  tokenHash   String                @unique
+  role        CompanyMembershipRole @default(VIEWER)
   expiresAt   DateTime
   maxUses     Int?
-  useCount    Int                     @default(0)
+  useCount    Int                   @default(0)
   revokedAt   DateTime?
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy   User                    @relation("WorkspaceInviteLinkCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  company     Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User                  @relation("WorkspaceInviteLinkCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
-  uses        WorkspaceInviteLinkUse[]
+  uses WorkspaceInviteLinkUse[]
 
   @@index([companyId, revokedAt, expiresAt])
   @@index([createdById])
@@ -1132,15 +1181,14 @@ model WorkspaceInviteLink {
 }
 
 model WorkspaceInviteLinkUse {
-  id           String             @id @default(cuid())
+  id           String              @id @default(cuid())
   inviteLinkId String
   userId       String?
   email        String
   membershipId String?
-  createdAt    DateTime           @default(now())
+  createdAt    DateTime            @default(now())
   inviteLink   WorkspaceInviteLink @relation(fields: [inviteLinkId], references: [id], onDelete: Cascade)
-  user         User?              @relation("WorkspaceInviteLinkUser", fields: [userId], references: [id], onDelete: SetNull)
-
+  user         User?               @relation("WorkspaceInviteLinkUser", fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([inviteLinkId, email])
   @@index([inviteLinkId, createdAt(sort: Desc)])
@@ -1206,38 +1254,77 @@ model ProjectMembership {
   @@map("project_memberships")
 }
 
+model WorkspaceTeam {
+  id               String                @id @default(cuid())
+  companyId        String
+  name             String
+  description      String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  memberships      WorkspaceTeamMember[]
+  credentials      AiCredential[]
+  policy           AiPolicy?
+  agentDelegations AgentDelegation[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("workspace_teams")
+}
+
+model WorkspaceTeamMember {
+  id        String        @id @default(cuid())
+  teamId    String
+  companyId String
+  userId    String
+  role      String        @default("MEMBER")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  team      WorkspaceTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([companyId, userId])
+  @@index([userId])
+  @@map("workspace_team_members")
+}
+
 model Company {
-  id                        String                     @id @default(cuid())
-  userId                    String
-  name                      String
-  ruc                       String?
-  logoUrl                   String?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  deletedAt                 DateTime?
-  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projects                  Project[]
-  resources                 Resource[]
-  collaborationPresence     CollaborationPresence[]
-  collaborationEditSessions CollaborationEditSession[]
-  collaborationComments     CollaborationComment[]
-  budgetChangeEvents        BudgetChangeEvent[]
-  budgetVersionSnapshots    BudgetVersionSnapshot[]
-  memberships               CompanyMembership[]
-  subscription              CompanySubscription?
-  storedProjectPackages     StoredProjectPackage[]
-  betaGrants                BetaGrant[]
-  workspaceAuditEvents      WorkspaceAuditEvent[]
-  inviteLinks               WorkspaceInviteLink[]
-  workspaceRoles            WorkspaceRole[]
-  projectMemberships        ProjectMembership[]
-  aiPolicies                AiPolicy[]
-  aiCredentials             AiCredential[]              @relation("AiCredentialWorkspace")
-  aiUsagePeriods            AiUsagePeriod[]             @relation("AiUsagePeriodWorkspace")
-  aiWorkspaceUsagePeriods   AiWorkspaceUsagePeriod[]
+  id                          String                       @id @default(cuid())
+  userId                      String
+  name                        String
+  ruc                         String?
+  logoUrl                     String?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  deletedAt                   DateTime?
+  user                        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects                    Project[]
+  resources                   Resource[]
+  collaborationPresence       CollaborationPresence[]
+  collaborationEditSessions   CollaborationEditSession[]
+  collaborationComments       CollaborationComment[]
+  budgetChangeEvents          BudgetChangeEvent[]
+  budgetVersionSnapshots      BudgetVersionSnapshot[]
+  memberships                 CompanyMembership[]
+  subscription                CompanySubscription?
+  storedProjectPackages       StoredProjectPackage[]
+  betaGrants                  BetaGrant[]
+  workspaceAuditEvents        WorkspaceAuditEvent[]
+  inviteLinks                 WorkspaceInviteLink[]
+  workspaceRoles              WorkspaceRole[]
+  projectMemberships          ProjectMembership[]
+  teams                       WorkspaceTeam[]
+  teamMemberships             WorkspaceTeamMember[]
+  aiPolicies                  AiPolicy[]
+  aiCredentials               AiCredential[]               @relation("AiCredentialWorkspace")
+  aiUsagePeriods              AiUsagePeriod[]              @relation("AiUsagePeriodWorkspace")
+  aiWorkspaceUsagePeriods     AiWorkspaceUsagePeriod[]
   aiUserWorkspaceUsagePeriods AiUserWorkspaceUsagePeriod[]
-  aiTokenLedgerEntries      AiTokenLedger[]             @relation("AiTokenLedgerWorkspace")
-  aiCredentialAudits        AiCredentialAuditEvent[]    @relation("AiCredentialAuditWorkspace")
+  aiTokenLedgerEntries        AiTokenLedger[]              @relation("AiTokenLedgerWorkspace")
+  aiCredentialAudits          AiCredentialAuditEvent[]     @relation("AiCredentialAuditWorkspace")
+  agentDelegations            AgentDelegation[]
 
   @@index([userId])
 }
@@ -1336,10 +1423,13 @@ model Project {
   storedProjectPackages      StoredProjectPackage[]
   attachments                ProjectAttachment[]
   projectMemberships         ProjectMembership[]
+  aiCredentials              AiCredential[]
+  aiPolicy                   AiPolicy?
+  agentDelegations           AgentDelegation[]
 
+  @@unique([companyId, demoKey])
   @@index([companyId])
   @@index([companyId, isDemo])
-  @@unique([companyId, demoKey])
 }
 
 model AiSessionFeedbackEvent {
@@ -1850,21 +1940,21 @@ model RiskVariable {
 }
 
 model RiskCorrelation {
-  id               String       @id @default(cuid())
+  id               String          @id @default(cuid())
   budgetId         String
   scenarioId       String?
   sourceVariableId String
   targetVariableId String
-  coefficient      Decimal      @default(0) @db.Decimal(8, 4)
+  coefficient      Decimal         @default(0) @db.Decimal(8, 4)
   source           RiskInputSource @default(MANUAL)
-  confidence       Decimal?     @db.Decimal(5, 4)
-  rationale        String?      @db.Text
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  budget           Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  scenario         RiskScenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-  sourceVariable   RiskVariable @relation("RiskCorrelationSource", fields: [sourceVariableId], references: [id], onDelete: Cascade)
-  targetVariable   RiskVariable @relation("RiskCorrelationTarget", fields: [targetVariableId], references: [id], onDelete: Cascade)
+  confidence       Decimal?        @db.Decimal(5, 4)
+  rationale        String?         @db.Text
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  budget           Budget          @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  scenario         RiskScenario?   @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  sourceVariable   RiskVariable    @relation("RiskCorrelationSource", fields: [sourceVariableId], references: [id], onDelete: Cascade)
+  targetVariable   RiskVariable    @relation("RiskCorrelationTarget", fields: [targetVariableId], references: [id], onDelete: Cascade)
 
   @@unique([budgetId, sourceVariableId, targetVariableId])
   @@index([budgetId])
@@ -1875,33 +1965,33 @@ model RiskCorrelation {
 }
 
 model RiskSimulationRun {
-  id                String   @id @default(cuid())
+  id                String        @id @default(cuid())
   budgetId          String
   scenarioId        String?
   createdByUserId   String?
   iterations        Int
   seed              String?
   engineVersion     String?
-  baseTotal         Decimal  @default(0) @db.Decimal(18, 4)
-  mean              Decimal  @default(0) @db.Decimal(18, 4)
-  median            Decimal  @default(0) @db.Decimal(18, 4)
-  variance          Decimal  @default(0) @db.Decimal(24, 6)
-  standardDeviation Decimal  @default(0) @db.Decimal(18, 4)
-  skewness          Decimal  @default(0) @db.Decimal(18, 6)
-  kurtosis          Decimal  @default(0) @db.Decimal(18, 6)
-  p10               Decimal  @default(0) @db.Decimal(18, 4)
-  p50               Decimal  @default(0) @db.Decimal(18, 4)
-  p80               Decimal  @default(0) @db.Decimal(18, 4)
-  p90               Decimal  @default(0) @db.Decimal(18, 4)
-  p95               Decimal  @default(0) @db.Decimal(18, 4)
+  baseTotal         Decimal       @default(0) @db.Decimal(18, 4)
+  mean              Decimal       @default(0) @db.Decimal(18, 4)
+  median            Decimal       @default(0) @db.Decimal(18, 4)
+  variance          Decimal       @default(0) @db.Decimal(24, 6)
+  standardDeviation Decimal       @default(0) @db.Decimal(18, 4)
+  skewness          Decimal       @default(0) @db.Decimal(18, 6)
+  kurtosis          Decimal       @default(0) @db.Decimal(18, 6)
+  p10               Decimal       @default(0) @db.Decimal(18, 4)
+  p50               Decimal       @default(0) @db.Decimal(18, 4)
+  p80               Decimal       @default(0) @db.Decimal(18, 4)
+  p90               Decimal       @default(0) @db.Decimal(18, 4)
+  p95               Decimal       @default(0) @db.Decimal(18, 4)
   histogramBins     Json
   sCurvePoints      Json
   scheduleSummary   Json?
   modelSnapshot     Json?
-  createdAt         DateTime @default(now())
-  budget            Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  createdAt         DateTime      @default(now())
+  budget            Budget        @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   scenario          RiskScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
-  createdBy         User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdBy         User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([scenarioId, createdAt(sort: Desc)])
@@ -1909,17 +1999,17 @@ model RiskSimulationRun {
 }
 
 model RiskScenario {
-  id              String             @id @default(cuid())
+  id              String              @id @default(cuid())
   budgetId        String
   name            String
   description     String?
-  source          RiskScenarioSource @default(MANUAL)
-  status          RiskScenarioStatus @default(DRAFT)
+  source          RiskScenarioSource  @default(MANUAL)
+  status          RiskScenarioStatus  @default(DRAFT)
   createdByUserId String
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  budget          Budget             @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  createdBy       User               @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  budget          Budget              @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  createdBy       User                @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
   variables       RiskVariable[]
   correlations    RiskCorrelation[]
   simulationRuns  RiskSimulationRun[]
@@ -1998,7 +2088,7 @@ model WorkScheduleDistribution {
 }
 
 model Resource {
-  id                      String                   @id @default(cuid())
+  id                      String                        @id @default(cuid())
   companyId               String?
   code                    String
   description             String
@@ -2008,47 +2098,47 @@ model Resource {
   iuCurrentReviewStatus   String?
   subcategory             String?
   unit                    String
-  unitPrice               Decimal                  @default(0) @db.Decimal(18, 4)
-  currency                String                   @default("PEN")
+  unitPrice               Decimal                       @default(0) @db.Decimal(18, 4)
+  currency                String                        @default("PEN")
   source                  String?
   priceUpdatedAt          DateTime?
   priceObservedAt         DateTime?
   priceSource             String?
   priceSyncStatus         String?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  company                 Company?                 @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+  company                 Company?                      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   apuResources            ApuResource[]
   partidaRows             PartidaApuRow[]
   generatedPartidaInsumos GeneratedPartidaInsumo[]
   priceBindings           ResourcePriceBinding[]
   priceSnapshots          ResourcePriceSnapshot[]
   priceUpdateItems        ResourcePriceUpdateItem[]
-  localPriceBatchItems     LocalResourcePriceBatchItem[]
-  localPriceHistory        LocalResourcePriceHistory[]
+  localPriceBatchItems    LocalResourcePriceBatchItem[]
+  localPriceHistory       LocalResourcePriceHistory[]
 
   @@index([companyId])
   @@index([priceSyncStatus, priceObservedAt])
 }
 
 model ResourcePriceProviderConfig {
-  id                    String                       @id @default(cuid())
-  singletonKey          String                       @unique @default("primary")
-  provider              String
-  status                ResourcePriceProviderStatus  @default(DISABLED)
-  baseUrl               String?
-  apiVersion            String                       @default("v1")
-  credentialEncrypted   String?
-  timeoutMs             Int                          @default(8000)
-  maxBatchSize          Int                          @default(50)
-  defaultTtlHours       Int                          @default(24)
-  allowFallback         Boolean                      @default(false)
-  lastHealthCheckAt     DateTime?
-  lastHealthStatus      String?
-  lastUpdatedById       String?
-  createdAt             DateTime                     @default(now())
-  updatedAt             DateTime                     @updatedAt
-  lastUpdatedBy         User?                        @relation("ResourcePriceConfigUpdater", fields: [lastUpdatedById], references: [id], onDelete: SetNull)
+  id                  String                      @id @default(cuid())
+  singletonKey        String                      @unique @default("primary")
+  provider            String
+  status              ResourcePriceProviderStatus @default(DISABLED)
+  baseUrl             String?
+  apiVersion          String                      @default("v1")
+  credentialEncrypted String?
+  timeoutMs           Int                         @default(8000)
+  maxBatchSize        Int                         @default(50)
+  defaultTtlHours     Int                         @default(24)
+  allowFallback       Boolean                     @default(false)
+  lastHealthCheckAt   DateTime?
+  lastHealthStatus    String?
+  lastUpdatedById     String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  lastUpdatedBy       User?                       @relation("ResourcePriceConfigUpdater", fields: [lastUpdatedById], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([provider, status])
@@ -2076,22 +2166,22 @@ model ResourcePriceBinding {
 }
 
 model ResourcePriceSnapshot {
-  id                 String                    @id @default(cuid())
+  id                 String                        @id @default(cuid())
   resourceId         String?
   requestId          String?
   provider           String
   externalResourceId String?
-  price              Decimal                   @db.Decimal(18, 4)
+  price              Decimal                       @db.Decimal(18, 4)
   currency           String
   unit               String
   observedAt         DateTime
-  receivedAt         DateTime                  @default(now())
+  receivedAt         DateTime                      @default(now())
   rawHash            String
   rawPayload         Json?
   status             ResourcePriceUpdateItemStatus @default(MATCHED)
-  createdAt          DateTime                  @default(now())
-  resource           Resource?                 @relation(fields: [resourceId], references: [id], onDelete: SetNull)
-  request            ResourcePriceUpdateRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                      @default(now())
+  resource           Resource?                     @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  request            ResourcePriceUpdateRequest?   @relation(fields: [requestId], references: [id], onDelete: SetNull)
 
   @@index([resourceId, observedAt(sort: Desc)])
   @@index([requestId])
@@ -2101,24 +2191,24 @@ model ResourcePriceSnapshot {
 }
 
 model ResourcePriceUpdateRequest {
-  id              String                    @id @default(cuid())
-  requestedById   String?
-  mode            ResourcePriceRequestMode
-  provider        String
-  status          ResourcePriceRequestStatus @default(QUEUED)
-  resourceCount   Int                       @default(0)
-  matchedCount    Int                       @default(0)
-  changedCount    Int                       @default(0)
-  errorCount      Int                       @default(0)
-  idempotencyKey  String                    @unique
-  errorMessage    String?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-  requestedBy     User?                     @relation("ResourcePriceRequestCreator", fields: [requestedById], references: [id], onDelete: SetNull)
-  items           ResourcePriceUpdateItem[]
-  snapshots       ResourcePriceSnapshot[]
+  id             String                     @id @default(cuid())
+  requestedById  String?
+  mode           ResourcePriceRequestMode
+  provider       String
+  status         ResourcePriceRequestStatus @default(QUEUED)
+  resourceCount  Int                        @default(0)
+  matchedCount   Int                        @default(0)
+  changedCount   Int                        @default(0)
+  errorCount     Int                        @default(0)
+  idempotencyKey String                     @unique
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  requestedBy    User?                      @relation("ResourcePriceRequestCreator", fields: [requestedById], references: [id], onDelete: SetNull)
+  items          ResourcePriceUpdateItem[]
+  snapshots      ResourcePriceSnapshot[]
 
   @@index([status, createdAt(sort: Desc)])
   @@index([requestedById, createdAt(sort: Desc)])
@@ -2127,29 +2217,29 @@ model ResourcePriceUpdateRequest {
 }
 
 model LocalResourcePriceBatch {
-  id             String                       @id @default(cuid())
-  versionNumber  Int                          @unique
-  versionLabel   String                       @unique
+  id             String                        @id @default(cuid())
+  versionNumber  Int                           @unique
+  versionLabel   String                        @unique
   source         LocalResourcePriceBatchSource
   status         LocalResourcePriceBatchStatus @default(DRAFT)
   fileName       String?
   fileHash       String?
   notes          String?
-  totalRows      Int                          @default(0)
-  validRows      Int                          @default(0)
-  changedRows    Int                          @default(0)
-  invalidRows    Int                          @default(0)
+  totalRows      Int                           @default(0)
+  validRows      Int                           @default(0)
+  changedRows    Int                           @default(0)
+  invalidRows    Int                           @default(0)
   createdById    String
   publishedById  String?
   rolledBackById String?
   previewedAt    DateTime?
   publishedAt    DateTime?
   rolledBackAt   DateTime?
-  createdAt      DateTime                     @default(now())
-  updatedAt      DateTime                     @updatedAt
-  createdBy      User                         @relation("LocalPriceBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  publishedBy    User?                        @relation("LocalPriceBatchPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
-  rolledBackBy   User?                        @relation("LocalPriceBatchRolledBackBy", fields: [rolledBackById], references: [id], onDelete: SetNull)
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  createdBy      User                          @relation("LocalPriceBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  publishedBy    User?                         @relation("LocalPriceBatchPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  rolledBackBy   User?                         @relation("LocalPriceBatchRolledBackBy", fields: [rolledBackById], references: [id], onDelete: SetNull)
   items          LocalResourcePriceBatchItem[]
   historyEntries LocalResourcePriceHistory[]
 
@@ -2160,25 +2250,25 @@ model LocalResourcePriceBatch {
 }
 
 model LocalResourcePriceBatchItem {
-  id              String                       @id @default(cuid())
-  batchId         String
-  resourceId      String?
-  rowNumber       Int
-  resourceCode    String
+  id                  String                       @id @default(cuid())
+  batchId             String
+  resourceId          String?
+  rowNumber           Int
+  resourceCode        String
   resourceDescription String
-  unit            String
-  currency        String
-  proposedPrice   Decimal?                     @db.Decimal(18, 4)
-  oldPrice        Decimal?                     @db.Decimal(18, 4)
-  observedAt      DateTime?
-  sourceLabel     String?
-  notes           String?
-  status          LocalResourcePriceItemStatus
-  reason          String?
-  createdAt       DateTime                     @default(now())
-  updatedAt       DateTime                     @updatedAt
-  batch           LocalResourcePriceBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  resource        Resource?                    @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  unit                String
+  currency            String
+  proposedPrice       Decimal?                     @db.Decimal(18, 4)
+  oldPrice            Decimal?                     @db.Decimal(18, 4)
+  observedAt          DateTime?
+  sourceLabel         String?
+  notes               String?
+  status              LocalResourcePriceItemStatus
+  reason              String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  batch               LocalResourcePriceBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  resource            Resource?                    @relation(fields: [resourceId], references: [id], onDelete: SetNull)
 
   @@unique([batchId, rowNumber])
   @@index([batchId, status])
@@ -2187,16 +2277,16 @@ model LocalResourcePriceBatchItem {
 }
 
 model LocalResourcePriceHistory {
-  id            String                 @id @default(cuid())
-  resourceId    String
-  batchId       String
-  oldPrice      Decimal                @db.Decimal(18, 4)
-  newPrice      Decimal                @db.Decimal(18, 4)
-  changedById   String
-  changedAt     DateTime               @default(now())
-  resource      Resource               @relation(fields: [resourceId], references: [id], onDelete: Restrict)
-  batch         LocalResourcePriceBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  changedBy     User                   @relation("LocalPriceHistoryChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+  id          String                  @id @default(cuid())
+  resourceId  String
+  batchId     String
+  oldPrice    Decimal                 @db.Decimal(18, 4)
+  newPrice    Decimal                 @db.Decimal(18, 4)
+  changedById String
+  changedAt   DateTime                @default(now())
+  resource    Resource                @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  batch       LocalResourcePriceBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  changedBy   User                    @relation("LocalPriceHistoryChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
 
   @@index([resourceId, changedAt(sort: Desc)])
   @@index([batchId])
@@ -2204,28 +2294,28 @@ model LocalResourcePriceHistory {
 }
 
 model ResourcePriceUpdateItem {
-  id                 String                     @id @default(cuid())
+  id                 String                        @id @default(cuid())
   requestId          String
   resourceId         String?
   externalResourceId String?
   status             ResourcePriceUpdateItemStatus
-  oldPrice           Decimal?                   @db.Decimal(18, 4)
-  newPrice           Decimal?                   @db.Decimal(18, 4)
+  oldPrice           Decimal?                      @db.Decimal(18, 4)
+  newPrice           Decimal?                      @db.Decimal(18, 4)
   oldCurrency        String?
   newCurrency        String?
   oldUnit            String?
   newUnit            String?
-  priceDelta         Decimal?                   @db.Decimal(18, 4)
-  priceDeltaPercent  Decimal?                   @db.Decimal(10, 4)
-  matchConfidence    Decimal?                   @db.Decimal(5, 4)
+  priceDelta         Decimal?                      @db.Decimal(18, 4)
+  priceDeltaPercent  Decimal?                      @db.Decimal(10, 4)
+  matchConfidence    Decimal?                      @db.Decimal(5, 4)
   reason             String?
   appliedAt          DateTime?
   appliedById        String?
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
-  request            ResourcePriceUpdateRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  resource           Resource?                  @relation(fields: [resourceId], references: [id], onDelete: SetNull)
-  appliedBy          User?                      @relation("ResourcePriceItemApplier", fields: [appliedById], references: [id], onDelete: SetNull)
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  request            ResourcePriceUpdateRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  resource           Resource?                     @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  appliedBy          User?                         @relation("ResourcePriceItemApplier", fields: [appliedById], references: [id], onDelete: SetNull)
 
   @@index([requestId, status])
   @@index([resourceId, createdAt(sort: Desc)])

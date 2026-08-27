@@ -135,6 +135,8 @@ export async function POST(request: Request) {
         const result = await runAgentWithScopedUsage({
           userId,
           workspaceId,
+          projectId: data.projectId,
+          teamId: data.teamId,
           message,
           requestId: data.requestId,
           run: () => restrictedOrchestrator.run({
@@ -171,6 +173,8 @@ export async function POST(request: Request) {
     const result = await runAgentWithScopedUsage({
       userId,
       workspaceId,
+      projectId: data.projectId,
+      teamId: data.teamId,
       message,
       requestId: data.requestId,
       run: () => orchestrator.run({
@@ -193,6 +197,8 @@ async function runAgentWithScopedUsage(input: {
   workspaceId: string | null;
   message: string;
   requestId?: string;
+  projectId?: string;
+  teamId?: string;
   run: () => Promise<AgentOrchestratorOutput>;
 }): Promise<AgentOrchestratorOutput> {
   if (!input.workspaceId || !isScopedAiResolverEnabled()) return input.run();
@@ -201,6 +207,8 @@ async function runAgentWithScopedUsage(input: {
   const credential = await resolveAiCredential({
     userId: input.userId,
     workspaceId: input.workspaceId,
+    projectId: input.projectId,
+    teamId: input.teamId,
     provider: "agent",
     task: "chat",
   });

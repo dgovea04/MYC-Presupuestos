@@ -19,6 +19,7 @@ export type AgentStreamExecution = {
     approvalId: string;
     toolName: string;
     reason: string;
+    impactSummary?: string;
   } | null;
   toolActivity: AgentToolActivitySummary[];
   warnings: string[];
@@ -39,6 +40,11 @@ export type AgentStreamInput = {
   messages?: AgentStreamMessage[];
   projectId?: string;
   workspaceId?: string;
+  teamId?: string;
+  provider?: string;
+  modelPreference?: string;
+  billingScope?: "AUTO" | "USER" | "WORKSPACE" | "PROJECT" | "TEAM";
+  requestId?: string;
   mode?: "chat" | "goal" | "workflow";
   workflowId?: string;
   skipMessageAdd?: boolean;
@@ -130,6 +136,7 @@ export function useAgentStream() {
             approvalId: readString(data.approvalId),
             toolName,
             reason,
+            impactSummary: typeof data.impactSummary === "string" ? data.impactSummary : undefined,
           },
         }));
         setMessages((prev) => [
@@ -210,6 +217,11 @@ export function useAgentStream() {
           messages: requestMessages,
           projectId: input.projectId,
           workspaceId: input.workspaceId,
+          teamId: input.teamId,
+          provider: input.provider,
+          modelPreference: input.modelPreference,
+          billingScope: input.billingScope,
+          requestId: input.requestId,
           mode: input.mode ?? "goal",
           workflowId: input.workflowId,
         }),

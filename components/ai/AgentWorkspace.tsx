@@ -15,6 +15,7 @@ import { ExecutionPlanPanel } from "./agent/ExecutionPlanPanel";
 import { AgentRightPanel } from "./agent/AgentRightPanel";
 import { BUNDLE_CONFIG } from "./agent/BundleConfig";
 import type { BundleSlug } from "./agent/BundleConfig";
+import { AiContextSelector } from "./agent/ai-context-selector";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ export function AgentWorkspace({
   // ── State ────────────────────────────────────────────────────────────────
   const [objective, setObjective] = useState(initialObjective);
   const [approving, setApproving] = useState(false);
+  const [executionApprovalStatus, setExecutionApprovalStatus] = useState<"approved" | "rejected" | null>(null);
   const [selectedBundleSlug, setSelectedBundleSlug] = useState<BundleSlug | null>(
     () => defaultBundleSlug ?? readStoredBundleSlug(),
   );
@@ -113,6 +115,9 @@ export function AgentWorkspace({
   const [forcefulCommandSent, setForcefulCommandSent] = useState(false);
   const fallbackTriggeredRef = useRef(false);
   const [postCreateDismissed, setPostCreateDismissed] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState("openrouter");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [billingScope, setBillingScope] = useState<"AUTO" | "USER" | "WORKSPACE" | "PROJECT" | "TEAM">("AUTO");
   const prevCreateProjectCountRef = useRef(0);
 
   // ── Panel layout ─────────────────────────────────────────────────────────
@@ -173,9 +178,9 @@ export function AgentWorkspace({
     connect,
     disconnect,
   } = useAgentStream();
-
   const loading = status === "connecting";
   const streaming = status === "streaming";
+  const effectiveConnect = useCallback((input: Parameters<typeof connect>[0]) => connect(input), [connect]);
 
 
 
@@ -206,8 +211,7 @@ export function AgentWorkspace({
   // ── Goal submission ──────────────────────────────────────────────────────
   const handleObjectiveSubmit = useCallback((obj: string) => {
     if (!obj.trim() || loading || streaming) return;
-    setObjective("");
-    connect({
+    effectiveConnect({
       message: obj.trim(),
       messages: [
         ...messages.map((m) => ({ role: m.role, content: m.content })),
@@ -217,8 +221,12 @@ export function AgentWorkspace({
       workspaceId,
       mode: selectedBundleSlug ? "workflow" : "goal",
       workflowId: selectedBundleSlug ?? undefined,
+      ...(selectedProvider !== "openrouter" ? { provider: selectedProvider } : {}),
+      ...(selectedModel ? { modelPreference: selectedModel } : {}),
+      ...(billingScope !== "AUTO" ? { billingScope } : {}),
     });
-  }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
+    setObjective("");
+  }, [projectId, workspaceId, loading, streaming, effectiveConnect, selectedBundleSlug, messages, billingScope, selectedModel, selectedProvider]);
 
   // ── Last construction description ────────────────────────────────────────
   const lastConstructionDescription = useMemo(() => {
@@ -355,26 +363,28 @@ export function AgentWorkspace({
   }, [projectId, workspaceId, loading, streaming, connect, selectedBundleSlug, messages]);
 
   // ── Approvals ────────────────────────────────────────────────────────────
-  const handleApprove = useCallback(async (approvalId: string) => {
+  const handleApprove = useCallback(async (approvalId: string, reason?: string) => {
     setApproving(true);
     try {
       await fetch("/api/ai/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approvalId, decision: "approve" }),
+        body: JSON.stringify({ approvalId, decision: "approve", reason }),
       });
     } catch { console.error("[AgentWorkspace] Error processing approval"); } finally { setApproving(false); }
+    setExecutionApprovalStatus("approved");
   }, []);
 
-  const handleReject = useCallback(async (approvalId: string) => {
+  const handleReject = useCallback(async (approvalId: string, reason: string) => {
     setApproving(true);
     try {
       await fetch("/api/ai/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approvalId, decision: "reject", reason: "Rechazado por el usuario." }),
+        body: JSON.stringify({ approvalId, decision: "reject", reason }),
       });
       disconnect();
+      setExecutionApprovalStatus("rejected");
     } catch { console.error("[AgentWorkspace] Error processing rejection"); } finally { setApproving(false); }
   }, [disconnect]);
 
@@ -406,6 +416,9 @@ export function AgentWorkspace({
           <GripVertical className="pointer-events-none h-4 w-4 text-[var(--app-text-muted)] opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
 
+        <div className="border-b border-[var(--app-border)] px-4 py-3">
+          <AiContextSelector provider={selectedProvider} model={selectedModel} scope={billingScope} onProviderChange={setSelectedProvider} onModelChange={setSelectedModel} onScopeChange={setBillingScope} disabled={loading || streaming} />
+        </div>
         <AgentChatPanel
           objective={objective}
           setObjective={setObjective}
@@ -471,6 +484,7 @@ export function AgentWorkspace({
             approving={approving}
             intent={intent}
             pendingAction={pendingAction}
+            approvalStatus={executionApprovalStatus}
           />
         </div>
       </div>

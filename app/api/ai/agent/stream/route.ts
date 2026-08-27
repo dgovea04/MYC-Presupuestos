@@ -232,6 +232,8 @@ export async function POST(request: Request) {
       ? await resolveAiCredential({
           userId: session.user.id,
           workspaceId,
+          teamId: data.teamId,
+          projectId: data.projectId,
           provider: credentialProvider,
           task: "chat",
           modelPreference,

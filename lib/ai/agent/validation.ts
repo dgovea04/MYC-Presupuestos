@@ -10,7 +10,8 @@ export const aiAgentRequestSchema = z.object({
   /** Historial completo de la conversación (mensajes anteriores + el nuevo). */
   messages: z.array(agentStreamMessageSchema).optional(),
   projectId: z.string().optional(),
-  workspaceId: z.string().optional(),
+  workspaceId: z.string().trim().min(1).optional(),
+  teamId: z.string().trim().min(1).optional(),
   mode: z.enum(["chat", "goal", "workflow"]).optional().default("chat"),
   workflowId: z.string().optional(),
   executionId: z.string().optional(),

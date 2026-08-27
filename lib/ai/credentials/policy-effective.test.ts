@@ -1,0 +1,4 @@
+import { describe, expect, it } from "vitest";
+import { resolveEffectivePolicy } from "./policy-effective";
+const base = { allowedProviders: ["OPENAI"], allowedModels: ["gpt"], monthlyTokenLimit: 1000, monthlyBudgetMinor: 500, allowUserKeys: true, allowWorkspaceKey: true, fallbackEnabled: true, allowAgentWrites: true };
+describe("resolveEffectivePolicy", () => { it("keeps child policies non-expansive", () => { const result = resolveEffectivePolicy(base, [{ scope: "WORKSPACE", label: "Workspace", policy: { allowedProviders: ["OPENAI", "GEMINI"], monthlyTokenLimit: 2000, allowAgentWrites: true } }, { scope: "PROJECT", label: "Proyecto", policy: { allowedProviders: ["OPENAI"], monthlyTokenLimit: 500, allowAgentWrites: false } }]); expect(result.allowedProviders).toEqual(["OPENAI"]); expect(result.monthlyTokenLimit).toBe(500); expect(result.allowAgentWrites).toBe(false); expect(result.restrictions.length).toBeGreaterThan(0); }); });

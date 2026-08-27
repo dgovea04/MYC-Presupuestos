@@ -276,6 +276,7 @@ export function AgentChatPanel({
               : "Describe tu objetivo: 'Crea un presupuesto para un hospital de 4 pisos'... (Ctrl+Enter para enviar)"}
             className="min-h-0 pr-12"
             rows={3}
+            data-testid="ui-textarea"
             onKeyDown={handleKeyDown}
           />
           <button

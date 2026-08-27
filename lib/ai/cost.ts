@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { findAiModelCatalogEntry, calculateCatalogCostMinor } from "@/lib/ai/model-catalog";
 
 const TOKENS_PER_MILLION = new Decimal(1_000_000);
 
@@ -14,6 +15,10 @@ export function estimateAiCostMinor(input: {
   inputTokens: number;
   outputTokens?: number;
 }): number {
+  const catalogEntry = findAiModelCatalogEntry(input.provider, input.model);
+  if (catalogEntry) {
+    return calculateCatalogCostMinor({ entry: catalogEntry, inputTokens: input.inputTokens, outputTokens: input.outputTokens ?? 0 });
+  }
   const inputRate = readRate(input.provider, input.model, "input");
   const outputRate = readRate(input.provider, input.model, "output");
   const inputCost = new Decimal(normalizeTokens(input.inputTokens))

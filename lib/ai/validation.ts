@@ -39,6 +39,7 @@ export const aiChatRequestSchema = z.object({
   context: aiContextSchema.optional(),
   projectId: projectIdSchema,
   workspaceId: z.string().trim().min(1).optional(),
+  teamId: z.string().trim().min(1).optional(),
   requestId: z.string().trim().min(1).max(200).optional(),
 });
 

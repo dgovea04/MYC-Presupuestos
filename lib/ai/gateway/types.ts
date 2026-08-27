@@ -23,6 +23,7 @@ export type ExecuteAiTaskInput = {
   projectId?: string;
   userId: string;
   workspaceId?: string | null;
+  teamId?: string | null;
   requestId?: string;
   modelPreference?: string;
   stream?: boolean;
