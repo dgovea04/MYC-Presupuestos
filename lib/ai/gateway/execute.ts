@@ -15,8 +15,9 @@ import { resolveAiCredential } from "@/lib/ai/credentials/resolver";
 import { buildAiExecutionAttribution } from "@/lib/ai/credentials/usage-attribution";
 import { getDecryptedGeminiApiKey, getDecryptedOpenaiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
-import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage } from "@/lib/ai/usage-scope";
+import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage, recordPlatformAiUsage } from "@/lib/ai/usage-scope";
 import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
+import { broadcastAppDataChange } from "@/lib/client/live-updates";
 
 type ExecutableProviderId = Exclude<AiProviderId, "auto">;
 
@@ -77,7 +78,13 @@ export async function executeAiTask({
   const promptHash = stableHash(request.messages);
   let lastError: unknown;
   const estimatedTokens = Math.max(1, Math.ceil(request.messages.reduce((total, message) => total + message.content.length, 0) / 4));
-  const hasScopedWorkspace = credential.workspaceId !== null && workspaceId !== undefined;
+  // Uso facturado a la plataforma (key del sistema) dentro de un workspace:
+  // contabilidad independiente. No reserva ni descuenta del cupo del
+  // usuario/workspace; solo registra en el ledger con atribución
+  // (ver recordPlatformAiUsage). El path legacy sin workspace se deja como
+  // estaba (sin reserva ni registro).
+  const platformAccounting = credential.billingScope === "PLATFORM" && credential.workspaceId !== null;
+  const hasScopedWorkspace = credential.workspaceId !== null && workspaceId !== undefined && !platformAccounting;
   let scopedReservation: Awaited<ReturnType<typeof reserveAiUsage>> | null = null;
   if (hasScopedWorkspace) {
     scopedReservation = await reserveAiUsage({
@@ -140,6 +147,22 @@ export async function executeAiTask({
           periodStart: scopedReservation?.periodStart,
           fallbackUsed,
         });
+      } else if (platformAccounting) {
+        await recordPlatformAiUsage({
+          userId,
+          workspaceId: credential.workspaceId ?? null,
+          requestId,
+          provider: result.provider ?? providerId,
+          model: result.model,
+          action: task,
+          estimatedTokens,
+          actualTokens: Math.max(1, Math.ceil((request.messages.reduce((total, message) => total + message.content.length, 0) + result.answer.length) / 4)),
+          fallbackUsed,
+        });
+      }
+
+      if (userId && platformAccounting) {
+        broadcastAppDataChange(["/account"], undefined, { aiUsage: { userId, consumedTokens: Math.max(1, Math.ceil((request.messages.reduce((total, message) => total + message.content.length, 0) + result.answer.length) / 4)) } });
       }
 
       return {

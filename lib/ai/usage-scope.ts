@@ -216,6 +216,74 @@ export async function recordScopedAiUsage(input: ScopedAiUsageInput, prisma: Usa
   });
 }
 
+export type PlatformAiUsageInput = {
+  userId: string;
+  workspaceId?: string | null;
+  requestId?: string;
+  provider: string;
+  model: string;
+  action: string;
+  estimatedTokens: number;
+  actualTokens?: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  fallbackUsed?: boolean;
+  periodStart?: Date;
+  prisma?: UsageClient;
+};
+
+/**
+ * Registra consumo facturado a la plataforma (key del sistema) en el ledger de
+ * tokens, con atribución completa (usuario, workspace, proveedor, modelo,
+ * acción). Es un registro contable INDEPENDIENTE: no reserva ni descuenta del
+ * cupo de ningún usuario/workspace, ni aplica límites de presupuesto. La key
+ * del sistema la paga la plataforma, pero el uso queda visible y filtrable en
+ * los reportes de administración.
+ */
+export async function recordPlatformAiUsage(input: PlatformAiUsageInput, prisma: UsageClient = input.prisma ?? defaultPrisma) {
+  const periodStart = input.periodStart ?? getScopedUsagePeriod();
+  const estimatedTokens = normalizeTokens(input.estimatedTokens);
+  const actualTokens = normalizeTokens(input.actualTokens ?? estimatedTokens);
+  const idempotencyKey = input.requestId ? `${input.requestId}:CONSUME` : `consume:${randomUUID()}`;
+  const inputTokens = input.inputTokens ?? estimatedTokens;
+  const outputTokens = input.outputTokens ?? Math.max(0, actualTokens - inputTokens);
+  const actualCostMinor = estimateAiCostMinor({ provider: input.provider, model: input.model, inputTokens, outputTokens });
+
+  return runSerializableTransaction(prisma, async (tx) => {
+    const existing = await tx.aiTokenLedger.findUnique({
+      where: { idempotencyKey },
+      select: { type: true, tokens: true, actualTokens: true, actualCostMinor: true, periodStart: true },
+    });
+    if (existing) {
+      if (existing.type !== "CONSUME") throw new Error("La clave de idempotencia ya fue usada por otro evento de uso IA.");
+      return {
+        requestId: input.requestId ?? idempotencyKey,
+        actualTokens: existing.actualTokens ?? Math.abs(existing.tokens),
+        actualCostMinor: existing.actualCostMinor ?? 0,
+        periodStart: existing.periodStart,
+      };
+    }
+
+    await tx.aiTokenLedger.create({
+      data: ledgerData(
+        { ...input, billingScope: "PLATFORM" as const, credentialSource: "PLATFORM" as const, inputTokens, outputTokens, actualCostMinor },
+        {
+          periodStart,
+          type: "CONSUME",
+          tokens: actualTokens,
+          estimatedTokens,
+          actualTokens,
+          estimatedCostMinor: actualCostMinor,
+          actualCostMinor,
+          reservedCostMinor: null,
+          idempotencyKey,
+        },
+      ),
+    });
+    return { requestId: input.requestId ?? idempotencyKey, actualTokens, actualCostMinor, periodStart };
+  });
+}
+
 export async function releaseAiUsage(input: {
   userId: string;
   workspaceId?: string | null;
@@ -349,10 +417,9 @@ async function incrementConsumed(input: { workspaceId?: string | null; userId: s
 }
 
 async function decrementReserved(input: { workspaceId?: string | null; userId: string; billingScope: ScopedBillingScope; periodStart: Date; prisma: UsageClient }, tokens: number, costMinor: number) {
-  const where = getPeriodWhere(input);
   const delegate = getPeriodDelegate(input);
   const current = await delegate.findUnique({
-    where,
+    where: getPeriodWhere(input),
     select: { consumedTokens: true, reservedTokens: true, reservedCostMinor: true, actualCostMinor: true },
   });
   if (!current || current.reservedTokens < tokens) {
@@ -366,9 +433,11 @@ async function decrementReserved(input: { workspaceId?: string | null; userId: s
     Math.max(0, costMinor),
     Math.max(0, current.reservedCostMinor ?? 0),
   );
+  // updateMany solo acepta filtros de campo (WhereInput), NO llaves únicas
+  // compuestas como userId_periodStart. Se construye el where plano equivalente.
   const updated = await delegate.updateMany({
     where: {
-      ...where,
+      ...getPeriodFilterWhere(input),
       reservedTokens: { gte: tokens },
       reservedCostMinor: { gte: reservedCostToRelease },
     },
@@ -378,6 +447,16 @@ async function decrementReserved(input: { workspaceId?: string | null; userId: s
     },
   });
   if (updated.count !== 1) throw new Error("La reserva de uso IA no existe, ya fue procesada o quedó inconsistente.");
+}
+
+function getPeriodFilterWhere(input: { workspaceId?: string | null; userId: string; billingScope: ScopedBillingScope; periodStart: Date }) {
+  if (input.billingScope === "WORKSPACE") {
+    return { workspaceId: input.workspaceId, periodStart: input.periodStart };
+  }
+  if (input.billingScope === "USER" && input.workspaceId) {
+    return { userId: input.userId, workspaceId: input.workspaceId, periodStart: input.periodStart };
+  }
+  return { userId: input.userId, periodStart: input.periodStart };
 }
 
 function getPeriodIdentity(input: { workspaceId?: string | null; userId: string; billingScope: ScopedBillingScope; periodStart: Date }) {

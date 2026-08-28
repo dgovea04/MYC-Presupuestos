@@ -13,10 +13,11 @@ import {
 } from "@/lib/ai/ollama";
 import { buildStructuredRepairPrompt } from "@/lib/ai/prompts";
 import { recordAiActionMetric } from "@/lib/ai/runtime";
+import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { parseStructuredAiOutput } from "@/lib/ai/structured-output";
 import type { AiAction, AiEndpointResult, AiMessage } from "@/lib/ai/types";
 import { assertCanUseAi, recordAiUsage } from "@/lib/ai/usage";
-import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage } from "@/lib/ai/usage-scope";
+import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage, recordPlatformAiUsage } from "@/lib/ai/usage-scope";
 import { OPENAI_RESPONSES_URL, DEFAULT_OPENAI_MODEL } from "@/lib/ai/gateway/providers/openai-provider";
 import { buildGeminiRequestBody, DEFAULT_GEMINI_MODEL, isGemmaModel, resolveEffectiveGeminiModel, simplifyMessagesForGemma } from "@/lib/ai/gateway/providers/gemini-provider";
 import { DEFAULT_OPENROUTER_MODEL, streamOpenRouterChat } from "@/lib/ai/gateway/providers/openrouter-provider";
@@ -270,6 +271,9 @@ export async function* streamChatAiResponse({
   const resolvedApiKey = apiKey;
   const resolvedModelPreference = modelPreference;
   const scopedAccounting = Boolean(userId && workspaceId && billingScope && billingScope !== "PLATFORM");
+  // Uso facturado a la plataforma (key del sistema): contabilidad independiente.
+  // No reserva ni descuenta del cupo del usuario, y no queda limitado por él.
+  const platformAccounting = Boolean(userId && billingScope === "PLATFORM");
   let scopedReservation: { estimatedTokens: number; estimatedCostMinor?: number; periodStart: Date } | null = null;
 
   try {
@@ -290,7 +294,7 @@ export async function* streamChatAiResponse({
         hardLimit: inputHardLimit,
         alertThresholds: inputAlertThresholds,
       });
-    } else if (userId) {
+    } else if (userId && !platformAccounting) {
       await assertCanUseAi({ userId, estimatedTokens });
     }
 
@@ -369,6 +373,18 @@ export async function* streamChatAiResponse({
         } else if (event.type === "final") {
           // Final event — merge with the accumulated answer
           answer = event.result.answer;
+          if (platformAccounting) {
+            await recordPlatformAiUsage({
+              userId: userId ?? "anonymous",
+              workspaceId: workspaceId ?? null,
+              requestId,
+              provider: provider ?? "agent",
+              model: resolvedModel,
+              action,
+              estimatedTokens,
+              actualTokens: estimateAiTokens(`${promptText}\n${answer}`),
+            });
+          }
           yield { type: "final", result: event.result };
           return;
         }
@@ -450,6 +466,17 @@ export async function* streamChatAiResponse({
         reservedCostMinor: scopedReservation.estimatedCostMinor,
         periodStart: scopedReservation.periodStart,
       });
+    } else if (userId && platformAccounting) {
+      await recordPlatformAiUsage({
+        userId,
+        workspaceId: workspaceId ?? null,
+        requestId,
+        provider: provider ?? "ollama",
+        model: resolvedModel,
+        action,
+        estimatedTokens,
+        actualTokens: estimateAiTokens(`${promptText}\n${result.answer}`),
+      });
     } else if (userId) {
       await recordAiUsage({
         userId,
@@ -459,6 +486,10 @@ export async function* streamChatAiResponse({
         estimatedTokens,
         actualTokens: estimateAiTokens(`${promptText}\n${result.answer}`),
       });
+    }
+
+    if (userId) {
+      broadcastAppDataChange(["/account"], undefined, { aiUsage: { userId, consumedTokens: estimateAiTokens(`${promptText}\\n${result.answer}`) } });
     }
 
     yield { type: "final", result };

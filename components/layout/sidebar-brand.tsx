@@ -19,14 +19,15 @@ export function SidebarBrand({
   return (
     <div className={cn("relative flex w-full items-start gap-3", isMini ? "flex-col items-center pt-2" : "justify-between")}>
       <div className={cn("flex", isMini ? "flex-col items-center" : "flex-col items-start gap-2")}>
-        <div className={cn("relative overflow-hidden", isMini ? "w-10" : "w-[140px]")}>
+        <div className={cn("relative h-10 overflow-hidden", isMini ? "w-10" : "w-[140px]")}>
           <Image
             src={isMini ? `/myc-logo-tr-mini.svg?v=${LOGO_VERSION}` : "/nuevo-logo-white-300-v3.png"}
             alt="MC Presupuestos"
             priority
             width={isMini ? 40 : 140}
             height={isMini ? 40 : 40}
-            className={cn("object-contain object-left", isMini && "h-full w-full object-contain object-center")}
+            className={cn("max-h-full max-w-full object-contain", isMini ? "object-center" : "object-left")}
+            style={{ width: "auto", height: "auto" }}
           />
         </div>
       </div>

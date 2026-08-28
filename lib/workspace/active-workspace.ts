@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import type { WorkspaceRole } from "@/types/workspace";
 
-const ACTIVE_WORKSPACE_COOKIE = "myc_active_workspace";
+export const ACTIVE_WORKSPACE_COOKIE = "myc_active_workspace";
 export const WORKSPACE_LIST_CACHE_TAG = "user-workspaces";
 
 export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(userId: string): Promise<string | null> {

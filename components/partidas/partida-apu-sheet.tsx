@@ -391,6 +391,7 @@ export function PartidaApuSheet({ partida, open, onClose, onChange, resourcesCat
                   })
                 }
                 className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), isReadonly ? "border-transparent bg-transparent px-0 shadow-none" : undefined)}
+                style={{ fontSize: "1rem" }}
               />
             </div>
             <div className={cn("border border-slate-200", isExcelMode ? "rounded-md border-slate-300 p-2" : "rounded-2xl p-4")}>

@@ -16,6 +16,7 @@ import { AdminBetaApplications } from "@/components/admin/admin-beta-application
 import { AdminBetaCampaigns } from "@/components/admin/admin-beta-campaigns";
 import { AdminPageTabs, normalizeAdminTab } from "@/components/admin/admin-page-tabs";
 import { AdminCloudAiSettings } from "@/components/admin/admin-cloud-ai-settings";
+import { AdminAiUsageDrilldown } from "@/components/admin/admin-ai-usage-drilldown";
 import { AdminMfaSettings } from "@/components/admin/admin-mfa-settings";
 import { ResourcePriceProviderAdminPanel } from "@/components/admin/resource-price-provider-admin-panel";
 import { LocalResourcePriceAdminPanel } from "@/components/admin/local-resource-price-admin-panel";
@@ -133,6 +134,14 @@ export default async function AdminPage({
     : null;
   const canManageBeta = hasAdminCapability(session.user, "beta.manage");
   const canExportBeta = hasAdminCapability(session.user, "beta.export");
+  // Usuarios del filtro de IA: consumidores del periodo + usuarios de la página
+  // actual (para poder seleccionar también a quienes aún no han consumido).
+  const drilldownUsers = [
+    ...stats.userUsage.map((entry) => ({ userId: entry.userId, name: entry.name, email: entry.email })),
+    ...stats.users
+      .filter((user) => !stats.userUsage.some((entry) => entry.userId === user.id))
+      .map((user) => ({ userId: user.id, name: user.name, email: user.email })),
+  ];
 
   return (
     <AppShell currentUser={session.user} settings={settings}>
@@ -204,7 +213,7 @@ export default async function AdminPage({
       {adminTab === "billing" || adminTab === "ai" ? (
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           {adminTab === "billing" ? (
-            <Card className="theme-surface-card">
+          <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Membresias" description="Distribucion de usuarios y cupos mensuales por plan." />
             <div className="grid gap-3">
@@ -226,11 +235,10 @@ export default async function AdminPage({
               ))}
             </div>
           </CardContent>
-            </Card>
+          </Card>
           ) : null}
 
-          {adminTab === "ai" ? (
-            <Card className="theme-surface-card">
+          <Card className="theme-surface-card">
           <CardContent className="space-y-4 p-6">
             <OperationalSectionHeader title="Uso IA por accion" description="Consumo mensual del ledger para chat, APU, revision y JSON." />
             {stats.actionUsage.length === 0 ? (
@@ -249,9 +257,45 @@ export default async function AdminPage({
                 ))}
               </div>
             )}
+
+            <OperationalSectionHeader
+              title="Consumo por usuario"
+              description="Tokens consumidos en el periodo por cada usuario, incluyendo uso con la key del sistema (plataforma)."
+            />
+            {stats.userUsage.length === 0 ? (
+              <p className="theme-dashed-panel theme-muted-text rounded-2xl border px-4 py-6 text-sm">
+                Aun no hay consumo IA registrado en este periodo.
+              </p>
+            ) : (
+              <div className="theme-surface-card overflow-x-auto rounded-2xl border">
+                <div className="min-w-[560px]">
+                  <div className="theme-muted-panel theme-muted-text grid grid-cols-[1.4fr_0.6fr_0.7fr_0.7fr] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]">
+                    <span>Usuario</span>
+                    <span>Solicitudes</span>
+                    <span>Tokens</span>
+                    <span>Costo</span>
+                  </div>
+                  {stats.userUsage.map((entry) => (
+                    <div
+                      key={entry.userId}
+                      className="grid grid-cols-[1.4fr_0.6fr_0.7fr_0.7fr] border-t border-[var(--app-border-soft)] px-4 py-3 text-sm text-[var(--app-text)]"
+                    >
+                      <div className="min-w-0">
+                        <p className="theme-strong-text truncate font-medium">{entry.name ?? "Usuario desconocido"}</p>
+                        {entry.email ? <p className="theme-muted-text truncate text-xs">{entry.email}</p> : null}
+                      </div>
+                      <span>{entry.requests}</span>
+                      <span>{formatTokenCount(entry.tokens)}</span>
+                      <span>{(entry.actualCostMinor / 100).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <AdminAiUsageDrilldown users={drilldownUsers} />
           </CardContent>
-            </Card>
-          ) : null}
+          </Card>
         </section>
       ) : null}
 

@@ -40,6 +40,7 @@ import {
 import type { AiContext } from "@/lib/ai/types";
 import type { WorkspaceSummary } from "@/types/workspace";
 import type { FeatureKey } from "@/lib/billing/entitlements";
+import { selectActiveWorkspaceId } from "@/components/layout/active-workspace-resolution";
 
 export async function AppShell({
   aiContext,
@@ -84,9 +85,15 @@ export async function AppShell({
   };
   const userId = session?.user?.id ?? currentUser?.id;
 
-  const activeWorkspaceId = currentUser?.activeCompanyId ?? currentUser?.companyId ?? (
-    userId ? await measureAsync("appShell.activeWorkspace", () => getActiveWorkspaceId(userId), { userId }) : null
-  );  const [settings, workspaces, license] = await measureAsync("appShell.shellData", () => Promise.all([
+  const cookieStore = await measureAsync("appShell.cookies", () => cookies());
+  const requestWorkspaceId = userId && (!initialSettings || cookieStore.get("myc_active_workspace"))
+    ? await measureAsync("appShell.activeWorkspace", () => getActiveWorkspaceId(userId), { userId })
+    : null;
+  const activeWorkspaceId = selectActiveWorkspaceId({
+    requestWorkspaceId,
+    userWorkspaceId: currentUser?.activeCompanyId ?? currentUser?.companyId,
+  });
+  const [settings, workspaces, license] = await measureAsync("appShell.shellData", () => Promise.all([
     initialSettings
       ? Promise.resolve(initialSettings)
       : userId
@@ -100,7 +107,6 @@ export async function AppShell({
       : Promise.resolve(null),
   ]), { userId, activeWorkspaceId: activeWorkspaceId ?? undefined });
 
-  const cookieStore = await measureAsync("appShell.cookies", () => cookies());
   const storedViewModeCookie = cookieStore.get(APP_VIEW_MODE_COOKIE_NAME)?.value;
   const storedSidebarModeCookie = cookieStore.get(SIDEBAR_MODE_COOKIE_NAME)?.value;
   const initialViewMode: ViewMode =

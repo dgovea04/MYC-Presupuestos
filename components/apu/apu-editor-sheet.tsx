@@ -700,6 +700,7 @@ export function ApuEditorSheet({
                     value={currentApuRecord.performance}
                     data-testid="apu-performance-input"
                     className={getInputDensityClass(effectiveDensityMode, isExcelMode)}
+                    style={{ fontSize: "1rem" }}
                     onCommit={(value) =>
                       onUpdate({
                         ...currentItemRecord,

@@ -44,7 +44,7 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
   const totalUsers = await prisma.user.count({ where: userWhere });
   const totalPages = Math.max(1, Math.ceil(totalUsers / ADMIN_USERS_PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
-  const [users, activeUsers, suspendedUsers, adminUsers, plans, currentUsage, actionUsage, manualPaymentRequests, workspacePaymentRequests] = await Promise.all([
+  const [users, activeUsers, suspendedUsers, adminUsers, plans, currentUsage, actionUsage, userUsage, manualPaymentRequests, workspacePaymentRequests] = await Promise.all([
     prisma.user.findMany({
       where: userWhere,
       select: {
@@ -133,6 +133,20 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
         _all: true,
       },
     }),
+    prisma.aiTokenLedger.groupBy({
+      by: ["userId"],
+      where: {
+        periodStart,
+        type: "CONSUME",
+      },
+      _sum: {
+        tokens: true,
+        actualCostMinor: true,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
     prisma.billingSubscription.findMany({
       where: {
         provider: "MANUAL",
@@ -188,6 +202,16 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       take: 20,
     }),
   ]);
+
+  const userUsageUserIds = [...new Set(userUsage.map((row) => row.userId).filter((id): id is string => Boolean(id)))];
+  const knownUserIds = new Set(users.map((user) => user.id));
+  const missingUserIds = userUsageUserIds.filter((id) => !knownUserIds.has(id));
+  const missingUsers = missingUserIds.length > 0
+    ? await prisma.user.findMany({ where: { id: { in: missingUserIds } }, select: { id: true, name: true, email: true } })
+    : [];
+  const userLookup = new Map<string, { name: string; email: string }>(
+    [...users, ...missingUsers].map((user) => [user.id, { name: user.name, email: user.email }]),
+  );
 
   const userRows = users.map((user) => {
     const usage = user.aiUsagePeriods[0];
@@ -256,6 +280,17 @@ export async function getAdminDashboardStats(filters: AdminDashboardFilters = {}
       requests: entry._count._all,
       tokens: entry._sum.tokens ?? 0,
     })),
+    userUsage: userUsage.map((entry) => {
+      const match = userLookup.get(entry.userId ?? "");
+      return {
+        userId: entry.userId,
+        name: match?.name ?? null,
+        email: match?.email ?? null,
+        requests: entry._count._all,
+        tokens: entry._sum.tokens ?? 0,
+        actualCostMinor: entry._sum.actualCostMinor ?? 0,
+      };
+    }).sort((left, right) => right.tokens - left.tokens),
     topUsers: [...userRows].sort((left, right) => right.consumedTokens - left.consumedTokens).slice(0, 5),
     users: userRows,
     pagination: {

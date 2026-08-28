@@ -22,18 +22,24 @@ export type MetradoLiveUpdateSummary = {
   isAdvanced: boolean;
 };
 
+export type AiUsageLiveUpdateSummary = {
+  userId: string;
+  consumedTokens: number;
+};
+
 export type AppDataChangePayload = {
   paths: string[];
   metrados?: MetradoLiveUpdateSummary[];
   occurredAt: number;
   budgets?: BudgetLiveUpdateSummary[];
   locallyHandledPaths?: string[];
+  aiUsage?: AiUsageLiveUpdateSummary;
 };
 
 export function broadcastAppDataChange(
   paths: string[],
   budgets?: BudgetLiveUpdateSummary[],
-  options?: { locallyHandledPaths?: string[]; metrados?: MetradoLiveUpdateSummary[] },
+  options?: { locallyHandledPaths?: string[]; metrados?: MetradoLiveUpdateSummary[]; aiUsage?: AiUsageLiveUpdateSummary },
 ) {
   const payload: AppDataChangePayload = {
     paths,
@@ -41,6 +47,7 @@ export function broadcastAppDataChange(
     budgets,
     metrados: options?.metrados,
     locallyHandledPaths: options?.locallyHandledPaths,
+    aiUsage: options?.aiUsage,
   };
 
   try {

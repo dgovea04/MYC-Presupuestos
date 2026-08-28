@@ -4,6 +4,7 @@ import { withAiRoute } from "@/lib/ai/route-handler";
 import type { AiMessage } from "@/lib/ai/types";
 import { aiAgentRequestSchema } from "@/lib/ai/agent/validation";
 import { streamAgentChat } from "@/lib/ai/gateway/providers/agent-provider";
+import { recordPlatformAiUsage } from "@/lib/ai/usage-scope";
 import { getDecryptedOpenrouterApiKey, getDecryptedGeminiApiKey, getAiProviderSettings } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
 import {
@@ -306,6 +307,7 @@ export async function POST(request: Request) {
                 { role: "user" as const, content: data.message },
               ];
           const estimatedTokens = estimateAiTokens(conversationMessages.map((message) => message.content).join("\n"));
+          const platformAccounting = Boolean(scopedCredential && scopedCredential.billingScope === "PLATFORM");
           const scopedAccounting = Boolean(scopedCredential && scopedCredential.billingScope !== "PLATFORM");
           let reservation: { estimatedTokens: number; estimatedCostMinor?: number; periodStart: Date } | null = null;
           let accountingSettled = false;
@@ -389,6 +391,20 @@ export async function POST(request: Request) {
                     periodStart: reservation.periodStart,
                   });
                   accountingSettled = true;
+                } else if (platformAccounting && scopedCredential) {
+                  // Uso facturado a la plataforma (key del sistema): registro
+                  // independiente en el ledger con atribución, sin tocar el cupo
+                  // del usuario ni del workspace.
+                  await recordPlatformAiUsage({
+                    userId: session.user.id,
+                    workspaceId,
+                    requestId,
+                    provider: scopedCredential.provider,
+                    model: effectiveModelPreference || scopedCredential.model,
+                    action: "chat",
+                    estimatedTokens,
+                    actualTokens: estimateAiTokens(`${conversationMessages.map((message) => message.content).join("\n")}\n${event.result.answer}`),
+                  });
                 }
                 writeEvent(controller, "final", {
                   answer: event.result.answer,

@@ -130,6 +130,10 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
         },
         take: 1,
       },
+      aiTokenLedger: {
+        where: { periodStart, type: "CONSUME" },
+        select: { tokens: true },
+      },
     },
   });
 
@@ -140,7 +144,9 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
   const license = await getEffectiveWorkspaceLicense({ userId, companyId: activeCompanyId });
   const monthlyTokenLimit = license?.monthlyTokenLimit ?? user.membershipPlan?.monthlyTokenLimit ?? 0;
   const extraTokens = user.aiTokenExtraMonthly;
-  const consumedTokens = user.aiUsagePeriods[0]?.consumedTokens ?? 0;
+  // El ledger es la fuente de verdad: también incluye consumos facturados
+  // a la plataforma, que no generan una fila en AiUsagePeriod.
+  const consumedTokens = user.aiTokenLedger.reduce((total, entry) => total + entry.tokens, 0);
   const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
   const allowance = Math.max(0, monthlyTokenLimit + extraTokens);
   const effectivePlanSlug = normalizePlanSlug(license?.planSlug ?? user.membershipPlan?.slug);

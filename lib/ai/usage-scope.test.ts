@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ScopedAiBudgetExceededError,
+  recordPlatformAiUsage,
   recordScopedAiUsage,
   releaseAiUsage,
   reserveAiUsage,
@@ -56,6 +57,10 @@ describe("scoped AI usage", () => {
     });
 
     expect(prisma.aiWorkspaceUsagePeriod.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workspaceId: "workspace-1",
+        periodStart: expect.any(Date),
+      }),
       data: expect.objectContaining({ reservedTokens: { decrement: 50 } }),
     }));
     expect(prisma.aiWorkspaceUsagePeriod.upsert).toHaveBeenCalledWith(expect.objectContaining({
@@ -177,6 +182,107 @@ describe("scoped AI usage", () => {
     expect(prisma.aiTokenLedger.create).toHaveBeenCalledTimes(2);
   });
 
+  it("records platform (system key) usage in the ledger without touching any quota", async () => {
+    const prisma = createScopedUsageMock({ consumedTokens: 100, reservedTokens: 0 });
+
+    const result = await recordPlatformAiUsage({
+      userId: "user-1",
+      workspaceId: "workspace-1",
+      provider: "agent",
+      model: "openrouter/free",
+      action: "chat",
+      estimatedTokens: 40,
+      actualTokens: 37,
+      requestId: "request-platform",
+      prisma,
+    });
+
+    expect(result.actualTokens).toBe(37);
+    // Solo escribe en el ledger con atribución completa de plataforma.
+    expect(prisma.aiTokenLedger.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        userId: "user-1",
+        workspaceId: "workspace-1",
+        provider: "agent",
+        model: "openrouter/free",
+        action: "chat",
+        type: "CONSUME",
+        billingScope: "PLATFORM",
+        credentialSource: "PLATFORM",
+        requestId: "request-platform",
+        tokens: 37,
+      }),
+    }));
+    // No descuenta del cupo de ningún periodo (ni usuario ni workspace).
+    expect(prisma.aiUsagePeriod.upsert).not.toHaveBeenCalled();
+    expect(prisma.aiWorkspaceUsagePeriod.upsert).not.toHaveBeenCalled();
+    expect(prisma.aiUserWorkspaceUsagePeriod.upsert).not.toHaveBeenCalled();
+  });
+
+  it("consumes a User-scoped reservation via updateMany with plain field filters", async () => {
+    const prisma = createScopedUsageMock({ consumedTokens: 0, reservedTokens: 581 });
+
+    await reserveAiUsage({
+      userId: "user-1",
+      billingScope: "USER",
+      estimatedTokens: 581,
+      allowance: 5000,
+      provider: "openrouter",
+      model: "openrouter/free",
+      action: "chat",
+      requestId: "request-user-scope",
+      prisma,
+    });
+
+    await recordScopedAiUsage({
+      userId: "user-1",
+      billingScope: "USER",
+      estimatedTokens: 581,
+      actualTokens: 620,
+      provider: "openrouter",
+      model: "openrouter/free",
+      action: "chat",
+      requestId: "request-user-scope",
+      prisma,
+    });
+
+    // REGRESIÓN: updateMany no acepta llaves únicas compuestas (userId_periodStart);
+    // debe usar filtros de campo planos (userId + periodStart) para no fallar en runtime.
+    expect(prisma.aiUsagePeriod.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        userId: "user-1",
+        periodStart: expect.any(Date),
+        reservedTokens: { gte: 581 },
+      }),
+    }));
+    expect(prisma.aiUsagePeriod.updateMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("userId_periodStart");
+  });
+
+  it("is idempotent for the same platform request", async () => {
+    const prisma = createScopedUsageMock({ consumedTokens: 0, reservedTokens: 0 });
+
+    await recordPlatformAiUsage({
+      userId: "user-1",
+      provider: "openrouter",
+      model: "openrouter/free",
+      action: "chat",
+      estimatedTokens: 10,
+      requestId: "request-idem-platform",
+      prisma,
+    });
+    await recordPlatformAiUsage({
+      userId: "user-1",
+      provider: "openrouter",
+      model: "openrouter/free",
+      action: "chat",
+      estimatedTokens: 10,
+      requestId: "request-idem-platform",
+      prisma,
+    });
+
+    expect(prisma.aiTokenLedger.create).toHaveBeenCalledTimes(1);
+  });
+
   it("releases reserved Workspace usage and appends a compensating event", async () => {
     const prisma = createScopedUsageMock({ consumedTokens: 0, reservedTokens: 40 });
 
@@ -233,7 +339,7 @@ function createScopedUsageMock({ consumedTokens, reservedTokens }: { consumedTok
     period.actualCostMinor = (period.actualCostMinor ?? 0) + increment("actualCostMinor");
     return {};
   });
-  const updateMany = vi.fn().mockImplementation(async (args: { data: Record<string, unknown> }) => {
+  const updateMany = vi.fn().mockImplementation(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
     const decrement = (key: string) => {
       const value = args.data[key];
       return typeof value === "object" && value !== null && "decrement" in value

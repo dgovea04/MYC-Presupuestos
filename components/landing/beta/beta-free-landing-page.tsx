@@ -39,6 +39,8 @@ export function BetaFreeLandingPage() {
 
       <PilotApplicationSection
         sectionId="solicitar"
+        openOnMount
+
         landingVariant="beta-free-v1"
         ctaLocation="beta_free_form"
         eyebrow="Acceso Pro gratuito"

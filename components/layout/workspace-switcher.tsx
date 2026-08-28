@@ -335,6 +335,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
         });
         if (res.ok) {
           router.refresh();
+          router.replace?.(window.location.href);
         } else {
           setOptimisticWorkspaceId(null);
         }
@@ -458,7 +459,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
           </button>
 
           {/* Dropdown with pending invitations */}
-          <div className="absolute right-0 top-full mt-2 z-50 w-72 hidden group-hover:block rounded-xl border border-[var(--app-border)] bg-white shadow-lg">
+          <div className="absolute right-0 top-full z-50 w-72 hidden group-hover:block rounded-xl border border-[var(--app-border)] bg-white shadow-lg">
             <div className="p-2.5 border-b border-[var(--app-border)]">
               <h3 className="text-xs font-semibold text-[#0F172A]">Invitaciones pendientes</h3>
             </div>
@@ -516,9 +517,10 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
             <Image
               src={currentWorkspace!.logoUrl!}
               alt={currentWorkspace!.name}
-              width={18}
-              height={18}
-              className="h-[18px] w-[18px] rounded object-contain"
+              width={22}
+              height={22}
+              className="max-h-[22px] max-w-[22px] rounded object-contain"
+              style={{ width: "auto", height: "auto" }}
               onError={() => handleLogoError(currentWorkspace!.logoUrl!)}
             />
           ) : (
@@ -546,6 +548,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
                       width={28}
                       height={28}
                       className="max-h-7 w-auto object-contain"
+                      style={{ width: "auto", height: "auto" }}
                       onError={() => handleLogoError(currentWorkspace!.logoUrl!)}
                     />
                   </div>

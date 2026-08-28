@@ -4194,7 +4194,8 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
         isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
         activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
       )}
-    >                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+    >
+      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
                         <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
                           <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
                           <BufferedInput
@@ -4210,7 +4211,8 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.level.id, columnId: "code" })}
           />
         </div>
-      </TD>                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+      </TD>
+      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
                         <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
                           <BufferedInput
                             {...buildSpreadsheetCellDataAttrs(row.level.id, "description", spreadsheetActiveCell, spreadsheetSelectedKeys)}
@@ -4502,7 +4504,8 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         itemWarningTone,
         activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
       )}
-    >                      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+    >
+      <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
                         <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
                           <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
                           <BufferedInput
@@ -4518,7 +4521,8 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "code" })}
           />
         </div>
-      </TD>                      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+      </TD>
+      <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
                         <div style={{ paddingLeft: `${row.depth * 18}px` }}>
                           <div className="relative flex min-w-0 flex-wrap items-center gap-2 space-y-1">
                             <div className="min-w-0 flex-1">
@@ -4597,7 +4601,8 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             ) : null}
           </div>
         </div>
-      </TD>                      <TD className={getBodyCellClass("unit", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+      </TD>
+      <TD className={getBodyCellClass("unit", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
                         <BufferedInput
                           {...buildSpreadsheetCellDataAttrs(row.item.id, "unit", spreadsheetActiveCell, spreadsheetSelectedKeys)}
                           value={row.item.unit}
@@ -4608,7 +4613,9 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
           onPaste={(event) => onPasteRows(event, row, "unit")}            onFocus={() => onCellFocus(row.item.id, "unit")}
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "unit" })}
         />
-      </TD>                      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", densityMode, isExcelMode)}>          <div className="flex items-center justify-end gap-1">
+      </TD>
+      <TD className={getBodyCellClass("quantity", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
+        <div className="flex items-center justify-end gap-1">
             <BufferedInput
                             {...buildSpreadsheetCellDataAttrs(row.item.id, "quantity", spreadsheetActiveCell, spreadsheetSelectedKeys)}
                           type="text"

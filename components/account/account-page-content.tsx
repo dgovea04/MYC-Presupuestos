@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { Bot, Coins, KeyRound, Mail, Shield, Upload, UserRound, Zap } from "lucide-react";
-import { broadcastAppDataChange } from "@/lib/client/live-updates";
+import { broadcastAppDataChange, getAppDataChangeEventName, getAppDataChangeStorageKey, type AppDataChangePayload } from "@/lib/client/live-updates";
 import { formatDate } from "@/lib/utils";
 import type { AccountMembershipRecord, AccountRecord } from "@/types/account";
 import { BillingActionButtons } from "@/components/billing/billing-action-buttons";
@@ -24,6 +24,27 @@ export function AccountPageContent({
   membership?: AccountMembershipRecord;
 }) {
   const [account, setAccount] = useState(initialAccount);
+  const [currentMembership, setCurrentMembership] = useState(membership);
+
+  useEffect(() => {
+    function applyUsage(payload: AppDataChangePayload | null) {
+      if (!payload?.aiUsage || payload.aiUsage.userId !== account.id || !membership) return;
+      setCurrentMembership((current) => current ? { ...current, consumedTokens: current.consumedTokens + payload.aiUsage!.consumedTokens, availableTokens: Math.max(0, current.availableTokens - payload.aiUsage!.consumedTokens) } : current);
+    }
+    function handleUsage(event: Event) {
+      applyUsage((event as CustomEvent<AppDataChangePayload>).detail);
+    }
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== getAppDataChangeStorageKey() || !event.newValue) return;
+      try { applyUsage(JSON.parse(event.newValue) as AppDataChangePayload); } catch {}
+    }
+    window.addEventListener(getAppDataChangeEventName(), handleUsage as EventListener);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(getAppDataChangeEventName(), handleUsage as EventListener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [account.id, membership]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
@@ -49,7 +70,7 @@ export function AccountPageContent({
       </div>
 
       <div className="space-y-6 xl:sticky xl:top-5">
-        {membership ? <AccountMembershipCard membership={membership} /> : null}
+        {currentMembership ? <AccountMembershipCard membership={currentMembership} /> : null}
         <Card className="theme-surface-card-gradient border">
           <CardHeader>
             <CardTitle>Resumen de cuenta</CardTitle>
@@ -90,11 +111,7 @@ export function AccountPageContent({
   );
 }
 
-function AccountMembershipCard({
-  membership,
-}: {
-  membership: AccountMembershipRecord;
-}) {
+function AccountMembershipCard({ membership }: { membership: AccountMembershipRecord }) {
   const usagePercent = membership.allowance > 0 ? Math.min(100, Math.round((membership.consumedTokens / membership.allowance) * 100)) : 0;
 
   return (

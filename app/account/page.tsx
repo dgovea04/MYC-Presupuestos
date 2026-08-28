@@ -5,8 +5,10 @@ import { getAuthSession } from "@/lib/auth/session";
 import { getUserAccount, getUserAccountMembership } from "@/lib/data/account";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { getUserSettings } from "@/lib/data/settings";
+import { unstable_noStore as noStore } from "next/cache";
 
 export default async function AccountPage() {
+  noStore();
   const session = await getAuthSession();
 
   if (!session?.user?.id) {

@@ -18,6 +18,7 @@ export type PilotApplicationSectionProps = {
   formTitle?: string;
   formSubtitle?: string;
   submitLabel?: string;
+  openOnMount?: boolean;
 };
 
 export function PilotApplicationSection({
@@ -30,10 +31,11 @@ export function PilotApplicationSection({
   formTitle = "Cuéntanos sobre tu equipo",
   formSubtitle = "Solo nombre y email",
   submitLabel = "Cuéntanos sobre tu equipo",
+  openOnMount = false,
 }: PilotApplicationSectionProps = {}) {
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openOnMount);
 
   const closeDialog = useCallback(() => {
     setOpen(false);
@@ -139,11 +141,11 @@ export function PilotApplicationSection({
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor={`${sectionId}-name`}>Nombre</Label>
-              <Input id={`${sectionId}-name`} name="name" autoComplete="name" placeholder="Ing. María Calderón" required minLength={2} maxLength={120} disabled={status === "submitting"} />
+              <Input aria-label="Nombre" id={`${sectionId}-name`} name="name" autoComplete="name" placeholder="Ing. María Calderón" required minLength={2} maxLength={120} disabled={status === "submitting"} />
             </div>
             <div className="space-y-2">
               <Label htmlFor={`${sectionId}-email`}>Email</Label>
-              <Input id={`${sectionId}-email`} name="email" type="email" autoComplete="email" placeholder="tu@empresa.com" required disabled={status === "submitting"} />
+              <Input aria-label="Email" id={`${sectionId}-email`} name="email" type="email" autoComplete="email" placeholder="tu@empresa.com" required disabled={status === "submitting"} />
             </div>
             {status === "success" ? <p className="flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-700"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{message}</p> : null}
             {status === "error" ? <p className="rounded-xl bg-rose-50 px-3 py-3 text-sm text-rose-700">{message}</p> : null}
