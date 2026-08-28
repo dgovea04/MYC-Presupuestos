@@ -210,7 +210,7 @@ export default async function AdminPage({
         </section>
       ) : null}
 
-      {adminTab === "billing" || adminTab === "ai" ? (
+      {adminTab === "billing" ? (
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           {adminTab === "billing" ? (
           <Card className="theme-surface-card">

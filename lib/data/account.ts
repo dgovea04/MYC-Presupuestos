@@ -132,7 +132,7 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
       },
       aiTokenLedger: {
         where: { periodStart, type: "CONSUME" },
-        select: { tokens: true },
+        select: { tokens: true, billingScope: true },
       },
     },
   });
@@ -146,7 +146,10 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
   const extraTokens = user.aiTokenExtraMonthly;
   // El ledger es la fuente de verdad: también incluye consumos facturados
   // a la plataforma, que no generan una fila en AiUsagePeriod.
-  const consumedTokens = user.aiTokenLedger.reduce((total, entry) => total + entry.tokens, 0);
+  const platformConsumedTokens = user.aiTokenLedger.filter((entry) => entry.billingScope === "PLATFORM").reduce((total, entry) => total + entry.tokens, 0);
+  const workspaceConsumedTokens = user.aiTokenLedger.filter((entry) => entry.billingScope === "WORKSPACE").reduce((total, entry) => total + entry.tokens, 0);
+  const userConsumedTokens = user.aiTokenLedger.filter((entry) => entry.billingScope === "USER").reduce((total, entry) => total + entry.tokens, 0);
+  const consumedTokens = platformConsumedTokens;
   const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
   const allowance = Math.max(0, license?.betaAiTokenLimit ?? monthlyTokenLimit + extraTokens);
   const effectivePlanSlug = normalizePlanSlug(license?.planSlug ?? user.membershipPlan?.slug);
@@ -177,6 +180,9 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
     monthlyTokenLimit,
     extraTokens,
     consumedTokens,
+    platformConsumedTokens,
+    workspaceConsumedTokens,
+    userConsumedTokens,
     reservedTokens,
     allowance,
     availableTokens: Math.max(0, allowance - consumedTokens - reservedTokens),

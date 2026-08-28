@@ -29,7 +29,7 @@ export function AccountPageContent({
   useEffect(() => {
     function applyUsage(payload: AppDataChangePayload | null) {
       if (!payload?.aiUsage || payload.aiUsage.userId !== account.id || !membership) return;
-      setCurrentMembership((current) => current ? { ...current, consumedTokens: current.consumedTokens + payload.aiUsage!.consumedTokens, availableTokens: Math.max(0, current.availableTokens - payload.aiUsage!.consumedTokens) } : current);
+      setCurrentMembership((current) => current ? { ...current, consumedTokens: current.consumedTokens + payload.aiUsage!.consumedTokens, platformConsumedTokens: current.platformConsumedTokens + payload.aiUsage!.consumedTokens, availableTokens: Math.max(0, current.availableTokens - payload.aiUsage!.consumedTokens) } : current);
     }
     function handleUsage(event: Event) {
       applyUsage((event as CustomEvent<AppDataChangePayload>).detail);
@@ -149,7 +149,9 @@ function AccountMembershipCard({ membership }: { membership: AccountMembershipRe
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
           <TokenMetric icon={<Zap className="h-4 w-4" />} label="Disponibles" value={formatTokenNumber(membership.availableTokens)} />
           <TokenMetric icon={<Coins className="h-4 w-4" />} label="Cupo mensual" value={formatTokenNumber(membership.allowance)} />
-          <TokenMetric icon={<Bot className="h-4 w-4" />} label="Consumidos" value={formatTokenNumber(membership.consumedTokens)} />
+          <TokenMetric icon={<Bot className="h-4 w-4" />} label="Consumidos plataforma" value={formatTokenNumber(membership.platformConsumedTokens)} />
+          <TokenMetric icon={<Bot className="h-4 w-4" />} label="Consumidos workspace" value={formatTokenNumber(membership.workspaceConsumedTokens)} />
+          <TokenMetric icon={<Bot className="h-4 w-4" />} label="Consumidos usuario" value={formatTokenNumber(membership.userConsumedTokens)} />
         </div>
 
         <div className="theme-surface-card space-y-2 rounded-2xl border px-4 py-3 text-sm">

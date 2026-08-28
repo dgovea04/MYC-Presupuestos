@@ -28,6 +28,9 @@ export type AccountMembershipRecord = {
   monthlyTokenLimit: number;
   extraTokens: number;
   consumedTokens: number;
+  platformConsumedTokens: number;
+  workspaceConsumedTokens: number;
+  userConsumedTokens: number;
   reservedTokens: number;
   allowance: number;
   availableTokens: number;
