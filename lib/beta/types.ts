@@ -25,6 +25,7 @@ export type BetaCampaignInput = {
   startsAt: Date;
   endsAt?: Date | null;
   maxAssignments?: number | null;
+  aiTokenLimit?: number | null;
   eligibilityRules: BetaEligibilityRules;
 };
 
@@ -44,4 +45,5 @@ export type ActiveBetaAccess = {
   startsAt: Date;
   expiresAt: Date;
   daysRemaining: number;
+  aiTokenLimit: number | null;
 };

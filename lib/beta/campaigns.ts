@@ -23,6 +23,7 @@ export async function createBetaCampaign(input: unknown, createdById: string) {
       startsAt: data.startsAt,
       endsAt: data.endsAt ?? null,
       maxAssignments: data.maxAssignments ?? null,
+      aiTokenLimit: data.aiTokenLimit ?? null,
       eligibilityRules: data.eligibilityRules as Prisma.InputJsonValue,
       createdById,
     },
@@ -51,6 +52,7 @@ export async function updateBetaCampaign(
     startsAt: input.startsAt ?? current.startsAt,
     endsAt: input.endsAt === undefined ? current.endsAt : input.endsAt,
     maxAssignments: input.maxAssignments === undefined ? current.maxAssignments : input.maxAssignments,
+    aiTokenLimit: input.aiTokenLimit === undefined ? current.aiTokenLimit : input.aiTokenLimit,
     eligibilityRules: input.eligibilityRules ?? current.eligibilityRules,
   });
 
@@ -64,6 +66,7 @@ export async function updateBetaCampaign(
       startsAt: parsed.startsAt,
       endsAt: parsed.endsAt ?? null,
       maxAssignments: parsed.maxAssignments ?? null,
+      aiTokenLimit: parsed.aiTokenLimit ?? null,
       eligibilityRules: parsed.eligibilityRules as Prisma.InputJsonValue,
     },
   });

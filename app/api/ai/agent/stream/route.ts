@@ -25,6 +25,7 @@ import { resolveAiCredential } from "@/lib/ai/credentials/resolver";
 import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
 import { estimateAiTokens } from "@/lib/ai/service";
 import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage } from "@/lib/ai/usage-scope";
+import { getActiveBetaAccess } from "@/lib/beta/access";
 
 const encoder = new TextEncoder();
 const STREAM_PREAMBLE = `: ${" ".repeat(2048)}\n\n`;
@@ -308,6 +309,9 @@ export async function POST(request: Request) {
               ];
           const estimatedTokens = estimateAiTokens(conversationMessages.map((message) => message.content).join("\n"));
           const platformAccounting = Boolean(scopedCredential && scopedCredential.billingScope === "PLATFORM");
+          const betaTokenLimit = platformAccounting
+            ? (await getActiveBetaAccess({ userId: session.user.id, companyId: workspaceId }))?.aiTokenLimit ?? null
+            : null;
           const scopedAccounting = Boolean(scopedCredential && scopedCredential.billingScope !== "PLATFORM");
           let reservation: { estimatedTokens: number; estimatedCostMinor?: number; periodStart: Date } | null = null;
           let accountingSettled = false;
@@ -328,6 +332,7 @@ export async function POST(request: Request) {
               requestId,
               hardLimit: scopedCredential.hardLimit,
               alertThresholds: scopedCredential.alertThresholds,
+              betaTokenLimit,
             });
           }
 

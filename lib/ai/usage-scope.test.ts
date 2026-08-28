@@ -182,6 +182,23 @@ describe("scoped AI usage", () => {
     expect(prisma.aiTokenLedger.create).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects beta platform usage when the estimated request exceeds the beta limit", async () => {
+    const prisma = createScopedUsageMock({ consumedTokens: 0, reservedTokens: 0 });
+    await expect(reserveAiUsage({
+      userId: "user-1",
+      workspaceId: "workspace-1",
+      billingScope: "PLATFORM",
+      estimatedTokens: 60,
+      betaTokenLimit: 50,
+      provider: "openrouter",
+      model: "openrouter/free",
+      action: "chat",
+      requestId: "request-beta-limit",
+      prisma,
+    })).rejects.toBeInstanceOf(ScopedAiBudgetExceededError);
+    expect(prisma.aiTokenLedger.create).not.toHaveBeenCalled();
+  });
+
   it("records platform (system key) usage in the ledger without touching any quota", async () => {
     const prisma = createScopedUsageMock({ consumedTokens: 100, reservedTokens: 0 });
 

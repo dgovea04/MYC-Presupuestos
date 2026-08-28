@@ -15,9 +15,10 @@ import { resolveAiCredential } from "@/lib/ai/credentials/resolver";
 import { buildAiExecutionAttribution } from "@/lib/ai/credentials/usage-attribution";
 import { getDecryptedGeminiApiKey, getDecryptedOpenaiApiKey, getDecryptedOpenrouterApiKey, getAiProviderSettings } from "@/lib/data/settings";
 import { getSystemSettings } from "@/lib/data/system-settings";
-import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage, recordPlatformAiUsage } from "@/lib/ai/usage-scope";
+import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage, recordPlatformAiUsage, getPlatformAiAllowance } from "@/lib/ai/usage-scope";
 import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
+import { getActiveBetaAccess } from "@/lib/beta/access";
 
 type ExecutableProviderId = Exclude<AiProviderId, "auto">;
 
@@ -84,6 +85,13 @@ export async function executeAiTask({
   // (ver recordPlatformAiUsage). El path legacy sin workspace se deja como
   // estaba (sin reserva ni registro).
   const platformAccounting = credential.billingScope === "PLATFORM" && credential.workspaceId !== null;
+  const betaTokenLimit = platformAccounting ? await getBetaTokenLimit(userId, credential.workspaceId) : null;
+  if (platformAccounting && betaTokenLimit !== null) {
+    const betaAllowance = await getPlatformAiAllowance({ userId, workspaceId: credential.workspaceId, betaTokenLimit });
+    if (betaAllowance.consumedTokens + estimatedTokens > betaAllowance.allowance) {
+      throw new Error("Has alcanzado el límite de IA incluido en tu acceso beta.");
+    }
+  }
   const hasScopedWorkspace = credential.workspaceId !== null && workspaceId !== undefined && !platformAccounting;
   let scopedReservation: Awaited<ReturnType<typeof reserveAiUsage>> | null = null;
   if (hasScopedWorkspace) {
@@ -102,6 +110,7 @@ export async function executeAiTask({
       requestId,
       hardLimit: credential.hardLimit,
       alertThresholds: credential.alertThresholds,
+      betaTokenLimit: await getBetaTokenLimit(userId, credential.workspaceId),
     });
   }
 
@@ -236,6 +245,11 @@ async function resolveLegacyCredential({
     workspaceId: null,
     task: "chat" as const,
   };
+}
+
+async function getBetaTokenLimit(userId: string, workspaceId: string | null) {
+  const beta = await getActiveBetaAccess({ userId, companyId: workspaceId });
+  return beta?.aiTokenLimit ?? null;
 }
 
 function defaultModelForProvider(provider: ExecutableProviderId): string {

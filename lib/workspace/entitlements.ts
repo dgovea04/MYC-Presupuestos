@@ -94,6 +94,7 @@ const _getEffectiveWorkspaceLicense = async (options: {
     betaGrantId: shouldUseBeta ? betaAccess.grantId : null,
     betaCampaignName: shouldUseBeta ? betaAccess.campaignName : null,
     betaExpiresAt: shouldUseBeta ? betaAccess.expiresAt.toISOString() : null,
+    betaAiTokenLimit: shouldUseBeta ? betaAccess.aiTokenLimit : null,
   };
 };
 

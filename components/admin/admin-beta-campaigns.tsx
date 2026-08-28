@@ -240,6 +240,7 @@ function CreateCampaignForm({ onCreated, onMessage }: { onCreated: () => void; o
       name: String(formData.get("name") ?? ""),
       code: String(formData.get("code") ?? "").trim() || null,
       durationDays: Number(formData.get("durationDays") ?? 60),
+      aiTokenLimit: Number(formData.get("aiTokenLimit") ?? 500000),
       assignmentMode: String(formData.get("assignmentMode") ?? "ADMIN"),
       startsAt: String(formData.get("startsAt") ?? ""),
       maxAssignments: String(formData.get("maxAssignments") ?? "").trim() ? Number(formData.get("maxAssignments")) : null,
@@ -276,7 +277,7 @@ function CreateCampaignForm({ onCreated, onMessage }: { onCreated: () => void; o
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2"><Label htmlFor="beta-name">Nombre</Label><Input id="beta-name" name="name" required placeholder="Piloto Pro 60 días" /></div>
           <div className="space-y-2"><Label htmlFor="beta-code">Código opcional</Label><Input id="beta-code" name="code" placeholder="PILOTO60" /></div>
-          <div className="space-y-2"><Label htmlFor="beta-duration">Duración</Label><Select id="beta-duration" name="durationDays" defaultValue="60"><option value="60">60 días</option><option value="90">90 días</option></Select></div>
+          <div className="space-y-2"><Label htmlFor="beta-duration">Duración</Label><Select id="beta-duration" name="durationDays" defaultValue="60"><option value="60">60 días</option><option value="90">90 días</option></Select></div><div className="space-y-2"><Label htmlFor="beta-ai-limit">Límite IA beta</Label><Input id="beta-ai-limit" name="aiTokenLimit" type="number" min="1" defaultValue="500000" /></div>
           <div className="space-y-2"><Label htmlFor="beta-mode">Asignación</Label><Select id="beta-mode" name="assignmentMode" defaultValue="ADMIN"><option value="ADMIN">Administrativa</option><option value="AUTOMATIC">Automática</option><option value="CODE">Por código</option><option value="MIXED">Mixta</option></Select></div>
           <div className="space-y-2"><Label htmlFor="beta-starts-at">Inicio</Label><Input id="beta-starts-at" name="startsAt" type="datetime-local" required /></div>
           <div className="space-y-2"><Label htmlFor="beta-max">Máximo de asignaciones</Label><Input id="beta-max" name="maxAssignments" type="number" min="1" placeholder="50" /></div>

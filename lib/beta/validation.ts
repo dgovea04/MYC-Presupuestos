@@ -45,6 +45,7 @@ export const betaCampaignInputSchema = z
     startsAt: z.coerce.date(),
     endsAt: z.coerce.date().nullable().optional(),
     maxAssignments: z.number().int().positive().max(1_000_000).nullable().optional(),
+    aiTokenLimit: z.number().int().positive().max(100_000_000).nullable().optional(),
     eligibilityRules: betaEligibilityRulesSchema,
   })
   .strict()

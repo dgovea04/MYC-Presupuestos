@@ -29,7 +29,7 @@ describe("beta access", () => {
       status: "ACTIVE",
       startsAt: now,
       expiresAt: new Date("2026-10-31T00:00:00.000Z"),
-      campaign: { name: "Piloto Pro" },
+      campaign: { name: "Piloto Pro", aiTokenLimit: 500000 },
     });
 
     await expect(getActiveBetaAccess({ userId: "user-1", companyId: "company-1", now })).resolves.toMatchObject({
@@ -37,6 +37,7 @@ describe("beta access", () => {
       campaignName: "Piloto Pro",
       planSlug: "pro",
       daysRemaining: 60,
+      aiTokenLimit: 500000,
     });
   });
 

@@ -32,6 +32,7 @@ export async function getActiveBetaAccess(options: {
       campaign: {
         select: {
           name: true,
+          aiTokenLimit: true,
         },
       },
     },
@@ -50,6 +51,7 @@ export async function getActiveBetaAccess(options: {
     startsAt: grant.startsAt,
     expiresAt: grant.expiresAt,
     daysRemaining: Math.max(1, Math.ceil((grant.expiresAt.getTime() - now.getTime()) / MILLISECONDS_PER_DAY)),
+    aiTokenLimit: grant.campaign.aiTokenLimit,
   };
 }
 

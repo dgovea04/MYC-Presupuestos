@@ -148,7 +148,7 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
   // a la plataforma, que no generan una fila en AiUsagePeriod.
   const consumedTokens = user.aiTokenLedger.reduce((total, entry) => total + entry.tokens, 0);
   const reservedTokens = user.aiUsagePeriods[0]?.reservedTokens ?? 0;
-  const allowance = Math.max(0, monthlyTokenLimit + extraTokens);
+  const allowance = Math.max(0, license?.betaAiTokenLimit ?? monthlyTokenLimit + extraTokens);
   const effectivePlanSlug = normalizePlanSlug(license?.planSlug ?? user.membershipPlan?.slug);
   const billingSubscription = user.billingSubscriptions[0] ?? null;
   const graceEndsAt =
@@ -173,6 +173,7 @@ export async function getUserAccountMembership(userId: string, activeCompanyId?:
     betaDaysRemaining: license?.betaExpiresAt
       ? Math.max(1, Math.ceil((new Date(license.betaExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
       : null,
+    betaAiTokenLimit: license?.betaAiTokenLimit ?? null,
     monthlyTokenLimit,
     extraTokens,
     consumedTokens,

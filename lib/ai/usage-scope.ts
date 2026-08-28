@@ -75,12 +75,13 @@ export async function assertAiBudgetAvailable(input: {
   budgetMinor?: number | null;
   periodStart?: Date;
   hardLimit?: boolean;
+  betaTokenLimit?: number | null;
   alertThresholds?: number[];
   prisma?: UsageClient;
 }): Promise<ScopedAiAllowance> {
   const periodStart = input.periodStart ?? getScopedUsagePeriod();
   const prisma = input.prisma ?? defaultPrisma;
-  const allowance = await readScopedAllowance({ ...input, periodStart, prisma });
+  const allowance = await readScopedAllowance({ ...input, allowance: input.betaTokenLimit ?? input.allowance, periodStart, prisma });
   assertAllowance({
     allowance,
     estimatedTokens: normalizeTokens(input.estimatedTokens),
@@ -117,6 +118,7 @@ export async function reserveAiUsage(input: {
   hardLimit?: boolean;
   alertThresholds?: number[];
   periodStart?: Date;
+  betaTokenLimit?: number | null;
   prisma?: UsageClient;
 }) {
   const estimatedTokens = normalizeTokens(input.estimatedTokens);
@@ -141,7 +143,7 @@ export async function reserveAiUsage(input: {
       };
     }
 
-    const allowance = await readScopedAllowance({ ...input, periodStart, prisma: tx });
+    const allowance = await readScopedAllowance({ ...input, allowance: input.betaTokenLimit ?? input.allowance, periodStart, prisma: tx });
     assertAllowance({ allowance, estimatedTokens, estimatedCostMinor, budgetMinor: input.budgetMinor, scope: input.billingScope, hardLimit: input.hardLimit ?? true });
 
     await incrementReserved({ workspaceId: input.workspaceId, userId: input.userId, billingScope: input.billingScope, periodStart, prisma: tx }, estimatedTokens, estimatedCostMinor);
@@ -216,7 +218,18 @@ export async function recordScopedAiUsage(input: ScopedAiUsageInput, prisma: Usa
   });
 }
 
+export async function getPlatformAiAllowance(input: { userId: string; workspaceId?: string | null; betaTokenLimit: number; periodStart?: Date; prisma?: UsageClient }) {
+  const periodStart = input.periodStart ?? getScopedUsagePeriod();
+  const prisma = input.prisma ?? defaultPrisma;
+  const usage = await prisma.aiTokenLedger.aggregate({
+    where: { userId: input.userId, workspaceId: input.workspaceId ?? null, periodStart, type: "CONSUME", billingScope: "PLATFORM" },
+    _sum: { tokens: true },
+  });
+  return { allowance: input.betaTokenLimit, consumedTokens: usage._sum.tokens ?? 0, availableTokens: Math.max(0, input.betaTokenLimit - (usage._sum.tokens ?? 0)) };
+}
+
 export type PlatformAiUsageInput = {
+
   userId: string;
   workspaceId?: string | null;
   requestId?: string;

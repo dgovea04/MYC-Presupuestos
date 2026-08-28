@@ -24,6 +24,7 @@ export type AccountMembershipRecord = {
   betaCampaignName: string | null;
   betaExpiresAt: string | null;
   betaDaysRemaining: number | null;
+  betaAiTokenLimit: number | null;
   monthlyTokenLimit: number;
   extraTokens: number;
   consumedTokens: number;

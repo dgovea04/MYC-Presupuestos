@@ -15,7 +15,20 @@ describe("beta campaign validation", () => {
 
     expect(result.code).toBe("piloto60");
     expect(result.durationDays).toBe(60);
+    expect(result.aiTokenLimit).toBeUndefined();
     expect(result.eligibilityRules.excludePaidSubscribers).toBe(true);
+  });
+
+  it("accepts a custom beta AI limit", () => {
+    const result = betaCampaignInputSchema.parse({
+      name: "Límite personalizado",
+      durationDays: 60,
+      assignmentMode: "ADMIN",
+      startsAt: "2026-09-01T00:00:00.000Z",
+      aiTokenLimit: 500000,
+      eligibilityRules: {},
+    });
+    expect(result.aiTokenLimit).toBe(500000);
   });
 
   it("accepts a 90-day campaign", () => {
