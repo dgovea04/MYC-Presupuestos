@@ -86,7 +86,7 @@ export async function AppShell({
   const userId = session?.user?.id ?? currentUser?.id;
 
   const cookieStore = await measureAsync("appShell.cookies", () => cookies());
-  const requestWorkspaceId = userId && (!initialSettings || cookieStore.get("myc_active_workspace"))
+  const requestWorkspaceId = userId && (!currentUser || !initialSettings || cookieStore.get("myc_active_workspace"))
     ? await measureAsync("appShell.activeWorkspace", () => getActiveWorkspaceId(userId), { userId })
     : null;
   const activeWorkspaceId = selectActiveWorkspaceId({

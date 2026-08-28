@@ -334,8 +334,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
           body: JSON.stringify({ companyId: value }),
         });
         if (res.ok) {
-          router.refresh();
-          router.replace?.(window.location.href);
+          window.location.reload();
         } else {
           setOptimisticWorkspaceId(null);
         }
