@@ -68,6 +68,16 @@ const SETTINGS_TABS = [
 
 const FORMAT_FORM_ID = "format-settings-form";
 
+const AI_SETTINGS_TABS = [
+  { id: "cloud", label: "Proveedores Cloud IA", description: "API keys y modelos cloud." },
+  { id: "floating", label: "Panel Flotante Khipu", description: "Configura el asistente flotante." },
+  { id: "agent", label: "Khipu Agente", description: "Herramientas, permisos y modelo del agente." },
+  { id: "pdf", label: "Importador PDF IA", description: "Proveedor para extraer datos desde PDF." },
+  { id: "local", label: "Integración de IA Local", description: "Conecta modelos locales con Ollama." },
+] as const;
+
+type AiSettingsTabId = (typeof AI_SETTINGS_TABS)[number]["id"];
+
 type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 
 export function SettingsPageContent({
@@ -94,6 +104,7 @@ export function SettingsPageContent({
   const [companyState, setCompanyState] = useState(company);
   const [settings, setSettings] = useState(initialSettings);
   const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
+  const [activeAiTab, setActiveAiTab] = useState<AiSettingsTabId>("cloud");
   const [formatSaving, setFormatSaving] = useState(false);
   const currencyPreview = useMemo(
     () => formatCurrency(7723.48, settings.defaultCurrency, settings.currencyDecimals),
@@ -349,23 +360,24 @@ export function SettingsPageContent({
       >
         <div className="space-y-6">
           {canUseKhipu ? (
-            <div className="grid items-start gap-6 xl:grid-cols-2">
-              <div className="space-y-6">
-                <FloatingKhipuSettingsCard
-                  settings={settings}
-                  onSaved={(khipu) => {
-                    setSettings({ ...settings, ...khipu });
-                    window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: khipu }));
-                  }}
-                />
-                <KhipuAgentSettingsCard />
+            <>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5" role="tablist" aria-label="Configuración de IA">
+                {AI_SETTINGS_TABS.filter((tab) => tab.id !== "local" || isLocalClientRuntimeEnabled()).map((tab) => {
+                  const isActive = activeAiTab === tab.id;
+                  return (
+                    <button key={tab.id} type="button" role="tab" aria-selected={isActive} aria-controls={`settings-ai-panel-${tab.id}`} onClick={() => setActiveAiTab(tab.id)} className={cn("rounded-2xl border px-4 py-3 text-left transition", isActive ? "border-sky-300 bg-white text-slate-950 shadow-sm dark:border-sky-500 dark:bg-slate-800 dark:text-slate-50" : "border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-white/70 dark:border-slate-700 dark:hover:bg-slate-800")}>
+                      <p className="text-sm font-semibold">{tab.label}</p>
+                      <p className="mt-1 text-xs leading-5">{tab.description}</p>
+                    </button>
+                  );
+                })}
               </div>
-
-              <div className="space-y-6">
-                <CloudAiSettingsCard />
-                <PdfImportAiSettingsCard />
-              </div>
-            </div>
+              <div id="settings-ai-panel-cloud" role="tabpanel" hidden={activeAiTab !== "cloud"}><CloudAiSettingsCard /></div>
+              <div id="settings-ai-panel-floating" role="tabpanel" hidden={activeAiTab !== "floating"}><FloatingKhipuSettingsCard settings={settings} onSaved={(khipu) => { setSettings({ ...settings, ...khipu }); window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: khipu })); }} /></div>
+              <div id="settings-ai-panel-agent" role="tabpanel" hidden={activeAiTab !== "agent"}><KhipuAgentSettingsCard /></div>
+              <div id="settings-ai-panel-pdf" role="tabpanel" hidden={activeAiTab !== "pdf"}><PdfImportAiSettingsCard /></div>
+              {isLocalClientRuntimeEnabled() ? <div id="settings-ai-panel-local" role="tabpanel" hidden={activeAiTab !== "local"}><LocalAiSettingsCard /></div> : null}
+            </>
           ) : (
             <UpgradeCTA
               title="Khipu y proveedores IA disponibles en Pro"
@@ -374,11 +386,6 @@ export function SettingsPageContent({
             />
           )}
 
-          {isLocalClientRuntimeEnabled() && canUseKhipu ? (
-            <div>
-              <LocalAiSettingsCard />
-            </div>
-          ) : null}
         </div>
       </section>
     </div>
