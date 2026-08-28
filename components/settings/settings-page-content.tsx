@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Loader2, Save, Settings2, Trash2 } from "lucide-react";
+import { Bot, CloudCog, FileScan, HardDrive, Loader2, PanelTop, Save, Settings2, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CompanyProfileCard } from "@/components/settings/company-profile-card";
 import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
@@ -69,10 +69,10 @@ const SETTINGS_TABS = [
 const FORMAT_FORM_ID = "format-settings-form";
 
 const AI_SETTINGS_TABS = [
-  { id: "cloud", label: "Proveedores Cloud IA", description: "API keys y modelos cloud." },
-  { id: "floating", label: "Panel Flotante Khipu", description: "Configura el asistente flotante." },
-  { id: "agent", label: "Khipu Agente", description: "Herramientas, permisos y modelo del agente." },
-  { id: "pdf", label: "Importador PDF IA", description: "Proveedor para extraer datos desde PDF." },
+  { id: "cloud", label: "Proveedores Cloud IA", description: "API keys y modelos cloud.", icon: CloudCog },
+  { id: "floating", label: "Panel Flotante Khipu", description: "Configura el asistente flotante.", icon: PanelTop },
+  { id: "agent", label: "Khipu Agente", description: "Herramientas, permisos y modelo del agente.", icon: Bot },
+  { id: "pdf", label: "Importador PDF IA", description: "Proveedor para extraer datos desde PDF.", icon: FileScan },
   { id: "local", label: "Integración de IA Local", description: "Conecta modelos locales con Ollama." },
 ] as const;
 
@@ -361,16 +361,19 @@ export function SettingsPageContent({
         <div className="space-y-6">
           {canUseKhipu ? (
             <>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5" role="tablist" aria-label="Configuración de IA">
+              <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-2 dark:border-slate-700 dark:bg-slate-900/40" role="tablist" aria-label="Configuración de IA">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                 {AI_SETTINGS_TABS.filter((tab) => tab.id !== "local" || isLocalClientRuntimeEnabled()).map((tab) => {
                   const isActive = activeAiTab === tab.id;
+                  const Icon = "icon" in tab ? tab.icon : HardDrive;
                   return (
-                    <button key={tab.id} type="button" role="tab" aria-selected={isActive} aria-controls={`settings-ai-panel-${tab.id}`} onClick={() => setActiveAiTab(tab.id)} className={cn("rounded-2xl border px-4 py-3 text-left transition", isActive ? "border-sky-300 bg-white text-slate-950 shadow-sm dark:border-sky-500 dark:bg-slate-800 dark:text-slate-50" : "border-[var(--app-border)] text-[var(--app-text-muted)] hover:bg-white/70 dark:border-slate-700 dark:hover:bg-slate-800")}>
-                      <p className="text-sm font-semibold">{tab.label}</p>
-                      <p className="mt-1 text-xs leading-5">{tab.description}</p>
+                    <button key={tab.id} type="button" role="tab" aria-selected={isActive} aria-controls={`settings-ai-panel-${tab.id}`} onClick={() => setActiveAiTab(tab.id)} className={cn("flex min-h-14 items-center gap-3 rounded-xl border px-3.5 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 focus-visible:ring-offset-2", isActive ? "border-sky-300 bg-white text-sky-800 shadow-sm dark:border-sky-500 dark:bg-slate-800 dark:text-sky-200" : "border-transparent text-[var(--app-text-muted)] hover:border-sky-200 hover:bg-white/80 hover:text-[var(--app-text-strong)] dark:hover:border-slate-600 dark:hover:bg-slate-800")}>
+                      <Icon className={cn("h-5 w-5 shrink-0", isActive ? "text-sky-600 dark:text-sky-300" : "text-slate-400")} aria-hidden="true" />
+                      <span>{tab.label}</span>
                     </button>
                   );
                 })}
+                </div>
               </div>
               <div id="settings-ai-panel-cloud" role="tabpanel" hidden={activeAiTab !== "cloud"}><CloudAiSettingsCard /></div>
               <div id="settings-ai-panel-floating" role="tabpanel" hidden={activeAiTab !== "floating"}><FloatingKhipuSettingsCard settings={settings} onSaved={(khipu) => { setSettings({ ...settings, ...khipu }); window.dispatchEvent(new CustomEvent("khipu-settings-changed", { detail: khipu })); }} /></div>
