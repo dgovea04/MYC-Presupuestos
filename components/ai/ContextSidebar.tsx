@@ -12,11 +12,9 @@ export type ContextShortcut = {
 export function ContextSidebar({
   context,
   onChange,
-  shortcuts = [],
 }: {
   context: AiContext;
   onChange: (context: AiContext) => void;
-  shortcuts?: ContextShortcut[];
 }) {
   return (
     <aside className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-sm">
@@ -41,28 +39,6 @@ export function ContextSidebar({
         />
         <ContextInput label="Tabla activa" value={context.activeTable ?? ""} onChange={(activeTable) => onChange({ ...context, activeTable })} />
       </div>
-      {shortcuts.length ? (
-        <div className="mt-6 border-t border-[var(--app-border)] pt-5">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-[var(--app-text-strong)]">Siguientes acciones</p>
-            <p className="text-sm leading-6 text-[var(--app-text-muted)]">Cambia de comando sin perder el contexto actual.</p>
-          </div>
-          <div className="mt-3 grid gap-2">
-            {shortcuts.map((shortcut) => (
-              <button
-                key={shortcut.label}
-                className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-left transition hover:border-blue-300 hover:bg-[var(--app-primary-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                type="button"
-                aria-label={shortcut.label}
-                onClick={shortcut.onSelect}
-              >
-                <span className="block text-sm font-semibold text-[var(--app-text-strong)]">{shortcut.label}</span>
-                <span className="mt-1 block text-xs leading-5 text-[var(--app-text-muted)]">{shortcut.description}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </aside>
   );
 }

@@ -426,6 +426,7 @@ export function AiAssistantPanel({
                 <button
                   key={action.id}
                   type="button"
+                  aria-label={action.label}
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all duration-200 hover:border-cyan-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
                     active ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600",
@@ -645,7 +646,7 @@ export function AiAssistantPanel({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">Asistente tecnico de obra</p>
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--app-text-strong)] md:text-4xl">
-                    Criterio tecnico para presupuestos de obra.
+                    Presupuesta mejor con Khipu.
                   </h1>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--app-text-muted)] md:text-base">
                     Revisa APU, genera partidas y responde con contexto del presupuesto activo.
@@ -679,59 +680,32 @@ export function AiAssistantPanel({
           </CardContent>
         </Card>
 
-        <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
-          <CardContent className="space-y-3 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="grid gap-5 xl:grid-cols-2">
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
+            <CardContent className="space-y-3 p-5">
               <div>
                 <p className="text-sm font-semibold text-[var(--app-text-strong)]">Trabajo activo</p>
-                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Contexto visible que Khipu usara en esta sesion.</p>
-              </div>
-              <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--app-text-muted)]">
-                Sesion actual
-              </span>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">Contexto de esta sesión.</p>
             </div>
-            {contextRows.length ? (
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {contextRows.map((row) => (
-                  <div key={row.label} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">{row.label}</p>
-                    <p className="mt-1 truncate text-sm font-medium text-[var(--app-text-strong)]">{row.value}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text-muted)]">
-                Selecciona un presupuesto, partida o APU para que Khipu pueda analizarlo con contexto.
-              </p>
-            )}
-            {contextRows.length > 0 && contextRows.length <= 2 ? (
-              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                Necesito más información para darte una recomendación confiable. Puedes seleccionar una partida, abrir un
-                APU o incluir metrados y costos relacionados.
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+              {contextRows.length ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {contextRows.map((row) => (
+                    <div key={row.label} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-muted)]">{row.label}</p>
+                      <p className="mt-1 truncate text-sm font-medium text-[var(--app-text-strong)]">{row.value}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text-muted)]">
+                  Selecciona un presupuesto, partida o APU para comenzar.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
-          <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_260px_260px]">
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Preparacion</p>
-                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Proveedor, modelos y latencia para ejecutar la accion activa.</p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                {(controller.health?.requiredModels ?? []).map((model) => (
-                  <div key={model.model} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2">
-                    <p className="text-xs font-semibold text-[var(--app-text-strong)]">{model.model}</p>
-                    <p className={cn("mt-1 text-[11px] font-medium", model.installed ? "text-emerald-700" : "text-amber-700")}>
-                      {model.installed ? "Instalado" : "Pendiente"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
+          <CardContent className="grid gap-4 p-5 lg:grid-cols-2">
             <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
               <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -809,20 +783,7 @@ export function AiAssistantPanel({
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
-          <CardContent className="space-y-3 p-5">
-            <div>
-              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Inicio rapido</p>
-              <p className="mt-1 text-sm text-[var(--app-text-muted)]">
-                Acciones frecuentes para empezar a trabajar con Khipu.
-              </p>
-            </div>
-            <KhipuQuickActions
-              actions={quickStartActions}
-            />
-          </CardContent>
-        </Card>
+        </div>
 
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           {ACTIONS.map((action) => {
@@ -837,6 +798,7 @@ export function AiAssistantPanel({
                   active ? "border-blue-300 bg-[var(--app-primary-muted)] text-[var(--app-text-strong)]" : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)]",
                 )}
                 type="button"
+                aria-label={action.label}
                 aria-pressed={active}
                 onClick={() => controller.setActiveAction(action.id)}
               >
@@ -1037,7 +999,37 @@ export function AiAssistantPanel({
           ) : null}
       </div>
 
-      <ContextSidebar context={controller.context} shortcuts={nextActionShortcuts} onChange={controller.setContext} />
+      <div className="space-y-5">
+        <ContextSidebar context={controller.context} onChange={controller.setContext} />
+        <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
+          <CardContent className="space-y-3 p-5">
+            <div>
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Inicio rápido</p>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">Acciones frecuentes para empezar a trabajar con Khipu.</p>
+            </div>
+            <KhipuQuickActions actions={quickStartActions} />
+          </CardContent>
+        </Card>
+        {isLocalClientRuntimeEnabled() && process.env.NODE_ENV === "development" ? (
+          <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
+            <CardContent className="space-y-3 p-5">
+              <div>
+                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Preparación</p>
+                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Proveedor, modelos y latencia para ejecutar la acción activa.</p>
+              </div>
+              <div className="grid gap-2">
+                {(controller.health?.requiredModels ?? []).map((model) => (
+                  <div key={model.model} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2">
+                    <p className="text-xs font-semibold text-[var(--app-text-strong)]">{model.model}</p>
+                    <p className={cn("mt-1 text-[11px] font-medium", model.installed ? "text-emerald-700" : "text-amber-700")}>
+                      {model.installed ? "Instalado" : "Pendiente"}
+                    </p>
+                  </div>
+                ))}
+              </div>              </CardContent>
+          </Card>
+        ) : null}
+      </div>
     </section>
   );
 }

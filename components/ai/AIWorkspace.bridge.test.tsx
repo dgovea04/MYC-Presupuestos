@@ -41,7 +41,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     expect(getByText("Khipu")).toBeTruthy();
     expect(getByText("Asistente tecnico de obra")).toBeTruthy();
-    expect(getTextContaining("Criterio tecnico para presupuestos de obra.")).toBeTruthy();
+    expect(getTextContaining("Presupuesta mejor con Khipu.")).toBeTruthy();
     expect(
       getTextContaining("Revisa APU, genera partidas y responde con contexto del presupuesto activo."),
     ).toBeTruthy();
@@ -58,21 +58,20 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("420")).toBeTruthy();
     expect(getTextContaining("Tabla activa")).toBeTruthy();
     expect(getTextContaining("Analisis de precios unitarios")).toBeTruthy();
-    expect(getTextContaining("Preparacion")).toBeTruthy();
-    expect(getTextContaining("Proveedor, modelos y latencia para ejecutar la accion activa.")).toBeTruthy();
+    expect(getTextContaining("Preparación local")).toBeDefined();
+    expect(getTextContaining("Modelos disponibles para ejecutar Khipu en este equipo.")).toBeDefined();
     expect(getTextContaining("Recomendado")).toBeTruthy();
     expect(getTextContaining("Ejecucion")).toBeTruthy();
     expect(getTextContaining("Consulta criterios tecnicos con el contexto activo.")).toBeTruthy();
-    expect(getTextContaining("Siguientes acciones")).toBeTruthy();
-    expect(getButtonByAriaLabel("Explicar contexto")).toBeTruthy();
-    expect(getButtonByAriaLabel("Autocompletar texto")).toBeTruthy();
+    expect(getByText("Chat tecnico")).toBeTruthy();
+    expect(getByText("Autocompletar")).toBeTruthy();
     expect(getTextContaining("Proveedor activo")).toBeTruthy();
     expect(getTextContaining("Ollama listo")).toBeTruthy();
     expect(getByText("Contexto de trabajo")).toBeTruthy();
     expect(getTextContaining("Estos datos guian la respuesta de Khipu")).toBeTruthy();
-    expect(getButtonByText("Actualizar estado")).toBeTruthy();
-    expect(getButtonByText("Ollama local")).toBeTruthy();
-    expect(getButtonByText("Bridge")).toBeTruthy();
+    expect(getByText("Actualizar estado")).toBeTruthy();
+    expect(getByText("Ollama local")).toBeTruthy();
+    expect(getByText("Bridge")).toBeTruthy();
     expect(getButtonByText("Ollama local").getAttribute("aria-pressed")).toBe("true");
     expect(getButtonByText("Bridge").getAttribute("aria-pressed")).toBe("false");
     expect(getTextContaining("Chat tecnico")).toBeTruthy();
@@ -83,37 +82,37 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("Ultima latencia")).toBeTruthy();
   });
 
-  it("switches commands from next-action shortcuts without submitting", async () => {
+  it("switches commands from workspace action buttons without submitting", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => createHealthPayload(),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { getButtonByAriaLabel, getTextContaining, getTextareaByLabel } = await renderWorkspace();
+    const { getByText, getButtonByAriaLabel, getTextContaining, getTextareaByLabel } = await renderWorkspace();
 
     expect(getTextContaining("Consulta criterios tecnicos con el contexto activo.")).toBeTruthy();
 
     await act(async () => {
-      getButtonByAriaLabel("Generar APU").click();
+      getByText("Generar APU").click();
     });
 
     expect(getTextContaining("Genera una propuesta editable de recursos y rendimiento.")).toBeTruthy();
 
     await act(async () => {
-      getButtonByAriaLabel("Revisar presupuesto").click();
+      getByText("Revisar presupuesto").click();
     });
 
     expect(getTextContaining("Revisa unidades, duplicados y costos sospechosos.")).toBeTruthy();
 
     await act(async () => {
-      getButtonByAriaLabel("Autocompletar texto").click();
+      getByText("Autocompletar").click();
     });
 
     expect(getTextContaining("Completa descripciones tecnicas sin perder el contexto.")).toBeTruthy();
 
     await act(async () => {
-      getButtonByAriaLabel("Explicar contexto").click();
+      getByText("Chat tecnico").click();
     });
 
     expect(getTextareaByLabel("Consulta tecnica").value).toBe("Consulta inicial");
@@ -128,12 +127,12 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { getButtonByText, getTextContaining, queryTextContaining } = await renderWorkspace();
+    const { getButtonByText, getByText, getTextContaining, queryTextContaining } = await renderWorkspace();
 
     expect(getTextContaining("Ollama no disponible")).toBeTruthy();
 
     await act(async () => {
-      getButtonByText("Bridge").click();
+      getByText("Bridge").click();
     });
 
     expect(getButtonByText("Ollama local").getAttribute("aria-pressed")).toBe("false");
@@ -151,9 +150,9 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const bridgeListener = vi.fn<(event: Event) => void>();
     window.addEventListener("MYCBridgeSendPrompt", bridgeListener);
 
-    const { getButtonByText, getTextareaByLabel } = await renderWorkspace();
+    const { getButtonByText, getByText, getTextareaByLabel } = await renderWorkspace();
     await act(async () => {
-      getButtonByText("Bridge").click();
+      getByText("Bridge").click();
     });
     expect(getTextareaByLabel("Consulta tecnica").value).toBe("Consulta inicial");
     await act(async () => {
@@ -219,10 +218,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const bridgeListener = vi.fn<(event: Event) => void>();
     window.addEventListener("MYCBridgeSendPrompt", bridgeListener);
 
-    const { getButtonByText } = await renderWorkspace({ projectId: "project-1" });
+    const { getButtonByText, getByText } = await renderWorkspace({ projectId: "project-1" });
 
     await act(async () => {
-      getButtonByText("Bridge").click();
+      getByText("Bridge").click();
     });
     await act(async () => {
       getButtonByText("Enviar a ChatGPT").click();
@@ -250,7 +249,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     const { getButtonByText, getByText } = await renderWorkspace();
     await act(async () => {
-      getButtonByText("Bridge").click();
+      getByText("Bridge").click();
     });
     await act(async () => {
       getButtonByText("Enviar a ChatGPT").click();
@@ -1272,7 +1271,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     const { getButtonByText, getByText, queryByText, rerender } = await renderWorkspace({ projectId: "project-1" });
 
     await act(async () => {
-      getButtonByText("Bridge").click();
+      getByText("Bridge").click();
     });
     await act(async () => {
       getButtonByText("Enviar a ChatGPT").click();
