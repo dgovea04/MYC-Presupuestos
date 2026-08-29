@@ -239,6 +239,7 @@ export function AiAssistantPanel({
     () => (controller.health ? controller.health.actions[controller.activeAction] : null),
     [controller.activeAction, controller.health],
   );
+  const localPreparationVisible = isLocalClientRuntimeEnabled() && process.env.NODE_ENV === "development";
   const providerStatus = readProviderStatus(
     controller.provider,
     controller.health?.status,
@@ -259,12 +260,6 @@ export function AiAssistantPanel({
     },
     { label: "Tabla activa", value: controller.context.activeTable },
   ].filter((row): row is { label: string; value: string } => typeof row.value === "string" && row.value.trim().length > 0);
-  const nextActionShortcuts = [
-    { label: "Explicar contexto", description: "Abre el chat tecnico con los datos visibles.", onSelect: () => controller.setActiveAction("chat") },
-    { label: "Generar APU", description: "Prepara una propuesta editable de recursos.", onSelect: () => controller.setActiveAction("apu") },
-    { label: "Revisar presupuesto", description: "Busca unidades, duplicados y costos sospechosos.", onSelect: () => controller.setActiveAction("review") },
-    { label: "Autocompletar texto", description: "Completa una descripcion tecnica breve.", onSelect: () => controller.setActiveAction("autocomplete") },
-  ];
 
   function buildRequest() {
     if (controller.activeAction === "apu") {
@@ -644,7 +639,7 @@ export function AiAssistantPanel({
               <div className="max-w-3xl space-y-3">
                 <KhipuLogo size="sm" showSubtitle={false} />
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">Asistente tecnico de obra</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">Asistente técnico de obra</p>
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--app-text-strong)] md:text-4xl">
                     Presupuesta mejor con Khipu.
                   </h1>
@@ -687,7 +682,7 @@ export function AiAssistantPanel({
                 <p className="text-sm font-semibold text-[var(--app-text-strong)]">Trabajo activo</p>
               <p className="mt-1 text-sm text-[var(--app-text-muted)]">Contexto de esta sesión.</p>
             </div>
-              {contextRows.length ? (
+            {contextRows.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {contextRows.map((row) => (
                     <div key={row.label} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
@@ -705,7 +700,7 @@ export function AiAssistantPanel({
           </Card>
 
           <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
-          <CardContent className="grid gap-4 p-5 lg:grid-cols-2">
+            <CardContent className="grid gap-4 p-5 lg:grid-cols-2">
             <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
               <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -754,13 +749,13 @@ export function AiAssistantPanel({
               {(controller.provider === "openai" || controller.provider === "gemini" || controller.provider === "openrouter" || controller.provider === "agent") &&
               !controller.cloudConfigured[controller.provider] ? (
                 <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                  {readProviderButtonLabel(controller.provider)} no configurado. Agrega tu API key en .env o Configuracion.
+                  {readProviderButtonLabel(controller.provider)} no configurado. Revisa la Configuración para agregar tu API key.
                 </p>
               ) : null}
             </div>
 
             <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Accion activa</p>
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Acción activa</p>
               <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                 Modelo solicitado: <span className="font-medium text-[var(--app-text-strong)]">{readActiveModelLabel(controller.provider, activeHealth, controller.agentModel)}</span>
               </p>
@@ -768,11 +763,11 @@ export function AiAssistantPanel({
                 Modelo resuelto: <span className="font-medium text-[var(--app-text-strong)]">{readResolvedModelLabel(controller.provider, activeHealth, controller.agentModel)}</span>
               </p>
               <p className="mt-1 text-sm text-[var(--app-text-muted)]">
-                Ultima latencia: <span className="font-medium text-[var(--app-text-strong)]">{readLatencyLabel(controller.provider, controller.health?.metrics[controller.activeAction]?.latencyMs)}</span>
+                Última latencia: <span className="font-medium text-[var(--app-text-strong)]">{readLatencyLabel(controller.provider, controller.health?.metrics[controller.activeAction]?.latencyMs)}</span>
               </p>
               {controller.provider === "ollama" && activeHealth?.fallbackUsed ? (
                 <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                  Fallback activo para esta accion.
+                  Se utilizó un modelo alternativo para esta acción.
                 </p>
               ) : null}
               {controller.provider === "ollama" && controller.health?.metrics[controller.activeAction]?.lastError ? (
@@ -1010,7 +1005,7 @@ export function AiAssistantPanel({
             <KhipuQuickActions actions={quickStartActions} />
           </CardContent>
         </Card>
-        {isLocalClientRuntimeEnabled() && process.env.NODE_ENV === "development" ? (
+        {localPreparationVisible ? (
           <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
             <CardContent className="space-y-3 p-5">
               <div>
@@ -1026,7 +1021,8 @@ export function AiAssistantPanel({
                     </p>
                   </div>
                 ))}
-              </div>              </CardContent>
+              </div>
+            </CardContent>
           </Card>
         ) : null}
       </div>

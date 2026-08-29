@@ -37,10 +37,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { getButtonByAriaLabel, getButtonByText, getByText, getTextContaining } = await renderWorkspace();
+    const { getButtonByAriaLabel, getButtonByText, getByText, getTextContaining, queryTextContaining } = await renderWorkspace();
 
     expect(getByText("Khipu")).toBeTruthy();
-    expect(getByText("Asistente tecnico de obra")).toBeTruthy();
+    expect(getByText("Asistente técnico de obra")).toBeTruthy();
     expect(getTextContaining("Presupuesta mejor con Khipu.")).toBeTruthy();
     expect(
       getTextContaining("Revisa APU, genera partidas y responde con contexto del presupuesto activo."),
@@ -58,8 +58,8 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("420")).toBeTruthy();
     expect(getTextContaining("Tabla activa")).toBeTruthy();
     expect(getTextContaining("Analisis de precios unitarios")).toBeTruthy();
-    expect(getTextContaining("Preparación local")).toBeDefined();
-    expect(getTextContaining("Modelos disponibles para ejecutar Khipu en este equipo.")).toBeDefined();
+    expect(queryTextContaining("Preparación local")).toBeNull();
+    expect(queryTextContaining("Modelos disponibles para ejecutar Khipu en este equipo.")).toBeNull();
     expect(getTextContaining("Recomendado")).toBeTruthy();
     expect(getTextContaining("Ejecucion")).toBeTruthy();
     expect(getTextContaining("Consulta criterios tecnicos con el contexto activo.")).toBeTruthy();
@@ -79,7 +79,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("Revisar presupuesto")).toBeTruthy();
     expect(getTextContaining("Autocompletar")).toBeTruthy();
     expect(getTextContaining("Modelo resuelto")).toBeTruthy();
-    expect(getTextContaining("Ultima latencia")).toBeTruthy();
+    expect(getTextContaining("Última latencia")).toBeTruthy();
   });
 
   it("switches commands from workspace action buttons without submitting", async () => {
