@@ -70,7 +70,7 @@ describe("summarizeRequest", () => {
   });
 
   it("fallbacks on missing chat message", () => {
-    expect(summarizeRequest({ action: "chat", payload: {} })).toBe("Consulta tecnica");
+    expect(summarizeRequest({ action: "chat", payload: {} })).toBe("Consulta técnica");
   });
 
   it("summarizes apu action from description field", () => {
@@ -96,7 +96,7 @@ describe("summarizeRequest", () => {
   });
 
   it("fallbacks on missing autocomplete input", () => {
-    expect(summarizeRequest({ action: "autocomplete", payload: {} })).toBe("Autocompletado tecnico");
+    expect(summarizeRequest({ action: "autocomplete", payload: {} })).toBe("Autocompletado técnico");
   });
 });
 

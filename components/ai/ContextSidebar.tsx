@@ -20,11 +20,11 @@ export function ContextSidebar({
     <aside className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-sm">
       <div className="space-y-1">
         <p className="text-sm font-semibold text-[var(--app-text-strong)]">Contexto de trabajo</p>
-        <p className="text-sm leading-6 text-[var(--app-text-muted)]">Estos datos guian la respuesta de Khipu para el modulo actual.</p>
+        <p className="text-sm leading-6 text-[var(--app-text-muted)]">Estos datos guían la respuesta de Khipu para el módulo actual.</p>
       </div>
       <div className="mt-5 grid gap-3">
         <ContextInput label="Proyecto" value={context.project ?? ""} onChange={(project) => onChange({ ...context, project })} />
-        <ContextInput label="Modulo" value={context.module ?? ""} onChange={(module) => onChange({ ...context, module })} />
+        <ContextInput label="Módulo" value={context.module ?? ""} onChange={(module) => onChange({ ...context, module })} />
         <ContextInput
           label="Partida seleccionada"
           value={context.selectedItem ?? ""}
@@ -56,7 +56,7 @@ function ContextInput({
 }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium text-[var(--app-text)]">
-      {label}
+      <span>{label}</span>
       <Input className="h-9" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );

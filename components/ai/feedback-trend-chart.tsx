@@ -23,7 +23,7 @@ const RANGE_OPTIONS: Array<{ label: string; days: RangeDays }> = [
 ];
 
 const LABEL_MAP: Record<string, string> = {
-  acceptanceRate: "Aceptacion",
+  acceptanceRate: "Aceptación",
   applied: "Aplicadas",
   edited: "Editadas",
   dismissed: "Descartadas",
@@ -79,7 +79,7 @@ export function FeedbackTrendChart({ trends }: { trends: FeedbackTrendPoint[] })
           <div>
             <p className="text-sm font-semibold text-[var(--app-text-strong)]">Tendencia semanal</p>
             <p className="mt-1 text-sm text-[var(--app-text-muted)]">
-              Evolucion de la tasa de aceptacion de sugerencias semana a semana.
+              Evolución de la tasa de aceptación de sugerencias semana a semana.
             </p>
           </div>
           <div className="flex gap-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-0.5">

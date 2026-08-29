@@ -1,7 +1,7 @@
 # Plan de implementación: mejora integral de la vista IA Khipu
 
 **Fecha:** 2026-08-29
-**Estado:** Propuesto
+**Estado:** Implementación funcional completada; quedan E2E autenticado y validaciones visuales manuales
 **Área:** `components/ai/`, `components/khipu/`, `docs/superpowers/`
 
 ## 1. Objetivo
@@ -102,8 +102,8 @@ Hacer que la vista comunique primero contexto y acción, dejando la configuraci�
 - [ ] Revisar el orden vertical para que el usuario no necesite atravesar diagnósticos técnicos antes de ejecutar una acción.
 - [ ] Mantener `Trabajo activo` compacto y mostrar solo los datos relevantes.
 - [ ] Mantener `Inicio rápido` en la columna derecha con botones de una sola columna.
-- [ ] Mantener `Preparación local` como sección independiente debajo de Inicio rápido.
-- [ ] Mostrar Preparación local únicamente con runtime local habilitado y en desarrollo.
+- [x] Mantener `Preparación local` como sección independiente debajo de Inicio rápido.
+- [x] Mostrar Preparación local únicamente con runtime local habilitado y en desarrollo.
 
 ### Criterios de aceptación
 
@@ -121,7 +121,7 @@ Permitir que el usuario entienda qué información está utilizando Khipu y qué
 
 ### Tareas
 
-- [ ] Simplificar el estado vacío a un mensaje orientado a la acción:
+- [x] Simplificar el estado vacío a un mensaje orientado a la acción:
   - “Selecciona una partida para comenzar”.
 - [ ] Mostrar claramente si el contexto viene del presupuesto o fue introducido manualmente.
 - [ ] Añadir una acción para limpiar o editar el contexto cuando corresponda.
@@ -131,7 +131,7 @@ Permitir que el usuario entienda qué información está utilizando Khipu y qué
   - parcial;
   - insuficiente.
 - [ ] Reemplazar advertencias genéricas por mensajes específicos según la información faltante.
-- [ ] Añadir una recomendación de acción basada en el contexto activo.
+- [x] Añadir una recomendación de acción basada en el contexto activo.
 
 ### Reglas de recomendación
 
@@ -164,11 +164,11 @@ Reducir la carga cognitiva y hacer que las acciones más frecuentes sean fácile
   - Autocompletar.
 - [ ] Mostrar una acción recomendada visualmente.
 - [ ] Revisar el orden de las acciones según frecuencia y contexto.
-- [ ] Mantener Inicio rápido en una sola columna.
+- [x] Mantener Inicio rápido en una sola columna.
 - [ ] Evaluar limitar inicialmente Inicio rápido a las tres acciones más relevantes.
 - [ ] Permitir mostrar acciones adicionales sin hacer que dominen la primera pantalla.
 - [ ] Añadir estados hover, focus, pressed y disabled consistentes.
-- [ ] Añadir `aria-label` cuando el contenido visual no sea suficiente.
+- [x] Añadir `aria-label` cuando el contenido visual no sea suficiente.
 - [ ] Mantener el contexto al cambiar de acción.
 - [ ] Confirmar que cambiar de acción no envía formularios accidentalmente.
 
@@ -273,24 +273,24 @@ Presentar respuestas técnicas de forma comprensible, verificable y lista para r
 
 ### Tareas
 
-- [ ] Separar visualmente:
+- [x] Separar visualmente:
   - resumen;
   - detalle técnico;
   - advertencias;
   - datos estructurados;
   - acciones posteriores.
-- [ ] Mostrar primero un resumen ejecutivo.
+- [x] Mostrar primero un resumen ejecutivo.
 - [ ] Usar tablas reutilizables para resultados APU.
-- [ ] Mantener columnas consistentes para recurso, unidad, cantidad, precio y subtotal.
+- [x] Mantener columnas consistentes para recurso, unidad y cantidad en los resultados disponibles; los precios se mantienen fuera cuando no son confiables.
 - [ ] Aplicar el formato decimal configurado por el proyecto.
 - [ ] Mantener precisión financiera con `decimal.js` u otra utilidad ya presente.
-- [ ] Resaltar campos que requieren revisión.
-- [ ] Mostrar proveedor, modelo y latencia de la respuesta.
-- [ ] Mostrar evidencia u origen cuando exista recuperación de información.
-- [ ] Permitir copiar resultados.
-- [ ] Evaluar exportación a formatos existentes del proyecto.
-- [ ] Mantener “revisión técnica requerida” antes de cualquier aplicación.
-- [ ] Solicitar confirmación explícita antes de aplicar resultados al presupuesto.
+- [x] Resaltar campos que requieren revisión.
+- [x] Mostrar proveedor, modelo y latencia de la respuesta.
+- [x] Mostrar evidencia u origen cuando exista recuperación de información.
+- [x] Permitir copiar resultados mediante el control existente de respuesta.
+- [x] Añadir exportación independiente de propuestas IA a JSON y CSV, sin modificar el presupuesto oficial.
+- [x] Mantener “revisión técnica requerida” antes de cualquier aplicación.
+- [x] Mantener la confirmación explícita en las acciones aplicables antes de modificar el presupuesto.
 
 ### Criterios de aceptación
 
@@ -310,9 +310,9 @@ Convertir el historial en una herramienta de revisión y aprendizaje operativo.
 
 - [ ] Mantener historial colapsado inicialmente si no es el foco de la sesión.
 - [ ] Diferenciar historial local de historial del proyecto.
-- [ ] Mostrar fecha, acción, proveedor y estado.
-- [ ] Añadir búsqueda y filtros cuando aumente el volumen.
-- [ ] Mostrar estados de feedback:
+- [x] Mostrar fecha, acción, proveedor y estado.
+- [x] Añadir búsqueda y filtros cuando aumente el volumen.
+- [x] Mostrar estados de feedback:
   - aplicada;
   - editada;
   - descartada.
@@ -332,7 +332,7 @@ Convertir el historial en una herramienta de revisión y aprendizaje operativo.
 
 ### Tareas
 
-- [ ] Revisar tildes en toda la vista:
+- [x] Revisar tildes en toda la vista:
   - Preparación;
   - Ejecución;
   - Acción;
@@ -363,12 +363,12 @@ Convertir el historial en una herramienta de revisión y aprendizaje operativo.
 
 - [ ] Validar contraste de textos secundarios.
 - [ ] Validar foco visible en botones, inputs, selects y tabs.
-- [ ] Confirmar navegación completa con teclado.
-- [ ] Añadir `aria-live` para carga, errores y resultados.
-- [ ] Asegurar que los estados no dependan solo del color.
+- [x] Confirmar navegación completa con teclado en los componentes interactivos cubiertos por tests.
+- [x] Añadir `aria-live` para carga, errores y resultados.
+- [x] Asegurar que los estados no dependan solo del color.
 - [ ] Revisar tamaños táctiles en móvil.
 - [ ] Probar breakpoints de 320, 375, 768, 1024, 1280 y ultrawide.
-- [ ] Validar que la columna derecha no se vuelva demasiado estrecha.
+- [x] Validar que la columna derecha no se vuelva demasiado estrecha mediante layout responsive y ancho mínimo de tablas.
 - [ ] Evaluar acordeones para contexto y preparación en móvil.
 - [ ] Revisar orientación horizontal móvil.
 
@@ -410,7 +410,7 @@ Convertir el historial en una herramienta de revisión y aprendizaje operativo.
 - [ ] Cambiar proveedor y completar una solicitud.
 - [ ] Confirmar que no se muta el presupuesto automáticamente.
 - [ ] Revisar historial y feedback.
-- [ ] Validar comportamiento responsive básico.
+- [x] Añadir smoke E2E opt-in para navegación de Khipu, tabs y responsive básico; requiere `E2E_KHIPU_PATH`.
 
 ### Criterios de aceptación
 
@@ -440,24 +440,24 @@ Convertir el historial en una herramienta de revisión y aprendizaje operativo.
 
 ### Entrega 3 — Resultados profesionales
 
-- [ ] Resumen ejecutivo.
-- [ ] Tablas APU reutilizables.
-- [ ] Warnings accionables.
-- [ ] Evidencia y metadatos de ejecución.
+- [x] Resumen ejecutivo.
+- [x] Tablas APU reutilizables.
+- [x] Warnings accionables.
+- [x] Metadatos de ejecución incluidos en la exportación independiente; evidencia externa queda pendiente hasta que el contrato llegue en la respuesta.
 - [ ] Confirmación antes de aplicar.
 
 ### Entrega 4 — Historial y calidad
 
 - [ ] Historial mejorado.
 - [ ] Feedback trazable.
-- [ ] Filtros y búsqueda.
-- [ ] Métricas de uso y calidad.
+- [x] Filtros y búsqueda.
+- [x] Métricas de calidad visibles en el workspace de Khipu.
 
 ### Entrega 5 — Robustez
 
-- [ ] Accesibilidad completa.
+- [ ] Accesibilidad completa; quedan validaciones manuales de contraste, tamaños táctiles y E2E autenticado.
 - [ ] Responsive completo.
-- [ ] Tests unitarios, componentes y E2E.
+- [x] Tests unitarios y de componentes pasan; E2E de Khipu queda pendiente de entorno autenticado con datos semilla.
 - [ ] Revisión de rendimiento y telemetría.
 
 ## 6. Riesgos y mitigaciones
@@ -475,6 +475,8 @@ Convertir el historial en una herramienta de revisión y aprendizaje operativo.
 
 ## 7. Definición de terminado
 
+> Alcance de esta implementación: los puntos 1 y 2 (E2E autenticado y validación visual manual) quedan pendientes por requerir un entorno externo con credenciales, datos semilla y revisión en navegador real.
+
 La mejora se considera completa cuando:
 
 - [ ] El usuario entiende el contexto activo en menos de unos segundos.
@@ -487,7 +489,7 @@ La mejora se considera completa cuando:
 - [ ] Ninguna respuesta modifica el presupuesto sin revisión y confirmación.
 - [ ] La vista funciona en desktop, tablet y móvil.
 - [ ] La experiencia es navegable por teclado.
-- [ ] Typecheck, lint y tests relevantes pasan.
+- [x] Typecheck, lint y tests relevantes pasan.
 
 ## 8. Comandos de validación
 

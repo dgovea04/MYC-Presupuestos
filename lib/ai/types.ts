@@ -27,6 +27,15 @@ export type AiContext = {
   viewSummary?: string;
 };
 
+export type AiEvidenceReference = {
+  id: string;
+  sourceType: string;
+  title: string;
+  excerpt: string;
+  score?: number;
+  metadata?: Record<string, string | number | boolean>;
+};
+
 export type AiEndpointResult = {
   answer: string;
   model: string;
@@ -35,6 +44,7 @@ export type AiEndpointResult = {
   warnings: string[];
   latencyMs?: number;
   structuredData?: unknown;
+  evidence?: AiEvidenceReference[];
   provider?: Exclude<AiProviderId, "auto">;
   task?: KhipuAiTask;
   promptHash?: string;

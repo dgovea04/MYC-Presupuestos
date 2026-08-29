@@ -27,12 +27,12 @@ export function QualityMetricsHeader({ total }: { total: number }) {
           <p className="text-lg font-semibold text-slate-900">Calidad de Khipu</p>
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          Metricas de calidad basadas en feedback de sugerencias de IA.
+          Métricas de calidad basadas en el feedback de tus sugerencias de IA.
         </p>
       </div>
       <div className="dashboard-khipu-header-pill flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
         <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-        {total} sugerencias evaluadas
+        {total} {total === 1 ? "sugerencia evaluada" : "sugerencias evaluadas"}
       </div>
     </div>
   );
@@ -42,7 +42,7 @@ export function QualityMetricsGrid({ summary }: { summary: FeedbackSummary }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <QualityMetricCard
-        label="Tasa de aceptacion"
+        label="Tasa de aceptación"
         value={formatPercent(summary.acceptanceRate)}
         tone={rateTone(Number(summary.acceptanceRate))}
         subtitle={summary.applied === 1 ? "1 sugerencia aplicada" : `${summary.applied} sugerencias aplicadas`}
@@ -180,7 +180,7 @@ export function QualityMetricsEmpty() {
         <BotMessageSquare className="mx-auto h-8 w-8 text-slate-300" />
         <p className="mt-2 font-medium text-slate-900">Sin datos de calidad</p>
         <p className="mt-1">
-          Las metricas apareceran cuando los usuarios comiencen a calificar las sugerencias de Khipu como
+          Las métricas aparecerán cuando los usuarios comiencen a calificar las sugerencias de Khipu como
           aplicadas, editadas o descartadas.
         </p>
       </CardContent>
@@ -195,7 +195,7 @@ export function ProviderQualityTable({ providers }: { providers: AiSuggestionFee
         <div>
           <p className="text-sm font-semibold text-slate-900">Calidad por proveedor</p>
           <p className="mt-1 text-sm text-slate-500">
-            Comparativa de aceptacion entre los proveedores de IA utilizados.
+            Comparativa de aceptación entre los proveedores de IA utilizados.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -207,7 +207,7 @@ export function ProviderQualityTable({ providers }: { providers: AiSuggestionFee
                 <th className="pb-2 pr-4 text-right">Aplicadas</th>
                 <th className="pb-2 pr-4 text-right">Editadas</th>
                 <th className="pb-2 pr-4 text-right">Descartadas</th>
-                <th className="pb-2 text-right">Aceptacion</th>
+                <th className="pb-2 text-right">Aceptación</th>
               </tr>
             </thead>
             <tbody>

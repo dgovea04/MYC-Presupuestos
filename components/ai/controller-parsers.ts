@@ -22,10 +22,10 @@ export function readErrorMessage(payload: unknown) {
 // ─── Request summary ────────────────────────────────────────────
 
 export function summarizeRequest(request: AssistantRequest) {
-  if (request.action === "chat") return String(request.payload.message ?? "Consulta tecnica");
+  if (request.action === "chat") return String(request.payload.message ?? "Consulta técnica");
   if (request.action === "apu") return String(request.payload.description ?? "Generacion de APU");
   if (request.action === "review") return String(request.payload.budgetSummary ?? "Revision de presupuesto").slice(0, 140);
-  return String(request.payload.input ?? "Autocompletado tecnico");
+  return String(request.payload.input ?? "Autocompletado técnico");
 }
 
 // ─── AI result parsing ─────────────────────────────────────────
@@ -80,8 +80,26 @@ export function readHistoryResult(value: unknown): AiResult | null {
     warnings: value.warnings.filter((warning): warning is string => typeof warning === "string"),
     latencyMs: typeof value.latencyMs === "number" ? value.latencyMs : undefined,
     structuredData: value.structuredData,
+    evidence: readAiEvidence(value.evidence),
+    provider: typeof value.provider === "string" ? value.provider as AiEndpointResult["provider"] : undefined,
+    requestId: typeof value.requestId === "string" ? value.requestId : undefined,
+    promptHash: typeof value.promptHash === "string" ? value.promptHash : undefined,
+    responseHash: typeof value.responseHash === "string" ? value.responseHash : undefined,
     debug: readAiDebug(value.debug),
   };
+}
+
+function readAiEvidence(value: unknown): AiEndpointResult["evidence"] {
+  if (!Array.isArray(value)) return undefined;
+  const evidence = value.filter((item): item is Record<string, unknown> => isRecord(item)).flatMap((item) => {
+    if (typeof item.id !== "string" || typeof item.title !== "string" || typeof item.excerpt !== "string" || typeof item.sourceType !== "string") return [];
+    return [{ id: item.id, sourceType: item.sourceType, title: item.title, excerpt: item.excerpt, score: typeof item.score === "number" ? item.score : undefined, metadata: isRecord(item.metadata) ? readEvidenceMetadata(item.metadata) : undefined }];
+  });
+  return evidence.length > 0 ? evidence : undefined;
+}
+
+function readEvidenceMetadata(value: Record<string, unknown>): Record<string, string | number | boolean> {
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string | number | boolean] => typeof entry[1] === "string" || typeof entry[1] === "number" || typeof entry[1] === "boolean"));
 }
 
 export function readAiDebug(value: unknown): AiEndpointResult["debug"] | undefined {

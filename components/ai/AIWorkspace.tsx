@@ -25,12 +25,12 @@ const DEFAULT_CONTEXT: AiContext = {
   selectedItem: "Concreto f'c=210",
   unit: "m3",
   currentCost: 420,
-  activeTable: "Analisis de precios unitarios",
+  activeTable: "Análisis de precios unitarios",
 };
 
 const TABS = [
   { id: "workspace", label: "Workspace", icon: BotMessageSquare },
-  { id: "metrics", label: "Metricas", icon: BarChart3 },
+  { id: "metrics", label: "Métricas", icon: BarChart3 },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -50,6 +50,7 @@ export function AIWorkspace(props: AIWorkspaceProps) {
               key={tab.id}
               type="button"
               aria-pressed={active}
+              aria-label={`Mostrar ${tab.label}`}
               className={cn(
                 "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 sm:flex-none",
                 active

@@ -34,22 +34,22 @@ const DEFAULT_CONTEXT: AiContext = {
   selectedItem: "Concreto f'c=210",
   unit: "m3",
   currentCost: 420,
-  activeTable: "Analisis de precios unitarios",
+  activeTable: "Análisis de precios unitarios",
 };
 
 const TAB_CONFIG = {
   assistant: {
     label: "Asistente",
-    description: "Chat tecnico, APU, revision y autocompletado.",
+    description: "Chat técnico, APU, revisión y autocompletado.",
     icon: BotMessageSquare,
   },
   agent: {
     label: "Agente",
-    description: "Flujos con herramientas, simulacion y aprobaciones.",
+    description: "Flujos con herramientas, simulación y aprobaciones.",
     icon: BrainCircuit,
   },
   metrics: {
-    label: "Metricas",
+    label: "Métricas",
     description: "Calidad, feedback y trazabilidad de respuestas.",
     icon: BarChart3,
   },
@@ -91,6 +91,7 @@ export function KhipuWorkspace(props: KhipuWorkspaceProps) {
                   key={tab}
                   type="button"
                   aria-pressed={active}
+                  aria-label={`Mostrar ${config.label}`}
                   title={config.description}
                   className={cn(
                     "flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-150 sm:flex-none",

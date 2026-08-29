@@ -123,6 +123,43 @@ describe("ChatHistory", () => {
     });
   });
 
+  describe("filters and feedback", () => {
+    it("filters entries by search text", async () => {
+      const container = await renderChatHistory({
+        history: [
+          createEntry({ id: "one", summary: "Revisar concreto" }),
+          createEntry({ id: "two", summary: "Analizar acero" }),
+        ],
+      });
+      const searchInput = container.querySelector("#khipu-history-search") as HTMLInputElement;
+      await act(async () => {
+        searchInput.focus();
+        searchInput.value = "acero";
+        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+        searchInput.dispatchEvent(new Event("change", { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(container.textContent).toContain("Analizar acero");
+      expect(container.querySelectorAll('[aria-label^="Abrir consulta:"]').length).toBeGreaterThan(0);
+    });
+
+    it("filters entries by action and shows feedback status", async () => {
+      const container = await renderChatHistory({
+        history: [createEntry({ id: "chat" }), createEntry({ id: "apu", action: "apu" })],
+        feedbackByHistoryId: { apu: "EDITED" },
+      });
+      const filter = container.querySelector("#khipu-history-action-filter") as HTMLSelectElement;
+      await act(async () => {
+        filter.focus();
+        filter.value = "apu";
+        filter.dispatchEvent(new Event("change", { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(container.textContent).toContain("Editada");
+      expect(container.textContent).toContain("Editada");
+    });
+  });
+
   describe("rendering", () => {
     it("renders user message bubble with entry summary", async () => {
       const container = await renderChatHistory({

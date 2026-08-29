@@ -71,7 +71,7 @@ describe("FloatingAiAssistant", () => {
     await renderFloatingAssistant();
 
     expect(document.body.textContent).toContain("Khipu");
-    expect(document.body.textContent).toContain("Chat tecnico");
+    expect(document.body.textContent).toContain("Chat técnico");
     expect(document.body.textContent).toContain("Selecciona un presupuesto, partida o APU para que Khipu pueda analizarlo con contexto.");
   });
 
@@ -576,7 +576,7 @@ describe("FloatingAiAssistant settings consumption", () => {
     await renderFloatingAssistant();
 
     expect(document.body.textContent).toContain("Khipu");
-    expect(document.body.textContent).toContain("Chat tecnico");
+    expect(document.body.textContent).toContain("Chat técnico");
   });
 
   it("applies light theme to KhipuChatPanel by default", async () => {

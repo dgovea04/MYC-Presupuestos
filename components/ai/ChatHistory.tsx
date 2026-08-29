@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { AIMessage } from "@/components/ai/AIMessage";
@@ -15,6 +15,7 @@ type ChatHistoryProps = {
   truncateLength?: number | false;
   expandable?: boolean;
   theme?: "light" | "dark";
+  feedbackByHistoryId?: Record<string, "APPLIED" | "EDITED" | "DISMISSED">;
 };
 
 export function ChatHistory({
@@ -25,11 +26,22 @@ export function ChatHistory({
   truncateLength = 300,
   expandable = false,
   theme = "light",
+  feedbackByHistoryId = {},
 }: ChatHistoryProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(history.length);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState<AiHistoryEntry["action"] | "all">("all");
   const isDark = theme === "dark";
+  const filteredHistory = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase();
+    return history.filter((entry) => {
+      const matchesAction = actionFilter === "all" || entry.action === actionFilter;
+      const matchesSearch = !normalizedSearch || `${entry.summary} ${entry.result.answer} ${entry.result.provider ?? ""}`.toLocaleLowerCase().includes(normalizedSearch);
+      return matchesAction && matchesSearch;
+    });
+  }, [actionFilter, history, search]);
 
   useEffect(() => {
     if (history.length > prevLengthRef.current) {
@@ -56,7 +68,7 @@ export function ChatHistory({
     return null;
   }
 
-  const chronological = [...history].reverse();
+  const chronological = [...filteredHistory].reverse();
 
   return (
     <div
@@ -68,6 +80,31 @@ export function ChatHistory({
         maxHeight,
       )}
     >
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <label className="sr-only" htmlFor="khipu-history-search">Buscar en el historial</label>
+          <input
+            id="khipu-history-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar en el historial"
+            className={cn("min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500", isDark ? "border-slate-700 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900")}
+          />
+          <label className="sr-only" htmlFor="khipu-history-action-filter">Filtrar por acción</label>
+          <select
+            id="khipu-history-action-filter"
+            value={actionFilter}
+            onChange={(event) => setActionFilter(event.target.value as AiHistoryEntry["action"] | "all")}
+            className={cn("rounded-lg border px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500", isDark ? "border-slate-700 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900")}
+          >
+            <option value="all">Todas las acciones</option>
+            <option value="chat">Chat técnico</option>
+            <option value="apu">APU</option>
+            <option value="review">Revisión</option>
+            <option value="autocomplete">Autocompletar</option>
+          </select>
+        </div>
+        {filteredHistory.length === 0 ? <p className={cn("px-2 py-4 text-center text-xs", isDark ? "text-slate-400" : "text-slate-500")}>No hay resultados para estos filtros.</p> : null}
       <div className="space-y-4">
         <AnimatePresence initial={false}>
           {chronological.map((entry, index) => {
@@ -93,6 +130,7 @@ export function ChatHistory({
                   <div
                     role="button"
                     tabIndex={0}
+                    aria-label={`Abrir consulta: ${entry.summary}`}
                     className="max-w-[82%] cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
                     onClick={() => {
                       if (expandable) {
@@ -119,6 +157,8 @@ export function ChatHistory({
                 <div
                   role="button"
                   tabIndex={0}
+                  aria-label={`${expandable ? (isExpanded ? "Contraer" : "Expandir") : "Abrir"} respuesta de Khipu`}
+                  aria-expanded={expandable ? isExpanded : undefined}
                   className="w-full max-w-[88%] cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
                   onClick={() => {
                     if (expandable) {
@@ -155,8 +195,9 @@ export function ChatHistory({
                   </div>
                 </div>
 
-                <p className={cn("text-center text-[10px] font-medium uppercase tracking-[0.14em]", isDark ? "text-[var(--khipu-dark-muted-soft)]" : "text-slate-400")}>
-                  {isLast && isRecent(entry.timestamp) ? (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <p className={cn("text-center text-[10px] font-medium uppercase tracking-[0.14em]", isDark ? "text-[var(--khipu-dark-muted-soft)]" : "text-slate-400")}>
+                    {isLast && isRecent(entry.timestamp) ? (
                     <span className="inline-flex items-center gap-2">
                       <span className={cn("h-px w-6", isDark ? "bg-[var(--khipu-dark-hairline-strong)]" : "bg-slate-200")} />
                       Ahora
@@ -168,13 +209,26 @@ export function ChatHistory({
                       {formatTime(entry.timestamp)}
                       <span className={cn("h-px w-6", isDark ? "bg-[var(--khipu-dark-hairline-strong)]" : "bg-slate-200")} />
                     </span>
-                  )}
-                </p>
+                    )}
+                  </p>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", isDark ? "bg-[var(--khipu-dark-surface)] text-[var(--khipu-dark-muted)]" : "bg-slate-100 text-slate-500")}>
+                    {readActionLabel(entry.action)}
+                  </span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", isDark ? "bg-[var(--khipu-dark-surface)] text-[var(--khipu-dark-muted)]" : "bg-slate-100 text-slate-500")}>
+                    {entry.result.provider ?? "Proveedor local"}
+                  </span>
+                  {feedbackByHistoryId[entry.id] ? (
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", isDark ? "bg-emerald-950 text-emerald-300" : "bg-emerald-50 text-emerald-700")}>
+                      {readFeedbackLabel(feedbackByHistoryId[entry.id])}
+                    </span>
+                  ) : null}
+                </div>
               </motion.div>
             );
           })}
         </AnimatePresence>
         <div ref={bottomRef} />
+      </div>
       </div>
     </div>
   );
@@ -194,6 +248,21 @@ function formatTime(timestamp: string): string {
   } catch {
     return "";
   }
+}
+
+function readActionLabel(action: AiHistoryEntry["action"]): string {
+  const labels: Record<AiHistoryEntry["action"], string> = {
+    chat: "Chat técnico",
+    apu: "APU",
+    review: "Revisión",
+    autocomplete: "Autocompletar",
+  };
+  return labels[action];
+}
+
+function readFeedbackLabel(feedback: "APPLIED" | "EDITED" | "DISMISSED"): string {
+  const labels = { APPLIED: "Aplicada", EDITED: "Editada", DISMISSED: "Descartada" } satisfies Record<typeof feedback, string>;
+  return labels[feedback];
 }
 
 function isRecent(timestamp: string): boolean {

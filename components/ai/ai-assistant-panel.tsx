@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BotMessageSquare,
+  Download,
   ChevronDown,
   ExternalLink,
   FileSearch,
@@ -75,35 +76,42 @@ type AiAssistantPanelProps = {
 const ACTIONS = [
   {
     id: "chat",
-    label: "Chat tecnico",
-    description: "Resolver dudas tecnicas con contexto de obra.",
+    label: "Chat técnico",
+    description: "Resuelve dudas técnicas con contexto de obra.",
     icon: BotMessageSquare,
   },
   {
     id: "apu",
     label: "Generar APU",
-    description: "Crear una propuesta revisable de recursos y rendimiento.",
+    description: "Crea una propuesta revisable de recursos y rendimiento.",
     icon: Sparkles,
   },
   {
     id: "review",
     label: "Revisar presupuesto",
-    description: "Detectar unidades, duplicados y costos sospechosos.",
+    description: "Detecta unidades, duplicados y costos sospechosos.",
     icon: FileSearch,
   },
   {
     id: "autocomplete",
     label: "Autocompletar",
-    description: "Completar descripciones y especificaciones tecnicas.",
+    description: "Completa descripciones y especificaciones técnicas.",
     icon: WandSparkles,
   },
 ] as const;
 
 const ACTION_HELPERS: Record<AssistantAction, string> = {
-  chat: "Consulta criterios tecnicos con el contexto activo.",
+  chat: "Consulta criterios técnicos con el contexto activo.",
   apu: "Genera una propuesta editable de recursos y rendimiento.",
   review: "Revisa unidades, duplicados y costos sospechosos.",
-  autocomplete: "Completa descripciones tecnicas sin perder el contexto.",
+  autocomplete: "Completa descripciones técnicas sin perder el contexto.",
+};
+
+const ACTION_SUGGESTIONS: Record<AssistantAction, string> = {
+  chat: "¿Qué criterio técnico debería revisar en esta partida?",
+  apu: "Genera una propuesta de APU para esta partida.",
+  review: "Revisa unidades, duplicados y costos atípicos.",
+  autocomplete: "Completa esta descripción técnica sin inventar especificaciones.",
 };
 
 const HISTORY_COLLAPSED_STORAGE_KEY = "myc-khipu-history-collapsed";
@@ -240,6 +248,8 @@ export function AiAssistantPanel({
     [controller.activeAction, controller.health],
   );
   const localPreparationVisible = isLocalClientRuntimeEnabled() && process.env.NODE_ENV === "development";
+  const installedLocalModels = controller.health?.requiredModels.filter((model) => model.installed).length ?? 0;
+  const totalLocalModels = controller.health?.requiredModels.length ?? 0;
   const providerStatus = readProviderStatus(
     controller.provider,
     controller.health?.status,
@@ -251,7 +261,7 @@ export function AiAssistantPanel({
     : ["chatgpt-bridge", "openai", "gemini", "openrouter", "agent"];
   const contextRows = [
     { label: "Proyecto", value: controller.context.project },
-    { label: "Modulo", value: controller.context.module },
+    { label: "Módulo", value: controller.context.module },
     { label: "Partida seleccionada", value: controller.context.selectedItem },
     { label: "Unidad", value: controller.context.unit },
     {
@@ -260,6 +270,12 @@ export function AiAssistantPanel({
     },
     { label: "Tabla activa", value: controller.context.activeTable },
   ].filter((row): row is { label: string; value: string } => typeof row.value === "string" && row.value.trim().length > 0);
+
+  const recommendedAction: AssistantAction = controller.context.selectedItem
+    ? "review"
+    : controller.context.project
+      ? "review"
+      : "chat";
 
   function buildRequest() {
     if (controller.activeAction === "apu") {
@@ -318,6 +334,7 @@ export function AiAssistantPanel({
             expandable
             truncateLength={200}
             theme={theme}
+            feedbackByHistoryId={controller.feedbackByHistoryId}
           />
           <div className="flex justify-end">
             <ClearHistoryButton
@@ -383,8 +400,18 @@ export function AiAssistantPanel({
           initial={reducedMotion ? undefined : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={anim(0.3, staggerDelays.context)}
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{ACTION_HELPERS[controller.activeAction]}</p>
+        >                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{ACTION_HELPERS[controller.activeAction]}</p>
+                    {controller.activeAction !== recommendedAction ? (
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        onClick={() => controller.setActiveAction(recommendedAction)}
+                      >
+                        Sugerida: {ACTIONS.find((action) => action.id === recommendedAction)?.label}
+                      </button>
+                    ) : null}
+                  </div>
           {contextRows.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {contextRows.slice(0, 3).map((row) => (
@@ -475,7 +502,7 @@ export function AiAssistantPanel({
         ) : null}
 
         {/* Form — sticky at the bottom so it's always visible */}
-        <div className="sticky bottom-0 space-y-3 bg-white pt-3">
+        <div aria-live="polite" className="sticky bottom-0 space-y-3 bg-white pt-3">
           <AnimatePresence>
             {controller.loading && !controller.streaming ? (
               <motion.div
@@ -509,7 +536,7 @@ export function AiAssistantPanel({
                         onChange={(event) => setChatMessage(event.target.value)}
                         className="min-h-0 pr-14"
                         rows={3}
-                        placeholder="Escribe tu consulta..."
+                        placeholder={ACTION_SUGGESTIONS.chat}
                       />
                       <button
                         type="submit"
@@ -543,7 +570,7 @@ export function AiAssistantPanel({
                           onChange={(event) => setApuDescription(event.target.value)}
                           className="min-h-0 pr-14"
                           rows={3}
-                          placeholder="Descripcion de partida"
+                          placeholder={ACTION_SUGGESTIONS.apu}
                         />
                         <button
                           type="submit"
@@ -572,7 +599,7 @@ export function AiAssistantPanel({
                         rows={3}
                         value={reviewSummary}
                         onChange={(event) => setReviewSummary(event.target.value)}
-                        placeholder="Pega el resumen del presupuesto..."
+                        placeholder={ACTION_SUGGESTIONS.review}
                       />
                       <button
                         type="submit"
@@ -600,7 +627,7 @@ export function AiAssistantPanel({
                         onChange={(event) => setAutocompleteInput(event.target.value)}
                         className="min-h-0 pr-14"
                         rows={3}
-                        placeholder="Texto base para autocompletar..."
+                        placeholder={ACTION_SUGGESTIONS.autocomplete}
                       />
                       <button
                         type="submit"
@@ -679,10 +706,8 @@ export function AiAssistantPanel({
           <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
             <CardContent className="space-y-3 p-5">
               <div>
-                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Trabajo activo</p>
-              <p className="mt-1 text-sm text-[var(--app-text-muted)]">Contexto de esta sesión.</p>
-            </div>
-            {contextRows.length ? (
+                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Trabajo activo</p>                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Contexto de esta sesión.</p>
+            </div>              {contextRows.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {contextRows.map((row) => (
                     <div key={row.label} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
@@ -696,13 +721,17 @@ export function AiAssistantPanel({
                   Selecciona un presupuesto, partida o APU para comenzar.
                 </p>
               )}
+              {contextRows.length > 0 && contextRows.length <= 2 ? (
+                <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  Falta contexto para una recomendación confiable. Selecciona una partida o agrega metrados.
+                </p>
+              ) : null}
             </CardContent>
           </Card>
 
           <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
             <CardContent className="grid gap-4 p-5 lg:grid-cols-2">
-            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor</p>
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Proveedor</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {providerOptions.map((provider) => (
                   <button
@@ -754,8 +783,7 @@ export function AiAssistantPanel({
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-              <p className="text-sm font-semibold text-[var(--app-text-strong)]">Acción activa</p>
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Acción activa</p>
               <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                 Modelo solicitado: <span className="font-medium text-[var(--app-text-strong)]">{readActiveModelLabel(controller.provider, activeHealth, controller.agentModel)}</span>
               </p>
@@ -803,7 +831,7 @@ export function AiAssistantPanel({
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold">{action.label}</span>
-                    {active && action.id === "chat" ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">Recomendado</span> : null}
+                    {active && (action.id === recommendedAction || (!controller.context.project && action.id === "chat")) ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">Recomendado</span> : null}
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-[var(--app-text-muted)]">{action.description}</span>
                 </span>
@@ -819,7 +847,7 @@ export function AiAssistantPanel({
                 <ActiveIcon className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ejecucion</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ejecución</p>
                 <h2 className="mt-1 text-xl font-semibold text-slate-950">{activeConfig.label}</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-500">{ACTION_HELPERS[controller.activeAction]}</p>
               </div>
@@ -828,7 +856,7 @@ export function AiAssistantPanel({
             <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
               {controller.activeAction === "chat" ? (
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Consulta tecnica
+                  <span>Consulta técnica</span>
                   <Textarea value={chatMessage} onChange={(event) => setChatMessage(event.target.value)} />
                 </label>
               ) : null}
@@ -846,13 +874,13 @@ export function AiAssistantPanel({
               ) : null}
               {controller.activeAction === "review" ? (
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Resumen del presupuesto
+                  <span>Resumen del presupuesto</span>
                   <Textarea className="min-h-36" value={reviewSummary} onChange={(event) => setReviewSummary(event.target.value)} />
                 </label>
               ) : null}
               {controller.activeAction === "autocomplete" ? (
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Texto base
+                  <span>Texto base</span>
                   <Input value={autocompleteInput} onChange={(event) => setAutocompleteInput(event.target.value)} />
                 </label>
               ) : null}
@@ -881,13 +909,23 @@ export function AiAssistantPanel({
         {controller.error ? <AIMessage content={controller.error} tone="error" /> : null}
         {controller.feedbackError ? <AIMessage content={controller.feedbackError} tone="error" /> : null}
         {controller.result ? (
-          <div className="space-y-3">
-            <AIMessage
-              content={controller.result.answer}
-              model={controller.result.model}
-              streaming={controller.streaming}
-            />
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div aria-live="polite" className="space-y-3">
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">Resultado de Khipu</p>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">Revisa el análisis y confirma cualquier cambio antes de aplicarlo.</p>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <AIMessage
+                content={controller.result.answer}
+                model={controller.result.model}
+                streaming={controller.streaming}
+              />
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="gap-2" onClick={() => downloadKhipuResult(controller.result as AiResult, "json")}><Download className="h-4 w-4" />JSON</Button>
+                <Button size="sm" variant="outline" className="gap-2" onClick={() => downloadKhipuResult(controller.result as AiResult, "csv")}><Download className="h-4 w-4" />CSV</Button>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
               Esta recomendación requiere revisión técnica antes de aplicarse al presupuesto.
             </div>
             {controller.activeFeedbackEntry ? (
@@ -898,6 +936,14 @@ export function AiAssistantPanel({
                   void controller.submitFeedback(controller.activeFeedbackEntry as AiHistoryEntry, feedbackType);
                 }}
               />
+            ) : null}
+            {controller.result.evidence?.length ? (
+              <Card>
+                <CardContent className="space-y-3 p-5">
+                  <div><p className="text-sm font-semibold text-[var(--app-text-strong)]">Fuentes consultadas</p><p className="mt-1 text-xs text-[var(--app-text-muted)]">Referencias utilizadas para orientar esta respuesta. Verifica su vigencia antes de aplicar cambios.</p></div>
+                  <ul className="space-y-2">{controller.result.evidence.map((source) => <li key={source.id} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3"><p className="text-sm font-medium text-[var(--app-text-strong)]">{source.title}</p><p className="mt-1 text-xs leading-5 text-[var(--app-text-muted)]">{source.excerpt}</p></li>)}</ul>
+                </CardContent>
+              </Card>
             ) : null}
             {controller.result.warnings.length ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -951,7 +997,7 @@ export function AiAssistantPanel({
                         <h3 className="text-lg font-semibold text-slate-950">Actividad reciente de Khipu</h3>
                       <p className="mt-1 text-sm text-slate-500">
                     {projectId
-                      ? "Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesion."
+                      ? "Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesión."
                       : "Se guarda solo en este navegador para retomar resultados recientes; no es memoria del proyecto."}
                       {dedupedHistory.length > 0 ? (
                         <HistoryCountBadge className="ml-2 inline-flex items-center px-2 text-[11px]" count={dedupedHistory.length} />
@@ -985,6 +1031,7 @@ export function AiAssistantPanel({
                   onSelect={controller.selectHistoryEntry}
                   reducedMotion={reducedMotion}
                   truncateLength={false}
+                  feedbackByHistoryId={controller.feedbackByHistoryId}
                 />
                 </motion.div>
                 ) : null}
@@ -994,7 +1041,7 @@ export function AiAssistantPanel({
           ) : null}
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-5 xl:sticky xl:top-5 xl:self-start">
         <ContextSidebar context={controller.context} onChange={controller.setContext} />
         <Card className="border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm">
           <CardContent className="space-y-3 p-5">
@@ -1009,16 +1056,19 @@ export function AiAssistantPanel({
           <Card className="border-[var(--app-border)] bg-[var(--app-surface-muted)]">
             <CardContent className="space-y-3 p-5">
               <div>
-                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Preparación</p>
-                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Proveedor, modelos y latencia para ejecutar la acción activa.</p>
+                <p className="text-sm font-semibold text-[var(--app-text-strong)]">Preparación local</p>
+                <p className="mt-1 text-sm text-[var(--app-text-muted)]">Estado de los modelos locales para ejecutar Khipu.</p>
+                {totalLocalModels > 0 ? <p className="mt-2 text-xs font-semibold text-[var(--app-text-strong)]">Modelos disponibles: {installedLocalModels} de {totalLocalModels}.</p> : null}
               </div>
               <div className="grid gap-2">
                 {(controller.health?.requiredModels ?? []).map((model) => (
                   <div key={model.model} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2">
-                    <p className="text-xs font-semibold text-[var(--app-text-strong)]">{model.model}</p>
-                    <p className={cn("mt-1 text-[11px] font-medium", model.installed ? "text-emerald-700" : "text-amber-700")}>
-                      {model.installed ? "Instalado" : "Pendiente"}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-xs font-semibold text-[var(--app-text-strong)]">{model.model}</p>
+                    <span aria-label={model.installed ? "Modelo disponible" : "Modelo pendiente"} className={cn("shrink-0 text-[11px] font-semibold", model.installed ? "text-emerald-700" : "text-amber-700")}>
+                      {model.installed ? "Listo" : "Pendiente"}
+                    </span>
+                  </div>
                   </div>
                 ))}
               </div>
@@ -1073,6 +1123,42 @@ function FeedbackControls({
   );
 }
 
+function downloadKhipuResult(result: AiResult, format: "json" | "csv") {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    answer: result.answer,
+    provider: result.provider ?? "No especificado",
+    model: result.model,
+    requestedModel: result.requestedModel,
+    latencyMs: result.latencyMs ?? null,
+    warnings: result.warnings,
+    structuredData: result.structuredData ?? null,
+    evidence: result.evidence ?? [],
+    trace: {
+      requestId: result.requestId ?? null,
+      promptHash: result.promptHash ?? null,
+      responseHash: result.responseHash ?? null,
+    },
+  };
+  const content = format === "json" ? JSON.stringify(payload, null, 2) : toCsv(payload);
+  const blob = new Blob([content], { type: format === "json" ? "application/json;charset=utf-8" : "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `khipu-propuesta-${new Date().toISOString().slice(0, 10)}.${format}`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function toCsv(payload: Record<string, unknown>): string {
+  const rows = Object.entries(payload).filter(([, value]) => value !== null && typeof value !== "object");
+  return ["Campo,Valor", ...rows.map(([key, value]) => `${escapeCsv(key)},${escapeCsv(String(value))}`)].join("\\n");
+}
+
+function escapeCsv(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
 function renderStructuredResult(result: AiResult) {
   const structuredData = result.structuredData;
 
@@ -1084,6 +1170,19 @@ function renderStructuredResult(result: AiResult) {
     return (
       <Card>
         <CardContent className="grid gap-4 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => downloadKhipuResult(result, "json")}><Download className="h-4 w-4" />JSON</Button>
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => downloadKhipuResult(result, "csv")}><Download className="h-4 w-4" />CSV</Button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-[var(--app-text-strong)]">Propuesta de APU</h3>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">Revisa los recursos y rendimientos antes de incorporarlos al presupuesto.</p>
+            </div>
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">Revisión requerida</span>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <StructuredMetric label="Unidad" value={structuredData.unit} />
             <StructuredMetric label="Rendimiento" value={structuredData.performance} />
@@ -1096,8 +1195,7 @@ function renderStructuredResult(result: AiResult) {
           </div>
           <StructuredTextList title="Observaciones" items={structuredData.observations} />
           <StructuredTextList title="Supuestos" items={structuredData.assumptions} />
-          <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Aviso de precios</p>
+          <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Aviso de precios</p>
             <p className="mt-1 text-sm leading-5 text-amber-900">
               No se generaron precios exactos porque deben validarse con tu catálogo, mercado local o base histórica.
             </p>
@@ -1111,6 +1209,10 @@ function renderStructuredResult(result: AiResult) {
     return (
       <Card>
         <CardContent className="space-y-4 p-6">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--app-text-strong)]">Hallazgos de revisión</h3>
+            <p className="mt-1 text-sm text-[var(--app-text-muted)]">Valida cada observación con los documentos y datos del proyecto.</p>
+          </div>
           <div className="space-y-3">
             {structuredData.findings.map((finding, index) => (
               <div key={`${finding.description}-${index}`} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
@@ -1122,7 +1224,7 @@ function renderStructuredResult(result: AiResult) {
                 </div>
                 <p className="mt-3 text-sm font-medium text-[var(--app-text-strong)]">{finding.description}</p>
                 <p className="mt-2 text-sm text-[var(--app-text-muted)]">{finding.impact}</p>
-                <p className="mt-2 text-sm text-[var(--app-text)]">Accion recomendada: {finding.recommendedAction}</p>
+                <p className="mt-2 text-sm text-[var(--app-text)]">Acción recomendada: {finding.recommendedAction}</p>
               </div>
             ))}
           </div>
@@ -1145,7 +1247,7 @@ function GenericStructuredResult({ data }: { data: Record<string, unknown> }) {
         <div>
           <h3 className="text-lg font-semibold text-[var(--app-text-strong)]">Detalles de la respuesta</h3>
           <p className="mt-1 text-sm text-[var(--app-text-muted)]">
-            Informacion estructurada devuelta por ChatGPT Bridge para revisar el criterio tecnico completo.
+            Información estructurada devuelta por ChatGPT Bridge para revisar el criterio técnico completo.
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
@@ -1214,16 +1316,21 @@ function StructuredLineItems({ items, title }: { items: AiApuStructuredData["mat
   return (
     <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
       <p className="text-sm font-semibold text-[var(--app-text-strong)]">{title}</p>
-      <div className="mt-3 space-y-3">
-        {items.map((item, index) => (
-          <div key={`${item.description}-${index}`} className="rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] p-3">
-            <p className="text-sm font-medium text-[var(--app-text-strong)]">{item.description}</p>
-            <p className="mt-1 text-xs text-[var(--app-text-muted)]">
-              {item.quantity} {item.unit}
-            </p>
-            {item.notes ? <p className="mt-2 text-xs text-[var(--app-text)]">{item.notes}</p> : null}
-          </div>
-        ))}
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[360px] text-left text-xs">
+          <thead className="border-b border-[var(--app-border)] text-[var(--app-text-muted)]">
+            <tr><th className="pb-2 pr-3 font-semibold">Recurso</th><th className="pb-2 pr-3 font-semibold">Cantidad</th><th className="pb-2 font-semibold">Unidad</th></tr>
+          </thead>
+          <tbody>
+            {items.map((item, index) => (
+              <tr key={`${item.description}-${index}`} className="border-b border-[var(--app-border-soft)] last:border-0">
+                <td className="py-2 pr-3 font-medium text-[var(--app-text-strong)]">{item.description}{item.notes ? <span className="block text-[11px] font-normal text-[var(--app-text-muted)]">{item.notes}</span> : null}</td>
+                <td className="py-2 pr-3 text-[var(--app-text)]">{item.quantity}</td>
+                <td className="py-2 text-[var(--app-text)]">{item.unit}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

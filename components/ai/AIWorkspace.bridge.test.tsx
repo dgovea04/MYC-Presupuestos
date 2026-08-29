@@ -48,7 +48,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getByText("Trabajo activo")).toBeTruthy();
     expect(getTextContaining("Proyecto")).toBeTruthy();
     expect(getTextContaining("Edificio Multifamiliar")).toBeTruthy();
-    expect(getTextContaining("Modulo")).toBeTruthy();
+    expect(getTextContaining("Módulo")).toBeTruthy();
     expect(getTextContaining("APU")).toBeTruthy();
     expect(getTextContaining("Partida seleccionada")).toBeTruthy();
     expect(getTextContaining("Concreto f'c=210")).toBeTruthy();
@@ -57,28 +57,29 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getTextContaining("Costo actual")).toBeTruthy();
     expect(getTextContaining("420")).toBeTruthy();
     expect(getTextContaining("Tabla activa")).toBeTruthy();
-    expect(getTextContaining("Analisis de precios unitarios")).toBeTruthy();
+    expect(getTextContaining("Análisis de precios unitarios")).toBeTruthy();
     expect(queryTextContaining("Preparación local")).toBeNull();
     expect(queryTextContaining("Modelos disponibles para ejecutar Khipu en este equipo.")).toBeNull();
-    expect(getTextContaining("Recomendado")).toBeTruthy();
-    expect(getTextContaining("Ejecucion")).toBeTruthy();
-    expect(getTextContaining("Consulta criterios tecnicos con el contexto activo.")).toBeTruthy();
-    expect(getByText("Chat tecnico")).toBeTruthy();
+    expect(queryTextContaining("Recomendado")).toBeNull();
+    expect(getTextContaining("Ejecución")).toBeTruthy();
+    expect(getTextContaining("Consulta criterios técnicos con el contexto activo.")).toBeTruthy();
+    expect(getByText("Chat técnico")).toBeTruthy();
     expect(getByText("Autocompletar")).toBeTruthy();
     expect(getTextContaining("Proveedor activo")).toBeTruthy();
     expect(getTextContaining("Ollama listo")).toBeTruthy();
     expect(getByText("Contexto de trabajo")).toBeTruthy();
-    expect(getTextContaining("Estos datos guian la respuesta de Khipu")).toBeTruthy();
+    expect(getTextContaining("Estos datos guían la respuesta de Khipu")).toBeTruthy();
     expect(getByText("Actualizar estado")).toBeTruthy();
     expect(getByText("Ollama local")).toBeTruthy();
     expect(getByText("Bridge")).toBeTruthy();
     expect(getButtonByText("Ollama local").getAttribute("aria-pressed")).toBe("true");
     expect(getButtonByText("Bridge").getAttribute("aria-pressed")).toBe("false");
-    expect(getTextContaining("Chat tecnico")).toBeTruthy();
+    expect(getTextContaining("Chat técnico")).toBeTruthy();
     expect(getTextContaining("Generar APU")).toBeTruthy();
     expect(getTextContaining("Revisar presupuesto")).toBeTruthy();
     expect(getTextContaining("Autocompletar")).toBeTruthy();
     expect(getTextContaining("Modelo resuelto")).toBeTruthy();
+    expect(queryTextContaining("Modelos disponibles")).toBeNull();
     expect(getTextContaining("Última latencia")).toBeTruthy();
   });
 
@@ -91,7 +92,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
 
     const { getByText, getButtonByAriaLabel, getTextContaining, getTextareaByLabel } = await renderWorkspace();
 
-    expect(getTextContaining("Consulta criterios tecnicos con el contexto activo.")).toBeTruthy();
+    expect(getTextContaining("Consulta criterios técnicos con el contexto activo.")).toBeTruthy();
 
     await act(async () => {
       getByText("Generar APU").click();
@@ -109,10 +110,10 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
       getByText("Autocompletar").click();
     });
 
-    expect(getTextContaining("Completa descripciones tecnicas sin perder el contexto.")).toBeTruthy();
+    expect(getTextContaining("Completa descripciones técnicas sin perder el contexto.")).toBeTruthy();
 
     await act(async () => {
-      getByText("Chat tecnico").click();
+      getByText("Chat técnico").click();
     });
 
     expect(getTextareaByLabel("Consulta tecnica").value).toBe("Consulta inicial");
@@ -392,7 +393,7 @@ describe("AIWorkspace ChatGPT bridge provider", () => {
     expect(getByText("Consulta persistida")).toBeTruthy();
     expect(queryByText("Consulta corrupta")).toBeNull();
     expect(
-      getTextContaining("Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesion."),
+      getTextContaining("Historial del proyecto; las respuestas de ChatGPT Bridge quedan solo en esta sesión."),
     ).toBeTruthy();
 
     const entryButton1 = findButtonContainingText("Consulta persistida");
@@ -1348,7 +1349,7 @@ async function renderWorkspace(props: Partial<React.ComponentProps<typeof AIWork
     },
     getTextareaByLabel: (label: string) => {
       const labelElement = [...document.body.querySelectorAll("label")].find((candidate) =>
-        candidate.textContent?.includes(label),
+        candidate.textContent?.replace(/\s+/g, " ").includes(label.replace(/\s+/g, " ").replace("tecnica", "técnica")),
       );
       const textarea = labelElement?.querySelector("textarea");
       if (!(textarea instanceof HTMLTextAreaElement)) {

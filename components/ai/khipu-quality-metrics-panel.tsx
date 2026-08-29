@@ -32,7 +32,7 @@ export function KhipuQualityMetricsPanel() {
         setError("");
         const response = await fetch("/api/ai/feedback/user-summary");
         if (!response.ok) {
-          throw new Error("No se pudieron cargar las metricas de calidad.");
+          throw new Error("No se pudieron cargar las métricas de calidad.");
         }
         const payload: ApiResponse = await response.json();
         if (!cancelled) {
@@ -41,7 +41,7 @@ export function KhipuQualityMetricsPanel() {
         }
       } catch (caught) {
         if (!cancelled) {
-          setError(caught instanceof Error ? caught.message : "Error al cargar metricas.");
+          setError(caught instanceof Error ? caught.message : "Error al cargar métricas.");
         }
       } finally {
         if (!cancelled) {
@@ -81,7 +81,7 @@ export function KhipuQualityMetricsPanel() {
         <QualityMetricsEmpty />
       )}
 
-      <FeedbackTrendChart trends={trends} />
+      <div aria-live="polite"><FeedbackTrendChart trends={trends} /></div>
 
       {summary.providerQuality.length > 0 ? (
         <ProviderQualityTable providers={summary.providerQuality} />
