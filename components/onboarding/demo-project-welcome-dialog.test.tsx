@@ -31,9 +31,11 @@ describe("DemoProjectWelcomeDialog", () => {
 
     expect(await screen.findByTestId("demo-project-welcome-dialog")).toBeTruthy();
     expect(screen.getByText("Conoce MC Presupuestos en 5 minutos")).toBeTruthy();
+    expect(screen.getByText(/Proyecto recomendado:/).parentElement?.className).toContain("border-violet-200");
 
     const startLink = screen.getByRole("link", { name: /Comenzar tutorial/i });
     expect(startLink.getAttribute("href")).toBe("/projects/project-demo?demoTour=1");
+    expect(startLink.className).toContain("bg-violet-700");
 
     fireEvent.click(startLink);
 

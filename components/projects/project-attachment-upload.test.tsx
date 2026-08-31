@@ -62,6 +62,7 @@ vi.mock("lucide-react", () => ({
   Paperclip: ({ className }: { className?: string }) => <span data-testid="icon-paperclip" className={className} />,
   Trash2: ({ className }: { className?: string }) => <span data-testid="icon-trash" className={className} />,
   Upload: ({ className }: { className?: string }) => <span data-testid="icon-upload" className={className} />,
+  ChevronDown: ({ className }: { className?: string }) => <span data-testid="icon-chevron-down" className={className} />,
 }));
 
 import { ProjectAttachmentUpload } from "@/components/projects/project-attachment-upload";
@@ -90,8 +91,23 @@ describe("ProjectAttachmentUpload", () => {
   });
 
   describe("initial render", () => {
+    it("starts collapsed and expands on toggle", () => {
+      render(<ProjectAttachmentUpload projectId="proj-1" initialAttachments={[]} />);
+
+      const toggle = screen.getByRole("button", { name: /Archivos adjuntos/ });
+      const content = document.getElementById("archivos-contenido");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(content?.hidden).toBe(true);
+
+      fireEvent.click(toggle);
+
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(content?.hidden).toBe(false);
+    });
+
     it("renders the category selector with all options and OTRO selected by default", () => {
       render(<ProjectAttachmentUpload projectId="proj-1" initialAttachments={[]} />);
+      fireEvent.click(screen.getByRole("button", { name: /Archivos adjuntos/ }));
 
       const select = screen.getByRole("combobox") as HTMLSelectElement;
       expect(select).toBeTruthy();
@@ -104,23 +120,26 @@ describe("ProjectAttachmentUpload", () => {
       expect(screen.getByText("Otro")).toBeTruthy();
     });
 
-    it("renders the upload button", () => {
+    it("renders the upload button after expanding the section", () => {
       render(<ProjectAttachmentUpload projectId="proj-1" initialAttachments={[]} />);
+      fireEvent.click(screen.getByRole("button", { name: /Archivos adjuntos/ }));
 
       expect(screen.getByText("Subir archivo")).toBeTruthy();
       expect(screen.getByTestId("icon-upload")).toBeTruthy();
     });
 
-    it("renders the drag and drop zone", () => {
+    it("renders the drag and drop zone after expanding the section", () => {
       render(<ProjectAttachmentUpload projectId="proj-1" initialAttachments={[]} />);
+      fireEvent.click(screen.getByRole("button", { name: /Archivos adjuntos/ }));
 
       expect(screen.getByText("Arrastra y suelta archivos aquí o usa el botón superior")).toBeTruthy();
       expect(screen.getByText(/PDF, Word, Excel/)).toBeTruthy();
       expect(screen.getByTestId("icon-paperclip")).toBeTruthy();
     });
 
-    it("shows empty state when no attachments are provided", () => {
+    it("shows empty state after expanding when no attachments are provided", () => {
       render(<ProjectAttachmentUpload projectId="proj-1" initialAttachments={[]} />);
+      fireEvent.click(screen.getByRole("button", { name: /Archivos adjuntos/ }));
 
       expect(screen.getByText("No hay archivos adjuntos en este proyecto.")).toBeTruthy();
     });
@@ -214,6 +233,7 @@ describe("ProjectAttachmentUpload", () => {
   describe("category selector", () => {
     it("changes the selected category", () => {
       render(<ProjectAttachmentUpload projectId="proj-1" initialAttachments={[]} />);
+      fireEvent.click(screen.getByRole("button", { name: /Archivos adjuntos/ }));
 
       const select = screen.getByRole("combobox") as HTMLSelectElement;
       fireEvent.change(select, { target: { value: "CONTRATO" } });
@@ -319,6 +339,7 @@ describe("ProjectAttachmentUpload", () => {
         }),
       );
       render(<ProjectAttachmentUpload projectId="proj-1" initialAttachments={[]} />);
+      fireEvent.click(screen.getByRole("button", { name: /Archivos adjuntos/ }));
 
       // Change category to CONTRATO
       fireEvent.change(screen.getByRole("combobox"), { target: { value: "CONTRATO" } });

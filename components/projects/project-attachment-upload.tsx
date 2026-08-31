@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { FileText, Paperclip, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CollapsibleCardSection } from "@/components/ui/collapsible-card-section";
 import { Label } from "@/components/ui/label";
 import { projectAttachmentCategoryValues } from "@/lib/validations/attachment";
 import { attachmentCategoryLabel } from "@/lib/projects/attachment-labels";
@@ -103,7 +104,12 @@ export function ProjectAttachmentUpload({ projectId, initialAttachments }: Proje
   };
 
   return (
-    <div className="space-y-4">
+    <CollapsibleCardSection
+      id="archivos"
+      title="Archivos adjuntos"
+      description="Planos, especificaciones, contratos, memorias y otros documentos del proyecto."
+    >
+      <div className="space-y-4">
       <div className="flex items-end gap-3">
         <div className="flex-1 space-y-2">
           <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]">
@@ -192,7 +198,8 @@ export function ProjectAttachmentUpload({ projectId, initialAttachments }: Proje
           No hay archivos adjuntos en este proyecto.
         </p>
       )}
-    </div>
+      </div>
+    </CollapsibleCardSection>
   );
 }
 

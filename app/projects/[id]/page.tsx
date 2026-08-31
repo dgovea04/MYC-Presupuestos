@@ -248,31 +248,19 @@ export default async function ProjectDetailPage({
           </Card>
         </section>
 
-        <section id="archivos">
-          <Card className="theme-surface-card rounded-2xl">
-            <CardHeader>
-              <CardTitle>Archivos adjuntos</CardTitle>
-              <CardDescription>
-                Planos, especificaciones, contratos, memorias y otros documentos del proyecto.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ProjectAttachmentUpload
-                projectId={project.id}
-                initialAttachments={attachments.map((a: Awaited<ReturnType<typeof getProjectAttachments>>[number]) => ({
-                  id: a.id,
-                  fileName: a.fileName,
-                  fileType: a.fileType,
-                  fileSize: a.fileSize,
-                  filePath: a.filePath,
-                  category: a.category as ProjectAttachmentCategory,
-                  createdAt: a.createdAt.toISOString(),
-                  user: a.user ? { name: a.user.name } : null,
-                }))}
-              />
-            </CardContent>
-          </Card>
-        </section>
+        <ProjectAttachmentUpload
+          projectId={project.id}
+          initialAttachments={attachments.map((a: Awaited<ReturnType<typeof getProjectAttachments>>[number]) => ({
+            id: a.id,
+            fileName: a.fileName,
+            fileType: a.fileType,
+            fileSize: a.fileSize,
+            filePath: a.filePath,
+            category: a.category as ProjectAttachmentCategory,
+            createdAt: a.createdAt.toISOString(),
+            user: a.user ? { name: a.user.name } : null,
+          }))}
+        />
 
         <section id="compartir">
           <ProjectSharePanel projectId={project.id} companyId={project.companyId} />

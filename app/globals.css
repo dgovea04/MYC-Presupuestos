@@ -6,12 +6,12 @@ html {
   scroll-behavior: smooth;
 }
 
-.demo-tour-highlight-emerald {
+.demo-tour-highlight-violet {
   position: relative;
   z-index: 61;
   scroll-margin-top: 140px;
   border-radius: 0.75rem;
-  outline: 3px solid var(--color-emerald-700, #047857);
+  outline: 3px solid var(--color-violet-700, #6d28d9);
   outline-offset: 4px;
 }
 
@@ -25,7 +25,7 @@ html {
   white-space: nowrap;
   border: none;
   border-radius: 0.75rem;
-  background: var(--color-emerald-700, #047857);
+  background: var(--color-violet-700, #6d28d9);
   padding: 0.55rem 0.9rem;
   color: #ffffff;
   font-size: 0.8rem;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Circle, HelpCircle, RotateCcw, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Circle, HelpCircle, RotateCcw, Sparkles, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -176,7 +176,7 @@ export function DemoProjectTour({
     let retryTimeout: number | null = null;
 
     function removeTargetDecorations() {
-      highlightedTarget?.classList.remove("demo-tour-highlight-emerald");
+      highlightedTarget?.classList.remove("demo-tour-highlight-violet");
       clickLabel?.remove();
       highlightedTarget = null;
       clickLabel = null;
@@ -218,11 +218,11 @@ export function DemoProjectTour({
 
       removeTargetDecorations();
       highlightedTarget = nextTarget;
-      highlightedTarget.classList.add("demo-tour-highlight-emerald");
+      highlightedTarget.classList.add("demo-tour-highlight-violet");
       clickLabel = document.createElement("span");
       clickLabel.className = "demo-tour-click-label-modern";
       clickLabel.textContent = "Click aquí";
-      clickLabel.style.background = "var(--color-emerald-700, #047857)";
+      clickLabel.style.background = "var(--color-violet-700, #6d28d9)";
       clickLabel.style.border = "none";
       clickLabel.style.color = "#ffffff";
       clickLabel.setAttribute("aria-hidden", "true");
@@ -257,22 +257,34 @@ export function DemoProjectTour({
   return (
     <>
       {showGuideCard ? (
-        <Card className="theme-surface-card rounded-2xl border-[var(--app-border-soft)] shadow-[0_18px_40px_-30px_rgba(37,99,235,0.28)] dark:shadow-black/30">
-          <CardHeader className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-base">5 minutos para conocer MC Presupuestos</CardTitle>
-                <Badge variant="secondary">Demo</Badge>
+        <Card className="overflow-hidden rounded-2xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] text-[var(--app-text)] shadow-sm">
+          <CardHeader className="relative space-y-4 border-b border-[var(--app-border-soft)] bg-[var(--color-violet-100)]/60 pb-5">
+            <div className="relative flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-700/25 bg-violet-700/10 text-violet-700 dark:border-violet-300/25 dark:bg-violet-300/10 dark:text-violet-300">
+                  <Sparkles className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-700 dark:text-violet-300">Ruta guiada</p>
+                  <CardTitle className="mt-1 text-base text-[var(--app-text-strong)]">5 minutos para conocer MC Presupuestos</CardTitle>
+                </div>
+                <Badge className="border-[var(--app-border-soft)] bg-[var(--app-surface)] text-violet-700 hover:bg-[var(--app-surface-muted)] dark:text-violet-300">Demo</Badge>
               </div>
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-primary-soft)]">
+              <span className="rounded-full border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-bold text-[var(--app-text)]">
                 {completedCount}/{steps.length} completados
               </span>
             </div>
-            <p className="text-sm text-[var(--app-text-muted)]">
-              No solo leas la guía: sigue los pasos y te indicaremos exactamente dónde hacer clic.
+            <p className="relative max-w-2xl text-sm leading-6 text-[var(--app-text-muted)]">
+              Sigue una ruta práctica por presupuesto, APU, fórmula y exportación. El sistema te señalará el siguiente clic.
             </p>
+            <div className="relative h-1.5 overflow-hidden rounded-full bg-[var(--app-border-soft)]" aria-label={`${completedCount} de ${steps.length} pasos completados`}>
+              <div
+                className="h-full rounded-full bg-violet-700 transition-[width] duration-500 dark:bg-violet-400"
+                style={{ width: `${steps.length ? (completedCount / steps.length) * 100 : 0}%` }}
+              />
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="ui-card-content space-y-4 bg-[color-mix(in_oklab,var(--color-violet-100)_60%,transparent)] p-5">
             <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {steps.map((step, index) => {
                 const isStepCompleted = completed.includes(step.id);
@@ -280,18 +292,20 @@ export function DemoProjectTour({
                   <li
                     key={step.id}
                     className={cn(
-                      "rounded-2xl border px-3 py-3 text-sm transition",
+                      "relative rounded-xl border px-3 py-3 text-sm transition duration-200 hover:-translate-y-0.5",
                       isStepCompleted
-                        ? "border-emerald-200 bg-emerald-50/70 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200"
-                        : "border-[var(--app-border-soft)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)]",
+                        ? "border-[var(--color-violet-300)] bg-[var(--color-violet-300)] text-violet-900 dark:text-violet-950"
+                        : activeStep?.id === step.id
+                          ? "border-violet-700/60 bg-[var(--color-violet-100)] text-[var(--app-text-strong)] shadow-sm dark:border-violet-400/60"
+                          : "border-[var(--app-border-soft)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-violet-700/40 hover:bg-[var(--app-surface-muted)] dark:hover:border-violet-400/40",
                     )}
                     data-testid={`demo-tour-step-${step.id}`}
                   >
                     <div className="flex items-start gap-2">
                       {isStepCompleted ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden="true" />
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden="true" />
                       ) : (
-                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--app-text-subtle)]" aria-hidden="true" />
+                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--app-text-muted)]" aria-hidden="true" />
                       )}
                       <span>
                         <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-current/70">Paso {index + 1}</span>
@@ -304,7 +318,7 @@ export function DemoProjectTour({
             </ol>
             {!isOpen ? (
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="button" className="gap-2" onClick={() => setIsOpen(true)}>
+                <Button type="button" className="gap-2 bg-violet-700 text-white hover:bg-violet-800 focus-visible:ring-violet-500/70" onClick={() => setIsOpen(true)}>
                   <HelpCircle className="h-4 w-4" />
                   {isComplete ? "Repasar tutorial" : "Abrir tutorial interactivo"}
                 </Button>
@@ -319,10 +333,10 @@ export function DemoProjectTour({
         <Button
           type="button"
           variant="outline"
-          className="fixed bottom-4 right-4 z-[100] gap-2 rounded-full border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)] shadow-lg"
+          className="fixed bottom-4 right-4 z-[100] gap-2 rounded-full border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)] shadow-lg focus-visible:ring-violet-500/70"
           onClick={() => setIsOpen(true)}
         >
-          <HelpCircle className="h-4 w-4 text-[var(--app-primary-soft)]" />
+          <HelpCircle className="h-4 w-4 text-violet-700 dark:text-violet-300" />
           Guía interactiva
         </Button>
       ) : null}
@@ -331,11 +345,11 @@ export function DemoProjectTour({
         <aside
           aria-live="polite"
           aria-label="Tutorial interactivo del proyecto demo"
-          className="theme-surface-card fixed bottom-4 right-4 z-[100] w-[min( calc(100vw-2rem),24rem)] rounded-2xl border border-[var(--app-border-soft)] p-4 shadow-2xl shadow-slate-950/20 dark:shadow-black/40"
+          className="theme-surface-card fixed bottom-4 right-4 z-[125] w-[min( calc(100vw-2rem),24rem)] rounded-2xl border border-[var(--app-border-soft)] p-4 shadow-2xl shadow-slate-950/20 dark:shadow-black/40"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--app-primary-soft)]">Guía interactiva</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">Guía interactiva</p>
               <p className="mt-1 font-semibold text-[var(--app-text-strong)]">
                 {isComplete ? "¡Tutorial completado!" : `Paso ${completedCount + 1} de ${steps.length}`}
               </p>
@@ -355,7 +369,7 @@ export function DemoProjectTour({
               <p className="text-sm leading-6 text-[var(--app-text-muted)]">
                 Ya recorriste el flujo principal: presupuesto, estructura, APU, fórmula polinómica y exportación.
               </p>
-              <Button type="button" variant="outline" className="w-full gap-2" onClick={resetTour}>
+              <Button type="button" variant="outline" className="w-full gap-2 border-[var(--app-border-soft)] bg-[var(--app-surface)] text-[var(--app-text)] hover:bg-[var(--app-surface-muted)]" onClick={resetTour}>
                 <RotateCcw className="h-4 w-4" />
                 Reiniciar tutorial
               </Button>
@@ -366,18 +380,18 @@ export function DemoProjectTour({
                 <p className="font-medium text-[var(--app-text-strong)]">{activeStep.title}</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--app-text-muted)]">{activeStep.description}</p>
               </div>
-              <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-xs leading-5 text-sky-900 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-200">
+              <div className="rounded-xl border border-violet-700/25 bg-[var(--color-violet-100)] px-3 py-2.5 text-xs leading-5 text-[var(--app-text)] dark:border-violet-300/25">
                 <span className="font-semibold">Qué debes hacer:</span> {activeStep.help}
               </div>
               {activeStepOnCurrentRoute ? (
-                <p className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                <p className="flex items-center gap-2 text-xs font-medium text-violet-700 dark:text-violet-300">
                   <CheckCircle2 className="h-4 w-4" />
                   El botón correcto está resaltado en la pantalla.
                 </p>
               ) : (
                 <Link
                   href={activeStep.route}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-700 bg-violet-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-800 active:translate-y-px"
                 >
                   Ir al paso <ChevronRight className="h-4 w-4" />
                 </Link>

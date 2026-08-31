@@ -81,14 +81,14 @@ export function DemoProjectWelcomeDialog({
           className="theme-surface-card fixed left-1/2 top-1/2 z-[111] w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[var(--app-border-soft)] p-6 shadow-[0_28px_80px_-34px_rgba(15,23,42,0.5)] outline-none sm:p-7"
         >
           <div className="flex items-start justify-between gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
               <Building2 className="h-6 w-6" aria-hidden="true" />
             </div>
             <Dialog.Close asChild>
               <button
                 type="button"
                 aria-label="Cerrar introducción al proyecto demo"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -103,7 +103,7 @@ export function DemoProjectWelcomeDialog({
             APU, fórmula polinómica y exportación.
           </Dialog.Description>
 
-          <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3 text-sm text-sky-900 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-200">
+          <div className="mt-5 rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3 text-sm text-violet-900 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-200">
             <span className="font-semibold">Proyecto recomendado:</span> {projectName}
           </div>
 
@@ -114,7 +114,7 @@ export function DemoProjectWelcomeDialog({
             <Link
               href={`/projects/${projectId}?demoTour=1`}
               onClick={() => closeWithStatus("started")}
-              className="ui-button ui-button-default inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
+              className="ui-button ui-button-default inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/70"
             >
               Comenzar tutorial
               <ArrowRight className="h-4 w-4" aria-hidden="true" />

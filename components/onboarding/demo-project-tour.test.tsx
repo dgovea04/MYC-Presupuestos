@@ -38,13 +38,15 @@ describe("DemoProjectTour", () => {
     expect(await screen.findByText("Paso 2 de 5")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Abrir tutorial interactivo" })).toBeNull();
     expect(document.querySelector(".demo-tour-click-label-modern")?.textContent).toBe("Click aquí");
-    expect(screen.getByTestId("demo-tour-step-general-budget").className).toContain("border-emerald-200");
+    expect(screen.getByTestId("demo-tour-step-general-budget").className).toContain("border-[var(--color-violet-300)]");
+    expect(screen.getByTestId("demo-tour-step-general-budget").className).toContain("bg-[var(--color-violet-300)]");
 
     fireEvent.click(screen.getByRole("button", { name: "Abrir Estructuras" }));
 
     await waitFor(() => {
       expect(screen.getByText("Paso 3 de 5")).toBeTruthy();
-      expect(screen.getByTestId("demo-tour-step-structures").className).toContain("border-emerald-200");
+      expect(screen.getByTestId("demo-tour-step-structures").className).toContain("border-[var(--color-violet-300)]");
+      expect(screen.getByTestId("demo-tour-step-structures").className).toContain("bg-[var(--color-violet-300)]");
     });
   });
 

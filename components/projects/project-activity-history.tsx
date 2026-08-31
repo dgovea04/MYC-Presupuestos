@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Clock3, History, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCardSection } from "@/components/ui/collapsible-card-section";
 import { Input } from "@/components/ui/input";
 import { SectionPagination } from "@/components/ui/section-pagination";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -95,22 +95,16 @@ export function ProjectActivityHistory({
   }, [events]);
 
   return (
-    <section id="historial">
-      <Card className="theme-surface-card">
-        <CardHeader>
-          <div className="flex items-start gap-3">
-            <div className="theme-soft-icon-panel rounded-2xl border p-2">
-              <History className="h-5 w-5" />
-            </div>
-            <div>
-              <CardTitle>Historial del proyecto</CardTitle>
-              <CardDescription>
-                Trazabilidad reciente de cambios registrados para la obra y sus presupuestos.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+    <CollapsibleCardSection
+      id="historial"
+      title="Historial del proyecto"
+      description="Trazabilidad reciente de cambios registrados para la obra y sus presupuestos."
+      icon={
+        <div className="theme-soft-icon-panel rounded-2xl border p-2">
+          <History className="h-5 w-5" />
+        </div>
+      }
+    >
           {events.length > 0 && (
             <div className="mb-4 flex flex-wrap gap-2">
               {FILTER_LABELS.map((label) => (
@@ -197,8 +191,6 @@ export function ProjectActivityHistory({
               </p>
             </div>
           )}
-        </CardContent>
-      </Card>
-    </section>
+    </CollapsibleCardSection>
   );
 }
