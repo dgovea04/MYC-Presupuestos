@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AiAutocompleteStructuredData } from "@/lib/ai/types";
 
 const aiLineItemSchema = z.object({
   description: z.string().trim().min(1),
@@ -27,6 +28,63 @@ export const aiAutocompleteStructuredSchema = z.object({
   assumptions: z.array(z.string().trim().min(1)),
   requiresHumanReview: z.literal(true),
 });
+
+export function parseAutocompleteStructuredData(answer: string): AiAutocompleteStructuredData | null {
+  try {
+    const parsedJson: unknown = JSON.parse(extractJsonObjectFromText(answer));
+    if (!isRecord(parsedJson) || parsedJson.requiresHumanReview !== true) return null;
+
+    const suggestion = normalizeAutocompleteSuggestion(parsedJson.suggestion);
+    if (!suggestion) return null;
+
+    const alternatives = Array.isArray(parsedJson.alternatives)
+      ? parsedJson.alternatives.map(normalizeAutocompleteSuggestion).filter((item): item is NonNullable<typeof item> => item !== null)
+      : [];
+    const normalized = {
+      answer: readNonEmptyString(parsedJson.answer),
+      input: readNonEmptyString(parsedJson.input),
+      suggestion,
+      alternatives,
+      assumptions: readStringArray(parsedJson.assumptions),
+      requiresHumanReview: true as const,
+    };
+    const result = aiAutocompleteStructuredSchema.safeParse(normalized);
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAutocompleteSuggestion(value: unknown) {
+  if (!isRecord(value)) return null;
+  const description = readNonEmptyString(value.description);
+  const unit = readNonEmptyString(value.unit);
+  if (!description || !unit) return null;
+
+  return {
+    ...(readNonEmptyString(value.id) ? { id: readNonEmptyString(value.id) } : {}),
+    ...(readNonEmptyString(value.code) ? { code: readNonEmptyString(value.code) } : {}),
+    description,
+    unit,
+    ...(readNonEmptyString(value.category) ? { category: readNonEmptyString(value.category) } : {}),
+    ...(readNonEmptyString(value.apuId) ? { apuId: readNonEmptyString(value.apuId) } : {}),
+    ...(readNonEmptyString(value.apuDescription) ? { apuDescription: readNonEmptyString(value.apuDescription) } : {}),
+    matchType: value.matchType === "existing" ? "existing" as const : "new" as const,
+    missingFields: readStringArray(value.missingFields),
+  };
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()) : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export const aiApuStructuredSchema = z.object({
   answer: z.string().trim().min(1),

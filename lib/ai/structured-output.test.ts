@@ -2,12 +2,52 @@ import { describe, expect, it } from "vitest";
 import {
   aiApuCatalogProposalSchema,
   aiApuStructuredSchema,
+  parseAutocompleteStructuredData,
   aiReviewStructuredSchema,
   extractJsonObjectFromText,
   parseStructuredAiOutput,
 } from "@/lib/ai/structured-output";
 
 describe("AI structured output", () => {
+  it("normalizes a raw autocomplete JSON response for presentation", () => {
+    const parsed = parseAutocompleteStructuredData(
+      JSON.stringify({
+        answer: "Excavacion manual en",
+        input: "Excavacion manual en",
+        suggestion: {
+          id: "",
+          code: "",
+          description: "Excavacion manual en terreno normal",
+          unit: "m3",
+          category: "Movimiento de tierras",
+          apuId: "",
+          apuDescription: "",
+          matchType: "new",
+          missingFields: ["tipo de terreno"],
+        },
+        alternatives: [{ description: "Excavacion manual en zanja", unit: "m3", category: "Movimiento de tierras" }],
+        assumptions: ["Se asume terreno normal"],
+        requiresHumanReview: true,
+      }),
+    );
+
+    expect(parsed?.suggestion).toEqual(
+      expect.objectContaining({
+        description: "Excavacion manual en terreno normal",
+        unit: "m3",
+        matchType: "new",
+      }),
+    );
+    expect(parsed?.suggestion).not.toHaveProperty("id");
+    expect(parsed?.alternatives[0]).toEqual(
+      expect.objectContaining({
+        description: "Excavacion manual en zanja",
+        matchType: "new",
+        missingFields: [],
+      }),
+    );
+  });
+
   it("extracts a JSON object embedded inside a model response", () => {
     expect(extractJsonObjectFromText("Analisis:\n{\"answer\":\"OK\",\"unit\":\"m3\"}\nFin")).toBe(
       "{\"answer\":\"OK\",\"unit\":\"m3\"}",

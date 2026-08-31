@@ -49,6 +49,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { AiApuStructuredData, AiAutocompleteStructuredData, AiReviewStructuredData } from "@/lib/ai/types";
+import { parseAutocompleteStructuredData } from "@/lib/ai/structured-output";
 import { isKhipuActionArray, getActionLabel, getActionDescription } from "@/lib/ai/actions";
 import type { KhipuAction } from "@/lib/ai/actions";
 import { useKhipuActionDispatcher } from "@/hooks/use-khipu-action-dispatcher";
@@ -471,7 +472,7 @@ export function AiAssistantPanel({
             {controller.result ? (
               <div className="space-y-2">
                 <AIMessage
-                  content={controller.result.answer}
+                  content={getDisplayAnswer(controller.result)}
                   model={controller.result.model}
                   streaming={controller.streaming}
                 />
@@ -917,7 +918,7 @@ export function AiAssistantPanel({
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <AIMessage
-                content={controller.result.answer}
+                content={getDisplayAnswer(controller.result)}
                 model={controller.result.model}
                 streaming={controller.streaming}
               />
@@ -1161,7 +1162,7 @@ function escapeCsv(value: string): string {
 }
 
 function renderStructuredResult(result: AiResult) {
-  const structuredData = result.structuredData;
+  const structuredData = getStructuredDataForDisplay(result);
 
   if (!isRecord(structuredData)) {
     return null;
@@ -1276,6 +1277,16 @@ function renderStructuredResult(result: AiResult) {
       </CardContent>
     </Card>
   );
+}
+
+function getStructuredDataForDisplay(result: AiResult): Record<string, unknown> | null {
+  if (isRecord(result.structuredData)) return result.structuredData;
+  return parseAutocompleteStructuredData(result.answer);
+}
+
+function getDisplayAnswer(result: AiResult): string {
+  const autocompleteData = parseAutocompleteStructuredData(result.answer);
+  return autocompleteData?.answer ?? result.answer;
 }
 
 function GenericStructuredResult({ data }: { data: Record<string, unknown> }) {

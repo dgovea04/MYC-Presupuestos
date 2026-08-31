@@ -150,6 +150,62 @@ async function renderPanel(props: Partial<React.ComponentProps<typeof AiAssistan
 }
 
 describe("AiAssistantPanel autocomplete actions", () => {
+  it("formats a raw autocomplete JSON answer as a partida suggestion card", async () => {
+    const rawAnswer = JSON.stringify({
+      answer: "Excavacion manual en",
+      input: "Excavacion manual en",
+      suggestion: {
+        id: "",
+        code: "",
+        description: "Excavacion manual en terreno normal",
+        unit: "m3",
+        category: "Movimiento de tierras",
+        apuId: "",
+        apuDescription: "",
+        matchType: "new",
+        missingFields: ["tipo de terreno", "profundidad de excavacion"],
+      },
+      alternatives: [
+        {
+          description: "Excavacion manual en zanja para cimentacion",
+          unit: "m3",
+          category: "Movimiento de tierras",
+        },
+      ],
+      assumptions: ["Se asume excavacion en terreno normal"],
+      requiresHumanReview: true,
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const root = createRoot(container);
+    (container as HTMLDivElement & { __root?: typeof root }).__root = root;
+
+    await act(async () => {
+      root.render(
+        <KhipuActionRegistryProvider>
+          <AiAssistantPanel
+            controller={createMockController({
+              activeAction: "autocomplete",
+              result: {
+                answer: rawAnswer,
+                model: "test",
+                requestedModel: "test",
+                fallbackUsed: false,
+                warnings: [],
+              },
+            })}
+            layout="page"
+          />
+        </KhipuActionRegistryProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain("Nueva partida propuesta");
+    expect(container.textContent).toContain("Excavacion manual en terreno normal");
+    expect(container.textContent).not.toContain('"suggestion"');
+  });
+
   it("opens the partida form with the structured suggestion", async () => {
     const suggestion: AiAutocompletePartidaSuggestion = {
       description: "Acero corrugado fy = 4200 kg/cm² de Ø 1/2” para columnas",
