@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MYCBridgeState } from "@/lib/ai/myc-bridge-client";
 import type {
   AiApuStructuredData,
+  AiAutocompleteStructuredData,
   AiContext,
   AiEndpointResult,
   AiReviewStructuredData,
@@ -669,4 +670,19 @@ export function hasApuStructuredShape(value: Record<string, unknown>): value is 
 
 export function hasReviewStructuredShape(value: Record<string, unknown>): value is AiReviewStructuredData {
   return Array.isArray(value.findings) && Array.isArray(value.assumptions);
+}
+
+export function hasAutocompleteStructuredShape(value: Record<string, unknown>): value is AiAutocompleteStructuredData {
+  return (
+    typeof value.answer === "string" &&
+    typeof value.input === "string" &&
+    isRecord(value.suggestion) &&
+    typeof value.suggestion.description === "string" &&
+    typeof value.suggestion.unit === "string" &&
+    (value.suggestion.matchType === "existing" || value.suggestion.matchType === "new") &&
+    Array.isArray(value.suggestion.missingFields) &&
+    Array.isArray(value.alternatives) &&
+    Array.isArray(value.assumptions) &&
+    value.requiresHumanReview === true
+  );
 }

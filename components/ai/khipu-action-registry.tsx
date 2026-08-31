@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode, useSyncExternalStore } from "react";
+import type { AiAutocompletePartidaSuggestion } from "@/lib/ai/types";
 
 /**
  * Callbacks that page-level editors provide so that the global Khipu
@@ -16,6 +17,8 @@ export type KhipuActionRegistry = {
   onNavigate?: (href: string) => void;
   /** Open the APU editor sheet for a partida within a budget. */
   onOpenApuEditor?: (partidaId: string, budgetId: string) => void;
+  onOpenPartidaForm?: (suggestion: AiAutocompletePartidaSuggestion) => void;
+  onOpenPartidaApu?: (suggestion: AiAutocompletePartidaSuggestion) => void;
 };
 
 // ── Module-level mutable state ──────────────────────────────────────
@@ -53,20 +56,24 @@ export function KhipuActionRegistryProvider({
   children,
   onNavigate,
   onOpenApuEditor,
+  onOpenPartidaForm,
+  onOpenPartidaApu,
 }: {
   children: ReactNode;
   onNavigate?: (href: string) => void;
   onOpenApuEditor?: (partidaId: string, budgetId: string) => void;
+  onOpenPartidaForm?: (suggestion: AiAutocompletePartidaSuggestion) => void;
+  onOpenPartidaApu?: (suggestion: AiAutocompletePartidaSuggestion) => void;
 }) {
   useEffect(() => {
-    registryState = { onNavigate, onOpenApuEditor };
+    registryState = { onNavigate, onOpenApuEditor, onOpenPartidaForm, onOpenPartidaApu };
     notify();
 
     return () => {
       registryState = {};
       notify();
     };
-  }, [onNavigate, onOpenApuEditor]);
+  }, [onNavigate, onOpenApuEditor, onOpenPartidaForm, onOpenPartidaApu]);
 
   return <>{children}</>;
 }

@@ -44,6 +44,25 @@ export const APU_OUTPUT_JSON_SHAPE = {
   assumptions: ["..."],
 };
 
+export const AUTOCOMPLETE_OUTPUT_JSON_SHAPE = {
+  answer: "descripcion tecnica corta",
+  input: "texto original",
+  suggestion: {
+    id: "id literal solo si existe",
+    code: "codigo literal solo si existe",
+    description: "descripcion tecnica de la partida",
+    unit: "unidad sugerida",
+    category: "categoria sugerida",
+    apuId: "id literal solo si existe",
+    apuDescription: "descripcion del APU solo si existe",
+    matchType: "existing|new",
+    missingFields: ["datos que el usuario debe confirmar"],
+  },
+  alternatives: [],
+  assumptions: ["supuestos y validaciones requeridas"],
+  requiresHumanReview: true,
+};
+
 export const REVIEW_OUTPUT_JSON_SHAPE = {
   answer: "resumen corto",
   findings: [

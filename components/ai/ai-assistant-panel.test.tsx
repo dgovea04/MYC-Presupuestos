@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiAssistantPanel } from "@/components/ai/ai-assistant-panel";
 import type { AiAssistantControllerViewModel } from "@/components/ai/use-ai-assistant-controller";
+import { KhipuActionRegistryProvider } from "@/components/ai/khipu-action-registry";
+import type { AiAutocompletePartidaSuggestion } from "@/lib/ai/types";
 
 vi.mock("framer-motion", () => {
   return {
@@ -112,12 +114,13 @@ async function renderPanel(props: Partial<React.ComponentProps<typeof AiAssistan
   (container as HTMLDivElement & { __root?: typeof root }).__root = root;
 
   await act(async () => {
-    root.render(
-      <AiAssistantPanel
-        controller={createMockController()}
-        layout="floating"
-        {...props}
-      />,
+    root.render(        <KhipuActionRegistryProvider>
+          <AiAssistantPanel
+            controller={createMockController()}
+            layout="floating"
+            {...props}
+          />
+        </KhipuActionRegistryProvider>,
     );
   });
 
@@ -145,6 +148,45 @@ async function renderPanel(props: Partial<React.ComponentProps<typeof AiAssistan
     },
   };
 }
+
+describe("AiAssistantPanel autocomplete actions", () => {
+  it("opens the partida form with the structured suggestion", async () => {
+    const suggestion: AiAutocompletePartidaSuggestion = {
+      description: "Acero corrugado fy = 4200 kg/cm² de Ø 1/2” para columnas",
+      unit: "kg",
+      matchType: "new",
+      missingFields: ["Metrado"],
+    };
+    const onOpenPartidaForm = vi.fn();
+    const controller = createMockController({
+      result: {
+        answer: suggestion.description,
+        model: "test",
+        requestedModel: "test",
+        fallbackUsed: false,
+        warnings: [],
+        structuredData: {
+          answer: suggestion.description,
+          input: "fierro 1/2 columnas",
+          suggestion,
+          alternatives: [],
+          assumptions: [],
+          requiresHumanReview: true,
+        },
+      },
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const root = createRoot(container);
+    (container as HTMLDivElement & { __root?: typeof root }).__root = root;
+    await act(async () => root.render(<KhipuActionRegistryProvider onOpenPartidaForm={onOpenPartidaForm}><AiAssistantPanel controller={controller} layout="page" /></KhipuActionRegistryProvider>));
+    const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent?.includes("Crear partida"));
+    expect(button).toBeTruthy();
+    await act(async () => (button as HTMLButtonElement).click());
+    expect(onOpenPartidaForm).toHaveBeenCalledWith(suggestion);
+  });
+});
 
 describe("AiAssistantPanel history collapse", () => {
   describe("floating layout", () => {

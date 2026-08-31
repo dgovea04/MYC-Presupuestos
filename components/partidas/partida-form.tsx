@@ -7,14 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormActionBar, FormSectionPanel } from "@/components/ui/operational-surfaces";
 import { Label } from "@/components/ui/label";
+import type { AiAutocompletePartidaSuggestion } from "@/lib/ai/types";
 import type { CatalogPartidaPatchResult, CatalogPartidaRecord, CatalogPartidaStatePatch } from "@/types/partida";
 
 export function PartidaForm({
   onCreated,
   onCancel,
+  initialSuggestion,
 }: {
   onCreated?: (partida: CatalogPartidaRecord) => void;
   onCancel?: () => void;
+  initialSuggestion?: AiAutocompletePartidaSuggestion | null;
 }) {
   const formRef = useRef<HTMLFormElement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,11 +88,11 @@ export function PartidaForm({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="description">Descripcion</Label>
-            <Input id="description" name="description" required />
+            <Input id="description" name="description" defaultValue={initialSuggestion?.description ?? ""} required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="unit">Unidad</Label>
-            <Input id="unit" name="unit" required />
+            <Input id="unit" name="unit" defaultValue={initialSuggestion?.unit ?? ""} required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="performance">Rendimiento</Label>

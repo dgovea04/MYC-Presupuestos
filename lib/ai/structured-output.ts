@@ -7,6 +7,27 @@ const aiLineItemSchema = z.object({
   notes: z.string().trim().min(1).optional(),
 });
 
+const aiAutocompletePartidaSuggestionSchema = z.object({
+  id: z.string().trim().min(1).optional(),
+  code: z.string().trim().min(1).optional(),
+  description: z.string().trim().min(1),
+  unit: z.string().trim().min(1),
+  category: z.string().trim().min(1).optional(),
+  apuId: z.string().trim().min(1).optional(),
+  apuDescription: z.string().trim().min(1).optional(),
+  matchType: z.enum(["existing", "new"]),
+  missingFields: z.array(z.string().trim().min(1)),
+});
+
+export const aiAutocompleteStructuredSchema = z.object({
+  answer: z.string().trim().min(1),
+  input: z.string().trim().min(1),
+  suggestion: aiAutocompletePartidaSuggestionSchema,
+  alternatives: z.array(aiAutocompletePartidaSuggestionSchema),
+  assumptions: z.array(z.string().trim().min(1)),
+  requiresHumanReview: z.literal(true),
+});
+
 export const aiApuStructuredSchema = z.object({
   answer: z.string().trim().min(1),
   unit: z.string().trim().min(1),

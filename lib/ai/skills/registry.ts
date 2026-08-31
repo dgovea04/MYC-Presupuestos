@@ -6,7 +6,7 @@ import {
   buildTaskPayloadMessages,
   REVIEW_OUTPUT_JSON_SHAPE,
 } from "@/lib/ai/prompts";
-import { aiApuStructuredSchema, aiReviewStructuredSchema } from "@/lib/ai/structured-output";
+import { aiApuStructuredSchema, aiAutocompleteStructuredSchema, aiReviewStructuredSchema } from "@/lib/ai/structured-output";
 import { PDF_IMPORT_OUTPUT_JSON_SHAPE } from "@/lib/pdf-import/prompts";
 import { buildKhipuTaskPayload } from "@/lib/ai/task-payloads";
 import type { KhipuAiTask } from "@/lib/ai/gateway/types";
@@ -79,8 +79,9 @@ const SKILLS: KhipuSkill[] = [
     id: "skill-autocomplete",
     tasks: ["autocomplete"],
     schemaName: "autocomplete_text_v1",
+    schema: aiAutocompleteStructuredSchema,
     instruction:
-      "skill-autocomplete: Completa texto tecnico breve y reutilizable, sin explicaciones adicionales.",
+      "skill-autocomplete: Devuelve una sugerencia estructurada de partida utilizable. Busca coincidencias en el contexto, evita duplicados y no inventes ids, códigos, APUs, metrados, precios ni rendimientos.",
   }),
 ];
 
@@ -157,6 +158,25 @@ function getOutputShapeBlock(schemaName: AiOutputSchemaName): string {
       return buildOutputJsonShapeBlock(PDF_IMPORT_OUTPUT_JSON_SHAPE);
     case "apu_generation_v1":
       return buildOutputJsonShapeBlock(APU_OUTPUT_JSON_SHAPE);
+    case "autocomplete_text_v1":
+      return buildOutputJsonShapeBlock({
+        answer: "descripcion tecnica corta",
+        input: "texto original",
+        suggestion: {
+          id: "id literal solo si existe",
+          code: "codigo literal solo si existe",
+          description: "descripcion tecnica de la partida",
+          unit: "unidad sugerida",
+          category: "categoria sugerida",
+          apuId: "id literal solo si existe",
+          apuDescription: "descripcion del APU solo si existe",
+          matchType: "existing|new",
+          missingFields: ["datos a confirmar"],
+        },
+        alternatives: [],
+        assumptions: ["supuestos"],
+        requiresHumanReview: true,
+      });
     default:
       return "";
   }

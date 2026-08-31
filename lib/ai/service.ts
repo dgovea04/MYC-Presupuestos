@@ -13,7 +13,6 @@ import {
 } from "@/lib/ai/ollama";
 import { buildStructuredRepairPrompt } from "@/lib/ai/prompts";
 import { recordAiActionMetric } from "@/lib/ai/runtime";
-import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { parseStructuredAiOutput } from "@/lib/ai/structured-output";
 import type { AiAction, AiEndpointResult, AiMessage } from "@/lib/ai/types";
 import { assertCanUseAi, recordAiUsage } from "@/lib/ai/usage";
@@ -486,10 +485,6 @@ export async function* streamChatAiResponse({
         estimatedTokens,
         actualTokens: estimateAiTokens(`${promptText}\n${result.answer}`),
       });
-    }
-
-    if (userId) {
-      broadcastAppDataChange(["/account"], undefined, { aiUsage: { userId, consumedTokens: estimateAiTokens(`${promptText}\\n${result.answer}`) } });
     }
 
     yield { type: "final", result };

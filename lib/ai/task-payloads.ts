@@ -147,7 +147,7 @@ function readKhipuOutput(task: KhipuAiTask): AiTaskPayload["output"] {
   }
 
   if (task === "autocomplete") {
-    return { format: "text", schema: "autocomplete_text_v1" };
+    return { format: "json_only", schema: "autocomplete_text_v1" };
   }
 
   if (task === "review_apu") {

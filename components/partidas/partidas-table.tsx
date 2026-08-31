@@ -23,6 +23,8 @@ import { useFormattingSettings } from "@/components/providers/formatting-setting
 import { formatCurrency } from "@/lib/utils";
 import type { CatalogPartidaPatchFields, CatalogPartidaPatchResult, CatalogPartidaRecord, CatalogPartidaStatePatch } from "@/types/partida";
 import type { ResourceRecord } from "@/types/resource";
+import type { AiAutocompletePartidaSuggestion } from "@/lib/ai/types";
+import { KhipuActionRegistryProvider } from "@/components/ai/khipu-action-registry";
 
 type EditableCatalogPartida = CatalogPartidaRecord & {
   isEditing?: boolean;
@@ -63,6 +65,7 @@ export function PartidasTable({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<EditableCatalogPartida[]>(() => partidas.map(toEditablePartida));
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
+  const [autocompleteSuggestion, setAutocompleteSuggestion] = useState<AiAutocompletePartidaSuggestion | null>(null);
   const [filter, setFilter] = useState(initialFilter);
   const [apuFilter, setApuFilter] = useState<ApuFilter>("ALL");
   const [pendingIds, setPendingIds] = useState<string[]>([]);
@@ -318,8 +321,17 @@ export function PartidasTable({
   }, [reconcilePatchResult, rows, selectedId]);
 
   return (
+    <KhipuActionRegistryProvider
+      onOpenPartidaForm={(suggestion) => {
+        setAutocompleteSuggestion(suggestion);
+        setIsCreateSheetOpen(true);
+      }}
+      onOpenPartidaApu={(suggestion) => {
+        if (suggestion.id) setSelectedId(suggestion.id);
+      }}
+    >
     <div className="space-y-4">
-      <PartidaCreateSheet open={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} onCreated={handlePartidaCreated} />
+      <PartidaCreateSheet open={isCreateSheetOpen} onClose={() => { setIsCreateSheetOpen(false); setAutocompleteSuggestion(null); }} onCreated={handlePartidaCreated} initialSuggestion={autocompleteSuggestion} />
 
       <OperationalPanel
         title="Tabla operativa"
@@ -460,6 +472,7 @@ export function PartidasTable({
       />
       <PartidaPastePreviewSheet pendingPaste={pendingPaste} onClose={closePastePreview} onConfirm={applyPendingPaste} />
     </div>
+    </KhipuActionRegistryProvider>
   );
 }
 

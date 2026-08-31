@@ -17,7 +17,6 @@ import { getDecryptedGeminiApiKey, getDecryptedOpenaiApiKey, getDecryptedOpenrou
 import { getSystemSettings } from "@/lib/data/system-settings";
 import { reserveAiUsage, recordScopedAiUsage, releaseAiUsage, recordPlatformAiUsage, getPlatformAiAllowance } from "@/lib/ai/usage-scope";
 import { isScopedAiResolverEnabled } from "@/lib/ai/credentials/rollout";
-import { broadcastAppDataChange } from "@/lib/client/live-updates";
 import { getActiveBetaAccess } from "@/lib/beta/access";
 
 type ExecutableProviderId = Exclude<AiProviderId, "auto">;
@@ -168,10 +167,6 @@ export async function executeAiTask({
           actualTokens: Math.max(1, Math.ceil((request.messages.reduce((total, message) => total + message.content.length, 0) + result.answer.length) / 4)),
           fallbackUsed,
         });
-      }
-
-      if (userId && platformAccounting) {
-        broadcastAppDataChange(["/account"], undefined, { aiUsage: { userId, consumedTokens: Math.max(1, Math.ceil((request.messages.reduce((total, message) => total + message.content.length, 0) + result.answer.length) / 4)) } });
       }
 
       return {

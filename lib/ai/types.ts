@@ -175,6 +175,27 @@ export type AiApuCatalogDebug = {
   validationWarnings: string[];
 };
 
+export type AiAutocompletePartidaSuggestion = {
+  id?: string;
+  code?: string;
+  description: string;
+  unit: string;
+  category?: string;
+  apuId?: string;
+  apuDescription?: string;
+  matchType: "existing" | "new";
+  missingFields: string[];
+};
+
+export type AiAutocompleteStructuredData = {
+  answer: string;
+  input: string;
+  suggestion: AiAutocompletePartidaSuggestion;
+  alternatives: AiAutocompletePartidaSuggestion[];
+  assumptions: string[];
+  requiresHumanReview: true;
+};
+
 export type AiApuStructuredData = {
   answer: string;
   unit: string;

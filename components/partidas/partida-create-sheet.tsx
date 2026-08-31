@@ -8,16 +8,19 @@ import { PartidaForm } from "@/components/partidas/partida-form";
 import { useAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import { getExcelViewCssVariables } from "@/lib/budget/excel-view-css";
 import { cn } from "@/lib/utils";
+import type { AiAutocompletePartidaSuggestion } from "@/lib/ai/types";
 import type { CatalogPartidaRecord } from "@/types/partida";
 
 export function PartidaCreateSheet({
   open,
   onClose,
   onCreated,
+  initialSuggestion,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: (partida: CatalogPartidaRecord) => void;
+  initialSuggestion?: AiAutocompletePartidaSuggestion | null;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const { isExcelMode } = useAppViewMode();
@@ -65,7 +68,7 @@ export function PartidaCreateSheet({
               </Dialog.Close>
             </div>
 
-            <PartidaForm onCancel={onClose} onCreated={onCreated} />
+            <PartidaForm onCancel={onClose} onCreated={onCreated} initialSuggestion={initialSuggestion} />
           </div>
         </Dialog.Content>
       </Dialog.Portal>

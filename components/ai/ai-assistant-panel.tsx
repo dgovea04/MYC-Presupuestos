@@ -39,7 +39,7 @@ import type {
   AssistantAction,
   AssistantProvider,
 } from "@/components/ai/use-ai-assistant-controller";
-import { hasApuStructuredShape, hasReviewStructuredShape } from "@/components/ai/use-ai-assistant-controller";
+import { hasApuStructuredShape, hasAutocompleteStructuredShape, hasReviewStructuredShape } from "@/components/ai/use-ai-assistant-controller";
 import { KhipuLogo } from "@/components/khipu/KhipuLogo";
 import { KhipuQuickActions } from "@/components/khipu/KhipuQuickActions";
 import type { KhipuQuickAction } from "@/components/khipu/KhipuQuickActions";
@@ -48,7 +48,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { AiApuStructuredData, AiReviewStructuredData } from "@/lib/ai/types";
+import type { AiApuStructuredData, AiAutocompleteStructuredData, AiReviewStructuredData } from "@/lib/ai/types";
 import { isKhipuActionArray, getActionLabel, getActionDescription } from "@/lib/ai/actions";
 import type { KhipuAction } from "@/lib/ai/actions";
 import { useKhipuActionDispatcher } from "@/hooks/use-khipu-action-dispatcher";
@@ -60,6 +60,7 @@ import type { FloatingKhipuTheme } from "@/types/settings";
 type AiAssistantPanelLayout = "page" | "floating";
 
 type AiAssistantPanelProps = {
+
   controller: AiAssistantControllerViewModel;
   initialAutocompleteInput?: string;
   initialApuDescription?: string;
@@ -1166,6 +1167,10 @@ function renderStructuredResult(result: AiResult) {
     return null;
   }
 
+  if (hasAutocompleteStructuredShape(structuredData)) {
+    return <AutocompletePartidaCard data={structuredData} />;
+  }
+
   if (hasApuStructuredShape(structuredData)) {
     return (
       <Card>
@@ -1235,6 +1240,42 @@ function renderStructuredResult(result: AiResult) {
   }
 
   return <GenericStructuredResult data={structuredData} />;
+}function AutocompletePartidaCard({ data }: { data: AiAutocompleteStructuredData }) {
+  const actionRegistry = useKhipuActionRegistry();
+  const partida = data.suggestion;
+  const isExisting = partida.matchType === "existing";
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">Partida sugerida</p>
+            <h3 className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">{isExisting ? "Partida encontrada" : "Nueva partida propuesta"}</h3>
+            <p className="mt-1 text-sm text-[var(--app-text-muted)]">Revisa los datos y confirma antes de incorporarla al presupuesto.</p>
+          </div>
+          <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", isExisting ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-amber-200 bg-amber-50 text-amber-800")}>
+            {isExisting ? "Catálogo" : "Borrador"}
+          </span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <StructuredMetric label="Descripción" value={partida.description} />
+          <StructuredMetric label="Unidad" value={partida.unit} />
+          {partida.code ? <StructuredMetric label="Código" value={partida.code} /> : null}
+          {partida.category ? <StructuredMetric label="Categoría" value={partida.category} /> : null}
+          {partida.apuDescription ? <StructuredMetric label="APU asociado" value={partida.apuDescription} /> : null}
+        </div>
+        {partida.missingFields.length ? <StructuredTextList title="Datos por confirmar" items={partida.missingFields} /> : null}
+        {data.assumptions.length ? <StructuredTextList title="Supuestos" items={data.assumptions} /> : null}
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" className="gap-2" onClick={() => actionRegistry.onOpenPartidaForm?.(partida)}><Pencil className="h-4 w-4" />{isExisting ? "Usar partida" : "Crear partida"}</Button>
+          <Button type="button" variant="outline" onClick={() => actionRegistry.onOpenPartidaApu?.(partida)}>{partida.apuId ? "Ver APU" : "Generar APU"}</Button>
+          <Button type="button" variant="outline" onClick={() => actionRegistry.onOpenPartidaForm?.(partida)}>Editar sugerencia</Button>
+        </div>
+        <p className="text-xs text-[var(--app-text-muted)]">La propuesta queda pendiente de confirmación técnica antes de guardarse.</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function GenericStructuredResult({ data }: { data: Record<string, unknown> }) {
