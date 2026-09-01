@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const companyId = session.user.activeCompanyId ?? session.user.companyId ?? "";
     await safelyTrackExportCompleted(body, session.user.id, companyId);
     await safelyTrackDemoExportCompleted(body, session.user.id, companyId);
-    if (body.format === "csv" || body.format === "zip" || body.format === "mcp" || body.target === "work_schedule") {
+    if (body.format === "csv" || body.format === "zip" || body.target === "work_schedule") {
       await trackBetaFeatureUsed({ userId: session.user.id, companyId, feature: "exports.advanced" }).catch(() => undefined);
     }
     return createExportResponse(result);
@@ -97,7 +97,11 @@ async function safelyTrackDemoExportCompleted(request: ExportRequest, userId: st
 }
 
 function requiresAdvancedExport(request: ExportRequest) {
-  if (request.format === "csv" || request.format === "zip" || request.format === "mcp") {
+  if (request.format === "mcp") {
+    return false;
+  }
+
+  if (request.format === "csv" || request.format === "zip") {
     return true;
   }
 

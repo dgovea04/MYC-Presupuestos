@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getUserAccount } from "@/lib/data/account";
 import { getBudgetById } from "@/lib/data/budgets";
 import { getBudgetFooterStructure, getBudgetGeneralExpenses, getGeneralBudgetResourceSummary } from "@/lib/data/budgets";
-import { getUserCompanies } from "@/lib/data/projects";
+import { getProjectBudgetOverviewById, getUserCompanies } from "@/lib/data/projects";
 import { getResourcesByUser } from "@/lib/data/resources";
 import { getUserSettings } from "@/lib/data/settings";
 import { getBudgetPolynomialFormulaSectionData } from "@/lib/data/polynomial-formulas";
@@ -24,6 +24,7 @@ import {
   type ExportFormat,
   type ExportPreset,
   type ExportRequest,
+  type ExportTarget,
   type NormalizedExportRequest,
   type WorkbookExportScope,
 } from "@/lib/exports/definitions";
@@ -127,10 +128,81 @@ export async function createCentralizedExport(input: ExportRequest, userId: stri
   }
 
   if (request.target === "project_package") {
+    if (request.preset === "proyecto_completo_zip") {
+      return createProjectDocumentZipExport(request, userId);
+    }
     return createProjectPackageExport(request, userId);
   }
 
   return createWorkScheduleExport(request, userId);
+}
+
+async function createProjectDocumentZipExport(request: NormalizedExportRequest, userId: string): Promise<ExportResult> {
+  const project = await getProjectBudgetOverviewById(request.targetId, userId);
+  if (!project) {
+    throw new Error("Proyecto no encontrado o no tienes acceso.");
+  }
+
+  const generalBudget = project.budgets.find((budget) => budget.kind === "GENERAL");
+  if (!generalBudget) {
+    throw new Error("El proyecto no tiene un presupuesto general para exportar.");
+  }
+
+  const selectedSections = request.options.packageSections ?? ["executive_summary", "sub_budgets", "resources", "general_expenses", "budget_footer", "polynomial_formula"];
+  const selectedFormats = request.options.packageFormats ?? ["xlsx", "pdf", "csv"];
+  const entries: ZipInput[] = [];
+
+  for (const format of selectedFormats) {
+    if (selectedSections.includes("executive_summary")) {
+      entries.push(await buildProjectPackageEntry("resumen-ejecutivo", format, generalBudget.id, "presupuesto_detallado", userId));
+    }
+
+    if (selectedSections.includes("sub_budgets")) {
+      for (const subBudget of project.budgets.filter((budget) => budget.kind === "SUB_BUDGET")) {
+        entries.push(await buildProjectPackageEntry(`subpresupuestos/${slugifyFilePart(subBudget.name)}`, format, subBudget.id, "presupuesto_detallado", userId));
+      }
+    }
+
+    const sectionTargets: Array<{ section: typeof selectedSections[number]; target: ExportTarget; preset: ExportPreset; prefix: string }> = [
+      { section: "resources", target: "budget_resources", preset: "lista_insumos_derivada", prefix: "lista-insumos" },
+      { section: "general_expenses", target: "general_expenses", preset: "gastos_generales_detallado", prefix: "gastos-generales" },
+      { section: "budget_footer", target: "budget_footer", preset: "pie_presupuesto_detallado", prefix: "pie-presupuesto" },
+      { section: "polynomial_formula", target: "polynomial_formula", preset: "formula_polinomica_detallada", prefix: "formula-polinomica" },
+    ];
+
+    for (const sectionTarget of sectionTargets) {
+      if (selectedSections.includes(sectionTarget.section)) {
+        entries.push(await buildProjectPackageEntry(sectionTarget.prefix, format, generalBudget.id, sectionTarget.preset, userId));
+      }
+    }
+  }
+
+  if (entries.length === 0) {
+    throw new Error("Selecciona al menos una sección y un formato para generar el ZIP.");
+  }
+
+  return {
+    content: buildStoredZip(entries),
+    contentType: CONTENT_TYPES.zip,
+    fileName: request.options.fileName ?? `presupuesto-${generalBudget.id}-paquete-documental.zip`,
+  };
+}
+
+async function buildProjectPackageEntry(prefix: string, format: "xlsx" | "pdf" | "csv", targetId: string, preset: ExportPreset, userId: string): Promise<ZipInput> {
+  const result = await createCentralizedExport({ target: targetForPreset(preset), targetId, format, preset }, userId);
+  return { fileName: `${prefix}.${format}`, content: result.content };
+}
+
+function targetForPreset(preset: ExportPreset): ExportTarget {
+  if (preset === "presupuesto_detallado") return "budget";
+  if (preset === "lista_insumos_derivada") return "budget_resources";
+  if (preset === "gastos_generales_detallado") return "general_expenses";
+  if (preset === "pie_presupuesto_detallado") return "budget_footer";
+  return "polynomial_formula";
+}
+
+function slugifyFilePart(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "subpresupuesto";
 }
 
 async function createProjectPackageExport(request: NormalizedExportRequest, userId: string): Promise<ExportResult> {

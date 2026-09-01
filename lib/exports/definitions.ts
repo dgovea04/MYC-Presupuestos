@@ -24,9 +24,12 @@ export type ExportPreset =
   | "calendario_valorizado"
   | "calendario_insumos"
   | "curva_s"
+  | "proyecto_completo_zip"
   | "proyecto_completo_mcp";
 
 export type WorkbookExportScope = "detail_only" | "detail_and_total" | "detail_subtotals_and_total";
+export type ProjectPackageExportSection = "executive_summary" | "sub_budgets" | "resources" | "general_expenses" | "budget_footer" | "polynomial_formula";
+export type ProjectPackageExportFormat = "xlsx" | "pdf" | "csv";
 
 export type ExportOptions = {
   scope: ExportScope;
@@ -43,6 +46,8 @@ export type ExportOptions = {
   pdfOrientation: PdfOrientation;
   fileName?: string;
   workbookScope?: WorkbookExportScope;
+  packageSections?: ProjectPackageExportSection[];
+  packageFormats?: ProjectPackageExportFormat[];
 };
 
 export type ExportRequest = {
@@ -236,6 +241,17 @@ export const EXPORT_DEFINITIONS: Record<ExportTarget, ExportDefinition> = {
     target: "project_package",
     label: "Proyecto completo",
     presets: [
+      {
+        id: "proyecto_completo_zip",
+        label: "Paquete documental ZIP",
+        description: "Resumen y secciones seleccionadas en Excel, PDF o CSV.",
+        formats: ["zip"],
+        defaultFormat: "zip",
+        defaultOptions: {
+          packageSections: ["executive_summary", "sub_budgets", "resources", "general_expenses", "budget_footer", "polynomial_formula"],
+          packageFormats: ["xlsx", "pdf", "csv"],
+        },
+      },
       {
         id: "proyecto_completo_mcp",
         label: "Proyecto completo .mcp",

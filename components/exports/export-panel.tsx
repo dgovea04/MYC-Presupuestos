@@ -158,8 +158,8 @@ export function ExportPanel({
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[2px]" />
-        <Dialog.Content className={cn("theme-surface-card fixed right-0 top-0 z-50 flex h-dvh w-full flex-col border-l shadow-2xl focus:outline-none", canPreviewPdf ? "max-w-6xl" : "max-w-md")}>
+        <Dialog.Overlay className="fixed inset-0 z-[259] bg-slate-950/30 backdrop-blur-[2px]" />
+        <Dialog.Content className={cn("theme-surface-card fixed right-0 top-0 z-[260] flex h-dvh w-full flex-col border-l shadow-2xl focus:outline-none", canPreviewPdf ? "max-w-6xl" : "max-w-md")}>
           <div className="border-[var(--app-border)] flex items-start justify-between border-b px-6 py-5">
             <div>
               <Dialog.Title className="theme-strong-text text-lg font-semibold">Preparar exportacion</Dialog.Title>
@@ -399,5 +399,4 @@ function buildExportOptionSummary(options: Partial<ExportOptions>, target: Expor
 
   return summary;
 }
-
 

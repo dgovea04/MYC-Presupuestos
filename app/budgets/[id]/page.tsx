@@ -28,6 +28,7 @@ import { measureAsync } from "@/lib/platform/performance";
 import { cn, ensureDate, formatCurrency, formatDate } from "@/lib/utils";
 import { getActiveWorkspaceId } from "@/lib/workspace/active-workspace";
 import { getEffectiveWorkspaceLicense, hasFeatureAccess } from "@/lib/workspace/entitlements";
+import { ProjectPackageExportPanel } from "@/components/exports/project-package-export-panel";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -134,9 +135,12 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                   </>
                 }
                 actions={
-                  <Link href={`/projects/${project.id}`}>
-                    <ActionButton action="open" label="Volver al proyecto" variant="outline" />
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ProjectPackageExportPanel projectId={project.id} />
+                    <Link href={`/projects/${project.id}`}>
+                      <ActionButton action="open" label="Volver al proyecto" variant="outline" />
+                    </Link>
+                  </div>
                 }
               />
             </CardHeader>

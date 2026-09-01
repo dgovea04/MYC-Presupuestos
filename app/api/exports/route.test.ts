@@ -278,7 +278,7 @@ describe("central exports route", () => {
     );
   });
 
-  it("requires advanced export entitlement for .mcp project packages", async () => {
+  it("allows .mcp project packages without advanced export entitlement", async () => {
     vi.mocked(getAuthSession).mockResolvedValue({ expires: new Date().toISOString(), user: { id: "user-1" } });
     vi.mocked(createCentralizedExport).mockResolvedValue({
       content: Buffer.from("mcp-zip-data"),
@@ -299,7 +299,7 @@ describe("central exports route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(assertFeatureAccess).toHaveBeenCalledWith({ userId: "user-1", feature: "exports.advanced" });
+    expect(assertFeatureAccess).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported export combinations with a 400 response", async () => {

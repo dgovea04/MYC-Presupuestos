@@ -82,6 +82,14 @@ describe("centralized export registry", () => {
     expect(getExportDefinition("polynomial_formula").presets[0]?.id).toBe("formula_polinomica_detallada");
     expect(getExportDefinition("work_schedule").presets.every((preset) => preset.formats.includes("pdf"))).toBe(true);
   });
+
+  it("exposes the configurable project document ZIP preset", () => {
+    const preset = getExportDefinition("project_package").presets.find((item) => item.id === "proyecto_completo_zip");
+
+    expect(preset?.formats).toEqual(["zip"]);
+    expect(preset?.defaultOptions.packageFormats).toEqual(["xlsx", "pdf", "csv"]);
+    expect(preset?.defaultOptions.packageSections).toContain("sub_budgets");
+  });
 });
 
 describe("stored zip builder", () => {
