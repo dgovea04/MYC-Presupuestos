@@ -6,6 +6,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { importPdfAiDraftToMyc } from "@/lib/pdf-import/import-persistence";
 import { pdfAiImportDraftSchema } from "@/lib/pdf-import/validation";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { assertWorkspaceFeatureAccess, getWorkspaceFeatureAccessStatus, isWorkspaceFeatureAccessError } from "@/lib/workspace/entitlements";
 import { PdfImportRequestError } from "../request";
 
 export async function POST(request: Request) {
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
     const companyId = body.companyId.trim();
     companyIdForTracking = companyId;
     await assertWorkspaceMembership({ userId: session.user.id, companyId, minimumRole: "EDITOR" });
+    await assertWorkspaceFeatureAccess({ userId: session.user.id, companyId, feature: "ai.pdf" });
     const draft = pdfAiImportDraftSchema.parse(body.draft);
     const result = await importPdfAiDraftToMyc(session.user.id, draft, { companyId });
 
@@ -50,6 +52,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (isWorkspaceFeatureAccessError(error)) {
+      return NextResponse.json({ error: "El importador PDF IA esta disponible en Pro." }, { status: getWorkspaceFeatureAccessStatus(error) });
+    }
     if (error instanceof PdfImportRequestError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }

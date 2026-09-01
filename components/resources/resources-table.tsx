@@ -882,19 +882,19 @@ const ResourceTableRow = memo(function ResourceTableRow({
           </div>
       </TD>
       <TD className="align-middle">
-        <div className="space-y-1">
+        <div className="flex min-w-0 items-center gap-2">
           <Input
             value={resource.source ?? ""}
             disabled={!resource.isEditing || !canEditCatalogFields}
             onPaste={(event) => onPaste(event, resource.id, "source")}
             onChange={(event) => onUpdateDraft(resource.id, { source: event.target.value })}
-            className={!resource.isEditing ? "border-transparent bg-transparent px-0 shadow-none" : undefined}
+            className={cn("min-w-0 flex-1", !resource.isEditing && "border-transparent bg-transparent px-0 shadow-none")}
           />
           {!isOwned ? <ResourcePriceStatus resource={resource} compact /> : null}
         </div>
       </TD>
       <TD className="align-middle">
-        <div className="flex flex-nowrap justify-end gap-1">
+        <div className="flex flex-nowrap justify-end gap-0">
           {isExcelMode ? (
             <CompactRowActions
               triggerLabel="Abrir acciones de fila"
@@ -1110,9 +1110,9 @@ function ResourceTableColGroup({ includeActions = true }: { includeActions?: boo
       <col style={{ width: "120px" }} />
       <col style={{ width: "170px" }} />
       <col style={{ width: "112px" }} />
-      <col style={{ width: "240px" }} />
-      <col style={{ width: "160px" }} />
-      {includeActions ? <col style={{ width: "124px" }} /> : null}
+      <col style={{ width: "190px" }} />
+      <col style={{ width: "220px" }} />
+      {includeActions ? <col style={{ width: "65px" }} /> : null}
     </colgroup>
   );
 }

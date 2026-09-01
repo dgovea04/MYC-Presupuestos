@@ -550,6 +550,26 @@ async function persistProjectResources(
   }
 
   for (const resource of projectResourcesData.resources ?? []) {
+    const matchingGlobalResource = await ctx.tx.resource.findFirst({
+      where: {
+        companyId: null,
+        code: resource.code,
+        description: resource.description,
+        category: resource.category as never,
+        unit: resource.unit,
+        unitPrice: resource.unitPrice,
+        currency: resource.currency,
+        iu: resource.iu,
+        iuCurrent: resource.iuCurrent,
+      },
+      select: { id: true },
+    });
+
+    if (matchingGlobalResource) {
+      ctx.resourceIdMap.set(resource.id, matchingGlobalResource.id);
+      continue;
+    }
+
     const createdResource = await ctx.tx.resource.create({
       data: {
         companyId,

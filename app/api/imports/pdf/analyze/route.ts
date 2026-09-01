@@ -6,6 +6,7 @@ import { extractPdfImportFile } from "@/lib/pdf-import/extraction";
 import { createPdfImportOcrProvider } from "@/lib/pdf-import/ocr";
 import { getPdfImportAiConfiguration } from "@/lib/pdf-import/provider";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
+import { assertWorkspaceFeatureAccess, getWorkspaceFeatureAccessStatus, isWorkspaceFeatureAccessError } from "@/lib/workspace/entitlements";
 import { PdfImportRequestError, assertPdfImportPageLimit, readPdfImportMultipartInput } from "../request";
 
 export async function POST(request: Request) {
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
     const input = await readPdfImportMultipartInput(request);
     companyIdForTracking = input.companyId;
     await assertWorkspaceMembership({ userId: session.user.id, companyId: input.companyId, minimumRole: "EDITOR" });
+    await assertWorkspaceFeatureAccess({ userId: session.user.id, companyId: input.companyId, feature: "ai.pdf" });
     const aiConfiguration = await getPdfImportAiConfiguration(session.user.id);
     const ocrProvider = aiConfiguration.apiKey
       ? createPdfImportOcrProvider(aiConfiguration)
@@ -49,6 +51,9 @@ export async function POST(request: Request) {
         .map((file) => `${file.fileName} parece escaneado y requerira OCR/vision. Configura una API key cloud en Configuracion > IA > Proveedores Cloud IA y selecciona el proveedor del importador PDF.`),
     });
   } catch (error) {
+    if (isWorkspaceFeatureAccessError(error)) {
+      return NextResponse.json({ error: "El importador PDF IA esta disponible en Pro." }, { status: getWorkspaceFeatureAccessStatus(error) });
+    }
     if (error instanceof PdfImportRequestError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }

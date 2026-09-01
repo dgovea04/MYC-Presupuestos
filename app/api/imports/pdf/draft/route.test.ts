@@ -5,6 +5,7 @@ import { POST } from "./route";
 const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   assertWorkspaceMembership: vi.fn(),
+  assertWorkspaceFeatureAccess: vi.fn(),
   structurePdfImportWithAi: vi.fn(),
   extractPdfImportFile: vi.fn(),
   createPdfImportOcrProvider: vi.fn(),
@@ -18,6 +19,12 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/workspace/access", () => ({
   assertWorkspaceMembership: mocks.assertWorkspaceMembership,
+}));
+
+vi.mock("@/lib/workspace/entitlements", () => ({
+  assertWorkspaceFeatureAccess: mocks.assertWorkspaceFeatureAccess,
+  getWorkspaceFeatureAccessStatus: () => 403,
+  isWorkspaceFeatureAccessError: () => false,
 }));
 
 vi.mock("@/lib/pdf-import/ai-structure", () => ({
@@ -48,6 +55,8 @@ describe("POST /api/imports/pdf/draft", () => {
   beforeEach(() => {
     mocks.getAuthSession.mockReset();
     mocks.assertWorkspaceMembership.mockReset();
+    mocks.assertWorkspaceFeatureAccess.mockReset();
+    mocks.assertWorkspaceFeatureAccess.mockResolvedValue(undefined);
     mocks.structurePdfImportWithAi.mockReset();
     mocks.extractPdfImportFile.mockReset();
     mocks.createPdfImportOcrProvider.mockReset();

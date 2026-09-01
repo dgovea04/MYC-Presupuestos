@@ -10,6 +10,15 @@ export function calculateApuResourceSubtotal(resource: ApuRecord["resources"][nu
   return calculateApuRows([resource], performance)[0]?.subtotal ?? 0;
 }
 
+export function synchronizeApuResourcePrice(apu: ApuRecord, resourceId: string, unitPrice: number): ApuRecord {
+  return calculateBudgetItemApu({
+    ...apu,
+    resources: apu.resources.map((resource) =>
+      resource.resourceId === resourceId ? { ...resource, unitPrice } : resource,
+    ),
+  });
+}
+
 export function calculateBudgetItemApu(apu: ApuRecord): ApuRecord {
   const resources = calculateApuRows(apu.resources, apu.performance);
   const totalUnitCost = calculateApuTotalUnitCost(resources, apu.performance);

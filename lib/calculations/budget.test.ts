@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateBudgetRecord } from "@/lib/calculations/budget";
+import { calculateBudgetRecord, synchronizeApuResourcePrice } from "@/lib/calculations/budget";
 
 describe("calculateBudgetRecord", () => {
   it("recalcula el presupuesto a partir de recursos APU, tasas y metrados", () => {
@@ -265,5 +265,29 @@ describe("calculateBudgetRecord", () => {
       totalTax: 0.0621,
       totalAmount: 0.4071,
     });
+  });
+});
+
+describe("synchronizeApuResourcePrice", () => {
+  it("updates every occurrence of a resource and recalculates the APU total", () => {
+    const apu = {
+      id: "apu-1",
+      budgetItemId: "item-1",
+      name: "Limpieza manual",
+      unit: "m2",
+      performance: 1,
+      totalUnitCost: 16.5,
+      resources: [
+        { id: "row-1", apuId: "apu-1", resourceId: "resource-peon", resourceType: "LABOR", quantity: 1, unitPrice: 16.5, subtotal: 16.5 },
+        { id: "row-2", apuId: "apu-1", resourceId: "resource-other", resourceType: "MATERIAL", quantity: 2, unitPrice: 3, subtotal: 6 },
+        { id: "row-3", apuId: "apu-1", resourceId: "resource-peon", resourceType: "LABOR", quantity: 0.5, unitPrice: 16.5, subtotal: 8.25 },
+      ],
+    };
+
+    const result = synchronizeApuResourcePrice(apu, "resource-peon", 26.5);
+
+    expect(result.resources.map((resource) => resource.unitPrice)).toEqual([26.5, 3, 26.5]);
+    expect(result.resources.map((resource) => resource.subtotal)).toEqual([26.5, 6, 13.25]);
+    expect(result.totalUnitCost).toBe(45.75);
   });
 });

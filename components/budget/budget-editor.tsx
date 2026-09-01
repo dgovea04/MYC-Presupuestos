@@ -19,7 +19,7 @@ import { applyCatalogPartidaToDraftItem, resolveCatalogResource } from "@/lib/bu
 import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
 import { calculateBudgetQualitySummary, type BudgetItemQualityState, type BudgetQualitySummary } from "@/lib/budgets/budget-quality";
 import { broadcastAppDataChange } from "@/lib/client/live-updates";
-import { calculateBudgetRecord } from "@/lib/calculations/budget";
+import { calculateBudgetItem, calculateBudgetRecord, synchronizeApuResourcePrice } from "@/lib/calculations/budget";
 import { buildAiBudgetReviewSummary } from "@/lib/ai/budget-review";
 import { useVirtualTableWindow } from "@/hooks/use-virtual-table-window";
 import { usePublishBudgetSelection } from "@/hooks/use-publish-budget-selection";
@@ -572,10 +572,39 @@ export function BudgetEditor({
     });
   }, []);
   const handleApuItemUpdate = useCallback((updatedItem: BudgetItemRecord) => {
-    setState((current) => ({
-      ...current,
-      items: current.items.map((item) => (item.id === updatedItem.id ? updatedItem : item)),
-    }));
+    setState((current) => {
+      const previousItem = current.items.find((item) => item.id === updatedItem.id);
+      const linkedResourcePrices = new Map<string, number>();
+
+      for (const resource of updatedItem.apu?.resources ?? []) {
+        if (!resource.resourceId) continue;
+
+        const previousResource = previousItem?.apu?.resources.find((candidate) => candidate.id === resource.id);
+        if (previousResource && previousResource.unitPrice !== resource.unitPrice) {
+          linkedResourcePrices.set(resource.resourceId, resource.unitPrice);
+        }
+      }
+
+      return {
+        ...current,
+        items: current.items.map((item) => {
+          if (item.id === updatedItem.id) return updatedItem;
+          if (!item.apu) return item;
+
+          let synchronizedItem = item;
+          for (const [resourceId, unitPrice] of linkedResourcePrices) {
+            if (!synchronizedItem.apu?.resources.some((resource) => resource.resourceId === resourceId)) continue;
+
+            synchronizedItem = calculateBudgetItem({
+              ...synchronizedItem,
+              apu: synchronizeApuResourcePrice(synchronizedItem.apu, resourceId, unitPrice),
+            });
+          }
+
+          return synchronizedItem;
+        }),
+      };
+    });
   }, []);
 
   useEffect(() => {

@@ -8,7 +8,7 @@ export function ResourcePriceStatus({ resource, compact = false }: { resource: P
   const observed = resource.priceObservedAt ? new Date(resource.priceObservedAt).toLocaleDateString("es-PE") : null;
 
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium", tone)} title={observed ? `${label} · ${observed} · ${resource.priceSource ?? "Fuente no indicada"}` : label}>
+    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium", tone)} title={observed ? `${label} · ${observed} · ${resource.priceSource ?? "Fuente no indicada"}` : label}>
       <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
       {compact ? label : `${label}${observed ? ` · ${observed}` : ""}`}
     </span>

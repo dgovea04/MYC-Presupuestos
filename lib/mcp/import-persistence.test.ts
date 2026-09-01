@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   budgetFooterRowCreateMany: vi.fn(),
   apuCreate: vi.fn(),
   apuResourceCreate: vi.fn(),
+  resourceFindFirst: vi.fn(),
   resourceCreate: vi.fn(),
   polynomialFormulaCreate: vi.fn(),
   polynomialMonomialCreate: vi.fn(),
@@ -275,6 +276,7 @@ describe("importProjectPackageToMyc", () => {
     mocks.budgetItemCreate.mockResolvedValue({ id: "item-created" });
     mocks.budgetFooterRowCreateMany.mockResolvedValue({ count: 1 });
     mocks.apuCreate.mockResolvedValue({ id: "apu-created" });
+    mocks.resourceFindFirst.mockResolvedValue(null);
     mocks.apuResourceCreate.mockResolvedValue({ id: "apu-res-created" });
     mocks.resourceCreate.mockResolvedValue({ id: "resource-created" });
     mocks.polynomialFormulaCreate.mockResolvedValue({ id: "formula-created" });
@@ -290,10 +292,58 @@ describe("importProjectPackageToMyc", () => {
         budgetFooterRow: { createMany: mocks.budgetFooterRowCreateMany },
         apu: { create: mocks.apuCreate },
         apuResource: { create: mocks.apuResourceCreate },
-        resource: { create: mocks.resourceCreate },
+        resource: { findFirst: mocks.resourceFindFirst, create: mocks.resourceCreate },
         polynomialFormula: { create: mocks.polynomialFormulaCreate },
         polynomialMonomial: { create: mocks.polynomialMonomialCreate },
         polynomialMonomialComponent: { create: mocks.polynomialMonomialComponentCreate },
+      }),
+    );
+  });
+
+  it("reuses an exact matching global resource when restoring an MCP project", async () => {
+    mocks.resourceFindFirst.mockResolvedValue({ id: "global-resource-1" });
+    const readModule = makeModuleReader({
+      ...fixtureModules,
+      "budgets/project-resources.json": {
+        resources: [
+          {
+            id: "res-1",
+            code: "MAT-051",
+            description: "AGUA PARA LA OBRA",
+            category: "MATERIAL",
+            unit: "M3",
+            currency: "PEN",
+            unitPrice: "5",
+            iu: "39 : INDICE DE PRECIOS AL CONSUMIDOR (INEI)",
+            iuCurrent: "93",
+          },
+        ],
+      },
+    });
+
+    await importProjectPackageToMyc("user-1", makeManifest(), readModule, {
+      companyId: "company-1",
+      mode: "restore_as_new_project",
+    });
+
+    expect(mocks.resourceFindFirst).toHaveBeenCalledWith({
+      where: {
+        companyId: null,
+        code: "MAT-051",
+        description: "AGUA PARA LA OBRA",
+        category: "MATERIAL",
+        unit: "M3",
+        unitPrice: "5",
+        currency: "PEN",
+        iu: "39 : INDICE DE PRECIOS AL CONSUMIDOR (INEI)",
+        iuCurrent: "93",
+      },
+      select: { id: true },
+    });
+    expect(mocks.resourceCreate).not.toHaveBeenCalled();
+    expect(mocks.apuResourceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ resourceId: "global-resource-1" }),
       }),
     );
   });

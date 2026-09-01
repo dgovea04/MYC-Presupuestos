@@ -27,9 +27,10 @@ import {
   type BudgetFooterStructureSaveInput,
 } from "@/lib/validations/budget-footer";
 import type { BudgetRecord, BudgetStatePatch } from "@/types/budget";
+import type { ApuRecord } from "@/types/apu";
 import type { PartidaApuRowRecord } from "@/types/partida";
 import type { BudgetFooterStructure, GeneralBudgetResourceSummaryResult, GeneralExpenseStructure } from "@/types/budget-sections";
-import { calculateBudgetRecord } from "@/lib/calculations/budget";
+import { calculateBudgetRecord, synchronizeApuResourcePrice } from "@/lib/calculations/budget";
 import { isSubpartidaResourceType } from "@/lib/apu/subpartidas";
 import { Prisma } from "@prisma/client";
 import type { BudgetLiveUpdateSummary } from "@/lib/client/live-updates";
@@ -1173,7 +1174,7 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
               select: {
                 id: true,
                 resources: {
-                  select: { id: true },
+                  select: { id: true, resourceId: true, unitPrice: true },
                 },
               },
             },
@@ -1202,6 +1203,7 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
       },
     });
 
+    const linkedResourcePrices = new Map<string, number>();
     const existingLevelIds = new Set(existingBudget.levels.map((level) => level.id));
     const desiredLevelIds = new Set(normalized.levels.map((level) => level.id));
     const levelIdsToDelete = existingBudget.levels
@@ -1269,6 +1271,15 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
       }
 
       const existingItem = existingItemsById.get(item.id);
+
+      for (const resource of item.apu?.resources ?? []) {
+        if (!resource.resourceId) continue;
+
+        const previousResource = existingItem?.apu?.resources.find((candidate) => candidate.id === resource.id);
+        if (previousResource && decimalToNumber(previousResource.unitPrice) !== resource.unitPrice) {
+          linkedResourcePrices.set(resource.resourceId, resource.unitPrice);
+        }
+      }
 
       if (!item.apu) {
         if (existingItem?.apu) {
@@ -1344,6 +1355,8 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
       }
     }
 
+    await synchronizeLinkedBudgetResourcePrices(tx, existingBudget.id, linkedResourcePrices);
+
     if (itemIdsToDelete.length) {
       await tx.budgetItem.deleteMany({
         where: {
@@ -1366,6 +1379,108 @@ export async function saveBudgetState(id: string, userId: string, budget: Budget
 
     return normalized;
   });
+}
+
+async function synchronizeLinkedBudgetResourcePrices(
+  tx: Prisma.TransactionClient,
+  budgetId: string,
+  linkedResourcePrices: Map<string, number>,
+) {
+  if (linkedResourcePrices.size === 0) return;
+
+  const apus = await tx.apu.findMany({
+    where: {
+      budgetItem: { budgetId },
+      resources: { some: { resourceId: { in: [...linkedResourcePrices.keys()] } } },
+    },
+    select: {
+      id: true,
+      budgetItemId: true,
+      name: true,
+      unit: true,
+      performance: true,
+      totalUnitCost: true,
+      budgetItem: { select: { quantity: true } },
+      resources: {
+        select: {
+          id: true,
+          apuId: true,
+          resourceId: true,
+          resourceType: true,
+          crew: true,
+          quantity: true,
+          unitPrice: true,
+          subtotal: true,
+          resource: {
+            select: {
+              id: true,
+              code: true,
+              description: true,
+              category: true,
+              unit: true,
+              currency: true,
+              unitPrice: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  for (const apu of apus) {
+    let synchronizedApu: ApuRecord = {
+      id: apu.id,
+      budgetItemId: apu.budgetItemId,
+      name: apu.name,
+      unit: apu.unit,
+      performance: decimalToNumber(apu.performance),
+      totalUnitCost: decimalToNumber(apu.totalUnitCost),
+      resources: apu.resources.map((resource) => ({
+        ...resource,
+        crew: resource.crew === null || resource.crew === undefined ? null : decimalToNumber(resource.crew),
+        quantity: decimalToNumber(resource.quantity),
+        unitPrice: decimalToNumber(resource.unitPrice),
+        subtotal: decimalToNumber(resource.subtotal),
+        resource: resource.resource
+          ? {
+              ...resource.resource,
+              unitPrice: decimalToNumber(resource.resource.unitPrice),
+            }
+          : undefined,
+      })),
+    };
+
+    for (const [resourceId, unitPrice] of linkedResourcePrices) {
+      if (synchronizedApu.resources.some((resource) => resource.resourceId === resourceId)) {
+        synchronizedApu = synchronizeApuResourcePrice(synchronizedApu, resourceId, unitPrice);
+      }
+    }
+
+    for (const resource of synchronizedApu.resources) {
+      await tx.apuResource.update({
+        where: { id: resource.id },
+        data: {
+          quantity: resource.quantity,
+          unitPrice: resource.unitPrice,
+          subtotal: resource.subtotal,
+        },
+      });
+    }
+
+    await tx.apu.update({
+      where: { id: apu.id },
+      data: { totalUnitCost: synchronizedApu.totalUnitCost },
+    });
+
+    const partial = new Decimal(decimalToNumber(apu.budgetItem.quantity)).times(synchronizedApu.totalUnitCost).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toNumber();
+    await tx.budgetItem.update({
+      where: { id: apu.budgetItemId },
+      data: {
+        unitPrice: synchronizedApu.totalUnitCost,
+        partial,
+      },
+    });
+  }
 }
 
 export async function saveBudgetPatch(id: string, userId: string, patchInput: BudgetStatePatch) {

@@ -5,6 +5,7 @@ import { POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
   assertWorkspaceMembership: vi.fn(),
+  assertWorkspaceFeatureAccess: vi.fn(),
   getAuthSession: vi.fn(),
   importPdfAiDraftToMyc: vi.fn(),
   revalidatePath: vi.fn(),
@@ -33,9 +34,17 @@ vi.mock("@/lib/workspace/access", () => ({
   assertWorkspaceMembership: mocks.assertWorkspaceMembership,
 }));
 
+vi.mock("@/lib/workspace/entitlements", () => ({
+  assertWorkspaceFeatureAccess: mocks.assertWorkspaceFeatureAccess,
+  getWorkspaceFeatureAccessStatus: () => 403,
+  isWorkspaceFeatureAccessError: () => false,
+}));
+
 describe("POST /api/imports/pdf/import", () => {
   beforeEach(() => {
     mocks.assertWorkspaceMembership.mockReset();
+    mocks.assertWorkspaceFeatureAccess.mockReset();
+    mocks.assertWorkspaceFeatureAccess.mockResolvedValue(undefined);
     mocks.getAuthSession.mockReset();
     mocks.importPdfAiDraftToMyc.mockReset();
     mocks.revalidatePath.mockReset();
