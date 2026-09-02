@@ -3020,7 +3020,7 @@ model ProjectDocument {
   originalFileName String
   category         ReviewDocumentCategory @default(OTHER)
   status           DocumentStatus         @default(UPLOADED)
-  currentVersionId String? @unique
+  currentVersionId String?
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   company          Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -3210,18 +3210,21 @@ model ReviewFinding {
   @@index([budgetId, budgetItemId])
   @@index([evidenceId])
   @@index([entityLinkId])
+  @@unique([id, companyId, projectId])
   @@map("review_findings")
 }
 
 model FindingDecision {
   id                String          @id @default(cuid())
+  companyId         String
+  projectId         String
   findingId         String
   userId            String
   resolution        FindingResolution
   note              String?         @db.Text
   expectedUpdatedAt DateTime
   createdAt         DateTime        @default(now())
-  finding           ReviewFinding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  finding           ReviewFinding  @relation(fields: [findingId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
   user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([findingId, createdAt(sort: Desc)])
@@ -3241,7 +3244,7 @@ model ReviewAuditEvent {
   createdAt     DateTime      @default(now())
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project       Project       @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
-  reviewRun     ReviewRun?    @relation(fields: [reviewRunId], references: [id], onDelete: SetNull)
+  reviewRun     ReviewRun?    @relation(fields: [reviewRunId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
   actor         User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([companyId, projectId, createdAt(sort: Desc)])

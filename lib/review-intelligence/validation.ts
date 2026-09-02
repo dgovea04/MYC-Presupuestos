@@ -46,9 +46,29 @@ export type WarningsJsonInput = z.infer<typeof warningsJsonSchema>;
 
 export interface TenantProjectOwnershipInput { companyId: string; projectCompanyId: string; }
 
+export interface TenantScopedAssociationInput {
+  companyId: string;
+  projectId: string;
+  relatedCompanyId: string;
+  relatedProjectId: string;
+  actorCompanyId?: string;
+}
+
 export function assertTenantProjectOwnership(input: TenantProjectOwnershipInput): void {
   if (input.companyId !== input.projectCompanyId) {
     throw new Error("Company and project tenant identifiers must match.");
+  }
+}
+
+export function assertTenantScopedAssociation(input: TenantScopedAssociationInput): void {
+  if (!input.companyId || !input.projectId || !input.relatedCompanyId || !input.relatedProjectId) {
+    throw new Error("Tenant and project identifiers are required.");
+  }
+  if (input.companyId !== input.relatedCompanyId || input.projectId !== input.relatedProjectId) {
+    throw new Error("Tenant and project identifiers must match.");
+  }
+  if (input.actorCompanyId !== undefined && input.actorCompanyId !== input.companyId) {
+    throw new Error("Actor tenant identifier must match.");
   }
 }
 

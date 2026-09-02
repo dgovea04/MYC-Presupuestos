@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertTenantProjectOwnership,
+  assertTenantScopedAssociation,
   comparisonJsonSchema,
   locationJsonSchema,
   parseReviewConfiguration,
@@ -113,5 +114,21 @@ describe("parseReviewConfiguration", () => {
   it("rechaza asociaciones entre empresas y proyectos distintos", () => {
     expect(() => assertTenantProjectOwnership({ companyId: "company-a", projectCompanyId: "company-b" })).toThrow();
     expect(() => assertTenantProjectOwnership({ companyId: "company-a", projectCompanyId: "company-a" })).not.toThrow();
+  });
+
+  it("rechaza decisiones y auditorías sin consistencia tenant/proyecto", () => {
+    const validAssociation = {
+      companyId: "company-a",
+      projectId: "project-a",
+      relatedCompanyId: "company-a",
+      relatedProjectId: "project-a",
+      actorCompanyId: "company-a",
+    };
+
+    expect(() => assertTenantScopedAssociation(validAssociation)).not.toThrow();
+    expect(() => assertTenantScopedAssociation({ ...validAssociation, relatedCompanyId: "company-b" })).toThrow();
+    expect(() => assertTenantScopedAssociation({ ...validAssociation, relatedProjectId: "project-b" })).toThrow();
+    expect(() => assertTenantScopedAssociation({ ...validAssociation, actorCompanyId: "company-b" })).toThrow();
+    expect(() => assertTenantScopedAssociation({ ...validAssociation, projectId: "" })).toThrow();
   });
 });
