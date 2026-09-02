@@ -222,5 +222,9 @@ async function detectMime(bytes: Uint8Array): Promise<typeof PDF_MIME | typeof X
 
 function isValidPdfStructure(bytes: Uint8Array): boolean {
   const text = new TextDecoder("latin1").decode(bytes);
-  return text.includes(" obj") && text.includes("endobj") && text.includes("trailer") && text.includes("startxref") && /%%EOF\s*$/.test(text);
+  const startxref = text.match(/\bstartxref\s+(\d+)\s+%%EOF\s*$/);
+  const xref = /\bxref\s+\d+\s+\d+\s+\d{10}\s+\d{5}\s+[fn]\s/.test(text);
+  const trailer = /\btrailer\s*<<[\s\S]*>>/.test(text);
+  const hasObjects = /\b\d+\s+\d+\s+obj\b[\s\S]*\bendobj\b/.test(text);
+  return startxref !== null && Number(startxref[1]) <= bytes.byteLength && xref && trailer && hasObjects;
 }

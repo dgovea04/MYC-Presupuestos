@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createDocumentVersion, createProjectDocument } from "./documents";
 
-const validPdf = (suffix: string): Uint8Array => new TextEncoder().encode(`%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n${suffix}\n%%EOF`);
+const validPdf = (suffix: string): Uint8Array => new TextEncoder().encode(`%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (${suffix})>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF`);
 
 function createClient() {
   return {

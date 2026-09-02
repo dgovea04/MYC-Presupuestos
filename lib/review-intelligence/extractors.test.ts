@@ -59,7 +59,7 @@ describe("review document extractors", () => {
   });
 
   it("uses the compatible PDF importer and states that page count may be estimated and exact location is unavailable", async () => {
-    const file = new File(["%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n01.01 Trazo y replanteo m2 10 2.50 25.00\n%%EOF"], "spec.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (01.01 Trazo y replanteo m2 10 2.50 25.00)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "spec.pdf", { type: "application/pdf" });
     const result = await extractDocument({ file });
     expect(result.kind).toBe("PDF");
     expect(result.items[0]?.content).toContain("Trazo y replanteo");
@@ -69,8 +69,9 @@ describe("review document extractors", () => {
 
   it("accepts a PDF exactly at 50 MB and rejects empty or malformed documents", async () => {
     const bytes = new Uint8Array(50 * 1024 * 1024);
-    bytes.set(new TextEncoder().encode("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n"));
-    bytes.set(new TextEncoder().encode("%%EOF"), bytes.byteLength - 5);
+    bytes.set(new TextEncoder().encode("%PDF-1.7\n"));
+    const structure = new TextEncoder().encode("xref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (boundary)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF");
+    bytes.set(structure, bytes.byteLength - structure.byteLength);
     await expect(validateDocumentFile(new File([bytes], "boundary.pdf", { type: "application/pdf" }))).resolves.toMatchObject({ fileSizeBytes: 50 * 1024 * 1024 });
     await expect(validateDocumentFile(new File([], "empty.pdf", { type: "application/pdf" }))).rejects.toThrow("MIME");
     await expect(validateDocumentFile(new File(["bad"], "bad.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))).rejects.toThrow("MIME");
@@ -78,6 +79,11 @@ describe("review document extractors", () => {
 
   it("rejects a PDF with a valid header but a malformed body", async () => {
     const malformed = new File(["%PDF-1.7\nnot a PDF body"], "malformed.pdf", { type: "application/pdf" });
+    await expect(validateDocumentFile(malformed)).rejects.toThrow("MIME");
+  });
+
+  it("rejects a PDF with an invalid numeric xref offset", async () => {
+    const malformed = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\nstartxref\nnot-a-number\n%%EOF"], "invalid-xref.pdf", { type: "application/pdf" });
     await expect(validateDocumentFile(malformed)).rejects.toThrow("MIME");
   });
 });
