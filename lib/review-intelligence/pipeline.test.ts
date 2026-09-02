@@ -13,10 +13,15 @@ function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>
     updateMany: async ({ where, data }) => { const compound = where.id_companyId_projectId as { id?: string; companyId?: string; projectId?: string } | undefined; const run = store.runs.find((entry) => (entry.id === where.id || entry.id === compound?.id) && (!where.status || typeof where.status === "string" && entry.status === where.status || typeof where.status === "object" && (where.status as { in?: unknown[] }).in?.includes(entry.status)) && (!where.progressJson || JSON.stringify(entry.progressJson) === JSON.stringify((where.progressJson as { equals?: unknown }).equals))); if (!run) return { count: 0 }; Object.assign(run, data); return { count: 1 }; },
   };
   store.reviewRunDocumentVersion = { upsert: async ({ create }) => create };
-  store.reviewEvidence = { findFirst: async ({ where }) => store.evidence.find((entry) => entry.documentVersionId === where.documentVersionId && entry.sourceHash === where.sourceHash) ?? null, create: async ({ data }) => { if (store.evidence.some((entry) => entry.id === data.id)) throw new Error("P2002"); const entry = { id: data.id ?? `evidence-${store.evidence.length + 1}`, ...data }; store.evidence.push(entry); return entry; } };
-  store.entityLink = { findFirst: async ({ where }) => store.links.find((entry) => entry.budgetItemId === where.budgetItemId && entry.evidenceId === where.evidenceId) ?? null, create: async ({ data }) => { if (store.links.some((entry) => entry.id === data.id)) throw new Error("P2002"); const entry = { id: data.id ?? `link-${store.links.length + 1}`, ...data }; store.links.push(entry); return entry; } };
-  store.reviewFinding = { findFirst: async ({ where }) => store.findings.find((entry) => entry.reviewRunId === where.reviewRunId && entry.evidenceId === where.evidenceId && entry.findingType === where.findingType && entry.budgetItemId === where.budgetItemId) ?? null, create: async ({ data }) => { if (store.findings.some((entry) => entry.id === data.id)) throw new Error("P2002"); const entry = { id: data.id ?? `finding-${store.findings.length + 1}`, ...data }; store.findings.push(entry); return entry; } };
+  store.reviewEvidence = { findFirst: async ({ where }) => store.evidence.find((entry) => entry.documentVersionId === where.documentVersionId && entry.sourceHash === where.sourceHash) ?? null, upsert: async ({ create, update }) => { const existing = store.evidence.find((entry) => entry.documentVersionId === create.documentVersionId && entry.sourceHash === create.sourceHash); if (existing) return Object.assign(existing, update); const entry = { id: create.id ?? `evidence-${store.evidence.length + 1}`, ...create }; store.evidence.push(entry); return entry; } };
+  store.entityLink = { findFirst: async ({ where }) => store.links.find((entry) => entry.budgetItemId === where.budgetItemId && entry.evidenceId === where.evidenceId) ?? null, upsert: async ({ create, update }) => { const existing = store.links.find((entry) => entry.id === create.id); if (existing) return Object.assign(existing, update); const entry = { id: create.id ?? `link-${store.links.length + 1}`, ...create }; store.links.push(entry); return entry; } };
+  store.reviewFinding = { findFirst: async ({ where }) => store.findings.find((entry) => entry.reviewRunId === where.reviewRunId && entry.evidenceId === where.evidenceId && entry.findingType === where.findingType && entry.budgetItemId === where.budgetItemId) ?? null, upsert: async ({ create, update }) => { const existing = store.findings.find((entry) => entry.id === create.id); if (existing) return Object.assign(existing, update); const entry = { id: create.id ?? `finding-${store.findings.length + 1}`, ...create }; store.findings.push(entry); return entry; } };
   store.reviewAuditEvent = { create: async ({ data }) => { store.events.push(data); return data; } };
+  store.budget = { findFirst: async ({ where }) => where.id === "budget-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "budget-1" } : null };
+  store.project = { findFirst: async ({ where }) => where.id === "project-1" && where.companyId === "company-1" ? { id: "project-1" } : null };
+  store.documentVersion = { findFirst: async ({ where }) => where.id === "version-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "version-1", projectDocumentId: "document-1" } : null };
+  store.projectDocument = { findFirst: async ({ where }) => where.id === "document-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "document-1" } : null };
+  store.budgetItem = { findFirst: async ({ where }) => where.id === "item-1" && where.budgetId === "budget-1" ? { id: "item-1" } : null };
   store.$transaction = async (callback) => callback(store);
   return store;
 }
@@ -39,6 +44,9 @@ describe("runReviewJob", () => {
     expect(database.findings).toHaveLength(1);
     expect(database.findings[0]).toMatchObject({ humanReviewRequired: true, automaticBudgetMutation: false });
     expect(database.evidence).toHaveLength(1);
+    const persistedEvidenceIds = new Set(database.evidence.map((entry) => entry.id));
+    expect(database.links.every((link) => persistedEvidenceIds.has(link.evidenceId))).toBe(true);
+    expect(database.findings.every((finding) => persistedEvidenceIds.has(finding.evidenceId))).toBe(true);
   });
 
   it("retries idempotently without duplicating evidence, links, or findings", async () => {
@@ -113,7 +121,10 @@ describe("runReviewJob", () => {
 
   it("rejects cross-tenant document versions and budget items", async () => {
     const database = client();
-    await expect(runReviewJob({ ...input(), documentVersions: [{ id: "version-1", companyId: "other", projectId: "project-1" }] }, database)).rejects.toThrow("does not belong");
+    database.documentVersion.findFirst = async () => null;
+    await expect(runReviewJob({ ...input(), documentVersions: [{ id: "version-1", companyId: "other", projectId: "project-1" }] }, database)).rejects.toThrow("database");
+    database.documentVersion.findFirst = async () => ({ id: "version-1", projectDocumentId: "document-1" });
+    database.budgetItem.findFirst = async () => null;
     await expect(runReviewJob({ ...input(), budgetItems: [{ ...input().budgetItems[0], companyId: "other" }] }, database)).rejects.toThrow("does not belong");
   });
 
@@ -145,6 +156,7 @@ describe("runReviewJob", () => {
   it("requires the exact document version set and budget ownership before creating a run", async () => {
     const database = client();
     await expect(runReviewJob({ ...input(), documentVersionIds: ["version-1", "version-2"] }, database)).rejects.toThrow("exact");
+    database.budget.findFirst = async () => null;
     await expect(runReviewJob({ ...input(), budgetReference: { id: "budget-1", companyId: "other", projectId: "project-1" } }, database)).rejects.toThrow("Budget does not belong");
     expect(database.runs).toHaveLength(0);
   });
@@ -155,5 +167,19 @@ describe("runReviewJob", () => {
     expect(database.evidence).toHaveLength(1);
     expect(database.links).toHaveLength(1);
     expect(database.findings).toHaveLength(1);
+  });
+
+  it("does not let an expired worker checkpoint, audit, publish, or cancel", async () => {
+    const database = client();
+    await expect(runReviewJob({ ...input(), shouldCancel: () => { const progress = database.runs[0].progressJson as { lease: { expiresAt: string } }; progress.lease.expiresAt = new Date(0).toISOString(); return false; } }, database)).rejects.toThrow("lease");
+    expect(database.runs[0].status).toBe("RUNNING");
+    expect(database.events.some((event) => event.eventType === "REVIEW_STAGE_COMPLETED")).toBe(false);
+  });
+
+  it("uses database ownership, not caller references, for every scoped entity", async () => {
+    const database = client();
+    await expect(runReviewJob({ ...input(), budgetReference: { id: "budget-1", companyId: "company-1", projectId: "project-1" }, budgetId: "budget-other" }, database)).rejects.toThrow("Budget does not belong");
+    database.documentVersion.findFirst = async () => null;
+    await expect(runReviewJob({ ...input(), documentVersions: [{ id: "version-1", companyId: "other", projectId: "project-1" }] }, database)).rejects.toThrow("database");
   });
 });

@@ -18,12 +18,16 @@ export interface ReviewBudgetReference { id: string; companyId: string; projectI
 export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; }
 export interface RunReviewJobResult { reviewRunId: string; status: ReviewRunStatus; stages: ReviewStage[]; warnings: WarningJson[]; idempotencyKey: string; }
 export interface ReviewPipelineClient {
-  budget?: { findFirst(args: { where: Where }): Promise<Row | null> };
+  budget: { findFirst(args: { where: Where }): Promise<Row | null> };
+  project: { findFirst(args: { where: Where }): Promise<Row | null> };
+  projectDocument: { findFirst(args: { where: Where }): Promise<Row | null> };
+  documentVersion: { findFirst(args: { where: Where }): Promise<Row | null> };
+  budgetItem: { findFirst(args: { where: Where }): Promise<Row | null> };
   reviewRun: { findFirst(args: { where: Where }): Promise<Row | null>; findUnique(args: { where: Where }): Promise<Row | null>; findMany(args: { where: Where }): Promise<Row[]>; create(args: { data: Row }): Promise<Row>; updateMany(args: { where: Where; data: Row }): Promise<{ count: number }>; };
   reviewRunDocumentVersion: { upsert(args: { where: Where; create: Row; update: Row }): Promise<Row>; };
-  reviewEvidence: { findFirst(args: { where: Where }): Promise<Row | null>; create(args: { data: Row }): Promise<Row>; };
-  entityLink: { findFirst(args: { where: Where }): Promise<Row | null>; create(args: { data: Row }): Promise<Row>; };
-  reviewFinding: { findFirst(args: { where: Where }): Promise<Row | null>; create(args: { data: Row }): Promise<Row>; };
+  reviewEvidence: { findFirst(args: { where: Where }): Promise<Row | null>; upsert(args: { where: Where; create: Row; update: Row }): Promise<Row>; };
+  entityLink: { findFirst(args: { where: Where }): Promise<Row | null>; upsert(args: { where: Where; create: Row; update: Row }): Promise<Row>; };
+  reviewFinding: { findFirst(args: { where: Where }): Promise<Row | null>; upsert(args: { where: Where; create: Row; update: Row }): Promise<Row>; };
   reviewAuditEvent: { create(args: { data: Row }): Promise<Row>; };
   $transaction<T>(callback: (transaction: ReviewPipelineClient) => Promise<T>, options?: TransactionOptions): Promise<T>;
 }
@@ -32,12 +36,11 @@ const activeStatuses = ["DRAFT", "QUEUED", "RUNNING"];
 const idempotencyKeyFor = (input: RunReviewJobInput): string => createHash("sha256").update(JSON.stringify({ companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, documentVersionIds: [...input.documentVersionIds].sort(), configuration: input.configuration, rulesVersion: input.rulesVersion })).digest("hex");
 const runIdFor = (key: string): string => `review-${key}`;
 const json = (value: unknown): unknown => value;
-const isUniqueViolation = (error: unknown): boolean => (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") || error instanceof Error && error.message.includes("P2002");
+const isRetryableUniqueOrSerializationConflict = (error: unknown): boolean => { if (typeof error === "object" && error !== null && "code" in error) return error.code === "P2002" || error.code === "P2034"; return error instanceof Error && (/P2002|P2034|serialization/i).test(error.message); };
 
 export async function runReviewJob(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<RunReviewJobResult> {
   const configuration = parseReviewConfiguration(input.configuration);
-  validateInput(input);
-  if (client.budget && !await client.budget.findFirst({ where: { id: input.budgetId, companyId: input.companyId, projectId: input.projectId } })) throw new Error("Budget does not belong to the requested tenant/project.");
+  await validateInput(input, client);
   if (input.humanReviewRequired === false || input.automaticBudgetMutation === true) throw new Error("Review guardrails cannot be disabled.");
   const key = idempotencyKeyFor(input);
   const id = runIdFor(key);
@@ -53,13 +56,13 @@ export async function runReviewJob(input: RunReviewJobInput, client: ReviewPipel
     }, { isolationLevel: "Serializable" });
   } catch (error) {
     const concurrent = await client.reviewRun.findUnique({ where: { id_companyId_projectId: { id, companyId: input.companyId, projectId: input.projectId } } });
-    if (!concurrent || !(error instanceof Error && error.message.includes("P2002"))) throw error;
+    if (!concurrent || !isRetryableUniqueOrSerializationConflict(error)) throw error;
     run = concurrent;
   }
   if (["COMPLETED", "COMPLETED_WITH_WARNINGS", "CANCELLED"].includes(String(run.status))) return result(run, key);
   const ownsRun = await claimRun(client, input, run, claimToken);
   if (!ownsRun) return result((await ownedRun(client, input, id)) ?? run, key);
-  return executeFromCheckpoint(input, client, run, configuration, key);
+  return executeFromCheckpoint(input, client, run, configuration, key, claimToken);
 }
 
 async function claimRun(client: ReviewPipelineClient, input: RunReviewJobInput, run: Row, token: string): Promise<boolean> {
@@ -70,7 +73,7 @@ async function claimRun(client: ReviewPipelineClient, input: RunReviewJobInput, 
   return changed.count > 0;
 }
 
-async function executeFromCheckpoint(input: RunReviewJobInput, client: ReviewPipelineClient, run: Row, configuration: ReviewConfiguration, key: string): Promise<RunReviewJobResult> {
+async function executeFromCheckpoint(input: RunReviewJobInput, client: ReviewPipelineClient, run: Row, configuration: ReviewConfiguration, key: string, claimToken: string): Promise<RunReviewJobResult> {
   const id = String(run.id);
   const stored = (run.progressJson ?? {}) as { checkpoints?: Array<{ stage?: string; status?: string }> };
   const failedIndex = stored.checkpoints?.findIndex((entry) => entry.status === "FAILED") ?? -1;
@@ -81,22 +84,24 @@ async function executeFromCheckpoint(input: RunReviewJobInput, client: ReviewPip
     const stage = REVIEW_STAGES[index];
     const correlationId = `${id}:${stage}:${Date.now()}`;
     try {
-      await checkpoint(client, input, id, stage, index, "RUNNING", 0, warnings, correlationId);
-      if (await isCancellationRequested(input, client, id)) return cancelResult(client, input, id, stage, warnings, key, correlationId);
+      await checkpoint(client, input, id, stage, index, "RUNNING", 0, warnings, correlationId, claimToken);
+      if (await isCancellationRequested(input, client, id)) return cancelResult(client, input, id, stage, warnings, key, correlationId, claimToken);
       const count = await processStage(stage, input, client, id, configuration);
-      await checkpoint(client, input, id, stage, index, "COMPLETED", count, warnings, correlationId);
-      await client.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType: "REVIEW_STAGE_COMPLETED", correlationId, payloadJson: { stage, status: "COMPLETED", count, warnings } } });
+      await checkpoint(client, input, id, stage, index, "COMPLETED", count, warnings, correlationId, claimToken);
+      await createAudit(client, input, id, claimToken, { stage, status: "COMPLETED", count, warnings }, correlationId, "REVIEW_STAGE_COMPLETED");
     } catch (error) {
       const warning: WarningJson = { code: "STAGE_FAILED", message: error instanceof Error ? error.message : "Review stage failed.", source: stage };
       warnings.push(warning);
-      await checkpoint(client, input, id, stage, index, "FAILED", 0, warnings, correlationId).catch(() => undefined);
-      await client.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType: "REVIEW_STAGE_FAILED", correlationId, payloadJson: { stage, status: "FAILED", count: 0, warnings: [warning] } } }).catch(() => undefined);
-      await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING" }, data: { status: "FAILED", warningsJson: warnings, finishedAt: new Date() } });
+      await checkpoint(client, input, id, stage, index, "FAILED", 0, warnings, correlationId, claimToken).catch(() => undefined);
+      await createAudit(client, input, id, claimToken, { stage, status: "FAILED", count: 0, warnings: [warning] }, correlationId, "REVIEW_STAGE_FAILED").catch(() => undefined);
+      const failedRun = await ownedRun(client, input, id);
+      if (leaseValid(failedRun, claimToken)) await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: failedRun?.progressJson } }, data: { status: "FAILED", warningsJson: warnings, finishedAt: new Date() } });
       throw error;
     }
   }
   const status: ReviewRunStatus = warnings.length > 0 ? "COMPLETED_WITH_WARNINGS" : "COMPLETED";
-  const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING" }, data: { status, warningsJson: warnings, finishedAt: new Date() } });
+  const current = await ownedRun(client, input, id);
+  const changed = leaseValid(current, claimToken) ? await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { status, warningsJson: warnings, finishedAt: new Date() } }) : { count: 0 };
   const final = await ownedRun(client, input, id);
   if (changed.count === 0 && final?.status === "CANCELLED") return result(final, key);
   return result(final ?? { id, status, progressJson: {}, warningsJson: warnings }, key);
@@ -106,24 +111,30 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
   if (stage === "validating") return input.budgetItems.length + input.documentVersionIds.length;
   if (stage === "extracting") { await client.$transaction(async (transaction) => { for (const documentVersionId of input.documentVersionIds) await transaction.reviewRunDocumentVersion.upsert({ where: { reviewRunId_documentVersionId: { reviewRunId: runId, documentVersionId } }, create: { companyId: input.companyId, projectId: input.projectId, reviewRunId: runId, documentVersionId }, update: {} }); }); return input.documentVersionIds.length; }
   if (stage === "classifying") return input.evidence.length;
-  if (stage === "identifying evidence") { await client.$transaction(async (transaction) => { for (const evidence of input.evidence) { const found = await transaction.reviewEvidence.findFirst({ where: { documentVersionId: evidence.documentVersionId, sourceHash: evidence.sourceHash, companyId: input.companyId, projectId: input.projectId } }); if (!found) { try { await transaction.reviewEvidence.create({ data: evidenceData(input, evidence) }); } catch (error) { if (!isUniqueViolation(error)) throw error; } } } }); return input.evidence.length; }
-  if (stage === "matching") { let count = 0; await client.$transaction(async (transaction) => { for (const item of input.budgetItems) for (const candidate of matchBudgetItemToEvidence(item, input.evidence).filter((entry) => entry.eligibleForFindings)) { const found = await transaction.entityLink.findFirst({ where: { budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId, companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId } }); if (!found) { try { await transaction.entityLink.create({ data: linkData(input, candidate) }); count += 1; } catch (error) { if (!isUniqueViolation(error)) throw error; } } } }); return count; }
-  if (stage === "rules" || stage === "prioritizing") { let count = 0; await client.$transaction(async (transaction) => { for (const item of input.budgetItems) { const candidates = matchBudgetItemToEvidence(item, input.evidence); for (const evidence of input.evidence.filter((entry) => entry.primary)) { const link = candidates.find((entry) => entry.evidenceId === evidence.id && entry.eligibleForFindings); const findings = evaluateFindingRules({ item, evidence, link: link ? { evidenceId: link.evidenceId, confidence: link.confidence, score: link.score } : undefined, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: configuration.findingTypes }); for (const finding of findings) { if (finding.type === "MISSING_DOCUMENTATION" && input.extractionWarnings?.some((warning) => warning.source === evidence.documentVersionId)) continue; const found = await transaction.reviewFinding.findFirst({ where: { reviewRunId: runId, budgetItemId: finding.budgetItemId, evidenceId: finding.evidenceId, findingType: finding.type, companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId } }); if (!found) { try { await transaction.reviewFinding.create({ data: findingData(input, runId, finding, link?.evidenceId) }); count += 1; } catch (error) { if (!isUniqueViolation(error)) throw error; } } } } } }); return count; }
+  if (stage === "identifying evidence") { await client.$transaction(async (transaction) => { for (const evidence of input.evidence) await transaction.reviewEvidence.upsert({ where: { documentVersionId_sourceHash: { documentVersionId: evidence.documentVersionId, sourceHash: evidence.sourceHash } }, create: evidenceData(input, evidence), update: {} }); }); return input.evidence.length; }
+  const persistedEvidence = await getPersistedEvidence(input, client);
+  if (stage === "matching") { let count = 0; await client.$transaction(async (transaction) => { for (const item of input.budgetItems) for (const candidate of matchBudgetItemToEvidence(item, persistedEvidence).filter((entry) => entry.eligibleForFindings)) { await transaction.entityLink.upsert({ where: { budgetItemId_evidenceId: { budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId } }, create: linkData(input, candidate), update: {} }); count += 1; } }); return count; }
+  if (stage === "rules" || stage === "prioritizing") { let count = 0; await client.$transaction(async (transaction) => { for (const item of input.budgetItems) { const candidates = matchBudgetItemToEvidence(item, persistedEvidence); for (const evidence of persistedEvidence.filter((entry) => entry.primary)) { const link = candidates.find((entry) => entry.evidenceId === evidence.id && entry.eligibleForFindings); const findings = evaluateFindingRules({ item, evidence, link: link ? { evidenceId: link.evidenceId, confidence: link.confidence, score: link.score } : undefined, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: configuration.findingTypes }); for (const finding of findings) { if (finding.type === "MISSING_DOCUMENTATION" && input.extractionWarnings?.some((warning) => warning.source === evidence.documentVersionId)) continue; await transaction.reviewFinding.upsert({ where: { id_companyId_projectId: { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId } }, create: findingData(input, runId, finding, link?.evidenceId), update: {} }); count += 1; } } } }); return count; }
   return input.budgetItems.length + input.evidence.length;
 }
 
-function validateInput(input: RunReviewJobInput): void {
+async function validateInput(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<void> {
   if (input.documentVersionIds.length === 0) throw new Error("At least one document version is required.");
-  if (input.budgetReference.id !== input.budgetId || input.budgetReference.companyId !== input.companyId || input.budgetReference.projectId !== input.projectId) throw new Error("Budget does not belong to the requested tenant/project.");
+  if (!await client.project.findFirst({ where: { id: input.projectId, companyId: input.companyId } })) throw new Error("Project does not belong to the requested company.");
+  if (!await client.budget.findFirst({ where: { id: input.budgetId, companyId: input.companyId, projectId: input.projectId } })) throw new Error("Budget does not belong to the requested tenant/project.");
   if (input.documentVersions.length !== input.documentVersionIds.length || new Set(input.documentVersionIds).size !== input.documentVersionIds.length || new Set(input.documentVersions.map((version) => version.id)).size !== input.documentVersions.length || input.documentVersions.some((version) => !input.documentVersionIds.includes(version.id))) throw new Error("Requested document version set is not exact.");
-  for (const version of input.documentVersions) if (version.companyId !== input.companyId || version.projectId !== input.projectId) throw new Error("Document version does not belong to the requested tenant/project.");
-  for (const item of input.budgetItems) if (item.budgetId !== input.budgetId || (item.companyId !== undefined && item.companyId !== input.companyId) || (item.projectId !== undefined && item.projectId !== input.projectId)) throw new Error("Budget item does not belong to the requested tenant/project/budget.");
-  for (const evidence of input.evidence) if (!input.documentVersionIds.includes(evidence.documentVersionId) || (evidence.companyId !== undefined && evidence.companyId !== input.companyId) || (evidence.projectId !== undefined && evidence.projectId !== input.projectId)) throw new Error("Evidence does not belong to the requested tenant/project/document version.");
+  for (const version of input.documentVersions) { const stored = await client.documentVersion.findFirst({ where: { id: version.id, companyId: input.companyId, projectId: input.projectId } }); if (!stored) throw new Error("Document version is not present in the database for this tenant/project."); if (!await client.projectDocument.findFirst({ where: { id: stored.projectDocumentId, companyId: input.companyId, projectId: input.projectId } })) throw new Error("Project document is not present in the database for this tenant/project."); }
+  for (const item of input.budgetItems) { if (item.budgetId !== input.budgetId || !await client.budgetItem.findFirst({ where: { id: item.id, budgetId: input.budgetId } })) throw new Error("Budget item does not belong to the requested tenant/project/budget."); }
+  for (const evidence of input.evidence) if (!input.documentVersionIds.includes(evidence.documentVersionId)) throw new Error("Evidence does not belong to the requested tenant/project/document version.");
 }
+async function getPersistedEvidence(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<ReviewEvidence[]> { const persisted: ReviewEvidence[] = []; for (const evidence of input.evidence) { const stored = await client.reviewEvidence.findFirst({ where: { documentVersionId: evidence.documentVersionId, sourceHash: evidence.sourceHash, companyId: input.companyId, projectId: input.projectId } }); if (!stored) throw new Error("Evidence was not persisted for the requested document version."); persisted.push({ ...evidence, id: String(stored.id) }); } return persisted; }
 async function ownedRun(client: ReviewPipelineClient, input: RunReviewJobInput, id: string): Promise<Row | null> { return client.reviewRun.findUnique({ where: { id_companyId_projectId: { id, companyId: input.companyId, projectId: input.projectId } } }); }
-async function checkpoint(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, stage: ReviewStage, index: number, status: string, count: number, warnings: WarningJson[], correlationId: string): Promise<void> { const current = await ownedRun(client, input, id); const existing = (current?.progressJson as { checkpoints?: Array<Record<string, unknown>> } | undefined)?.checkpoints ?? []; const checkpoints = [...existing]; const entry = { stage, status, count, total: 8, warnings, correlationId }; const at = checkpoints.findIndex((value) => value.stage === stage); if (at >= 0) checkpoints[at] = entry; else checkpoints.push(entry); const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING" }, data: { progressJson: { stage, completed: index, total: 8, percent: stage === "completed" ? 100 : Math.round((index / 8) * 100), checkpoints }, warningsJson: warnings } }); if (changed.count === 0) throw new Error("Review run is no longer active."); }
+function leaseFor(token: string): { token: string; expiresAt: string } { return { token, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() }; }
+function leaseValid(run: Row | null, token: string): boolean { const lease = ((run?.progressJson ?? {}) as { lease?: { token?: string; expiresAt?: string } }).lease; return run?.status === "RUNNING" && lease?.token === token && !!lease.expiresAt && Date.parse(lease.expiresAt) > Date.now(); }
+async function checkpoint(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, stage: ReviewStage, index: number, status: string, count: number, warnings: WarningJson[], correlationId: string, token: string): Promise<void> { const current = await ownedRun(client, input, id); if (!leaseValid(current, token)) throw new Error("Review lease is no longer active."); const existing = (current?.progressJson as { checkpoints?: Array<Record<string, unknown>> } | undefined)?.checkpoints ?? []; const checkpoints = [...existing]; const entry = { stage, status, count, total: 8, warnings, correlationId }; const at = checkpoints.findIndex((value) => value.stage === stage); if (at >= 0) checkpoints[at] = entry; else checkpoints.push(entry); const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { progressJson: { stage, completed: index, total: 8, percent: stage === "completed" ? 100 : Math.round((index / 8) * 100), checkpoints, lease: leaseFor(token) }, warningsJson: warnings } }); if (changed.count === 0) throw new Error("Review run is no longer active."); }
 async function isCancellationRequested(input: RunReviewJobInput, client: ReviewPipelineClient, id: string): Promise<boolean> { return (await ownedRun(client, input, id))?.status === "CANCELLED" || Boolean(await input.shouldCancel?.()); }
-async function cancelResult(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, stage: ReviewStage, warnings: WarningJson[], key: string, correlationId: string): Promise<RunReviewJobResult> { await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING" }, data: { status: "CANCELLED", finishedAt: new Date(), warningsJson: warnings } }); await client.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType: "REVIEW_CANCELLED", correlationId, payloadJson: { stage, warnings } } }); return result((await ownedRun(client, input, id)) ?? { id, status: "CANCELLED", progressJson: {}, warningsJson: warnings }, key); }
+async function createAudit(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string, payload: Row, correlationId: string, eventType: string): Promise<void> { const current = await ownedRun(client, input, id); if (!leaseValid(current, token)) throw new Error("Review lease is no longer active."); const guarded = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { progressJson: { ...(current?.progressJson as Record<string, unknown>), lease: leaseFor(token) } } }); if (guarded.count === 0) throw new Error("Review lease is no longer active."); await client.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType, correlationId, payloadJson: { ...payload, leaseToken: token } } }); }
+async function cancelResult(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, stage: ReviewStage, warnings: WarningJson[], key: string, correlationId: string, token: string): Promise<RunReviewJobResult> { const current = await ownedRun(client, input, id); const changed = leaseValid(current, token) ? await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { status: "CANCELLED", finishedAt: new Date(), warningsJson: warnings } }) : { count: 0 }; if (changed.count > 0) await client.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType: "REVIEW_CANCELLED", correlationId, payloadJson: { stage, warnings, leaseToken: token } } }); return result((await ownedRun(client, input, id)) ?? { id, status: "CANCELLED", progressJson: {}, warningsJson: warnings }, key); }
 function result(run: Row, key: string): RunReviewJobResult { const checkpoints = (run.progressJson as { checkpoints?: Array<{ stage?: string }> } | undefined)?.checkpoints ?? []; const stages = checkpoints.map((entry) => entry.stage).filter((stage): stage is ReviewStage => typeof stage === "string" && (REVIEW_STAGES as readonly string[]).includes(stage)); return { reviewRunId: String(run.id), status: String(run.status) as ReviewRunStatus, stages: [...new Set(stages)], warnings: Array.isArray(run.warningsJson) ? run.warningsJson as WarningJson[] : [], idempotencyKey: key }; }
 function stableId(prefix: string, ...parts: string[]): string { return `${prefix}-${createHash("sha256").update(parts.join("\u001f")).digest("hex")}`; }
 function evidenceData(input: RunReviewJobInput, evidence: ReviewEvidence): Row { return { id: stableId("evidence", evidence.documentVersionId, evidence.sourceHash), companyId: input.companyId, projectId: input.projectId, documentVersionId: evidence.documentVersionId, evidenceType: evidence.evidenceType, originalText: evidence.originalText, normalizedText: evidence.normalizedText, locationJson: json(evidence.locationJson), value: evidence.quantity?.toString(), unit: evidence.unit, extractionMethod: "review-pipeline", confidence: evidence.confidence, sourceHash: evidence.sourceHash }; }
