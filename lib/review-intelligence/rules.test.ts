@@ -25,10 +25,10 @@ const baseInput = (): ReviewRuleInput => ({
 
 describe("evaluateFindingRules", () => {
   it("produces quantity, unit, technical and incomplete APU findings from primary evidence", () => {
-    const findings = evaluateFindingRules(baseInput());
+    const input = baseInput();
+    const findings = evaluateFindingRules({ ...input, evidence: { ...input.evidence, unit: "m3" } });
     expect(findings.map((finding) => finding.type)).toEqual([
       "QUANTITY_MISMATCH",
-      "UNIT_INCONSISTENCY",
       "TECHNICAL_SPEC_MISMATCH",
       "INCOMPLETE_APU",
     ]);
@@ -50,7 +50,9 @@ describe("evaluateFindingRules", () => {
     const input = baseInput();
     const findings = evaluateFindingRules({ ...input, link: { evidenceId: "evidence-1", confidence: "LOW", score: new Decimal("0.2") } });
 
-    expect(findings).toHaveLength(0);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].type).toBe("MISSING_DOCUMENTATION");
+    expect(findings[0].message).toBe("No encontramos documentación relacionada con suficiente confianza.");
   });
 
   it("never publishes a finding without primary evidence and never adds APU resources", () => {
@@ -59,5 +61,25 @@ describe("evaluateFindingRules", () => {
 
     expect(findings).toHaveLength(0);
     expect(input.item.apuComponents).toEqual(["cemento", "arena"]);
+  });
+
+  it("does not flag an incomplete APU without technical specification evidence", () => {
+    const input = baseInput();
+    const findings = evaluateFindingRules({ ...input, evidence: { ...input.evidence, technicalSpecification: undefined } });
+
+    expect(findings.some((finding) => finding.type === "INCOMPLETE_APU")).toBe(false);
+  });
+
+  it("does not calculate quantity mismatch for incompatible units", () => {
+    const findings = evaluateFindingRules(baseInput());
+
+    expect(findings.some((finding) => finding.type === "QUANTITY_MISMATCH")).toBe(false);
+  });
+
+  it("normalizes diacritics when comparing technical specifications", () => {
+    const input = baseInput();
+    const findings = evaluateFindingRules({ ...input, evidence: { ...input.evidence, unit: "m3", technicalSpecification: "Concréto f'c 210" } });
+
+    expect(findings.some((finding) => finding.type === "TECHNICAL_SPEC_MISMATCH")).toBe(false);
   });
 });

@@ -12,6 +12,10 @@ export interface BudgetItemMatchInput {
   discipline?: string;
   attributes?: Record<string, string>;
   location?: MatchLocation;
+  hierarchy?: string[];
+  sectionHeader?: string;
+  crossReferences?: string[];
+  previouslyConfirmedEvidenceIds?: string[];
 }
 
 export interface EvidenceMatchInput {
@@ -23,6 +27,10 @@ export interface EvidenceMatchInput {
   discipline?: string;
   attributes?: Record<string, string>;
   location?: MatchLocation;
+  hierarchy?: string[];
+  sectionHeader?: string;
+  crossReferences?: string[];
+  previouslyConfirmed?: boolean;
 }
 
 export interface MatchingOptions {
@@ -37,6 +45,7 @@ export interface EntityLinkCandidate {
   confidence: ConfidenceLevel;
   eligibleForFindings: boolean;
   signals: SignalsJson;
+  explanation: string[];
 }
 
 const DEFAULTS = { highThreshold: 0.8, mediumThreshold: 0.5 } as const;
@@ -75,12 +84,36 @@ function confidenceFor(score: number, options: Required<MatchingOptions>): Confi
   return score >= options.highThreshold ? "HIGH" : score >= options.mediumThreshold ? "MEDIUM" : "LOW";
 }
 
+function validateThresholds(options: Required<MatchingOptions>): void {
+  if (!Number.isFinite(options.highThreshold) || !Number.isFinite(options.mediumThreshold)
+    || options.highThreshold < 0 || options.highThreshold > 1
+    || options.mediumThreshold < 0 || options.mediumThreshold > 1
+    || options.highThreshold <= options.mediumThreshold) {
+    throw new Error("Matching thresholds must be finite, within 0..1, and highThreshold must exceed mediumThreshold.");
+  }
+}
+
+function listSignal(left: string[] | undefined, right: string[] | undefined): number {
+  if (!left?.length || !right?.length) return 0;
+  const normalizedRight = new Set(right.map((value) => normalizedText(value)));
+  const matches = left.filter((value) => normalizedRight.has(normalizedText(value))).length;
+  return matches / left.length;
+}
+
+function hierarchySignal(left: string[] | undefined, right: string[] | undefined): number {
+  if (!left?.length || !right?.length) return 0;
+  let common = 0;
+  while (common < left.length && common < right.length && normalizedText(left[common]) === normalizedText(right[common])) common += 1;
+  return common / Math.max(left.length, right.length);
+}
+
 export function matchBudgetItemToEvidence(
   item: BudgetItemMatchInput,
   evidence: EvidenceMatchInput[],
   options: MatchingOptions = {},
 ): EntityLinkCandidate[] {
   const thresholds = { ...DEFAULTS, ...options };
+  validateThresholds(thresholds);
   return evidence.map((entry) => {
     const signals: SignalsJson = {
       code: item.code !== undefined && entry.code !== undefined && normalizedText(item.code) === normalizedText(entry.code) ? 1 : 0,
@@ -89,17 +122,32 @@ export function matchBudgetItemToEvidence(
       discipline: item.discipline && entry.discipline && normalizedText(item.discipline) === normalizedText(entry.discipline) ? 1 : 0,
       attributes: attributesSignal(item.attributes, entry.attributes),
       proximity: proximitySignal(item.location, entry.location),
+      hierarchy: hierarchySignal(item.hierarchy, entry.hierarchy),
+      sectionHeader: item.sectionHeader && entry.sectionHeader && normalizedText(item.sectionHeader) === normalizedText(entry.sectionHeader) ? 1 : 0,
+      crossReference: listSignal(item.crossReferences, entry.crossReferences),
+      confirmedMatch: item.previouslyConfirmedEvidenceIds?.includes(entry.id) || entry.previouslyConfirmed === true ? 1 : 0,
     };
-    const weights: Readonly<Record<string, string>> = { code: "0.35", description: "0.25", unit: "0.15", discipline: "0.1", attributes: "0.1", proximity: "0.05" };
-    const activeWeight = Object.entries(signals).reduce((total, [signal, value]) => total.plus(value > 0 || (signal === "description" && entry.description !== undefined) || (signal === "unit" && entry.unit !== undefined) || (signal === "discipline" && entry.discipline !== undefined) || (signal === "attributes" && entry.attributes !== undefined) || (signal === "proximity" && entry.location?.row !== undefined) || (signal === "code" && entry.code !== undefined) ? new Decimal(weights[signal]) : new Decimal(0)), new Decimal(0));
+    const weights: Readonly<Record<string, string>> = { code: "0.3", description: "0.2", unit: "0.12", discipline: "0.08", attributes: "0.08", proximity: "0.05", hierarchy: "0.06", sectionHeader: "0.04", crossReference: "0.03", confirmedMatch: "0.04" };
+    const available: Readonly<Record<string, boolean>> = {
+      code: entry.code !== undefined, description: entry.description !== undefined, unit: entry.unit !== undefined,
+      discipline: entry.discipline !== undefined, attributes: entry.attributes !== undefined, proximity: entry.location?.row !== undefined,
+      hierarchy: entry.hierarchy !== undefined, sectionHeader: entry.sectionHeader !== undefined, crossReference: entry.crossReferences !== undefined,
+      confirmedMatch: entry.previouslyConfirmed !== undefined || item.previouslyConfirmedEvidenceIds !== undefined,
+    };
+    const activeWeight = Object.entries(available).reduce((total, [signal, isAvailable]) => total.plus(isAvailable ? new Decimal(weights[signal]) : new Decimal(0)), new Decimal(0));
     const weightedScore = new Decimal(signals.code).times(weights.code)
       .plus(new Decimal(signals.description).times("0.25"))
-      .plus(new Decimal(signals.unit).times("0.15"))
-      .plus(new Decimal(signals.discipline).times("0.1"))
-      .plus(new Decimal(signals.attributes).times("0.1"))
-      .plus(new Decimal(signals.proximity).times("0.05"));
+      .plus(new Decimal(signals.unit).times(weights.unit))
+      .plus(new Decimal(signals.discipline).times(weights.discipline))
+      .plus(new Decimal(signals.attributes).times(weights.attributes))
+      .plus(new Decimal(signals.proximity).times(weights.proximity))
+      .plus(new Decimal(signals.hierarchy).times(weights.hierarchy))
+      .plus(new Decimal(signals.sectionHeader).times(weights.sectionHeader))
+      .plus(new Decimal(signals.crossReference).times(weights.crossReference))
+      .plus(new Decimal(signals.confirmedMatch).times(weights.confirmedMatch));
     const score = activeWeight.isZero() ? new Decimal(0) : weightedScore.dividedBy(activeWeight);
     const confidence = confidenceFor(score.toNumber(), thresholds);
-    return { budgetItemId: item.id, evidenceId: entry.id, score, confidence, eligibleForFindings: confidence !== "LOW", signals };
+    const explanation = Object.entries(signals).filter(([, value]) => value > 0).map(([signal, value]) => `${signal}=${value.toFixed(3)}`);
+    return { budgetItemId: item.id, evidenceId: entry.id, score, confidence, eligibleForFindings: confidence !== "LOW", signals, explanation };
   }).sort((left, right) => right.score.comparedTo(left.score));
 }

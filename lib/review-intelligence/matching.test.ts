@@ -48,4 +48,22 @@ describe("matchBudgetItemToEvidence", () => {
     expect(candidate.eligibleForFindings).toBe(false);
     expect(candidate.signals.proximity).toBe(0);
   });
+
+  it("includes hierarchy, section, cross-reference, and confirmed-match signals", () => {
+    const [candidate] = matchBudgetItemToEvidence({ ...item, hierarchy: ["01", "01.01"], sectionHeader: "Estructuras", crossReferences: ["PL-01"], previouslyConfirmedEvidenceIds: ["evidence-1"] }, [evidence({ hierarchy: ["01", "01.01"], sectionHeader: "Estructuras", crossReferences: ["PL-01"], previouslyConfirmed: true })]);
+
+    expect(candidate.signals).toMatchObject({ hierarchy: 1, sectionHeader: 1, crossReference: 1, confirmedMatch: 1 });
+    expect(candidate.explanation).toEqual(expect.arrayContaining([
+      expect.stringContaining("hierarchy"),
+      expect.stringContaining("sectionHeader"),
+      expect.stringContaining("crossReference"),
+      expect.stringContaining("confirmedMatch"),
+    ]));
+  });
+
+  it("rejects non-finite, out-of-range, and inverted confidence thresholds", () => {
+    expect(() => matchBudgetItemToEvidence(item, [evidence()], { highThreshold: Number.NaN })).toThrow();
+    expect(() => matchBudgetItemToEvidence(item, [evidence()], { mediumThreshold: -0.1 })).toThrow();
+    expect(() => matchBudgetItemToEvidence(item, [evidence()], { highThreshold: 0.5, mediumThreshold: 0.5 })).toThrow();
+  });
 });

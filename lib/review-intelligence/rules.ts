@@ -61,7 +61,7 @@ const MISSING_DOCUMENTATION_MESSAGE = "No encontramos documentación relacionada
 const RULE_VERSION = "review-rules-v1";
 
 function enabled(input: ReviewRuleInput, type: ReviewFindingType): boolean { return input.ruleTypes === undefined || input.ruleTypes.includes(type); }
-function comparableText(value: string | undefined): string { return (value ?? "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, ""); }
+function comparableText(value: string | undefined): string { return (value ?? "").toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, ""); }
 function primaryLink(input: ReviewRuleInput): boolean { return input.evidence.primary && input.link?.evidenceId === input.evidence.id && input.link.confidence !== "LOW"; }
 function candidate(input: ReviewRuleInput, type: ReviewFindingType, message: string, severity: "LOW" | "MEDIUM" | "HIGH", comparison?: FindingCandidate["comparison"]): FindingCandidate {
   const priority = calculatePriority({ evidenceConfidence: input.evidence.primary ? "HIGH" : "LOW", linkConfidence: input.link?.confidence ?? "LOW", technicalSeverity: severity, potentialImpact: comparison?.potentialImpact ?? new Decimal(0) });
@@ -70,17 +70,22 @@ function candidate(input: ReviewRuleInput, type: ReviewFindingType, message: str
 
 export function evaluateFindingRules(input: ReviewRuleInput): FindingCandidate[] {
   const findings: FindingCandidate[] = [];
-  if (enabled(input, "MISSING_DOCUMENTATION") && input.evidence.primary && !input.link) {
+  if (enabled(input, "MISSING_DOCUMENTATION") && input.evidence.primary && (!input.link || input.link.confidence === "LOW")) {
     findings.push(candidate({ ...input, link: undefined }, "MISSING_DOCUMENTATION", MISSING_DOCUMENTATION_MESSAGE, "MEDIUM"));
   }
   if (!primaryLink(input)) return findings;
   if (enabled(input, "QUANTITY_MISMATCH") && input.item.quantity !== undefined && input.evidence.quantity !== undefined) {
-    const comparison = calculateQuantityDifference({ documentValue: input.evidence.quantity, budgetValue: input.item.quantity, unitPrice: input.item.unitPrice, tolerance: input.tolerance });
-    if (comparison.exceedsTolerance) findings.push(candidate(input, "QUANTITY_MISMATCH", "La cantidad documentada supera la tolerancia configurada.", "HIGH", { documentValue: comparison.documentValue.toString(), budgetValue: comparison.budgetValue.toString(), difference: comparison.difference.toString(), percentage: comparison.percentage?.toString(), potentialImpact: comparison.potentialImpact ?? undefined, unit: input.item.unit }));
+    const budgetUnit = input.item.unit ? normalizeUnit(input.item.unit) : undefined;
+    const evidenceUnit = input.evidence.unit ? normalizeUnit(input.evidence.unit) : undefined;
+    const equivalentUnits = budgetUnit?.comparable === true && evidenceUnit?.comparable === true && budgetUnit.canonical === evidenceUnit.canonical;
+    if (equivalentUnits) {
+      const comparison = calculateQuantityDifference({ documentValue: input.evidence.quantity, budgetValue: input.item.quantity, unitPrice: input.item.unitPrice, tolerance: input.tolerance });
+      if (comparison.exceedsTolerance) findings.push(candidate(input, "QUANTITY_MISMATCH", "La cantidad documentada supera la tolerancia configurada.", "HIGH", { documentValue: comparison.documentValue.toString(), budgetValue: comparison.budgetValue.toString(), difference: comparison.difference.toString(), percentage: comparison.percentage?.toString(), potentialImpact: comparison.potentialImpact ?? undefined, unit: input.item.unit }));
+    }
   }
   if (enabled(input, "UNIT_INCONSISTENCY") && input.item.unit && input.evidence.unit && normalizeUnit(input.item.unit).canonical !== normalizeUnit(input.evidence.unit).canonical) findings.push(candidate(input, "UNIT_INCONSISTENCY", "La unidad documentada puede ser inconsistente con la partida.", "HIGH", { unit: input.item.unit, details: { documentUnit: input.evidence.unit } }));
   if (enabled(input, "TECHNICAL_SPEC_MISMATCH") && input.item.technicalSpecification && input.evidence.technicalSpecification && comparableText(input.item.technicalSpecification) !== comparableText(input.evidence.technicalSpecification)) findings.push(candidate(input, "TECHNICAL_SPEC_MISMATCH", "La especificación técnica documentada puede ser incompatible.", "HIGH", { details: { budgetSpecification: input.item.technicalSpecification, documentSpecification: input.evidence.technicalSpecification } }));
-  if (enabled(input, "INCOMPLETE_APU") && input.item.apuComponents && input.evidence.apuComponents && input.item.apuComponents.some((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component)))) findings.push(candidate(input, "INCOMPLETE_APU", "El APU documentado puede estar incompleto.", "MEDIUM", { details: { missingComponents: input.item.apuComponents.filter((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component))).join(", ") } }));
+  if (enabled(input, "INCOMPLETE_APU") && input.item.technicalSpecification && input.evidence.technicalSpecification && input.item.apuComponents && input.evidence.apuComponents && input.item.apuComponents.some((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component)))) findings.push(candidate(input, "INCOMPLETE_APU", "El APU documentado puede estar incompleto.", "MEDIUM", { details: { missingComponents: input.item.apuComponents.filter((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component))).join(", ") } }));
   return findings;
 }
 
