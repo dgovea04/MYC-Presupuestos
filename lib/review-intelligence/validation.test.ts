@@ -9,6 +9,7 @@ import {
   reviewFindingFlagsSchema,
   signalsJsonSchema,
   warningsJsonSchema,
+  validateReviewAssociationInput,
 } from "./validation";
 import { reviewFindingTypes } from "./types";
 
@@ -130,5 +131,20 @@ describe("parseReviewConfiguration", () => {
     expect(() => assertTenantScopedAssociation({ ...validAssociation, relatedProjectId: "project-b" })).toThrow();
     expect(() => assertTenantScopedAssociation({ ...validAssociation, actorCompanyId: "company-b" })).toThrow();
     expect(() => assertTenantScopedAssociation({ ...validAssociation, projectId: "" })).toThrow();
+  });
+
+  it("bloquea asociaciones inválidas en la frontera de persistencia", () => {
+    const input = {
+      companyId: "company-a",
+      projectId: "project-a",
+      relatedCompanyId: "company-a",
+      relatedProjectId: "project-a",
+      actorCompanyId: "company-a",
+    };
+
+    expect(validateReviewAssociationInput(input)).toEqual(input);
+    expect(() => validateReviewAssociationInput({ ...input, companyId: "company-b" })).toThrow();
+    expect(() => validateReviewAssociationInput({ ...input, relatedProjectId: "project-b" })).toThrow();
+    expect(() => validateReviewAssociationInput({ ...input, actorCompanyId: "company-b" })).toThrow();
   });
 });

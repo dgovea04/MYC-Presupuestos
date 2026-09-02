@@ -54,6 +54,14 @@ export interface TenantScopedAssociationInput {
   actorCompanyId?: string;
 }
 
+const tenantScopedAssociationSchema = z.object({
+  companyId: z.string().min(1),
+  projectId: z.string().min(1),
+  relatedCompanyId: z.string().min(1),
+  relatedProjectId: z.string().min(1),
+  actorCompanyId: z.string().min(1).optional(),
+}).strict();
+
 export function assertTenantProjectOwnership(input: TenantProjectOwnershipInput): void {
   if (input.companyId !== input.projectCompanyId) {
     throw new Error("Company and project tenant identifiers must match.");
@@ -70,6 +78,12 @@ export function assertTenantScopedAssociation(input: TenantScopedAssociationInpu
   if (input.actorCompanyId !== undefined && input.actorCompanyId !== input.companyId) {
     throw new Error("Actor tenant identifier must match.");
   }
+}
+
+export function validateReviewAssociationInput(input: unknown): TenantScopedAssociationInput {
+  const parsed = tenantScopedAssociationSchema.parse(input);
+  assertTenantScopedAssociation(parsed);
+  return parsed;
 }
 
 export function parseReviewConfiguration(input: unknown): ReviewConfiguration {
