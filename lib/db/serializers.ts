@@ -16,6 +16,7 @@ import type {
   ValuationRecord,
 } from "@/types/polynomial-formula";
 import type { ResourceRecord } from "@/types/resource";
+import { sortApuResourcesByCategory } from "@/lib/calculations/apu";
 
 type SerializableCatalogPartida = {
   id: string;
@@ -266,7 +267,7 @@ export function serializeBudget(budget: {
             unit: item.apu.unit,
             performance: decimalToNumber(item.apu.performance),
             totalUnitCost: decimalToNumber(item.apu.totalUnitCost),
-            resources: item.apu.resources.map((resource) => ({
+            resources: sortApuResourcesByCategory(item.apu.resources).map((resource) => ({
               id: resource.id,
               apuId: resource.apuId,
               resourceId: resource.resourceId ?? undefined,

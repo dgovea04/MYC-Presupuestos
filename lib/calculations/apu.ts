@@ -1,16 +1,19 @@
 import { toNumber } from "@/lib/utils";
 
-type ApuCalculationRow = {
+type ApuCategorySource = {
   resourceType?: string | null;
+  resource?: {
+    unit?: string | null;
+    category?: string | null;
+  } | null;
+};
+
+type ApuCalculationRow = ApuCategorySource & {
   crew?: number | null;
   quantity: number;
   unitPrice: number;
   subtotal: number;
   unit?: string | null;
-  resource?: {
-    unit?: string | null;
-    category?: string | null;
-  };
 };
 
 export type ApuPresentationCategory = "LABOR" | "MATERIAL" | "EQUIPMENT" | "SUBCONTRACT" | "SUBPARTIDA";
@@ -27,6 +30,17 @@ export const APU_PRESENTATION_CATEGORY_ORDER: ApuPresentationCategory[] = [
   "SUBCONTRACT",
   "SUBPARTIDA",
 ];
+
+export function sortApuResourcesByCategory<T extends ApuCategorySource>(rows: T[]): T[] {
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => {
+      const categoryOrder = APU_PRESENTATION_CATEGORY_ORDER.indexOf(getApuPresentationCategory(left.row));
+      const rightCategoryOrder = APU_PRESENTATION_CATEGORY_ORDER.indexOf(getApuPresentationCategory(right.row));
+      return categoryOrder - rightCategoryOrder || left.index - right.index;
+    })
+    .map(({ row }) => row);
+}
 
 type ResourceBucket = "LABOR" | "MATERIAL" | "EQUIPMENT" | "TOOLS" | "SUBCONTRACT" | "OTHER";
 
@@ -124,7 +138,7 @@ export function isEquipmentApuRow(row: Pick<ApuCalculationRow, "resourceType" | 
   return resolveRowBucket(row) === "EQUIPMENT";
 }
 
-export function getApuPresentationCategory(row: Pick<ApuCalculationRow, "resourceType" | "resource">): ApuPresentationCategory {
+export function getApuPresentationCategory(row: ApuCategorySource): ApuPresentationCategory {
   const normalizedType = normalizeResourceType(row.resourceType ?? row.resource?.category ?? "");
 
   if (normalizedType === "LABOR" || normalizedType === "MO" || normalizedType === "MANO DE OBRA") return "LABOR";

@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { calculateApuRows, calculateApuSummary, calculateApuTotalUnitCost } from "@/lib/calculations/apu";
+import { calculateApuRows, calculateApuSummary, calculateApuTotalUnitCost, sortApuResourcesByCategory } from "@/lib/calculations/apu";
+
+describe("sortApuResourcesByCategory", () => {
+  it("orders labor, materials, equipment, subcontracts and subpartidas", () => {
+    const rows = [
+      { id: "subpartida", resourceType: "SUBPARTIDA" },
+      { id: "equipment", resourceType: "EQUIPMENT" },
+      { id: "material", resourceType: "MATERIAL" },
+      { id: "subcontract", resourceType: "SUBCONTRACT" },
+      { id: "labor", resourceType: "LABOR" },
+    ];
+
+    expect(sortApuResourcesByCategory(rows).map((row) => row.id)).toEqual([
+      "labor",
+      "material",
+      "equipment",
+      "subcontract",
+      "subpartida",
+    ]);
+  });
+});
 
 describe("calculateApuSummary", () => {
   it("returns the same derived rows and total unit cost as the dedicated helpers", () => {
