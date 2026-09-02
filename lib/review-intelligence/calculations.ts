@@ -10,6 +10,8 @@ export interface QuantityComparison {
   exceedsTolerance: boolean;
 }
 
+const MINIMUM_ABSOLUTE_TOLERANCE = new Decimal("0.01");
+
 export function calculateQuantityDifference(input: {
   documentValue: Decimal;
   budgetValue: Decimal;
@@ -18,7 +20,7 @@ export function calculateQuantityDifference(input: {
 }): QuantityComparison {
   const difference = input.documentValue.minus(input.budgetValue);
   const onePercent = input.budgetValue.abs().times(new Decimal("0.01"));
-  const tolerance = Decimal.max(input.tolerance.abs(), onePercent);
+  const tolerance = Decimal.max(input.tolerance.abs(), onePercent, MINIMUM_ABSOLUTE_TOLERANCE);
   const percentage = input.budgetValue.isZero()
     ? null
     : difference.abs().dividedBy(input.budgetValue.abs()).times(new Decimal(100));

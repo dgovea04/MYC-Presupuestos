@@ -40,4 +40,16 @@ describe("calculatePriority", () => {
     expect(result.score.greaterThanOrEqualTo(0)).toBe(true);
     expect(result.impactFactor.greaterThanOrEqualTo(0)).toBe(true);
   });
+
+  it("multiplies all priority factors for nontrivial inputs", () => {
+    const result = calculatePriority(input({
+      evidenceConfidence: "MEDIUM",
+      linkConfidence: "MEDIUM",
+      technicalSeverity: "MEDIUM",
+      potentialImpact: new Decimal("500"),
+    }));
+
+    expect(result.score.toFixed(6)).toBe("0.143748");
+    expect(result.priority).toBe("LOW");
+  });
 });

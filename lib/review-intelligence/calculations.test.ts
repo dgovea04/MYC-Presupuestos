@@ -56,4 +56,15 @@ describe("calculateQuantityDifference", () => {
     expect(result.potentialImpact?.toFixed(2)).toBe("20.00");
     expect(result.exceedsTolerance).toBe(true);
   });
+
+  it("uses the absolute 0.01 floor with zero budget and configured tolerance", () => {
+    const result = calculateQuantityDifference({
+      documentValue: new Decimal("0.02"),
+      budgetValue: new Decimal("0"),
+      tolerance: new Decimal("0"),
+    });
+
+    expect(result.tolerance.toFixed(2)).toBe("0.01");
+    expect(result.exceedsTolerance).toBe(true);
+  });
 });

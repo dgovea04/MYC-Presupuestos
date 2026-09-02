@@ -22,8 +22,6 @@ export interface PriorityResult {
 
 const VERSION = "priority-v1";
 const ONE = new Decimal(1);
-const FOUR = new Decimal(4);
-const WEIGHT = new Decimal("0.25");
 const IMPACT_CAP = new Decimal("1000");
 
 function confidenceFactor(value: PriorityConfidence): Decimal {
@@ -41,7 +39,7 @@ export function calculatePriority(input: PriorityInput): PriorityResult {
   const linkFactor = confidenceFactor(input.linkConfidence);
   const severityFactor = confidenceFactor(input.technicalSeverity);
   const impact = impactFactor(input.potentialImpact);
-  const score = evidenceFactor.plus(linkFactor).plus(severityFactor).plus(impact).dividedBy(FOUR);
+  const score = evidenceFactor.times(linkFactor).times(severityFactor).times(impact);
 
   return {
     priority: score.greaterThanOrEqualTo(new Decimal("0.8"))
