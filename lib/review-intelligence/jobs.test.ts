@@ -6,6 +6,7 @@ function jobClient(): ReviewJobClient & { runs: Array<Record<string, unknown>> }
   database.reviewRun = {
     findUnique: async ({ where }) => database.runs.find((run) => run.id === where.id && run.companyId === where.companyId) ?? null,
     update: async ({ where, data }) => { const run = database.runs.find((entry) => entry.id === where.id)!; Object.assign(run, data); return run; },
+    updateMany: async ({ where, data }) => { const run = database.runs.find((entry) => entry.id === where.id && (!where.status || typeof where.status === "string" && entry.status === where.status || typeof where.status === "object" && (where.status as { in?: unknown[] }).in?.includes(entry.status))); if (!run) return { count: 0 }; Object.assign(run, data); return { count: 1 }; },
     findMany: async () => database.runs,
   };
   return database;
