@@ -176,6 +176,88 @@ enum ProjectAttachmentCategory {
   OTRO
 }
 
+enum ReviewRunStatus {
+  DRAFT
+  QUEUED
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_WARNINGS
+  FAILED
+  CANCELLED
+  STALE
+}
+
+enum ReviewFindingType {
+  QUANTITY_MISMATCH
+  UNIT_INCONSISTENCY
+  TECHNICAL_SPEC_MISMATCH
+  MISSING_DOCUMENTATION
+  INCOMPLETE_APU
+}
+
+enum FindingStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+  STALE
+}
+
+enum FindingResolution {
+  ACCEPTED
+  REJECTED
+  NOT_APPLICABLE
+  NEEDS_MORE_EVIDENCE
+  CORRECTED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  COMPLETED_WITH_WARNINGS
+  FAILED
+  ARCHIVED
+}
+
+enum EvidenceType {
+  QUANTITY
+  UNIT
+  TECHNICAL_SPECIFICATION
+  DOCUMENT_REFERENCE
+  APU_COMPONENT
+  OTHER
+}
+
+enum ConfidenceLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReviewDocumentCategory {
+  PLAN
+  TECHNICAL_SPECIFICATION
+  QUANTITY_TAKEOFF
+  BUDGET
+  APU
+  OTHER
+}
+
+enum ExtractionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_WARNINGS
+  FAILED
+}
+
+enum EntityLinkValidationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
 enum ActivityEventType {
   PROJECT_CREATED
   PROJECT_UPDATED
@@ -541,6 +623,11 @@ model User {
   riskSimulationRuns            RiskSimulationRun[]
   projectMemberships            ProjectMembership[]
   teamMemberships               WorkspaceTeamMember[]
+  reviewRunsCreated             ReviewRun[]                    @relation("ReviewRunCreatedBy")
+  findingDecisions              FindingDecision[]
+  reviewAuditEvents             ReviewAuditEvent[]
+  projectDocumentsCreated      ProjectDocument[]
+  entityLinksValidated         EntityLink[]                 @relation("EntityLinkValidator")
 
   @@index([role])
   @@index([status])
@@ -1326,6 +1413,12 @@ model Company {
   aiTokenLedgerEntries        AiTokenLedger[]              @relation("AiTokenLedgerWorkspace")
   aiCredentialAudits          AiCredentialAuditEvent[]     @relation("AiCredentialAuditWorkspace")
   agentDelegations            AgentDelegation[]
+  reviewDocuments             ProjectDocument[]
+  reviewEvidence              ReviewEvidence[]
+  reviewLinks                 EntityLink[]
+  reviewRuns                  ReviewRun[]
+  reviewFindings              ReviewFinding[]
+  reviewAuditEvents           ReviewAuditEvent[]
 
   @@index([userId])
 }
@@ -1427,6 +1520,12 @@ model Project {
   aiCredentials              AiCredential[]
   aiPolicy                   AiPolicy?
   agentDelegations           AgentDelegation[]
+  reviewDocuments            ProjectDocument[]
+  reviewRuns                 ReviewRun[]
+  reviewEvidence             ReviewEvidence[]
+  reviewAuditEvents          ReviewAuditEvent[]
+  reviewLinks                EntityLink[]
+  reviewFindings             ReviewFinding[]
 
   @@unique([companyId, demoKey])
   @@index([companyId])
@@ -1514,6 +1613,9 @@ model Budget {
   collaborationComments          CollaborationComment[]
   budgetChangeEvents             BudgetChangeEvent[]
   budgetVersionSnapshots         BudgetVersionSnapshot[]
+  reviewRuns                      ReviewRun[]
+  reviewLinks                     EntityLink[]
+  reviewFindings                  ReviewFinding[]
 
   @@unique([id, projectId])
   @@index([projectId])
@@ -1713,6 +1815,8 @@ model BudgetItem {
   riskVariables                RiskVariable[]
   noteTasks                    NoteTask[]
   metradoLinks                 MetradoPartidaLink[]
+  reviewLinks                  EntityLink[]
+  reviewFindings               ReviewFinding[]
 
   @@unique([id, budgetId])
   @@index([budgetId])
@@ -2904,4 +3008,219 @@ model ProjectAttachment {
   @@index([userId])
   @@index([category])
   @@map("project_attachments")
+}
+
+model ProjectDocument {
+  id               String                 @id @default(cuid())
+  companyId        String
+  projectId        String
+  createdById      String
+  name             String
+  originalFileName String
+  category         ReviewDocumentCategory @default(OTHER)
+  status           DocumentStatus         @default(UPLOADED)
+  currentVersionId String? @unique
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  company          Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project          Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy        User                   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  currentVersion   DocumentVersion?       @relation("CurrentDocumentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions         DocumentVersion[]      @relation("DocumentVersions")
+
+  @@unique([companyId, id])
+  @@index([companyId, projectId, status])
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([createdById])
+  @@map("project_documents")
+}
+
+model DocumentVersion {
+  id                 String           @id @default(cuid())
+  projectDocumentId  String
+  versionNumber      Int
+  storageKey         String
+  originalFileName   String
+  mimeType           String
+  fileSizeBytes      Int
+  sha256             String
+  pageCount          Int?
+  sheetCount         Int?
+  extractionStatus   ExtractionStatus @default(PENDING)
+  extractionWarnings Json?
+  createdAt          DateTime         @default(now())
+  projectDocument    ProjectDocument  @relation("DocumentVersions", fields: [projectDocumentId], references: [id], onDelete: Cascade)
+  currentFor         ProjectDocument? @relation("CurrentDocumentVersion")
+  evidence           ReviewEvidence[]
+  reviewRuns         ReviewRun[]
+
+  @@unique([projectDocumentId, versionNumber])
+  @@unique([projectDocumentId, sha256])
+  @@index([projectDocumentId, createdAt(sort: Desc)])
+  @@index([sha256])
+  @@index([extractionStatus])
+  @@map("document_versions")
+}
+
+model ReviewEvidence {
+  id                String          @id @default(cuid())
+  companyId         String
+  projectId         String
+  documentVersionId String
+  evidenceType      EvidenceType
+  originalText      String          @db.Text
+  normalizedText    String?         @db.Text
+  locationJson      Json
+  value             Decimal?        @db.Decimal(18, 6)
+  unit              String?
+  extractionMethod  String
+  confidence        ConfidenceLevel
+  sourceHash        String
+  createdAt         DateTime        @default(now())
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  entityLinks       EntityLink[]
+  findings          ReviewFinding[]
+
+  @@unique([documentVersionId, sourceHash])
+  @@index([companyId, projectId, evidenceType])
+  @@index([documentVersionId, createdAt(sort: Desc)])
+  @@index([confidence])
+  @@map("review_evidence")
+}
+
+model EntityLink {
+  id               String                    @id @default(cuid())
+  companyId        String
+  projectId        String
+  budgetId         String
+  budgetItemId     String
+  evidenceId       String
+  signalsJson      Json
+  score            Decimal                   @db.Decimal(8, 6)
+  confidence       ConfidenceLevel
+  validationStatus EntityLinkValidationStatus @default(PENDING)
+  validatedById    String?
+  validatedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  company          Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project          Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget           Budget                    @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  budgetItem       BudgetItem                @relation(fields: [budgetItemId, budgetId], references: [id, budgetId], onDelete: Cascade)
+  evidence         ReviewEvidence            @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  validatedBy      User?                     @relation("EntityLinkValidator", fields: [validatedById], references: [id], onDelete: SetNull)
+  findings         ReviewFinding[]
+
+  @@unique([budgetItemId, evidenceId])
+  @@index([companyId, projectId, validationStatus])
+  @@index([budgetId, budgetItemId])
+  @@index([evidenceId])
+  @@map("entity_links")
+}
+
+model ReviewRun {
+  id                       String            @id @default(cuid())
+  companyId                String
+  projectId                String
+  budgetId                 String
+  createdById              String
+  configurationJson        Json
+  rulesVersion             String
+  status                   ReviewRunStatus   @default(DRAFT)
+  progressJson             Json?
+  warningsJson             Json?
+  startedAt                DateTime?
+  finishedAt               DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  company                  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project                  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget                   Budget            @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  createdBy                User              @relation("ReviewRunCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  documentVersions         DocumentVersion[]
+  findings                 ReviewFinding[]
+  auditEvents              ReviewAuditEvent[]
+
+  @@index([companyId, projectId, status])
+  @@index([budgetId, createdAt(sort: Desc)])
+  @@index([createdById])
+  @@map("review_runs")
+}
+
+model ReviewFinding {
+  id                       String             @id @default(cuid())
+  companyId               String
+  projectId               String
+  budgetId                String
+  reviewRunId             String
+  budgetItemId            String?
+  entityLinkId            String?
+  evidenceId              String
+  findingType             ReviewFindingType
+  status                  FindingStatus      @default(OPEN)
+  severity                String
+  priority                Decimal            @db.Decimal(8, 6)
+  confidence              ConfidenceLevel
+  score                   Decimal            @db.Decimal(8, 6)
+  potentialImpact         Decimal?           @db.Decimal(18, 6)
+  ruleKey                 String
+  comparisonJson          Json
+  humanReviewRequired     Boolean            @default(true)
+  automaticBudgetMutation Boolean            @default(false)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  company                 Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project                 Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget                  Budget             @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  reviewRun               ReviewRun          @relation(fields: [reviewRunId], references: [id], onDelete: Cascade)
+  budgetItem              BudgetItem?        @relation(fields: [budgetItemId, budgetId], references: [id, budgetId], onDelete: SetNull)
+  entityLink              EntityLink?        @relation(fields: [entityLinkId], references: [id], onDelete: SetNull)
+  evidence                ReviewEvidence     @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  decisions               FindingDecision[]
+
+  @@index([companyId, projectId, status])
+  @@index([reviewRunId, findingType, priority])
+  @@index([budgetId, budgetItemId])
+  @@index([evidenceId])
+  @@map("review_findings")
+}
+
+model FindingDecision {
+  id                String          @id @default(cuid())
+  findingId         String
+  userId            String
+  resolution        FindingResolution
+  note              String?         @db.Text
+  expectedUpdatedAt DateTime
+  createdAt         DateTime        @default(now())
+  finding           ReviewFinding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([findingId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("finding_decisions")
+}
+
+model ReviewAuditEvent {
+  id            String        @id @default(cuid())
+  companyId     String
+  projectId     String
+  reviewRunId   String?
+  actorUserId   String?
+  eventType     String
+  correlationId String?
+  payloadJson   Json?
+  createdAt     DateTime      @default(now())
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewRun     ReviewRun?    @relation(fields: [reviewRunId], references: [id], onDelete: SetNull)
+  actor         User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, projectId, createdAt(sort: Desc)])
+  @@index([reviewRunId, createdAt(sort: Desc)])
+  @@index([actorUserId])
+  @@index([correlationId])
+  @@map("review_audit_events")
 }
