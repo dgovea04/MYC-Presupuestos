@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import { runReviewJob, type ReviewPipelineClient, type RunReviewJobInput } from "./pipeline";
 
-function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>; evidence: Array<Record<string, unknown>>; links: Array<Record<string, unknown>>; findings: Array<Record<string, unknown>>; events: Array<Record<string, unknown>> } {
+function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>; evidence: Array<Record<string, unknown>>; links: Array<Record<string, unknown>>; findings: Array<Record<string, unknown>>; events: Array<Record<string, unknown>>; beforeTransaction?: (count: number) => void } {
   const store = { runs: [], evidence: [], links: [], findings: [], events: [] } as ReturnType<typeof client>;
   store.reviewRun = {
     findFirst: async ({ where }) => store.runs.find((run) => run.id === where.id || (run.budgetId === where.budgetId && run.companyId === where.companyId && run.projectId === where.projectId)) ?? null,
@@ -22,7 +22,8 @@ function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>
   store.documentVersion = { findFirst: async ({ where }) => where.id === "version-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "version-1", projectDocumentId: "document-1" } : null };
   store.projectDocument = { findFirst: async ({ where }) => where.id === "document-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "document-1" } : null };
   store.budgetItem = { findFirst: async ({ where }) => where.id === "item-1" && where.budgetId === "budget-1" ? { id: "item-1" } : null };
-  store.$transaction = async (callback) => callback(store);
+  let transactionCount = 0;
+  store.$transaction = async (callback) => { transactionCount += 1; store.beforeTransaction?.(transactionCount); return callback(store); };
   return store;
 }
 
@@ -47,6 +48,8 @@ describe("runReviewJob", () => {
     const persistedEvidenceIds = new Set(database.evidence.map((entry) => entry.id));
     expect(database.links.every((link) => persistedEvidenceIds.has(link.evidenceId))).toBe(true);
     expect(database.findings.every((finding) => persistedEvidenceIds.has(finding.evidenceId))).toBe(true);
+    expect(database.findings[0].entityLinkId).toBe(database.links[0].id);
+    expect(database.links.some((link) => link.id === database.findings[0].entityLinkId)).toBe(true);
   });
 
   it("retries idempotently without duplicating evidence, links, or findings", async () => {
@@ -174,6 +177,20 @@ describe("runReviewJob", () => {
     await expect(runReviewJob({ ...input(), shouldCancel: () => { const progress = database.runs[0].progressJson as { lease: { expiresAt: string } }; progress.lease.expiresAt = new Date(0).toISOString(); return false; } }, database)).rejects.toThrow("lease");
     expect(database.runs[0].status).toBe("RUNNING");
     expect(database.events.some((event) => event.eventType === "REVIEW_STAGE_COMPLETED")).toBe(false);
+  });
+
+  it("does not publish stage results after another worker takes the lease", async () => {
+    const database = client();
+    database.beforeTransaction = (count) => {
+      if (count === 7) {
+        const run = database.runs[0];
+        run.progressJson = { ...(run.progressJson as Record<string, unknown>), lease: { token: "new-worker", expiresAt: new Date(Date.now() + 60_000).toISOString() } };
+      }
+    };
+
+    await expect(runReviewJob(input(), database)).rejects.toThrow("lease");
+    expect(database.findings).toHaveLength(0);
+    expect(database.events).toHaveLength(3);
   });
 
   it("uses database ownership, not caller references, for every scoped entity", async () => {
