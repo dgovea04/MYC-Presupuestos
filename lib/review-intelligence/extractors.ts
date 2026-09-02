@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 import { extractPdfImportFile } from "@/lib/pdf-import/extraction";
 import { validateDocumentFile, type ReviewDocumentFile } from "./documents";
@@ -55,7 +56,7 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
   const workbook = new ExcelJS.Workbook();
   const workbookInput = validated.bytes as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(workbookInput);
-  const warnings: string[] = getZipIndicatorWarnings(validated.bytes);
+  const warnings: string[] = await getZipIndicatorWarnings(validated.bytes);
   const items: ExtractionItem[] = [];
 
   workbook.eachSheet((worksheet) => {
@@ -130,19 +131,24 @@ function normalizeCell(value: ExcelJS.CellValue): { text: string; hasHyperlink: 
   return { text: normalizeText(String(value)), hasHyperlink: false };
 }
 
-function getZipIndicatorWarnings(bytes: Uint8Array): string[] {
-  const archiveText = new TextDecoder("latin1").decode(bytes);
+async function getZipIndicatorWarnings(bytes: Uint8Array): Promise<string[]> {
+  const zip = await JSZip.loadAsync(bytes);
+  const entries = Object.entries(zip.files).filter(([, entry]) => !entry.dir);
+  const names = entries.map(([name]) => name);
+  const xmlContents = await Promise.all(entries
+    .filter(([name]) => name.toLowerCase().endsWith(".xml"))
+    .map(async ([name, entry]) => ({ name, content: await entry.async("string") })));
   const warnings: string[] = [];
-  if (/vbaProject\.bin|macros?/i.test(archiveText)) {
+  if (names.some((name) => /vbaProject\.bin$/i.test(name))) {
     warnings.push("El archivo contiene macros VBA; no se ejecutaron.");
   }
-  if (/externalLinks|externalBook/i.test(archiveText)) {
+  if (names.some((name) => /externalLinks\//i.test(name)) || xmlContents.some(({ content }) => /externalBook/i.test(content))) {
     warnings.push("El archivo contiene enlaces externos; no se accedió a ellos.");
   }
-  if (/\[[^\]]+\][^\s<]+!/i.test(archiveText) || /externalBook/i.test(archiveText)) {
+  if (xmlContents.some(({ content }) => /\[[^\]]+\][^<]*!/i.test(content) || /<f[^>]*>[^<]*\[[^\]]+\]/i.test(content))) {
     warnings.push("El archivo contiene fórmulas con referencias externas; no se evaluaron.");
   }
-  if (/hyperlinks?/i.test(archiveText)) {
+  if (xmlContents.some(({ name, content }) => /worksheets\//i.test(name) && /<hyperlink(?:\s|>)/i.test(content))) {
     warnings.push("El archivo contiene hipervínculos; no se accedió ni ejecutó ningún enlace.");
   }
   return warnings;

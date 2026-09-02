@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createDocumentVersion, createProjectDocument } from "./documents";
 
+const validPdf = (suffix: string): Uint8Array => new TextEncoder().encode(`%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n${suffix}\n%%EOF`);
+
 function createClient() {
   return {
     projectDocument: {
@@ -38,7 +40,7 @@ describe("review document persistence", () => {
     client.projectDocument.findFirst.mockResolvedValue({ id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "budget.pdf" });
     const existing = { id: "version-1", sha256: "existing" };
     client.documentVersion.findFirst.mockResolvedValue(existing);
-    const file = new File([new Uint8Array([37, 80, 68, 70, 45, 49])], "budget.pdf", { type: "application/pdf" });
+    const file = new File([validPdf("one")], "budget.pdf", { type: "application/pdf" });
 
     const result = await createDocumentVersion({
       companyId: "company-1",
@@ -66,7 +68,7 @@ describe("review document persistence", () => {
     transaction.documentVersion.create.mockResolvedValue(created);
     transaction.projectDocument.update.mockResolvedValue({});
     client.$transaction.mockImplementation(async (callback) => callback(transaction));
-    const file = new File([new Uint8Array([37, 80, 68, 70, 45, 50])], "budget.pdf", { type: "application/pdf" });
+    const file = new File([validPdf("two")], "budget.pdf", { type: "application/pdf" });
 
     const result = await createDocumentVersion({
       companyId: "company-1",
@@ -90,7 +92,7 @@ describe("review document persistence", () => {
     const client = createClient();
     client.$transaction.mockImplementation(async (callback) => callback(client));
     client.projectDocument.findFirst.mockResolvedValue(null);
-    const file = new File([new Uint8Array([37, 80, 68, 70, 45, 49])], "budget.pdf", { type: "application/pdf" });
+    const file = new File([validPdf("tenant")], "budget.pdf", { type: "application/pdf" });
 
     await expect(createDocumentVersion({ companyId: "attacker-company", projectId: "other-project", projectDocumentId: "document-1", storageKey: "documents/document-1/v1", file }, client)).rejects.toThrow("no pertenece");
     expect(client.documentVersion.findFirst).not.toHaveBeenCalled();
@@ -104,7 +106,7 @@ describe("review document persistence", () => {
     transaction.documentVersion.aggregate.mockResolvedValue({ _max: { versionNumber: 1 } });
     transaction.documentVersion.create.mockRejectedValue(new Error("storage failure"));
     client.$transaction.mockImplementation(async (callback) => callback(transaction));
-    const file = new File([new Uint8Array([37, 80, 68, 70, 45, 51])], "budget.pdf", { type: "application/pdf" });
+    const file = new File([validPdf("three")], "budget.pdf", { type: "application/pdf" });
 
     await expect(createDocumentVersion({ companyId: "company-1", projectId: "project-1", projectDocumentId: "document-1", storageKey: "documents/document-1/v1", file }, client)).rejects.toThrow("storage failure");
     expect(transaction.projectDocument.update).not.toHaveBeenCalled();

@@ -174,7 +174,7 @@ export async function validateDocumentFile(file: ReviewDocumentFile): Promise<Va
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const supportedExtension: ".pdf" | ".xlsx" = extension === ".pdf" ? ".pdf" : ".xlsx";
-  const detectedMime = detectMime(bytes);
+  const detectedMime = await detectMime(bytes);
   if (detectedMime === null || detectedMime !== expectedMime(supportedExtension)) {
     throw new Error("El MIME real del documento no coincide con la extensión.");
   }
@@ -200,18 +200,27 @@ function expectedMime(extension: string): typeof PDF_MIME | typeof XLSX_MIME | n
   return extension === ".pdf" ? PDF_MIME : extension === ".xlsx" ? XLSX_MIME : null;
 }
 
-function detectMime(bytes: Uint8Array): typeof PDF_MIME | typeof XLSX_MIME | null {
+async function detectMime(bytes: Uint8Array): Promise<typeof PDF_MIME | typeof XLSX_MIME | null> {
   const prefix = new TextDecoder().decode(bytes.slice(0, 5));
   if (prefix === "%PDF-") {
-    return PDF_MIME;
+    return isValidPdfStructure(bytes) ? PDF_MIME : null;
   }
-  if (bytes[0] === 0x50 && bytes[1] === 0x4b && containsAscii(bytes, "[Content_Types].xml") && containsAscii(bytes, "xl/workbook.xml")) {
-    return XLSX_MIME;
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(bytes);
+      const entries = new Set(Object.keys(zip.files));
+      if (entries.has("[Content_Types].xml") && entries.has("xl/workbook.xml")) {
+        return XLSX_MIME;
+      }
+    } catch {
+      return null;
+    }
   }
   return null;
 }
 
-function containsAscii(bytes: Uint8Array, needle: string): boolean {
-  const haystack = new TextDecoder("latin1").decode(bytes);
-  return haystack.includes(needle);
+function isValidPdfStructure(bytes: Uint8Array): boolean {
+  const text = new TextDecoder("latin1").decode(bytes);
+  return text.includes(" obj") && text.includes("endobj") && text.includes("trailer") && text.includes("startxref") && /%%EOF\s*$/.test(text);
 }
