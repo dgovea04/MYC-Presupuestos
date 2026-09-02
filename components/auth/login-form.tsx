@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { GoogleSignInButton } from "@/components/auth/google-signin-button";
@@ -177,11 +178,9 @@ export function LoginForm() {
         </>
       ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      <Button className="w-full" type="submit" disabled={loading}>
-        {loading ? (showMfaCode ? "Verificando..." : "Ingresando...") : showMfaCode ? "Verificar código" : "Iniciar sesion"}
-      </Button>
+      <LoginSubmitButton loading={loading} showMfaCode={showMfaCode} />
       {!showMfaCode && canResend ? (
-        <Button type="button" variant="outline" className="w-full" disabled={resending} onClick={handleResend}>
+        <Button type="button" variant="outline" className="w-full" loading={resending} onClick={handleResend}>
           {resending ? "Reenviando..." : "Reenviar verificacion"}
         </Button>
       ) : null}
@@ -200,6 +199,17 @@ export function LoginForm() {
         </>
       ) : null}
     </form>
+  );
+}
+
+function LoginSubmitButton({ loading, showMfaCode }: { loading: boolean; showMfaCode: boolean }) {
+  const { pending } = useFormStatus();
+  const isLoading = loading || pending;
+
+  return (
+    <Button className="w-full" type="submit" loading={isLoading}>
+      {isLoading ? (showMfaCode ? "Verificando..." : "Ingresando...") : showMfaCode ? "Verificar código" : "Iniciar sesion"}
+    </Button>
   );
 }
 

@@ -43,7 +43,7 @@ export interface GoogleSignInButtonProps {
 export function GoogleSignInButton({ mode = "login", callbackUrl = "/dashboard" }: GoogleSignInButtonProps) {
   const [loading, setLoading] = useState(false);
 
-  function handleGoogleSignIn() {
+  async function handleGoogleSignIn() {
     if (mode === "register") {
       trackClientEvent("signup_started", {
         cta_location: "google_register_button",
@@ -56,7 +56,11 @@ export function GoogleSignInButton({ mode = "login", callbackUrl = "/dashboard" 
       });
     }
     setLoading(true);
-    signIn("google", { callbackUrl });
+    try {
+      await signIn("google", { callbackUrl });
+    } finally {
+      setLoading(false);
+    }
   }
 
   const label = mode === "register" ? "Registrarse con Google" : "Continuar con Google";
@@ -67,7 +71,7 @@ export function GoogleSignInButton({ mode = "login", callbackUrl = "/dashboard" 
       variant="outline"
       className="w-full"
       onClick={handleGoogleSignIn}
-      disabled={loading}
+      loading={loading}
     >
       <GoogleIcon />
       <span className="ml-2">{loading ? "Redirigiendo..." : label}</span>

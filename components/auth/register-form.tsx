@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trackClientEvent } from "@/lib/analytics/client";
 import { GoogleSignInButton } from "@/components/auth/google-signin-button";
@@ -80,9 +81,7 @@ export function RegisterForm() {
         <Input id="companyName" name="companyName" placeholder="Constructora Andina SAC" />
       </div>
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      <Button className="w-full" type="submit" disabled={loading}>
-        {loading ? "Creando cuenta..." : "Crear cuenta"}
-      </Button>
+      <RegisterSubmitButton loading={loading} />
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-slate-200" />
@@ -93,5 +92,16 @@ export function RegisterForm() {
       </div>
       <GoogleSignInButton mode="register" callbackUrl={nextPath} />
     </form>
+  );
+}
+
+function RegisterSubmitButton({ loading }: { loading: boolean }) {
+  const { pending } = useFormStatus();
+  const isLoading = loading || pending;
+
+  return (
+    <Button className="w-full" type="submit" loading={isLoading}>
+      {isLoading ? "Creando cuenta..." : "Crear cuenta"}
+    </Button>
   );
 }

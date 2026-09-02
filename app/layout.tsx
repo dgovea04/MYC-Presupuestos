@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { cookies } from "next/headers";
 import { GoogleAnalytics } from "@/components/analytics/google-analytics";
 import { IdentifyAnalyticsUser } from "@/components/analytics/identify-user";
@@ -78,11 +79,9 @@ export default async function RootLayout({
           isAuthenticated={Boolean(session?.user?.id)}
         />
         <IdentifyAnalyticsUser userId={session?.user?.id ?? null} />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){var w=localStorage.getItem('myc-khipu-agent-chat-panel-width');if(w){document.documentElement.style.setProperty('--chat-width',w+'px');}})()`,
-          }}
-        />
+        <Script id="chat-panel-width-init" strategy="beforeInteractive">
+          {`(function(){var w=localStorage.getItem('myc-khipu-agent-chat-panel-width');if(w){document.documentElement.style.setProperty('--chat-width',w+'px');}})()`}
+        </Script>
         <GlobalAiAssistantProvider canUseKhipu={canUseKhipu}>{children}</GlobalAiAssistantProvider>
       </body>
     </html>
