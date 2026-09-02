@@ -10,12 +10,12 @@ function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>
     findMany: async ({ where }) => store.runs.filter((run) => run.budgetId === where.budgetId && run.companyId === where.companyId && run.projectId === where.projectId),
     create: async ({ data }) => { if (store.runs.some((run) => run.id === data.id)) throw new Error("P2002"); const run = { id: data.id ?? `run-${store.runs.length + 1}`, ...data }; store.runs.push(run); return run; },
     update: async ({ where, data }) => { const run = store.runs.find((entry) => entry.id === where.id && (!where.status || entry.status === where.status))!; Object.assign(run, data); return run; },
-    updateMany: async ({ where, data }) => { const compound = where.id_companyId_projectId as { id?: string; companyId?: string; projectId?: string } | undefined; const run = store.runs.find((entry) => (entry.id === where.id || entry.id === compound?.id) && (!where.status || typeof where.status === "string" && entry.status === where.status || typeof where.status === "object" && (where.status as { in?: unknown[] }).in?.includes(entry.status))); if (!run) return { count: 0 }; Object.assign(run, data); return { count: 1 }; },
+    updateMany: async ({ where, data }) => { const compound = where.id_companyId_projectId as { id?: string; companyId?: string; projectId?: string } | undefined; const run = store.runs.find((entry) => (entry.id === where.id || entry.id === compound?.id) && (!where.status || typeof where.status === "string" && entry.status === where.status || typeof where.status === "object" && (where.status as { in?: unknown[] }).in?.includes(entry.status)) && (!where.progressJson || JSON.stringify(entry.progressJson) === JSON.stringify((where.progressJson as { equals?: unknown }).equals))); if (!run) return { count: 0 }; Object.assign(run, data); return { count: 1 }; },
   };
   store.reviewRunDocumentVersion = { upsert: async ({ create }) => create };
-  store.reviewEvidence = { findFirst: async ({ where }) => store.evidence.find((entry) => entry.documentVersionId === where.documentVersionId && entry.sourceHash === where.sourceHash) ?? null, create: async ({ data }) => { const entry = { id: `evidence-${store.evidence.length + 1}`, ...data }; store.evidence.push(entry); return entry; } };
-  store.entityLink = { findFirst: async ({ where }) => store.links.find((entry) => entry.budgetItemId === where.budgetItemId && entry.evidenceId === where.evidenceId) ?? null, create: async ({ data }) => { const entry = { id: `link-${store.links.length + 1}`, ...data }; store.links.push(entry); return entry; } };
-  store.reviewFinding = { findFirst: async ({ where }) => store.findings.find((entry) => entry.reviewRunId === where.reviewRunId && entry.evidenceId === where.evidenceId && entry.findingType === where.findingType && entry.budgetItemId === where.budgetItemId) ?? null, create: async ({ data }) => { const entry = { id: `finding-${store.findings.length + 1}`, ...data }; store.findings.push(entry); return entry; } };
+  store.reviewEvidence = { findFirst: async ({ where }) => store.evidence.find((entry) => entry.documentVersionId === where.documentVersionId && entry.sourceHash === where.sourceHash) ?? null, create: async ({ data }) => { if (store.evidence.some((entry) => entry.id === data.id)) throw new Error("P2002"); const entry = { id: data.id ?? `evidence-${store.evidence.length + 1}`, ...data }; store.evidence.push(entry); return entry; } };
+  store.entityLink = { findFirst: async ({ where }) => store.links.find((entry) => entry.budgetItemId === where.budgetItemId && entry.evidenceId === where.evidenceId) ?? null, create: async ({ data }) => { if (store.links.some((entry) => entry.id === data.id)) throw new Error("P2002"); const entry = { id: data.id ?? `link-${store.links.length + 1}`, ...data }; store.links.push(entry); return entry; } };
+  store.reviewFinding = { findFirst: async ({ where }) => store.findings.find((entry) => entry.reviewRunId === where.reviewRunId && entry.evidenceId === where.evidenceId && entry.findingType === where.findingType && entry.budgetItemId === where.budgetItemId) ?? null, create: async ({ data }) => { if (store.findings.some((entry) => entry.id === data.id)) throw new Error("P2002"); const entry = { id: data.id ?? `finding-${store.findings.length + 1}`, ...data }; store.findings.push(entry); return entry; } };
   store.reviewAuditEvent = { create: async ({ data }) => { store.events.push(data); return data; } };
   store.$transaction = async (callback) => callback(store);
   return store;
@@ -23,9 +23,9 @@ function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>
 
 const input = (): RunReviewJobInput => ({
   companyId: "company-1", projectId: "project-1", budgetId: "budget-1", createdById: "user-1",
-  documentVersionIds: ["version-1"], rulesVersion: "review-rules-v1",
+  documentVersionIds: ["version-1"], documentVersions: [{ id: "version-1", companyId: "company-1", projectId: "project-1" }], budgetReference: { id: "budget-1", companyId: "company-1", projectId: "project-1" }, rulesVersion: "review-rules-v1",
   configuration: { maxFiles: 1, maxPdfPages: 300, maxFileSizeMb: 50, maxXlsxSheets: 20, tolerancePercent: "1", findingTypes: ["QUANTITY_MISMATCH"] },
-  budgetItems: [{ id: "item-1", budgetId: "budget-1", code: "A-1", description: "Concreto", unit: "m3", quantity: new Decimal("10"), unitPrice: new Decimal("100") }],
+  budgetItems: [{ id: "item-1", budgetId: "budget-1", companyId: "company-1", projectId: "project-1", code: "A-1", description: "Concreto", unit: "m3", quantity: new Decimal("10"), unitPrice: new Decimal("100") }],
   evidence: [{ id: "evidence-source-1", documentVersionId: "version-1", primary: true, originalText: "Concreto 12 m3", normalizedText: "Concreto 12 m3", sourceHash: "source-1", evidenceType: "QUANTITY", quantity: new Decimal("12"), unit: "m3", confidence: "HIGH", locationJson: { sheet: "Hoja 1", range: "A1" } }],
 });
 
@@ -54,9 +54,9 @@ describe("runReviewJob", () => {
 
   it("completes with warnings and suppresses absence findings for affected evidence", async () => {
     const database = client();
-    const result = await runReviewJob({ ...input(), extractionWarnings: [{ code: "PDF_LOCATION_UNAVAILABLE", message: "location unavailable", source: "version-1" }], evidence: [{ ...input().evidence[0], id: "evidence-affected", description: "Otra partida", confidence: "LOW" }] }, database);
+    const result = await runReviewJob({ ...input(), configuration: { ...input().configuration, findingTypes: ["MISSING_DOCUMENTATION"] }, extractionWarnings: [{ code: "EXTRACTION_PROCESSING", message: "processing incomplete", source: "version-1" }], evidence: [{ ...input().evidence[0], id: "evidence-affected", description: "Otra partida", confidence: "LOW" }] }, database);
     expect(result.status).toBe("COMPLETED_WITH_WARNINGS");
-    expect(result.warnings).toEqual([{ code: "PDF_LOCATION_UNAVAILABLE", message: "location unavailable", source: "version-1" }]);
+    expect(result.warnings).toEqual([{ code: "EXTRACTION_PROCESSING", message: "processing incomplete", source: "version-1" }]);
     expect(database.findings).toHaveLength(0);
   });
 
@@ -130,5 +130,30 @@ describe("runReviewJob", () => {
     const result = await runReviewJob({ ...input(), shouldCancel: () => { database.runs[0].status = "CANCELLED"; return true; } }, database);
     expect(result.status).toBe("CANCELLED");
     expect(database.runs[0].status).toBe("CANCELLED");
+  });
+
+  it("claims a RUNNING run so only one concurrent worker executes stages", async () => {
+    const database = client();
+    let executions = 0;
+    const gated = { ...input(), shouldCancel: async () => { executions += 1; await new Promise((resolve) => setTimeout(resolve, 1)); return false; } };
+    const results = await Promise.all([runReviewJob(gated, database), runReviewJob(gated, database)]);
+    expect(results[0].reviewRunId).toBe(results[1].reviewRunId);
+    expect(executions).toBe(8);
+    expect(database.events).toHaveLength(8);
+  });
+
+  it("requires the exact document version set and budget ownership before creating a run", async () => {
+    const database = client();
+    await expect(runReviewJob({ ...input(), documentVersionIds: ["version-1", "version-2"] }, database)).rejects.toThrow("exact");
+    await expect(runReviewJob({ ...input(), budgetReference: { id: "budget-1", companyId: "other", projectId: "project-1" } }, database)).rejects.toThrow("Budget does not belong");
+    expect(database.runs).toHaveLength(0);
+  });
+
+  it("deduplicates concurrent result insertion by stable evidence, link, and finding keys", async () => {
+    const database = client();
+    await Promise.all([runReviewJob(input(), database), runReviewJob(input(), database)]);
+    expect(database.evidence).toHaveLength(1);
+    expect(database.links).toHaveLength(1);
+    expect(database.findings).toHaveLength(1);
   });
 });
