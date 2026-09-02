@@ -64,3 +64,44 @@ export interface ReviewConfiguration {
   tolerancePercent: string;
   findingTypes: ReviewFindingType[];
 }
+
+export interface ComparisonJson {
+  documentValue?: string;
+  budgetValue?: string;
+  difference?: string;
+  percentage?: string;
+  potentialImpact?: string;
+  unit?: string;
+  details?: Record<string, string>;
+}
+
+export interface SignalsJson {
+  [signal: string]: number;
+}
+
+export interface LocationJson {
+  page?: number;
+  sheet?: string;
+  row?: number;
+  column?: number;
+  textOffsetStart?: number;
+  textOffsetEnd?: number;
+}
+
+export interface ProgressJson {
+  stage: string;
+  completed: number;
+  total: number;
+  percent: number;
+}
+
+export interface WarningJson {
+  code: string;
+  message: string;
+  source?: string;
+}
+
+export const reviewFindingDefaults = {
+  humanReviewRequired: true,
+  automaticBudgetMutation: false,
+} as const;

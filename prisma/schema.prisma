@@ -1528,6 +1528,7 @@ model Project {
   reviewFindings             ReviewFinding[]
 
   @@unique([companyId, demoKey])
+  @@unique([id, companyId])
   @@index([companyId])
   @@index([companyId, isDemo])
 }
@@ -3023,20 +3024,23 @@ model ProjectDocument {
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   company          Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project          Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project          Project                @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
   createdBy        User                   @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  currentVersion   DocumentVersion?       @relation("CurrentDocumentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  currentVersion   DocumentVersion?       @relation("CurrentDocumentVersion", fields: [currentVersionId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
   versions         DocumentVersion[]      @relation("DocumentVersions")
 
-  @@unique([companyId, id])
   @@index([companyId, projectId, status])
   @@index([projectId, createdAt(sort: Desc)])
   @@index([createdById])
+  @@unique([id, companyId, projectId])
+  @@unique([currentVersionId, companyId, projectId])
   @@map("project_documents")
 }
 
 model DocumentVersion {
   id                 String           @id @default(cuid())
+  companyId          String
+  projectId          String
   projectDocumentId  String
   versionNumber      Int
   storageKey         String
@@ -3049,13 +3053,14 @@ model DocumentVersion {
   extractionStatus   ExtractionStatus @default(PENDING)
   extractionWarnings Json?
   createdAt          DateTime         @default(now())
-  projectDocument    ProjectDocument  @relation("DocumentVersions", fields: [projectDocumentId], references: [id], onDelete: Cascade)
+  projectDocument    ProjectDocument  @relation("DocumentVersions", fields: [projectDocumentId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
   currentFor         ProjectDocument? @relation("CurrentDocumentVersion")
   evidence           ReviewEvidence[]
-  reviewRuns         ReviewRun[]
+  reviewRunVersions  ReviewRunDocumentVersion[]
 
   @@unique([projectDocumentId, versionNumber])
   @@unique([projectDocumentId, sha256])
+  @@unique([id, companyId, projectId])
   @@index([projectDocumentId, createdAt(sort: Desc)])
   @@index([sha256])
   @@index([extractionStatus])
@@ -3078,8 +3083,8 @@ model ReviewEvidence {
   sourceHash        String
   createdAt         DateTime        @default(now())
   company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  project           Project         @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
   entityLinks       EntityLink[]
   findings          ReviewFinding[]
 
@@ -3087,6 +3092,7 @@ model ReviewEvidence {
   @@index([companyId, projectId, evidenceType])
   @@index([documentVersionId, createdAt(sort: Desc)])
   @@index([confidence])
+  @@unique([id, companyId, projectId])
   @@map("review_evidence")
 }
 
@@ -3106,10 +3112,10 @@ model EntityLink {
   createdAt        DateTime                  @default(now())
   updatedAt        DateTime                  @updatedAt
   company          Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project          Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project          Project                   @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
   budget           Budget                    @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
   budgetItem       BudgetItem                @relation(fields: [budgetItemId, budgetId], references: [id, budgetId], onDelete: Cascade)
-  evidence         ReviewEvidence            @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  evidence         ReviewEvidence            @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
   validatedBy      User?                     @relation("EntityLinkValidator", fields: [validatedById], references: [id], onDelete: SetNull)
   findings         ReviewFinding[]
 
@@ -3117,6 +3123,7 @@ model EntityLink {
   @@index([companyId, projectId, validationStatus])
   @@index([budgetId, budgetItemId])
   @@index([evidenceId])
+  @@unique([id, companyId, projectId])
   @@map("entity_links")
 }
 
@@ -3136,17 +3143,34 @@ model ReviewRun {
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
   company                  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project                  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project                  Project           @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
   budget                   Budget            @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
   createdBy                User              @relation("ReviewRunCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  documentVersions         DocumentVersion[]
+  documentVersionLinks     ReviewRunDocumentVersion[]
   findings                 ReviewFinding[]
   auditEvents              ReviewAuditEvent[]
 
   @@index([companyId, projectId, status])
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([createdById])
+  @@unique([id, companyId, projectId])
   @@map("review_runs")
+}
+
+model ReviewRunDocumentVersion {
+  id                String          @id @default(cuid())
+  companyId         String
+  projectId         String
+  reviewRunId       String
+  documentVersionId String
+  createdAt         DateTime        @default(now())
+  reviewRun         ReviewRun       @relation(fields: [reviewRunId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+
+  @@unique([reviewRunId, documentVersionId])
+  @@index([companyId, projectId, reviewRunId])
+  @@index([documentVersionId])
+  @@map("review_run_document_versions")
 }
 
 model ReviewFinding {
@@ -3156,6 +3180,7 @@ model ReviewFinding {
   budgetId                String
   reviewRunId             String
   budgetItemId            String?
+  budgetItemBudgetId      String?
   entityLinkId            String?
   evidenceId              String
   findingType             ReviewFindingType
@@ -3172,18 +3197,19 @@ model ReviewFinding {
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
   company                 Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project                 Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project                 Project            @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
   budget                  Budget             @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
-  reviewRun               ReviewRun          @relation(fields: [reviewRunId], references: [id], onDelete: Cascade)
-  budgetItem              BudgetItem?        @relation(fields: [budgetItemId, budgetId], references: [id, budgetId], onDelete: SetNull)
-  entityLink              EntityLink?        @relation(fields: [entityLinkId], references: [id], onDelete: SetNull)
-  evidence                ReviewEvidence     @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  reviewRun               ReviewRun          @relation(fields: [reviewRunId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  budgetItem              BudgetItem?        @relation(fields: [budgetItemId, budgetItemBudgetId], references: [id, budgetId], onDelete: SetNull)
+  entityLink              EntityLink?        @relation(fields: [entityLinkId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
+  evidence                ReviewEvidence     @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
   decisions               FindingDecision[]
 
   @@index([companyId, projectId, status])
   @@index([reviewRunId, findingType, priority])
   @@index([budgetId, budgetItemId])
   @@index([evidenceId])
+  @@index([entityLinkId])
   @@map("review_findings")
 }
 
@@ -3214,7 +3240,7 @@ model ReviewAuditEvent {
   payloadJson   Json?
   createdAt     DateTime      @default(now())
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project       @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
   reviewRun     ReviewRun?    @relation(fields: [reviewRunId], references: [id], onDelete: SetNull)
   actor         User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
