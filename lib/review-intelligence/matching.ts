@@ -136,7 +136,7 @@ export function matchBudgetItemToEvidence(
     };
     const activeWeight = Object.entries(available).reduce((total, [signal, isAvailable]) => total.plus(isAvailable ? new Decimal(weights[signal]) : new Decimal(0)), new Decimal(0));
     const weightedScore = new Decimal(signals.code).times(weights.code)
-      .plus(new Decimal(signals.description).times("0.25"))
+      .plus(new Decimal(signals.description).times(weights.description))
       .plus(new Decimal(signals.unit).times(weights.unit))
       .plus(new Decimal(signals.discipline).times(weights.discipline))
       .plus(new Decimal(signals.attributes).times(weights.attributes))

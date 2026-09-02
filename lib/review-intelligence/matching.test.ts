@@ -66,4 +66,11 @@ describe("matchBudgetItemToEvidence", () => {
     expect(() => matchBudgetItemToEvidence(item, [evidence()], { mediumThreshold: -0.1 })).toThrow();
     expect(() => matchBudgetItemToEvidence(item, [evidence()], { highThreshold: 0.5, mediumThreshold: 0.5 })).toThrow();
   });
+
+  it("keeps the normalized weighted score at or below one", () => {
+    const [candidate] = matchBudgetItemToEvidence({ id: "item-2", code: "A-1", description: "Concreto zapata", unit: "m3" }, [{ id: "evidence-2", primary: true, code: "A-1", description: "Concreto", unit: "m3" }]);
+
+    expect(candidate.score.lessThanOrEqualTo(1)).toBe(true);
+    expect(candidate.score.toFixed(9)).toBe("0.838709677");
+  });
 });
