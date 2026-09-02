@@ -35,15 +35,16 @@ export type DocumentVersionRecord = Prisma.DocumentVersionGetPayload<{
 
 type DocumentClient = {
   projectDocument: {
-    findFirst(args: { where: { companyId: string; projectId: string; originalFileName: string } }): Promise<ProjectDocumentRecord | null>;
+    findFirst(args: { where: { companyId: string; projectId: string; originalFileName?: string; id?: string } }): Promise<ProjectDocumentRecord | null>;
     create(args: { data: Record<string, unknown> }): Promise<ProjectDocumentRecord>;
     update(args: { where: { id: string; companyId: string; projectId: string }; data: { currentVersionId: string } }): Promise<ProjectDocumentRecord>;
   };
   documentVersion: {
-    findUnique(args: { where: { projectDocumentId_sha256: { projectDocumentId: string; sha256: string } } }): Promise<DocumentVersionRecord | null>;
-    aggregate(args: { where: { projectDocumentId: string }; _max: { versionNumber: true } }): Promise<{ _max: { versionNumber: number | null } }>;
+    findFirst(args: { where: { companyId: string; projectId: string; projectDocumentId: string; sha256: string } }): Promise<DocumentVersionRecord | null>;
+    aggregate(args: { where: { companyId: string; projectId: string; projectDocumentId: string }; _max: { versionNumber: true } }): Promise<{ _max: { versionNumber: number | null } }>;
     create(args: { data: Record<string, unknown> }): Promise<DocumentVersionRecord>;
   };
+  $transaction<T>(callback: (transaction: DocumentClient) => Promise<T>): Promise<T>;
 };
 
 export async function createProjectDocument(
@@ -78,46 +79,80 @@ export async function createDocumentVersion(
   client: DocumentClient,
 ): Promise<DocumentVersionRecord> {
   const validated = await validateDocumentFile(input.file);
-  const existing = await client.documentVersion.findUnique({
-    where: {
-      projectDocumentId_sha256: {
+  try {
+    return await client.$transaction(async (transaction) => {
+      const document = await transaction.projectDocument.findFirst({
+        where: {
+          id: input.projectDocumentId,
+          companyId: input.companyId,
+          projectId: input.projectId,
+        },
+      });
+      if (!document) {
+        throw new Error("El documento no pertenece a la empresa y proyecto indicados.");
+      }
+
+      const existing = await transaction.documentVersion.findFirst({
+        where: {
+          companyId: input.companyId,
+          projectId: input.projectId,
+          projectDocumentId: input.projectDocumentId,
+          sha256: validated.sha256,
+        },
+      });
+      if (existing) {
+        return existing;
+      }
+
+      const aggregate = await transaction.documentVersion.aggregate({
+        where: {
+          companyId: input.companyId,
+          projectId: input.projectId,
+          projectDocumentId: input.projectDocumentId,
+        },
+        _max: { versionNumber: true },
+      });
+      const created = await transaction.documentVersion.create({
+        data: {
+          companyId: input.companyId,
+          projectId: input.projectId,
+          projectDocumentId: input.projectDocumentId,
+          versionNumber: (aggregate._max.versionNumber ?? 0) + 1,
+          storageKey: input.storageKey,
+          originalFileName: input.file.name,
+          mimeType: validated.mimeType,
+          fileSizeBytes: validated.fileSizeBytes,
+          sha256: validated.sha256,
+          extractionStatus: ExtractionStatus.PENDING,
+        },
+      });
+      await transaction.projectDocument.update({
+        where: {
+          id: input.projectDocumentId,
+          companyId: input.companyId,
+          projectId: input.projectId,
+        },
+        data: { currentVersionId: created.id },
+      });
+      return created;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("no pertenece")) {
+      throw error;
+    }
+    const existing = await client.documentVersion.findFirst({
+      where: {
+        companyId: input.companyId,
+        projectId: input.projectId,
         projectDocumentId: input.projectDocumentId,
         sha256: validated.sha256,
       },
-    },
-  });
-  if (existing) {
-    return existing;
+    });
+    if (existing) {
+      return existing;
+    }
+    throw error;
   }
-
-  const aggregate = await client.documentVersion.aggregate({
-    where: { projectDocumentId: input.projectDocumentId },
-    _max: { versionNumber: true },
-  });
-  const versionNumber = (aggregate._max.versionNumber ?? 0) + 1;
-  const created = await client.documentVersion.create({
-    data: {
-      companyId: input.companyId,
-      projectId: input.projectId,
-      projectDocumentId: input.projectDocumentId,
-      versionNumber,
-      storageKey: input.storageKey,
-      originalFileName: input.file.name,
-      mimeType: validated.mimeType,
-      fileSizeBytes: validated.fileSizeBytes,
-      sha256: validated.sha256,
-      extractionStatus: ExtractionStatus.PENDING,
-    },
-  });
-  await client.projectDocument.update({
-    where: {
-      id: input.projectDocumentId,
-      companyId: input.companyId,
-      projectId: input.projectId,
-    },
-    data: { currentVersionId: created.id },
-  });
-  return created;
 }
 
 export type ValidatedDocument = {

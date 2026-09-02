@@ -46,7 +46,7 @@ async function extractPdf(file: ReviewDocumentFile, validated: Awaited<ReturnTyp
     items: extracted.text.trim() === "" ? [] : [{ content: normalizeText(extracted.text) }],
     pageCount: extracted.pageCount,
     warnings: [
-      "El adaptador PDF compatible no expone ubicaciones verificables de página ni bounding boxes; el texto se conserva sin ubicación.",
+      "El conteo de páginas PDF puede ser estimado; la ubicación exacta no está disponible porque el adaptador compatible no expone página ni bounding boxes verificables.",
     ],
   };
 }
@@ -55,7 +55,7 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
   const workbook = new ExcelJS.Workbook();
   const workbookInput = validated.bytes as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(workbookInput);
-  const warnings: string[] = [];
+  const warnings: string[] = getZipIndicatorWarnings(validated.bytes);
   const items: ExtractionItem[] = [];
 
   workbook.eachSheet((worksheet) => {
@@ -128,6 +128,24 @@ function normalizeCell(value: ExcelJS.CellValue): { text: string; hasHyperlink: 
     }
   }
   return { text: normalizeText(String(value)), hasHyperlink: false };
+}
+
+function getZipIndicatorWarnings(bytes: Uint8Array): string[] {
+  const archiveText = new TextDecoder("latin1").decode(bytes);
+  const warnings: string[] = [];
+  if (/vbaProject\.bin|macros?/i.test(archiveText)) {
+    warnings.push("El archivo contiene macros VBA; no se ejecutaron.");
+  }
+  if (/externalLinks|externalBook/i.test(archiveText)) {
+    warnings.push("El archivo contiene enlaces externos; no se accedió a ellos.");
+  }
+  if (/\[[^\]]+\][^\s<]+!/i.test(archiveText) || /externalBook/i.test(archiveText)) {
+    warnings.push("El archivo contiene fórmulas con referencias externas; no se evaluaron.");
+  }
+  if (/hyperlinks?/i.test(archiveText)) {
+    warnings.push("El archivo contiene hipervínculos; no se accedió ni ejecutó ningún enlace.");
+  }
+  return warnings;
 }
 
 function normalizeText(value: string): string {
