@@ -414,12 +414,12 @@ export function PartidasTable({
       <VirtualizedTableFrame scrollContainerRef={scrollContainerRef} onScroll={scrollProps.onScroll}>
           <Table className="table-fixed">
             <colgroup>
-              <col className="w-[35%]" />
-              <col className="w-[92px]" />
-              <col className="w-[132px]" />
+              <col className="w-[45%]" />
+              <col className="w-[100px]" />
+              <col className="w-[140px]" />
+              <col className="w-[170px]" />
+              <col className="w-[100px]" />
               <col className="w-[160px]" />
-              <col className="w-[88px]" />
-              <col className="w-[360px]" />
             </colgroup>
             <THead className="sticky top-0 z-20 [&_tr]:border-b-[var(--app-border)]">
               <TR className="bg-[var(--app-surface-muted)] hover:bg-[var(--app-surface-muted)]">
