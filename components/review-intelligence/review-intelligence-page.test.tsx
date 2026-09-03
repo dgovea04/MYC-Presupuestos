@@ -83,8 +83,8 @@ describe("FindingDetail", () => {
 
     render(<FindingDetail finding={finding} canResolve onChanged={onChanged} />);
 
-    expect(screen.getByText("Fuente primaria")).toBeTruthy();
-    expect(screen.getByText("Página 12 · fila 4")).toBeTruthy();
+    expect(screen.getByText("Visor estructurado de evidencia")).toBeTruthy();
+    expect(screen.getByText(/12.*fila 4/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Ver evidencia temporal" }).getAttribute("href")).toContain("/api/review-evidence/");
     expect(screen.getAllByText(/Revisión humana requerida/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/El presupuesto no se modifica automáticamente/i)).toBeTruthy();

@@ -36,7 +36,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     skip: (page - 1) * pageSize,
     take: pageSize + 1,
-    select: { id: true, name: true, originalFileName: true, category: true, status: true, currentVersionId: true, createdAt: true, updatedAt: true, currentVersion: { select: { id: true, versionNumber: true, mimeType: true, fileSizeBytes: true, sha256: true, extractionStatus: true, pageCount: true, sheetCount: true } } },
+    select: { id: true, name: true, originalFileName: true, category: true, status: true, currentVersionId: true, createdAt: true, updatedAt: true, currentVersion: { select: { id: true, versionNumber: true, mimeType: true, fileSizeBytes: true, sha256: true, extractionStatus: true, extractionWarnings: true, pageCount: true, sheetCount: true } } },
   });
   return NextResponse.json({ documents: documents.slice(0, pageSize), page, pageSize, hasNextPage: documents.length > pageSize });
 }

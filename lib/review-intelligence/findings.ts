@@ -12,7 +12,7 @@ type FindingRow = Prisma.ReviewFindingGetPayload<{
     findingType: true; status: true; severity: true; priority: true; confidence: true; score: true; potentialImpact: true; ruleKey: true; discipline: true; baseSnapshotId: true;
     comparisonJson: true; humanReviewRequired: true; automaticBudgetMutation: true; createdAt: true; updatedAt: true;
     budgetItem: { select: { id: true; code: true; description: true; unit: true; quantity: true; unitPrice: true; discipline: true; levelId: true } };
-    evidence: { select: { id: true; documentVersionId: true; evidenceType: true; originalText: true; normalizedText: true; locationJson: true; unit: true; extractionMethod: true; confidence: true; sourceHash: true } };
+    evidence: { select: { id: true; documentVersionId: true; evidenceType: true; originalText: true; normalizedText: true; locationJson: true; value: true; unit: true; extractionMethod: true; confidence: true; sourceHash: true; documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } };
     entityLink: { select: { id: true; score: true; confidence: true; validationStatus: true; signalsJson: true } };
     decisions: { select: { id: true; userId: true; resolution: true; note: true; expectedUpdatedAt: true; previousStatus: true; newStatus: true; correctionVersionId: true; createdAt: true }; orderBy: { createdAt: "desc" } };
   }
@@ -50,7 +50,8 @@ export function verifyTemporaryEvidenceToken(evidenceId: string, token: string):
 function serializeFinding(row: FindingRow): Record<string, unknown> {
   const evidence = row.evidence ? {
     id: row.evidence.id, documentVersionId: row.evidence.documentVersionId, evidenceType: row.evidence.evidenceType,
-    originalText: row.evidence.originalText, normalizedText: row.evidence.normalizedText, location: row.evidence.locationJson,
+    originalText: row.evidence.originalText, normalizedText: row.evidence.normalizedText, value: decimal(row.evidence.value), location: row.evidence.locationJson,
+    sourceName: row.evidence.documentVersion.projectDocument.name || row.evidence.documentVersion.projectDocument.originalFileName, sourceVersion: row.evidence.documentVersion.versionNumber,
     unit: row.evidence.unit, extractionMethod: row.evidence.extractionMethod, confidence: row.evidence.confidence, sourceHash: row.evidence.sourceHash,
     viewUrl: `/api/review-evidence/${encodeURIComponent(row.evidence.id)}/view?token=${encodeURIComponent(temporaryToken(row.evidence.id, Date.now() + 5 * 60 * 1000))}`,
   } : null;
@@ -72,7 +73,7 @@ const findingSelect = {
   findingType: true, status: true, severity: true, priority: true, confidence: true, score: true, potentialImpact: true, ruleKey: true, discipline: true, baseSnapshotId: true,
   comparisonJson: true, humanReviewRequired: true, automaticBudgetMutation: true, createdAt: true, updatedAt: true,
   budgetItem: { select: { id: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true, levelId: true } },
-  evidence: { select: { id: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true } },
+  evidence: { select: { id: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } },
   entityLink: { select: { id: true, score: true, confidence: true, validationStatus: true, signalsJson: true } },
   decisions: { select: { id: true, userId: true, resolution: true, note: true, expectedUpdatedAt: true, previousStatus: true, newStatus: true, correctionVersionId: true, createdAt: true }, orderBy: { createdAt: "desc" } },
 } satisfies Prisma.ReviewFindingSelect;

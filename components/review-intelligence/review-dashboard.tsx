@@ -1,4 +1,5 @@
 import { AlertTriangle, CircleDot, FileSearch, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ReviewRunView } from "./types";
 
@@ -23,6 +24,7 @@ export function ReviewDashboard({ run, findingCount, documentCount }: { run?: Re
             <h3 className="font-semibold text-[var(--app-text-strong)]">Aún no hay revisiones</h3>
             <p className="mt-1 text-sm text-[var(--app-text-muted)]">Carga fuentes y crea una revisión para comparar tus partidas con evidencia documentada.</p>
           </div>
+          <div className="flex gap-2"><Link href="#review-document-manager" className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-medium text-white">Agregar documentos</Link><Link href="#review-how-it-works" className="rounded-xl border px-3 py-2 text-sm">Cómo funciona</Link></div>
         </CardContent>
       </Card>
     );
@@ -43,11 +45,15 @@ export function ReviewDashboard({ run, findingCount, documentCount }: { run?: Re
         </span>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Metric label="Progreso" value={`${run.progress.percent}%`} />
           <Metric label="Fuentes" value={String(documentCount)} />
           <Metric label="Hallazgos" value={`${findingCount} para revisar`} />
+          <Metric label="Cobertura" value={run.metrics?.coveragePercent !== undefined ? `${run.metrics.coveragePercent}%` : "—"} />
+          <Metric label="Partidas analizadas" value={run.metrics?.analyzedItems?.toString() ?? "—"} />
+          <Metric label="Fallos / incompletitud" value={run.metrics ? `${run.metrics.failedChecks ?? 0} / ${run.metrics.incompleteItems ?? 0}` : "—"} />
         </div>
+        <p className="text-sm text-[var(--app-text-muted)]">Delta vs ejecución anterior: {run.metrics?.deltaVsPrevious === undefined || run.metrics.deltaVsPrevious === null ? "—" : `${run.metrics.deltaVsPrevious > 0 ? "+" : ""}${run.metrics.deltaVsPrevious}`}</p>
         <div aria-label="Progreso por etapas" className="space-y-2">
           <div className="flex justify-between text-xs text-[var(--app-text-muted)]"><span>{stageLabels[run.progress.stage]}</span><span>{run.progress.completed}/{run.progress.total}</span></div>
           <div className="h-2 overflow-hidden rounded-full bg-[var(--app-surface-muted)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={run.progress.percent} aria-label={`Progreso de revisión: ${run.progress.percent}%`}>

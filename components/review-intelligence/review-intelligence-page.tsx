@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ClipboardCheck, Play, RefreshCw } from "lucide-react";
 import { ActionButton } from "@/components/ui/action-button";
@@ -26,6 +26,7 @@ export function ReviewIntelligencePage({ budgetId, projectId, initialRun, budget
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const runKey = useRef<string | null>(null);
 
   async function loadDocuments() {
     const payload = await fetchJson<{ documents?: unknown[] }>(`/api/projects/${encodeURIComponent(projectId)}/review-documents?page=1&pageSize=100`);
@@ -45,6 +46,9 @@ export function ReviewIntelligencePage({ budgetId, projectId, initialRun, budget
     if (nextFilters.status) params.set("status", nextFilters.status);
     if (nextFilters.confidence) params.set("confidence", nextFilters.confidence);
     if (nextFilters.document) params.set("document", nextFilters.document);
+    if (nextFilters.priority !== undefined) params.set("priority", String(nextFilters.priority));
+    if (nextFilters.discipline) params.set("discipline", nextFilters.discipline);
+    if (nextFilters.subbudget) params.set("subbudget", nextFilters.subbudget);
     const payload = await fetchJson<PaginatedFindings>(`/api/review-runs/${encodeURIComponent(run.id)}/findings?${params.toString()}`);
     setFindings(parseFindingPage(payload));
   }
@@ -88,11 +92,12 @@ export function ReviewIntelligencePage({ budgetId, projectId, initialRun, budget
     try {
       const response = await fetch(`/api/budgets/${encodeURIComponent(budgetId)}/review-runs`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": `review-ui-${Date.now()}` },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": runKey.current ?? (runKey.current = `review-ui-${crypto.randomUUID()}`) },
         body: JSON.stringify({ documentVersionIds: selectedVersionIds, configuration: { maxFiles: 10, maxPdfPages: 300, maxFileSizeMb: 50, maxXlsxSheets: 20, tolerancePercent: "1.00", findingTypes: ["QUANTITY_MISMATCH", "UNIT_INCONSISTENCY", "TECHNICAL_SPEC_MISMATCH", "MISSING_DOCUMENTATION", "INCOMPLETE_APU"] }, rulesVersion: "review-rules-v1" }),
       });
       if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "No se pudo iniciar la revisión.");
       await loadRuns();
+      runKey.current = null;
     } catch (startError) { setError(startError instanceof Error ? startError.message : "No se pudo iniciar la revisión."); }
     finally { setStarting(false); }
   }
@@ -109,8 +114,8 @@ async function fetchJson<T>(url: string): Promise<T> { const response = await fe
 function record(value: unknown): Record<string, unknown> | null { return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null; }
 function stringValue(value: unknown, fallback = "") { return typeof value === "string" ? value : fallback; }
 function numberValue(value: unknown, fallback = 0) { return typeof value === "number" && Number.isFinite(value) ? value : fallback; }
-function parseRun(value: unknown, budgetId: string): ReviewRunView | null { const row = record(value); if (!row || typeof row.id !== "string") return null; const progressRow = record(row.progressJson) ?? record(row.progress); const warnings = Array.isArray(row.warningsJson) ? row.warningsJson.flatMap(parseWarning) : Array.isArray(row.warnings) ? row.warnings.flatMap(parseWarning) : []; return { id: row.id, budgetId, status: stringValue(row.status, "DRAFT") as ReviewRunView["status"], progress: { stage: stringValue(progressRow?.stage, "validating") as ReviewStage, completed: numberValue(progressRow?.completed), total: numberValue(progressRow?.total, 8), percent: numberValue(progressRow?.percent) }, warnings, createdAt: stringValue(row.createdAt, new Date().toISOString()), updatedAt: stringValue(row.updatedAt, new Date().toISOString()), finishedAt: typeof row.finishedAt === "string" ? row.finishedAt : null }; }
+function parseRun(value: unknown, budgetId: string): ReviewRunView | null { const row = record(value); if (!row || typeof row.id !== "string") return null; const progressRow = record(row.progressJson) ?? record(row.progress); const warnings = Array.isArray(row.warningsJson) ? row.warningsJson.flatMap(parseWarning) : Array.isArray(row.warnings) ? row.warnings.flatMap(parseWarning) : []; const metrics = record(progressRow?.metrics); return { id: row.id, budgetId, status: stringValue(row.status, "DRAFT") as ReviewRunView["status"], progress: { stage: stringValue(progressRow?.stage, "validating") as ReviewStage, completed: numberValue(progressRow?.completed), total: numberValue(progressRow?.total, 8), percent: numberValue(progressRow?.percent) }, metrics: metrics ? { coveragePercent: numberValue(metrics.coveragePercent), analyzedItems: numberValue(metrics.analyzedItems), incompleteItems: numberValue(metrics.incompleteItems), failedChecks: numberValue(metrics.failedChecks), deltaVsPrevious: typeof metrics.deltaVsPrevious === "number" ? metrics.deltaVsPrevious : null } : undefined, warnings, createdAt: stringValue(row.createdAt, new Date().toISOString()), updatedAt: stringValue(row.updatedAt, new Date().toISOString()), finishedAt: typeof row.finishedAt === "string" ? row.finishedAt : null }; }
 function parseWarning(value: unknown): ReviewWarningView[] { const row = record(value); return row && typeof row.code === "string" && typeof row.message === "string" ? [{ code: row.code, message: row.message, source: typeof row.source === "string" ? row.source : undefined }] : []; }
-function parseDocument(value: unknown): ReviewDocumentView[] { const row = record(value); if (!row || typeof row.id !== "string") return []; const version = record(row.currentVersion); return [{ id: row.id, name: stringValue(row.name, stringValue(row.originalFileName, "Documento")), originalFileName: stringValue(row.originalFileName), category: stringValue(row.category, "OTHER"), status: stringValue(row.status, "UPLOADED"), currentVersion: version && typeof version.id === "string" ? { id: version.id, versionNumber: numberValue(version.versionNumber, 1), mimeType: stringValue(version.mimeType), fileSizeBytes: numberValue(version.fileSizeBytes), pageCount: typeof version.pageCount === "number" ? version.pageCount : null, sheetCount: typeof version.sheetCount === "number" ? version.sheetCount : null, extractionStatus: stringValue(version.extractionStatus) } : null, warnings: Array.isArray(row.warnings) ? row.warnings.filter((warning): warning is string => typeof warning === "string") : [] }]; }
+function parseDocument(value: unknown): ReviewDocumentView[] { const row = record(value); if (!row || typeof row.id !== "string") return []; const version = record(row.currentVersion); const extractionWarnings = Array.isArray(version?.extractionWarnings) ? version.extractionWarnings.flatMap((warning) => parseWarning(warning).map((item) => item.message)) : []; return [{ id: row.id, name: stringValue(row.name, stringValue(row.originalFileName, "Documento")), originalFileName: stringValue(row.originalFileName), category: stringValue(row.category, "OTHER"), status: stringValue(row.status, "UPLOADED"), currentVersion: version && typeof version.id === "string" ? { id: version.id, versionNumber: numberValue(version.versionNumber, 1), mimeType: stringValue(version.mimeType), fileSizeBytes: numberValue(version.fileSizeBytes), pageCount: typeof version.pageCount === "number" ? version.pageCount : null, sheetCount: typeof version.sheetCount === "number" ? version.sheetCount : null, extractionStatus: stringValue(version.extractionStatus), extractionWarnings } : null, warnings: [...(Array.isArray(row.warnings) ? row.warnings.filter((warning): warning is string => typeof warning === "string") : []), ...extractionWarnings] }]; }
 function parseProgress(value: unknown, run: ReviewRunView): ReviewRunView { const row = record(value); const progress = record(row?.progress); return { ...run, status: stringValue(row?.status, run.status) as ReviewRunView["status"], progress: { stage: stringValue(progress?.stage, run.progress.stage) as ReviewStage, completed: numberValue(progress?.completed, run.progress.completed), total: numberValue(progress?.total, run.progress.total), percent: numberValue(progress?.percent, run.progress.percent) }, warnings: Array.isArray(row?.warnings) ? row.warnings.flatMap(parseWarning) : run.warnings }; }
 function parseFindingPage(value: PaginatedFindings): PaginatedFindings { return { findings: Array.isArray(value.findings) ? value.findings : [], page: numberValue(value.page, 1), pageSize: numberValue(value.pageSize, 25), hasNextPage: value.hasNextPage === true }; }

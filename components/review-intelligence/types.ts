@@ -23,6 +23,7 @@ export interface ReviewRunView {
   createdAt: string;
   updatedAt: string;
   finishedAt?: string | null;
+  metrics?: { coveragePercent?: number; analyzedItems?: number; incompleteItems?: number; failedChecks?: number; deltaVsPrevious?: number | null };
 }
 
 export interface ReviewDocumentVersionView {
@@ -33,6 +34,7 @@ export interface ReviewDocumentVersionView {
   pageCount: number | null;
   sheetCount: number | null;
   extractionStatus: string;
+  extractionWarnings?: string[];
 }
 
 export interface ReviewDocumentView {
@@ -62,6 +64,8 @@ export interface FindingLocationView {
   sheet?: string;
   row?: number;
   column?: number;
+  range?: string;
+  boundingBox?: { x: number; y: number; width: number; height: number };
 }
 
 export interface FindingEvidenceView {
@@ -70,6 +74,10 @@ export interface FindingEvidenceView {
   evidenceType: string;
   originalText: string;
   normalizedText?: string | null;
+  value?: string | null;
+  sourceName?: string;
+  sourceVersion?: number;
+  warnings?: string[];
   location: FindingLocationView;
   confidence: ConfidenceLevel;
   extractionMethod: string;
@@ -138,4 +146,7 @@ export interface FindingFilterState {
   status?: FindingStatus;
   confidence?: ConfidenceLevel;
   document?: string;
+  priority?: number;
+  discipline?: string;
+  subbudget?: string;
 }
