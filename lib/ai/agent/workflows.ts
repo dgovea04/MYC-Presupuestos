@@ -66,7 +66,7 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "exportReport", "exportPDF", "exportExcel", "exportS10", "dashboard",
       // RevisiÃ³n Inteligente
       "getReviewSummary", "listReviewFindings", "getReviewFinding", "getReviewEvidence",
-      "calculateReviewFindingImpact", "recordReviewFindingDecision",
+      "searchProjectEvidence", "calculateReviewFindingImpact", "recordReviewFindingDecision",
     ],
     systemPrompt: [
       "Eres Khipu, el asistente técnico de obra de MC Presupuestos.",
@@ -183,12 +183,12 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "searchPartidas", "searchBudgets", "searchInsumos",
       "calculateBudget", "calculateAPU",
       "getReviewSummary", "listReviewFindings", "getReviewFinding", "getReviewEvidence",
-      "calculateReviewFindingImpact",
+      "searchProjectEvidence", "calculateReviewFindingImpact", "recordReviewFindingDecision",
     ],
     systemPrompt: [
       "Eres un especialista en revisión de calidad de presupuestos.",
       "Puedes revisar APUs, metrados y comparar presupuestos.",
-      "Todas tus herramientas son de solo lectura.",
+      "Las consultas son de solo lectura; recordReviewFindingDecision registra decisiones humanas explícitas y auditables.",
       "Presenta hallazgos claros con recomendaciones accionables.",
     ].join(" "),
   },

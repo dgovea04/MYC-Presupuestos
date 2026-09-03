@@ -100,6 +100,12 @@ describe("FindingDetail", () => {
     expect(String(request?.body)).not.toContain("BudgetItem");
     expect(onChanged).toHaveBeenCalled();
   });
+
+  it("keeps provenance readable but hides resolution actions for a viewer", () => {
+    render(<FindingDetail finding={finding} canResolve={false} onChanged={vi.fn()} />);
+    expect(screen.getByRole("region", { name: "Visor estructurado de provenance" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "VALID_AS_IS" })).toBeNull();
+  });
 });
 
 const runningRun: ReviewRunView = {

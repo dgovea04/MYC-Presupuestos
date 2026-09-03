@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { FindingView } from "./types";
 
 const resolutions = ["VALID_AS_IS", "CONFIRMED_ISSUE", "FALSE_POSITIVE", "NEEDS_MORE_INFORMATION", "CORRECTED", "NOT_APPLICABLE"] as const;
+const reviewPermissionContext = createContext<boolean | undefined>(undefined);
+export function ReviewPermissionProvider({ canResolve, children }: { canResolve: boolean; children: ReactNode }) { return <reviewPermissionContext.Provider value={canResolve}>{children}</reviewPermissionContext.Provider>; }
 
 export function FindingDetail({ finding: selected, canResolve, onChanged, runStatus }: { finding?: FindingView; canResolve: boolean; onChanged: () => void; runStatus?: string }) {
+  const contextualCanResolve = useContext(reviewPermissionContext);
+  canResolve = contextualCanResolve ?? canResolve;
   const [page, setPage] = useState(selected?.evidence?.location.page ?? 1); const [sheet, setSheet] = useState(selected?.evidence?.location.sheet ?? ""); const [note, setNote] = useState(""); const [version, setVersion] = useState(""); const [reconfirm, setReconfirm] = useState(false); const [error, setError] = useState<string | null>(null);
   if (!selected) return <Card><CardContent className="p-6">Selecciona un hallazgo para ver comparaciÃƒÆ’Ã‚Â³n, evidencia y acciones.</CardContent></Card>;
   const finding = selected; const evidence = finding.evidence; const location = evidence?.location; const stale = finding.status === "STALE" || runStatus === "STALE"; const isSheet = Boolean(location?.sheet);

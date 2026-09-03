@@ -65,6 +65,12 @@ describe("review document extractors", () => {
     expect(result.items[0]?.content).toContain("Concreto estructural");
   });
 
+  it("transports PDF technical specification and APU components from embedded text", async () => {
+    const pdf = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (01.01 Concreto 12.5 m3 | Especificación: f'c 210 | APU: cemento; arena)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "apu.pdf", { type: "application/pdf" });
+    const result = await extractDocument({ file: pdf });
+    expect(result.items[0]?.metadata).toMatchObject({ technicalSpecification: "f'c 210", apuComponents: ["cemento", "arena"] });
+  });
+
   it("extracts every xlsx data row with technical and APU metadata as primary evidence", async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Metrados");

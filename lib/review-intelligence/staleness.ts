@@ -24,6 +24,7 @@ export type StalenessClient = {
 };
 
 type StalenessQueryClient = StalenessClient & {
+  budget?: { findFirst: (args: { where: JsonRecord; select?: JsonRecord }) => Promise<{ id: string; parentBudgetId?: string | null } | null> };
   reviewRun: StalenessClient["reviewRun"] & {
     findMany?: (args: { where: JsonRecord; select?: JsonRecord }) => Promise<StaleRun[]>;
   };
@@ -105,10 +106,11 @@ async function markReviewRunsStaleInternal(
   input: { companyId: string; projectId: string; budgetId?: string; fingerprint: string; change?: Omit<StalenessChange, "companyId" | "projectId" | "budgetId"> },
   client: StalenessQueryClient,
 ): Promise<number> {
+  const budgetIds = await resolveBudgetScope(input, client);
   const where: JsonRecord = {
     companyId: input.companyId,
     projectId: input.projectId,
-    ...(input.budgetId ? { budgetId: input.budgetId } : {}),
+    ...(budgetIds ? { budgetId: { in: budgetIds } } : {}),
     status: { in: [...staleableStatuses] },
   };
   if (!client.reviewRun.findMany || !client.reviewAuditEvent) {
@@ -143,6 +145,18 @@ async function markReviewRunsStaleInternal(
     });
   }
   return markedCount;
+}
+
+async function resolveBudgetScope(input: { companyId: string; projectId: string; budgetId?: string }, client: StalenessQueryClient): Promise<string[] | undefined> {
+  if (!input.budgetId || !client.budget?.findFirst) return input.budgetId ? [input.budgetId] : undefined;
+  const ids: string[] = [];
+  let current: string | undefined = input.budgetId;
+  while (current && !ids.includes(current)) {
+    ids.push(current);
+    const budget = await client.budget.findFirst({ where: { id: current, companyId: input.companyId, projectId: input.projectId }, select: { id: true, parentBudgetId: true } });
+    current = typeof budget?.parentBudgetId === "string" ? budget.parentBudgetId : undefined;
+  }
+  return ids;
 }
 
 function stableSerialize(value: unknown): string {

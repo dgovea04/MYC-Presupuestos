@@ -70,6 +70,8 @@ describe("SpecialistBundles", () => {
     // APU
     expect(bundle!.toolNames).toContain("calculateAPU");
     expect(bundle!.toolNames).toContain("reviewAPU");
+    expect(bundle!.toolNames).toContain("searchProjectEvidence");
+    expect(bundle!.toolNames).toContain("recordReviewFindingDecision");
     // Insumos
     expect(bundle!.toolNames).toContain("searchInsumos");
     // Cronograma
@@ -126,7 +128,7 @@ describe("SpecialistBundles", () => {
     const readOnlyNames = ["reviewAPU", "reviewTakeoff", "compareBudgets",
       "searchPartidas", "searchBudgets", "searchInsumos",
       "calculateBudget", "calculateAPU", "getReviewSummary", "listReviewFindings",
-      "getReviewFinding", "getReviewEvidence", "calculateReviewFindingImpact"];
+      "getReviewFinding", "getReviewEvidence", "searchProjectEvidence", "calculateReviewFindingImpact", "recordReviewFindingDecision"];
     for (const name of bundle!.toolNames) {
       expect(readOnlyNames).toContain(name);
     }
@@ -154,7 +156,7 @@ describe("SpecialistBundles", () => {
   describe("consistencia systemPrompt con toolNames", () => {
     it("cada bundle que menciona toolNames explícitos en su systemPrompt los tiene registrados en toolNames", () => {
       const allKnownTools = collectAllToolNames();
-      const bundlesWithoutExplicitTools = ["review-agent"];
+      const bundlesWithoutExplicitTools: string[] = [];
 
       for (const bundle of SPECIALIST_BUNDLES) {
         const mentionedTools = extractKnownToolNames(bundle.systemPrompt, allKnownTools);
@@ -216,8 +218,7 @@ describe("SpecialistBundles", () => {
       const khipuMentions = extractKnownToolNames(getBundleSystemPrompt("khipu-agent")!, allKnownTools);
       expect(khipuMentions).toContain("previewBudgetGeneration");
       expect(khipuMentions).toContain("generateBudget");
-      // review-agent still uses pure natural language
-      expect(extractKnownToolNames(getBundleSystemPrompt("review-agent")!, allKnownTools)).toHaveLength(0);
+      expect(extractKnownToolNames(getBundleSystemPrompt("review-agent")!, allKnownTools)).toContain("recordReviewFindingDecision");
     });
   });
 });

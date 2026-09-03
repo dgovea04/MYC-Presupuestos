@@ -20,7 +20,7 @@ export type ExtractionItem = {
   content: string;
   primary?: boolean;
   location?: ExtractionLocation;
-  metadata?: { code?: string; description?: string; quantity?: string; unit?: string; spec?: string; technicalSpec?: string; discipline?: string; attributes?: Record<string, string>; apuComponents?: string[]; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "APU_COMPONENT" | "OTHER" };
+  metadata?: { code?: string; description?: string; quantity?: string; unit?: string; spec?: string; technicalSpec?: string; technicalSpecification?: string; discipline?: string; attributes?: Record<string, string>; apuComponents?: string[]; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "APU_COMPONENT" | "OTHER" };
 };
 
 export type ExtractionOutput = {
@@ -149,7 +149,9 @@ function metadataFromPdfLine(line: string): ExtractionItem["metadata"] {
   if (!codeMatch && !number) return undefined;
   const quantity = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[2] : number[1]) : undefined;
   const unit = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[1] : number[2]) : undefined;
-  return { code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, number?.index ?? line.length).trim() || undefined, quantity: quantity?.replace(",", "."), unit, evidenceType: number ? "QUANTITY" : "OTHER" };
+  const specification = line.match(/(?:especificaci[oó]n|spec)\s*:\s*([^|]+)/i)?.[1]?.trim();
+  const apuComponents = line.match(/(?:apu|componentes?)\s*:\s*([^|]+)/i)?.[1]?.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
+  return { code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, number?.index ?? line.length).replace(/\s*\|.*$/, "").trim() || undefined, quantity: quantity?.replace(",", "."), unit, spec: specification, technicalSpec: specification, technicalSpecification: specification, apuComponents, evidenceType: number ? "QUANTITY" : specification ? "TECHNICAL_SPECIFICATION" : apuComponents ? "APU_COMPONENT" : "OTHER" };
 }
 
 function normalizeCell(value: ExcelJS.CellValue): { text: string; hasHyperlink: boolean } {

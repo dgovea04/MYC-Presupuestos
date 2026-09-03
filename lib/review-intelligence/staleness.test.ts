@@ -104,4 +104,13 @@ describe("review staleness", () => {
     ]));
     expect(changes.filter((change) => change.id === "item-1")).toHaveLength(4);
   });
+
+  it("marks parent and child runs stale when a child BudgetItem changes", async () => {
+    const client = clientForRuns() as ReturnType<typeof clientForRuns> & { budget: { findFirst: ReturnType<typeof vi.fn> } };
+    client.runs.push({ id: "run-parent", status: "COMPLETED", progressJson: { results: ["parent-finding"] } });
+    client.reviewRun.findMany.mockResolvedValue(client.runs);
+    client.budget = { findFirst: vi.fn().mockResolvedValueOnce({ id: "child-budget", parentBudgetId: "parent-budget" }).mockResolvedValueOnce({ id: "parent-budget", parentBudgetId: null }) };
+    await expect(markStaleForChange({ companyId: "company-1", projectId: "project-1", budgetId: "child-budget", kind: "budget-item-quantity", id: "child-item", payload: { after: "12" } }, client)).resolves.toBe(3);
+    expect(client.reviewRun.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ budgetId: { in: ["child-budget", "parent-budget"] } }) }));
+  });
 });

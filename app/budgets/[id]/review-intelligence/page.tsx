@@ -5,6 +5,7 @@ import { ReviewIntelligencePage } from "@/components/review-intelligence/review-
 import { getAuthSession } from "@/lib/auth/session";
 import { getBudgetHeaderById } from "@/lib/data/budgets";
 import { getUserSettings } from "@/lib/data/settings";
+import { assertWorkspaceMembership } from "@/lib/workspace/access";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -18,7 +19,7 @@ export default async function BudgetReviewIntelligencePage({ params }: { params:
   const { id } = await params;
   const session = await getAuthSession();
   if (!session) notFound();
-  const [budget, settings] = await Promise.all([getBudgetHeaderById(id, session.user.id), getUserSettings(session.user.id)]);
+  const [budget, settings, membership] = await Promise.all([getBudgetHeaderById(id, session.user.id), getUserSettings(session.user.id), assertWorkspaceMembership({ userId: session.user.id, companyId: session.user.activeCompanyId ?? session.user.companyId ?? "", minimumRole: "VIEWER" })]);
   if (!budget) notFound();
-  return <AppShell currentUser={session.user} settings={settings}><ReviewIntelligencePage budgetId={budget.id} projectId={budget.projectId} budgetName={budget.name} /></AppShell>;
+  return <AppShell currentUser={session.user} settings={settings}><ReviewIntelligencePage budgetId={budget.id} projectId={budget.projectId} budgetName={budget.name} canResolve={membership.role !== "VIEWER"} /></AppShell>;
 }

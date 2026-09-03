@@ -238,4 +238,10 @@ describe("runReviewJob", () => {
     expect(result.status).toBe("COMPLETED");
     expect(database.findings[0]?.baseSnapshotId).toBe("auto-base-1");
   });
+
+  it("persists PDF technical specification and APU components through the pipeline", async () => {
+    const database = client();
+    await runReviewJob({ ...input(), evidence: [{ ...input().evidence[0], technicalSpecification: "f'c 210", apuComponents: ["cemento", "arena"] }] }, database);
+    expect(database.evidence[0]?.metadataJson).toMatchObject({ technicalSpec: "f'c 210", apuComponents: ["cemento", "arena"] });
+  });
 });
