@@ -10,6 +10,7 @@ import { markStaleForChange } from "@/lib/review-intelligence/stale";
 const categorySchema = z.enum(["PLAN", "TECHNICAL_SPECIFICATION", "QUANTITY_TAKEOFF", "BUDGET", "APU", "OTHER"]);
 const pageSchema = z.coerce.number().int().min(1).default(1);
 const pageSizeSchema = z.coerce.number().int().min(1).max(100).default(25);
+const clearDocumentsSchema = z.object({ confirmation: z.literal("ELIMINAR DOCUMENTOS FUENTE") }).strict();
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -70,5 +71,39 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message ?? "Payload inválido" }, { status: 400 });
     const message = error instanceof Error ? error.message : "No se pudo cargar el documento";
     return NextResponse.json({ error: message }, { status: /idempotency key conflict/i.test(message) ? 409 : 400 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: RouteContext) {
+  const session = await getAuthSession();
+  if (!session?.user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const { id: projectId } = await params;
+  const scope = await projectForUser(projectId, session.user.id, session.user.activeCompanyId ?? session.user.companyId, "EDITOR");
+  if ("response" in scope) return scope.response;
+  try {
+    clearDocumentsSchema.parse(await request.json());
+    const documents = await prisma.projectDocument.findMany({ where: { companyId: scope.project.companyId, projectId }, select: { id: true, currentVersionId: true } });
+    const documentIds = documents.map((document) => document.id);
+    const versionIds = documents.flatMap((document) => document.currentVersionId ? [document.currentVersionId] : []);
+    const versions = versionIds.length > 0 ? await prisma.documentVersion.findMany({ where: { companyId: scope.project.companyId, projectId, projectDocumentId: { in: documentIds } }, select: { id: true } }) : [];
+    const allVersionIds = versions.map((version) => version.id);
+    const runs = await prisma.reviewRun.findMany({ where: { companyId: scope.project.companyId, projectId }, select: { id: true } });
+    const runIds = runs.map((run) => run.id);
+    await prisma.$transaction(async (transaction) => {
+      if (runIds.length > 0) {
+        await transaction.findingDecision.deleteMany({ where: { finding: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } } });
+        await transaction.reviewFinding.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } });
+        await transaction.reviewAuditEvent.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } });
+        await transaction.reviewRunDocumentVersion.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } });
+        await transaction.reviewRun.deleteMany({ where: { id: { in: runIds }, companyId: scope.project.companyId, projectId } });
+      }
+      if (documentIds.length > 0) await transaction.projectDocument.updateMany({ where: { id: { in: documentIds }, companyId: scope.project.companyId, projectId }, data: { currentVersionId: null } });
+      if (allVersionIds.length > 0) await transaction.documentVersion.deleteMany({ where: { id: { in: allVersionIds }, companyId: scope.project.companyId, projectId } });
+      if (documentIds.length > 0) await transaction.projectDocument.deleteMany({ where: { id: { in: documentIds }, companyId: scope.project.companyId, projectId } });
+    });
+    return NextResponse.json({ deletedDocuments: documentIds.length });
+  } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "Escribe exactamente ELIMINAR DOCUMENTOS FUENTE para confirmar." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudieron eliminar los documentos fuente." }, { status: 400 });
   }
 }

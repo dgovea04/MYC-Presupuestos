@@ -85,6 +85,20 @@ describe("review document extractors", () => {
     expect(result.items[1]?.metadata?.code).toBe("01.02");
   });
 
+  it("finds structured headers after title rows so quantities remain comparable", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Metrados");
+    sheet.addRow(["Metrados de Estructuras"]);
+    sheet.addRow([]);
+    sheet.addRow(["Código", "Descripción", "Unidad", "Metrado"]);
+    sheet.addRow(["2.11", "MATERIAL DE PRESTAMO PARA RELLENOS", "m3", 208259.9]);
+    const bytes = await workbook.xlsx.writeBuffer();
+    const result = await extractDocument({ file: new File([bytes], "metrados.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.metadata).toMatchObject({ code: "2.11", description: "MATERIAL DE PRESTAMO PARA RELLENOS", unit: "m3", quantity: "208259.9", evidenceType: "QUANTITY" });
+  });
+
   it("uses the compatible PDF importer and states that page count may be estimated and exact location is unavailable", async () => {
     const file = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (01.01 Trazo y replanteo m2 10 2.50 25.00)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "spec.pdf", { type: "application/pdf" });
     const result = await extractDocument({ file });

@@ -159,6 +159,7 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
 
 async function validateInput(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<void> {
   if (input.documentVersionIds.length === 0) throw new Error("At least one document version is required.");
+  if (input.evidence.length === 0) throw new Error("No extracted evidence is available for the selected document versions.");
   if (!await client.project.findFirst({ where: { id: input.projectId, companyId: input.companyId } })) throw new Error("Project does not belong to the requested company.");
   if (!await client.budget.findFirst({ where: { id: input.budgetId, project: { companyId: input.companyId }, projectId: input.projectId } })) throw new Error("Budget does not belong to the requested tenant/project.");
   if (input.documentVersions.length !== input.documentVersionIds.length || new Set(input.documentVersionIds).size !== input.documentVersionIds.length || new Set(input.documentVersions.map((version) => version.id)).size !== input.documentVersions.length || input.documentVersions.some((version) => !input.documentVersionIds.includes(version.id))) throw new Error("Requested document version set is not exact.");

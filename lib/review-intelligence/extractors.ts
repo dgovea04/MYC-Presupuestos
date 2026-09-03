@@ -96,13 +96,14 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
         .slice(minRow - 1, maxRow)
         .map((row) => row.slice(minColumn - 1, maxColumn).map((value) => value ?? "").join("\t"))
         .join("\n");
-      const headers = rows[minRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
-      const structured = headers.some((header) => /desc|partida|spec|tecn|disciplina|apu|componente/i.test(header)) && maxRow > minRow;
+      const headerRow = findHeaderRow(rows, minRow, maxRow, minColumn, maxColumn);
+      const headers = rows[headerRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
+      const structured = headers.some((header) => /desc|partida|spec|tecn|disciplina|apu|componente/i.test(header)) && maxRow > headerRow;
       if (structured) {
-        for (let rowNumber = minRow + 1; rowNumber <= maxRow; rowNumber += 1) {
+        for (let rowNumber = headerRow + 1; rowNumber <= maxRow; rowNumber += 1) {
           const row = rows[rowNumber - 1] ?? [];
           const rowContent = row.slice(minColumn - 1, maxColumn).map((value) => value ?? "").join("\t").trim();
-          if (rowContent) items.push({ content: rowContent, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${rowNumber}:${columnToLetters(maxColumn)}${rowNumber}` }, metadata: metadataFromRows(rows, minRow, rowNumber, minColumn, maxColumn) });
+          if (rowContent) items.push({ content: rowContent, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${rowNumber}:${columnToLetters(maxColumn)}${rowNumber}` }, metadata: metadataFromRows(rows, headerRow, rowNumber, minColumn, maxColumn) });
         }
       } else items.push({ content, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${minRow}:${columnToLetters(maxColumn)}${maxRow}` }, metadata: metadataFromRows(rows, minRow, maxRow, minColumn, maxColumn) });
     }
@@ -117,6 +118,16 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
     sheetCount: workbook.worksheets.length,
     warnings,
   };
+}
+
+function findHeaderRow(rows: string[][], minRow: number, maxRow: number, minColumn: number, maxColumn: number): number {
+  for (let rowNumber = minRow; rowNumber <= maxRow; rowNumber += 1) {
+    const headers = rows[rowNumber - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
+    const hasDescription = headers.some((header) => /desc|partida/i.test(header));
+    const hasQuantity = headers.some((header) => /cant|metr|qty/i.test(header));
+    if (hasDescription && hasQuantity) return rowNumber;
+  }
+  return minRow;
 }
 
 function metadataFromRows(rows: string[][], minRow: number, maxRow: number, minColumn: number, maxColumn: number): ExtractionItem["metadata"] {

@@ -39,6 +39,12 @@ const input = (): RunReviewJobInput => ({
 });
 
 describe("runReviewJob", () => {
+  it("rejects a review when the selected documents have no extracted evidence", async () => {
+    const database = client();
+    await expect(runReviewJob({ ...input(), evidence: [] }, database)).rejects.toThrow("No extracted evidence is available");
+    expect(database.runs).toHaveLength(0);
+  });
+
   it("reuses an explicit idempotency key and conflicts on a changed request", async () => {
     const database = client();
     const request = { ...input(), idempotencyKey: "client-key-1" };

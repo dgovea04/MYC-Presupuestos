@@ -23,7 +23,7 @@ async function persistedMetrics(run: Row, companyId: string, client: ReviewJobCl
   const projectId = typeof run.projectId === "string" ? run.projectId : undefined;
   const budgetId = typeof run.budgetId === "string" ? run.budgetId : undefined;
   if (!projectId || !budgetId || typeof run.id !== "string") return undefined;
-  const budgets = await client.budget.findMany({ where: { companyId, projectId } });
+  const budgets = await client.budget.findMany({ where: { project: { companyId }, projectId } });
   const budgetIds = new Set([budgetId]); let frontier = [budgetId];
   while (frontier.length) { const children = budgets.filter((budget) => typeof budget.parentBudgetId === "string" && frontier.includes(budget.parentBudgetId)); frontier = children.map((budget) => String(budget.id)).filter((id) => !budgetIds.has(id)); frontier.forEach((id) => budgetIds.add(id)); }
   const [runDocuments, items, findings, previousRuns] = await Promise.all([

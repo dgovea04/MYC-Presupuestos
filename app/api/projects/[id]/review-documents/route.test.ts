@@ -11,17 +11,33 @@ const mocks = vi.hoisted(() => ({
   validateDocumentFile: vi.fn(),
   projectDocumentUpdate: vi.fn(),
   documentVersionFindFirst: vi.fn(),
-  documentVersionFindMany: vi.fn(),
   assertWorkspaceMembership: vi.fn(),
   extractAndPersistDocumentVersion: vi.fn(),
   markStaleForChange: vi.fn().mockResolvedValue(0),
+  documentVersionDeleteMany: vi.fn(),
+  documentVersionFindMany: vi.fn(),
+  projectDocumentUpdateMany: vi.fn(),
+  projectDocumentDeleteMany: vi.fn(),
+  reviewRunFindMany: vi.fn(),
+  reviewFindingDeleteMany: vi.fn(),
+  findingDecisionDeleteMany: vi.fn(),
+  reviewAuditEventDeleteMany: vi.fn(),
+  reviewRunDocumentVersionDeleteMany: vi.fn(),
+  reviewRunDeleteMany: vi.fn(),
+  transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: {
   project: { findFirst: mocks.projectFindFirst },
   projectDocument: { findMany: mocks.projectDocumentFindMany, findFirst: mocks.projectDocumentFindFirst, update: mocks.projectDocumentUpdate },
-  documentVersion: { findFirst: mocks.documentVersionFindFirst, findMany: mocks.documentVersionFindMany },
+  documentVersion: { findFirst: mocks.documentVersionFindFirst, findMany: mocks.documentVersionFindMany, deleteMany: mocks.documentVersionDeleteMany },
+  reviewRun: { findMany: mocks.reviewRunFindMany },
+  reviewFinding: { deleteMany: mocks.reviewFindingDeleteMany },
+  findingDecision: { deleteMany: mocks.findingDecisionDeleteMany },
+  reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany },
+  reviewRunDocumentVersion: { deleteMany: mocks.reviewRunDocumentVersionDeleteMany },
+  $transaction: mocks.transaction,
 } }));
 vi.mock("@/lib/review-intelligence/documents", () => ({
   createProjectDocument: mocks.createProjectDocument,
@@ -33,7 +49,7 @@ vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership: mocks.asse
 vi.mock("@/lib/review-intelligence/extraction-persistence", () => ({ extractAndPersistDocumentVersion: mocks.extractAndPersistDocumentVersion }));
 vi.mock("@/lib/review-intelligence/stale", () => ({ markStaleForChange: mocks.markStaleForChange }));
 
-import { GET, POST } from "@/app/api/projects/[id]/review-documents/route";
+import { DELETE, GET, POST } from "@/app/api/projects/[id]/review-documents/route";
 
 describe("review documents API", () => {
   beforeEach(() => {
@@ -44,6 +60,15 @@ describe("review documents API", () => {
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
     mocks.validateDocumentFile.mockResolvedValue({ sha256: "hash", mimeType: "application/pdf", extension: ".pdf", fileSizeBytes: 8, bytes: new Uint8Array() });
     mocks.documentVersionFindMany.mockResolvedValue([]);
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+      projectDocument: { updateMany: mocks.projectDocumentUpdateMany, deleteMany: mocks.projectDocumentDeleteMany },
+      documentVersion: { deleteMany: mocks.documentVersionDeleteMany },
+      reviewRun: { findMany: mocks.reviewRunFindMany, deleteMany: mocks.reviewRunDeleteMany },
+      reviewFinding: { deleteMany: mocks.reviewFindingDeleteMany },
+      findingDecision: { deleteMany: mocks.findingDecisionDeleteMany },
+      reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany },
+      reviewRunDocumentVersion: { deleteMany: mocks.reviewRunDocumentVersionDeleteMany },
+    }));
   });
 
   it("returns 401 without an authenticated session", async () => {
@@ -119,5 +144,17 @@ describe("review documents API", () => {
     const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-target" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(409);
     expect(mocks.createDocumentVersion).not.toHaveBeenCalled();
+  });
+
+  it("deletes all source documents and dependent review history only with explicit confirmation", async () => {
+    mocks.projectDocumentFindMany.mockResolvedValue([{ id: "document-1", currentVersionId: "version-1" }]);
+    mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1" }]);
+    mocks.reviewRunFindMany.mockResolvedValue([{ id: "run-1" }]);
+    const response = await DELETE(new Request("http://localhost/api/projects/project-1/review-documents", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "ELIMINAR DOCUMENTOS FUENTE" }) }), { params: Promise.resolve({ id: "project-1" }) });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ deletedDocuments: 1 });
+    expect(mocks.projectDocumentUpdateMany).toHaveBeenCalledWith({ where: { id: { in: ["document-1"] }, companyId: "company-1", projectId: "project-1" }, data: { currentVersionId: null } });
+    expect(mocks.documentVersionDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["version-1"] }, companyId: "company-1", projectId: "project-1" } });
+    expect(mocks.projectDocumentDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["document-1"] }, companyId: "company-1", projectId: "project-1" } });
   });
 });

@@ -11,9 +11,20 @@ const mocks = vi.hoisted(() => ({
   documentVersionFindMany: vi.fn(),
   budgetItemFindMany: vi.fn(),
   reviewEvidenceFindMany: vi.fn(),
+  reviewFindingDeleteMany: vi.fn(),
+  findingDecisionDeleteMany: vi.fn(),
+  reviewAuditEventDeleteMany: vi.fn(),
+  reviewRunDocumentVersionDeleteMany: vi.fn(),
+  reviewRunDeleteMany: vi.fn(),
+  transaction: vi.fn(),
   assertWorkspaceMembership: vi.fn(),
+  after: vi.fn(),
 }));
 
+vi.mock("next/server", async () => {
+  const actual = await vi.importActual<typeof import("next/server")>("next/server");
+  return { ...actual, after: mocks.after };
+});
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: {
   budget: { findFirst: mocks.budgetFindFirst, findMany: mocks.budgetFindMany },
@@ -22,11 +33,16 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: {
   documentVersion: { findMany: mocks.documentVersionFindMany },
   budgetItem: { findMany: mocks.budgetItemFindMany },
   reviewEvidence: { findMany: mocks.reviewEvidenceFindMany },
+  reviewFinding: { deleteMany: mocks.reviewFindingDeleteMany },
+  findingDecision: { deleteMany: mocks.findingDecisionDeleteMany },
+  reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany },
+  reviewRunDocumentVersion: { deleteMany: mocks.reviewRunDocumentVersionDeleteMany },
+  $transaction: mocks.transaction,
 } }));
 vi.mock("@/lib/review-intelligence/pipeline", () => ({ runReviewJob: mocks.runReviewJob }));
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership: mocks.assertWorkspaceMembership }));
 
-import { GET, POST } from "@/app/api/budgets/[id]/review-runs/route";
+import { DELETE, GET, POST } from "@/app/api/budgets/[id]/review-runs/route";
 
 const configuration = { maxFiles: 1, maxPdfPages: 300, maxFileSizeMb: 50, maxXlsxSheets: 20, tolerancePercent: "1", findingTypes: ["QUANTITY_MISMATCH"] };
 
@@ -39,9 +55,17 @@ describe("review runs API", () => {
     mocks.reviewRunFindMany.mockResolvedValue([]);
     mocks.reviewRunCount.mockResolvedValue(0);
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
+    mocks.after.mockImplementation((callback: () => void | Promise<void>) => { void callback(); });
     mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1", projectDocumentId: "document-1" }]);
     mocks.budgetItemFindMany.mockResolvedValue([]);
     mocks.reviewEvidenceFindMany.mockResolvedValue([]);
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+      reviewFinding: { deleteMany: mocks.reviewFindingDeleteMany },
+      findingDecision: { deleteMany: mocks.findingDecisionDeleteMany },
+      reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany },
+      reviewRunDocumentVersion: { deleteMany: mocks.reviewRunDocumentVersionDeleteMany },
+      reviewRun: { deleteMany: mocks.reviewRunDeleteMany },
+    }));
   });
 
   it("returns 401 without a session", async () => {
@@ -84,6 +108,15 @@ describe("review runs API", () => {
     expect(response.status).toBe(409);
   });
 
+  it("clears all review history for the budget only with explicit confirmation", async () => {
+    mocks.reviewRunFindMany.mockResolvedValue([{ id: "run-2" }, { id: "run-1" }]);
+    const response = await DELETE(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "LIMPIAR REVISIONES" }) }), { params: Promise.resolve({ id: "budget-1" }) });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ deletedRuns: 2 });
+    expect(mocks.reviewFindingDeleteMany).toHaveBeenCalledWith({ where: { reviewRunId: { in: ["run-2", "run-1"] }, companyId: "company-1", projectId: "project-1" } });
+    expect(mocks.reviewRunDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["run-2", "run-1"] }, companyId: "company-1", projectId: "project-1", budgetId: "budget-1" } });
+  });
+
   it("does not report a next page when the final page has exactly pageSize runs", async () => {
     mocks.reviewRunFindMany.mockResolvedValue([{ id: "run-2" }, { id: "run-1" }]);
     const response = await GET(new Request("http://localhost/api/budgets/budget-1/review-runs?pageSize=2"), { params: Promise.resolve({ id: "budget-1" }) });
@@ -103,6 +136,13 @@ describe("review runs API", () => {
     expect(response.status).toBe(202);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: "key-long" }), expect.anything());
+    expect(mocks.after).toHaveBeenCalledTimes(1);
     release?.();
+  });
+
+  it("schedules the deferred worker with Next's response-lifetime hook", async () => {
+    mocks.runReviewJob.mockResolvedValue({ reviewRunId: "review-queued", status: "QUEUED", idempotencyKey: "key-after" });
+    await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-after" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
+    expect(mocks.after).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AlertTriangle, FileSpreadsheet, FileText, Upload } from "lucide-react";
+import { AlertTriangle, FileSpreadsheet, FileText, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import type { ReviewDocumentView } from "./types";
@@ -16,6 +17,8 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
   const targetDocumentId = useRef<string | null>(null);
   const [category, setCategory] = useState<(typeof categories)[number]>("OTHER");
   const [uploading, setUploading] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function upload(file: File) {
@@ -30,6 +33,18 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
       uploadKey.current = null; targetDocumentId.current = null;
     } catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : "No se pudo cargar el documento."); }
     finally { setUploading(false); if (inputRef.current) inputRef.current.value = ""; }
+  }
+
+  async function clearDocuments() {
+    const confirmation = "ELIMINAR DOCUMENTOS FUENTE";
+    setClearDialogOpen(false);
+    setClearing(true); setError(null);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/review-documents`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation }) });
+      if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "No se pudieron eliminar los documentos fuente.");
+      onSelectionChange?.([]); onChanged();
+    } catch (clearError) { setError(clearError instanceof Error ? clearError.message : "No se pudieron eliminar los documentos fuente."); }
+    finally { setClearing(false); }
   }
 
   function toggleDocument(id: string) {
@@ -48,6 +63,7 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
           </Select>
           <input ref={inputRef} type="file" accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" aria-label="Archivo PDF o XLSX" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
           <Button type="button" onClick={() => inputRef.current?.click()} loading={uploading} aria-label="Cargar documento PDF o XLSX"><Upload className="h-4 w-4" aria-hidden="true" />Cargar documento</Button>
+          <Button type="button" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => setClearDialogOpen(true)} loading={clearing} disabled={documents.length === 0} aria-label="Eliminar documentos fuente"><Trash2 className="h-4 w-4" aria-hidden="true" />Limpiar fuentes</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -55,6 +71,7 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
         {documents.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--app-border)] px-4 py-8 text-center text-sm text-[var(--app-text-muted)]">Todavía no hay documentos asociados a este proyecto.</p> : null}
         {documents.map((document) => <DocumentRow key={document.id} document={document} selected={selectedDocumentIds.includes(document.id)} onToggle={() => toggleDocument(document.id)} onClassified={onChanged} onReplace={() => { targetDocumentId.current = document.id; inputRef.current?.click(); }} />)}
       </CardContent>
+      <AlertDialog open={clearDialogOpen} title="Limpiar documentos fuente" description="Esta acción eliminará todos los documentos fuente, sus versiones, evidencias y revisiones del proyecto. El presupuesto y sus APU se conservarán." confirmLabel="Sí, limpiar fuentes" onConfirm={() => void clearDocuments()} onCancel={() => setClearDialogOpen(false)} />
     </Card>
   );
 }

@@ -29,7 +29,7 @@ describe("review jobs", () => {
 
   it("calculates persisted metrics only from the run's document versions and descendants", async () => {
     const database = jobClient();
-    database.budget = { findMany: async () => [{ id: "budget-1", parentBudgetId: null }, { id: "budget-child", parentBudgetId: "budget-1" }, { id: "other", parentBudgetId: null }] };
+    database.budget = { findMany: async ({ where }) => { expect(where).toEqual({ project: { companyId: "company-1" }, projectId: "project-1" }); return [{ id: "budget-1", parentBudgetId: null }, { id: "budget-child", parentBudgetId: "budget-1" }, { id: "other", parentBudgetId: null }]; } };
     database.budgetItem = { findMany: async () => [{ id: "item-1", budgetId: "budget-1" }, { id: "item-2", budgetId: "budget-child" }, { id: "item-other", budgetId: "other" }] };
     database.reviewRunDocumentVersion = { findMany: async ({ where }) => where.reviewRunId === "run-1" ? [{ documentVersionId: "version-in-scope" }] : [] };
     database.reviewEvidence = { findMany: async ({ where }) => where.documentVersionId.in.includes("version-in-scope") ? [{ id: "evidence-1", documentVersionId: "version-in-scope" }] : [] };

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
@@ -14,6 +14,7 @@ const requestSchema = z.object({
   rulesVersion: z.string().min(1).max(100).default("review-rules-v1"),
 }).strict();
 const paginationSchema = z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25) });
+const clearHistorySchema = z.object({ confirmation: z.literal("LIMPIAR REVISIONES") }).strict();
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -67,12 +68,39 @@ export async function POST(request: Request, { params }: Context) {
     const reviewItems = items.map((item) => ({ ...item, discipline: item.discipline ?? undefined, technicalSpecification: item.apu?.name ?? undefined, apuComponents: item.apu?.resources.map((resource) => resource.resource?.description ?? resource.resource?.code ?? resource.catalogPartida?.description).filter((value): value is string => typeof value === "string" && value.length > 0) }));
     const input = { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId, budgetReference: { id: budgetId, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, createdById: session.user.id, documentVersionIds: body.documentVersionIds, documentVersions: versions, configuration, rulesVersion: body.rulesVersion, idempotencyKey, defer: true, budgetItems: reviewItems, evidence: evidence.map((entry) => { const metadata = typeof entry.metadataJson === "object" && entry.metadataJson !== null && !Array.isArray(entry.metadataJson) ? entry.metadataJson as Record<string, unknown> : {}; const metadataQuantity = typeof metadata.quantity === "string" && /^-?\d+(?:\.\d+)?$/.test(metadata.quantity) ? new Decimal(metadata.quantity) : undefined; const components = Array.isArray(metadata.apuComponents) ? metadata.apuComponents.filter((value): value is string => typeof value === "string") : undefined; return { id: entry.id, documentVersionId: entry.documentVersionId, originalText: entry.originalText, normalizedText: entry.normalizedText ?? undefined, sourceHash: entry.sourceHash, evidenceType: entry.evidenceType, confidence: entry.confidence, unit: typeof metadata.unit === "string" ? metadata.unit : entry.unit ?? undefined, quantity: metadataQuantity ?? entry.value ?? undefined, code: typeof metadata.code === "string" ? metadata.code : undefined, description: typeof metadata.description === "string" ? metadata.description : undefined, technicalSpecification: typeof metadata.technicalSpec === "string" ? metadata.technicalSpec : typeof metadata.spec === "string" ? metadata.spec : undefined, discipline: typeof metadata.discipline === "string" ? metadata.discipline : undefined, attributes: typeof metadata.attributes === "object" && metadata.attributes !== null ? metadata.attributes as Record<string, string> : undefined, apuComponents: components, primary: true, locationJson: typeof entry.locationJson === "object" && entry.locationJson !== null && !Array.isArray(entry.locationJson) ? entry.locationJson as Record<string, unknown> : {} }; }) };
     const result = await runReviewJob(input, prisma as unknown as ReviewPipelineClient);
-    void runReviewJob({ ...input, defer: false }, prisma as unknown as ReviewPipelineClient).catch(() => undefined);
+    after(async () => {
+      await runReviewJob({ ...input, defer: false }, prisma as unknown as ReviewPipelineClient);
+    });
     return NextResponse.json({ reviewRunId: result.reviewRunId, status: result.status, idempotencyKey: result.idempotencyKey }, { status: 202 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message ?? "Payload inválido" }, { status: 400 });
     if (error instanceof ReviewRunLimitError) return NextResponse.json({ error: error.message, code: error.code }, { status: 400 });
     if (error instanceof Error && /active review run|idempotency key was reused/i.test(error.message)) return NextResponse.json({ error: error.message }, { status: 409 });
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo iniciar la revisión" }, { status: 400 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: Context) {
+  const session = await getAuthSession();
+  if (!session?.user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const { id: budgetId } = await params;
+  const scope = await budgetForUser(budgetId, session.user.id, session.user.activeCompanyId ?? session.user.companyId, "EDITOR");
+  if ("response" in scope) return scope.response;
+  try {
+    clearHistorySchema.parse(await request.json());
+    const runs = await prisma.reviewRun.findMany({ where: { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId }, select: { id: true } });
+    const runIds = runs.map((run) => run.id);
+    if (runIds.length === 0) return NextResponse.json({ deletedRuns: 0 });
+    await prisma.$transaction(async (transaction) => {
+      await transaction.findingDecision.deleteMany({ where: { finding: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } } });
+      await transaction.reviewFinding.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } });
+      await transaction.reviewAuditEvent.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } });
+      await transaction.reviewRunDocumentVersion.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } });
+      await transaction.reviewRun.deleteMany({ where: { id: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId } });
+    });
+    return NextResponse.json({ deletedRuns: runIds.length });
+  } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "Escribe exactamente LIMPIAR REVISIONES para confirmar." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo limpiar el historial de revisiones." }, { status: 400 });
   }
 }

@@ -20,6 +20,29 @@ afterEach(() => {
 });
 
 describe("ReviewIntelligencePage", () => {
+  it("selects the newly created run instead of keeping findings from the previous run", async () => {
+    const newRun: ReviewRunView = { ...runningRun, id: "run-new", status: "QUEUED", progress: { stage: "validating", completed: 0, total: 8, percent: 0 } };
+    let created = false;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes("review-documents")) return jsonResponse({ documents: [documentView] });
+      if (url.includes("review-runs?") && init?.method !== "POST") return jsonResponse({ runs: created ? [newRun, runningRun] : [runningRun] });
+      if (init?.method === "POST") { created = true; return jsonResponse({ reviewRunId: "run-new" }, 201); }
+      if (url.includes("run-new/findings")) return jsonResponse({ findings: [], page: 1, pageSize: 25, hasNextPage: false });
+      if (url.endsWith("/run-1/findings")) return jsonResponse(findingPage);
+      return jsonResponse(newRun);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" />);
+    await screen.findByText("Planos.pdf");
+    fireEvent.click(screen.getByLabelText("Incluir Planos.pdf en la revisión"));
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+
+    await waitFor(() => expect(screen.getByTestId("review-lifecycle-status").textContent).toBe("QUEUED"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("run-new/findings"))).toBe(true));
+  });
+
   it("shows the empty state with supported formats and human-review guardrails", async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ documents: [], page: 1, pageSize: 25, hasNextPage: false }))
@@ -33,6 +56,15 @@ describe("ReviewIntelligencePage", () => {
     expect(screen.getByText(/PDF y XLSX/i)).toBeTruthy();
     expect(screen.getByText(/humana/i)).toBeTruthy();
     expect(screen.getByText(/Sin mutaci.*autom.*tica/i)).toBeTruthy();
+  });
+
+  it("uses the system confirmation dialog before clearing review history", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ documents: [], runs: [] })));
+    render(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Limpiar revisiones" }));
+    expect(screen.getByRole("heading", { name: "Limpiar revisiones" })).toBeTruthy();
+    expect(screen.getByText(/eliminará todas las revisiones/i)).toBeTruthy();
   });
 
   it("shows lifecycle status and editor action while keeping the action hidden for a viewer", async () => {
@@ -67,6 +99,14 @@ describe("DocumentManager", () => {
     expect(screen.getByText(/Parcial: página 8 sin texto extraíble/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cargar documento PDF o XLSX" })).toBeTruthy();
     expect(screen.getByLabelText("Categoría del documento" )).toBeTruthy();
+  });
+
+  it("uses the system confirmation dialog before clearing source documents", () => {
+    render(<DocumentManager projectId="project-1" documents={[documentView]} onChanged={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar documentos fuente" }));
+    expect(screen.getByRole("heading", { name: "Limpiar documentos fuente" })).toBeTruthy();
+    expect(screen.getByText(/documentos fuente.*evidencias.*revisiones/i)).toBeTruthy();
   });
 });
 
