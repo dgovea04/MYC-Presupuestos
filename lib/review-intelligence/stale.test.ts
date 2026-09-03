@@ -3,9 +3,9 @@ import { changeFingerprint, markReviewRunsStale, markStaleForChange } from "./st
 
 describe("review stale invalidation", () => {
   it("marks only active or completed runs for the affected project/budget", async () => {
-    const client = { reviewRun: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) } };
+    const client = { reviewRun: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) }, budget: { findFirst: vi.fn().mockResolvedValueOnce({ id: "b", parentBudgetId: "parent" }).mockResolvedValueOnce({ id: "parent", parentBudgetId: null }) } };
     await expect(markReviewRunsStale({ companyId: "c", projectId: "p", budgetId: "b", fingerprint: "f" }, client)).resolves.toBe(2);
-    expect(client.reviewRun.updateMany).toHaveBeenCalledWith({ where: expect.objectContaining({ companyId: "c", projectId: "p", budgetId: "b", status: { in: expect.arrayContaining(["RUNNING", "COMPLETED"]) } }), data: { status: "STALE", progressJson: { staleFingerprint: "f" } } });
+    expect(client.reviewRun.updateMany).toHaveBeenCalledWith({ where: expect.objectContaining({ companyId: "c", projectId: "p", budgetId: { in: ["b", "parent"] }, status: { in: expect.arrayContaining(["RUNNING", "COMPLETED"]) } }), data: { status: "STALE", progressJson: { staleFingerprint: "f" } } });
   });
 
   it("uses stable fingerprints for each change kind and payload", async () => {
