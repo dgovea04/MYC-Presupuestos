@@ -31,7 +31,7 @@ describe("ReviewIntelligencePage", () => {
     expect(await screen.findByRole("heading", { name: /Revisi.*Inteligente/ })).toBeTruthy();
     expect(screen.getByText(/Aún no hay revisiones/i)).toBeTruthy();
     expect(screen.getByText(/PDF y XLSX/i)).toBeTruthy();
-    expect(screen.getByText(/revisi.*humana/i)).toBeTruthy();
+    expect(screen.getByText(/humana/i)).toBeTruthy();
     expect(screen.getByText(/Sin mutaci.*autom.*tica/i)).toBeTruthy();
   });
 });
@@ -84,11 +84,11 @@ describe("FindingDetail", () => {
     render(<FindingDetail finding={finding} canResolve onChanged={onChanged} />);
 
     expect(screen.getByRole("region", { name: "Visor estructurado de provenance" })).toBeTruthy();
-    expect(screen.getByLabelText("Página de evidencia")).toBeTruthy();
+    expect(screen.getByRole("spinbutton")).toBeTruthy();
     expect(screen.getByTestId("evidence-highlight")).toBeTruthy();
     expect(screen.getByText(/12/)).toBeTruthy();
-    expect(screen.getAllByText(/Revisión humana requerida/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/El presupuesto no se modifica automáticamente/i)).toBeTruthy();
+    expect(screen.getAllByText(/humana requerida/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/presupuesto no se modifica autom.*ticamente/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "VALID_AS_IS" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(

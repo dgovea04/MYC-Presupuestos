@@ -11,14 +11,17 @@ const mocks = vi.hoisted(() => ({
   validateDocumentFile: vi.fn(),
   projectDocumentUpdate: vi.fn(),
   documentVersionFindFirst: vi.fn(),
+  documentVersionFindMany: vi.fn(),
   assertWorkspaceMembership: vi.fn(),
+  extractAndPersistDocumentVersion: vi.fn(),
+  markStaleForChange: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: {
   project: { findFirst: mocks.projectFindFirst },
   projectDocument: { findMany: mocks.projectDocumentFindMany, findFirst: mocks.projectDocumentFindFirst, update: mocks.projectDocumentUpdate },
-  documentVersion: { findFirst: mocks.documentVersionFindFirst },
+  documentVersion: { findFirst: mocks.documentVersionFindFirst, findMany: mocks.documentVersionFindMany },
 } }));
 vi.mock("@/lib/review-intelligence/documents", () => ({
   createProjectDocument: mocks.createProjectDocument,
@@ -27,6 +30,8 @@ vi.mock("@/lib/review-intelligence/documents", () => ({
   validateDocumentFile: mocks.validateDocumentFile,
 }));
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership: mocks.assertWorkspaceMembership }));
+vi.mock("@/lib/review-intelligence/extraction-persistence", () => ({ extractAndPersistDocumentVersion: mocks.extractAndPersistDocumentVersion }));
+vi.mock("@/lib/review-intelligence/stale", () => ({ markStaleForChange: mocks.markStaleForChange }));
 
 import { GET, POST } from "@/app/api/projects/[id]/review-documents/route";
 
@@ -38,6 +43,7 @@ describe("review documents API", () => {
     mocks.projectDocumentFindMany.mockResolvedValue([]);
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
     mocks.validateDocumentFile.mockResolvedValue({ sha256: "hash", mimeType: "application/pdf", extension: ".pdf", fileSizeBytes: 8, bytes: new Uint8Array() });
+    mocks.documentVersionFindMany.mockResolvedValue([]);
   });
 
   it("returns 401 without an authenticated session", async () => {
@@ -105,5 +111,13 @@ describe("review documents API", () => {
     form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
     const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-conflict" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(409);
+  });
+
+  it("returns 409 when an idempotency key is reused for another target", async () => {
+    mocks.documentVersionFindMany.mockResolvedValue([{ storageKey: "review-documents/company-1/project-1/key-target/other-document/hash", sha256: "hash", projectDocumentId: "other-document" }]);
+    const form = new FormData(); form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" })); form.set("documentId", "document-1");
+    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-target" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
+    expect(response.status).toBe(409);
+    expect(mocks.createDocumentVersion).not.toHaveBeenCalled();
   });
 });

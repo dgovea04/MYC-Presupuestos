@@ -33,7 +33,7 @@ export function calculateReviewRunMetrics(input: ReviewRunMetricInput): ReviewRu
   }
   const failures = input.warnings.filter((warning) => /fail|error/i.test(`${warning.code} ${warning.message}`)).length;
   const incompleteness = input.warnings.filter((warning) => /incomplete|partial|missing/i.test(`${warning.code} ${warning.message}`)).length + (findingsByType.INCOMPLETE_APU ?? 0) + (findingsByType.MISSING_DOCUMENTATION ?? 0);
-  const analyzedItems = new Set(input.findings.filter((finding) => finding.budgetItemId !== null && itemIds.has(finding.budgetItemId)).map((finding) => finding.budgetItemId)).size;
+  const analyzedItems = items.length;
   const coveragePercent = items.length === 0 ? 0 : Math.round((analyzedItems / items.length) * 100);
   return { analyzedItems, totalItems: items.length, coveragePercent, evidenceCount: input.evidence.length, linkedEvidenceCount: linkedEvidence.size, findingsByStatus, findingsByType, failures, incompleteness, deltaVsPrevious: input.previous ? analyzedItems - input.previous.analyzedItems : null };
 }

@@ -4,6 +4,8 @@ import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { createDocumentVersion, createProjectDocumentAndVersion, validateDocumentFile } from "@/lib/review-intelligence/documents";
+import { extractAndPersistDocumentVersion } from "@/lib/review-intelligence/extraction-persistence";
+import { markStaleForChange } from "@/lib/review-intelligence/stale";
 
 const categorySchema = z.enum(["PLAN", "TECHNICAL_SPECIFICATION", "QUANTITY_TAKEOFF", "BUDGET", "APU", "OTHER"]);
 const pageSchema = z.coerce.number().int().min(1).default(1);
@@ -53,9 +55,16 @@ export async function POST(request: Request, { params }: RouteContext) {
     const file = formData.get("file");
     if (!(file instanceof File)) return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     const category = categorySchema.parse(formData.get("category") ?? "OTHER");
-    await validateDocumentFile(file);
+    const validated = await validateDocumentFile(file);
     const targetDocumentId = String(formData.get("documentId") ?? "");
-    const result = targetDocumentId ? await createDocumentVersion({ companyId: scope.project.companyId, projectId, projectDocumentId: targetDocumentId, storageKey: `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}`, file }, prisma as unknown as Parameters<typeof createDocumentVersion>[1]).then((version) => ({ document: { id: targetDocumentId }, version })) : await createProjectDocumentAndVersion({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, storageKey: `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}`, file }, prisma as unknown as Parameters<typeof createProjectDocumentAndVersion>[1]);
+    const storageKey = `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}/${targetDocumentId || "new"}/${validated.sha256}`;
+    if (typeof prisma.documentVersion.findMany === "function") {
+      const previous = await prisma.documentVersion.findMany({ where: { companyId: scope.project.companyId, projectId, storageKey: { startsWith: `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}/` } }, select: { id: true, projectDocumentId: true, storageKey: true, sha256: true } });
+      if (previous.some((version) => version.storageKey !== storageKey || version.sha256 !== validated.sha256 || (targetDocumentId && version.projectDocumentId !== targetDocumentId))) throw new Error("Idempotency key conflict: target or payload differs.");
+    }
+    const result = targetDocumentId ? await createDocumentVersion({ companyId: scope.project.companyId, projectId, projectDocumentId: targetDocumentId, storageKey, file }, prisma as unknown as Parameters<typeof createDocumentVersion>[1]).then((version) => ({ document: { id: targetDocumentId }, version })) : await createProjectDocumentAndVersion({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, storageKey, file }, prisma as unknown as Parameters<typeof createProjectDocumentAndVersion>[1]);
+    await extractAndPersistDocumentVersion({ file, version: result.version, companyId: scope.project.companyId, projectId }, prisma as unknown as Parameters<typeof extractAndPersistDocumentVersion>[1]);
+    await markStaleForChange({ companyId: scope.project.companyId, projectId, kind: "document-upload", id: result.version.id, payload: result.version.sha256 }, prisma);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message ?? "Payload inválido" }, { status: 400 });
