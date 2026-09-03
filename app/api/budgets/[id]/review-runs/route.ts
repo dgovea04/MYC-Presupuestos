@@ -51,7 +51,15 @@ export async function POST(request: Request, { params }: Context) {
     const configuration = parseReviewConfiguration(body.configuration);
     const versions = await prisma.documentVersion.findMany({ where: { id: { in: body.documentVersionIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, select: { id: true, companyId: true, projectId: true, projectDocumentId: true } });
     const evidence = await prisma.reviewEvidence.findMany({ where: { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, documentVersionId: { in: body.documentVersionIds } }, select: { id: true, documentVersionId: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, evidenceType: true } });
-    const items = await prisma.budgetItem.findMany({ where: { budgetId }, select: { id: true, budgetId: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true } });
+    const budgets = await prisma.budget.findMany({ where: { project: { companyId: scope.budget.project.companyId }, projectId: scope.budget.projectId }, select: { id: true, parentBudgetId: true } });
+    const budgetIds = new Set<string>([budgetId]);
+    let frontier = [budgetId];
+    while (frontier.length > 0) {
+      const children = budgets.filter((budget) => budget.parentBudgetId !== null && frontier.includes(budget.parentBudgetId));
+      frontier = children.map((budget) => budget.id).filter((id) => !budgetIds.has(id));
+      frontier.forEach((id) => budgetIds.add(id));
+    }
+    const items = await prisma.budgetItem.findMany({ where: { budgetId: { in: [...budgetIds] } }, select: { id: true, budgetId: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true } });
     const reviewItems = items.map((item) => ({ ...item, discipline: item.discipline ?? undefined }));
     const input = { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId, budgetReference: { id: budgetId, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, createdById: session.user.id, documentVersionIds: body.documentVersionIds, documentVersions: versions, configuration, rulesVersion: body.rulesVersion, idempotencyKey, defer: true, budgetItems: reviewItems, evidence: evidence.map((entry) => ({ id: entry.id, documentVersionId: entry.documentVersionId, originalText: entry.originalText, normalizedText: entry.normalizedText ?? undefined, sourceHash: entry.sourceHash, evidenceType: entry.evidenceType, confidence: entry.confidence, unit: entry.unit ?? undefined, primary: true, locationJson: typeof entry.locationJson === "object" && entry.locationJson !== null && !Array.isArray(entry.locationJson) ? entry.locationJson as Record<string, unknown> : {} })) };
     const result = await runReviewJob(input, prisma as unknown as ReviewPipelineClient);

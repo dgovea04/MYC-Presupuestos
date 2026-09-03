@@ -9,7 +9,7 @@ type Client = Pick<PrismaClient, "reviewRun" | "reviewFinding" | "findingDecisio
 type FindingRow = Prisma.ReviewFindingGetPayload<{
   select: {
     id: true; companyId: true; projectId: true; budgetId: true; reviewRunId: true; budgetItemId: true; entityLinkId: true; evidenceId: true;
-    findingType: true; status: true; severity: true; priority: true; confidence: true; score: true; potentialImpact: true; ruleKey: true; discipline: true;
+    findingType: true; status: true; severity: true; priority: true; confidence: true; score: true; potentialImpact: true; ruleKey: true; discipline: true; baseSnapshotId: true;
     comparisonJson: true; humanReviewRequired: true; automaticBudgetMutation: true; createdAt: true; updatedAt: true;
     budgetItem: { select: { id: true; code: true; description: true; unit: true; quantity: true; unitPrice: true; discipline: true; levelId: true } };
     evidence: { select: { id: true; documentVersionId: true; evidenceType: true; originalText: true; normalizedText: true; locationJson: true; unit: true; extractionMethod: true; confidence: true; sourceHash: true } };
@@ -69,7 +69,7 @@ function serializeFinding(row: FindingRow): Record<string, unknown> {
 
 const findingSelect = {
   id: true, companyId: true, projectId: true, budgetId: true, reviewRunId: true, budgetItemId: true, entityLinkId: true, evidenceId: true,
-  findingType: true, status: true, severity: true, priority: true, confidence: true, score: true, potentialImpact: true, ruleKey: true, discipline: true,
+  findingType: true, status: true, severity: true, priority: true, confidence: true, score: true, potentialImpact: true, ruleKey: true, discipline: true, baseSnapshotId: true,
   comparisonJson: true, humanReviewRequired: true, automaticBudgetMutation: true, createdAt: true, updatedAt: true,
   budgetItem: { select: { id: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true, levelId: true } },
   evidence: { select: { id: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true } },
@@ -80,11 +80,17 @@ const findingSelect = {
 export async function listFindings(filters: FindingFilters, client: Client = prisma): Promise<PaginatedFindings> {
   const run = await client.reviewRun.findFirst({ where: { id: filters.reviewRunId, companyId: filters.companyId, ...(filters.projectId ? { projectId: filters.projectId } : {}), ...(filters.budgetId ? { budgetId: filters.budgetId } : {}) }, select: { id: true, projectId: true, budgetId: true } });
   if (!run) throw new Error("Review run not found.");
-  if (filters.subbudget !== undefined) {
-    const selectedSubbudget = await client.budget.findFirst({ where: { id: filters.subbudget, projectId: run.projectId, project: { companyId: filters.companyId }, kind: "SUB_BUDGET" }, select: { id: true } });
-    if (!selectedSubbudget || selectedSubbudget.id !== run.budgetId) return { findings: [], page: filters.page, pageSize: filters.pageSize, hasNextPage: false };
+  const budgets = await client.budget.findMany({ where: { project: { companyId: filters.companyId }, projectId: run.projectId }, select: { id: true, parentBudgetId: true, kind: true } });
+  const budgetIds = new Set<string>([run.budgetId]);
+  let frontier = [run.budgetId];
+  while (frontier.length > 0) {
+    const children = budgets.filter((budget) => typeof budget.id === "string" && typeof budget.parentBudgetId === "string" && frontier.includes(budget.parentBudgetId));
+    frontier = children.map((budget) => String(budget.id)).filter((id) => !budgetIds.has(id));
+    frontier.forEach((id) => budgetIds.add(id));
   }
-  const where: Prisma.ReviewFindingWhereInput = { companyId: filters.companyId, projectId: run.projectId, budgetId: run.budgetId, reviewRunId: run.id, status: filters.status, findingType: filters.findingType, severity: filters.severity, confidence: filters.confidence, discipline: filters.discipline, ...(filters.priority === undefined ? {} : { priority: { gte: filters.priority } }), ...(filters.document === undefined ? {} : { OR: [{ evidenceId: filters.document }, { evidence: { documentVersion: { projectDocumentId: filters.document } } }] }) };
+  if (filters.subbudget !== undefined && (!budgetIds.has(filters.subbudget) || !budgets.some((budget) => budget.id === filters.subbudget && budget.kind === "SUB_BUDGET"))) return { findings: [], page: filters.page, pageSize: filters.pageSize, hasNextPage: false };
+  const scopedBudgetIds = filters.subbudget === undefined ? [...budgetIds] : [filters.subbudget];
+  const where: Prisma.ReviewFindingWhereInput = { companyId: filters.companyId, projectId: run.projectId, budgetId: { in: scopedBudgetIds }, reviewRunId: run.id, status: filters.status, findingType: filters.findingType, severity: filters.severity, confidence: filters.confidence, discipline: filters.discipline, ...(filters.priority === undefined ? {} : { priority: { gte: filters.priority } }), ...(filters.document === undefined ? {} : { OR: [{ evidenceId: filters.document }, { evidence: { documentVersion: { projectDocumentId: filters.document } } }] }) };
   const rows = await client.reviewFinding.findMany({ where, orderBy: [{ priority: "desc" }, { potentialImpact: "desc" }, { confidence: "desc" }, { budgetItem: { code: "asc" } }, { id: "asc" }], skip: (filters.page - 1) * filters.pageSize, take: filters.pageSize + 1, select: findingSelect });
   return { findings: rows.slice(0, filters.pageSize).map(serializeFinding), page: filters.page, pageSize: filters.pageSize, hasNextPage: rows.length > filters.pageSize };
 }
@@ -98,7 +104,7 @@ export async function getFinding(findingId: string, companyId: string, client: C
 export async function recordFindingDecision(input: FindingDecisionInput, client: Client = prisma): Promise<FindingDecisionRecord> {
   if (input.resolution === "CORRECTED" && !input.correctionVersionId) throw new Error("CORRECTED requires a post-correction version reference.");
   return client.$transaction(async (tx) => {
-    const current = await tx.reviewFinding.findFirst({ where: { id: input.findingId, companyId: input.companyId, project: { companyId: input.companyId }, budget: { project: { companyId: input.companyId } } }, select: { id: true, companyId: true, projectId: true, budgetId: true, budgetItemId: true, evidenceId: true, reviewRunId: true, status: true, updatedAt: true } });
+    const current = await tx.reviewFinding.findFirst({ where: { id: input.findingId, companyId: input.companyId, project: { companyId: input.companyId }, budget: { project: { companyId: input.companyId } } }, select: { id: true, companyId: true, projectId: true, budgetId: true, budgetItemId: true, baseSnapshotId: true, evidenceId: true, reviewRunId: true, status: true, updatedAt: true } });
     if (!current) throw new Error("Finding not found.");
     const run = await tx.reviewRun.findFirst({ where: { id: current.reviewRunId, companyId: input.companyId, projectId: current.projectId, budgetId: current.budgetId }, select: { id: true, status: true } });
     if (!run) throw new Error("Review run not found.");
@@ -106,14 +112,18 @@ export async function recordFindingDecision(input: FindingDecisionInput, client:
     let correctionVersionId: string | undefined;
     if (input.resolution === "CORRECTED") {
       if (!current.budgetId || !current.budgetItemId) throw new Error("Correction version does not belong to the finding tenant/project/budget/item scope.");
+      const base = current.baseSnapshotId ? await tx.budgetVersionSnapshot.findFirst({ where: { id: current.baseSnapshotId, companyId: input.companyId, projectId: current.projectId, budgetId: current.budgetId }, select: { id: true, versionNumber: true, createdAt: true, snapshot: true } }) : null;
       const version = await tx.budgetVersionSnapshot.findFirst({ where: { id: input.correctionVersionId, companyId: input.companyId, projectId: current.projectId, budgetId: current.budgetId }, select: { id: true, versionNumber: true, createdAt: true, snapshot: true } });
+      const baseSnapshot = jsonObject(base?.snapshot);
+      const baseItems = Array.isArray(baseSnapshot.items) ? baseSnapshot.items : [];
       const snapshot = jsonObject(version?.snapshot);
       const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+      const baseItemIsPresent = baseItems.some((item) => jsonObject(item).id === current.budgetItemId);
       const itemIsPresent = items.some((item) => {
         const candidate = jsonObject(item);
         return candidate.id === current.budgetItemId && (candidate.budgetId === undefined || candidate.budgetId === current.budgetId);
       });
-      if (!version || !itemIsPresent || version.createdAt <= current.updatedAt) throw new Error("Correction version must be a later BudgetVersionSnapshot for the finding budget item.");
+      if (!base || !baseItemIsPresent || !version || version.versionNumber <= base.versionNumber || !itemIsPresent || version.createdAt <= base.createdAt) throw new Error("Correction version must be later than the finding base BudgetVersionSnapshot for the same budget item.");
       correctionVersionId = version.id;
     }
     const newStatus = input.resolution === "NEEDS_MORE_INFORMATION" ? "IN_REVIEW" : input.resolution === "CORRECTED" || input.resolution === "CONFIRMED_ISSUE" || input.resolution === "VALID_AS_IS" || input.resolution === "FALSE_POSITIVE" || input.resolution === "NOT_APPLICABLE" ? "RESOLVED" : "REOPENED";

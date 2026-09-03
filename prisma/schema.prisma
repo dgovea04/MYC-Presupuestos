@@ -1770,6 +1770,7 @@ model BudgetVersionSnapshot {
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy     User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
   correctionDecisions FindingDecision[] @relation("FindingDecisionCorrectionVersion")
+  baseFindings      ReviewFinding[]   @relation("ReviewFindingBaseSnapshot")
 
   @@unique([budgetId, versionNumber])
   @@index([budgetId, createdAt(sort: Desc)])
@@ -3186,6 +3187,7 @@ model ReviewFinding {
   budgetItemBudgetId      String?
   entityLinkId            String?
   evidenceId              String
+  baseSnapshotId          String?
   discipline              String?
   findingType             ReviewFindingType
   status                  FindingStatus      @default(PENDING)
@@ -3207,6 +3209,7 @@ model ReviewFinding {
   budgetItem              BudgetItem?        @relation(fields: [budgetItemId, budgetItemBudgetId], references: [id, budgetId], onDelete: SetNull)
   entityLink              EntityLink?        @relation(fields: [entityLinkId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
   evidence                ReviewEvidence     @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  baseSnapshot           BudgetVersionSnapshot? @relation("ReviewFindingBaseSnapshot", fields: [baseSnapshotId], references: [id], onDelete: Restrict)
   decisions               FindingDecision[]
 
   @@index([companyId, projectId, status])

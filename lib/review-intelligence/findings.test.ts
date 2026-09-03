@@ -12,12 +12,12 @@ describe("review findings service", () => {
   it("uses the run tenant/project/budget scope and required priority ordering", async () => {
     const reviewRunFindFirst = vi.fn().mockResolvedValue({ id: "run-1", projectId: "project-1", budgetId: "budget-1" });
     const reviewFindingFindMany = vi.fn().mockResolvedValue([findingRow(), findingRow()]);
-    const client = { reviewRun: { findFirst: reviewRunFindFirst }, reviewFinding: { findMany: reviewFindingFindMany } } as never;
+    const client = { reviewRun: { findFirst: reviewRunFindFirst }, budget: { findMany: vi.fn().mockResolvedValue([{ id: "budget-1", parentBudgetId: null, kind: "GENERAL" }]) }, reviewFinding: { findMany: reviewFindingFindMany } } as never;
     const filters: FindingFilters = { companyId: "company-1", reviewRunId: "run-1", page: 1, pageSize: 1 };
     const result = await listFindings(filters, client);
     expect(result.hasNextPage).toBe(true);
     expect(reviewRunFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "run-1", companyId: "company-1" } }));
-    expect(reviewFindingFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { companyId: "company-1", projectId: "project-1", budgetId: "budget-1", reviewRunId: "run-1", status: undefined, findingType: undefined, severity: undefined, confidence: undefined }, orderBy: [{ priority: "desc" }, { potentialImpact: "desc" }, { confidence: "desc" }, { budgetItem: { code: "asc" } }, { id: "asc" }] }));
+    expect(reviewFindingFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ companyId: "company-1", projectId: "project-1", budgetId: { in: ["budget-1"] }, reviewRunId: "run-1", status: undefined, findingType: undefined, severity: undefined, confidence: undefined }), orderBy: [{ priority: "desc" }, { potentialImpact: "desc" }, { confidence: "desc" }, { budgetItem: { code: "asc" } }, { id: "asc" }] }));
   });
 
   it("creates an append-only decision and audit event after optimistic concurrency succeeds", async () => {
@@ -66,11 +66,24 @@ describe("review findings service", () => {
   });
 
   it("accepts only a later budget snapshot containing the corrected budget item", async () => {
-    const tx = { reviewFinding: { findFirst: vi.fn().mockResolvedValue({ id: "finding-1", companyId: "company-1", projectId: "project-1", budgetId: "budget-1", budgetItemId: "item-1", reviewRunId: "run-1", status: "PENDING", updatedAt: new Date("2026-09-02T12:00:00.000Z") }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, reviewRun: { findFirst: vi.fn().mockResolvedValue({ id: "run-1", status: "COMPLETED" }) }, budgetVersionSnapshot: { findFirst: vi.fn().mockResolvedValue({ id: "budget-version-2", versionNumber: 2, createdAt: new Date("2026-09-02T12:01:00.000Z"), snapshot: { items: [{ id: "item-1", budgetId: "budget-1" }] } }) }, findingDecision: { create: vi.fn().mockResolvedValue({ id: "decision-2", findingId: "finding-1", resolution: "CORRECTED", note: null, expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), previousStatus: "PENDING", newStatus: "RESOLVED", correctionVersionId: "budget-version-2", createdAt: new Date("2026-09-02T12:02:00.000Z") }) }, reviewAuditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-2" }) } };
+    const tx = { reviewFinding: { findFirst: vi.fn().mockResolvedValue({ id: "finding-1", companyId: "company-1", projectId: "project-1", budgetId: "budget-1", budgetItemId: "item-1", baseSnapshotId: "base-version-1", reviewRunId: "run-1", status: "PENDING", updatedAt: new Date("2026-09-02T12:00:00.000Z") }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, reviewRun: { findFirst: vi.fn().mockResolvedValue({ id: "run-1", status: "COMPLETED" }) }, budgetVersionSnapshot: { findFirst: vi.fn().mockImplementation(({ where }: { where: { id?: string } }) => where.id === "base-version-1" ? { id: "base-version-1", versionNumber: 1, createdAt: new Date("2026-09-02T11:00:00.000Z"), snapshot: { items: [{ id: "item-1", budgetId: "budget-1" }] } } : { id: "budget-version-2", versionNumber: 2, createdAt: new Date("2026-09-02T12:01:00.000Z"), snapshot: { items: [{ id: "item-1", budgetId: "budget-1" }] } }) }, findingDecision: { create: vi.fn().mockResolvedValue({ id: "decision-2", findingId: "finding-1", resolution: "CORRECTED", note: null, expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), previousStatus: "PENDING", newStatus: "RESOLVED", correctionVersionId: "budget-version-2", createdAt: new Date("2026-09-02T12:02:00.000Z") }) }, reviewAuditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-2" }) } };
     const client = { $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx)), reviewFinding: tx.reviewFinding, reviewRun: tx.reviewRun, budgetVersionSnapshot: tx.budgetVersionSnapshot, findingDecision: tx.findingDecision, reviewAuditEvent: tx.reviewAuditEvent } as never;
     await recordFindingDecision({ findingId: "finding-1", companyId: "company-1", userId: "user-1", role: "EDITOR", correlationId: "corr-2", resolution: "CORRECTED", correctionVersionId: "budget-version-2", expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z") }, client);
     expect(tx.budgetVersionSnapshot.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ companyId: "company-1", projectId: "project-1", budgetId: "budget-1", id: "budget-version-2" }) }));
     expect(tx.findingDecision.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ correctionVersionId: "budget-version-2" }) }));
+  });
+
+  it.each([
+    ["equal", 1, "2026-09-02T12:01:00.000Z"],
+    ["retrograde", 0, "2026-09-02T12:02:00.000Z"],
+  ])("rejects CORRECTED when the correction snapshot is %s to the base", async (_label, versionNumber, createdAt) => {
+    const tx = {
+      reviewFinding: { findFirst: vi.fn().mockResolvedValue({ id: "finding-1", companyId: "company-1", projectId: "project-1", budgetId: "budget-1", budgetItemId: "item-1", baseSnapshotId: "base-version-1", reviewRunId: "run-1", status: "PENDING", updatedAt: new Date("2026-09-02T14:00:00.000Z") }) },
+      reviewRun: { findFirst: vi.fn().mockResolvedValue({ id: "run-1", status: "COMPLETED" }) },
+      budgetVersionSnapshot: { findFirst: vi.fn().mockImplementation(({ where }: { where: { id?: string } }) => where.id === "base-version-1" ? { id: "base-version-1", versionNumber: 1, createdAt: new Date("2026-09-02T12:00:00.000Z"), snapshot: { items: [{ id: "item-1", budgetId: "budget-1" }] } } : { id: "budget-version-2", versionNumber, createdAt: new Date(createdAt), snapshot: { items: [{ id: "item-1", budgetId: "budget-1" }] } }) },
+    };
+    const client = { $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx)) } as never;
+    await expect(recordFindingDecision({ findingId: "finding-1", companyId: "company-1", userId: "user-1", role: "EDITOR", correlationId: "corr-regression", resolution: "CORRECTED", correctionVersionId: "budget-version-2", expectedUpdatedAt: new Date("2026-09-02T14:00:00.000Z") }, client)).rejects.toThrow("later");
   });
 
   it("audits link validation and evidence viewing with correlation and role", async () => {
@@ -85,16 +98,25 @@ describe("review findings service", () => {
     expect(evidenceClient.reviewAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ correlationId: "corr-view", payloadJson: expect.objectContaining({ role: "VIEWER" }) }) }));
   });
 
-  it("includes only findings from the selected subbudget, not a sibling", async () => {
-    const reviewRunFindFirst = vi.fn().mockResolvedValue({ id: "run-1", projectId: "project-1", budgetId: "sub-budget-1" });
-    const budgetFindFirst = vi.fn().mockImplementation(({ where }: { where: { id: string } }) => where.id === "sub-budget-1" ? { id: "sub-budget-1" } : null);
-    const reviewFindingFindMany = vi.fn().mockImplementation(({ where }: { where: { budgetId: string; discipline: string } }) => where.budgetId === "sub-budget-1" && where.discipline === "Estructuras" ? [findingRow()] : []);
-    const client = { reviewRun: { findFirst: reviewRunFindFirst }, budget: { findFirst: budgetFindFirst }, reviewFinding: { findMany: reviewFindingFindMany } } as never;
-    const included = await listFindings({ companyId: "company-1", reviewRunId: "run-1", page: 1, pageSize: 25, discipline: "Estructuras", subbudget: "sub-budget-1" }, client);
-    const excluded = await listFindings({ companyId: "company-1", reviewRunId: "run-1", page: 1, pageSize: 25, discipline: "Estructuras", subbudget: "sibling-budget" }, client);
-    expect(included.findings).toHaveLength(1);
-    expect(excluded.findings).toHaveLength(0);
-    expect(reviewFindingFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ budgetId: "sub-budget-1", discipline: "Estructuras" }) }));
-    expect(budgetFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "sibling-budget", kind: "SUB_BUDGET" }) }));
+  it("filters a parent run by each real child subbudget", async () => {
+    const reviewRunFindFirst = vi.fn().mockResolvedValue({ id: "run-1", projectId: "project-1", budgetId: "parent-budget" });
+    const budgetFindMany = vi.fn().mockResolvedValue([
+      { id: "parent-budget", parentBudgetId: null, kind: "GENERAL" },
+      { id: "sub-budget-a", parentBudgetId: "parent-budget", kind: "SUB_BUDGET" },
+      { id: "sub-budget-b", parentBudgetId: "parent-budget", kind: "SUB_BUDGET" },
+    ]);
+    const reviewFindingFindMany = vi.fn().mockImplementation(({ where }: { where: { budgetId: { in: string[] } } }) => {
+      const budgetId = where.budgetId.in[0];
+      return [{ ...findingRow(), budgetId }];
+    });
+    const client = { reviewRun: { findFirst: reviewRunFindFirst }, budget: { findMany: budgetFindMany }, reviewFinding: { findMany: reviewFindingFindMany } } as never;
+    const findingsA = await listFindings({ companyId: "company-1", reviewRunId: "run-1", page: 1, pageSize: 25, subbudget: "sub-budget-a" }, client);
+    const findingsB = await listFindings({ companyId: "company-1", reviewRunId: "run-1", page: 1, pageSize: 25, subbudget: "sub-budget-b" }, client);
+    expect(findingsA.findings).toHaveLength(1);
+    expect(findingsA.findings[0]).toMatchObject({ budgetId: "sub-budget-a" });
+    expect(findingsB.findings).toHaveLength(1);
+    expect(findingsB.findings[0]).toMatchObject({ budgetId: "sub-budget-b" });
+    expect(reviewFindingFindMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: expect.objectContaining({ budgetId: { in: ["sub-budget-a"] }, reviewRunId: "run-1" }) }));
+    expect(reviewFindingFindMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: expect.objectContaining({ budgetId: { in: ["sub-budget-b"] }, reviewRunId: "run-1" }) }));
   });
 });

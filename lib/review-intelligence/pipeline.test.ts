@@ -17,7 +17,8 @@ function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>
   store.entityLink = { findFirst: async ({ where }) => store.links.find((entry) => entry.budgetItemId === where.budgetItemId && entry.evidenceId === where.evidenceId) ?? null, upsert: async ({ create, update }) => { const existing = store.links.find((entry) => entry.id === create.id); if (existing) return Object.assign(existing, update); const entry = { id: create.id ?? `link-${store.links.length + 1}`, ...create }; store.links.push(entry); return entry; } };
   store.reviewFinding = { findFirst: async ({ where }) => store.findings.find((entry) => entry.reviewRunId === where.reviewRunId && entry.evidenceId === where.evidenceId && entry.findingType === where.findingType && entry.budgetItemId === where.budgetItemId) ?? null, upsert: async ({ create, update }) => { const existing = store.findings.find((entry) => entry.id === create.id); if (existing) return Object.assign(existing, update); const entry = { id: create.id ?? `finding-${store.findings.length + 1}`, ...create }; store.findings.push(entry); return entry; } };
   store.reviewAuditEvent = { create: async ({ data }) => { store.events.push(data); return data; } };
-  store.budget = { findFirst: async ({ where }) => where.id === "budget-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "budget-1" } : null };
+  store.budget = { findFirst: async ({ where }) => where.id === "budget-1" && (where.project as { companyId?: string } | undefined)?.companyId === "company-1" && where.projectId === "project-1" ? { id: "budget-1" } : null, findMany: async () => [{ id: "budget-1", parentBudgetId: null }] };
+  store.budgetVersionSnapshot = { findFirst: async ({ where }) => where.budgetId === "budget-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "base-version-1", versionNumber: 1, snapshot: { items: [{ id: "item-1", budgetId: "budget-1" }] } } : null };
   store.project = { findFirst: async ({ where }) => where.id === "project-1" && where.companyId === "company-1" ? { id: "project-1" } : null };
   store.documentVersion = { findFirst: async ({ where }) => where.id === "version-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "version-1", projectDocumentId: "document-1" } : null };
   store.projectDocument = { findFirst: async ({ where }) => where.id === "document-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "document-1" } : null };
@@ -58,6 +59,27 @@ describe("runReviewJob", () => {
     expect(database.findings.every((finding) => persistedEvidenceIds.has(finding.evidenceId))).toBe(true);
     expect(database.findings[0].entityLinkId).toBe(database.links[0].id);
     expect(database.links.some((link) => link.id === database.findings[0].entityLinkId)).toBe(true);
+  });
+
+  it("runs on a parent budget while preserving child subbudget ownership on findings", async () => {
+    const database = client();
+    database.budget.findMany = async () => [
+      { id: "budget-1", parentBudgetId: null },
+      { id: "sub-budget-a", parentBudgetId: "budget-1" },
+      { id: "sub-budget-b", parentBudgetId: "budget-1" },
+    ];
+    database.budgetItem.findFirst = async ({ where }) => ({ id: String(where.id) });
+    database.budgetVersionSnapshot.findFirst = async ({ where }) => ({ id: `base-${String(where.budgetId)}`, versionNumber: 1, snapshot: { items: [{ id: String(where.budgetId === "sub-budget-a" ? "item-a" : "item-b"), budgetId: where.budgetId }] } });
+    const result = await runReviewJob({
+      ...input(),
+      budgetItems: [
+        { ...input().budgetItems[0], id: "item-a", budgetId: "sub-budget-a", code: "A-1" },
+        { ...input().budgetItems[0], id: "item-b", budgetId: "sub-budget-b", code: "B-1" },
+      ],
+    }, database);
+    expect(result.status).toBe("COMPLETED");
+    expect(database.findings.map((finding) => finding.budgetId)).toEqual(expect.arrayContaining(["sub-budget-a", "sub-budget-b"]));
+    expect(database.findings.every((finding) => finding.reviewRunId === result.reviewRunId)).toBe(true);
   });
 
   it("retries idempotently without duplicating evidence, links, or findings", async () => {

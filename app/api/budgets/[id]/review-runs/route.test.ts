@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
   budgetFindFirst: vi.fn(),
+  budgetFindMany: vi.fn(),
   reviewRunFindMany: vi.fn(),
   reviewRunCount: vi.fn(),
   runReviewJob: vi.fn(),
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: {
-  budget: { findFirst: mocks.budgetFindFirst },
+  budget: { findFirst: mocks.budgetFindFirst, findMany: mocks.budgetFindMany },
   reviewRun: { findMany: mocks.reviewRunFindMany, count: mocks.reviewRunCount },
   projectDocument: { findMany: mocks.projectDocumentFindMany },
   documentVersion: { findMany: mocks.documentVersionFindMany },
@@ -34,6 +35,7 @@ describe("review runs API", () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1", activeCompanyId: "company-1" } });
     mocks.budgetFindFirst.mockResolvedValue({ id: "budget-1", projectId: "project-1", project: { id: "project-1", companyId: "company-1" } });
+    mocks.budgetFindMany.mockResolvedValue([{ id: "budget-1", parentBudgetId: null }]);
     mocks.reviewRunFindMany.mockResolvedValue([]);
     mocks.reviewRunCount.mockResolvedValue(0);
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);

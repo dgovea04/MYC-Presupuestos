@@ -9,20 +9,22 @@ export const REVIEW_STAGES = ["validating", "extracting", "classifying", "identi
 export type ReviewStage = (typeof REVIEW_STAGES)[number];
 type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
+type QueryArgs = { where: Where; select?: Record<string, unknown>; orderBy?: Record<string, unknown> };
 type TransactionOptions = { isolationLevel?: "Serializable" };
 
-export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem { budgetId: string; companyId?: string; projectId?: string; discipline?: string; }
+export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem { budgetId: string; companyId?: string; projectId?: string; discipline?: string; baseSnapshotId?: string; }
 export interface ReviewEvidence extends EvidenceMatchInput, ReviewRuleEvidence { documentVersionId: string; originalText: string; normalizedText?: string; sourceHash: string; evidenceType: string; confidence: "LOW" | "MEDIUM" | "HIGH"; locationJson: Record<string, unknown>; companyId?: string; projectId?: string; }
 export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; }
 export interface ReviewBudgetReference { id: string; companyId: string; projectId: string; }
 export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; idempotencyKey?: string; defer?: boolean; }
 export interface RunReviewJobResult { reviewRunId: string; status: ReviewRunStatus; stages: ReviewStage[]; warnings: WarningJson[]; idempotencyKey: string; }
 export interface ReviewPipelineClient {
-  budget: { findFirst(args: { where: Where }): Promise<Row | null> };
+  budget: { findFirst(args: QueryArgs): Promise<Row | null>; findMany(args: QueryArgs): Promise<Row[]> };
   project: { findFirst(args: { where: Where }): Promise<Row | null> };
   projectDocument: { findFirst(args: { where: Where }): Promise<Row | null> };
   documentVersion: { findFirst(args: { where: Where }): Promise<Row | null> };
   budgetItem: { findFirst(args: { where: Where }): Promise<Row | null> };
+  budgetVersionSnapshot: { findFirst(args: QueryArgs): Promise<Row | null> };
   reviewRun: { findFirst(args: { where: Where }): Promise<Row | null>; findUnique(args: { where: Where }): Promise<Row | null>; findMany(args: { where: Where }): Promise<Row[]>; create(args: { data: Row }): Promise<Row>; updateMany(args: { where: Where; data: Row }): Promise<{ count: number }>; };
   reviewRunDocumentVersion: { upsert(args: { where: Where; create: Row; update: Row }): Promise<Row>; };
   reviewEvidence: { findFirst(args: { where: Where }): Promise<Row | null>; upsert(args: { where: Where; create: Row; update: Row }): Promise<Row>; };
@@ -124,10 +126,28 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
 async function validateInput(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<void> {
   if (input.documentVersionIds.length === 0) throw new Error("At least one document version is required.");
   if (!await client.project.findFirst({ where: { id: input.projectId, companyId: input.companyId } })) throw new Error("Project does not belong to the requested company.");
-  if (!await client.budget.findFirst({ where: { id: input.budgetId, companyId: input.companyId, projectId: input.projectId } })) throw new Error("Budget does not belong to the requested tenant/project.");
+  if (!await client.budget.findFirst({ where: { id: input.budgetId, project: { companyId: input.companyId }, projectId: input.projectId } })) throw new Error("Budget does not belong to the requested tenant/project.");
   if (input.documentVersions.length !== input.documentVersionIds.length || new Set(input.documentVersionIds).size !== input.documentVersionIds.length || new Set(input.documentVersions.map((version) => version.id)).size !== input.documentVersions.length || input.documentVersions.some((version) => !input.documentVersionIds.includes(version.id))) throw new Error("Requested document version set is not exact.");
   for (const version of input.documentVersions) { const stored = await client.documentVersion.findFirst({ where: { id: version.id, companyId: input.companyId, projectId: input.projectId } }); if (!stored) throw new Error("Document version is not present in the database for this tenant/project."); if (!await client.projectDocument.findFirst({ where: { id: stored.projectDocumentId, companyId: input.companyId, projectId: input.projectId } })) throw new Error("Project document is not present in the database for this tenant/project."); }
-  for (const item of input.budgetItems) { if (item.budgetId !== input.budgetId || !await client.budgetItem.findFirst({ where: { id: item.id, budgetId: input.budgetId } })) throw new Error("Budget item does not belong to the requested tenant/project/budget."); }
+  const budgets = await client.budget.findMany({ where: { project: { companyId: input.companyId }, projectId: input.projectId } });
+  const budgetIds = new Set<string>([input.budgetId]);
+  let frontier = [input.budgetId];
+  while (frontier.length > 0) {
+    const children = budgets.filter((budget) => typeof budget.id === "string" && typeof budget.parentBudgetId === "string" && frontier.includes(budget.parentBudgetId));
+    frontier = children.map((budget) => String(budget.id)).filter((id) => !budgetIds.has(id));
+    frontier.forEach((id) => budgetIds.add(id));
+  }
+  for (const item of input.budgetItems) {
+    if (!budgetIds.has(item.budgetId) || !await client.budgetItem.findFirst({ where: { id: item.id, budgetId: item.budgetId } })) throw new Error("Budget item does not belong to the requested tenant/project/budget hierarchy.");
+    if (!item.baseSnapshotId) {
+      const base = await client.budgetVersionSnapshot.findFirst({ where: { budgetId: item.budgetId, companyId: input.companyId, projectId: input.projectId }, orderBy: { versionNumber: "desc" } });
+      if (!base || typeof base.id !== "string") throw new Error("Budget item requires a persisted base budget snapshot before review.");
+      item.baseSnapshotId = base.id;
+    } else {
+      const base = await client.budgetVersionSnapshot.findFirst({ where: { id: item.baseSnapshotId, budgetId: item.budgetId, companyId: input.companyId, projectId: input.projectId } });
+      if (!base) throw new Error("Base budget snapshot does not belong to the requested tenant/project/budget.");
+    }
+  }
   for (const evidence of input.evidence) if (!input.documentVersionIds.includes(evidence.documentVersionId)) throw new Error("Evidence does not belong to the requested tenant/project/document version.");
 }
 async function getPersistedEvidence(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<ReviewEvidence[]> { const persisted: ReviewEvidence[] = []; for (const evidence of input.evidence) { const stored = await client.reviewEvidence.findFirst({ where: { documentVersionId: evidence.documentVersionId, sourceHash: evidence.sourceHash, companyId: input.companyId, projectId: input.projectId } }); if (!stored) throw new Error("Evidence was not persisted for the requested document version."); persisted.push({ ...evidence, id: String(stored.id) }); } return persisted; }
@@ -144,5 +164,5 @@ async function closeRun(client: ReviewPipelineClient, input: RunReviewJobInput, 
 function result(run: Row, key: string): RunReviewJobResult { const checkpoints = (run.progressJson as { checkpoints?: Array<{ stage?: string }> } | undefined)?.checkpoints ?? []; const stages = checkpoints.map((entry) => entry.stage).filter((stage): stage is ReviewStage => typeof stage === "string" && (REVIEW_STAGES as readonly string[]).includes(stage)); return { reviewRunId: String(run.id), status: String(run.status) as ReviewRunStatus, stages: [...new Set(stages)], warnings: Array.isArray(run.warningsJson) ? run.warningsJson as WarningJson[] : [], idempotencyKey: key }; }
 function stableId(prefix: string, ...parts: string[]): string { return `${prefix}-${createHash("sha256").update(parts.join("\u001f")).digest("hex")}`; }
 function evidenceData(input: RunReviewJobInput, evidence: ReviewEvidence): Row { return { id: stableId("evidence", evidence.documentVersionId, evidence.sourceHash), companyId: input.companyId, projectId: input.projectId, documentVersionId: evidence.documentVersionId, evidenceType: evidence.evidenceType, originalText: evidence.originalText, normalizedText: evidence.normalizedText, locationJson: json(evidence.locationJson), value: evidence.quantity?.toString(), unit: evidence.unit, extractionMethod: "review-pipeline", confidence: evidence.confidence, sourceHash: evidence.sourceHash }; }
-function linkData(input: RunReviewJobInput, candidate: ReturnType<typeof matchBudgetItemToEvidence>[number]): Row { return { id: stableId("link", candidate.budgetItemId, candidate.evidenceId), companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId, signalsJson: json(candidate.signals), score: candidate.score.toString(), confidence: candidate.confidence }; }
-function findingData(input: RunReviewJobInput, runId: string, finding: ReturnType<typeof evaluateFindingRules>[number], linkId: string | undefined): Row { const item = input.budgetItems.find((candidate) => candidate.id === finding.budgetItemId); return { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, reviewRunId: runId, budgetItemId: finding.budgetItemId, budgetItemBudgetId: input.budgetId, evidenceId: finding.evidenceId, entityLinkId: linkId, findingType: finding.type, severity: finding.severity, priority: finding.priorityScore.toString(), confidence: finding.confidence, score: finding.priorityScore.toString(), potentialImpact: finding.comparison?.potentialImpact?.toString(), ruleKey: finding.priorityVersion, comparisonJson: json({ message: finding.message, ...finding.comparison }), discipline: item?.discipline, humanReviewRequired: true, automaticBudgetMutation: false }; }
+function linkData(input: RunReviewJobInput, candidate: ReturnType<typeof matchBudgetItemToEvidence>[number]): Row { const item = input.budgetItems.find((entry) => entry.id === candidate.budgetItemId); return { id: stableId("link", candidate.budgetItemId, candidate.evidenceId), companyId: input.companyId, projectId: input.projectId, budgetId: item?.budgetId ?? input.budgetId, budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId, signalsJson: json(candidate.signals), score: candidate.score.toString(), confidence: candidate.confidence }; }
+function findingData(input: RunReviewJobInput, runId: string, finding: ReturnType<typeof evaluateFindingRules>[number], linkId: string | undefined): Row { const item = input.budgetItems.find((candidate) => candidate.id === finding.budgetItemId); return { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId, budgetId: item?.budgetId ?? input.budgetId, reviewRunId: runId, budgetItemId: finding.budgetItemId, budgetItemBudgetId: item?.budgetId ?? input.budgetId, evidenceId: finding.evidenceId, baseSnapshotId: item?.baseSnapshotId, entityLinkId: linkId, findingType: finding.type, severity: finding.severity, priority: finding.priorityScore.toString(), confidence: finding.confidence, score: finding.priorityScore.toString(), potentialImpact: finding.comparison?.potentialImpact?.toString(), ruleKey: finding.priorityVersion, comparisonJson: json({ message: finding.message, ...finding.comparison }), discipline: item?.discipline, humanReviewRequired: true, automaticBudgetMutation: false }; }
