@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDocumentVersion, createProjectDocument } from "./documents";
+import { createDocumentVersion, createProjectDocument, createProjectDocumentAndVersion } from "./documents";
 
 const validPdf = (suffix: string): Uint8Array => new TextEncoder().encode(`%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (${suffix})>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF`);
 
@@ -127,5 +127,29 @@ describe("review document persistence", () => {
 
     expect(result).toBe(existing);
     expect(client.projectDocument.create).not.toHaveBeenCalled();
+  });
+
+  it("validates before creating a document-version transaction", async () => {
+    const client = createClient();
+    const file = new File(["plain text"], "invalid.pdf", { type: "application/pdf" });
+    await expect(createProjectDocumentAndVersion({ companyId: "company-1", projectId: "project-1", createdById: "user-1", name: "Invalid", originalFileName: file.name, storageKey: "key", file }, client)).rejects.toThrow("MIME");
+    expect(client.$transaction).not.toHaveBeenCalled();
+    expect(client.projectDocument.create).not.toHaveBeenCalled();
+  });
+
+  it("creates document and version in one transaction", async () => {
+    const client = createClient();
+    const transaction = createClient();
+    transaction.projectDocument.findFirst.mockResolvedValue(null);
+    transaction.projectDocument.create.mockResolvedValue({ id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "valid.pdf" });
+    transaction.documentVersion.findFirst.mockResolvedValue(null);
+    transaction.documentVersion.aggregate.mockResolvedValue({ _max: { versionNumber: null } });
+    transaction.documentVersion.create.mockResolvedValue({ id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256: "hash" });
+    transaction.projectDocument.update.mockResolvedValue({});
+    client.$transaction.mockImplementation(async (callback) => callback(transaction));
+    const file = new File([validPdf("atomic")], "valid.pdf", { type: "application/pdf" });
+    const result = await createProjectDocumentAndVersion({ companyId: "company-1", projectId: "project-1", createdById: "user-1", name: "Valid", originalFileName: file.name, storageKey: "key", file }, client);
+    expect(result).toEqual({ document: expect.objectContaining({ id: "document-1" }), version: expect.objectContaining({ id: "version-1" }) });
+    expect(client.$transaction).toHaveBeenCalledOnce();
   });
 });

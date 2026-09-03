@@ -33,7 +33,7 @@ export type DocumentVersionRecord = Prisma.DocumentVersionGetPayload<{
   select: { id: true; projectDocumentId: true; versionNumber: true; sha256: true };
 }>;
 
-type DocumentClient = {
+export type DocumentClient = {
   projectDocument: {
     findFirst(args: { where: { companyId: string; projectId: string; originalFileName?: string; id?: string } }): Promise<ProjectDocumentRecord | null>;
     create(args: { data: Record<string, unknown> }): Promise<ProjectDocumentRecord>;
@@ -46,6 +46,24 @@ type DocumentClient = {
   };
   $transaction<T>(callback: (transaction: DocumentClient) => Promise<T>): Promise<T>;
 };
+
+export type ProjectDocumentAndVersionInput = ProjectDocumentInput & Pick<DocumentVersionInput, "storageKey" | "file">;
+
+export async function createProjectDocumentAndVersion(
+  input: ProjectDocumentAndVersionInput,
+  client: DocumentClient,
+): Promise<{ document: ProjectDocumentRecord; version: DocumentVersionRecord }> {
+  const validated = await validateDocumentFile(input.file);
+  return client.$transaction(async (transaction) => {
+    const document = await transaction.projectDocument.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, originalFileName: input.originalFileName } }) ?? await transaction.projectDocument.create({ data: { companyId: input.companyId, projectId: input.projectId, createdById: input.createdById, name: input.name, originalFileName: input.originalFileName, category: input.category ?? ReviewDocumentCategory.OTHER } });
+    const existing = await transaction.documentVersion.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, sha256: validated.sha256 } });
+    if (existing) return { document, version: existing };
+    const aggregate = await transaction.documentVersion.aggregate({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id }, _max: { versionNumber: true } });
+    const version = await transaction.documentVersion.create({ data: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, versionNumber: (aggregate._max.versionNumber ?? 0) + 1, storageKey: input.storageKey, originalFileName: input.file.name, mimeType: validated.mimeType, fileSizeBytes: validated.fileSizeBytes, sha256: validated.sha256, extractionStatus: ExtractionStatus.PENDING } });
+    await transaction.projectDocument.update({ where: { id: document.id, companyId: input.companyId, projectId: input.projectId }, data: { currentVersionId: version.id } });
+    return { document, version };
+  });
+}
 
 export async function createProjectDocument(
   input: ProjectDocumentInput,

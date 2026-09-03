@@ -36,6 +36,14 @@ const input = (): RunReviewJobInput => ({
 });
 
 describe("runReviewJob", () => {
+  it("reuses an explicit idempotency key and conflicts on a changed request", async () => {
+    const database = client();
+    const request = { ...input(), idempotencyKey: "client-key-1" };
+    const first = await runReviewJob(request, database);
+    const second = await runReviewJob(request, database);
+    expect(first).toMatchObject({ reviewRunId: second.reviewRunId, idempotencyKey: "client-key-1" });
+    await expect(runReviewJob({ ...request, configuration: { ...request.configuration, tolerancePercent: "2" } }, database)).rejects.toThrow("Idempotency key");
+  });
   it("persists the eight stages in order and publishes guarded findings", async () => {
     const database = client();
     const result = await runReviewJob(input(), database);

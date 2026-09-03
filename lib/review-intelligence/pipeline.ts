@@ -15,7 +15,7 @@ export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem {
 export interface ReviewEvidence extends EvidenceMatchInput, ReviewRuleEvidence { documentVersionId: string; originalText: string; normalizedText?: string; sourceHash: string; evidenceType: string; confidence: "LOW" | "MEDIUM" | "HIGH"; locationJson: Record<string, unknown>; companyId?: string; projectId?: string; }
 export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; }
 export interface ReviewBudgetReference { id: string; companyId: string; projectId: string; }
-export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; }
+export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; idempotencyKey?: string; defer?: boolean; }
 export interface RunReviewJobResult { reviewRunId: string; status: ReviewRunStatus; stages: ReviewStage[]; warnings: WarningJson[]; idempotencyKey: string; }
 export interface ReviewPipelineClient {
   budget: { findFirst(args: { where: Where }): Promise<Row | null> };
@@ -33,8 +33,9 @@ export interface ReviewPipelineClient {
 }
 
 const activeStatuses = ["DRAFT", "QUEUED", "RUNNING"];
-const idempotencyKeyFor = (input: RunReviewJobInput): string => createHash("sha256").update(JSON.stringify({ companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, documentVersionIds: [...input.documentVersionIds].sort(), configuration: input.configuration, rulesVersion: input.rulesVersion })).digest("hex");
-const runIdFor = (key: string): string => `review-${key}`;
+const requestFingerprintFor = (input: RunReviewJobInput): string => createHash("sha256").update(JSON.stringify({ documentVersionIds: [...input.documentVersionIds].sort(), configuration: input.configuration, rulesVersion: input.rulesVersion })).digest("hex");
+const idempotencyKeyFor = (input: RunReviewJobInput): string => input.idempotencyKey ?? createHash("sha256").update(JSON.stringify({ companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, requestFingerprint: requestFingerprintFor(input) })).digest("hex");
+const runIdFor = (input: RunReviewJobInput, key: string): string => `review-${createHash("sha256").update(`${input.companyId}:${input.projectId}:${input.budgetId}:${key}`).digest("hex")}`;
 const json = (value: unknown): unknown => value;
 const isRetryableUniqueOrSerializationConflict = (error: unknown): boolean => { if (typeof error === "object" && error !== null && "code" in error) return error.code === "P2002" || error.code === "P2034"; return error instanceof Error && (/P2002|P2034|serialization/i).test(error.message); };
 
@@ -43,22 +44,27 @@ export async function runReviewJob(input: RunReviewJobInput, client: ReviewPipel
   await validateInput(input, client);
   if (input.humanReviewRequired === false || input.automaticBudgetMutation === true) throw new Error("Review guardrails cannot be disabled.");
   const key = idempotencyKeyFor(input);
-  const id = runIdFor(key);
+  const id = runIdFor(input, key);
   const claimToken = randomUUID();
   let run: Row;
   try {
     run = await client.$transaction(async (transaction) => {
     const existing = await transaction.reviewRun.findUnique({ where: { id_companyId_projectId: { id, companyId: input.companyId, projectId: input.projectId } } });
-    if (existing) return existing;
+    if (existing) {
+      const configurationJson = existing.configurationJson as { idempotencyKey?: string; requestFingerprint?: string } | undefined;
+      if (configurationJson?.idempotencyKey === key && configurationJson.requestFingerprint !== undefined && configurationJson.requestFingerprint !== requestFingerprintFor(input)) throw new Error("Idempotency key was reused with a different request.");
+      return existing;
+    }
     const active = await transaction.reviewRun.findMany({ where: { companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, status: { in: activeStatuses } } });
     if (active.length > 0) throw new Error("An active review run already exists for this budget.");
-    return transaction.reviewRun.create({ data: { id, companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, createdById: input.createdById, configurationJson: { ...configuration, idempotencyKey: key }, rulesVersion: input.rulesVersion, status: "RUNNING", startedAt: new Date(), progressJson: { stage: "validating", completed: 0, total: 8, percent: 0, checkpoints: [], lease: { token: claimToken, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() } }, warningsJson: input.extractionWarnings ?? [] } });
+    return transaction.reviewRun.create({ data: { id, companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, createdById: input.createdById, configurationJson: { ...configuration, idempotencyKey: key, requestFingerprint: requestFingerprintFor(input) }, rulesVersion: input.rulesVersion, status: input.defer ? "QUEUED" : "RUNNING", startedAt: input.defer ? null : new Date(), progressJson: { stage: "validating", completed: 0, total: 8, percent: 0, checkpoints: [], lease: { token: claimToken, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() } }, warningsJson: input.extractionWarnings ?? [] } });
     }, { isolationLevel: "Serializable" });
   } catch (error) {
     const concurrent = await client.reviewRun.findUnique({ where: { id_companyId_projectId: { id, companyId: input.companyId, projectId: input.projectId } } });
     if (!concurrent || !isRetryableUniqueOrSerializationConflict(error)) throw error;
     run = concurrent;
   }
+  if (input.defer) return result(run, key);
   if (["COMPLETED", "COMPLETED_WITH_WARNINGS", "CANCELLED"].includes(String(run.status))) return result(run, key);
   const ownsRun = await claimRun(client, input, run, claimToken);
   if (!ownsRun) return result((await ownedRun(client, input, id)) ?? run, key);
@@ -68,7 +74,7 @@ export async function runReviewJob(input: RunReviewJobInput, client: ReviewPipel
 async function claimRun(client: ReviewPipelineClient, input: RunReviewJobInput, run: Row, token: string): Promise<boolean> {
   const progress = (run.progressJson ?? {}) as { lease?: { token?: string; expiresAt?: string } };
   if (run.status === "RUNNING" && progress.lease?.token && progress.lease.token !== token && progress.lease.expiresAt && Date.parse(progress.lease.expiresAt) > Date.now()) return false;
-  const status: Where["status"] = run.status === "RUNNING" ? "RUNNING" : { in: ["FAILED", "STALE"] };
+  const status: Where["status"] = run.status === "RUNNING" ? "RUNNING" : { in: ["QUEUED", "FAILED", "STALE"] };
   const changed = await client.reviewRun.updateMany({ where: { id: String(run.id), companyId: input.companyId, projectId: input.projectId, status, progressJson: { equals: run.progressJson } }, data: { status: "RUNNING", finishedAt: null, progressJson: { ...(run.progressJson as Record<string, unknown> | null ?? {}), lease: { token, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() } } } });
   return changed.count > 0;
 }

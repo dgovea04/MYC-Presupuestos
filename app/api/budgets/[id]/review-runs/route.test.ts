@@ -32,7 +32,7 @@ const configuration = { maxFiles: 1, maxPdfPages: 300, maxFileSizeMb: 50, maxXls
 describe("review runs API", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
-    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1", activeCompanyId: "company-1" } });
     mocks.budgetFindFirst.mockResolvedValue({ id: "budget-1", projectId: "project-1", project: { id: "project-1", companyId: "company-1" } });
     mocks.reviewRunFindMany.mockResolvedValue([]);
     mocks.reviewRunCount.mockResolvedValue(0);
@@ -62,16 +62,38 @@ describe("review runs API", () => {
   });
 
   it("returns the idempotent run contract for a valid request", async () => {
-    mocks.runReviewJob.mockResolvedValue({ reviewRunId: "review-1", status: "RUNNING", idempotencyKey: "key-1" });
+    mocks.runReviewJob.mockImplementation(async (input: { defer?: boolean; idempotencyKey?: string }) => ({ reviewRunId: "review-1", status: input.defer ? "QUEUED" : "RUNNING", idempotencyKey: input.idempotencyKey ?? "key-1" }));
     const response = await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-1" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toEqual({ reviewRunId: "review-1", status: "RUNNING", idempotencyKey: "key-1" });
-    expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ companyId: "company-1", projectId: "project-1", budgetId: "budget-1", createdById: "user-1", documentVersionIds: ["version-1"] }), expect.anything());
+    await expect(response.json()).resolves.toEqual({ reviewRunId: "review-1", status: "QUEUED", idempotencyKey: "key-1" });
+    expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ companyId: "company-1", projectId: "project-1", budgetId: "budget-1", createdById: "user-1", documentVersionIds: ["version-1"], idempotencyKey: "key-1" }), expect.anything());
   });
 
   it("returns 409 when an active run already exists", async () => {
     mocks.runReviewJob.mockRejectedValue(new Error("An active review run already exists for this budget."));
     const response = await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-1" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
     expect(response.status).toBe(409);
+  });
+
+  it("does not report a next page when the final page has exactly pageSize runs", async () => {
+    mocks.reviewRunFindMany.mockResolvedValue([{ id: "run-2" }, { id: "run-1" }]);
+    const response = await GET(new Request("http://localhost/api/budgets/budget-1/review-runs?pageSize=2"), { params: Promise.resolve({ id: "budget-1" }) });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(expect.objectContaining({ runs: [{ id: "run-2" }, { id: "run-1" }], hasNextPage: false }));
+    expect(mocks.reviewRunFindMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }));
+  });
+
+  it("returns before a long analysis finishes and schedules the runner", async () => {
+    let release: (() => void) | undefined;
+    mocks.runReviewJob.mockImplementation(async (input: { defer?: boolean }) => {
+      if (!input.defer) await new Promise<void>((resolve) => { release = resolve; });
+      return { reviewRunId: "review-queued", status: "QUEUED", idempotencyKey: "key-long" };
+    });
+    const responsePromise = POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-long" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
+    const response = await Promise.race([responsePromise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("route blocked")), 100))]);
+    expect(response.status).toBe(202);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: "key-long" }), expect.anything());
+    release?.();
   });
 });
