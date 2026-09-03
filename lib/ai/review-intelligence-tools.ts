@@ -17,6 +17,8 @@ import {
   recordFindingDecision,
   type FindingDecisionRecord,
   type PaginatedFindings,
+  searchProjectEvidence as searchPersistedProjectEvidence,
+  type PaginatedEvidence,
 } from "@/lib/review-intelligence/findings";
 import { prisma } from "@/lib/db/prisma";
 import type { AgentToolContext, AgentToolDefinition } from "@/lib/ai/agent/types";
@@ -78,6 +80,7 @@ const listInputSchema = z.object({
   subbudget: z.string().trim().min(1).optional(),
   document: z.string().trim().min(1).optional(),
 }).strict();
+const evidenceSearchInputSchema = z.object({ query: z.string().trim().max(200).default(""), projectId: z.string().trim().min(1), documentVersionId: z.string().trim().min(1).optional(), evidenceType: z.string().trim().min(1).optional(), discipline: z.string().trim().min(1).optional(), page: z.number().int().min(1).default(1), pageSize: z.number().int().min(1).max(100).default(20) }).strict();
 
 const idInputSchema = z.object({
   id: z.string().trim().min(1),
@@ -101,6 +104,7 @@ const decisionInputSchema = z.object({
 });
 
 type ReviewListInput = z.infer<typeof listInputSchema>;
+type EvidenceSearchInput = z.infer<typeof evidenceSearchInputSchema>;
 type ReviewDecisionInput = z.infer<typeof decisionInputSchema>;
 
 async function authorize(session: ReviewToolSession, minimumRole: "VIEWER" | "EDITOR"): Promise<ReviewToolSession & { role: string }> {
@@ -160,6 +164,12 @@ export async function getReviewEvidence(evidenceId: string, session: ReviewToolS
   const parsedId = idInputSchema.parse({ id: evidenceId }).id;
   const authorized = await authorize(session, "VIEWER");
   return getPersistedReviewEvidence(parsedId, authorized.companyId);
+}
+
+export async function searchProjectEvidence(input: EvidenceSearchInput, session: ReviewToolSession): Promise<PaginatedEvidence> {
+  const parsed = evidenceSearchInputSchema.parse(input);
+  const authorized = await authorize(session, "VIEWER");
+  return searchPersistedProjectEvidence({ companyId: authorized.companyId, projectId: parsed.projectId, documentVersionId: parsed.documentVersionId, evidenceType: parsed.evidenceType, discipline: parsed.discipline, page: parsed.page, pageSize: parsed.pageSize }, parsed.query);
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -229,6 +239,7 @@ const listReviewFindingsInput = listInputSchema;
 const getReviewFindingInput = idInputSchema;
 const getReviewEvidenceInput = idInputSchema;
 const calculateReviewFindingImpactInput = idInputSchema;
+const searchProjectEvidenceInput = evidenceSearchInputSchema;
 
 export const getReviewSummaryTool: AgentToolDefinition<z.infer<typeof getReviewSummaryInput>, ReviewSummary> = {
   name: "getReviewSummary",
@@ -268,6 +279,15 @@ export const getReviewEvidenceTool: AgentToolDefinition<z.infer<typeof getReview
   execute: (input, context) => getReviewEvidence(input.id, sessionFromContext(context)),
 };
 
+export const searchProjectEvidenceTool: AgentToolDefinition<z.infer<typeof searchProjectEvidenceInput>, PaginatedEvidence> = {
+  name: "searchProjectEvidence",
+  description: "Busca evidencia estructurada ya persistida dentro de un proyecto y tenant, sin IA, paginada y con filtros de fuente.",
+  risk: "read",
+  requiresProjectId: true,
+  inputSchema: searchProjectEvidenceInput,
+  execute: (input, context) => searchProjectEvidence(input, sessionFromContext(context)),
+};
+
 export const calculateReviewFindingImpactTool: AgentToolDefinition<z.infer<typeof calculateReviewFindingImpactInput>, ImpactResult> = {
   name: "calculateReviewFindingImpact",
   description: "Explica el impacto numérico ya persistido de un hallazgo usando Decimal; no inventa ni cambia valores del presupuesto.",
@@ -291,6 +311,7 @@ export const reviewIntelligenceTools = [
   listReviewFindingsTool,
   getReviewFindingTool,
   getReviewEvidenceTool,
+  searchProjectEvidenceTool,
   calculateReviewFindingImpactTool,
   recordReviewFindingDecisionTool,
 ] as unknown as AgentToolDefinition[];

@@ -9,14 +9,18 @@ export type ExtractionInput = {
 };
 
 export type ExtractionLocation = {
-  sheet: string;
-  range: string;
+  page?: number;
+  sheet?: string;
+  range?: string;
+  textOffsetStart?: number;
+  textOffsetEnd?: number;
 };
 
 export type ExtractionItem = {
   content: string;
+  primary?: boolean;
   location?: ExtractionLocation;
-  metadata?: { code?: string; description?: string; quantity?: string; unit?: string; spec?: string; discipline?: string; attributes?: Record<string, string>; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "OTHER" };
+  metadata?: { code?: string; description?: string; quantity?: string; unit?: string; spec?: string; technicalSpec?: string; discipline?: string; attributes?: Record<string, string>; apuComponents?: string[]; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "APU_COMPONENT" | "OTHER" };
 };
 
 export type ExtractionOutput = {
@@ -40,12 +44,13 @@ export async function extractDocument(input: ExtractionInput): Promise<Extractio
 
 async function extractPdf(file: ReviewDocumentFile, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
   const extracted = await extractPdfImportFile(file);
+  const text = normalizeText(extracted.text);
   return {
     kind: "PDF",
     sha256: validated.sha256,
     mimeType: validated.mimeType,
     fileSizeBytes: validated.fileSizeBytes,
-    items: extracted.text.trim() === "" ? [] : [{ content: normalizeText(extracted.text) }],
+    items: extractPdfEvidence(text),
     pageCount: extracted.pageCount,
     warnings: [
       "El conteo de páginas PDF puede ser estimado; la ubicación exacta no está disponible porque el adaptador compatible no expone página ni bounding boxes verificables.",
@@ -92,14 +97,15 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
         .slice(minRow - 1, maxRow)
         .map((row) => row.slice(minColumn - 1, maxColumn).map((value) => value ?? "").join("\t"))
         .join("\n");
-      items.push({
-        content,
-        location: {
-          sheet: worksheet.name,
-          range: `${columnToLetters(minColumn)}${minRow}:${columnToLetters(maxColumn)}${maxRow}`,
-        },
-        metadata: metadataFromRows(rows, minRow, maxRow, minColumn, maxColumn),
-      });
+      const headers = rows[minRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
+      const structured = headers.some((header) => /desc|partida|spec|tecn|disciplina|apu|componente/i.test(header)) && maxRow > minRow;
+      if (structured) {
+        for (let rowNumber = minRow + 1; rowNumber <= maxRow; rowNumber += 1) {
+          const row = rows[rowNumber - 1] ?? [];
+          const rowContent = row.slice(minColumn - 1, maxColumn).map((value) => value ?? "").join("\t").trim();
+          if (rowContent) items.push({ content: rowContent, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${rowNumber}:${columnToLetters(maxColumn)}${rowNumber}` }, metadata: metadataFromRows(rows, minRow, rowNumber, minColumn, maxColumn) });
+        }
+      } else items.push({ content, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${minRow}:${columnToLetters(maxColumn)}${maxRow}` }, metadata: metadataFromRows(rows, minRow, maxRow, minColumn, maxColumn) });
     }
   });
 
@@ -116,11 +122,34 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
 
 function metadataFromRows(rows: string[][], minRow: number, maxRow: number, minColumn: number, maxColumn: number): ExtractionItem["metadata"] {
   const headers = rows[minRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
-  const values = rows[minRow]?.slice(minColumn - 1, maxColumn) ?? [];
+  const values = rows[maxRow - 1]?.slice(minColumn - 1, maxColumn) ?? [];
   const find = (patterns: RegExp[]): string | undefined => { const index = headers.findIndex((header) => patterns.some((pattern) => pattern.test(header))); const value = index >= 0 ? values[index] : undefined; return value?.trim() || undefined; };
-  const metadata = { code: find([/c.{0,2}dig/i, /^id$/i]), description: find([/desc/i, /partida/i]), quantity: find([/cant/i, /metr/i, /qty/i]), unit: find([/^uni/i, /^unit/i]), spec: find([/spec/i, /tecn/i]), discipline: find([/disc/i, /especial/i]), attributes: {} };
+  const spec = find([/spec/i, /tecn/i]);
+  const apuComponents = find([/apu/i, /componente/i])?.split(/[;,|]/).map((value) => value.trim()).filter(Boolean);
+  const metadata = { code: find([/c.{0,2}dig/i, /^id$/i]), description: find([/desc/i, /partida/i]), quantity: find([/cant/i, /metr/i, /qty/i]), unit: find([/^uni/i, /^unit/i]), spec, technicalSpec: spec, discipline: find([/disc/i, /especial/i]), attributes: {}, apuComponents };
   const evidenceType = metadata.quantity ? "QUANTITY" : metadata.unit ? "UNIT" : metadata.spec ? "TECHNICAL_SPECIFICATION" : "OTHER";
-  return Object.values(metadata).some((value) => typeof value === "string" && value.length > 0) ? { ...metadata, evidenceType } : undefined;
+  return Object.values(metadata).some((value) => typeof value === "string" && value.length > 0 || Array.isArray(value) && value.length > 0) ? { ...metadata, evidenceType } : undefined;
+}
+
+function extractPdfEvidence(text: string): ExtractionItem[] {
+  return text.split("\f").flatMap((pageText, pageIndex) => {
+    const candidates = [...pageText.matchAll(/\(([^()\r\n]{3,})\)/g)].map((match) => match[1] ?? "");
+    const lines = (candidates.length > 0 ? candidates : pageText.split(/\r?\n/)).map(normalizeText).filter((line) => line && !/^%PDF|^xref|^trailer|^startxref|^endobj|^endstream|^BT|^ET/i.test(line));
+    return lines.map((line) => {
+    const metadata = metadataFromPdfLine(line);
+      const start = text.indexOf(line);
+      return { content: line, primary: true, location: { page: pageIndex + 1, textOffsetStart: start >= 0 ? start : undefined, textOffsetEnd: start >= 0 ? start + line.length : undefined }, metadata };
+    });
+  }).filter((item) => item.metadata !== undefined) as ExtractionItem[];
+}
+
+function metadataFromPdfLine(line: string): ExtractionItem["metadata"] {
+  const codeMatch = line.match(/^([A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)+)\s+/);
+  const number = line.match(/(-?\d+(?:[.,]\d+)?)\s*(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\b/i) ?? line.match(/(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\s+(-?\d+(?:[.,]\d+)?)/i);
+  if (!codeMatch && !number) return undefined;
+  const quantity = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[2] : number[1]) : undefined;
+  const unit = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[1] : number[2]) : undefined;
+  return { code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, number?.index ?? line.length).trim() || undefined, quantity: quantity?.replace(",", "."), unit, evidenceType: number ? "QUANTITY" : "OTHER" };
 }
 
 function normalizeCell(value: ExcelJS.CellValue): { text: string; hasHyperlink: boolean } {

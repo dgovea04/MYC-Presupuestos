@@ -229,4 +229,13 @@ describe("runReviewJob", () => {
     database.documentVersion.findFirst = async () => null;
     await expect(runReviewJob({ ...input(), documentVersions: [{ id: "version-1", companyId: "other", projectId: "project-1" }] }, database)).rejects.toThrow("database");
   });
+
+  it("creates and uses a base snapshot when a new budget has none", async () => {
+    const database = client();
+    database.budgetVersionSnapshot.findFirst = async () => null;
+    database.budgetVersionSnapshot.create = async ({ data }) => ({ id: "auto-base-1", ...data });
+    const result = await runReviewJob(input(), database);
+    expect(result.status).toBe("COMPLETED");
+    expect(database.findings[0]?.baseSnapshotId).toBe("auto-base-1");
+  });
 });

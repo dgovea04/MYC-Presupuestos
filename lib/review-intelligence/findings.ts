@@ -23,6 +23,8 @@ export type FindingFilters = {
   status?: FindingStatus; findingType?: Prisma.ReviewFindingWhereInput["findingType"]; severity?: string; confidence?: Prisma.ReviewFindingWhereInput["confidence"]; priority?: number; discipline?: string; subbudget?: string; document?: string;
 };
 export type PaginatedFindings = { findings: Array<Record<string, unknown>>; page: number; pageSize: number; hasNextPage: boolean };
+export type EvidenceSearchFilters = { companyId: string; projectId: string; documentVersionId?: string; evidenceType?: string; discipline?: string; page: number; pageSize: number };
+export type PaginatedEvidence = { evidence: Array<Record<string, unknown>>; page: number; pageSize: number; hasNextPage: boolean };
 export type FindingDecisionInput = { findingId: string; companyId: string; userId: string; role: string; resolution: FindingResolution; note?: string; expectedUpdatedAt: Date; reconfirmStale?: boolean; correlationId: string; correctionVersionId?: string };
 export type FindingDecisionRecord = { id: string; findingId: string; resolution: FindingResolution; note: string | null; expectedUpdatedAt: string; previousStatus: string | null; newStatus: string | null; correctionVersionId: string | null; createdAt: string };
 
@@ -94,6 +96,20 @@ export async function listFindings(filters: FindingFilters, client: Client = pri
   const where: Prisma.ReviewFindingWhereInput = { companyId: filters.companyId, projectId: run.projectId, budgetId: { in: scopedBudgetIds }, reviewRunId: run.id, status: filters.status, findingType: filters.findingType, severity: filters.severity, confidence: filters.confidence, discipline: filters.discipline, ...(filters.priority === undefined ? {} : { priority: { gte: filters.priority } }), ...(filters.document === undefined ? {} : { OR: [{ evidenceId: filters.document }, { evidence: { documentVersion: { projectDocumentId: filters.document } } }] }) };
   const rows = await client.reviewFinding.findMany({ where, orderBy: [{ priority: "desc" }, { potentialImpact: "desc" }, { confidence: "desc" }, { budgetItem: { code: "asc" } }, { id: "asc" }], skip: (filters.page - 1) * filters.pageSize, take: filters.pageSize + 1, select: findingSelect });
   return { findings: rows.slice(0, filters.pageSize).map(serializeFinding), page: filters.page, pageSize: filters.pageSize, hasNextPage: rows.length > filters.pageSize };
+}
+
+export async function searchProjectEvidence(filters: EvidenceSearchFilters, query: string, client: Client = prisma): Promise<PaginatedEvidence> {
+  const normalizedQuery = query.trim();
+  const where: Prisma.ReviewEvidenceWhereInput = {
+    companyId: filters.companyId,
+    projectId: filters.projectId,
+    ...(filters.documentVersionId ? { documentVersionId: filters.documentVersionId } : {}),
+    ...(filters.evidenceType ? { evidenceType: filters.evidenceType as Prisma.ReviewEvidenceWhereInput["evidenceType"] } : {}),
+    ...(filters.discipline ? { metadataJson: { path: ["discipline"], string_contains: filters.discipline } } : {}),
+    ...(normalizedQuery ? { OR: [{ originalText: { contains: normalizedQuery, mode: "insensitive" } }, { normalizedText: { contains: normalizedQuery, mode: "insensitive" } }, { metadataJson: { path: ["code"], string_contains: normalizedQuery } }, { metadataJson: { path: ["description"], string_contains: normalizedQuery } }] } : {}),
+  };
+  const rows = await client.reviewEvidence.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (filters.page - 1) * filters.pageSize, take: filters.pageSize + 1, select: { id: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, metadataJson: true } });
+  return { evidence: rows.slice(0, filters.pageSize).map((row) => ({ ...row, value: decimal(row.value) })), page: filters.page, pageSize: filters.pageSize, hasNextPage: rows.length > filters.pageSize };
 }
 
 export async function getFinding(findingId: string, companyId: string, client: Client = prisma): Promise<Record<string, unknown>> {

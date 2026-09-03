@@ -58,13 +58,32 @@ describe("review document extractors", () => {
     ]));
   });
 
+  it("extracts structured primary PDF evidence with page, text and numeric metadata", async () => {
+    const pdf = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (01.01 Concreto estructural 12.5 m3)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "metrados.pdf", { type: "application/pdf" });
+    const result = await extractDocument({ file: pdf });
+    expect(result.items[0]).toMatchObject({ primary: true, location: { page: 1 }, metadata: { code: "01.01", description: "Concreto estructural", quantity: "12.5", unit: "m3", evidenceType: "QUANTITY" } });
+    expect(result.items[0]?.content).toContain("Concreto estructural");
+  });
+
+  it("extracts every xlsx data row with technical and APU metadata as primary evidence", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Metrados");
+    sheet.addRow(["Código", "Descripción", "Cantidad", "Unidad", "Especificación", "Disciplina", "APU Componentes"]);
+    sheet.addRow(["01.01", "Concreto", 12.5, "m3", "f'c 210", "Estructuras", "cemento; arena"]);
+    sheet.addRow(["01.02", "Acero", 100, "kg", "Grado 60", "Estructuras", "acero; alambre"]);
+    const bytes = await workbook.xlsx.writeBuffer();
+    const result = await extractDocument({ file: new File([bytes], "metrados.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) });
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({ primary: true, location: { sheet: "Metrados", range: "A2:G2" }, metadata: { code: "01.01", technicalSpec: "f'c 210", apuComponents: ["cemento", "arena"] } });
+    expect(result.items[1]?.metadata?.code).toBe("01.02");
+  });
+
   it("uses the compatible PDF importer and states that page count may be estimated and exact location is unavailable", async () => {
     const file = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (01.01 Trazo y replanteo m2 10 2.50 25.00)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "spec.pdf", { type: "application/pdf" });
     const result = await extractDocument({ file });
     expect(result.kind).toBe("PDF");
     expect(result.items[0]?.content).toContain("Trazo y replanteo");
-    expect(result.items[0]?.location).toBeUndefined();
-    expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining("estimado"), expect.stringContaining("exacta")]));
+    expect(result.items[0]).toMatchObject({ primary: true, location: { page: 1 }, metadata: { code: "01.01", unit: "m2", quantity: "10" } });
   });
 
   it("accepts a PDF exactly at 50 MB and rejects empty or malformed documents", async () => {

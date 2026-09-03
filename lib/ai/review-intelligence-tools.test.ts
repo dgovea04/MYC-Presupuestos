@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getFinding: vi.fn(),
   getReviewEvidence: vi.fn(),
   recordFindingDecision: vi.fn(),
+  searchProjectEvidence: vi.fn(),
 }));
 
 vi.mock("@/lib/workspace/access", () => ({
@@ -22,6 +23,7 @@ vi.mock("@/lib/review-intelligence/findings", () => ({
   getFinding: mocks.getFinding,
   getReviewEvidence: mocks.getReviewEvidence,
   recordFindingDecision: mocks.recordFindingDecision,
+  searchProjectEvidence: mocks.searchProjectEvidence,
 }));
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
@@ -32,6 +34,7 @@ import {
   getReviewFinding,
   getReviewSummary,
   listReviewFindings,
+  searchProjectEvidence,
   recordReviewFindingDecision,
   reviewIntelligenceTools,
 } from "./review-intelligence-tools";
@@ -119,6 +122,7 @@ describe("review intelligence tools", () => {
       "listReviewFindings",
       "getReviewFinding",
       "getReviewEvidence",
+      "searchProjectEvidence",
       "calculateReviewFindingImpact",
       "recordReviewFindingDecision",
     ]);
@@ -128,6 +132,7 @@ describe("review intelligence tools", () => {
       "listReviewFindings",
       "getReviewFinding",
       "getReviewEvidence",
+      "searchProjectEvidence",
       "calculateReviewFindingImpact",
       "recordReviewFindingDecision",
     ]));
