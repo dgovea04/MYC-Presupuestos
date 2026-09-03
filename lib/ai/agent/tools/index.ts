@@ -19,13 +19,14 @@ import { insumoTools } from "./insumos";
 import { projectTools } from "./projects";
 import { mcpBudgetTools } from "./mcp-budget";
 import { riskTools } from "./risk";
+import { reviewIntelligenceTools } from "@/lib/ai/review-intelligence-tools";
 
 function asRegistrableTool(tool: unknown): AgentToolDefinition {
   return tool as unknown as AgentToolDefinition;
 }
 
 // Re-export all domain tools for single-point registration
-export { budgetTools, partidaTools, apuTools, insumoTools, projectTools, mcpBudgetTools, riskTools };
+export { budgetTools, partidaTools, apuTools, insumoTools, projectTools, mcpBudgetTools, riskTools, reviewIntelligenceTools };
 
 // ─── Takeoffs (Metrados) ─────────────────────────────────────────────────────
 
@@ -731,6 +732,7 @@ const rawTools: readonly unknown[] = [
   ...projectTools,
   ...mcpBudgetTools,
   ...riskTools,
+  ...reviewIntelligenceTools,
   ...remainingTools,
 ];
 

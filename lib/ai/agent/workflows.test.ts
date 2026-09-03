@@ -125,7 +125,8 @@ describe("SpecialistBundles", () => {
     // Todas las tools del bundle deben ser read, excepto calculateBudget que también es read
     const readOnlyNames = ["reviewAPU", "reviewTakeoff", "compareBudgets",
       "searchPartidas", "searchBudgets", "searchInsumos",
-      "calculateBudget", "calculateAPU"];
+      "calculateBudget", "calculateAPU", "getReviewSummary", "listReviewFindings",
+      "getReviewFinding", "getReviewEvidence", "calculateReviewFindingImpact"];
     for (const name of bundle!.toolNames) {
       expect(readOnlyNames).toContain(name);
     }

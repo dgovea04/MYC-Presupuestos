@@ -64,6 +64,9 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "reviewTakeoff", "createTakeoff", "importTakeoff",
       // Reportes
       "exportReport", "exportPDF", "exportExcel", "exportS10", "dashboard",
+      // RevisiÃ³n Inteligente
+      "getReviewSummary", "listReviewFindings", "getReviewFinding", "getReviewEvidence",
+      "calculateReviewFindingImpact", "recordReviewFindingDecision",
     ],
     systemPrompt: [
       "Eres Khipu, el asistente técnico de obra de MC Presupuestos.",
@@ -179,6 +182,8 @@ export const SPECIALIST_BUNDLES: SpecialistBundle[] = [
       "reviewAPU", "reviewTakeoff", "compareBudgets",
       "searchPartidas", "searchBudgets", "searchInsumos",
       "calculateBudget", "calculateAPU",
+      "getReviewSummary", "listReviewFindings", "getReviewFinding", "getReviewEvidence",
+      "calculateReviewFindingImpact",
     ],
     systemPrompt: [
       "Eres un especialista en revisión de calidad de presupuestos.",

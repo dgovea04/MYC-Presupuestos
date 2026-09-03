@@ -102,6 +102,47 @@ export async function getFinding(findingId: string, companyId: string, client: C
   return serializeFinding(row);
 }
 
+export async function getReviewEvidence(evidenceId: string, companyId: string, client: Client = prisma) {
+  const evidence = await client.reviewEvidence.findFirst({
+    where: { id: evidenceId, companyId, project: { companyId } },
+    select: {
+      id: true,
+      projectId: true,
+      documentVersionId: true,
+      evidenceType: true,
+      originalText: true,
+      normalizedText: true,
+      locationJson: true,
+      unit: true,
+      extractionMethod: true,
+      confidence: true,
+      sourceHash: true,
+      documentVersion: {
+        select: {
+          versionNumber: true,
+          projectDocument: { select: { name: true, originalFileName: true } },
+        },
+      },
+    },
+  });
+  if (!evidence) throw new Error("Evidence not found.");
+  return {
+    evidenceId: evidence.id,
+    projectId: evidence.projectId,
+    documentVersionId: evidence.documentVersionId,
+    evidenceType: evidence.evidenceType,
+    originalText: evidence.originalText,
+    normalizedText: evidence.normalizedText,
+    location: jsonObject(evidence.locationJson),
+    unit: evidence.unit,
+    extractionMethod: evidence.extractionMethod,
+    confidence: evidence.confidence,
+    sourceHash: evidence.sourceHash,
+    sourceName: evidence.documentVersion?.projectDocument?.name || evidence.documentVersion?.projectDocument?.originalFileName || null,
+    sourceVersion: evidence.documentVersion?.versionNumber ?? null,
+  };
+}
+
 export async function recordFindingDecision(input: FindingDecisionInput, client: Client = prisma): Promise<FindingDecisionRecord> {
   if (input.resolution === "CORRECTED" && !input.correctionVersionId) throw new Error("CORRECTED requires a post-correction version reference.");
   return client.$transaction(async (tx) => {
