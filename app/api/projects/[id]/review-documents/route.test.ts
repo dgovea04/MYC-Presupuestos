@@ -62,7 +62,7 @@ describe("review documents API", () => {
   });
 
   it("rejects an upload without a file", async () => {
-    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", body: new FormData() }), { params: Promise.resolve({ id: "project-1" }) });
+    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-empty" }, body: new FormData() }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(400);
   });
 
@@ -75,7 +75,7 @@ describe("review documents API", () => {
     const form = new FormData();
     form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
     form.set("category", "TECHNICAL_SPECIFICATION");
-    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", body: form }), { params: Promise.resolve({ id: "project-1" }) });
+    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-create" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(201);
     const payload = await response.json() as Record<string, unknown>;
     expect(payload).toEqual(expect.objectContaining({ document, version }));
@@ -94,7 +94,7 @@ describe("review documents API", () => {
     mocks.validateDocumentFile.mockRejectedValue(new Error("MIME inválido"));
     const form = new FormData();
     form.set("file", new File(["invalid"], "spec.pdf", { type: "application/pdf" }));
-    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", body: form }), { params: Promise.resolve({ id: "project-1" }) });
+    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-invalid" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(400);
     expect(mocks.createProjectDocument).not.toHaveBeenCalled();
   });

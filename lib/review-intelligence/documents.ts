@@ -112,6 +112,12 @@ export async function createDocumentVersion(
         throw new Error("El documento no pertenece a la empresa y proyecto indicados.");
       }
 
+      const replay = await transaction.documentVersion.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: input.projectDocumentId, storageKey: input.storageKey } });
+      if (replay) {
+        if (replay.sha256 !== validated.sha256) throw new Error("Idempotency key conflict: payload hash differs.");
+        return replay;
+      }
+
       const existing = await transaction.documentVersion.findFirst({
         where: {
           companyId: input.companyId,

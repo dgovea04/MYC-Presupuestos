@@ -84,6 +84,8 @@ describe("FindingDetail", () => {
     render(<FindingDetail finding={finding} canResolve onChanged={onChanged} />);
 
     expect(screen.getByRole("region", { name: "Visor estructurado de provenance" })).toBeTruthy();
+    expect(screen.getByLabelText("Página de evidencia")).toBeTruthy();
+    expect(screen.getByTestId("evidence-highlight")).toBeTruthy();
     expect(screen.getByText(/12/)).toBeTruthy();
     expect(screen.getAllByText(/Revisión humana requerida/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/El presupuesto no se modifica automáticamente/i)).toBeTruthy();

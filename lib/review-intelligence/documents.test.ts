@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDocumentVersion, createProjectDocument, createProjectDocumentAndVersion } from "./documents";
@@ -39,7 +40,7 @@ describe("review document persistence", () => {
     client.$transaction.mockImplementation(async (callback) => callback(client));
     client.projectDocument.findFirst.mockResolvedValue({ id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "budget.pdf" });
     const existing = { id: "version-1", sha256: "existing" };
-    client.documentVersion.findFirst.mockResolvedValue(existing);
+    client.documentVersion.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(existing);
     const file = new File([validPdf("one")], "budget.pdf", { type: "application/pdf" });
 
     const result = await createDocumentVersion({
@@ -86,6 +87,26 @@ describe("review document persistence", () => {
       where: { id: "document-1", companyId: "company-1", projectId: "project-1" },
       data: { currentVersionId: "version-3" },
     }));
+  });
+
+  it("replays the same idempotency storage key and rejects a different payload", async () => {
+    const client = createClient();
+    const transaction = createClient();
+    transaction.projectDocument.findFirst.mockResolvedValue({ id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "budget.pdf" });
+    transaction.documentVersion.findFirst.mockResolvedValueOnce({ id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256: "other-hash" });
+    client.$transaction.mockImplementation(async (callback) => callback(transaction));
+    const file = new File([validPdf("replay")], "budget.pdf", { type: "application/pdf" });
+    await expect(createDocumentVersion({ companyId: "company-1", projectId: "project-1", projectDocumentId: "document-1", storageKey: "idempotency/key-1", file }, client)).rejects.toThrow("Idempotency key conflict");
+    expect(transaction.documentVersion.create).not.toHaveBeenCalled();
+  });
+
+  it("replays the same idempotency key and hash without creating a version", async () => {
+    const client = createClient(); const transaction = createClient();
+    transaction.projectDocument.findFirst.mockResolvedValue({ id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "budget.pdf" });
+    transaction.documentVersion.findFirst.mockResolvedValueOnce({ id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256: createHash("sha256").update(validPdf("same")).digest("hex") }); client.$transaction.mockImplementation(async (callback) => callback(transaction));
+    const file = new File([validPdf("same")], "budget.pdf", { type: "application/pdf" });
+    const result = await createDocumentVersion({ companyId: "company-1", projectId: "project-1", projectDocumentId: "document-1", storageKey: "idempotency/key-1", file }, client);
+    expect(result.id).toBe("version-1"); expect(transaction.documentVersion.create).not.toHaveBeenCalled();
   });
 
   it("rejects a direct version call when the document belongs to another tenant or project", async () => {
