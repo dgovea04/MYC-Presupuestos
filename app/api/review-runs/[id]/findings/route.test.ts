@@ -27,9 +27,9 @@ describe("review findings list API", () => {
   });
 
   it("passes validated filters and tenant scope to the service", async () => {
-    const response = await GET(new Request("http://localhost/api/review-runs/run-1/findings?page=2&pageSize=10&status=OPEN&findingType=QUANTITY_MISMATCH"), { params: Promise.resolve({ id: "run-1" }) });
+    const response = await GET(new Request("http://localhost/api/review-runs/run-1/findings?page=2&pageSize=10&status=PENDING&findingType=QUANTITY_MISMATCH&priority=0.75&discipline=Estructuras&subbudget=sub-1&document=doc-1"), { params: Promise.resolve({ id: "run-1" }) });
     expect(response.status).toBe(200);
-    expect(mocks.listFindings).toHaveBeenCalledWith(expect.objectContaining({ reviewRunId: "run-1", companyId: "company-1", page: 2, pageSize: 10, status: "OPEN", findingType: "QUANTITY_MISMATCH" }));
+    expect(mocks.listFindings).toHaveBeenCalledWith(expect.objectContaining({ reviewRunId: "run-1", companyId: "company-1", page: 2, pageSize: 10, status: "PENDING", findingType: "QUANTITY_MISMATCH", priority: 0.75, discipline: "Estructuras", subbudget: "sub-1", document: "doc-1" }));
   });
 
   it("rejects invalid pagination before querying", async () => {

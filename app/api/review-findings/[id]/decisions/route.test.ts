@@ -17,14 +17,14 @@ describe("finding decisions API", () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1", activeCompanyId: "company-1" } });
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
-    mocks.recordFindingDecision.mockResolvedValue({ id: "decision-1", resolution: "ACCEPTED" });
+    mocks.recordFindingDecision.mockResolvedValue({ id: "decision-1", resolution: "CONFIRMED_ISSUE" });
   });
 
   it("requires editor access and records the expected version", async () => {
-    const response = await POST(new Request("http://localhost/api/review-findings/finding-1/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resolution: "ACCEPTED", expectedUpdatedAt: "2026-09-02T12:00:00.000Z", note: "Verificado" }) }), { params: Promise.resolve({ id: "finding-1" }) });
+    const response = await POST(new Request("http://localhost/api/review-findings/finding-1/decisions", { method: "POST", headers: { "Content-Type": "application/json", "X-Correlation-Id": "corr-1" }, body: JSON.stringify({ resolution: "CONFIRMED_ISSUE", expectedUpdatedAt: "2026-09-02T12:00:00.000Z", note: "Verificado", correctionVersionId: "version-2" }) }), { params: Promise.resolve({ id: "finding-1" }) });
     expect(response.status).toBe(201);
     expect(mocks.assertWorkspaceMembership).toHaveBeenCalledWith({ userId: "user-1", companyId: "company-1", minimumRole: "EDITOR" });
-    expect(mocks.recordFindingDecision).toHaveBeenCalledWith(expect.objectContaining({ findingId: "finding-1", companyId: "company-1", userId: "user-1", expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z") }));
+    expect(mocks.recordFindingDecision).toHaveBeenCalledWith(expect.objectContaining({ findingId: "finding-1", companyId: "company-1", userId: "user-1", expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), correlationId: "corr-1", correctionVersionId: "version-2" }));
   });
 
   it("returns conflict when optimistic concurrency requires reconfirmation", async () => {

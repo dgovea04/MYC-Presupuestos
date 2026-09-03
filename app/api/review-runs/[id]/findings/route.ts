@@ -4,7 +4,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { listFindings } from "@/lib/review-intelligence/findings";
 
-const querySchema = z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25), status: z.enum(["OPEN", "IN_REVIEW", "RESOLVED", "DISMISSED", "STALE"]).optional(), findingType: z.enum(["QUANTITY_MISMATCH", "UNIT_INCONSISTENCY", "TECHNICAL_SPEC_MISMATCH", "MISSING_DOCUMENTATION", "INCOMPLETE_APU"]).optional(), severity: z.string().trim().min(1).max(30).optional(), confidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional() });
+const querySchema = z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25), status: z.enum(["PENDING", "IN_REVIEW", "RESOLVED", "REOPENED", "STALE"]).optional(), findingType: z.enum(["QUANTITY_MISMATCH", "UNIT_INCONSISTENCY", "TECHNICAL_SPEC_MISMATCH", "MISSING_DOCUMENTATION", "INCOMPLETE_APU"]).optional(), severity: z.string().trim().min(1).max(30).optional(), confidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(), priority: z.coerce.number().min(0).max(1).optional(), discipline: z.string().trim().min(1).max(100).optional(), subbudget: z.string().trim().min(1).max(100).optional(), document: z.string().trim().min(1).max(100).optional() });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();

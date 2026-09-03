@@ -196,18 +196,19 @@ enum ReviewFindingType {
 }
 
 enum FindingStatus {
-  OPEN
+  PENDING
   IN_REVIEW
   RESOLVED
-  DISMISSED
+  REOPENED
   STALE
 }
 
 enum FindingResolution {
-  ACCEPTED
-  REJECTED
+  CONFIRMED_ISSUE
+  VALID_AS_IS
+  FALSE_POSITIVE
+  NEEDS_MORE_INFORMATION
   NOT_APPLICABLE
-  NEEDS_MORE_EVIDENCE
   CORRECTED
 }
 
@@ -3184,7 +3185,7 @@ model ReviewFinding {
   entityLinkId            String?
   evidenceId              String
   findingType             ReviewFindingType
-  status                  FindingStatus      @default(OPEN)
+  status                  FindingStatus      @default(PENDING)
   severity                String
   priority                Decimal            @db.Decimal(8, 6)
   confidence              ConfidenceLevel

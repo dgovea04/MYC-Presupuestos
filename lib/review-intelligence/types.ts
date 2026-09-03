@@ -21,14 +21,15 @@ export const reviewFindingTypes = [
 
 export type ReviewFindingType = (typeof reviewFindingTypes)[number];
 
-export const findingStatuses = ["OPEN", "IN_REVIEW", "RESOLVED", "DISMISSED", "STALE"] as const;
+export const findingStatuses = ["PENDING", "IN_REVIEW", "RESOLVED", "REOPENED", "STALE"] as const;
 export type FindingStatus = (typeof findingStatuses)[number];
 
 export const findingResolutions = [
-  "ACCEPTED",
-  "REJECTED",
+  "CONFIRMED_ISSUE",
+  "VALID_AS_IS",
+  "FALSE_POSITIVE",
+  "NEEDS_MORE_INFORMATION",
   "NOT_APPLICABLE",
-  "NEEDS_MORE_EVIDENCE",
   "CORRECTED",
 ] as const;
 export type FindingResolution = (typeof findingResolutions)[number];
