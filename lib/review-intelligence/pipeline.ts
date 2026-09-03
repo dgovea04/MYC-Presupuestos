@@ -121,7 +121,39 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
   if (stage === "identifying evidence") { await client.$transaction(async (transaction) => { await assertLease(transaction, input, runId, token); for (const evidence of input.evidence) await transaction.reviewEvidence.upsert({ where: { documentVersionId_sourceHash: { documentVersionId: evidence.documentVersionId, sourceHash: evidence.sourceHash } }, create: evidenceData(input, evidence), update: {} }); }); return input.evidence.length; }
   const persistedEvidence = await getPersistedEvidence(input, client);
   if (stage === "matching") { let count = 0; await client.$transaction(async (transaction) => { await assertLease(transaction, input, runId, token); for (const item of input.budgetItems) for (const candidate of matchBudgetItemToEvidence(item, persistedEvidence).filter((entry) => entry.eligibleForFindings)) { await transaction.entityLink.upsert({ where: { budgetItemId_evidenceId: { budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId } }, create: linkData(input, candidate), update: {} }); count += 1; } }); return count; }
-  if (stage === "rules" || stage === "prioritizing") { let count = 0; await client.$transaction(async (transaction) => { await assertLease(transaction, input, runId, token); for (const item of input.budgetItems) { const candidates = matchBudgetItemToEvidence(item, persistedEvidence); for (const evidence of persistedEvidence.filter((entry) => entry.primary)) { const link = candidates.find((entry) => entry.evidenceId === evidence.id && entry.eligibleForFindings); const persistedLink = link ? await transaction.entityLink.findFirst({ where: { budgetItemId: link.budgetItemId, evidenceId: link.evidenceId, companyId: input.companyId, projectId: input.projectId } }) : null; const persistedLinkId = typeof persistedLink?.id === "string" ? persistedLink.id : undefined; if (link && !persistedLinkId) throw new Error("Matched entity link was not persisted for the requested tenant/project."); const findings = evaluateFindingRules({ item, evidence, link: link ? { evidenceId: link.evidenceId, confidence: link.confidence, score: link.score } : undefined, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: configuration.findingTypes }); for (const finding of findings) { if (finding.type === "MISSING_DOCUMENTATION" && input.extractionWarnings?.some((warning) => warning.source === evidence.documentVersionId)) continue; await transaction.reviewFinding.upsert({ where: { id_companyId_projectId: { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId } }, create: findingData(input, runId, finding, persistedLinkId), update: {} }); count += 1; } } } }); return count; }
+  if (stage === "rules" || stage === "prioritizing") {
+    let count = 0;
+    await client.$transaction(async (transaction) => {
+      await assertLease(transaction, input, runId, token);
+      const primaryEvidence = persistedEvidence.filter((entry) => entry.primary);
+      for (const item of input.budgetItems) {
+        const candidates = matchBudgetItemToEvidence(item, persistedEvidence);
+        const linkedPrimary = primaryEvidence.find((evidence) => candidates.some((entry) => entry.evidenceId === evidence.id && entry.eligibleForFindings));
+        if (!linkedPrimary && primaryEvidence[0] && configuration.findingTypes.includes("MISSING_DOCUMENTATION")) {
+          const evidence = primaryEvidence[0];
+          const findings = evaluateFindingRules({ item, evidence, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: ["MISSING_DOCUMENTATION"] });
+          for (const finding of findings) {
+            if (input.extractionWarnings?.some((warning) => warning.source === evidence.documentVersionId)) continue;
+            await transaction.reviewFinding.upsert({ where: { id_companyId_projectId: { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId } }, create: findingData(input, runId, finding, undefined), update: {} });
+            count += 1;
+          }
+        }
+        for (const evidence of primaryEvidence) {
+          const link = candidates.find((entry) => entry.evidenceId === evidence.id && entry.eligibleForFindings);
+          if (!link) continue;
+          const persistedLink = await transaction.entityLink.findFirst({ where: { budgetItemId: link.budgetItemId, evidenceId: link.evidenceId, companyId: input.companyId, projectId: input.projectId } });
+          const persistedLinkId = typeof persistedLink?.id === "string" ? persistedLink.id : undefined;
+          if (!persistedLinkId) throw new Error("Matched entity link was not persisted for the requested tenant/project.");
+          const findings = evaluateFindingRules({ item, evidence, link: { evidenceId: link.evidenceId, confidence: link.confidence, score: link.score }, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: configuration.findingTypes.filter((type) => type !== "MISSING_DOCUMENTATION") });
+          for (const finding of findings) {
+            await transaction.reviewFinding.upsert({ where: { id_companyId_projectId: { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId } }, create: findingData(input, runId, finding, persistedLinkId), update: {} });
+            count += 1;
+          }
+        }
+      }
+    });
+    return count;
+  }
   return input.budgetItems.length + input.evidence.length;
 }
 

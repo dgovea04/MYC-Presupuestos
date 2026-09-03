@@ -71,6 +71,13 @@ describe("review runs API", () => {
     expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ companyId: "company-1", projectId: "project-1", budgetId: "budget-1", createdById: "user-1", documentVersionIds: ["version-1"], idempotencyKey: "key-1" }), expect.anything());
   });
 
+  it("transports the persisted APU specification and resources into the review pipeline", async () => {
+    mocks.budgetItemFindMany.mockResolvedValue([{ id: "item-1", budgetId: "budget-1", code: "A-1", description: "Concreto", unit: "m3", quantity: "10", unitPrice: "100", discipline: "Estructuras", apu: { name: "f'c 210 kg/cm2", resources: [{ quantity: "1", resource: { code: "MAT-1", description: "Cemento" }, catalogPartida: null }, { quantity: "2", resource: null, catalogPartida: { description: "Arena" } }] } }]);
+    mocks.runReviewJob.mockImplementation(async (input: { defer?: boolean; idempotencyKey?: string }) => ({ reviewRunId: "review-technical", status: input.defer ? "QUEUED" : "RUNNING", idempotencyKey: input.idempotencyKey ?? "key-technical" }));
+    await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-technical" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
+    expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ budgetItems: [expect.objectContaining({ technicalSpecification: "f'c 210 kg/cm2", apuComponents: ["Cemento", "Arena"] })] }), expect.anything());
+  });
+
   it("returns 409 when an active run already exists", async () => {
     mocks.runReviewJob.mockRejectedValue(new Error("An active review run already exists for this budget."));
     const response = await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-1" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });

@@ -244,4 +244,19 @@ describe("runReviewJob", () => {
     await runReviewJob({ ...input(), evidence: [{ ...input().evidence[0], technicalSpecification: "f'c 210", apuComponents: ["cemento", "arena"] }] }, database);
     expect(database.evidence[0]?.metadataJson).toMatchObject({ technicalSpec: "f'c 210", apuComponents: ["cemento", "arena"] });
   });
+
+  it("evaluates missing documentation for every item without a primary match", async () => {
+    const database = client();
+    database.budgetItem.findFirst = async ({ where }) => ({ id: String(where.id) });
+    const result = await runReviewJob({
+      ...input(),
+      configuration: { ...input().configuration, findingTypes: ["MISSING_DOCUMENTATION"] },
+      budgetItems: [input().budgetItems[0], { ...input().budgetItems[0], id: "item-2", code: "B-2", description: "Instalación eléctrica" }],
+      evidence: [{ ...input().evidence[0], id: "evidence-unrelated", code: "Z-9", description: "Documento de seguridad", confidence: "HIGH" }],
+    }, database);
+    expect(result.status).toBe("COMPLETED");
+    expect(database.findings).toHaveLength(2);
+    expect(database.findings.every((finding) => finding.findingType === "MISSING_DOCUMENTATION")).toBe(true);
+    expect(database.findings.every((finding) => finding.evidenceId === database.evidence[0]?.id)).toBe(true);
+  });
 });

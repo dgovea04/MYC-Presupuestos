@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import PDFDocument from "pdfkit";
 import { extractDigitalPdf } from "./digital-extraction";
+import { extractDocument } from "@/lib/review-intelligence/extractors";
 
 function pdfWithTwoDigitalPages(): File {
   const page = (text: string, id: number) => `${id} 0 obj\n<< /Length ${text.length + 32} >>\nstream\nBT /F1 12 Tf (${text}) Tj ET\nendstream\nendobj\n`;
@@ -15,5 +17,23 @@ describe("digital PDF extraction", () => {
       expect.objectContaining({ page: 1, text: expect.stringContaining("Concreto") }),
       expect.objectContaining({ page: 2, text: expect.stringContaining("Acero") }),
     ]);
+  });
+
+  it("extracts text and provenance from a PDFKit-generated digital PDF", async () => {
+    const document = new PDFDocument({ autoFirstPage: true });
+    const chunks: Buffer[] = [];
+    document.on("data", (chunk: Buffer) => chunks.push(chunk));
+    const finished = new Promise<Buffer>((resolve) => document.on("end", () => resolve(Buffer.concat(chunks))));
+    document.fontSize(12).text("01.01 Concreto 12 m3");
+    document.addPage().fontSize(12).text("01.02 Acero 100 kg");
+    document.end();
+    const result = await extractDigitalPdf(await finished);
+    expect(result.pageCount).toBe(2);
+    expect(result.pages.every((page) => page.text.length > 0)).toBe(true);
+    expect(result.pages.map((page) => page.page)).toEqual([1, 2]);
+    const structured = await extractDocument({ file: new File([await finished], "pdfkit.pdf", { type: "application/pdf" }) });
+    expect(structured.pageCount).toBe(2);
+    expect(structured.items.length).toBeGreaterThan(0);
+    expect(structured.items.every((item) => typeof item.location.page === "number")).toBe(true);
   });
 });
