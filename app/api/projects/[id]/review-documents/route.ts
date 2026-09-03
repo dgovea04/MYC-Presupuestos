@@ -1,10 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
-import { createProjectDocumentAndVersion, validateDocumentFile } from "@/lib/review-intelligence/documents";
+import { createDocumentVersion, createProjectDocumentAndVersion, validateDocumentFile } from "@/lib/review-intelligence/documents";
 
 const categorySchema = z.enum(["PLAN", "TECHNICAL_SPECIFICATION", "QUANTITY_TAKEOFF", "BUDGET", "APU", "OTHER"]);
 const pageSchema = z.coerce.number().int().min(1).default(1);
@@ -48,12 +47,15 @@ export async function POST(request: Request, { params }: RouteContext) {
   const scope = await projectForUser(projectId, session.user.id, session.user.activeCompanyId ?? session.user.companyId, "EDITOR");
   if ("response" in scope) return scope.response;
   try {
+    const idempotencyKey = request.headers.get("Idempotency-Key")?.trim();
+    if (!idempotencyKey || idempotencyKey.length > 200) return NextResponse.json({ error: "Idempotency-Key requerido" }, { status: 400 });
     const formData = await request.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     const category = categorySchema.parse(formData.get("category") ?? "OTHER");
     await validateDocumentFile(file);
-    const result = await createProjectDocumentAndVersion({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, storageKey: `review-documents/${scope.project.companyId}/${projectId}/${randomUUID()}`, file }, prisma as unknown as Parameters<typeof createProjectDocumentAndVersion>[1]);
+    const targetDocumentId = String(formData.get("documentId") ?? "");
+    const result = targetDocumentId ? await createDocumentVersion({ companyId: scope.project.companyId, projectId, projectDocumentId: targetDocumentId, storageKey: `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}`, file }, prisma as unknown as Parameters<typeof createDocumentVersion>[1]).then((version) => ({ document: { id: targetDocumentId }, version })) : await createProjectDocumentAndVersion({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, storageKey: `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}`, file }, prisma as unknown as Parameters<typeof createProjectDocumentAndVersion>[1]);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message ?? "Payload inválido" }, { status: 400 });

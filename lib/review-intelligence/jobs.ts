@@ -2,7 +2,7 @@ import type { ReviewRunStatus, ProgressJson, WarningJson } from "./types";
 
 type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
-export interface ReviewProgress { reviewRunId: string; status: ReviewRunStatus; progress: ProgressJson; warnings: WarningJson[]; }
+export interface ReviewProgress { reviewRunId: string; status: ReviewRunStatus; progress: ProgressJson & { metrics?: { coveragePercent: number; analyzedItems: number; failures: number; incompleteness: number; deltaVsPrevious: number | null } }; warnings: WarningJson[]; }
 export interface ReviewJobClient { reviewRun: { findUnique(args: { where: Where }): Promise<Row | null>; updateMany(args: { where: Where; data: Row }): Promise<{ count: number }>; findMany(args: { where: Where }): Promise<Row[]>; }; }
 
 export async function getReviewProgress(reviewRunId: string, companyId: string, client: ReviewJobClient, options: { staleAfterMs?: number } = {}): Promise<ReviewProgress> {
@@ -13,7 +13,8 @@ export async function getReviewProgress(reviewRunId: string, companyId: string, 
   const updatedAt = run.updatedAt instanceof Date ? run.updatedAt.getTime() : Date.now();
   if (["DRAFT", "QUEUED", "RUNNING"].includes(status) && Date.now() - updatedAt > staleAfterMs) { status = "STALE"; await client.reviewRun.updateMany({ where: { id: reviewRunId, companyId, status: { in: ["DRAFT", "QUEUED", "RUNNING"] } }, data: { status } }); }
   const value = (run.progressJson ?? {}) as Partial<ProgressJson>;
-  return { reviewRunId, status, progress: { stage: String(value.stage ?? "validating"), completed: Number(value.completed ?? 0), total: Number(value.total ?? 8), percent: Number(value.percent ?? 0) }, warnings: Array.isArray(run.warningsJson) ? run.warningsJson as WarningJson[] : [] };
+  const metrics = (value as Partial<ProgressJson> & { metrics?: { coveragePercent?: number; analyzedItems?: number; failures?: number; incompleteness?: number; deltaVsPrevious?: number | null } }).metrics;
+  return { reviewRunId, status, progress: { stage: String(value.stage ?? "validating"), completed: Number(value.completed ?? 0), total: Number(value.total ?? 8), percent: Number(value.percent ?? 0), metrics: metrics ? { coveragePercent: Number(metrics.coveragePercent ?? 0), analyzedItems: Number(metrics.analyzedItems ?? 0), failures: Number(metrics.failures ?? 0), incompleteness: Number(metrics.incompleteness ?? 0), deltaVsPrevious: metrics.deltaVsPrevious ?? null } : undefined }, warnings: Array.isArray(run.warningsJson) ? run.warningsJson as WarningJson[] : [] };
 }
 
 export async function requestReviewCancellation(reviewRunId: string, companyId: string, client: ReviewJobClient): Promise<void> {

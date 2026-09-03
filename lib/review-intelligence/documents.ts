@@ -40,7 +40,7 @@ export type DocumentClient = {
     update(args: { where: { id: string; companyId: string; projectId: string }; data: { currentVersionId: string } }): Promise<ProjectDocumentRecord>;
   };
   documentVersion: {
-    findFirst(args: { where: { companyId: string; projectId: string; projectDocumentId: string; sha256: string } }): Promise<DocumentVersionRecord | null>;
+    findFirst(args: { where: { companyId: string; projectId: string; projectDocumentId: string; sha256?: string; storageKey?: string } }): Promise<DocumentVersionRecord | null>;
     aggregate(args: { where: { companyId: string; projectId: string; projectDocumentId: string }; _max: { versionNumber: true } }): Promise<{ _max: { versionNumber: number | null } }>;
     create(args: { data: Record<string, unknown> }): Promise<DocumentVersionRecord>;
   };
@@ -56,6 +56,8 @@ export async function createProjectDocumentAndVersion(
   const validated = await validateDocumentFile(input.file);
   return client.$transaction(async (transaction) => {
     const document = await transaction.projectDocument.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, originalFileName: input.originalFileName } }) ?? await transaction.projectDocument.create({ data: { companyId: input.companyId, projectId: input.projectId, createdById: input.createdById, name: input.name, originalFileName: input.originalFileName, category: input.category ?? ReviewDocumentCategory.OTHER } });
+    const replay = await transaction.documentVersion.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, storageKey: input.storageKey } });
+    if (replay) return { document, version: replay };
     const existing = await transaction.documentVersion.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, sha256: validated.sha256 } });
     if (existing) return { document, version: existing };
     const aggregate = await transaction.documentVersion.aggregate({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id }, _max: { versionNumber: true } });

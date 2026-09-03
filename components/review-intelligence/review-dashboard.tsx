@@ -17,7 +17,7 @@ const stageLabels: Record<ReviewRunView["progress"]["stage"], string> = {
 export function ReviewDashboard({ run, findingCount, documentCount }: { run?: ReviewRunView; findingCount: number; documentCount: number }) {
   if (!run) {
     return (
-      <Card className="theme-surface-card">
+      <Card id="review-how-it-works" className="theme-surface-card">
         <CardContent className="flex min-h-48 flex-col items-center justify-center gap-3 p-6 text-center">
           <FileSearch className="h-8 w-8 text-[var(--app-primary-soft)]" aria-hidden="true" />
           <div>
@@ -51,7 +51,7 @@ export function ReviewDashboard({ run, findingCount, documentCount }: { run?: Re
           <Metric label="Hallazgos" value={`${findingCount} para revisar`} />
           <Metric label="Cobertura" value={run.metrics?.coveragePercent !== undefined ? `${run.metrics.coveragePercent}%` : "—"} />
           <Metric label="Partidas analizadas" value={run.metrics?.analyzedItems?.toString() ?? "—"} />
-          <Metric label="Fallos / incompletitud" value={run.metrics ? `${run.metrics.failedChecks ?? 0} / ${run.metrics.incompleteItems ?? 0}` : "—"} />
+          <Metric label="Fallos / incompletitud" value={run.metrics ? `${run.metrics.failedChecks ?? run.metrics.failures ?? 0} / ${run.metrics.incompleteItems ?? run.metrics.incompleteness ?? 0}` : "—"} />
         </div>
         <p className="text-sm text-[var(--app-text-muted)]">Delta vs ejecución anterior: {run.metrics?.deltaVsPrevious === undefined || run.metrics.deltaVsPrevious === null ? "—" : `${run.metrics.deltaVsPrevious > 0 ? "+" : ""}${run.metrics.deltaVsPrevious}`}</p>
         <div aria-label="Progreso por etapas" className="space-y-2">

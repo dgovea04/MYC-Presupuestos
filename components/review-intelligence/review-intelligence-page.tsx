@@ -56,6 +56,7 @@ export function ReviewIntelligencePage({ budgetId, projectId, initialRun, budget
   async function loadProgress(run: ReviewRunView) {
     const progress = parseProgress(await fetchJson<unknown>(`/api/review-runs/${encodeURIComponent(run.id)}`), run);
     setSelectedRun(progress);
+    setSelectedFinding((current) => current && progress.status === "STALE" ? { ...current, status: "STALE" } : current);
     setRuns((current) => current.map((item) => item.id === progress.id ? progress : item));
   }
 

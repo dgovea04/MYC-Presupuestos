@@ -12,6 +12,7 @@ const categoryLabels: Record<(typeof categories)[number], string> = { PLAN: "Pla
 export function DocumentManager({ projectId, documents, selectedDocumentIds = [], onSelectionChange, onChanged }: { projectId: string; documents: ReviewDocumentView[]; selectedDocumentIds?: string[]; onSelectionChange?: (ids: string[]) => void; onChanged: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const uploadKey = useRef<string | null>(null);
+  const targetDocumentId = useRef<string | null>(null);
   const [category, setCategory] = useState<(typeof categories)[number]>("OTHER");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,13 +20,13 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
   async function upload(file: File) {
     setUploading(true); setError(null);
     const formData = new FormData();
-    formData.set("file", file); formData.set("category", category); formData.set("name", file.name);
+    formData.set("file", file); formData.set("category", category); formData.set("name", file.name); if (targetDocumentId.current) formData.set("documentId", targetDocumentId.current);
     try {
       const key = uploadKey.current ?? (uploadKey.current = `review-upload-${crypto.randomUUID()}`);
       const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/review-documents`, { method: "POST", headers: { "Idempotency-Key": key }, body: formData });
       if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "No se pudo cargar el documento.");
       onChanged();
-      uploadKey.current = null;
+      uploadKey.current = null; targetDocumentId.current = null;
     } catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : "No se pudo cargar el documento."); }
     finally { setUploading(false); if (inputRef.current) inputRef.current.value = ""; }
   }
@@ -51,7 +52,7 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
       <CardContent className="space-y-3">
         {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p> : null}
         {documents.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--app-border)] px-4 py-8 text-center text-sm text-[var(--app-text-muted)]">Todavía no hay documentos asociados a este proyecto.</p> : null}
-        {documents.map((document) => <DocumentRow key={document.id} document={document} selected={selectedDocumentIds.includes(document.id)} onToggle={() => toggleDocument(document.id)} onClassified={onChanged} onReplace={() => inputRef.current?.click()} />)}
+        {documents.map((document) => <DocumentRow key={document.id} document={document} selected={selectedDocumentIds.includes(document.id)} onToggle={() => toggleDocument(document.id)} onClassified={onChanged} onReplace={() => { targetDocumentId.current = document.id; inputRef.current?.click(); }} />)}
       </CardContent>
     </Card>
   );

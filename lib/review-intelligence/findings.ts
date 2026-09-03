@@ -51,7 +51,7 @@ function serializeFinding(row: FindingRow): Record<string, unknown> {
   const evidence = row.evidence ? {
     id: row.evidence.id, documentVersionId: row.evidence.documentVersionId, evidenceType: row.evidence.evidenceType,
     originalText: row.evidence.originalText, normalizedText: row.evidence.normalizedText, value: decimal(row.evidence.value), location: row.evidence.locationJson,
-    sourceName: row.evidence.documentVersion.projectDocument.name || row.evidence.documentVersion.projectDocument.originalFileName, sourceVersion: row.evidence.documentVersion.versionNumber,
+    sourceName: row.evidence.documentVersion?.projectDocument?.name || row.evidence.documentVersion?.projectDocument?.originalFileName, sourceVersion: row.evidence.documentVersion?.versionNumber,
     unit: row.evidence.unit, extractionMethod: row.evidence.extractionMethod, confidence: row.evidence.confidence, sourceHash: row.evidence.sourceHash,
     viewUrl: `/api/review-evidence/${encodeURIComponent(row.evidence.id)}/view?token=${encodeURIComponent(temporaryToken(row.evidence.id, Date.now() + 5 * 60 * 1000))}`,
   } : null;
