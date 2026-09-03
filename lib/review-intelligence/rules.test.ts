@@ -5,6 +5,7 @@ import { evaluateFindingRules, type ReviewRuleInput } from "./rules";
 const baseInput = (): ReviewRuleInput => ({
   item: {
     id: "item-1",
+    description: "Concreto",
     quantity: new Decimal("10"),
     unit: "m3",
     unitPrice: new Decimal("25.50"),
@@ -81,5 +82,20 @@ describe("evaluateFindingRules", () => {
     const findings = evaluateFindingRules({ ...input, evidence: { ...input.evidence, unit: "m3", technicalSpecification: "Concréto f'c 210" } });
 
     expect(findings.some((finding) => finding.type === "TECHNICAL_SPEC_MISMATCH")).toBe(false);
+  });
+
+  it("detects a different budget item description in the primary document", () => {
+    const input = baseInput();
+    const findings = evaluateFindingRules({
+      ...input,
+      item: { ...input.item, description: "EXCAVACION EN EXPLANACIONES EN ROCA FIJA" },
+      evidence: { ...input.evidence, unit: "m3", technicalSpecification: input.item.technicalSpecification, description: "EXCAVACION EN EXPLANACIONES EN ROCA DESCONOCIDA" },
+    });
+
+    expect(findings.filter((finding) => finding.type === "TECHNICAL_SPEC_MISMATCH")).toHaveLength(1);
+    expect(findings.find((finding) => finding.type === "TECHNICAL_SPEC_MISMATCH")?.comparison?.details).toEqual({
+      budgetDescription: "EXCAVACION EN EXPLANACIONES EN ROCA FIJA",
+      documentDescription: "EXCAVACION EN EXPLANACIONES EN ROCA DESCONOCIDA",
+    });
   });
 });

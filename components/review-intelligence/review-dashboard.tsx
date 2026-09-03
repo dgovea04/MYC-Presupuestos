@@ -2,6 +2,7 @@ import { AlertTriangle, CircleDot, FileSearch, ShieldCheck } from "lucide-react"
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ReviewRunView } from "./types";
+import { reviewLabel, reviewStatusLabels } from "./labels";
 
 const stageLabels: Record<ReviewRunView["progress"]["stage"], string> = {
   validating: "Validando fuentes",
@@ -38,7 +39,7 @@ export function ReviewDashboard({ run }: { run?: ReviewRunView; findingCount: nu
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle>Resumen de la revisión</CardTitle>
-          <p className="mt-1 text-sm text-[var(--app-text-muted)]">Ejecución {run.id.slice(0, 8)} · {run.status}</p>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">Ejecución {run.id.slice(0, 8)} · {reviewLabel(reviewStatusLabels, run.status)}</p>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800">
           <CircleDot className="h-3.5 w-3.5" aria-hidden="true" />
@@ -46,7 +47,7 @@ export function ReviewDashboard({ run }: { run?: ReviewRunView; findingCount: nu
         </span>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Metric label="Progreso" value={`${run.progress.percent}%`} />
           <Metric label="Fuentes" value={run.metrics ? String(run.metrics.evidenceCount ?? 0) : "—"} />
           <Metric label="Hallazgos" value={run.metrics ? `${runFindingCount ?? 0} registrados` : "—"} />
@@ -77,5 +78,5 @@ export function ReviewDashboard({ run }: { run?: ReviewRunView; findingCount: nu
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-3"><p className="text-xs text-[var(--app-text-muted)]">{label}</p><p className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">{value}</p></div>;
+  return <div className="flex min-h-[5.5rem] flex-col justify-between rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-3"><p className="min-h-8 text-xs leading-4 text-[var(--app-text-muted)]">{label}</p><p className="mt-2 whitespace-nowrap text-base font-semibold tabular-nums text-[var(--app-text-strong)]">{value}</p></div>;
 }

@@ -143,8 +143,7 @@ function metadataFromRows(rows: string[][], minRow: number, maxRow: number, minC
 
 function extractPdfEvidence(text: string, page = 1): ExtractionItem[] {
   return text.split("\f").flatMap((pageText, pageIndex) => {
-    const candidates = [...pageText.matchAll(/\(([^()\r\n]{3,})\)/g)].map((match) => match[1] ?? "");
-    const lines = (candidates.length > 0 ? candidates : pageText.split(/\r?\n/)).map(normalizeText).filter((line) => line && !/^%PDF|^xref|^trailer|^startxref|^endobj|^endstream|^BT|^ET/i.test(line));
+    const lines = pageText.split(/\r?\n/).map(normalizeText).filter((line) => line && !/^%PDF|^xref|^trailer|^startxref|^endobj|^endstream|^BT|^ET/i.test(line)).flatMap(splitPdfEvidenceLines);
     return lines.map((line) => {
     const metadata = metadataFromPdfLine(line);
       const start = text.indexOf(line);
@@ -153,15 +152,23 @@ function extractPdfEvidence(text: string, page = 1): ExtractionItem[] {
   }).filter((item) => item.metadata !== undefined) as ExtractionItem[];
 }
 
+function splitPdfEvidenceLines(line: string): string[] {
+  const parts = line.split(/(?=\d+(?:\.\d+)+\s*[-:])/g).map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts.slice(1) : parts;
+}
+
 function metadataFromPdfLine(line: string): ExtractionItem["metadata"] {
   const codeMatch = line.match(/^([A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)+)\s+/);
   const number = line.match(/(-?\d+(?:[.,]\d+)?)\s*(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\b/i) ?? line.match(/(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\s+(-?\d+(?:[.,]\d+)?)/i);
   if (!codeMatch && !number) return undefined;
   const quantity = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[2] : number[1]) : undefined;
   const unit = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[1] : number[2]) : undefined;
+  const explicitUnit = line.match(/\b(?:unidad|und)\s*:\s*([A-Za-z0-9²]+)/i)?.[1];
   const specification = line.match(/(?:especificacion|especificaci\u00f3n|especificaciÃ³n|spec)\s*:\s*([^|]+)/i)?.[1]?.trim();
   const apuComponents = line.match(/(?:apu|componentes?)\s*:\s*([^|]+)/i)?.[1]?.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
-  return { code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, number?.index ?? line.length).replace(/\s*\|.*$/, "").trim() || undefined, quantity: quantity?.replace(",", "."), unit, spec: specification, technicalSpec: specification, technicalSpecification: specification, apuComponents, evidenceType: number ? "QUANTITY" : specification ? "TECHNICAL_SPECIFICATION" : apuComponents ? "APU_COMPONENT" : "OTHER" };
+  const unitIndex = line.search(/\b(?:unidad|und)\s*:/i);
+  const descriptionEnd = number?.index ?? (unitIndex >= 0 ? unitIndex : line.length);
+  return { code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, descriptionEnd).replace(/\s*\|.*$/, "").trim() || undefined, quantity: quantity?.replace(",", "."), unit: unit ?? explicitUnit, spec: specification, technicalSpec: specification, technicalSpecification: specification, apuComponents, evidenceType: number ? "QUANTITY" : explicitUnit ? "UNIT" : specification ? "TECHNICAL_SPECIFICATION" : apuComponents ? "APU_COMPONENT" : "OTHER" };
 }
 
 function normalizeCell(value: ExcelJS.CellValue): { text: string; hasHyperlink: boolean } {

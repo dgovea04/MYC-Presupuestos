@@ -72,6 +72,15 @@ describe("review document extractors", () => {
     expect(result.items[0]?.metadata).toMatchObject({ technicalSpecification: "f'c 210", apuComponents: ["cemento", "arena"] });
   });
 
+  it("splits concatenated PDF page text into coded partidas and reads explicit units", async () => {
+    const pdf = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<< /Type /Page >>\nendobj\n2 0 obj\n<</Subject (Encabezado 2.7 - CONFORMACION DE TERRAPLENES Unidad: M2 2.4 - EXCAVACION EN EXPLANACIONES EN ROCA DESCONOCIDA Unidad: M3)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "specifications.pdf", { type: "application/pdf" });
+    const result = await extractDocument({ file: pdf });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items.map((item) => item.metadata?.code)).toEqual(["2.7", "2.4"]);
+    expect(result.items[0]?.metadata).toMatchObject({ unit: "M2", evidenceType: "UNIT" });
+  });
+
   it("extracts every xlsx data row with technical and APU metadata as primary evidence", async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Metrados");

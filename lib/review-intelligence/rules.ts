@@ -6,6 +6,7 @@ import type { ConfidenceLevel, ReviewFindingType } from "./types";
 
 export interface ReviewRuleItem {
   id: string;
+  description: string;
   quantity?: Decimal;
   unit?: string;
   unitPrice?: Decimal;
@@ -16,6 +17,7 @@ export interface ReviewRuleItem {
 export interface ReviewRuleEvidence {
   id: string;
   primary: boolean;
+  description?: string;
   quantity?: Decimal;
   unit?: string;
   technicalSpecification?: string;
@@ -84,7 +86,20 @@ export function evaluateFindingRules(input: ReviewRuleInput): FindingCandidate[]
     }
   }
   if (enabled(input, "UNIT_INCONSISTENCY") && input.item.unit && input.evidence.unit && normalizeUnit(input.item.unit).canonical !== normalizeUnit(input.evidence.unit).canonical) findings.push(candidate(input, "UNIT_INCONSISTENCY", "La unidad documentada puede ser inconsistente con la partida.", "HIGH", { unit: input.item.unit, details: { documentUnit: input.evidence.unit } }));
-  if (enabled(input, "TECHNICAL_SPEC_MISMATCH") && input.item.technicalSpecification && input.evidence.technicalSpecification && comparableText(input.item.technicalSpecification) !== comparableText(input.evidence.technicalSpecification)) findings.push(candidate(input, "TECHNICAL_SPEC_MISMATCH", "La especificación técnica documentada puede ser incompatible.", "HIGH", { details: { budgetSpecification: input.item.technicalSpecification, documentSpecification: input.evidence.technicalSpecification } }));
+  const descriptionMismatch = input.item.description !== undefined && input.evidence.description !== undefined && comparableText(input.item.description) !== comparableText(input.evidence.description);
+  const technicalSpecificationMismatch = input.item.technicalSpecification !== undefined && input.evidence.technicalSpecification !== undefined && comparableText(input.item.technicalSpecification) !== comparableText(input.evidence.technicalSpecification);
+  if (enabled(input, "TECHNICAL_SPEC_MISMATCH") && (descriptionMismatch || technicalSpecificationMismatch)) {
+    const details: Record<string, string> = {};
+    if (descriptionMismatch) {
+      details.budgetDescription = input.item.description;
+      details.documentDescription = input.evidence.description!;
+    }
+    if (technicalSpecificationMismatch) {
+      details.budgetSpecification = input.item.technicalSpecification!;
+      details.documentSpecification = input.evidence.technicalSpecification!;
+    }
+    findings.push(candidate(input, "TECHNICAL_SPEC_MISMATCH", "La descripciÃ³n o especificaciÃ³n tÃ©cnica documentada puede ser incompatible.", "HIGH", { details }));
+  }
   if (enabled(input, "INCOMPLETE_APU") && input.item.technicalSpecification && input.evidence.technicalSpecification && input.item.apuComponents && input.evidence.apuComponents && input.item.apuComponents.some((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component)))) findings.push(candidate(input, "INCOMPLETE_APU", "El APU documentado puede estar incompleto.", "MEDIUM", { details: { missingComponents: input.item.apuComponents.filter((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component))).join(", ") } }));
   return findings;
 }

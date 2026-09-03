@@ -268,6 +268,21 @@ describe("runReviewJob", () => {
     expect(database.findings.every((finding) => finding.evidenceId === database.evidence[0]?.id)).toBe(true);
   });
 
+  it("evaluates quantity only against the best primary match for each item", async () => {
+    const database = client();
+    const result = await runReviewJob({
+      ...input(),
+      evidence: [
+        { ...input().evidence[0], code: "A-1", description: "Concreto", quantity: new Decimal("12") },
+        { ...input().evidence[0], id: "evidence-secondary", sourceHash: "source-secondary", code: undefined, description: "Concreto", quantity: new Decimal("15") },
+      ],
+    }, database);
+
+    expect(result.status).toBe("COMPLETED");
+    expect(database.findings).toHaveLength(1);
+    expect(database.findings[0]?.comparisonJson).toMatchObject({ documentValue: "12" });
+  });
+
   it("publishes UNIT_INCONSISTENCY from PDFKit evidence through matching", async () => {
     const document = new PDFDocument();
     const chunks: Buffer[] = [];
