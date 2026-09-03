@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     const result = targetDocumentId ? await createDocumentVersion({ companyId: scope.project.companyId, projectId, projectDocumentId: targetDocumentId, storageKey, file }, prisma as unknown as Parameters<typeof createDocumentVersion>[1]).then((version) => ({ document: { id: targetDocumentId }, version })) : await createProjectDocumentAndVersion({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, storageKey, file }, prisma as unknown as Parameters<typeof createProjectDocumentAndVersion>[1]);
     await extractAndPersistDocumentVersion({ file, version: result.version, companyId: scope.project.companyId, projectId }, prisma as unknown as Parameters<typeof extractAndPersistDocumentVersion>[1]);
-    await markStaleForChange({ companyId: scope.project.companyId, projectId, kind: "document-upload", id: result.version.id, payload: result.version.sha256 }, prisma);
+    await markStaleForChange({ companyId: scope.project.companyId, projectId, kind: "document-replacement", id: result.version.id, payload: result.version.sha256, actorUserId: session.user.id }, prisma);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message ?? "Payload inválido" }, { status: 400 });

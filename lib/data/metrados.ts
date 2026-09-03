@@ -1094,7 +1094,7 @@ export async function updateBudgetItemQuantityFromMetrados(input: {
   });
 
   const result = { itemId: item.id, budgetId: item.budgetId, projectId: item.budget.projectId, quantity: quantity.toNumber() };
-  await markStaleForChange({ companyId: item.budget.project.companyId, projectId: result.projectId, budgetId: result.budgetId, kind: "budget-item-quantity", id: result.itemId, payload: result.quantity }, prisma);
+  await markStaleForChange({ companyId: item.budget.project.companyId, projectId: result.projectId, budgetId: result.budgetId, kind: "budget-item-quantity", id: result.itemId, payload: result.quantity, actorUserId: input.userId }, prisma);
   return result;
 }
 

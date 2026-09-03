@@ -38,6 +38,7 @@ import { assertWithinPlanLimit } from "@/lib/billing/entitlements";
 import { requireProjectCapability } from "@/lib/workspace/project-access";
 import { getUserSettings } from "@/lib/data/settings";
 import { measureAsync } from "@/lib/platform/performance";
+import { getBudgetPatchStalenessChanges, markStaleForChange } from "@/lib/review-intelligence/staleness";
 
 export const BUDGETS_LIST_CACHE_TAG = "budgets-list";
 export const BUDGET_DETAIL_CACHE_TAG = "budget-detail";
@@ -1492,7 +1493,19 @@ export async function saveBudgetPatch(id: string, userId: string, patchInput: Bu
   }
 
   const nextBudget = applyBudgetPatch(existingBudget, patch);
-  return saveBudgetState(id, userId, nextBudget);
+  const savedBudget = await saveBudgetState(id, userId, nextBudget);
+  const companyId = existingBudget.project?.companyId;
+  if (companyId) {
+    const changes = getBudgetPatchStalenessChanges(patch);
+    if (changes.length === 0) {
+      await markStaleForChange({ companyId, projectId: existingBudget.projectId, budgetId: id, kind: "budget-item-description", id, payload: patch, actorUserId: userId }, prisma);
+    } else {
+      for (const change of changes) {
+        await markStaleForChange({ companyId, projectId: existingBudget.projectId, budgetId: id, ...change, actorUserId: userId }, prisma);
+      }
+    }
+  }
+  return savedBudget;
 }
 
 function getLevelDepth(levels: BudgetRecord["levels"], levelId: string) {

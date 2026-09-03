@@ -127,6 +127,12 @@ La aplicacion esta orientada a ingenieros, contratistas, oficinas tecnicas y emp
 - Administracion de cupos extra desde panel admin.
 - Validacion de ENCRYPTION_KEY al iniciar el servidor (warning si no esta configurada).
 
+### MC Revisión Inteligente V0
+
+- Revisión persistida de partidas contra evidencia PDF/XLSX, con matching determinístico, cinco tipos de hallazgo, prioridad y decisiones humanas auditables.
+- Corridas con estados, cancelación cooperativa e invalidación `STALE` ante cambios de partida, APU, fuente, reglas o tolerancia; los resultados previos no se eliminan.
+- Configuración, límites y exclusiones operativas: `docs/review-intelligence-operations.md`.
+
 ### Administracion y facturacion
 
 - Panel admin para usuarios, roles, estado, plan y cupos IA.

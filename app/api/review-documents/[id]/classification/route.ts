@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!project || project.companyId !== companyId) return NextResponse.json({ error: "El proyecto no pertenece a este workspace" }, { status: 403 });
     const parsed = bodySchema.parse(await request.json());
     const updated = await prisma.projectDocument.update({ where: { id_companyId_projectId: { id: document.id, companyId, projectId: document.projectId } }, data: { category: parsed.category }, select: { id: true, category: true, updatedAt: true } });
-    await markStaleForChange({ companyId, projectId: document.projectId, kind: "document-classification", id: document.id, payload: parsed.category }, prisma);
+    await markStaleForChange({ companyId, projectId: document.projectId, kind: "document-classification", id: document.id, payload: parsed.category, actorUserId: session.user.id }, prisma);
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Clasificación inválida" }, { status: 400 });
