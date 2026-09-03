@@ -153,7 +153,10 @@ async function resolveBudgetScope(input: { companyId: string; projectId: string;
   let current: string | undefined = input.budgetId;
   while (current && !ids.includes(current)) {
     ids.push(current);
-    const budget = await client.budget.findFirst({ where: { id: current, companyId: input.companyId, projectId: input.projectId }, select: { id: true, parentBudgetId: true } });
+    const budget = await client.budget.findFirst({
+      where: { id: current, projectId: input.projectId, project: { companyId: input.companyId } },
+      select: { id: true, parentBudgetId: true },
+    });
     current = typeof budget?.parentBudgetId === "string" ? budget.parentBudgetId : undefined;
   }
   return ids;

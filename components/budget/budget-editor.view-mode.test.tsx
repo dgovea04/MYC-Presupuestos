@@ -1213,6 +1213,43 @@ describe("BudgetEditor view mode integration", () => {
     }
   });
 
+  it("keeps the item actions menu open when clicking its three-dot trigger again", async () => {
+    const { getButtonByLabel, getByText, queryByText } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    const actionButton = getButtonByLabel("Abrir acciones de la partida");
+
+    await act(async () => {
+      actionButton.click();
+    });
+    expect(getByText("Duplicar partida")).toBeTruthy();
+
+    await act(async () => {
+      actionButton.click();
+    });
+    expect(queryByText("Duplicar partida")).toBeNull();
+  });
+
+  it("anchors the item actions menu to whichever partida trigger was clicked", async () => {
+    const budget = createBudgetWithDuplicateReviewSignals();
+    const { getByText } = await renderEditor({ budget });
+    const actionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-label="Abrir acciones de la partida"]'));
+
+    expect(actionButtons).toHaveLength(2);
+    await act(async () => {
+      actionButtons[0]?.click();
+    });
+    expect(getByText("Duplicar partida")).toBeTruthy();
+    expect(document.querySelector("[data-item-action-menu]")?.id).toBe("budget-item-menu-item-review-1");
+
+    await act(async () => {
+      actionButtons[1]?.click();
+    });
+    expect(document.querySelector("[data-item-action-menu]")?.id).toBe("budget-item-menu-item-review-2");
+    expect(actionButtons[1]?.getAttribute("data-item-action-trigger")).toBe("true");
+  });
+
   it("uses tighter excel mode density in budget cells and summary panel", async () => {
     const { getButtonByText, getEditorRoot, getHeaderByText, getSummaryPanel, getTableSurface } = await renderEditor({
       budget: createBudgetWithItem(),

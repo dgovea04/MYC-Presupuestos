@@ -111,6 +111,10 @@ describe("review staleness", () => {
     client.reviewRun.findMany.mockResolvedValue(client.runs);
     client.budget = { findFirst: vi.fn().mockResolvedValueOnce({ id: "child-budget", parentBudgetId: "parent-budget" }).mockResolvedValueOnce({ id: "parent-budget", parentBudgetId: null }) };
     await expect(markStaleForChange({ companyId: "company-1", projectId: "project-1", budgetId: "child-budget", kind: "budget-item-quantity", id: "child-item", payload: { after: "12" } }, client)).resolves.toBe(3);
+    expect(client.budget.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: "child-budget", projectId: "project-1", project: { companyId: "company-1" } },
+      select: { id: true, parentBudgetId: true },
+    });
     expect(client.reviewRun.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ budgetId: { in: ["child-budget", "parent-budget"] } }) }));
   });
 });

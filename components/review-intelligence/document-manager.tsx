@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { AlertTriangle, FileSpreadsheet, FileText, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import type { ReviewDocumentView } from "./types";
 
 const categories = ["PLAN", "TECHNICAL_SPECIFICATION", "QUANTITY_TAKEOFF", "BUDGET", "APU", "OTHER"] as const;
@@ -42,9 +43,9 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
         <div><CardTitle>Documentos fuente</CardTitle><p className="mt-1 text-sm text-[var(--app-text-muted)]">PDF/XLSX versionados, sin ejecutar macros, scripts ni enlaces embebidos.</p></div>
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="review-document-category" className="sr-only">Categoría del documento</label>
-          <select id="review-document-category" value={category} onChange={(event) => setCategory(event.target.value as (typeof categories)[number])} className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text-strong)] focus:outline-none focus:ring-2 focus:ring-sky-500">
+          <Select id="review-document-category" aria-label="Categoría del documento" value={category} onChange={(event) => setCategory(event.target.value as (typeof categories)[number])}>
             {categories.map((value) => <option key={value} value={value}>{categoryLabels[value]}</option>)}
-          </select>
+          </Select>
           <input ref={inputRef} type="file" accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" aria-label="Archivo PDF o XLSX" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
           <Button type="button" onClick={() => inputRef.current?.click()} loading={uploading} aria-label="Cargar documento PDF o XLSX"><Upload className="h-4 w-4" aria-hidden="true" />Cargar documento</Button>
         </div>

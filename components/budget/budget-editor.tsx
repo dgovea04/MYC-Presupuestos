@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, BookOpenCheck, BotMessageSquare, Check, ChevronLeft, ChevronRight, ClipboardCheck, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Ruler, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
@@ -2558,16 +2559,18 @@ export function BudgetEditor({
       ) : null}
 
       {itemActionMenu ? (
-        <div
+        typeof document !== "undefined"
+          ? createPortal(
+              <div
           ref={itemActionMenuRef}
           id={`budget-item-menu-${itemActionMenu.rowId}`}
           data-item-action-menu
           role="menu"
           aria-label="Acciones de la partida"
-          className="fixed z-[92] w-48 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
+          className="absolute z-[92] w-48 overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-2xl"
           style={{
-            top: itemActionMenu.top,
-            left: itemActionMenu.left,
+            top: itemActionMenu.top + window.scrollY,
+            left: itemActionMenu.left + window.scrollX,
           }}
         >
           <LevelActionMenuButton
@@ -2654,7 +2657,10 @@ export function BudgetEditor({
               closeItemActionMenu(true);
             }}
           />
-        </div>
+              </div>,
+              document.body,
+            )
+          : null
       ) : null}
 
       {headerActionMenu ? (
@@ -2993,6 +2999,7 @@ function IconButton({
   onClick,
   className,
   dataActionTrigger = false,
+  dataItemActionTrigger = false,
   dataHeaderActionTrigger = false,
   ariaExpanded,
   ariaControls,
@@ -3002,6 +3009,7 @@ function IconButton({
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
   className?: string;
   dataActionTrigger?: boolean;
+  dataItemActionTrigger?: boolean;
   dataHeaderActionTrigger?: boolean;
   ariaExpanded?: boolean;
   ariaControls?: string;
@@ -3018,7 +3026,11 @@ function IconButton({
       aria-expanded={ariaExpanded}
       aria-controls={ariaControls}
       data-level-action-trigger={dataActionTrigger ? "true" : undefined}
+      data-item-action-trigger={dataItemActionTrigger ? "true" : undefined}
       data-header-action-trigger={dataHeaderActionTrigger ? "true" : undefined}
+      onMouseDown={(event) => {
+        if (dataActionTrigger || dataItemActionTrigger || dataHeaderActionTrigger) event.stopPropagation();
+      }}
       className={cn("h-8 w-8 rounded-lg px-0 text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2", className)}
     >
       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0">
@@ -4761,7 +4773,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             <IconButton
               label="Abrir acciones de la partida"
               onClick={(event) => onToggleItemActionMenu(row.item.id, event.currentTarget)}
-              dataActionTrigger
+              dataItemActionTrigger
               ariaExpanded={isActionOpen}
               ariaControls={isActionOpen ? `budget-item-menu-${row.item.id}` : undefined}
             >
