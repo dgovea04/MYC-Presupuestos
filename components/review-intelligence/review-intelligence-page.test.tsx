@@ -34,6 +34,16 @@ describe("ReviewIntelligencePage", () => {
     expect(screen.getByText(/humana/i)).toBeTruthy();
     expect(screen.getByText(/Sin mutaci.*autom.*tica/i)).toBeTruthy();
   });
+
+  it("shows lifecycle status and editor action while keeping the action hidden for a viewer", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ documents: [], runs: [], findings: [], page: 1, pageSize: 25, hasNextPage: false })));
+    const completed: ReviewRunView = { ...runningRun, status: "COMPLETED", updatedAt: "2026-09-03T12:00:00.000Z" };
+    const { rerender } = render(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" initialRun={completed} canResolve />);
+    expect((await screen.findByTestId("review-lifecycle-status")).textContent).toBe("COMPLETED");
+    expect(screen.getByRole("button", { name: "Pasar a revisión" })).toBeTruthy();
+    rerender(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" initialRun={completed} canResolve={false} />);
+    expect(screen.queryByRole("button", { name: "Pasar a revisión" })).toBeNull();
+  });
 });
 
 describe("ReviewDashboard", () => {

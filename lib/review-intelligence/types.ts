@@ -5,6 +5,8 @@ export const reviewRunStatuses = [
   "CANCEL_REQUESTED",
   "COMPLETED",
   "COMPLETED_WITH_WARNINGS",
+  "UNDER_REVIEW",
+  "REVIEWED",
   "FAILED",
   "CANCELLED",
   "STALE",
