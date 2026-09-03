@@ -98,4 +98,12 @@ describe("review documents API", () => {
     expect(response.status).toBe(400);
     expect(mocks.createProjectDocument).not.toHaveBeenCalled();
   });
+
+  it("returns 409 when the persisted upload key replays a different payload", async () => {
+    mocks.createProjectDocumentAndVersion.mockRejectedValue(new Error("Idempotency key conflict: payload hash differs."));
+    const form = new FormData();
+    form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
+    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-conflict" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
+    expect(response.status).toBe(409);
+  });
 });

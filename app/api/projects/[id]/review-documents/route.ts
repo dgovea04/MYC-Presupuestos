@@ -59,6 +59,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message ?? "Payload inválido" }, { status: 400 });
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo cargar el documento" }, { status: 400 });
+    const message = error instanceof Error ? error.message : "No se pudo cargar el documento";
+    return NextResponse.json({ error: message }, { status: /idempotency key conflict/i.test(message) ? 409 : 400 });
   }
 }

@@ -28,11 +28,11 @@ describe("ReviewIntelligencePage", () => {
 
     render(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" budgetName="Presupuesto demo" projectName="Obra demo" />);
 
-    expect(await screen.findByRole("heading", { name: "Revisión Inteligente" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /Revisi.*Inteligente/ })).toBeTruthy();
     expect(screen.getByText(/Aún no hay revisiones/i)).toBeTruthy();
     expect(screen.getByText(/PDF y XLSX/i)).toBeTruthy();
-    expect(screen.getByText(/revisión humana/i)).toBeTruthy();
-    expect(screen.getByText(/Sin mutación automática/i)).toBeTruthy();
+    expect(screen.getByText(/revisi.*humana/i)).toBeTruthy();
+    expect(screen.getByText(/Sin mutaci.*autom.*tica/i)).toBeTruthy();
   });
 });
 

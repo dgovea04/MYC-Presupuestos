@@ -26,4 +26,16 @@ describe("review jobs", () => {
     expect(database.runs[0]).toMatchObject({ status: "CANCELLED" });
     await expect(requestReviewCancellation("run-1", "other-company", database)).rejects.toThrow("not found");
   });
+
+  it("calculates persisted metrics only from the run's document versions and descendants", async () => {
+    const database = jobClient();
+    database.budget = { findMany: async () => [{ id: "budget-1", parentBudgetId: null }, { id: "budget-child", parentBudgetId: "budget-1" }, { id: "other", parentBudgetId: null }] };
+    database.budgetItem = { findMany: async () => [{ id: "item-1", budgetId: "budget-1" }, { id: "item-2", budgetId: "budget-child" }, { id: "item-other", budgetId: "other" }] };
+    database.reviewRunDocumentVersion = { findMany: async ({ where }) => where.reviewRunId === "run-1" ? [{ documentVersionId: "version-in-scope" }] : [] };
+    database.reviewEvidence = { findMany: async ({ where }) => where.documentVersionId.in.includes("version-in-scope") ? [{ id: "evidence-1", documentVersionId: "version-in-scope" }] : [] };
+    database.entityLink = { findMany: async () => [{ budgetItemId: "item-1", evidenceId: "evidence-1" }] };
+    database.reviewFinding = { findMany: async () => [{ budgetItemId: "item-1", status: "PENDING", findingType: "QUANTITY_MISMATCH" }, { budgetItemId: "item-2", status: "RESOLVED", findingType: "UNIT_INCONSISTENCY" }] };
+    const progress = await getReviewProgress("run-1", "company-1", database);
+    expect(progress.progress.metrics).toMatchObject({ analyzedItems: 2, evidenceCount: 1, linkedEvidenceCount: 1, coveragePercent: 100 });
+  });
 });

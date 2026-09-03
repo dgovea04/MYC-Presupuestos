@@ -57,7 +57,10 @@ export async function createProjectDocumentAndVersion(
   return client.$transaction(async (transaction) => {
     const document = await transaction.projectDocument.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, originalFileName: input.originalFileName } }) ?? await transaction.projectDocument.create({ data: { companyId: input.companyId, projectId: input.projectId, createdById: input.createdById, name: input.name, originalFileName: input.originalFileName, category: input.category ?? ReviewDocumentCategory.OTHER } });
     const replay = await transaction.documentVersion.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, storageKey: input.storageKey } });
-    if (replay) return { document, version: replay };
+    if (replay) {
+      if (replay.sha256 !== validated.sha256) throw new Error("Idempotency key conflict: payload hash differs.");
+      return { document, version: replay };
+    }
     const existing = await transaction.documentVersion.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, sha256: validated.sha256 } });
     if (existing) return { document, version: existing };
     const aggregate = await transaction.documentVersion.aggregate({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id }, _max: { versionNumber: true } });
