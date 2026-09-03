@@ -1799,6 +1799,7 @@ model BudgetItem {
   id                           String                        @id @default(cuid())
   budgetId                     String
   levelId                      String?
+  discipline                   String?
   code                         String
   description                  String
   unit                         String
@@ -3184,6 +3185,7 @@ model ReviewFinding {
   budgetItemBudgetId      String?
   entityLinkId            String?
   evidenceId              String
+  discipline              String?
   findingType             ReviewFindingType
   status                  FindingStatus      @default(PENDING)
   severity                String
@@ -3224,6 +3226,9 @@ model FindingDecision {
   resolution        FindingResolution
   note              String?         @db.Text
   expectedUpdatedAt DateTime
+  previousStatus    FindingStatus?
+  newStatus         FindingStatus?
+  correctionVersionId String?
   createdAt         DateTime        @default(now())
   finding           ReviewFinding  @relation(fields: [findingId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
   user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)

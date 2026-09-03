@@ -16,9 +16,9 @@ describe("review evidence view API", () => {
   });
 
   it("returns only an authorized temporary evidence view", async () => {
-    const response = await GET(new Request("http://localhost/api/review-evidence/evidence-1/view?token=temp"), { params: Promise.resolve({ id: "evidence-1" }) });
+    const response = await GET(new Request("http://localhost/api/review-evidence/evidence-1/view?token=temp", { headers: { "X-Correlation-Id": "corr-view" } }), { params: Promise.resolve({ id: "evidence-1" }) });
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual(expect.objectContaining({ evidenceId: "evidence-1", expiresAt: expect.any(String) }));
-    expect(mocks.viewReviewEvidence).toHaveBeenCalledWith(expect.objectContaining({ evidenceId: "evidence-1", companyId: "company-1", userId: "user-1", token: "temp" }));
+    expect(mocks.viewReviewEvidence).toHaveBeenCalledWith(expect.objectContaining({ evidenceId: "evidence-1", companyId: "company-1", userId: "user-1", token: "temp", correlationId: "corr-view", role: "VIEWER" }));
   });
 });

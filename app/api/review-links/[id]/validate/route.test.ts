@@ -21,8 +21,8 @@ describe("review link validation API", () => {
   });
 
   it("requires an explicit human validation status", async () => {
-    const response = await POST(new Request("http://localhost/api/review-links/link-1/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ validationStatus: "CONFIRMED" }) }), { params: Promise.resolve({ id: "link-1" }) });
+    const response = await POST(new Request("http://localhost/api/review-links/link-1/validate", { method: "POST", headers: { "Content-Type": "application/json", "X-Correlation-Id": "corr-link" }, body: JSON.stringify({ validationStatus: "CONFIRMED" }) }), { params: Promise.resolve({ id: "link-1" }) });
     expect(response.status).toBe(200);
-    expect(mocks.validateReviewLink).toHaveBeenCalledWith({ linkId: "link-1", companyId: "company-1", userId: "user-1", validationStatus: "CONFIRMED" });
+    expect(mocks.validateReviewLink).toHaveBeenCalledWith({ linkId: "link-1", companyId: "company-1", userId: "user-1", validationStatus: "CONFIRMED", correlationId: "corr-link", role: "EDITOR" });
   });
 });
