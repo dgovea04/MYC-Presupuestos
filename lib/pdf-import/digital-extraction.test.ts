@@ -19,6 +19,12 @@ describe("digital PDF extraction", () => {
     ]);
   });
 
+  it("reconstructs TJ glyph chunks without inserting spaces inside words", async () => {
+    const body = "%PDF-1.4\n1 0 obj\n<< /Type /Page >>\nendobj\n2 0 obj\n<< /Length 62 >>\nstream\nBT [(CON) 18 (CRE) 12 (TO) -260 ( m3)] TJ ET\nendstream\nendobj\ntrailer\n<<>>\n%%EOF";
+    const result = await extractDigitalPdf(new TextEncoder().encode(body));
+    expect(result.pages[0]?.text).toBe("CONCRETO m3");
+  });
+
   it("extracts text and provenance from a PDFKit-generated digital PDF", async () => {
     const document = new PDFDocument({ autoFirstPage: true });
     const chunks: Buffer[] = [];
@@ -29,7 +35,7 @@ describe("digital PDF extraction", () => {
     document.end();
     const result = await extractDigitalPdf(await finished);
     expect(result.pageCount).toBe(2);
-    expect(result.pages.every((page) => page.text.length > 0)).toBe(true);
+    expect(result.pages.map((page) => page.text)).toEqual(["01.01 Concreto 12 m3", "01.02 Acero 100 kg"]);
     expect(result.pages.map((page) => page.page)).toEqual([1, 2]);
     const structured = await extractDocument({ file: new File([await finished], "pdfkit.pdf", { type: "application/pdf" }) });
     expect(structured.pageCount).toBe(2);

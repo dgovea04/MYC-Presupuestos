@@ -43,16 +43,32 @@ function extractStreams(bytes: Uint8Array): string[] {
 
 function extractTextOperators(stream: string): string {
   const values: string[] = [];
+  for (const match of stream.matchAll(/\[([\s\S]*?)\]\s*TJ/g)) values.push(decodeTextArray(match[1] ?? ""));
   for (const match of stream.matchAll(/\(([^()]*(?:\\.[^()]*)*)\)\s*T[jJ]/g)) values.push(unescapePdfString(match[1] ?? ""));
-  for (const match of stream.matchAll(/\[([\s\S]*?)\]\s*TJ/g)) {
-    for (const literal of (match[1] ?? "").matchAll(/\(([^()]*(?:\\.[^()]*)*)\)/g)) values.push(unescapePdfString(literal[1] ?? ""));
-    for (const hex of (match[1] ?? "").matchAll(/<([0-9a-f]+)>/gi)) values.push(decodeHexString(hex[1] ?? ""));
-  }
   if (values.length === 0) for (const match of stream.matchAll(/\(([^()]*(?:\\.[^()]*)*)\)/g)) values.push(unescapePdfString(match[1] ?? ""));
   for (const match of stream.matchAll(/<([0-9a-f]{4,})>\s*T[jJ]/gi)) {
     values.push(decodeHexString(match[1] ?? ""));
   }
   return values.join(" ");
+}
+
+function decodeTextArray(value: string): string {
+  let output = "";
+  let insertSpace = false;
+  const tokenPattern = /\(([^()]*(?:\\.[^()]*)*)\)|<([0-9a-f]+)>|(-?\d+(?:\.\d+)?)/gi;
+  for (const token of value.matchAll(tokenPattern)) {
+    const literal = token[1];
+    const hex = token[2];
+    if (literal !== undefined || hex !== undefined) {
+      const decoded = literal !== undefined ? unescapePdfString(literal) : decodeHexString(hex ?? "");
+      if (insertSpace && output.length > 0 && !/\s$/.test(output)) output += " ";
+      output += decoded;
+      insertSpace = false;
+    } else if (Number(token[3] ?? 0) <= -100) {
+      insertSpace = true;
+    }
+  }
+  return output;
 }
 
 function decodeHexString(value: string): string {

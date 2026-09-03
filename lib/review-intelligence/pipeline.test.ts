@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
+import PDFDocument from "pdfkit";
+import { extractDocument } from "./extractors";
 import { runReviewJob, type ReviewPipelineClient, type RunReviewJobInput } from "./pipeline";
 
 function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>; evidence: Array<Record<string, unknown>>; links: Array<Record<string, unknown>>; findings: Array<Record<string, unknown>>; events: Array<Record<string, unknown>>; beforeTransaction?: (count: number) => void } {
@@ -258,5 +260,26 @@ describe("runReviewJob", () => {
     expect(database.findings).toHaveLength(2);
     expect(database.findings.every((finding) => finding.findingType === "MISSING_DOCUMENTATION")).toBe(true);
     expect(database.findings.every((finding) => finding.evidenceId === database.evidence[0]?.id)).toBe(true);
+  });
+
+  it("publishes UNIT_INCONSISTENCY from PDFKit evidence through matching", async () => {
+    const document = new PDFDocument();
+    const chunks: Buffer[] = [];
+    document.on("data", (chunk: Buffer) => chunks.push(chunk));
+    const finished = new Promise<Buffer>((resolve) => document.on("end", () => resolve(Buffer.concat(chunks))));
+    document.text("A-1 CONCRETO 12 kg");
+    document.end();
+    const extracted = await extractDocument({ file: new File([await finished], "unit.pdf", { type: "application/pdf" }) });
+    const item = extracted.items[0];
+    if (!item?.metadata?.code || !item.metadata.description || !item.metadata.quantity || !item.metadata.unit) throw new Error("PDFKit fixture did not produce structured evidence");
+    const database = client();
+    const result = await runReviewJob({
+      ...input(),
+      configuration: { ...input().configuration, findingTypes: ["UNIT_INCONSISTENCY"] },
+      budgetItems: [{ ...input().budgetItems[0], code: item.metadata.code, description: item.metadata.description, unit: "m3", quantity: new Decimal(item.metadata.quantity) }],
+      evidence: [{ ...input().evidence[0], originalText: item.content, normalizedText: item.content, code: item.metadata.code, description: item.metadata.description, unit: item.metadata.unit, quantity: new Decimal(item.metadata.quantity), locationJson: { page: item.location?.page } }],
+    }, database);
+    expect(result.status).toBe("COMPLETED");
+    expect(database.findings).toEqual(expect.arrayContaining([expect.objectContaining({ findingType: "UNIT_INCONSISTENCY" })]));
   });
 });
