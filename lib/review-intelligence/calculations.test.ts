@@ -30,6 +30,12 @@ describe("calculateQuantityDifference", () => {
     expect(result.exceedsTolerance).toBe(false);
   });
 
+  it("applies relative configured tolerance to the budget value", () => {
+    const result = calculateQuantityDifference({ documentValue: new Decimal("10.8"), budgetValue: new Decimal("10"), tolerance: new Decimal("1") });
+    expect(result.tolerance.toFixed(2)).toBe("0.10");
+    expect(result.exceedsTolerance).toBe(true);
+  });
+
   it("calculates signed impact, including a negative document difference", () => {
     const result = calculateQuantityDifference({
       documentValue: new Decimal("8"),

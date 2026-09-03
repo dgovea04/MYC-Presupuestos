@@ -57,5 +57,5 @@ async function persistedMetricsWithoutDelta(run: Row, companyId: string, client:
 export async function requestReviewCancellation(reviewRunId: string, companyId: string, client: ReviewJobClient): Promise<void> {
   const run = await client.reviewRun.findUnique({ where: { id: reviewRunId, companyId } });
   if (!run) throw new Error("Review run not found.");
-  if (["DRAFT", "QUEUED", "RUNNING"].includes(String(run.status))) await client.reviewRun.updateMany({ where: { id: reviewRunId, companyId, status: { in: ["DRAFT", "QUEUED", "RUNNING"] } }, data: { status: "CANCELLED", finishedAt: new Date() } });
+  if (["DRAFT", "QUEUED", "RUNNING"].includes(String(run.status))) await client.reviewRun.updateMany({ where: { id: reviewRunId, companyId, status: { in: ["DRAFT", "QUEUED", "RUNNING"] } }, data: { status: "CANCEL_REQUESTED" } });
 }

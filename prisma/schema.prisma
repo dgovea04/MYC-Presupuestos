@@ -180,6 +180,7 @@ enum ReviewRunStatus {
   DRAFT
   QUEUED
   RUNNING
+  CANCEL_REQUESTED
   COMPLETED
   COMPLETED_WITH_WARNINGS
   FAILED
@@ -3085,6 +3086,7 @@ model ReviewEvidence {
   extractionMethod  String
   confidence        ConfidenceLevel
   sourceHash        String
+  metadataJson      Json?
   createdAt         DateTime        @default(now())
   company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project           Project         @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)

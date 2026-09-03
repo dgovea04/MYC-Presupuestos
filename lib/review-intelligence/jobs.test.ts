@@ -23,7 +23,7 @@ describe("review jobs", () => {
   it("requests cancellation only for a tenant-owned active run", async () => {
     const database = jobClient();
     await requestReviewCancellation("run-1", "company-1", database);
-    expect(database.runs[0]).toMatchObject({ status: "CANCELLED" });
+    expect(database.runs[0]).toMatchObject({ status: "CANCEL_REQUESTED" });
     await expect(requestReviewCancellation("run-1", "other-company", database)).rejects.toThrow("not found");
   });
 
@@ -36,6 +36,6 @@ describe("review jobs", () => {
     database.entityLink = { findMany: async () => [{ budgetItemId: "item-1", evidenceId: "evidence-1" }] };
     database.reviewFinding = { findMany: async () => [{ budgetItemId: "item-1", status: "PENDING", findingType: "QUANTITY_MISMATCH" }, { budgetItemId: "item-2", status: "RESOLVED", findingType: "UNIT_INCONSISTENCY" }] };
     const progress = await getReviewProgress("run-1", "company-1", database);
-    expect(progress.progress.metrics).toMatchObject({ analyzedItems: 2, evidenceCount: 1, linkedEvidenceCount: 1, coveragePercent: 100 });
+    expect(progress.progress.metrics).toMatchObject({ analyzedItems: 2, evidenceCount: 1, linkedEvidenceCount: 1, coveragePercent: 50 });
   });
 });

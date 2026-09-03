@@ -7,6 +7,8 @@ import { BUDGETS_LIST_CACHE_TAG, BUDGET_DETAIL_CACHE_TAG, deleteBudget, getBudge
 import { getProjectOverviewCacheTag, PROJECT_OVERVIEW_CACHE_TAG } from "@/lib/data/projects";
 import { recordBudgetChangeEvents } from "@/lib/collaboration/audit";
 import type { CollaborationEntityType } from "@/types/collaboration";
+import { prisma } from "@/lib/db/prisma";
+import { markStaleForChange } from "@/lib/review-intelligence/stale";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -28,6 +30,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const budget = await saveBudgetPatch(id, session.user.id, body);
     await safelyTrackApuCreated(body, id, session.user.id, session.user.activeCompanyId ?? session.user.companyId);
+    const companyId = session.user.activeCompanyId ?? session.user.companyId;
+    if (companyId) await markStaleForChange({ companyId, projectId: budget.projectId, budgetId: id, kind: "budget-item-or-rule", id, payload: body }, prisma);
     
     await recordActivityEvent({
       userId: session.user.id,

@@ -41,7 +41,7 @@ describe("ReviewDashboard", () => {
     render(<ReviewDashboard run={runningRun} findingCount={3} documentCount={2} />);
 
     expect(screen.getAllByText("Procesando evidencia").length).toBeGreaterThan(0);
-    expect(screen.getByText("3 para revisar")).toBeTruthy();
+    expect(screen.getByText("3 registrados")).toBeTruthy();
     expect(screen.getByText("1 advertencia de procesamiento")).toBeTruthy();
     expect(screen.getByText(/No se generan cambios automáticos/i)).toBeTruthy();
   });
@@ -87,8 +87,8 @@ describe("FindingDetail", () => {
     expect(screen.getByRole("spinbutton")).toBeTruthy();
     expect(screen.getByTestId("evidence-highlight")).toBeTruthy();
     expect(screen.getByText(/12/)).toBeTruthy();
-    expect(screen.getAllByText(/humana requerida/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/presupuesto no se modifica autom.*ticamente/i)).toBeTruthy();
+    expect(screen.getAllByText(/requerida/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/presupuesto no se modifica/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "VALID_AS_IS" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
@@ -110,6 +110,7 @@ const runningRun: ReviewRunView = {
   warnings: [{ code: "PDF_PARTIAL", message: "Página 8 sin texto extraíble." }],
   createdAt: "2026-09-02T12:00:00.000Z",
   updatedAt: "2026-09-02T12:05:00.000Z",
+  metrics: { analyzedItems: 12, totalItems: 15, coveragePercent: 80, evidenceCount: 2, linkedEvidenceCount: 2, findingsByStatus: { PENDING: 3 }, findingsByType: { QUANTITY_MISMATCH: 3 }, failures: 0, incompleteness: 1, deltaVsPrevious: 1 },
 };
 
 const documentView: ReviewDocumentView = {

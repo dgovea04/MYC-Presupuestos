@@ -14,7 +14,7 @@ const stageLabels: Record<ReviewRunView["progress"]["stage"], string> = {
   completed: "Revisión completada",
 };
 
-export function ReviewDashboard({ run, findingCount, documentCount }: { run?: ReviewRunView; findingCount: number; documentCount: number }) {
+export function ReviewDashboard({ run }: { run?: ReviewRunView; findingCount: number; documentCount: number }) {
   if (!run) {
     return (
       <Card id="review-how-it-works" className="theme-surface-card">
@@ -31,6 +31,7 @@ export function ReviewDashboard({ run, findingCount, documentCount }: { run?: Re
   }
 
   const warningLabel = run.warnings.length === 1 ? "1 advertencia de procesamiento" : `${run.warnings.length} advertencias de procesamiento`;
+  const runFindingCount = run.metrics?.findingsByStatus ? Object.values(run.metrics.findingsByStatus).reduce((total, count) => total + count, 0) : undefined;
 
   return (
     <Card className="theme-surface-card" data-testid="review-dashboard">
@@ -47,8 +48,8 @@ export function ReviewDashboard({ run, findingCount, documentCount }: { run?: Re
       <CardContent className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Metric label="Progreso" value={`${run.progress.percent}%`} />
-          <Metric label="Fuentes" value={String(documentCount)} />
-          <Metric label="Hallazgos" value={`${findingCount} para revisar`} />
+          <Metric label="Fuentes" value={run.metrics ? String(run.metrics.evidenceCount ?? 0) : "—"} />
+          <Metric label="Hallazgos" value={run.metrics ? `${runFindingCount ?? 0} registrados` : "—"} />
           <Metric label="Cobertura" value={run.metrics?.coveragePercent !== undefined ? `${run.metrics.coveragePercent}%` : "—"} />
           <Metric label="Partidas analizadas" value={run.metrics?.analyzedItems?.toString() ?? "—"} />
           <Metric label="Fallos / incompletitud" value={run.metrics ? `${run.metrics.failedChecks ?? run.metrics.failures ?? 0} / ${run.metrics.incompleteItems ?? run.metrics.incompleteness ?? 0}` : "—"} />

@@ -19,8 +19,9 @@ export function calculateQuantityDifference(input: {
   tolerance: Decimal;
 }): QuantityComparison {
   const difference = input.documentValue.minus(input.budgetValue);
+  const configuredRelative = input.budgetValue.abs().times(input.tolerance.abs()).dividedBy(100);
   const onePercent = input.budgetValue.abs().times(new Decimal("0.01"));
-  const tolerance = Decimal.max(input.tolerance.abs(), onePercent, MINIMUM_ABSOLUTE_TOLERANCE);
+  const tolerance = Decimal.max(configuredRelative, onePercent, MINIMUM_ABSOLUTE_TOLERANCE);
   const percentage = input.budgetValue.isZero()
     ? null
     : difference.abs().dividedBy(input.budgetValue.abs()).times(new Decimal(100));

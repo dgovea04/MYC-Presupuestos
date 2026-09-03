@@ -12,6 +12,6 @@ describe("calculateReviewRunMetrics", () => {
       warnings: [{ code: "EXTRACTION_PARTIAL", message: "incomplete page" }],
       previous: { analyzedItems: 1, coveragePercent: 25, failures: 0, incompleteness: 0, deltaVsPrevious: null },
     });
-    expect(result).toEqual({ analyzedItems: 3, totalItems: 3, coveragePercent: 100, evidenceCount: 2, linkedEvidenceCount: 1, findingsByStatus: { PENDING: 1, RESOLVED: 1 }, findingsByType: { QUANTITY_MISMATCH: 1, INCOMPLETE_APU: 1 }, failures: 0, incompleteness: 2, deltaVsPrevious: 2 });
+    expect(result).toEqual({ analyzedItems: 3, totalItems: 3, coveragePercent: 33, evidenceCount: 2, linkedEvidenceCount: 1, findingsByStatus: { PENDING: 1, RESOLVED: 1 }, findingsByType: { QUANTITY_MISMATCH: 1, INCOMPLETE_APU: 1 }, failures: 0, incompleteness: 2, deltaVsPrevious: 2 });
   });
 });

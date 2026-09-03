@@ -24,7 +24,9 @@ export interface ReviewRunMetricInput {
 export function calculateReviewRunMetrics(input: ReviewRunMetricInput): ReviewRunMetrics {
   const items = input.budgetItems.filter((item) => input.budgetIds.includes(item.budgetId));
   const itemIds = new Set(items.map((item) => item.id));
-  const linkedEvidence = new Set(input.links.filter((link) => itemIds.has(link.budgetItemId)).map((link) => link.evidenceId));
+  const scopedLinks = input.links.filter((link) => itemIds.has(link.budgetItemId));
+  const linkedEvidence = new Set(scopedLinks.map((link) => link.evidenceId));
+  const coveredItems = new Set(scopedLinks.map((link) => link.budgetItemId));
   const findingsByStatus: Record<string, number> = {};
   const findingsByType: Record<string, number> = {};
   for (const finding of input.findings.filter((item) => item.budgetItemId === null || itemIds.has(item.budgetItemId))) {
@@ -34,6 +36,6 @@ export function calculateReviewRunMetrics(input: ReviewRunMetricInput): ReviewRu
   const failures = input.warnings.filter((warning) => /fail|error/i.test(`${warning.code} ${warning.message}`)).length;
   const incompleteness = input.warnings.filter((warning) => /incomplete|partial|missing/i.test(`${warning.code} ${warning.message}`)).length + (findingsByType.INCOMPLETE_APU ?? 0) + (findingsByType.MISSING_DOCUMENTATION ?? 0);
   const analyzedItems = items.length;
-  const coveragePercent = items.length === 0 ? 0 : Math.round((analyzedItems / items.length) * 100);
+  const coveragePercent = items.length === 0 ? 0 : Math.round((coveredItems.size / items.length) * 100);
   return { analyzedItems, totalItems: items.length, coveragePercent, evidenceCount: input.evidence.length, linkedEvidenceCount: linkedEvidence.size, findingsByStatus, findingsByType, failures, incompleteness, deltaVsPrevious: input.previous ? analyzedItems - input.previous.analyzedItems : null };
 }

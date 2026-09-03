@@ -23,7 +23,7 @@ export interface ReviewRunView {
   createdAt: string;
   updatedAt: string;
   finishedAt?: string | null;
-  metrics?: { coveragePercent?: number; analyzedItems?: number; incompleteItems?: number; failedChecks?: number; failures?: number; incompleteness?: number; deltaVsPrevious?: number | null };
+  metrics?: { coveragePercent?: number; analyzedItems?: number; totalItems?: number; evidenceCount?: number; linkedEvidenceCount?: number; findingsByStatus?: Record<string, number>; findingsByType?: Record<string, number>; incompleteItems?: number; failedChecks?: number; failures?: number; incompleteness?: number; deltaVsPrevious?: number | null };
 }
 
 export interface ReviewDocumentVersionView {

@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 
 import { calculateMetradoSheet } from "@/lib/calculations/metrados";
 import { prisma } from "@/lib/db/prisma";
+import { markStaleForChange } from "@/lib/review-intelligence/stale";
 import { requireProjectCapability } from "@/lib/workspace/project-access";
 import { refreshGeneralBudgetTotals } from "@/lib/data/budgets";
 import {
@@ -1092,7 +1093,9 @@ export async function updateBudgetItemQuantityFromMetrados(input: {
     if (item.budget.parentBudgetId) await refreshGeneralBudgetTotals(tx, item.budget.parentBudgetId);
   });
 
-  return { itemId: item.id, budgetId: item.budgetId, projectId: item.budget.projectId, quantity: quantity.toNumber() };
+  const result = { itemId: item.id, budgetId: item.budgetId, projectId: item.budget.projectId, quantity: quantity.toNumber() };
+  await markStaleForChange({ companyId: item.budget.project.companyId, projectId: result.projectId, budgetId: result.budgetId, kind: "budget-item-quantity", id: result.itemId, payload: result.quantity }, prisma);
+  return result;
 }
 
 async function requireBudgetItemMetradoMutation(userId: string, projectId: string, companyId: string) {

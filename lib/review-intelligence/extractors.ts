@@ -16,6 +16,7 @@ export type ExtractionLocation = {
 export type ExtractionItem = {
   content: string;
   location?: ExtractionLocation;
+  metadata?: { code?: string; description?: string; quantity?: string; unit?: string; spec?: string; discipline?: string; attributes?: Record<string, string>; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "OTHER" };
 };
 
 export type ExtractionOutput = {
@@ -97,6 +98,7 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
           sheet: worksheet.name,
           range: `${columnToLetters(minColumn)}${minRow}:${columnToLetters(maxColumn)}${maxRow}`,
         },
+        metadata: metadataFromRows(rows, minRow, maxRow, minColumn, maxColumn),
       });
     }
   });
@@ -110,6 +112,15 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
     sheetCount: workbook.worksheets.length,
     warnings,
   };
+}
+
+function metadataFromRows(rows: string[][], minRow: number, maxRow: number, minColumn: number, maxColumn: number): ExtractionItem["metadata"] {
+  const headers = rows[minRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
+  const values = rows[minRow]?.slice(minColumn - 1, maxColumn) ?? [];
+  const find = (patterns: RegExp[]): string | undefined => { const index = headers.findIndex((header) => patterns.some((pattern) => pattern.test(header))); const value = index >= 0 ? values[index] : undefined; return value?.trim() || undefined; };
+  const metadata = { code: find([/c.{0,2}dig/i, /^id$/i]), description: find([/desc/i, /partida/i]), quantity: find([/cant/i, /metr/i, /qty/i]), unit: find([/^uni/i, /^unit/i]), spec: find([/spec/i, /tecn/i]), discipline: find([/disc/i, /especial/i]), attributes: {} };
+  const evidenceType = metadata.quantity ? "QUANTITY" : metadata.unit ? "UNIT" : metadata.spec ? "TECHNICAL_SPECIFICATION" : "OTHER";
+  return Object.values(metadata).some((value) => typeof value === "string" && value.length > 0) ? { ...metadata, evidenceType } : undefined;
 }
 
 function normalizeCell(value: ExcelJS.CellValue): { text: string; hasHyperlink: boolean } {

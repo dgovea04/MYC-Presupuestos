@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { ExtractionStatus, EvidenceType } from "@prisma/client";
+import { ExtractionStatus } from "@prisma/client";
 import { extractDocument, type ExtractionOutput } from "./extractors";
 import type { ReviewDocumentFile } from "./documents";
 
@@ -16,7 +16,7 @@ export async function extractAndPersistDocumentVersion(input: { file: ReviewDocu
       const sourceHash = createHash("sha256").update(`${input.version.sha256}:${item.content}:${JSON.stringify(item.location ?? {})}`).digest("hex");
       await client.reviewEvidence.upsert({
         where: { documentVersionId_sourceHash: { documentVersionId: input.version.id, sourceHash } },
-        create: { companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id, evidenceType: EvidenceType.OTHER, originalText: item.content, normalizedText: item.content, locationJson: item.location ?? {}, extractionMethod: extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE", confidence: "MEDIUM", sourceHash },
+        create: { companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id, evidenceType: item.metadata?.evidenceType ?? "OTHER", originalText: item.content, normalizedText: item.content, locationJson: item.location ?? {}, metadataJson: item.metadata ?? {}, extractionMethod: extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE", confidence: "MEDIUM", sourceHash },
         update: {},
       });
     }
