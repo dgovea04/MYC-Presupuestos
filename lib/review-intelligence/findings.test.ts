@@ -53,4 +53,8 @@ describe("review findings service", () => {
     await expect(getFinding("finding-1", "company-1", client)).rejects.toThrow("signing secret");
     vi.stubEnv("NEXTAUTH_SECRET", "test-review-secret");
   });
+
+  it("requires a post-correction version reference", async () => {
+    await expect(recordFindingDecision({ findingId: "finding-1", companyId: "company-1", userId: "user-1", role: "EDITOR", correlationId: "corr-1", resolution: "CORRECTED", expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z") }, {} as never)).rejects.toThrow("post-correction");
+  });
 });

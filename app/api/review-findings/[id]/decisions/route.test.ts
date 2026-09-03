@@ -29,7 +29,7 @@ describe("finding decisions API", () => {
 
   it("returns conflict when optimistic concurrency requires reconfirmation", async () => {
     mocks.recordFindingDecision.mockRejectedValue(new Error("Finding changed; reconfirmation required."));
-    const response = await POST(new Request("http://localhost/api/review-findings/finding-1/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resolution: "CORRECTED", expectedUpdatedAt: "2026-09-02T12:00:00.000Z" }) }), { params: Promise.resolve({ id: "finding-1" }) });
+    const response = await POST(new Request("http://localhost/api/review-findings/finding-1/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resolution: "CORRECTED", correctionVersionId: "version-2", expectedUpdatedAt: "2026-09-02T12:00:00.000Z" }) }), { params: Promise.resolve({ id: "finding-1" }) });
     expect(response.status).toBe(409);
   });
 });

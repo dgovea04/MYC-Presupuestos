@@ -92,6 +92,7 @@ export async function getFinding(findingId: string, companyId: string, client: C
 }
 
 export async function recordFindingDecision(input: FindingDecisionInput, client: Client = prisma): Promise<FindingDecisionRecord> {
+  if (input.resolution === "CORRECTED" && !input.correctionVersionId) throw new Error("CORRECTED requires a post-correction version reference.");
   return client.$transaction(async (tx) => {
     const current = await tx.reviewFinding.findFirst({ where: { id: input.findingId, companyId: input.companyId, project: { companyId: input.companyId }, budget: { project: { companyId: input.companyId } } }, select: { id: true, companyId: true, projectId: true, budgetId: true, reviewRunId: true, status: true, updatedAt: true } });
     if (!current) throw new Error("Finding not found.");

@@ -5,7 +5,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { recordFindingDecision } from "@/lib/review-intelligence/findings";
 
-const bodySchema = z.object({ resolution: z.enum(["CONFIRMED_ISSUE", "CORRECTED", "VALID_AS_IS", "FALSE_POSITIVE", "NOT_APPLICABLE", "NEEDS_MORE_INFORMATION"]), note: z.string().trim().max(5000).optional(), expectedUpdatedAt: z.coerce.date(), reconfirmStale: z.boolean().default(false), correctionVersionId: z.string().trim().min(1).max(200).optional() }).strict();
+const bodySchema = z.object({ resolution: z.enum(["CONFIRMED_ISSUE", "CORRECTED", "VALID_AS_IS", "FALSE_POSITIVE", "NOT_APPLICABLE", "NEEDS_MORE_INFORMATION"]), note: z.string().trim().max(5000).optional(), expectedUpdatedAt: z.coerce.date(), reconfirmStale: z.boolean().default(false), correctionVersionId: z.string().trim().min(1).max(200).optional() }).strict().superRefine((value, context) => { if (value.resolution === "CORRECTED" && !value.correctionVersionId) context.addIssue({ code: "custom", path: ["correctionVersionId"], message: "CORRECTED requiere referencia de versión posterior" }); });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
