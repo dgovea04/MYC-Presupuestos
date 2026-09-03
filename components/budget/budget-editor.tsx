@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BookOpenCheck, BotMessageSquare, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Ruler, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
+import { Activity, BookOpenCheck, BotMessageSquare, Check, ChevronLeft, ChevronRight, ClipboardCheck, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Ruler, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -2142,6 +2142,13 @@ export function BudgetEditor({
                     <ProLockBadge />
                   </button>
                 )}
+                <Link
+                  href={`/budgets/${budget.id}/review-intelligence`}
+                  className="theme-budget-risk-link inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  <ClipboardCheck className="h-4 w-4" />
+                  Revisión
+                </Link>
                 <div className="inline-flex flex-wrap items-center gap-2 self-end rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)] focus-within:border-[var(--app-border-strong)] focus-within:bg-[var(--app-surface-hover)]">
                       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--app-text-muted)]">Densidad</p>
                       <div className="inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-elevated)] p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">

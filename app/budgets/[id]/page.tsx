@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { type ReactNode } from "react";
-import { Activity, ArrowRight, Calculator, FileSpreadsheet, ReceiptText, Sigma, Wrench } from "lucide-react";
+import { Activity, ArrowRight, Calculator, ClipboardCheck, FileSpreadsheet, ReceiptText, Sigma, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { GeneralBudgetOverview } from "@/components/budget/general-budget-overview";
@@ -266,6 +266,13 @@ export default async function BudgetDetailPage({ params }: { params: Promise<{ i
                         icon={<Activity className="h-5 w-5" />}
                       />
                     ) : null}
+                    <BudgetQuickActionLink
+                      href={`/budgets/${budget.id}/review-intelligence`}
+                      title="Revisión Inteligente"
+                      description="Contrasta partidas con documentos fuente y registra decisiones humanas auditables."
+                      icon={<ClipboardCheck className="h-5 w-5" />}
+                      tone="primary"
+                    />
                   </div>
                 </CardContent>
               </Card>
