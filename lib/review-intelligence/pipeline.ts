@@ -11,7 +11,7 @@ type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
 type TransactionOptions = { isolationLevel?: "Serializable" };
 
-export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem { budgetId: string; companyId?: string; projectId?: string; discipline?: string | null; }
+export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem { budgetId: string; companyId?: string; projectId?: string; discipline?: string; }
 export interface ReviewEvidence extends EvidenceMatchInput, ReviewRuleEvidence { documentVersionId: string; originalText: string; normalizedText?: string; sourceHash: string; evidenceType: string; confidence: "LOW" | "MEDIUM" | "HIGH"; locationJson: Record<string, unknown>; companyId?: string; projectId?: string; }
 export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; }
 export interface ReviewBudgetReference { id: string; companyId: string; projectId: string; }

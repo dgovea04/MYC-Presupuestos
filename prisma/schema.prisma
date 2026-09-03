@@ -3036,7 +3036,7 @@ model ProjectDocument {
   @@index([createdById])
   @@unique([id, companyId, projectId])
   @@unique([currentVersionId, companyId, projectId])
-  @@map("project_documents")
+  @@map("ProjectDocument")
 }
 
 model DocumentVersion {
@@ -3066,7 +3066,7 @@ model DocumentVersion {
   @@index([projectDocumentId, createdAt(sort: Desc)])
   @@index([sha256])
   @@index([extractionStatus])
-  @@map("document_versions")
+  @@map("DocumentVersion")
 }
 
 model ReviewEvidence {
@@ -3095,7 +3095,7 @@ model ReviewEvidence {
   @@index([documentVersionId, createdAt(sort: Desc)])
   @@index([confidence])
   @@unique([id, companyId, projectId])
-  @@map("review_evidence")
+  @@map("ReviewEvidence")
 }
 
 model EntityLink {
@@ -3126,7 +3126,7 @@ model EntityLink {
   @@index([budgetId, budgetItemId])
   @@index([evidenceId])
   @@unique([id, companyId, projectId])
-  @@map("entity_links")
+  @@map("EntityLink")
 }
 
 model ReviewRun {
@@ -3156,7 +3156,7 @@ model ReviewRun {
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([createdById])
   @@unique([id, companyId, projectId])
-  @@map("review_runs")
+  @@map("ReviewRun")
 }
 
 model ReviewRunDocumentVersion {
@@ -3172,7 +3172,7 @@ model ReviewRunDocumentVersion {
   @@unique([reviewRunId, documentVersionId])
   @@index([companyId, projectId, reviewRunId])
   @@index([documentVersionId])
-  @@map("review_run_document_versions")
+  @@map("ReviewRunDocumentVersion")
 }
 
 model ReviewFinding {
@@ -3214,7 +3214,7 @@ model ReviewFinding {
   @@index([evidenceId])
   @@index([entityLinkId])
   @@unique([id, companyId, projectId])
-  @@map("review_findings")
+  @@map("ReviewFinding")
 }
 
 model FindingDecision {
@@ -3235,7 +3235,7 @@ model FindingDecision {
 
   @@index([findingId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
-  @@map("finding_decisions")
+  @@map("FindingDecision")
 }
 
 model ReviewAuditEvent {
@@ -3257,5 +3257,5 @@ model ReviewAuditEvent {
   @@index([reviewRunId, createdAt(sort: Desc)])
   @@index([actorUserId])
   @@index([correlationId])
-  @@map("review_audit_events")
+  @@map("ReviewAuditEvent")
 }
