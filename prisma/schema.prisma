@@ -1769,6 +1769,7 @@ model BudgetVersionSnapshot {
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy     User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  correctionDecisions FindingDecision[] @relation("FindingDecisionCorrectionVersion")
 
   @@unique([budgetId, versionNumber])
   @@index([budgetId, createdAt(sort: Desc)])
@@ -3232,6 +3233,7 @@ model FindingDecision {
   createdAt         DateTime        @default(now())
   finding           ReviewFinding  @relation(fields: [findingId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
   user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  correctionVersion BudgetVersionSnapshot? @relation("FindingDecisionCorrectionVersion", fields: [correctionVersionId], references: [id], onDelete: Restrict)
 
   @@index([findingId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])

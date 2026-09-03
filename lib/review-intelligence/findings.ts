@@ -3,7 +3,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { FindingResolution, FindingStatus } from "./types";
 
-type Client = Pick<PrismaClient, "reviewRun" | "reviewFinding" | "findingDecision" | "reviewAuditEvent" | "entityLink" | "reviewEvidence" | "documentVersion" | "reviewRunDocumentVersion"> & {
+type Client = Pick<PrismaClient, "reviewRun" | "reviewFinding" | "findingDecision" | "reviewAuditEvent" | "entityLink" | "reviewEvidence" | "budget" | "budgetVersionSnapshot"> & {
   $transaction<T>(callback: (transaction: Client) => Promise<T>): Promise<T>;
 };
 type FindingRow = Prisma.ReviewFindingGetPayload<{
@@ -80,7 +80,11 @@ const findingSelect = {
 export async function listFindings(filters: FindingFilters, client: Client = prisma): Promise<PaginatedFindings> {
   const run = await client.reviewRun.findFirst({ where: { id: filters.reviewRunId, companyId: filters.companyId, ...(filters.projectId ? { projectId: filters.projectId } : {}), ...(filters.budgetId ? { budgetId: filters.budgetId } : {}) }, select: { id: true, projectId: true, budgetId: true } });
   if (!run) throw new Error("Review run not found.");
-  const where: Prisma.ReviewFindingWhereInput = { companyId: filters.companyId, projectId: run.projectId, budgetId: run.budgetId, reviewRunId: run.id, status: filters.status, findingType: filters.findingType, severity: filters.severity, confidence: filters.confidence, discipline: filters.discipline, ...(filters.priority === undefined ? {} : { priority: { gte: filters.priority } }), ...(filters.subbudget === undefined ? {} : { budget: { id: run.budgetId, projectId: run.projectId, parentBudgetId: filters.subbudget } }), ...(filters.document === undefined ? {} : { OR: [{ evidenceId: filters.document }, { evidence: { documentVersion: { projectDocumentId: filters.document } } }] }) };
+  if (filters.subbudget !== undefined) {
+    const selectedSubbudget = await client.budget.findFirst({ where: { id: filters.subbudget, projectId: run.projectId, project: { companyId: filters.companyId }, kind: "SUB_BUDGET" }, select: { id: true } });
+    if (!selectedSubbudget || selectedSubbudget.id !== run.budgetId) return { findings: [], page: filters.page, pageSize: filters.pageSize, hasNextPage: false };
+  }
+  const where: Prisma.ReviewFindingWhereInput = { companyId: filters.companyId, projectId: run.projectId, budgetId: run.budgetId, reviewRunId: run.id, status: filters.status, findingType: filters.findingType, severity: filters.severity, confidence: filters.confidence, discipline: filters.discipline, ...(filters.priority === undefined ? {} : { priority: { gte: filters.priority } }), ...(filters.document === undefined ? {} : { OR: [{ evidenceId: filters.document }, { evidence: { documentVersion: { projectDocumentId: filters.document } } }] }) };
   const rows = await client.reviewFinding.findMany({ where, orderBy: [{ priority: "desc" }, { potentialImpact: "desc" }, { confidence: "desc" }, { budgetItem: { code: "asc" } }, { id: "asc" }], skip: (filters.page - 1) * filters.pageSize, take: filters.pageSize + 1, select: findingSelect });
   return { findings: rows.slice(0, filters.pageSize).map(serializeFinding), page: filters.page, pageSize: filters.pageSize, hasNextPage: rows.length > filters.pageSize };
 }
@@ -101,11 +105,15 @@ export async function recordFindingDecision(input: FindingDecisionInput, client:
     if ((current.status === "STALE" || run.status === "STALE") && !input.reconfirmStale) throw new Error("Finding or review run is stale; reconfirmation required.");
     let correctionVersionId: string | undefined;
     if (input.resolution === "CORRECTED") {
-      const source = await tx.reviewEvidence.findFirst({ where: { id: current.evidenceId, companyId: input.companyId, projectId: current.projectId }, select: { documentVersionId: true, documentVersion: { select: { projectDocumentId: true, versionNumber: true } } } });
-      if (!source) throw new Error("Finding evidence not found.");
-      const linkedVersion = await tx.reviewRunDocumentVersion.findFirst({ where: { reviewRunId: current.reviewRunId, documentVersionId: input.correctionVersionId, companyId: input.companyId, projectId: current.projectId }, select: { documentVersion: { select: { id: true, projectDocumentId: true, versionNumber: true } } } });
-      const version = linkedVersion?.documentVersion && linkedVersion.documentVersion.projectDocumentId === source.documentVersion.projectDocumentId && linkedVersion.documentVersion.versionNumber > source.documentVersion.versionNumber ? linkedVersion.documentVersion : null;
-      if (!version || !current.budgetId || !current.budgetItemId) throw new Error("Correction version does not belong to the finding tenant/project/budget/item scope.");
+      if (!current.budgetId || !current.budgetItemId) throw new Error("Correction version does not belong to the finding tenant/project/budget/item scope.");
+      const version = await tx.budgetVersionSnapshot.findFirst({ where: { id: input.correctionVersionId, companyId: input.companyId, projectId: current.projectId, budgetId: current.budgetId }, select: { id: true, versionNumber: true, createdAt: true, snapshot: true } });
+      const snapshot = jsonObject(version?.snapshot);
+      const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+      const itemIsPresent = items.some((item) => {
+        const candidate = jsonObject(item);
+        return candidate.id === current.budgetItemId && (candidate.budgetId === undefined || candidate.budgetId === current.budgetId);
+      });
+      if (!version || !itemIsPresent || version.createdAt <= current.updatedAt) throw new Error("Correction version must be a later BudgetVersionSnapshot for the finding budget item.");
       correctionVersionId = version.id;
     }
     const newStatus = input.resolution === "NEEDS_MORE_INFORMATION" ? "IN_REVIEW" : input.resolution === "CORRECTED" || input.resolution === "CONFIRMED_ISSUE" || input.resolution === "VALID_AS_IS" || input.resolution === "FALSE_POSITIVE" || input.resolution === "NOT_APPLICABLE" ? "RESOLVED" : "REOPENED";
