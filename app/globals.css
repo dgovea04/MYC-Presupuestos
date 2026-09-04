@@ -2263,6 +2263,19 @@ body,
   background: transparent;
 }
 
+/* Excel: override child backgrounds when a row is active so the TR highlight shows through */
+[data-view-mode="excel"] [data-row-active="true"] > .ui-table-cell:not(.sticky) {
+  background: transparent !important;
+}
+
+[data-view-mode="excel"] [data-row-active="true"] > .ui-table-cell:not(.sticky) .ui-input {
+  background: transparent !important;
+}
+
+[data-view-mode="excel"] [data-row-active="true"]:hover > .ui-table-cell:not(.sticky) {
+  background: transparent !important;
+}
+
 [data-view-mode="excel"] [data-excel-field-border-opt-out="true"] {
   border-color: #cbd5e1 !important;
 }

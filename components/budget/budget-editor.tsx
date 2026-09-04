@@ -383,6 +383,7 @@ export function BudgetEditor({
   const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
   const [apuSheetSession, setApuSheetSession] = useState<ApuSheetSession | null>(null);
   const [excelSelectedItemId, setExcelSelectedItemId] = useState<string | null>(null);
+  const [excelEditingRowId, setExcelEditingRowId] = useState<string | null>(null);
   const deferredCatalogQuery = useDeferredValue(catalogQuery);
   const deferredCatalogInsertQuery = useDeferredValue(catalogInsertQuery);
   const indexedPartidasCatalog = useMemo(
@@ -1930,17 +1931,25 @@ export function BudgetEditor({
     }
   }, [editableCells, focusCell, getAdjacentCell, rowNavigationLookup.editableCellIndexByKey, rowNavigationLookup.rowIdToColumns]);
 
+  const handleRowUnlockEdit = useCallback((rowId: string) => {
+    setExcelEditingRowId(rowId);
+  }, []);
+
   const handleRowFocus = useCallback((rowId: string) => {
     activeRowIdRef.current = rowId;
     setActiveRowId(rowId);
 
     if (!isExcelMode) return;
 
+    if (excelEditingRowId && excelEditingRowId !== rowId) {
+      setExcelEditingRowId(null);
+    }
+
     const focusedRow = rows.find((row) => getRowId(row) === rowId);
     if (focusedRow?.kind === "item") {
       setExcelSelectedItemId(focusedRow.item.id);
     }
-  }, [isExcelMode, rows]);
+  }, [excelEditingRowId, isExcelMode, rows]);
 
   const handleCellFocus = useCallback(
     (rowId: string, column: ActiveColumn) => {
@@ -2363,6 +2372,8 @@ export function BudgetEditor({
           onApplyCatalogPartida={applyCatalogPartidaToItem}
           onOpenApuSheet={openApuSheet}
           apuSelectedItemId={isExcelApuDocked ? dockedApuItem?.id : null}
+          excelEditingRowId={excelEditingRowId}
+          onUnlockEdit={handleRowUnlockEdit}
           onRunAiItemAction={(kind, itemId) => void runAiItemAction(kind, itemId)}
           canUseKhipu={canUseKhipu}
           itemQualityStateById={itemQualityStateById}
@@ -4245,6 +4256,8 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   spreadsheetActiveCell,
   spreadsheetSelectedKeys,
   onActivateSpreadsheetCell,
+  excelEditingRowId,
+  onUnlockEdit,
 }: {
   row: Extract<BudgetDisplayRow, { kind: "level" }>;
   densityMode: DensityMode;
@@ -4262,6 +4275,8 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   onUpdateLevel: (levelId: string, patch: Partial<BudgetLevelRecord>) => void;
   onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
   onNavigate: (event: React.KeyboardEvent<HTMLInputElement>, rowId: string, column: EditableColumn) => void;
+  excelEditingRowId?: string | null;
+  onUnlockEdit?: (rowId: string) => void;
   onPasteRows: (event: React.ClipboardEvent<HTMLInputElement>, targetRow: BudgetDisplayRow, startColumn: EditableColumn) => void;
   onToggleLevelActionMenu: (rowId: string, kind: "add" | "more", trigger: HTMLElement) => void;
   spreadsheetActiveCell?: SpreadsheetCellAddress | null;
@@ -4271,9 +4286,30 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   const isEditingField = activeRowId === row.level.id && isEditableActiveColumn(activeColumn);
   const isTitleOrSubtitle = row.level.type === "TITLE" || row.level.type === "SUBTITLE";
 
+  function handleExcelInputDoubleClick(event: React.MouseEvent<HTMLInputElement>) {
+    event.stopPropagation();
+    onUnlockEdit?.(row.level.id);
+    event.currentTarget.focus();
+    event.currentTarget.select();
+  }
+
+  function handleExcelInputPointerDown(event: React.PointerEvent<HTMLInputElement>) {
+    if (isExcelMode && excelEditingRowId !== row.level.id && activeRowId === row.level.id) {
+      onUnlockEdit?.(row.level.id);
+      event.currentTarget.focus();
+      event.currentTarget.select();
+      return;
+    }
+
+    if (isExcelMode && excelEditingRowId !== row.level.id) {
+      event.preventDefault();
+    }
+  }
+
   return (
     <TR
       data-budget-row-id={row.level.id}
+      data-row-active={activeRowId === row.level.id ? "true" : undefined}
       draggable={!isEditingField}
       onDragStart={(event) => {
         if (shouldCancelRowDragStart(event, isEditingField)) return;
@@ -4284,12 +4320,24 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
       }}
       onDrop={() => onDropRow(row)}
       onDragEnd={onDragEnd}
+      onClick={(event) => {
+        if (event.target instanceof HTMLInputElement) {
+          onRowFocus(row.level.id);
+          return;
+        }
+        (document.activeElement as HTMLElement | null)?.blur();
+        onRowFocus(row.level.id);
+      }}
+      onDoubleClick={() => onUnlockEdit?.(row.level.id)}
       onFocusCapture={() => onRowFocus(row.level.id)}
       className={cn(
         "group",
+        isExcelMode && "cursor-pointer",
         getLevelRowTone(row.level.type, isExcelMode),
         isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
-        activeRowId === row.level.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "ring-2 ring-sky-200") : "",
+        activeRowId === row.level.id ? (isExcelMode ? "bg-sky-300/15 ring-1 ring-sky-300/40" : "ring-2 ring-sky-200") : "",
+        isExcelMode && activeRowId === row.level.id &&
+          "hover:!bg-sky-300/15",
       )}
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
@@ -4301,7 +4349,10 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
             onCommit={(value) => onUpdateLevel(row.level.id, { code: value })}
             className={cn(getInputDensityClass(densityMode, isExcelMode), "w-auto max-w-full px-2", isTitleOrSubtitle && "font-medium")}
             style={getCodeInputStyle(row.level.code)}
+            readOnly={isExcelMode && excelEditingRowId !== row.level.id}
             ref={(element) => onSetCellRef(row.level.id, "code", element)}
+            onPointerDown={isExcelMode ? handleExcelInputPointerDown : undefined}
+            onDoubleClick={isExcelMode ? handleExcelInputDoubleClick : undefined}
             onKeyDown={(event) => onNavigate(event, row.level.id, "code")}
             onPaste={(event) => onPasteRows(event, row, "code")}
             onFocus={() => onCellFocus(row.level.id, "code")}
@@ -4316,7 +4367,10 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
                             value={row.level.name}
             onCommit={(value) => onUpdateLevel(row.level.id, { name: value })}
             className={cn(getInputDensityClass(densityMode, isExcelMode), "flex-1", isTitleOrSubtitle && "font-medium")}
+            readOnly={isExcelMode && excelEditingRowId !== row.level.id}
             ref={(element) => onSetCellRef(row.level.id, "description", element)}
+            onPointerDown={isExcelMode ? handleExcelInputPointerDown : undefined}
+            onDoubleClick={isExcelMode ? handleExcelInputDoubleClick : undefined}
             onKeyDown={(event) => onNavigate(event, row.level.id, "description")}
             onPaste={(event) => onPasteRows(event, row, "description")}
             onFocus={() => onCellFocus(row.level.id, "description")}
@@ -4408,8 +4462,11 @@ type BudgetItemTableRowProps = {
   spreadsheetActiveCell?: SpreadsheetCellAddress | null;
   spreadsheetSelectedKeys?: ReadonlySet<string>;
   onDuplicateItem?: (itemId: string) => void;
-  onRemoveItem?: (itemId: string) => void;  onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
+  onRemoveItem?: (itemId: string) => void;
+  onActivateSpreadsheetCell?: (cell: SpreadsheetCellAddress) => void;
   spreadsheetSelectionKey?: string;
+  excelEditingRowId?: string | null;
+  onUnlockEdit?: (rowId: string) => void;
 };
 
 
@@ -4562,6 +4619,8 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onOpenApuSheet,
   onRunAiItemAction,
   apuSelectedItemId,
+  excelEditingRowId,
+  onUnlockEdit,
   canUseKhipu,
   onToggleItemActionMenu,
   qualityState,
@@ -4572,6 +4631,27 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onActivateSpreadsheetCell,
 }: BudgetItemTableRowProps) {
   const isEditingField = activeRowId === row.item.id && isEditableActiveColumn(activeColumn);
+  const isExcelRowEditing = isExcelMode && excelEditingRowId === row.item.id;
+
+  function handleExcelInputDoubleClick(event: React.MouseEvent<HTMLInputElement>) {
+    event.stopPropagation();
+    onUnlockEdit?.(row.item.id);
+    event.currentTarget.focus();
+    event.currentTarget.select();
+  }
+
+  function handleExcelInputPointerDown(event: React.PointerEvent<HTMLInputElement>) {
+    if (isExcelMode && !isExcelRowEditing && activeRowId === row.item.id) {
+      onUnlockEdit?.(row.item.id);
+      event.currentTarget.focus();
+      event.currentTarget.select();
+      return;
+    }
+
+    if (isExcelMode && !isExcelRowEditing) {
+      event.preventDefault();
+    }
+  }
   const metradoInputClass = isMetradoAdvanced ? "cursor-pointer border-sky-300 bg-sky-50 text-sky-800" : "";
   const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;
   const hasNoApu = !row.item.apu;
@@ -4587,6 +4667,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
     <TR
       data-budget-row-id={row.item.id}
       data-apu-selected={isApuSelected ? "true" : "false"}
+      data-row-active={(activeRowId === row.item.id || isApuSelected) && !isEditingField ? "true" : undefined}
       draggable={!isEditingField}
       onDragStart={(event) => {
         if (shouldCancelRowDragStart(event, isEditingField)) return;
@@ -4597,14 +4678,27 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
       }}
       onDrop={() => onDropRow(row)}
       onDragEnd={onDragEnd}
+      onClick={(event) => {
+        if (event.target instanceof HTMLInputElement) {
+          onRowFocus(row.item.id);
+          return;
+        }
+        (document.activeElement as HTMLElement | null)?.blur();
+        onRowFocus(row.item.id);
+      }}
+      onDoubleClick={() => onUnlockEdit?.(row.item.id)}
       onFocusCapture={() => onRowFocus(row.item.id)}
       className={cn(
         "group",
-        isExcelMode && "bg-[var(--app-surface)]",
+        isExcelMode && "cursor-pointer bg-[var(--app-surface)]",
         isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
         itemWarningTone,
-        activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
-        isApuSelected && "bg-sky-50/90 ring-1 ring-sky-300",
+        activeRowId === row.item.id
+          ? (isExcelMode ? "bg-sky-300/15 ring-1 ring-sky-300/40" : "bg-sky-50/60 ring-2 ring-sky-200")
+          : "",
+        isApuSelected && !isEditingField && "bg-sky-300/20 ring-1 ring-sky-300/50",
+        isExcelMode && (activeRowId === row.item.id || isApuSelected) && !isEditingField &&
+          "hover:!bg-sky-300/15",
       )}
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
@@ -4616,7 +4710,10 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             onCommit={(value) => onUpdateItem(row.item.id, { code: value })}
             className={cn(getInputDensityClass(densityMode, isExcelMode), isExcelMode ? "w-full max-w-full px-1" : "w-auto max-w-full px-2")}
             style={getCodeInputStyle(row.item.code)}
+            readOnly={isExcelMode && !isExcelRowEditing}
             ref={(element) => onSetCellRef(row.item.id, "code", element)}
+            onPointerDown={isExcelMode ? handleExcelInputPointerDown : undefined}
+            onDoubleClick={isExcelMode ? handleExcelInputDoubleClick : undefined}
             onKeyDown={(event) => onNavigate(event, row.item.id, "code")}
             onPaste={(event) => onPasteRows(event, row, "code")}
             onFocus={() => onCellFocus(row.item.id, "code")}
@@ -4637,7 +4734,10 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
                 }}
                 syncWhileFocused
                 className={cn(getInputDensityClass(densityMode, isExcelMode), "min-w-0")}
+                readOnly={isExcelMode && !isExcelRowEditing}
                 ref={(element) => onSetCellRef(row.item.id, "description", element)}
+                onPointerDown={isExcelMode ? handleExcelInputPointerDown : undefined}
+                onDoubleClick={isExcelMode ? handleExcelInputDoubleClick : undefined}
                 onKeyDown={(event) => {
                   if (isCatalogActive && catalogSuggestions.length > 0) {
                     if (event.key === "ArrowDown") {
@@ -4710,7 +4810,10 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
                           value={row.item.unit}
           onCommit={(value) => onUpdateItem(row.item.id, { unit: value })}
           className={cn(getInputDensityClass(densityMode, isExcelMode), "text-center")}
+          readOnly={isExcelMode && !isExcelRowEditing}
           ref={(element) => onSetCellRef(row.item.id, "unit", element)}
+          onPointerDown={isExcelMode ? handleExcelInputPointerDown : undefined}
+          onDoubleClick={isExcelMode ? handleExcelInputDoubleClick : undefined}
           onKeyDown={(event) => onNavigate(event, row.item.id, "unit")}
           onPaste={(event) => onPasteRows(event, row, "unit")}            onFocus={() => onCellFocus(row.item.id, "unit")}
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "unit" })}
@@ -4727,7 +4830,6 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             if (isMetradoAdvanced) return;
             onUpdateItem(row.item.id, { quantity: parseSpreadsheetNumber(value) });
           }}
-          readOnly={isMetradoAdvanced}
           onClick={() => {
             if (isMetradoAdvanced) {
               void onRequestManualMetrado?.(row.item.id, parseSpreadsheetNumber(String(row.item.quantity)));
@@ -4738,7 +4840,10 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
           }}
           title={isMetradoAdvanced ? "Haz clic para cambiar a metrado manual" : "Metrado manual editable"}
           className={cn(getInputDensityClass(densityMode, isExcelMode), "text-right tabular-nums", metradoInputClass)}
+          readOnly={isExcelMode && !isExcelRowEditing || isMetradoAdvanced}
           ref={(element) => onSetCellRef(row.item.id, "quantity", element)}
+          onPointerDown={isExcelMode ? handleExcelInputPointerDown : undefined}
+          onDoubleClick={isExcelMode ? handleExcelInputDoubleClick : undefined}
           onKeyDown={(event) => onNavigate(event, row.item.id, "quantity")}
           onPaste={(event) => onPasteRows(event, row, "quantity")}            onFocus={() => onCellFocus(row.item.id, "quantity")}
             onFocusCapture={() => onActivateSpreadsheetCell?.({ rowId: row.item.id, columnId: "quantity" })}
@@ -4943,6 +5048,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onOpenApuSheet,
   onRunAiItemAction,
   apuSelectedItemId,
+  excelEditingRowId,
+  onUnlockEdit,
   canUseKhipu,
   itemQualityStateById,
   spreadsheetActiveCell,
@@ -4997,6 +5104,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onOpenApuSheet: (item: BudgetItemRecord) => void;
   onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
   apuSelectedItemId?: string | null;
+  excelEditingRowId?: string | null;
+  onUnlockEdit?: (rowId: string) => void;
   canUseKhipu: boolean;
   itemQualityStateById: Record<string, BudgetItemQualityState | undefined>;
   spreadsheetActiveCell?: SpreadsheetCellAddress | null;
@@ -5105,6 +5214,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   spreadsheetActiveCell={spreadsheetActiveCell}
                   spreadsheetSelectedKeys={spreadsheetSelectedKeys}
                   onActivateSpreadsheetCell={onActivateSpreadsheetCell}
+                  excelEditingRowId={excelEditingRowId}
+                  onUnlockEdit={onUnlockEdit}
                 />
               ) : (
                 <BudgetItemTableRow
@@ -5137,6 +5248,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onScheduleCatalogClose={onScheduleCatalogClose}                   onApplyCatalogPartida={onApplyCatalogPartida}
                    onOpenApuSheet={onOpenApuSheet}
                   apuSelectedItemId={apuSelectedItemId}
+                  excelEditingRowId={excelEditingRowId}
+                  onUnlockEdit={onUnlockEdit}
                   onRunAiItemAction={onRunAiItemAction}
                    canUseKhipu={canUseKhipu}
                    onToggleItemActionMenu={onToggleItemActionMenu}

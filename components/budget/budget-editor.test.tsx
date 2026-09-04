@@ -50,7 +50,62 @@ describe("BudgetEditor Khipu floating panel blur guard", () => {
     }
 
     document.querySelector("[data-khipu-panel]")?.remove();
+    window.localStorage.removeItem("app_view_mode");
     vi.restoreAllMocks();
+  });
+
+  it("enters input editing on double click and keeps the input focused", async () => {
+    window.localStorage.setItem("app_view_mode", "excel");
+
+    const { getInputByValue } = await renderEditor({ budget: createBudgetWithItem() });
+    const descriptionInput = getInputByValue("Partida demo");
+
+    expect(descriptionInput.readOnly).toBe(true);
+
+    await act(async () => {
+      descriptionInput.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+
+    expect(descriptionInput.readOnly).toBe(false);
+    expect(document.activeElement).toBe(descriptionInput);
+    expect(descriptionInput.selectionStart).toBe(0);
+    expect(descriptionInput.selectionEnd).toBe(descriptionInput.value.length);
+  });
+
+  it("does not focus a read-only input on the first pointer down", async () => {
+    window.localStorage.setItem("app_view_mode", "excel");
+
+    const { getInputByValue } = await renderEditor({ budget: createBudgetWithItem() });
+    const descriptionInput = getInputByValue("Partida demo");
+    const pointerDown = new MouseEvent("pointerdown", { bubbles: true, cancelable: true });
+
+    descriptionInput.dispatchEvent(pointerDown);
+
+    expect(pointerDown.defaultPrevented).toBe(true);
+    expect(descriptionInput.readOnly).toBe(true);
+  });
+
+  it("unlocks the input on the second pointer down", async () => {
+    window.localStorage.setItem("app_view_mode", "excel");
+
+    const { getInputByValue } = await renderEditor({ budget: createBudgetWithItem() });
+    const descriptionInput = getInputByValue("Partida demo");
+    const row = descriptionInput.closest("tr");
+    if (!(row instanceof HTMLTableRowElement)) throw new Error("Missing budget row");
+    const rowClick = new MouseEvent("click", { bubbles: true });
+    const secondPointerDown = new MouseEvent("pointerdown", { bubbles: true, cancelable: true });
+
+    await act(async () => {
+      row.dispatchEvent(rowClick);
+    });
+
+    await act(async () => {
+      descriptionInput.dispatchEvent(secondPointerDown);
+    });
+
+    expect(secondPointerDown.defaultPrevented).toBe(false);
+    expect(descriptionInput.readOnly).toBe(false);
+    expect(document.activeElement).toBe(descriptionInput);
   });
 
   it("does not clear activeRowId when focus moves to the Khipu floating panel", async () => {
